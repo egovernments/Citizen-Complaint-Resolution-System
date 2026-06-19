@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGetList, useTranslate, useDataProvider, useNotify, type RaRecord } from 'ra-core';
-import { RefreshCw, ChevronRight, ChevronDown, Search, Plus } from 'lucide-react';
+import { RefreshCw, ChevronRight, ChevronDown, Search, Plus, Pencil } from 'lucide-react';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,10 @@ import { Input } from '@/components/ui/input';
 import { groupComplaintTypes, type SubTypeRecord } from './groupComplaintTypes';
 import { filterComplaintTypeGroups } from './filterComplaintTypeGroups';
 import { SubTypeTable } from './SubTypeTable';
+import { RenameTypeDialog } from './RenameTypeDialog';
+import { localizationService } from '@/api/services/localization';
+import { useAvailableLocales } from '@/hooks/useAvailableLocales';
+import { digitClient } from '@/providers/bridge';
 
 const GRID = 'grid grid-cols-[28px_1fr_120px_120px] gap-2';
 
@@ -28,6 +32,25 @@ export function ComplaintTypeList() {
 
   const dataProvider = useDataProvider();
   const notify = useNotify();
+  const { locales } = useAvailableLocales();
+
+  const handleRenameType = async (menuPath: string, newName: string) => {
+    const tenantId = digitClient.stateTenantId;
+    if (!tenantId) return;
+    // The type's display name is localization-only: upsert SERVICEDEFS.<CODE>
+    // for every configured locale, then cache-bust so the list re-reads it.
+    // The menuPath code itself is never modified.
+    const code = `SERVICEDEFS.${menuPath.toUpperCase()}`;
+    const targetLocales = new Set<string>([...locales.map((l) => l.value), 'en_IN']);
+    for (const locale of targetLocales) {
+      await localizationService.upsertMessages(tenantId, locale, [
+        { code, message: newName, module: 'rainmaker-pgr', locale },
+      ]);
+    }
+    await localizationService.cacheBust();
+    notify('Complaint type renamed', { type: 'info' });
+    await refetch();
+  };
 
   const handleDeleteSubType = async (record: SubTypeRecord) => {
     // dataProvider.delete maps to an MDMS soft-delete (isActive:false). On
@@ -184,11 +207,28 @@ export function ComplaintTypeList() {
                       )}
                     </span>
                     <span
-                      className={`min-w-0 break-words font-semibold ${
+                      className={`min-w-0 flex items-center gap-1 font-semibold ${
                         g.isUncategorized ? 'text-muted-foreground' : ''
                       }`}
                     >
-                      {g.label}
+                      <span className="truncate">{g.label}</span>
+                      {!g.isUncategorized && (
+                        <RenameTypeDialog
+                          currentName={g.label}
+                          onRename={(newName) => handleRenameType(g.menuPath, newName)}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              aria-label={`Rename ${g.label}`}
+                              className="h-6 w-6 p-0 flex-shrink-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          }
+                        />
+                      )}
                     </span>
                     <span className="tabular-nums">{g.count}</span>
                     <span>

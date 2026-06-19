@@ -1,8 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const navigate = vi.fn();
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
+
+const { upsertMessages, cacheBust } = vi.hoisted(() => ({
+  upsertMessages: vi.fn().mockResolvedValue({ success: 1, failed: 0 }),
+  cacheBust: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/api/services/localization', () => ({
+  localizationService: { upsertMessages, cacheBust },
+}));
+vi.mock('@/hooks/useAvailableLocales', () => ({
+  useAvailableLocales: () => ({ locales: [{ value: 'en_IN' }] }),
+}));
+vi.mock('@/providers/bridge', () => ({ digitClient: { stateTenantId: 'pb' } }));
 
 vi.mock('ra-core', () => ({
   useTranslate: () => (key: string, opts?: { _?: string }) => opts?._ ?? key,
@@ -28,6 +40,14 @@ vi.mock('ra-core', () => ({
         slaHours: 72,
         active: true,
         order: 2,
+      },
+      {
+        id: 'Streetlight',
+        serviceCode: 'Streetlight',
+        name: 'Street light broken',
+        slaHours: 24,
+        active: true,
+        order: 3,
       },
     ],
     isPending: false,
@@ -78,5 +98,34 @@ describe('ComplaintTypeList (accordion)', () => {
     render(<ComplaintTypeList />);
     fireEvent.click(screen.getByText('Add Complaint Type'));
     expect(navigate).toHaveBeenCalledWith('/manage/complaint-types/create');
+  });
+
+  it('shows a rename action on a type row but not on Uncategorized', () => {
+    render(<ComplaintTypeList />);
+    expect(screen.getByLabelText('Rename Sanitation')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Rename Uncategorized')).not.toBeInTheDocument();
+  });
+
+  it('renames a type: upserts SERVICEDEFS.<menuPath> across locales then cache-busts', async () => {
+    upsertMessages.mockClear();
+    cacheBust.mockClear();
+    render(<ComplaintTypeList />);
+    fireEvent.click(screen.getByLabelText('Rename Sanitation'));
+    const input = await screen.findByLabelText('Complaint type display name');
+    fireEvent.change(input, { target: { value: 'Sanitation & Waste' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(cacheBust).toHaveBeenCalled());
+    expect(upsertMessages).toHaveBeenCalledWith(
+      'pb',
+      'en_IN',
+      [{ code: 'SERVICEDEFS.SANITATION', message: 'Sanitation & Waste', module: 'rainmaker-pgr', locale: 'en_IN' }],
+    );
+  });
+
+  it('clicking rename does not toggle the type open', () => {
+    render(<ComplaintTypeList />);
+    fireEvent.click(screen.getByLabelText('Rename Sanitation'));
+    // The sub-type stays hidden because the row didn't expand.
+    expect(screen.queryByText('Garbage not collected')).not.toBeInTheDocument();
   });
 });
