@@ -77,6 +77,21 @@ export function ComplaintTypeList() {
             <p className="text-destructive font-medium">
               {translate('app.list.error_loading', { _: 'Failed to load' })}
             </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {error instanceof Error
+                ? error.message
+                : translate('app.list.error_unexpected', {
+                    _: 'An unexpected error occurred',
+                  })}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              className="mt-3"
+            >
+              {translate('app.list.try_again', { _: 'Try Again' })}
+            </Button>
           </div>
         )}
 
