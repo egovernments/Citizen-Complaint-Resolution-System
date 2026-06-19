@@ -7,6 +7,7 @@
 // bridge endpoint.
 
 import { workflow } from '@novu/framework';
+import { KARIX_WORKFLOWS } from './karix-workflows.js';
 
 // ─── Citizen OTP ─────────────────────────────────────────────────────
 // Triggered when the SPA's citizen-login form sends an OTP request.
@@ -102,4 +103,5 @@ export const ALL_WORKFLOWS = [
   complaintsReassign,
   complaintsRate,
   complaintsSmsV1,
+  ...KARIX_WORKFLOWS,
 ];

@@ -48,7 +48,7 @@
     "schemaCode": "ProviderDetail",
     "tenantId": "pb.amritsar",
     "data": {
-      "tenantId": "pb.amritsar", 
+      "tenantId": "pb.amritsar",
       "providerName": "plivo",
       "channel": "sms",
       "credentials": {
@@ -57,6 +57,22 @@
       },
       "isActive": false,
       "priority": 3
+    }
+  },
+  {
+    "schemaCode": "ProviderDetail",
+    "tenantId": "pb.amritsar",
+    "data": {
+      "tenantId": "pb.amritsar",
+      "providerName": "karix",
+      "channel": "whatsapp",
+      "credentials": {
+        "accountId": "your_karix_account_id",
+        "authToken": "your_karix_auth_token"
+      },
+      "senderNumber": "+919999999999",
+      "isActive": true,
+      "priority": 1
     }
   }
 ]

@@ -155,17 +155,33 @@ public class DispatchPipelineService {
             log.info("Built ordered content variables from paramOrder: {}", contentVariables);
         }
 
-        // Use provider-agnostic notification dispatch with automatic strategy selection
-        NovuClient.NovuResponse novuResponse = novuClient.triggerWithProviderConfig(
-                resolvedTemplate.getTemplateKey(),
-                subscriberId,
-                recipientPhone,
-                event.getData(),
-                event.getEventId(),
-                resolvedProvider,
-                resolvedTemplate,
-                contentVariables,
-                novuApiKey);
+        // Karix has no native Novu provider — route via step.custom() in novu-bridge-endpoint.
+        // The trigger payload is enriched with credentials + routing data; Novu API call
+        // path is the same as Twilio/Vonage, only the bridge-side delivery step differs.
+        NovuClient.NovuResponse novuResponse;
+        if ("karix".equalsIgnoreCase(resolvedProvider.getProviderName())) {
+            Map<String, Object> karixPayload = buildKarixTriggerPayload(
+                    event, resolvedProvider, resolvedTemplate, contentVariables, recipientPhone);
+            novuResponse = novuClient.trigger(
+                    resolvedTemplate.getTemplateKey(),
+                    subscriberId,
+                    null,
+                    karixPayload,
+                    event.getEventId(),
+                    null,
+                    novuApiKey);
+        } else {
+            novuResponse = novuClient.triggerWithProviderConfig(
+                    resolvedTemplate.getTemplateKey(),
+                    subscriberId,
+                    recipientPhone,
+                    event.getData(),
+                    event.getEventId(),
+                    resolvedProvider,
+                    resolvedTemplate,
+                    contentVariables,
+                    novuApiKey);
+        }
 
         log.info("Novu trigger response: eventId={}, statusCode={}, response={}",
                 event.getEventId(), novuResponse.getStatusCode(), novuResponse.getResponse());
@@ -370,6 +386,46 @@ public class DispatchPipelineService {
             return template.getTemplateVersion();
         }
         return null;
+    }
+
+    /**
+     * Builds the Novu trigger payload for Karix WhatsApp delivery.
+     * Credentials and routing data are embedded so that the step.custom() action in
+     * novu-bridge-endpoint can call the Karix API without a separate config lookup.
+     *
+     * The Karix workflow ID (resolvedTemplate.templateKey) must end with "-karix" and
+     * must be registered in novu-bridge-endpoint/karix-workflows.js.
+     */
+    private Map<String, Object> buildKarixTriggerPayload(ComplaintsDomainEvent event,
+                                                          ResolvedProvider provider,
+                                                          ResolvedTemplate template,
+                                                          Map<String, String> contentVariables,
+                                                          String recipientPhone) {
+        Map<String, Object> payload = new HashMap<>(
+                event.getData() != null ? event.getData() : Collections.emptyMap());
+
+        Map<String, Object> creds = provider.getCredentials();
+        payload.put("karixAccountId", creds.get("accountId"));
+        payload.put("karixAuthToken", creds.get("authToken"));
+        payload.put("karixSenderNumber", provider.getSenderNumber());
+        payload.put("karixTemplateName", template.getContentSid());
+        payload.put("karixLanguage", "en");
+
+        // Karix needs raw E.164; strip the Twilio-style "whatsapp:" prefix added by formatRecipientPhone
+        String phone = StringUtils.hasText(recipientPhone) && recipientPhone.startsWith("whatsapp:")
+                ? recipientPhone.substring("whatsapp:".length()) : recipientPhone;
+        payload.put("karixRecipientPhone", phone);
+
+        // Ordered positional param values for the template body component
+        payload.put("karixParams", contentVariables != null
+                ? new ArrayList<>(contentVariables.values())
+                : Collections.emptyList());
+
+        log.info("Karix trigger payload built: eventId={}, templateName={}, recipient={}, paramCount={}",
+                event.getEventId(), template.getContentSid(), phone,
+                contentVariables != null ? contentVariables.size() : 0);
+
+        return payload;
     }
 
     private void persist(ComplaintsDomainEvent event, DerivedContext context, ResolvedTemplate template,
