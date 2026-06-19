@@ -80,7 +80,7 @@ export function ComplaintTypeCreate() {
     >
       <DigitFormInput
         source="menuPath"
-        label="Complaint Type (Menu Path)"
+        label={presetMenuPath ? 'Complaint Type (Menu Path)' : 'Complaint Type Name'}
         validate={presetMenuPath ? undefined : v.required}
         disabled={!!presetMenuPath}
       />

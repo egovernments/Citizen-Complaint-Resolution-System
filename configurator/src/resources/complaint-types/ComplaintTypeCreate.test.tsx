@@ -26,8 +26,8 @@ vi.mock('@/admin', () => ({
       </div>
     );
   },
-  DigitFormInput: ({ source, disabled }: any) => (
-    <div data-testid={`input-${source}`} data-disabled={String(!!disabled)} />
+  DigitFormInput: ({ source, disabled, label }: any) => (
+    <div data-testid={`input-${source}`} data-disabled={String(!!disabled)} data-label={String(label)} />
   ),
   DigitFormSelect: ({ source }: any) => <div data-testid={`select-${source}`} />,
   DigitFormCodeInput: ({ source }: any) => <div data-testid={`code-${source}`} />,
@@ -76,5 +76,15 @@ describe('ComplaintTypeCreate', () => {
   it('provides no transform when menuPath is not preset', () => {
     renderAt('');
     expect(captured.props.transform).toBeUndefined();
+  });
+
+  it('labels the type field as a name when creating a new type', () => {
+    renderAt('');
+    expect(screen.getByTestId('input-menuPath').dataset.label).toBe('Complaint Type Name');
+  });
+
+  it('labels the type field as the menu path when adding a sub-type', () => {
+    renderAt('?menuPath=Sanitation');
+    expect(screen.getByTestId('input-menuPath').dataset.label).toBe('Complaint Type (Menu Path)');
   });
 });
