@@ -59,6 +59,23 @@ describe('filterComplaintTypeGroups', () => {
     expect(out[0].activeCount).toBe(1);
   });
 
+  it('matches by sub-type serviceName when name is absent', () => {
+    const withServiceName: ComplaintTypeGroup[] = [
+      group({
+        menuPath: 'WATER',
+        label: 'Water',
+        count: 1,
+        activeCount: 1,
+        subTypes: [
+          { id: 'l', serviceCode: 'LeakReport', serviceName: 'Pipe leakage', active: true },
+        ],
+      }),
+    ];
+    const out = filterComplaintTypeGroups(withServiceName, 'leakage');
+    expect(out).toHaveLength(1);
+    expect(out[0].subTypes).toHaveLength(1);
+  });
+
   it('matches by sub-type service code', () => {
     const out = filterComplaintTypeGroups(groups, 'pothole');
     expect(out).toHaveLength(1);
