@@ -9,6 +9,7 @@ import PGRWorkflowModal from "../../components/PGRWorkflowModal";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import Urls from "../../utils/urls";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
+import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -269,6 +270,26 @@ const PGRDetails = () => {
     { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
   );
 
+  // Complaint classification hierarchy (configurable N levels). Absent on
+  // un-migrated tenants -> buildComplaintPath returns null and the flat
+  // Type/Sub-Type rows are kept below.
+  const { data: hier } = Digit.Hooks.useCustomMDMS(
+    tenantId,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintHierarchyDefinition" }, { name: "ClassificationNode" }],
+    {
+      cacheTime: Infinity,
+      select: (raw) => {
+        const defs = (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter((d) => d?.active !== false);
+        const allNodes = raw?.["RAINMAKER-PGR"]?.ClassificationNode || [];
+        const def = defs.find((d) => allNodes.some((n) => n?.hierarchyType === d?.hierarchyType)) || defs[0] || null;
+        const nodes = def ? allNodes.filter((n) => n?.hierarchyType === def.hierarchyType) : [];
+        return { def, nodes };
+      },
+    },
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
+  );
+
   // Return SERVICEDEFS.* localization keys so callers can hand the result to t().
   // Mirrors the pattern every other PGR surface uses (inbox filter, DesktopInbox, ComplaintDetails…),
   // which in turn matches the keys the configurator seeds for every ServiceDef record.
@@ -492,6 +513,16 @@ const PGRDetails = () => {
   // Display loader until required data loads
   if (isLoading || isMDMSLoading || isWorkflowLoading) return <Loader />;
 
+  // Full hierarchy breakdown for the selected complaint type (null => flat).
+  const complaintServiceCode = pgrData?.ServiceWrappers?.[0]?.service?.serviceCode;
+  const complaintClassification = buildComplaintPath({
+    serviceCode: complaintServiceCode,
+    def: hier?.def,
+    nodes: hier?.nodes,
+    serviceDefs,
+    t,
+  });
+
   return (
     <div className="v2-pgr-details v2-scope">
       {/* Header */}
@@ -516,18 +547,29 @@ const PGRDetails = () => {
                     type: "text",
                     value: pgrData?.ServiceWrappers[0].service?.serviceRequestId || "NA",
                   },
-                  {
-                    inline: true,
-                    label: t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE"),
-                    type: "text",
-                    value: t(getServiceCategoryByCode(pgrData?.ServiceWrappers[0].service?.serviceCode, serviceDefs) || "NA"),
-                  },
-                  {
-                    inline: true,
-                    label: t("CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE"),
-                    type: "text",
-                    value: t(getServiceNameByCode(pgrData?.ServiceWrappers[0].service?.serviceCode) || "NA"),
-                  },
+                  // Hierarchy tenants: one row per level (Main Category › Sector ›
+                  // Sub-Type …). Flat tenants: the legacy Type + Sub-Type pair.
+                  ...(complaintClassification
+                    ? complaintClassification.map((r) => ({
+                        inline: true,
+                        label: r.label,
+                        type: "text",
+                        value: r.value || "NA",
+                      }))
+                    : [
+                        {
+                          inline: true,
+                          label: t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE"),
+                          type: "text",
+                          value: t(getServiceCategoryByCode(pgrData?.ServiceWrappers[0].service?.serviceCode, serviceDefs) || "NA"),
+                        },
+                        {
+                          inline: true,
+                          label: t("CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE"),
+                          type: "text",
+                          value: t(getServiceNameByCode(pgrData?.ServiceWrappers[0].service?.serviceCode) || "NA"),
+                        },
+                      ]),
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_FILED_DATE"),
