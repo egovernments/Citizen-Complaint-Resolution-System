@@ -27,7 +27,7 @@ export function buildServiceDefLabelMap(
  */
 export function useServiceDefLabels(): {
   labels: Record<string, string>;
-  refetch: () => void;
+  refetch: () => Promise<unknown>;
 } {
   const [locale] = useLocaleState();
   const tenantId = digitClient.stateTenantId;
@@ -42,8 +42,6 @@ export function useServiceDefLabels(): {
   });
   return {
     labels: data ?? {},
-    refetch: () => {
-      void refetch();
-    },
+    refetch: () => refetch(),
   };
 }
