@@ -225,10 +225,12 @@ export function ComplaintTypeList() {
                       )}
                     </span>
                     <span
-                      className={`min-w-0 break-words ${
+                      className={`min-w-0 break-words text-sm ${
                         isCodeLabel
-                          ? 'font-mono text-sm text-muted-foreground'
-                          : `font-semibold ${g.isUncategorized ? 'text-muted-foreground' : ''}`
+                          ? 'font-mono text-muted-foreground'
+                          : g.isUncategorized
+                            ? 'text-muted-foreground'
+                            : ''
                       }`}
                     >
                       {g.label}

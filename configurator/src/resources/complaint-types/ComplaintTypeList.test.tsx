@@ -77,7 +77,6 @@ describe('ComplaintTypeList (accordion)', () => {
     const label = screen.getByText('Sanitation & Waste');
     expect(label).toBeInTheDocument();
     expect(label).not.toHaveClass('font-mono');
-    expect(label).toHaveClass('font-semibold');
   });
 
   it('shows an unlabeled type as its menuPath code in monospace', () => {
