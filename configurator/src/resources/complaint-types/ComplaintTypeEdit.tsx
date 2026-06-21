@@ -1,10 +1,44 @@
+import { useLocaleState, type RaRecord } from 'ra-core';
 import { DigitEdit, DigitFormInput, DigitFormSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { BooleanInput } from '@/admin/widgets';
+import { localizationService } from '@/api/services/localization';
+import { digitClient } from '@/providers/bridge';
 
 export function ComplaintTypeEdit() {
+  const [locale] = useLocaleState();
+
+  // The sub-type's display name lives in two places: the MDMS record's `name`
+  // field AND the SERVICEDEFS.* localization keys the citizen/employee PGR UI
+  // reads. The MDMS update only changes the former, so re-seed the sub-type's
+  // name labels for the ACTIVE locale here, then cache-bust, so the new name
+  // shows everywhere. We deliberately omit `menuPath` so the PARENT type label
+  // (SERVICEDEFS.<menuPath>) is not overwritten — that's edited via type rename.
+  // Only the active locale is written, to avoid clobbering other languages'
+  // translations (same policy as type rename).
+  const afterUpdate = async (record: RaRecord) => {
+    const data = record as unknown as {
+      serviceCode?: string;
+      name?: string;
+      department?: string;
+    };
+    const serviceCode = data.serviceCode?.trim();
+    const name = data.name?.trim();
+    if (!serviceCode || !name) return;
+
+    const tenantId = digitClient.stateTenantId;
+    if (!tenantId) return;
+
+    await localizationService.uploadComplaintTypeLocalizations(
+      tenantId,
+      [{ serviceCode, name, department: data.department }],
+      locale,
+    );
+    await localizationService.cacheBust();
+  };
+
   return (
-    <DigitEdit title="Edit Complaint Type">
+    <DigitEdit title="Edit Complaint Type" afterUpdate={afterUpdate}>
       <FieldSection title="Details">
         <div className="space-y-4">
           <DigitFormInput source="menuPath" label="Complaint Type (Menu Path)" validate={v.required} />

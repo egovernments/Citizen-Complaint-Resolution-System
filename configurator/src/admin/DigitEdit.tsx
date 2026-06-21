@@ -41,6 +41,11 @@ export interface DigitEditProps {
   redirect?: 'list' | 'edit' | 'show' | false;
   /** Optional pre-submit transform */
   transform?: TransformData;
+  /** Optional post-success side-effect — e.g. re-seed dependent localization
+   *  rows for the updated record. Runs after the update succeeds, before the
+   *  redirect. Failures are caught + surfaced as a toast; the redirect still
+   *  fires so the operator isn't stranded on the edit form. */
+  afterUpdate?: (data: RaRecord) => void | Promise<void>;
 }
 
 function DigitEditContent({
@@ -159,7 +164,7 @@ function DigitEditContent({
   );
 }
 
-export function DigitEdit({ title, children, resource, id, redirect = 'list', transform }: DigitEditProps) {
+export function DigitEdit({ title, children, resource, id, redirect = 'list', transform, afterUpdate }: DigitEditProps) {
   const { info, capture, clear } = useMutationError();
   const contextResource = useResourceContext();
   const redirectTo = useRedirect();
@@ -175,13 +180,27 @@ export function DigitEdit({ title, children, resource, id, redirect = 'list', tr
       transform={transform}
       mutationOptions={{
         onError: (err) => capture(err),
-        onSuccess: (data) => {
+        onSuccess: async (data) => {
           clear();
           const label = pickRecordLabel(data);
           toast({
             title: `${prettyResourceSingular(effectiveResource)} updated`,
             description: label !== 'Record' ? label : undefined,
           });
+          // Run any per-resource post-update side-effect (e.g. re-seed
+          // localization rows). Errors don't block the redirect — the record
+          // itself saved successfully.
+          if (afterUpdate && data) {
+            try {
+              await afterUpdate(data as RaRecord);
+            } catch (e) {
+              toast({
+                title: 'Post-update step failed',
+                description: e instanceof Error ? e.message : String(e),
+                variant: 'destructive',
+              });
+            }
+          }
           if (redirect && effectiveResource) {
             redirectTo(redirect, effectiveResource, (data as RaRecord | undefined)?.id, data as RaRecord | undefined);
           }
