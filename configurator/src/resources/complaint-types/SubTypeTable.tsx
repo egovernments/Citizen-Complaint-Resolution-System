@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Pencil, Trash2 } from 'lucide-react';
 import { StatusChip } from '@/admin/fields';
 import { Button } from '@/components/ui/button';
+import { CopyableCode } from '@/components/ui/copyable-code';
 import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog';
 import type { SubTypeRecord } from './groupComplaintTypes';
 
@@ -43,7 +44,9 @@ export function SubTypeTable({ subTypes, onDelete }: SubTypeTableProps) {
               className="cursor-pointer border-t border-border hover:bg-muted/40"
             >
               <td className="px-3 py-2">{label}</td>
-              <td className="px-3 py-2 font-mono text-xs text-primary whitespace-nowrap">{s.serviceCode}</td>
+              <td className="px-3 py-2">
+                <CopyableCode value={s.serviceCode} className="max-w-[200px] text-xs text-primary" />
+              </td>
               <td className="px-3 py-2">{s.department ?? '--'}</td>
               <td className="px-3 py-2">{s.slaHours != null ? `${s.slaHours}h` : '--'}</td>
               <td className="px-3 py-2">

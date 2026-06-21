@@ -12,6 +12,7 @@ import { SubTypeTable } from './SubTypeTable';
 import { RenameTypeDialog } from './RenameTypeDialog';
 import { useServiceDefLabels } from './useServiceDefLabels';
 import { menuPathCode } from './menuPathCode';
+import { CopyableCode } from '@/components/ui/copyable-code';
 import { localizationService } from '@/api/services/localization';
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 import { digitClient } from '@/providers/bridge';
@@ -224,17 +225,21 @@ export function ComplaintTypeList() {
                         <ChevronRight className="w-4 h-4" />
                       )}
                     </span>
-                    <span
-                      className={`min-w-0 break-words text-sm ${
-                        isCodeLabel
-                          ? 'font-mono text-muted-foreground'
-                          : g.isUncategorized
-                            ? 'text-muted-foreground'
-                            : ''
-                      }`}
-                    >
-                      {g.label}
-                    </span>
+                    {isCodeLabel ? (
+                      <CopyableCode
+                        value={g.label}
+                        showCopy={false}
+                        className="text-sm text-muted-foreground"
+                      />
+                    ) : (
+                      <span
+                        className={`min-w-0 break-words text-sm ${
+                          g.isUncategorized ? 'text-muted-foreground' : ''
+                        }`}
+                      >
+                        {g.label}
+                      </span>
+                    )}
                     <span className="tabular-nums">{g.count}</span>
                     <span className="flex items-center justify-end gap-2">
                       <Badge
