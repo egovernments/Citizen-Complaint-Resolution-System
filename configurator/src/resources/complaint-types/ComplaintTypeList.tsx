@@ -10,6 +10,8 @@ import { groupComplaintTypes, type SubTypeRecord } from './groupComplaintTypes';
 import { filterComplaintTypeGroups } from './filterComplaintTypeGroups';
 import { SubTypeTable } from './SubTypeTable';
 import { RenameTypeDialog } from './RenameTypeDialog';
+import { useServiceDefLabels } from './useServiceDefLabels';
+import { humanizeMenuPath } from './humanizeMenuPath';
 import { localizationService } from '@/api/services/localization';
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 import { digitClient } from '@/providers/bridge';
@@ -33,6 +35,16 @@ export function ComplaintTypeList() {
   const dataProvider = useDataProvider();
   const notify = useNotify();
   const { locales } = useAvailableLocales();
+  const { labels: serviceDefLabels, refetch: refetchLabels } = useServiceDefLabels();
+
+  // The configurator i18n only loads the `configurator-ui` module, so the
+  // SERVICEDEFS.* type labels (module `rainmaker-pgr`) won't resolve through
+  // `translate`. Resolve them from the fetched map, and humanize the raw
+  // menuPath (e.g. `complaints.categories.GarbageNotCollected`) as a fallback.
+  const labelTranslate = (key: string, opts?: { _?: string }) =>
+    key.startsWith('SERVICEDEFS.')
+      ? serviceDefLabels[key] ?? humanizeMenuPath(opts?._ ?? '')
+      : translate(key, opts);
 
   const handleRenameType = async (menuPath: string, newName: string) => {
     const tenantId = digitClient.stateTenantId;
@@ -49,6 +61,7 @@ export function ComplaintTypeList() {
     }
     await localizationService.cacheBust();
     notify('Complaint type renamed', { type: 'info' });
+    await refetchLabels();
     await refetch();
   };
 
@@ -67,7 +80,7 @@ export function ComplaintTypeList() {
 
   const allGroups = groupComplaintTypes(
     (data ?? []) as unknown as SubTypeRecord[],
-    translate,
+    labelTranslate,
   );
   const searching = query.trim().length > 0;
   const groups = filterComplaintTypeGroups(allGroups, query);

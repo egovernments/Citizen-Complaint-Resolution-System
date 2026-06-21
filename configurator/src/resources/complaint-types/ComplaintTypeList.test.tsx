@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const navigate = vi.fn();
@@ -15,6 +15,13 @@ vi.mock('@/hooks/useAvailableLocales', () => ({
   useAvailableLocales: () => ({ locales: [{ value: 'en_IN' }] }),
 }));
 vi.mock('@/providers/bridge', () => ({ digitClient: { stateTenantId: 'pb' } }));
+
+// Type labels come from the rainmaker-pgr SERVICEDEFS map; mock it so tests can
+// control whether a real label exists (else the UI humanizes the menuPath).
+const labelsState = vi.hoisted(() => ({ labels: {} as Record<string, string> }));
+vi.mock('./useServiceDefLabels', () => ({
+  useServiceDefLabels: () => ({ labels: labelsState.labels, refetch: vi.fn() }),
+}));
 
 vi.mock('ra-core', () => ({
   useTranslate: () => (key: string, opts?: { _?: string }) => opts?._ ?? key,
@@ -60,6 +67,23 @@ vi.mock('ra-core', () => ({
 import { ComplaintTypeList } from './ComplaintTypeList';
 
 describe('ComplaintTypeList (accordion)', () => {
+  afterEach(() => {
+    labelsState.labels = {};
+  });
+
+  it('shows the real SERVICEDEFS label when localization provides one', () => {
+    labelsState.labels = { 'SERVICEDEFS.SANITATION': 'Sanitation & Waste' };
+    render(<ComplaintTypeList />);
+    expect(screen.getByText('Sanitation & Waste')).toBeInTheDocument();
+  });
+
+  it('humanizes the raw menuPath when no SERVICEDEFS label exists', () => {
+    labelsState.labels = {};
+    render(<ComplaintTypeList />);
+    // "Sanitation" stays "Sanitation"; a dotted onboarding code would be cleaned up.
+    expect(screen.getByText('Sanitation')).toBeInTheDocument();
+  });
+
   it('renders complaint type rows collapsed by default', () => {
     render(<ComplaintTypeList />);
     expect(screen.getByText('Sanitation')).toBeInTheDocument();
