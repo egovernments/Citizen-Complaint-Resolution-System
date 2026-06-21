@@ -9,21 +9,36 @@ import {
 import { cn } from '@/lib/utils';
 
 interface CopyableCodeProps {
-  /** The code string to display, truncate, reveal on hover, and copy. */
+  /** Full value — shown in the tooltip and copied to the clipboard. */
   value: string;
-  /** Extra classes on the wrapper — set width (e.g. `max-w-[200px]`), size, color. */
+  /** Max characters shown before the label is shortened with an ellipsis. */
+  maxChars?: number;
+  /** Extra classes on the wrapper (size, color, etc.). */
   className?: string;
   /** Render the copy button (default true). */
   showCopy?: boolean;
 }
 
 /**
- * A monospace code that truncates to its container with an ellipsis, reveals the
- * full value in a tooltip on hover, and (optionally) offers a one-click copy.
- * Font size and color are inherited from `className` so callers can theme it.
+ * A monospace code that shortens long values with an ellipsis, reveals the FULL
+ * value in a tooltip on hover, and (optionally) copies the full value.
+ *
+ * Truncation is done on the string (not via CSS `truncate`) because CSS
+ * ellipsis doesn't work inside auto-layout table cells — there the cell just
+ * grows to the content, so nothing actually gets shortened and the tooltip ends
+ * up identical to the visible text.
  */
-export function CopyableCode({ value, className, showCopy = true }: CopyableCodeProps) {
+export function CopyableCode({
+  value,
+  maxChars = 24,
+  className,
+  showCopy = true,
+}: CopyableCodeProps) {
   const [copied, setCopied] = useState(false);
+
+  const display =
+    value.length > maxChars ? `${value.slice(0, maxChars - 1).trimEnd()}…` : value;
+  const isShortened = display !== value;
 
   const handleCopy = async (e: MouseEvent) => {
     e.stopPropagation();
@@ -37,19 +52,23 @@ export function CopyableCode({ value, className, showCopy = true }: CopyableCode
   };
 
   return (
-    <span className={cn('inline-flex items-center gap-1 min-w-0 max-w-full', className)}>
-      <TooltipProvider delayDuration={300}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="min-w-0 truncate font-mono">{value}</span>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-[min(90vw,28rem)]">
-            {/* Codes have no spaces; break-all lets long ones wrap instead of
-                rendering one ultra-wide line that the tooltip clips. */}
-            <span className="font-mono break-all">{value}</span>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+    <span className={cn('inline-flex items-center gap-1 max-w-full', className)}>
+      {isShortened ? (
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="font-mono">{display}</span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[min(90vw,28rem)]">
+              {/* Codes have no spaces; break-all lets long ones wrap instead of
+                  rendering one ultra-wide line that the tooltip clips. */}
+              <span className="font-mono break-all">{value}</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : (
+        <span className="font-mono">{display}</span>
+      )}
       {showCopy && (
         <button
           type="button"

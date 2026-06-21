@@ -229,6 +229,7 @@ export function ComplaintTypeList() {
                       <CopyableCode
                         value={g.label}
                         showCopy={false}
+                        maxChars={32}
                         className="text-sm text-muted-foreground"
                       />
                     ) : (

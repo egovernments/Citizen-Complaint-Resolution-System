@@ -45,7 +45,7 @@ export function SubTypeTable({ subTypes, onDelete }: SubTypeTableProps) {
             >
               <td className="px-3 py-2">{label}</td>
               <td className="px-3 py-2">
-                <CopyableCode value={s.serviceCode} className="max-w-[200px] text-xs text-primary" />
+                <CopyableCode value={s.serviceCode} maxChars={22} className="text-xs text-primary" />
               </td>
               <td className="px-3 py-2">{s.department ?? '--'}</td>
               <td className="px-3 py-2">{s.slaHours != null ? `${s.slaHours}h` : '--'}</td>

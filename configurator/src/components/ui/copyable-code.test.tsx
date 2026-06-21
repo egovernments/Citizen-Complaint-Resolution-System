@@ -7,16 +7,24 @@ describe('CopyableCode', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the value', () => {
-    render(<CopyableCode value="GarbageNotCollected" />);
-    expect(screen.getByText('GarbageNotCollected')).toBeInTheDocument();
+  it('renders short values in full', () => {
+    render(<CopyableCode value="GARB" />);
+    expect(screen.getByText('GARB')).toBeInTheDocument();
   });
 
-  it('copies the value to the clipboard when the copy button is clicked', async () => {
-    render(<CopyableCode value="GarbageNotCollected" />);
-    fireEvent.click(screen.getByLabelText('Copy GarbageNotCollected'));
+  it('shortens long values with an ellipsis (the visible text differs from the full value)', () => {
+    const long = 'PUBLIC_STREET_LIGHT_NOT_WORKING_AT_NIGHT';
+    render(<CopyableCode value={long} maxChars={20} />);
+    expect(screen.queryByText(long)).not.toBeInTheDocument();
+    expect(screen.getByText(/…$/)).toBeInTheDocument();
+  });
+
+  it('copies the full value even when the display is shortened', async () => {
+    const long = 'PUBLIC_STREET_LIGHT_NOT_WORKING_AT_NIGHT';
+    render(<CopyableCode value={long} maxChars={20} />);
+    fireEvent.click(screen.getByLabelText(`Copy ${long}`));
     await waitFor(() =>
-      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('GarbageNotCollected'),
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(long),
     );
   });
 
