@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGetList, useTranslate, useDataProvider, useNotify, type RaRecord } from 'ra-core';
+import { useGetList, useTranslate, useDataProvider, useNotify, useLocaleState, type RaRecord } from 'ra-core';
 import { RefreshCw, ChevronRight, ChevronDown, Search, Plus, Pencil } from 'lucide-react';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +14,6 @@ import { useServiceDefLabels } from './useServiceDefLabels';
 import { menuPathCode } from './menuPathCode';
 import { CopyableCode } from '@/components/ui/copyable-code';
 import { localizationService } from '@/api/services/localization';
-import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 import { digitClient } from '@/providers/bridge';
 
 const GRID = 'grid grid-cols-[28px_1fr_120px_120px] gap-2';
@@ -35,7 +34,7 @@ export function ComplaintTypeList() {
 
   const dataProvider = useDataProvider();
   const notify = useNotify();
-  const { locales } = useAvailableLocales();
+  const [locale] = useLocaleState();
   const { labels: serviceDefLabels, refetch: refetchLabels } = useServiceDefLabels();
 
   // The configurator i18n only loads the `configurator-ui` module, so the
@@ -51,16 +50,16 @@ export function ComplaintTypeList() {
   const handleRenameType = async (menuPath: string, newName: string) => {
     const tenantId = digitClient.stateTenantId;
     if (!tenantId) return;
-    // The type's display name is localization-only: upsert SERVICEDEFS.<CODE>
-    // for every configured locale, then cache-bust so the list re-reads it.
+    // The type's display name is localization-only. We upsert SERVICEDEFS.<CODE>
+    // for the ACTIVE locale only: localization rows are keyed per
+    // (tenant, module, locale, code), so writing every locale would clobber
+    // other languages' existing translations with this one string. Other
+    // locales are translated separately (Localization screen / bulk import).
     // The menuPath code itself is never modified.
     const code = `SERVICEDEFS.${menuPath.toUpperCase()}`;
-    const targetLocales = new Set<string>([...locales.map((l) => l.value), 'en_IN']);
-    for (const locale of targetLocales) {
-      await localizationService.upsertMessages(tenantId, locale, [
-        { code, message: newName, module: 'rainmaker-pgr', locale },
-      ]);
-    }
+    await localizationService.upsertMessages(tenantId, locale, [
+      { code, message: newName, module: 'rainmaker-pgr', locale },
+    ]);
     await localizationService.cacheBust();
     notify('Complaint type renamed', { type: 'info' });
     await refetchLabels();

@@ -27,6 +27,7 @@ vi.mock('ra-core', () => ({
   useTranslate: () => (key: string, opts?: { _?: string }) => opts?._ ?? key,
   useDataProvider: () => ({ delete: vi.fn().mockResolvedValue({ data: {} }) }),
   useNotify: () => vi.fn(),
+  useLocaleState: () => ['en_IN', vi.fn()],
   useGetList: () => ({
     data: [
       {
@@ -132,7 +133,7 @@ describe('ComplaintTypeList (accordion)', () => {
     expect(screen.queryByLabelText('Rename Uncategorized')).not.toBeInTheDocument();
   });
 
-  it('renames a type: upserts SERVICEDEFS.<menuPath> across locales then cache-busts', async () => {
+  it('renames a type: upserts SERVICEDEFS.<menuPath> for the current locale only, then cache-busts', async () => {
     upsertMessages.mockClear();
     cacheBust.mockClear();
     render(<ComplaintTypeList />);
@@ -141,6 +142,8 @@ describe('ComplaintTypeList (accordion)', () => {
     fireEvent.change(input, { target: { value: 'Sanitation & Waste' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(cacheBust).toHaveBeenCalled());
+    // Only the active locale is written — other languages are left untouched.
+    expect(upsertMessages).toHaveBeenCalledTimes(1);
     expect(upsertMessages).toHaveBeenCalledWith(
       'pb',
       'en_IN',
