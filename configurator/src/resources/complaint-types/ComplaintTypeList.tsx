@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGetList, useTranslate, useDataProvider, useNotify, useLocaleState, type RaRecord } from 'ra-core';
+import { useGetList, useTranslate, useDataProvider, useLocaleState, type RaRecord } from 'ra-core';
 import { RefreshCw, ChevronRight, ChevronDown, Search, Plus, Pencil } from 'lucide-react';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import { menuPathCode } from './menuPathCode';
 import { CopyableCode } from '@/components/ui/copyable-code';
 import { localizationService } from '@/api/services/localization';
 import { digitClient } from '@/providers/bridge';
+import { toast } from '@/hooks/use-toast';
 
 const GRID = 'grid grid-cols-[28px_1fr_120px_120px] gap-2';
 
@@ -33,7 +34,6 @@ export function ComplaintTypeList() {
   );
 
   const dataProvider = useDataProvider();
-  const notify = useNotify();
   const [locale] = useLocaleState();
   const { labels: serviceDefLabels, refetch: refetchLabels } = useServiceDefLabels();
 
@@ -61,7 +61,7 @@ export function ComplaintTypeList() {
       { code, message: newName, module: 'rainmaker-pgr', locale },
     ]);
     await localizationService.cacheBust();
-    notify('Complaint type renamed', { type: 'info' });
+    toast({ title: 'Complaint type renamed', description: newName });
     await refetchLabels();
     await refetch();
   };
@@ -75,7 +75,7 @@ export function ComplaintTypeList() {
       id: record.id,
       previousData: record as unknown as RaRecord,
     });
-    notify('Sub-type deleted', { type: 'info' });
+    toast({ title: 'Sub-type deleted', description: record.name ?? record.serviceName });
     await refetch();
   };
 

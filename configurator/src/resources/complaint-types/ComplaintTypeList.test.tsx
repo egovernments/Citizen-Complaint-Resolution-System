@@ -16,6 +16,9 @@ vi.mock('@/hooks/useAvailableLocales', () => ({
 }));
 vi.mock('@/providers/bridge', () => ({ digitClient: { stateTenantId: 'pb' } }));
 
+const { toast } = vi.hoisted(() => ({ toast: vi.fn() }));
+vi.mock('@/hooks/use-toast', () => ({ toast }));
+
 // Type labels come from the rainmaker-pgr SERVICEDEFS map; mock it so tests can
 // control whether a real label exists (else the UI humanizes the menuPath).
 const labelsState = vi.hoisted(() => ({ labels: {} as Record<string, string> }));
@@ -26,7 +29,6 @@ vi.mock('./useServiceDefLabels', () => ({
 vi.mock('ra-core', () => ({
   useTranslate: () => (key: string, opts?: { _?: string }) => opts?._ ?? key,
   useDataProvider: () => ({ delete: vi.fn().mockResolvedValue({ data: {} }) }),
-  useNotify: () => vi.fn(),
   useLocaleState: () => ['en_IN', vi.fn()],
   useGetList: () => ({
     data: [
@@ -156,5 +158,18 @@ describe('ComplaintTypeList (accordion)', () => {
     fireEvent.click(screen.getByLabelText('Rename Sanitation'));
     // The sub-type stays hidden because the row didn't expand.
     expect(screen.queryByText('Garbage not collected')).not.toBeInTheDocument();
+  });
+
+  it('shows a toast after deleting a sub-type', async () => {
+    toast.mockClear();
+    render(<ComplaintTypeList />);
+    fireEvent.click(screen.getByText('Sanitation')); // expand
+    fireEvent.click(screen.getByLabelText('Delete Garbage not collected'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Sub-type deleted' }),
+      ),
+    );
   });
 });
