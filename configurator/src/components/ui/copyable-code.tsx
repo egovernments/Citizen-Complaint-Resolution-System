@@ -43,8 +43,10 @@ export function CopyableCode({ value, className, showCopy = true }: CopyableCode
           <TooltipTrigger asChild>
             <span className="min-w-0 truncate font-mono">{value}</span>
           </TooltipTrigger>
-          <TooltipContent>
-            <span className="font-mono">{value}</span>
+          <TooltipContent className="max-w-[min(90vw,28rem)]">
+            {/* Codes have no spaces; break-all lets long ones wrap instead of
+                rendering one ultra-wide line that the tooltip clips. */}
+            <span className="font-mono break-all">{value}</span>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
