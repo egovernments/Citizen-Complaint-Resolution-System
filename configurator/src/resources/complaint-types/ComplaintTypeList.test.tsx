@@ -71,17 +71,20 @@ describe('ComplaintTypeList (accordion)', () => {
     labelsState.labels = {};
   });
 
-  it('shows the real SERVICEDEFS label when localization provides one', () => {
+  it('shows the real SERVICEDEFS label as a normal name (not a code) when localization provides one', () => {
     labelsState.labels = { 'SERVICEDEFS.SANITATION': 'Sanitation & Waste' };
     render(<ComplaintTypeList />);
-    expect(screen.getByText('Sanitation & Waste')).toBeInTheDocument();
+    const label = screen.getByText('Sanitation & Waste');
+    expect(label).toBeInTheDocument();
+    expect(label).not.toHaveClass('font-mono');
+    expect(label).toHaveClass('font-semibold');
   });
 
-  it('humanizes the raw menuPath when no SERVICEDEFS label exists', () => {
+  it('shows an unlabeled type as its menuPath code in monospace', () => {
     labelsState.labels = {};
     render(<ComplaintTypeList />);
-    // "Sanitation" stays "Sanitation"; a dotted onboarding code would be cleaned up.
-    expect(screen.getByText('Sanitation')).toBeInTheDocument();
+    const label = screen.getByText('Sanitation');
+    expect(label).toHaveClass('font-mono');
   });
 
   it('renders complaint type rows collapsed by default', () => {

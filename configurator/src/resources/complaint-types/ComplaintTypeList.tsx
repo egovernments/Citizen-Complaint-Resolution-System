@@ -11,7 +11,7 @@ import { filterComplaintTypeGroups } from './filterComplaintTypeGroups';
 import { SubTypeTable } from './SubTypeTable';
 import { RenameTypeDialog } from './RenameTypeDialog';
 import { useServiceDefLabels } from './useServiceDefLabels';
-import { humanizeMenuPath } from './humanizeMenuPath';
+import { menuPathCode } from './menuPathCode';
 import { localizationService } from '@/api/services/localization';
 import { useAvailableLocales } from '@/hooks/useAvailableLocales';
 import { digitClient } from '@/providers/bridge';
@@ -39,11 +39,12 @@ export function ComplaintTypeList() {
 
   // The configurator i18n only loads the `configurator-ui` module, so the
   // SERVICEDEFS.* type labels (module `rainmaker-pgr`) won't resolve through
-  // `translate`. Resolve them from the fetched map, and humanize the raw
-  // menuPath (e.g. `complaints.categories.GarbageNotCollected`) as a fallback.
+  // `translate`. Resolve them from the fetched map; when a type has no label
+  // yet, fall back to its raw menuPath code (last segment), which the UI shows
+  // in monospace so it reads as an unnamed code rather than a real name.
   const labelTranslate = (key: string, opts?: { _?: string }) =>
     key.startsWith('SERVICEDEFS.')
-      ? serviceDefLabels[key] ?? humanizeMenuPath(opts?._ ?? '')
+      ? serviceDefLabels[key] ?? menuPathCode(opts?._ ?? '')
       : translate(key, opts);
 
   const handleRenameType = async (menuPath: string, newName: string) => {
@@ -204,6 +205,10 @@ export function ComplaintTypeList() {
             {groups.map((g) => {
               const key = g.menuPath || '__uncategorized__';
               const isOpen = searching || expanded.has(g.menuPath);
+              // No localized label → g.label is the raw menuPath code; render it
+              // in monospace so operators can spot types that still need naming.
+              const isCodeLabel =
+                !g.isUncategorized && !serviceDefLabels[`SERVICEDEFS.${g.menuPath}`];
               return (
                 <div key={key}>
                   <div
@@ -220,8 +225,10 @@ export function ComplaintTypeList() {
                       )}
                     </span>
                     <span
-                      className={`min-w-0 break-words font-semibold ${
-                        g.isUncategorized ? 'text-muted-foreground' : ''
+                      className={`min-w-0 break-words ${
+                        isCodeLabel
+                          ? 'font-mono text-sm text-muted-foreground'
+                          : `font-semibold ${g.isUncategorized ? 'text-muted-foreground' : ''}`
                       }`}
                     >
                       {g.label}
