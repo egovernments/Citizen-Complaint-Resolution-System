@@ -52,7 +52,15 @@ export function SubTypeTable({ subTypes, onDelete }: SubTypeTableProps) {
               <td className="px-3 py-2">
                 <StatusChip value={s.active} labels={{ true: 'Active', false: 'Inactive' }} />
               </td>
-              <td className="px-3 py-2 whitespace-nowrap">
+              {/* Guard the whole actions cell: the Delete trigger is wrapped in
+                  Radix AlertDialogTrigger (asChild), whose event composition can
+                  let the click leak to the row's navigate-to-Show handler. A
+                  stopPropagation here catches any action-cell click before it
+                  reaches the row, regardless of the trigger's own handling. */}
+              <td
+                className="px-3 py-2 whitespace-nowrap"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div className="flex items-center justify-end gap-1">
                   <Button
                     variant="ghost"

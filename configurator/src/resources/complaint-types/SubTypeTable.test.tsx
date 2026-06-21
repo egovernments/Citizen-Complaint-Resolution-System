@@ -54,6 +54,14 @@ describe('SubTypeTable', () => {
     await waitFor(() => expect(onDelete).toHaveBeenCalledWith(sub));
   });
 
+  it('clicking the Delete trigger opens the dialog without navigating to the row Show page', async () => {
+    navigate.mockClear();
+    render(<SubTypeTable subTypes={twoSubs} onDelete={vi.fn().mockResolvedValue(undefined)} />);
+    fireEvent.click(screen.getByLabelText('Delete Garbage not collected'));
+    await screen.findByRole('button', { name: 'Delete' });
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('warns that deleting the last sub-type removes the whole complaint type', async () => {
     render(<SubTypeTable subTypes={[sub]} onDelete={vi.fn().mockResolvedValue(undefined)} />);
     fireEvent.click(screen.getByLabelText('Delete Garbage not collected'));
