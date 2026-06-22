@@ -23,10 +23,11 @@ var globalConfigs = (function () {
   // (seeded during tenant onboarding). These values are a build-time fallback used only
   // when MDMS has not been seeded yet or cannot be reached. Changing these values alone
   // will NOT take effect in a running deployment — update the MDMS master data as well.
+  // All derived constraints (min/max length, allowed starting digits, error message) are
+  // computed at runtime from mobileNumberRegex — do NOT add separate fields for them here.
   var coreMobileConfigs = {
-    mobilePrefix: "+254",
-    mobileNumberPattern: "^0?[17][0-9]{8}$",
-    mobileNumberAllowedStartingCharacters: ["1", "7"]
+    countryCode: "+254",
+    mobileNumberRegex: "^0?[17][0-9]{8}$",
   };
 
   // Runtime locale fallback for local setup: force default language unless user explicitly changes it.

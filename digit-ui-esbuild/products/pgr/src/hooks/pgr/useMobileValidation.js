@@ -2,8 +2,6 @@ import {
   computeMobileLengths,
   extractAllowedStartingDigits,
   buildMobileErrorMessage,
-  DEFAULT_MOBILE_ALLOWED_STARTING_DIGITS,
-  DEFAULT_MOBILE_ERROR_MESSAGE,
   DEFAULT_MOBILE_PATTERN,
   DEFAULT_MOBILE_PREFIX,
 } from "@egovernments/digit-ui-libraries";
@@ -75,39 +73,31 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
   /** ---------- Priority 2: Global Config ---------- */
   const globalConfig = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS") || {};
 
-  /** ---------- Priority 3: Library defaults ---------- */
-  const defaultValidation = {
-    rules: {
-      allowedStartingCharacters: DEFAULT_MOBILE_ALLOWED_STARTING_DIGITS,
-      prefix: DEFAULT_MOBILE_PREFIX,
-      pattern: DEFAULT_MOBILE_PATTERN,
-      errorMessage: DEFAULT_MOBILE_ERROR_MESSAGE,
-      isActive: true,
-    },
-  };
-
-  /** ---------- Combined view (MDMS > globalConfigs > defaults) ---------- */
+  /** ---------- Combined view (MDMS > globalConfigs > library default) ----------
+   *
+   * `mobileNumberRegex` is the single source of truth. All derived values
+   * (allowedStartingDigits, minLength, maxLength, errorMessage) are computed
+   * from the resolved regex — never from separate config fields.
+   */
   const resolvedPattern =
     mdmsConfig?.mobileNumberRegex ||
+    globalConfig?.mobileNumberRegex ||
     globalConfig?.mobileNumberPattern ||
-    defaultValidation.rules.pattern;
+    DEFAULT_MOBILE_PATTERN;
 
   const { min: resolvedMin, max: resolvedMax } = computeMobileLengths(resolvedPattern);
 
   const validationRules = {
-    allowedStartingDigits:
-      extractAllowedStartingDigits(resolvedPattern) ||
-      globalConfig?.mobileNumberAllowedStartingCharacters ||
-      defaultValidation.rules.allowedStartingCharacters,
+    allowedStartingDigits: extractAllowedStartingDigits(resolvedPattern),
 
     countryCode:
       mdmsConfig?.countryCode ||
-      globalConfig?.mobilePrefix ||
-      defaultValidation.rules.prefix,
+      globalConfig?.countryCode ||
+      DEFAULT_MOBILE_PREFIX,
     prefix:
       mdmsConfig?.countryCode ||
-      globalConfig?.mobilePrefix ||
-      defaultValidation.rules.prefix,
+      globalConfig?.countryCode ||
+      DEFAULT_MOBILE_PREFIX,
 
     mobileNumberRegex: resolvedPattern,
     pattern: resolvedPattern,
@@ -115,15 +105,9 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
     minLength: resolvedMin,
     maxLength: resolvedMax > 0 ? resolvedMax : 15,
 
-    errorMessage:
-      globalConfig?.mobileNumberErrorMessage ||
-      buildMobileErrorMessage(resolvedPattern) ||
-      defaultValidation.rules.errorMessage,
+    errorMessage: buildMobileErrorMessage(resolvedPattern),
 
-    isActive:
-      mdmsConfig?.isActive !== undefined
-        ? mdmsConfig.isActive
-        : defaultValidation.rules.isActive,
+    isActive: mdmsConfig?.isActive !== undefined ? mdmsConfig.isActive : true,
   };
 
   // Mirror the resolved rule on `window` so synchronous, hook-less

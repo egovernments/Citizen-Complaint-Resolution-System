@@ -35,17 +35,21 @@ const STATE_TENANT = (import.meta.env.VITE_CITIZEN_STATE_TENANT as string) || 's
 const CITY_TENANT = (import.meta.env.VITE_CITIZEN_TENANT as string) || 'statea.citya';
 
 // Read mobile validation config from globalConfigs (injected by nginx/Ansible).
-// Falls back to Kenya defaults (+254, 9-10 digits starting with 7 or 1).
+// Fields: countryCode (E.164 prefix) + mobileNumberRegex. All other constraints
+// (maxLength, errorMessage) are derived from the regex at runtime.
 function getMobileConfig(): { regex: RegExp; prefix: string; maxLength: number; errorMessage: string } {
   const gc = (window as unknown as Record<string, { getConfig?: (k: string) => Record<string, unknown> | undefined }>)
     .globalConfigs?.getConfig?.('CORE_MOBILE_CONFIGS');
-  const pattern = (gc?.mobileNumberPattern as string | undefined) ?? '^0?[17][0-9]{8}$';
-  const prefix = (gc?.mobilePrefix as string | undefined) ?? '+254';
-  const maxLength = (gc?.mobileNumberLength as number | undefined) ?? 10;
+  const patternStr = (gc?.mobileNumberRegex as string | undefined) ?? '^0?[17][0-9]{8}$';
+  const countryCode = (gc?.countryCode as string | undefined) ?? '+254';
   let regex: RegExp;
-  try { regex = new RegExp(pattern); } catch { regex = /^0?[17][0-9]{8}$/; }
-  const errorMessage = `Enter a ${maxLength}-digit mobile number`;
-  return { regex, prefix, maxLength, errorMessage };
+  try { regex = new RegExp(patternStr); } catch { regex = /^0?[17][0-9]{8}$/; }
+  // Derive maxLength from regex quantifiers (last {n} or {m,n} group)
+  const lenMatch = patternStr.match(/\{(\d+)(?:,(\d+))?\}/g);
+  const last = lenMatch ? lenMatch[lenMatch.length - 1].match(/\{(\d+)(?:,(\d+))?\}/) : null;
+  const maxLength = last ? parseInt(last[2] || last[1], 10) + 1 : 10;
+  const errorMessage = `Enter a valid ${maxLength}-digit mobile number`;
+  return { regex, prefix: countryCode, maxLength, errorMessage };
 }
 
 type Step = 'mobile' | 'otp';

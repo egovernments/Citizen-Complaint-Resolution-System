@@ -50,13 +50,12 @@ const CreateEmployee = () => {
           list[0];
         if (!record) return null;
         const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
-        const pattern = record.mobileNumberRegex || gc?.mobileNumberPattern || DEFAULT_MOBILE_PATTERN;
+        const pattern = record.mobileNumberRegex || gc?.mobileNumberRegex || DEFAULT_MOBILE_PATTERN;
         const { max } = computeMobileLengths(pattern);
         return {
-          prefix: record.countryCode || gc?.mobilePrefix || DEFAULT_MOBILE_PREFIX,
+          countryCode: record.countryCode || gc?.countryCode || DEFAULT_MOBILE_PREFIX,
           pattern,
           maxLength: max > 0 ? max : 15,
-          errorMessage: gc?.mobileNumberErrorMessage || "CORE_COMMON_MOBILE_ERROR",
         };
       },
       staleTime: 300000,

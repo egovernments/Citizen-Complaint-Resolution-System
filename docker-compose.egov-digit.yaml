@@ -575,7 +575,7 @@ services:
     restart: "no"
 
   egov-user:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-user:updatenovalidate-fix
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:master-e22c7c5
     depends_on:
       pgbouncer:
         condition: service_healthy

@@ -29,10 +29,10 @@ export const CreateComplaint = ({ parentUrl }) => {
       list[0];
     if (!record) return null;
     const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
-    const pattern = record.mobileNumberRegex || gc?.mobileNumberPattern || DEFAULT_MOBILE_PATTERN;
+    const pattern = record.mobileNumberRegex || gc?.mobileNumberRegex || DEFAULT_MOBILE_PATTERN;
     const { max } = computeMobileLengths(pattern);
     return {
-      prefix: record.countryCode || gc?.mobilePrefix || DEFAULT_MOBILE_PREFIX,
+      countryCode: record.countryCode || gc?.countryCode || DEFAULT_MOBILE_PREFIX,
       pattern,
       maxLength: max > 0 ? max : 15,
     };
@@ -54,8 +54,8 @@ export const CreateComplaint = ({ parentUrl }) => {
 
   const mobileValidationConfig = mobileConfigCurrent || mobileConfigState;
 
-  const mobilePrefix = mobileValidationConfig?.prefix || window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobilePrefix || DEFAULT_MOBILE_PREFIX;
-  const mobilePattern = mobileValidationConfig?.pattern || window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern || DEFAULT_MOBILE_PATTERN;
+  const countryCode = mobileValidationConfig?.countryCode || window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.countryCode || DEFAULT_MOBILE_PREFIX;
+  const mobilePattern = mobileValidationConfig?.pattern || window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberRegex || DEFAULT_MOBILE_PATTERN;
   const mobileMaxLength = mobileValidationConfig?.maxLength || computeMobileLengths(mobilePattern).max || 15;
   const [showToast, setShowToast] = useState(null);
   const { t } = useTranslation();
@@ -255,7 +255,7 @@ export const CreateComplaint = ({ parentUrl }) => {
               maxLength: mobileMaxLength,
             },
             maxLength: mobileMaxLength,
-            componentInFront: <div className="employee-card-input employee-card-input--front">{mobilePrefix}</div>,
+            componentInFront: <div className="employee-card-input employee-card-input--front">{countryCode}</div>,
             error: t("CORE_COMMON_MOBILE_ERROR"),
           },
         },

@@ -1,48 +1,35 @@
 /**
  * Default mobile-number validation values.
  *
- * Historically the codebase duplicated 10-digit Indian mobile defaults
- * (`[6-9][0-9]{9}`, prefix `+91`, length 10) across at least seven call
- * sites. That made it impossible to roll out a non-Indian deployment
- * without either (a) seeding MDMS on every environment or (b) editing
- * every file. This module centralises the fallback so an implementer
- * only has one place to look and one place to patch.
+ * Only the regex and country-code prefix are stored here. All derived values
+ * (min length, max length, allowed starting digits, error message) are
+ * computed at runtime from `DEFAULT_MOBILE_PATTERN` by the utility functions
+ * below — there is no separate constant for each derived value.
  *
- * Defaults here are used when both globalConfigs and MDMS are unavailable.
- * To override at runtime, prefer in this order:
+ * Resolution order at runtime (highest → lowest priority):
+ *   1. MDMS `common-masters.MobileNumberValidation` — operator-managed, per-tenant.
+ *      Fields: `countryCode` + `mobileNumberRegex`.  Everything else is derived.
+ *   2. `window.globalConfigs.getConfig("CORE_MOBILE_CONFIGS")` — injected by
+ *      Ansible/nginx.  Fields: `countryCode` + `mobileNumberRegex`.
+ *      Changing this file alone does NOT override MDMS in production.
+ *   3. These constants — bare-metal dev-box fallback when neither MDMS nor
+ *      globalConfigs is available.
  *
- *   1. `window.globalConfigs.getConfig("CORE_MOBILE_CONFIGS")` — set
- *      per-deployment in `globalConfigs.js`. Highest priority.
- *   2. MDMS `common-masters.MobileNumberValidation` — the single source of
- *      truth, queried at startup and cached for 5 minutes.
- *   3. These constants — last-resort fallback.
- *
- * See `products/pgr/src/hooks/pgr/useMobileValidation.js` for the
- * resolution code.
+ * See `products/pgr/src/hooks/pgr/useMobileValidation.js` for the hook that
+ * applies this priority chain.
  */
 
-/** Full-anchor regex (use with `new RegExp(pattern)`). */
+/** Full-anchor regex — the single source of truth for all derived constraints. */
 export const DEFAULT_MOBILE_PATTERN = "^0?[17][0-9]{8}$";
 
 /**
- * Lax (no-anchor) pattern for inbox-style search fields that want to
- * match either an empty string or a mobile number, e.g. `"^$|<lax>"`.
+ * Lax (no-anchor) variant for inbox search fields that accept an empty string
+ * or a partial mobile number (e.g. `"^$|<lax>"`).
  */
 export const DEFAULT_MOBILE_PATTERN_LAX = "0?[17][0-9]{8}";
 
-/** Displayed as a non-editable prefix on mobile inputs. */
+/** E.164 country-code prefix displayed in front of mobile inputs. */
 export const DEFAULT_MOBILE_PREFIX = "+254";
-
-/** First digits accepted by the default pattern. */
-export const DEFAULT_MOBILE_ALLOWED_STARTING_DIGITS = ["1", "7"];
-
-/**
- * Raw (non-localised) error message — UIs that have access to the
- * translator should prefer a locale key like
- * `CORE_COMMON_MOBILE_NUMBER_INVALID` instead.
- */
-export const DEFAULT_MOBILE_ERROR_MESSAGE =
-  "Please enter a valid 9-10 digit mobile number starting with 7 or 1";
 
 /**
  * Extract the set of allowed starting digits from a mobile regex pattern.

@@ -1232,9 +1232,9 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     value: g.code,
     label: t(g.i18nKey),
   }));
-  const mobilePrefix =
-    mdmsValidationData?.prefix ||
-    window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobilePrefix ||
+  const countryCode =
+    mdmsValidationData?.countryCode ||
+    window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.countryCode ||
     DEFAULT_MOBILE_PREFIX;
   const isMultiRoot = Digit.Utils.getMultiRootTenant();
 
@@ -1391,7 +1391,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
             >
               {userInfo?.userName ? userInfo.userName : ""}
               {userInfo?.userName && (mobileNumber || email) ? "  ·  " : ""}
-              {mobileNumber ? `${mobilePrefix} ${mobileNumber}` : ""}
+              {mobileNumber ? `${countryCode} ${mobileNumber}` : ""}
               {mobileNumber && email ? "  ·  " : ""}
               {email || ""}
             </div>
@@ -1476,7 +1476,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
                 }}
               >
                 <Phone style={{ height: "0.95rem", width: "0.95rem" }} aria-hidden />
-                {mobilePrefix}
+                {countryCode}
               </span>
               <input
                 id="profile-mobile"

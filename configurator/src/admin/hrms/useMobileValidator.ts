@@ -135,9 +135,7 @@ function buildErrorMessage(regex: string): string {
 
 // ── globalConfigs fallback ───────────────────────────────────────────────────
 // Read CORE_MOBILE_CONFIGS from globalConfigs.js (injected by Ansible/nginx).
-// Accepts both field names used by the Ansible template:
-//   mobileNumberPattern / mobileNumberRegex  (regex string)
-//   mobilePrefix / countryCode               (E.164 prefix)
+// Fields: countryCode (E.164 prefix) + mobileNumberRegex.
 
 function readGlobalMobileConfig(): { mobileNumberRegex: string; countryCode: string } | null {
   if (typeof window === 'undefined') return null;
@@ -145,14 +143,9 @@ function readGlobalMobileConfig(): { mobileNumberRegex: string; countryCode: str
     window as unknown as Record<string, { getConfig?: (key: string) => Record<string, unknown> | undefined }>
   ).globalConfigs?.getConfig?.('CORE_MOBILE_CONFIGS');
   if (!gc) return null;
-  const regex =
-    (gc.mobileNumberPattern as string | undefined) ??
-    (gc.mobileNumberRegex as string | undefined);
+  const regex = (gc.mobileNumberRegex as string | undefined);
   if (!regex) return null;
-  const countryCode =
-    (gc.mobilePrefix as string | undefined) ??
-    (gc.countryCode as string | undefined) ??
-    '';
+  const countryCode = (gc.countryCode as string | undefined) ?? '';
   return { mobileNumberRegex: regex, countryCode };
 }
 
@@ -167,7 +160,6 @@ function parseRules(record: Record<string, unknown>): MobileRules {
     FALLBACK_REGEX;
   const countryCode =
     typeof record.countryCode === 'string' ? record.countryCode :
-    typeof record.mobilePrefix === 'string' ? record.mobilePrefix :
     FALLBACK_COUNTRY_CODE;
 
   const { max } = computeRegexLengths(regex);

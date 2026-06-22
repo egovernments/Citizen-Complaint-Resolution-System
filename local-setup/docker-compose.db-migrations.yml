@@ -344,7 +344,7 @@ services:
     restart: "no"
 
   egov-user:
-    image: egovio/egov-user:mobile-validation-user-otp-a12e7d5
+    image: egovio/egov-user:master-e22c7c5
     container_name: egov-user
     depends_on:
       pgbouncer:
@@ -443,7 +443,7 @@ services:
     - egov-network
 
   user-otp:
-    image: egovio/user-otp:mobile-validation-user-otp-a12e7d5
+    image: egovio/user-otp:master-e22c7c5
     container_name: user-otp
     depends_on:
       egov-otp:
@@ -490,7 +490,7 @@ services:
     - egov-network
 
   egov-notification-sms:
-    image: egovio/egov-notification-sms:mobile-validation-user-otp-a12e7d5
+    image: egovio/egov-notification-sms:master-e22c7c5
     container_name: egov-notification-sms
     depends_on:
       redpanda:

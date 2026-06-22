@@ -1,52 +1,143 @@
 /**
- * Custom hook to fetch mobile number validation configuration from MDMS
- * Priority:
- * 1. Global configs (window.globalConfigs?.getConfig("CORE_MOBILE_CONFIGS"))
- * 2. MDMS configs (MobileNumberValidation — flat countryCode/mobileNumberRegex)
- * 3. Default fallback validation
+ * Custom hook that returns mobile-number validation config for the current tenant.
  *
- * Returns all available country validation configs for dropdown support,
- * plus the currently selected/default validation rules.
+ * Resolution order (highest → lowest priority):
+ *   1. MDMS — `common-masters.MobileNumberValidation` (countryCode + mobileNumberRegex)
+ *   2. globalConfigs — CORE_MOBILE_CONFIGS.countryCode + mobileNumberRegex
+ *   3. Library constants — DEFAULT_MOBILE_PATTERN / DEFAULT_MOBILE_PREFIX
+ *
+ * `mobileNumberRegex` is the single source of truth. All derived values
+ * (allowedStartingCharacters, minLength, maxLength, errorMessage) are computed
+ * from the resolved regex — there is no separate config field for each.
  *
  * @param {string} tenantId - The tenant ID
- * @param {string} validationName - The validation name (default: "defaultMobileValidation")
- * @returns {object} - Returns validation rules, all configs, loading state, and helpers
+ * @param {string} validationName - Reserved for future per-field selection
+ * @returns {object} validationRules, allValidationConfigs, isLoading, error, helpers
  */
+
+// ── inline regex utilities (no import available in this bundle) ───────────────
+
+function _computeMobileLengths(pattern) {
+  if (!pattern) return { min: 0, max: -1 };
+  const s = pattern.replace(/^\^/, "").replace(/\$$/, "");
+  let min = 0, max = 0, i = 0;
+  while (i < s.length) {
+    let atomEnd = i;
+    if (s[i] === "[") {
+      const end = s.indexOf("]", i + 1);
+      atomEnd = end === -1 ? i + 1 : end + 1;
+    } else if (s[i] === "\\") {
+      atomEnd = i + 2;
+    } else if (s[i] === "(") {
+      let depth = 1; atomEnd = i + 1;
+      while (atomEnd < s.length && depth > 0) {
+        if (s[atomEnd] === "(") depth++;
+        else if (s[atomEnd] === ")") depth--;
+        atomEnd++;
+      }
+    } else {
+      atomEnd = i + 1;
+    }
+    let atomMin = 1, atomMax = 1, qi = atomEnd;
+    if (qi < s.length) {
+      if (s[qi] === "?") { atomMin = 0; atomMax = 1; qi++; }
+      else if (s[qi] === "*") { atomMin = 0; atomMax = Infinity; qi++; }
+      else if (s[qi] === "+") { atomMin = 1; atomMax = Infinity; qi++; }
+      else if (s[qi] === "{") {
+        const end = s.indexOf("}", qi);
+        if (end !== -1) {
+          const parts = s.slice(qi + 1, end).split(",");
+          atomMin = parseInt(parts[0], 10) || 0;
+          atomMax = parts.length > 1
+            ? (parts[1].trim() ? parseInt(parts[1], 10) : Infinity)
+            : atomMin;
+          qi = end + 1;
+        }
+      }
+    }
+    min += atomMin; max += atomMax; i = qi;
+  }
+  return { min, max: isFinite(max) ? max : -1 };
+}
+
+function _extractAllowedStartingDigits(pattern) {
+  if (!pattern) return null;
+  const s = pattern.replace(/^\^/, "").replace(/\$$/, "");
+  let i = 0;
+  while (i < s.length) {
+    let content = null, atomEnd;
+    if (s[i] === "[") {
+      const end = s.indexOf("]", i + 1);
+      if (end === -1) break;
+      content = s.slice(i + 1, end);
+      atomEnd = end + 1;
+    } else if (s[i] === "\\") {
+      atomEnd = i + 2;
+    } else {
+      content = s[i]; atomEnd = i + 1;
+    }
+    if (atomEnd < s.length && s[atomEnd] === "?") { i = atomEnd + 1; continue; }
+    if (!content) { i = atomEnd; continue; }
+    const digits = [];
+    let ci = 0;
+    while (ci < content.length) {
+      if (ci + 2 < content.length && content[ci + 1] === "-") {
+        const from = content.charCodeAt(ci), to = content.charCodeAt(ci + 2);
+        for (let code = from; code <= to; code++) digits.push(String.fromCharCode(code));
+        ci += 3;
+      } else {
+        digits.push(content[ci]); ci++;
+      }
+    }
+    const onlyDigits = digits.every((d) => /^[0-9]$/.test(d));
+    return onlyDigits && digits.length > 0 ? digits : null;
+  }
+  return null;
+}
+
+function _buildMobileErrorMessage(pattern) {
+  if (!pattern) return "Please enter a valid mobile number";
+  const { min, max } = _computeMobileLengths(pattern);
+  const startDigits = _extractAllowedStartingDigits(pattern);
+  const lenPart = min === max ? `${min} digits` : max === -1 ? `at least ${min} digits` : `${min}-${max} digits`;
+  let startPart = "";
+  if (startDigits && startDigits.length > 0) {
+    const u = [...new Set(startDigits)];
+    startPart = u.length === 1
+      ? `, starting with ${u[0]}`
+      : u.length === 2
+        ? `, starting with ${u[0]} or ${u[1]}`
+        : `, starting with ${u.slice(0, -1).join(", ")}, or ${u[u.length - 1]}`;
+  }
+  return `Please enter a valid mobile number (${lenPart}${startPart})`;
+}
+
+// ── defaults ──────────────────────────────────────────────────────────────────
+const _DEFAULT_PATTERN = "^0?[17][0-9]{8}$";
+const _DEFAULT_PREFIX  = "+254";
+
+// ── hook ─────────────────────────────────────────────────────────────────────
+
 const useMobileValidation = (tenantId, validationName = "defaultMobileValidation") => {
-  // Fetch mobile validation config from MDMS
   const stateId = Digit.Utils.getMultiRootTenant()
     ? Digit.ULBService.getCurrentTenantId()
     : window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
-  const moduleName = Digit.Utils.getMultiRootTenant() ? "common-masters" : Digit?.Utils?.getConfigModuleName?.();
+  const moduleName = Digit.Utils.getMultiRootTenant()
+    ? "common-masters"
+    : Digit?.Utils?.getConfigModuleName?.();
+
   const { isLoading, data: mdmsData, error } = Digit.Hooks.useCustomMDMS(
     stateId,
     moduleName,
     [{ name: "MobileNumberValidation" }],
     {
       select: (data) => {
-        const allValidations = data?.[moduleName]?.MobileNumberValidation || [];
-
-        // Build config for each entry (flat schema: countryCode + mobileNumberRegex)
-        const allConfigs = allValidations.map((item) => ({
-          isDefault: item.default === true,
-          countryCode: item.countryCode || "+91",
-          prefix: item.countryCode || "+91",          // backward-compat alias
-          mobileNumberRegex: item.mobileNumberRegex || "^[6-9][0-9]{9}$",
-          pattern: item.mobileNumberRegex || "^[6-9][0-9]{9}$",  // backward-compat alias
-          isActive: item.isActive !== false,
-        }));
-
-        // Default config is the one flagged as default
-        const defaultConfig = allConfigs.find((c) => c.isDefault) || allConfigs[0] || {
-          countryCode: "+91",
-          prefix: "+91",
-          mobileNumberRegex: "^[6-9][0-9]{9}$",
-          pattern: "^[6-9][0-9]{9}$",
-        };
-
+        const all = data?.[moduleName]?.MobileNumberValidation || [];
+        const active = all.filter((r) => r.isActive !== false);
+        const defaultRec = active.find((r) => r.default === true) || active[0] || null;
         return {
-          defaultConfig,
-          allConfigs,
+          defaultConfig: defaultRec,
+          allConfigs: active,
         };
       },
       staleTime: 300000,
@@ -54,65 +145,71 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
     }
   );
 
-  /** ---------- Priority 1: Global Config ---------- */
-  const globalConfig = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS") || {};
+  const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS") || {};
 
-  // Default fallback validation
-  const defaultValidation = {
-    allowedStartingCharacters: ["6", "7", "8", "9"],
-    isActive: true,
-  };
+  // mobileNumberRegex is the single source of truth for all derived values.
+  const resolvedPattern =
+    mdmsData?.defaultConfig?.mobileNumberRegex ||
+    gc?.mobileNumberRegex ||
+    gc?.mobileNumberPattern ||
+    _DEFAULT_PATTERN;
 
-  const mdmsDefault = mdmsData?.defaultConfig || {};
+  const resolvedPrefix =
+    mdmsData?.defaultConfig?.countryCode ||
+    gc?.countryCode ||
+    _DEFAULT_PREFIX;
 
-  /** ---------- Combine configs with priority ---------- */
+  const { min: resolvedMin, max: resolvedMax } = _computeMobileLengths(resolvedPattern);
+
   const validationRules = {
-    allowedStartingCharacters:
-      globalConfig?.mobileNumberAllowedStartingCharacters || defaultValidation?.allowedStartingCharacters,
+    allowedStartingCharacters: _extractAllowedStartingDigits(resolvedPattern),
 
-    countryCode: globalConfig?.mobilePrefix || mdmsDefault?.countryCode,
-    prefix: globalConfig?.mobilePrefix || mdmsDefault?.countryCode,  // backward-compat alias
+    countryCode: resolvedPrefix,
+    prefix: resolvedPrefix,
 
-    mobileNumberRegex: globalConfig?.mobileNumberPattern || mdmsDefault?.mobileNumberRegex,
-    pattern: globalConfig?.mobileNumberPattern || mdmsDefault?.mobileNumberRegex,  // backward-compat alias
+    mobileNumberRegex: resolvedPattern,
+    pattern: resolvedPattern,
 
-    minLength: globalConfig?.mobileNumberLength || mdmsDefault?.minLength,
+    minLength: resolvedMin,
+    maxLength: resolvedMax > 0 ? resolvedMax : 15,
 
-    maxLength: globalConfig?.mobileNumberLength || mdmsDefault?.maxLength,
+    errorMessage: _buildMobileErrorMessage(resolvedPattern),
 
-    errorMessage: globalConfig?.mobileNumberErrorMessage || mdmsDefault?.errorMessage,
-
-    isActive:
-      mdmsDefault?.isActive !== undefined
-        ? mdmsDefault.isActive
-        : defaultValidation.isActive !== undefined
-          ? defaultValidation.isActive
-          : true,
+    isActive: mdmsData?.defaultConfig?.isActive !== undefined ? mdmsData.defaultConfig.isActive : true,
   };
 
-  // All available country configs for dropdown
-  const allValidationConfigs = mdmsData?.allConfigs || [];
+  // All active configs for country-selector dropdowns
+  const allValidationConfigs = (mdmsData?.allConfigs || []).map((r) => {
+    const pat = r.mobileNumberRegex || _DEFAULT_PATTERN;
+    const { min, max } = _computeMobileLengths(pat);
+    return {
+      isDefault: r.default === true,
+      countryCode: r.countryCode || _DEFAULT_PREFIX,
+      prefix: r.countryCode || _DEFAULT_PREFIX,
+      mobileNumberRegex: pat,
+      pattern: pat,
+      allowedStartingCharacters: _extractAllowedStartingDigits(pat),
+      minLength: min,
+      maxLength: max > 0 ? max : 15,
+      isActive: r.isActive !== false,
+    };
+  });
 
-  // Helper to get config by country code / prefix value (e.g., "+91", "+254")
-  const getConfigByPrefix = (prefix) => {
-    return allValidationConfigs.find((c) => c.countryCode === prefix) || validationRules;
-  };
+  const getConfigByPrefix = (prefix) =>
+    allValidationConfigs.find((c) => c.countryCode === prefix) || validationRules;
 
-  // Helper function to get min/max values for number validation
   const getMinMaxValues = (config) => {
     const rules = config || validationRules;
     const { allowedStartingCharacters, minLength } = rules;
     if (!allowedStartingCharacters || allowedStartingCharacters.length === 0) {
       return { min: 0, max: 9999999999 };
     }
-
     const minDigit = Math.min(...allowedStartingCharacters.map(Number));
     const maxDigit = Math.max(...allowedStartingCharacters.map(Number));
-
-    const min = minDigit * Math.pow(10, minLength - 1);
-    const max = (maxDigit + 1) * Math.pow(10, minLength - 1) - 1;
-
-    return { min, max };
+    return {
+      min: minDigit * Math.pow(10, minLength - 1),
+      max: (maxDigit + 1) * Math.pow(10, minLength - 1) - 1,
+    };
   };
 
   return {

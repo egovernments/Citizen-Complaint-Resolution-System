@@ -89,10 +89,10 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
   // Priority: globalConfigs.CORE_MOBILE_CONFIGS → MDMS common-masters.MobileNumberValidation → constants fallback.
   const globalCfg = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
   const validationConfig = {
-    prefix: globalCfg?.mobilePrefix || mdmsValidationConfig?.prefix,
-    pattern: globalCfg?.mobileNumberPattern || mdmsValidationConfig?.pattern,
-    errorMessage:
-      globalCfg?.mobileNumberErrorMessage || mdmsValidationConfig?.errorMessage,
+    countryCode: globalCfg?.countryCode || mdmsValidationConfig?.countryCode,
+    prefix: globalCfg?.countryCode || mdmsValidationConfig?.countryCode,
+    pattern: globalCfg?.mobileNumberRegex || mdmsValidationConfig?.pattern,
+    errorMessage: mdmsValidationConfig?.errorMessage,
   };
 
   useEffect(() => {
