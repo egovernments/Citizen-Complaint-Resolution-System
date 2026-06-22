@@ -42,9 +42,7 @@ const EditForm = ({ tenantId, data }) => {
       select: (data) => {
         const list = data?.["common-masters"]?.MobileNumberValidation || [];
         const record =
-          list.find((x) => x.default === true && x.isActive !== false) ||
-          list.find((x) => x.isActive !== false) ||
-          list[0];
+          list.find((x) => x.default === true && x.isActive !== false) || null;
         if (!record) return null;
         const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
         const pattern = record.mobileNumberRegex || gc?.mobileNumberRegex || DEFAULT_MOBILE_PATTERN;

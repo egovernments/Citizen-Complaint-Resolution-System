@@ -84,8 +84,7 @@ const Inbox = ({ parentRoute, businessService = "HRMS", initialStates = {}, filt
     [{ name: "MobileNumberValidation" }],
     {
       select: (data) => {
-        const validationData = data?.[moduleName]?.MobileNumberValidation?.find((x) => x.default === true)
-          || data?.[moduleName]?.MobileNumberValidation?.[0];
+        const validationData = data?.[moduleName]?.MobileNumberValidation?.find((x) => x.default === true && x.isActive !== false) || null;
         const pattern = validationData?.mobileNumberRegex || DEFAULT_MOBILE_PATTERN;
         const { max } = computeMobileLengths(pattern);
         return {
