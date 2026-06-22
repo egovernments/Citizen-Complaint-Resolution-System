@@ -97,13 +97,13 @@ public class MdmsServiceClient {
                     url, HttpMethod.POST, new HttpEntity<>(body), (Class<Map<String, Object>>) (Class<?>) Map.class);
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                throw new CustomException("NB_MDMS_MOBILE_VALIDATION_UNAVAILABLE",
+                throw new CustomException("MDMS_MOBILE_VALIDATION_UNAVAILABLE",
                         "MDMS returned non-2xx or empty body while resolving mobile validation config for tenantId=" + tenantId);
             }
 
             List<Map<String, Object>> mdmsList = (List<Map<String, Object>>) response.getBody().get("mdms");
             if (mdmsList == null || mdmsList.isEmpty()) {
-                throw new CustomException("NB_MDMS_MOBILE_VALIDATION_UNAVAILABLE",
+                throw new CustomException("MDMS_MOBILE_VALIDATION_UNAVAILABLE",
                         "MDMS returned no records for schemaCode=" + SCHEMA_CODE + " tenantId=" + tenantId);
             }
 
@@ -115,7 +115,7 @@ public class MdmsServiceClient {
                     })
                     .findFirst()
                     .orElseThrow(() -> new CustomException(
-                            "NB_MDMS_MOBILE_VALIDATION_NOT_FOUND",
+                            "MDMS_MOBILE_VALIDATION_NOT_FOUND",
                             "No default mobile validation config found in MDMS for tenantId=" + tenantId
                     ));
 
@@ -124,7 +124,7 @@ public class MdmsServiceClient {
         } catch (CustomException e) {
             throw e;
         } catch (Exception e) {
-            throw new CustomException("NB_MDMS_MOBILE_VALIDATION_UNAVAILABLE",
+            throw new CustomException("MDMS_MOBILE_VALIDATION_UNAVAILABLE",
                     "Failed to fetch mobile validation config from MDMS for tenantId=" + tenantId + ": " + e.getMessage());
         }
     }

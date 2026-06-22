@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useDispatch } from "react-redux";
 import { Dropdown, Toast } from "@egovernments/digit-ui-react-components";
@@ -16,32 +16,43 @@ import { createComplaint } from "../../../redux/actions/index";
 export const CreateComplaint = ({ parentUrl }) => {
   const { data: cities, isLoading }  = Digit.Utils.getMultiRootTenant()? Digit.Hooks.useTenants() :Digit.Hooks.pgr.useTenants();
 
+  const currentTenantId = window.Digit.SessionStorage.get("Employee.tenantId");
   const stateLvlTenantId = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
-  const { data: mobileValidationConfig } = Digit.Hooks.useCustomMDMS(
+
+  // Strategy: look for MobileNumberValidation within the current tenant first
+  // (self-contained), then fall back to the state-level tenant.
+  const mobileValidationSelect = (data) => {
+    const list = data?.["common-masters"]?.MobileNumberValidation || [];
+    const record =
+      list.find((x) => x.default === true && x.isActive !== false) ||
+      list.find((x) => x.isActive !== false) ||
+      list[0];
+    if (!record) return null;
+    const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
+    const pattern = record.mobileNumberRegex || gc?.mobileNumberPattern || DEFAULT_MOBILE_PATTERN;
+    const { max } = computeMobileLengths(pattern);
+    return {
+      prefix: record.countryCode || gc?.mobilePrefix || DEFAULT_MOBILE_PREFIX,
+      pattern,
+      maxLength: max > 0 ? max : 15,
+    };
+  };
+
+  const { data: mobileConfigCurrent } = Digit.Hooks.useCustomMDMS(
+    currentTenantId,
+    "common-masters",
+    [{ name: "MobileNumberValidation" }],
+    { select: mobileValidationSelect, staleTime: 300000, enabled: !!currentTenantId && currentTenantId !== stateLvlTenantId }
+  );
+
+  const { data: mobileConfigState } = Digit.Hooks.useCustomMDMS(
     stateLvlTenantId,
     "common-masters",
     [{ name: "MobileNumberValidation" }],
-    {
-      select: (data) => {
-        const list = data?.["common-masters"]?.MobileNumberValidation || [];
-        const record =
-          list.find((x) => x.default === true && x.isActive !== false) ||
-          list.find((x) => x.isActive !== false) ||
-          list[0];
-        if (!record) return null;
-        const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
-        const pattern = record.mobileNumberRegex || gc?.mobileNumberPattern || DEFAULT_MOBILE_PATTERN;
-        const { max } = computeMobileLengths(pattern);
-        return {
-          prefix: record.countryCode || gc?.mobilePrefix || DEFAULT_MOBILE_PREFIX,
-          pattern,
-          maxLength: max > 0 ? max : 15,
-        };
-      },
-      staleTime: 300000,
-      enabled: !!stateLvlTenantId,
-    }
+    { select: mobileValidationSelect, staleTime: 300000, enabled: !!stateLvlTenantId }
   );
+
+  const mobileValidationConfig = mobileConfigCurrent || mobileConfigState;
 
   const mobilePrefix = mobileValidationConfig?.prefix || window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobilePrefix || DEFAULT_MOBILE_PREFIX;
   const mobilePattern = mobileValidationConfig?.pattern || window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern || DEFAULT_MOBILE_PATTERN;
@@ -88,8 +99,7 @@ export const CreateComplaint = ({ parentUrl }) => {
 
   const [pincodeNotValid, setPincodeNotValid] = useState(false);
   const [params, setParams] = useState({});
-  const tenantId = window.Digit.SessionStorage.get("Employee.tenantId");
-  const menu = Digit.Hooks.pgr.useComplaintTypes({ stateCode: tenantId });
+  const menu = Digit.Hooks.pgr.useComplaintTypes({ stateCode: currentTenantId });
   const dispatch = useDispatch();
   const match = useRouteMatch();
   const history = useHistory();
@@ -155,7 +165,7 @@ export const CreateComplaint = ({ parentUrl }) => {
       } else {
         setSubType({ name: "" });
         setComplaintType(value);
-        setSubTypeMenu(await serviceDefinitions.getSubMenu(tenantId, value, t));
+        setSubTypeMenu(await serviceDefinitions.getSubMenu(currentTenantId, value, t));
       }
     }
   }

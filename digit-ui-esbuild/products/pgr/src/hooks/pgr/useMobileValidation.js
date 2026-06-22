@@ -1,5 +1,7 @@
 import {
   computeMobileLengths,
+  extractAllowedStartingDigits,
+  buildMobileErrorMessage,
   DEFAULT_MOBILE_ALLOWED_STARTING_DIGITS,
   DEFAULT_MOBILE_ERROR_MESSAGE,
   DEFAULT_MOBILE_PATTERN,
@@ -94,6 +96,7 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
 
   const validationRules = {
     allowedStartingDigits:
+      extractAllowedStartingDigits(resolvedPattern) ||
       globalConfig?.mobileNumberAllowedStartingCharacters ||
       defaultValidation.rules.allowedStartingCharacters,
 
@@ -114,6 +117,7 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
 
     errorMessage:
       globalConfig?.mobileNumberErrorMessage ||
+      buildMobileErrorMessage(resolvedPattern) ||
       defaultValidation.rules.errorMessage,
 
     isActive:

@@ -192,7 +192,7 @@ export function useMobileValidator(): UseMobileValidatorResult {
   //   1. MDMS common-masters.MobileNumberValidation (operator-managed, per-tenant)
   //   2. globalConfigs.CORE_MOBILE_CONFIGS (Ansible-injected, per-deployment)
   //   3. Hardcoded fallback (Kenya defaults — keeps the app functional on bare dev boxes)
-  const { data, isLoading } = useGetList('user-validation', {
+  const { data, isLoading } = useGetList('mobile-number-validation', {
     pagination: { page: 1, perPage: 50 },
     sort: { field: 'countryCode', order: 'ASC' },
   });

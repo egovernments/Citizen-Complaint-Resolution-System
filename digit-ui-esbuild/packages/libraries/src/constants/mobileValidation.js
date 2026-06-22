@@ -45,6 +45,94 @@ export const DEFAULT_MOBILE_ERROR_MESSAGE =
   "Please enter a valid 9-10 digit mobile number starting with 7 or 1";
 
 /**
+ * Extract the set of allowed starting digits from a mobile regex pattern.
+ * Parses the first mandatory character class (e.g. `[17]` → `['1','7']`,
+ * `[6-9]` → `['6','7','8','9']`). Returns null when the pattern is too
+ * complex to parse statically (callers fall back to globalConfigs/defaults).
+ *
+ * Examples:
+ *   extractAllowedStartingDigits("^[17][0-9]{8}$")   → ['1', '7']
+ *   extractAllowedStartingDigits("^[6-9][0-9]{9}$")  → ['6', '7', '8', '9']
+ *   extractAllowedStartingDigits("^[79][0-9]{8}$")   → ['7', '9']
+ */
+export function extractAllowedStartingDigits(pattern) {
+  if (!pattern) return null;
+  const s = pattern.replace(/^\^/, "").replace(/\$$/, "");
+  let i = 0;
+  while (i < s.length) {
+    let content = null;
+    let atomEnd;
+    if (s[i] === "[") {
+      const end = s.indexOf("]", i + 1);
+      if (end === -1) break;
+      content = s.slice(i + 1, end);
+      atomEnd = end + 1;
+    } else if (s[i] === "\\") {
+      atomEnd = i + 2;
+    } else {
+      // literal character — treat as a single-char class
+      content = s[i];
+      atomEnd = i + 1;
+    }
+    // Skip optional atoms (quantifier `?` makes them non-mandatory)
+    if (atomEnd < s.length && s[atomEnd] === "?") { i = atomEnd + 1; continue; }
+    if (!content) { i = atomEnd; continue; }
+    // Expand the character class into individual digits
+    const digits = [];
+    let ci = 0;
+    while (ci < content.length) {
+      if (ci + 2 < content.length && content[ci + 1] === "-") {
+        const from = content.charCodeAt(ci);
+        const to = content.charCodeAt(ci + 2);
+        for (let code = from; code <= to; code++) digits.push(String.fromCharCode(code));
+        ci += 3;
+      } else {
+        digits.push(content[ci]);
+        ci++;
+      }
+    }
+    // Only return if all extracted chars are digits (0-9)
+    const onlyDigits = digits.every((d) => /^[0-9]$/.test(d));
+    return onlyDigits && digits.length > 0 ? digits : null;
+  }
+  return null;
+}
+
+/**
+ * Build a human-readable validation error message from a mobile regex pattern.
+ *
+ * Examples:
+ *   buildMobileErrorMessage("^[17][0-9]{8}$")   →
+ *     "Please enter a valid mobile number (9-10 digits, starting with 1 or 7)"
+ *   buildMobileErrorMessage("^[6-9][0-9]{9}$")  →
+ *     "Please enter a valid mobile number (10 digits, starting with 6-9)"
+ */
+export function buildMobileErrorMessage(pattern) {
+  if (!pattern) return null;
+  const { min, max } = computeMobileLengths(pattern);
+  const startDigits = extractAllowedStartingDigits(pattern);
+
+  const lenPart =
+    min === max ? `${min} digits` :
+    max === -1  ? `at least ${min} digits` :
+    `${min}-${max} digits`;
+
+  let startPart = "";
+  if (startDigits && startDigits.length > 0) {
+    const unique = [...new Set(startDigits)];
+    if (unique.length === 1) {
+      startPart = `, starting with ${unique[0]}`;
+    } else if (unique.length === 2) {
+      startPart = `, starting with ${unique[0]} or ${unique[1]}`;
+    } else {
+      startPart = `, starting with ${unique.slice(0, -1).join(", ")}, or ${unique[unique.length - 1]}`;
+    }
+  }
+
+  return `Please enter a valid mobile number (${lenPart}${startPart})`;
+}
+
+/**
  * Derive { min, max } digit counts from a mobile regex pattern string.
  * `max` is -1 when the pattern is unbounded (e.g. contains `+` or `*`).
  * Use this instead of separate mobileNumberLength / maxLength config fields —

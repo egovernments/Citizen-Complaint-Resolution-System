@@ -19,6 +19,10 @@ var globalConfigs = (function () {
   var pgrBoundaryLowestLevel = "Ward";
   var mapCenter = { lat: -1.0, lng: 37.0 };
   var useInboxV1 = true;
+  // Source of truth for mobile validation is common-masters.MobileNumberValidation in MDMS
+  // (seeded during tenant onboarding). These values are a build-time fallback used only
+  // when MDMS has not been seeded yet or cannot be reached. Changing these values alone
+  // will NOT take effect in a running deployment — update the MDMS master data as well.
   var coreMobileConfigs = {
     mobilePrefix: "+254",
     mobileNumberPattern: "^0?[17][0-9]{8}$",
