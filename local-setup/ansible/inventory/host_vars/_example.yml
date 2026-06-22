@@ -206,6 +206,15 @@ enable_integration_tests_runner: false
 
 # ────────── Optional services (opt-in via flags) ──────────
 
+# Start the real OTP stack: egov-otp (stores OTPs), user-otp (orchestrates
+# send/validate), egov-notification-sms (delivers via SMS gateway).
+# Default false — lean local dev uses a Kong request-termination mock on
+# /user-otp/* so login/register work without SMS infra, accepting the
+# fixed OTP (123456) that egov-user provides via
+# CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE.
+# Set true for production or any environment where real SMS delivery is needed.
+enable_otp_services: false
+
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
 # extra). Off by default; only enable if you actually use the inbox.
 enable_search_stack: false

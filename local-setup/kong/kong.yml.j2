@@ -127,12 +127,16 @@ services:
     paths:
     - /user-otp
     strip_path: false
+{% if not (enable_otp_services | default(false)) %}
+    # OTP services disabled — mock every /user-otp/* call with 200 so the
+    # login/register UI flow works using the fixed OTP (123456) in egov-user.
     plugins:
     - name: request-termination
       config:
         status_code: 200
         content_type: application/json
         body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":null,"ts":null,"resMsgId":"uief87324","msgId":null,"status":"successful"},"otp":{"identity":"","tenantId":"","type":"","otp":"","expiryTime":0}}'
+{% endif %}
 - name: enc-service
   url: http://egov-enc-service:1234
   tags:
