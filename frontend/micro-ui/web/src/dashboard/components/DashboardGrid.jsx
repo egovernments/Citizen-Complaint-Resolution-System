@@ -11,6 +11,7 @@ import {
   getSizeConstraints,
   getDefaultChartItem,
   getDefaultKpiLayoutItem,
+  getResizeHandles,
   isChartWidget,
   isKpiWidget,
 } from "../constants/layoutConfig";
@@ -91,8 +92,6 @@ const WidgetHeader = ({
 
 // Per-card "last updated" caption — absolute bottom-right on every card.
 const GRID_MARGIN = [16, 16];
-const RESIZE_HANDLES = ["se"];
-
 function gridItemClassName(widgetId) {
   if (isKpiWidget(widgetId)) return "dashboard-grid-item-kpi";
   if (isTableWidget(widgetId) || isDemoTableWidget(widgetId)) {
@@ -152,7 +151,7 @@ const DashboardGrid = ({
       layout.map((item) => ({
         ...item,
         ...getSizeConstraints(item.i),
-        resizeHandles: RESIZE_HANDLES,
+        resizeHandles: getResizeHandles(item.i),
         className: gridItemClassName(item.i),
       })),
     [layout]
@@ -198,7 +197,7 @@ const DashboardGrid = ({
         return <ChartPlaceholder message="Loading…" />;
       }
       if (!chartData.categories?.length) return <ChartPlaceholder message="No data" />;
-      return <DepartmentBarChart data={chartData.categories} />;
+      return <DepartmentBarChart data={chartData.categories} scrollKey={widgetId} />;
     }
 
     if (widgetId === "cl-chart-wards") {
@@ -206,7 +205,7 @@ const DashboardGrid = ({
         return <ChartPlaceholder message="Loading…" />;
       }
       if (!chartData.wards?.length) return <ChartPlaceholder message="No data" />;
-      return <DepartmentBarChart data={chartData.wards} />;
+      return <DepartmentBarChart data={chartData.wards} scrollKey={widgetId} />;
     }
 
     if (widgetId === "cl-chart-dow") {
@@ -215,7 +214,7 @@ const DashboardGrid = ({
         <DepartmentBarChart
           data={chartData.dow}
           categoryOrder={WEEKDAY_CHART_ORDER}
-          compact
+          scrollKey={widgetId}
         />
       );
     }
@@ -247,6 +246,7 @@ const DashboardGrid = ({
         series={series}
         colors={colors}
         horizontal={horizontal}
+        scrollKey={widgetId}
       />
     );
   };
@@ -364,7 +364,7 @@ const DashboardGrid = ({
           onResizeStop={handleResizeStop}
           onLayoutChange={handleLayoutChange}
           draggableHandle=".dashboard-widget-surface"
-          draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-gauge-target-marker, .dashboard-table-scroll, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
+          draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-gauge-target-marker, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
           compactType={null}
           allowOverlap
           isResizable

@@ -38,5 +38,5 @@ export function useChartContainerSize() {
     return () => observer.disconnect();
   }, [containerNode]);
 
-  return { containerRef, containerSize };
+  return { containerRef, containerSize, containerNode };
 }

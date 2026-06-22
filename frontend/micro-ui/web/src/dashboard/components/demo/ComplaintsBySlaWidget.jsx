@@ -89,7 +89,7 @@ const ComplaintsBySlaWidget = () => {
       {view === "table" ? (
         <SlaBucketTable rows={SLA_BUCKETS} />
       ) : (
-        <DepartmentBarChart data={barChartData} compact />
+        <DepartmentBarChart data={barChartData} scrollKey="demo-viz-sla-toggle" />
       )}
     </DataTableChrome>
   );

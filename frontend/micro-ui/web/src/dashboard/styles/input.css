@@ -203,7 +203,8 @@
   .dashboard-kpi-card--sparkline {
     @apply tw-h-full;
     display: grid;
-    grid-template-rows: minmax(0, 1fr) 26px auto;
+    /* Title band matches default metric tile offset; only the sparkline row grows on resize. */
+    grid-template-rows: minmax(26px, auto) 26px minmax(10px, 1fr);
     gap: 0.25rem;
     min-height: 0;
     padding-bottom: 1.125rem;
@@ -220,6 +221,8 @@
   .dashboard-kpi-sparkline-value-row {
     @apply tw-flex tw-items-baseline tw-justify-start tw-gap-1.5;
     min-width: 0;
+    align-self: center;
+    padding-top: 0;
   }
 
   .dashboard-kpi-card--sparkline .dashboard-kpi-value {
@@ -249,10 +252,8 @@
   }
 
   .dashboard-kpi-sparkline-chart {
-    @apply tw-min-h-0 tw-overflow-hidden;
-    height: 22px;
+    @apply tw-min-h-0 tw-h-full tw-w-full tw-overflow-hidden;
     min-height: 22px;
-    align-self: start;
   }
 
   .dashboard-kpi-sparkline-chart .apexcharts-canvas,
@@ -586,6 +587,10 @@
     color: var(--dashboard-muted-foreground, #6b6860) !important;
     vertical-align: bottom;
     padding-top: 0.125rem !important;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--dashboard-surface, #fff) !important;
   }
 
   .dashboard-root table.dashboard-table th.dashboard-table-th-right,
@@ -604,7 +609,7 @@
   }
 
   .dashboard-root table.dashboard-table tbody tr.dashboard-table-row-highlight td.dashboard-table-td {
-    background-color: color-mix(in srgb, var(--chart-1) 8%, transparent) !important;
+    background-color: color-mix(in srgb, var(--status-breach) 3%, transparent) !important;
   }
 
   .dashboard-root table.dashboard-table col.dashboard-table-col-fixed {
@@ -621,21 +626,21 @@
 
   .dashboard-table-badge {
     @apply tw-shrink-0 tw-text-[8px] tw-font-bold tw-uppercase tw-tracking-wide;
-    color: var(--chart-4);
+    color: var(--status-breach);
   }
 
   .dashboard-table-row-highlight {
-    background-color: color-mix(in srgb, var(--chart-1) 8%, transparent);
+    background-color: color-mix(in srgb, var(--status-breach) 3%, transparent);
   }
 
   .dashboard-table-trend-up {
     @apply tw-font-semibold;
-    color: var(--chart-3);
+    color: var(--status-resolved);
   }
 
   .dashboard-table-trend-down {
     @apply tw-font-semibold;
-    color: var(--chart-1);
+    color: var(--status-breach);
   }
 
   .dashboard-table-muted {
@@ -676,15 +681,15 @@
   }
 
   /* Viz type: bar-chart — vertical bars (all normal bar chart widgets) */
-  .dashboard-bar-chart {
-    overflow: visible;
-    min-height: 0;
+  .dashboard-bar-chart .apexcharts-canvas,
+  .dashboard-bar-chart .apexcharts-svg {
+    overflow: visible !important;
   }
 
   .dashboard-bar-chart-body {
     @apply tw-flex tw-min-h-0 tw-min-w-0 tw-w-full tw-flex-1 tw-flex-col tw-overflow-hidden tw-px-2 tw-pt-0;
     margin-top: -10px;
-    padding-bottom: 1.125rem;
+    padding-bottom: 0.375rem;
   }
 
   .dashboard-bar-chart-header {
@@ -697,6 +702,25 @@
 
   .dashboard-bar-chart-header .dashboard-drag-handle-subtitle {
     @apply tw-mt-0 tw-leading-none;
+  }
+
+  .dashboard-chart-scroll-viewport {
+    @apply tw-h-full tw-min-h-0 tw-min-w-0 tw-w-full tw-flex-1;
+    overflow: hidden;
+  }
+
+  .dashboard-chart-scroll-viewport--active {
+    overflow: auto !important;
+  }
+
+  .dashboard-chart-scroll-viewport--vertical.dashboard-chart-scroll-viewport--active {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .dashboard-chart-scroll-canvas {
+    flex-shrink: 0;
+    position: relative;
   }
 
   /* Viz type: gauge — progress bar vs target */
@@ -714,11 +738,13 @@
   }
 
   .dashboard-gauge-value {
-    @apply tw-mb-0.5 tw-text-[32px] tw-font-semibold tw-tabular-nums tw-leading-none tw-text-foreground;
+    @apply tw-mb-1.5 tw-font-semibold tw-tabular-nums tw-text-foreground;
+    font-size: 26px;
+    line-height: 1;
   }
 
   .dashboard-gauge-track {
-    @apply tw-relative tw-my-0 tw-h-2 tw-w-full tw-overflow-visible tw-rounded-full tw-bg-muted;
+    @apply tw-relative tw-my-0 tw-h-3 tw-w-full tw-overflow-visible tw-rounded-full tw-bg-muted;
   }
 
   .dashboard-gauge-fill {
@@ -763,15 +789,25 @@
     display: none;
   }
 
+  .dashboard-widget-surface .apexcharts-xaxis-texts-g,
+  .dashboard-widget-surface .apexcharts-yaxis-texts-g,
+  .dashboard-widget-surface .apexcharts-xaxis-inversed-texts-g {
+    overflow: visible;
+  }
+
+  .dashboard-widget-surface .apexcharts-xaxis-label,
+  .dashboard-widget-surface .apexcharts-yaxis-label {
+    overflow: visible;
+  }
+
   /* Viz type: horizontal-bar — ranked / ratio bars */
   .dashboard-horizontal-bar {
-    overflow: visible;
     min-height: 0;
   }
 
   .dashboard-horizontal-bar-body {
     @apply tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-px-2 tw-pt-0;
-    margin-top: -10px;
+    margin-top: -6px;
     padding-bottom: 1.125rem;
   }
 
@@ -792,9 +828,13 @@
     overflow: visible !important;
   }
 
+  .dashboard-horizontal-bar .apexcharts-yaxis-texts-g .apexcharts-yaxis-label,
+  .dashboard-stacked-bar--horizontal .apexcharts-yaxis-texts-g .apexcharts-yaxis-label {
+    text-anchor: start;
+  }
+
   /* Viz type: stacked-bar — vertical + horizontal stacked bars */
   .dashboard-stacked-bar {
-    overflow: visible;
     min-height: 0;
   }
 
@@ -826,7 +866,6 @@
     display: none;
   }
 
-  /* Viz type: line-chart — multi-series trends */
   .dashboard-line-chart {
     overflow: visible;
     min-height: 0;
@@ -983,7 +1022,8 @@
     opacity: 0;
   }
 
-  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se {
+  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se,
+  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-e {
     opacity: 1;
   }
 
@@ -993,6 +1033,16 @@
     width: 18px;
     height: 18px;
     cursor: se-resize;
+    z-index: 3;
+  }
+
+  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-e {
+    top: 50%;
+    right: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: -9px;
+    cursor: e-resize;
     z-index: 3;
   }
 

@@ -4,9 +4,10 @@ import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
 import { resolveDashboardCssColor } from "../config/chartColors";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import { getNumberTileValueClass } from "../config/kpiDisplay";
+import { useChartContainerSize } from "../hooks/useChartContainerSize";
 import ResizeGrip from "./ResizeGrip";
 
-const SPARKLINE_HEIGHT = 22;
+const SPARKLINE_MIN_HEIGHT = 10;
 
 const sparklineTile = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_SPARKLINE];
 const numberTile = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE];
@@ -49,6 +50,8 @@ const KpiSparklineCard = ({
   const displayValue = value ?? (loading ? "…" : "—");
   const valueClass = getNumberTileValueClass(status, { unavailable: isUnavailable });
   const chartData = normalizeSparklineData(sparkline);
+  const { containerRef, containerSize } = useChartContainerSize();
+  const chartHeight = Math.max(SPARKLINE_MIN_HEIGHT, containerSize.height || SPARKLINE_MIN_HEIGHT);
   const strokeColor = useMemo(
     () => resolveDashboardCssColor(seriesColor),
     [seriesColor]
@@ -107,14 +110,17 @@ const KpiSparklineCard = ({
         ) : null}
       </div>
 
-      <div className={sparklineTile.sparkline}>
-        <Chart
-          options={chartOptions}
-          series={series}
-          type="line"
-          height={SPARKLINE_HEIGHT}
-          width="100%"
-        />
+      <div ref={containerRef} className={sparklineTile.sparkline}>
+        {chartHeight > 0 ? (
+          <Chart
+            key={chartHeight}
+            options={chartOptions}
+            series={series}
+            type="line"
+            height={chartHeight}
+            width="100%"
+          />
+        ) : null}
       </div>
 
       <ResizeGrip />

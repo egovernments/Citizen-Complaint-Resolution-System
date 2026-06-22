@@ -192,7 +192,15 @@ export const BATCH_QUERIES = {
     grain: "facts",
     dimensions: ["service_code"],
     measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "total", dir: "desc" }],
     limit: 200,
+  },
+  cl_trending_wow: {
+    grain: "facts",
+    window: { name: "last_28d", timeRole: "filed_at" },
+    dimensions: ["service_code", "created_week_start"],
+    measures: [{ name: "total", agg: "count" }],
+    limit: 500,
   },
   cl_ward_open: {
     grain: "facts",
@@ -247,8 +255,8 @@ export const BATCH_QUERIES = {
   },
   ev_table_stage_dwell: {
     grain: "events",
-    window: { name: "wtd", timeRole: "event_at" },
     dimensions: ["status"],
+    filters: { is_current_state: false },
     measures: [
       { name: "avg_dwell", agg: "avg", column: "dwell_ms" },
       { name: "median_dwell", agg: "percentile", column: "dwell_ms", p: 50 },
@@ -685,6 +693,67 @@ function priorWeekCreatedAtFilter() {
   return { gte: lastMonday.getTime(), lt: thisMonday.getTime() };
 }
 
+function isAnalyticsResult(result) {
+  return Boolean(result?.rows) && !result?.error;
+}
+
+function normalizeWeekKey(value) {
+  if (value == null) return "";
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return String(value).slice(0, 10);
+}
+
+function buildPriorVolumeByKey(priorResult, wowFallbackResult, labelKey = "service_code") {
+  if (isAnalyticsResult(priorResult) && priorResult.rows.length > 0) {
+    return Object.fromEntries(
+      priorResult.rows.map((row) => [
+        String(row[labelKey]),
+        Number(row.total) || 0,
+      ])
+    );
+  }
+
+  if (!isAnalyticsResult(wowFallbackResult)) return {};
+
+  const byWeek = new Map();
+  for (const row of wowFallbackResult.rows) {
+    const week = normalizeWeekKey(row.created_week_start);
+    const key = String(row[labelKey]);
+    if (!week || !key) continue;
+    if (!byWeek.has(week)) byWeek.set(week, {});
+    const bucket = byWeek.get(week);
+    bucket[key] = (bucket[key] ?? 0) + (Number(row.total) || 0);
+  }
+
+  const weeks = [...byWeek.keys()].sort();
+  if (weeks.length < 2) return {};
+  return byWeek.get(weeks[weeks.length - 2]) || {};
+}
+
+function normalizeStageDwellQuery(query, apiFilters) {
+  const baseFilters = mergeQueryFilters(query.filters, { is_current_state: false });
+  const { __dateRange, ...dimensionFilters } = apiFilters || {};
+
+  if (__dateRange) {
+    const withoutComplaintCreated = { ...baseFilters };
+    delete withoutComplaintCreated.complaint_created_at;
+    const { window, filters, ...rest } = query;
+    return {
+      ...rest,
+      filters: mergeQueryFilters(withoutComplaintCreated, {
+        ...dimensionFilters,
+        entered_at: { gte: __dateRange.fromMs, lt: __dateRange.toMs },
+      }),
+    };
+  }
+
+  const { window, filters, ...rest } = query;
+  return {
+    ...rest,
+    filters: baseFilters,
+  };
+}
+
 export function buildBatchQueries(dashboardFilters) {
   const apiFilters = buildGlobalApiFilters(dashboardFilters);
   const dimensionOnlyFilters = apiFilters.__dateRange
@@ -699,12 +768,10 @@ export function buildBatchQueries(dashboardFilters) {
     queries[key] = applyDashboardFiltersToQuery(query, apiFilters);
   }
 
-  if (!apiFilters.__dateRange && queries.cl_chart_categories_pw) {
-    const wardTypeFilters = { ...apiFilters };
-    delete wardTypeFilters.__dateRange;
+  if (queries.cl_chart_categories_pw) {
     queries.cl_chart_categories_pw = {
       ...queries.cl_chart_categories_pw,
-      filters: mergeQueryFilters(wardTypeFilters, {
+      filters: mergeQueryFilters(queries.cl_chart_categories_pw.filters, {
         created_at: priorWeekCreatedAtFilter(),
       }),
     };
@@ -720,6 +787,13 @@ export function buildBatchQueries(dashboardFilters) {
         };
       }
     }
+  }
+
+  if (queries.ev_table_stage_dwell) {
+    queries.ev_table_stage_dwell = normalizeStageDwellQuery(
+      queries.ev_table_stage_dwell,
+      apiFilters
+    );
   }
 
   return queries;
@@ -1185,16 +1259,14 @@ export function parseTrendingComplaintsTable(
   currentResult,
   priorResult,
   labelKey = "service_code",
-  limit = 5
+  limit = 5,
+  { enableWow = true, wowFallbackResult = null } = {}
 ) {
   if (!currentResult?.rows?.length) return [];
 
-  const priorByKey = Object.fromEntries(
-    (priorResult?.rows || []).map((row) => [
-      String(row[labelKey]),
-      Number(row.total) || 0,
-    ])
-  );
+  const priorByKey = enableWow
+    ? buildPriorVolumeByKey(priorResult, wowFallbackResult, labelKey)
+    : null;
 
   return sortRowsByTotalDesc(currentResult.rows, labelKey)
     .slice(0, limit)
@@ -1202,12 +1274,13 @@ export function parseTrendingComplaintsTable(
       const key = String(row[labelKey] ?? "Unknown");
       const volume = Number(row.total) || 0;
       const label = formatDimensionLabel(key);
+      const priorVolume = priorByKey?.[key] ?? 0;
       return {
         id: `trend-${index + 1}-${key}`,
         rank: index + 1,
         label,
         volume,
-        wow: priorResult ? computeWowPercent(volume, priorByKey[key]) : null,
+        wow: enableWow ? computeWowPercent(volume, priorVolume) : null,
       };
     });
 }
@@ -1256,11 +1329,26 @@ export function parseLocalityTable(loggedResult, openResult, ontimeResult, limit
     });
 }
 
-export function parseWorkflowStageTable(result, limit = 5) {
-  if (!result?.rows?.length) return [];
+function formatWorkflowStageLabel(status) {
+  const key = String(status ?? "").toUpperCase();
+  const labels = {
+    PENDINGFORASSIGNMENT: "Pending Assignment",
+    PENDINGATLME: "Assigned",
+    PENDINGFORREASSIGNMENT: "Pending Reassignment",
+    RESOLVED: "Resolved (end-to-end)",
+    REJECTED: "Rejected",
+    CLOSEDAFTERRESOLUTION: "Closed after resolution",
+    CLOSEDAFTERREJECTION: "Closed after rejection",
+  };
+  if (labels[key]) return labels[key];
+  return formatStatusLabel(status);
+}
 
-  const rows = result.rows.slice(0, limit).map((row, index) => {
-    const label = formatStatusLabel(row.status ?? "Unknown");
+export function parseWorkflowStageTable(result, limit = 5) {
+  if (result?.error || !result?.rows?.length) return [];
+
+  return result.rows.slice(0, limit).map((row, index) => {
+    const label = formatWorkflowStageLabel(row.status);
     return {
       id: `stage-${index}-${label}`,
       label,
@@ -1269,15 +1357,6 @@ export function parseWorkflowStageTable(result, limit = 5) {
       samples: Number(row.samples) || 0,
     };
   });
-
-  const maxAvg = Math.max(...rows.map((r) => r.avgDwellMs).filter(Number.isFinite));
-  return rows.map((row) => ({
-    ...row,
-    highlight: Number.isFinite(maxAvg) && row.avgDwellMs === maxAvg && rows.length > 1,
-    badge: Number.isFinite(maxAvg) && row.avgDwellMs === maxAvg && rows.length > 1
-      ? "BOTTLENECK"
-      : null,
-  }));
 }
 
 export function parseDowTable(result) {

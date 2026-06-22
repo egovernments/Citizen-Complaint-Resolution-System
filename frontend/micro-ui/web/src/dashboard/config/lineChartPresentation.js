@@ -3,7 +3,12 @@
  */
 
 import { resolveDashboardCssColor } from "./chartColors";
+import {
+  buildWrappedVerticalXAxisLabels,
+  resolveVerticalXAxisLabelHeight,
+} from "./chartAxisLabels";
 import { buildApexSeriesHoverTooltip } from "./chartTooltipPresentation";
+import { formatWrappedChartLabel } from "../utils/chartLabelWrap";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "./visualizationStyles";
 
 const LINE_CHART_STYLES = VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART];
@@ -201,17 +206,27 @@ export function resolveLineChartYAxisBounds(series, yAxisConfig = {}) {
   return { min: 0, max: Math.max(step, max), tickAmount: 4 };
 }
 
-export function buildLineChartGrid() {
+export function buildLineChartGrid({ bottomPadding = 0 } = {}) {
   const borderColor = resolveDashboardCssColor("var(--border)");
 
   return {
     show: true,
     borderColor,
     strokeDashArray: 4,
-    padding: { left: 0, right: 12, top: 8, bottom: 0 },
+    padding: { left: 0, right: 12, top: 8, bottom: bottomPadding },
     xaxis: { lines: { show: false } },
     yaxis: { lines: { show: true } },
   };
+}
+
+export function resolveLineChartXAxisLabelHeight(categories, containerWidth) {
+  const gridWidth = estimateLineChartGridWidth(containerWidth);
+  const labelSlotWidth =
+    categories.length > 1 ? gridWidth / (categories.length - 1) : gridWidth;
+  return resolveVerticalXAxisLabelHeight(categories, labelSlotWidth, {
+    minHeightPx: 22,
+    maxHeightPx: 56,
+  });
 }
 
 /** Map category series to numeric x/y pairs; x starts at 0 (inset applied via xaxis.min). */
@@ -250,6 +265,13 @@ export function buildLineChartXAxis(categories, containerWidth) {
     categories.length,
     containerWidth
   );
+  const gridWidth = estimateLineChartGridWidth(containerWidth);
+  const labelSlotWidth =
+    categories.length > 1 ? gridWidth / (categories.length - 1) : gridWidth;
+  const xAxisLabelHeight = resolveVerticalXAxisLabelHeight(categories, labelSlotWidth, {
+    minHeightPx: 22,
+    maxHeightPx: 56,
+  });
 
   return {
     type: "numeric",
@@ -259,12 +281,13 @@ export function buildLineChartXAxis(categories, containerWidth) {
     decimalsInFloat: 0,
     floating: false,
     labels: {
-      style: { fontSize: "10px" },
-      hideOverlappingLabels: true,
+      ...buildWrappedVerticalXAxisLabels(labelSlotWidth),
+      maxHeight: xAxisLabelHeight,
       formatter: (value) => {
         const index = Math.round(Number(value));
         if (index < 0 || index >= categories.length) return "";
-        return categories[index] ?? "";
+        const label = categories[index] ?? "";
+        return formatWrappedChartLabel(label, labelSlotWidth);
       },
     },
     axisBorder: { show: true, color: borderColor, height: 1, offsetX: 0, offsetY: 0 },

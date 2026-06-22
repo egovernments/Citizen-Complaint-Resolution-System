@@ -10,7 +10,10 @@ const TrendCell = ({ value }) => {
   if (value == null || !Number.isFinite(value)) {
     return <span className={muted}>—</span>;
   }
-  const up = value >= 0;
+  if (value === 0) {
+    return <span className={muted}>0.0%</span>;
+  }
+  const up = value > 0;
   return (
     <span className={up ? trendUp : trendDown}>
       {up ? "↑" : "↓"} {Math.abs(value).toFixed(1)}%

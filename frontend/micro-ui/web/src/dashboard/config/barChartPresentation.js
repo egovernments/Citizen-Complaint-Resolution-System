@@ -21,6 +21,12 @@ export const BAR_CHART_GRID_TOP_PAD = 4;
 /** Space reserved below plot for x-axis category labels (inside the chart). */
 export const BAR_CHART_XAXIS_LABEL_HEIGHT_PX = 22;
 export const BAR_CHART_XAXIS_LABEL_HEIGHT_COMPACT_PX = 18;
+/** Bar thickness as a fraction of each category slot — same on every vertical bar chart. */
+export const BAR_COLUMN_WIDTH_RATIO = 0.62;
+export const BAR_COLUMN_MAX_WIDTH_PX = 44;
+export const BAR_COLUMN_MIN_WIDTH_PERCENT = 20;
+export const BAR_COLUMN_MAX_WIDTH_PERCENT = 75;
+export const BAR_CHART_GRID_GUTTER_PX = 4;
 /** Minimum y-axis headroom (data units) above the tallest bar for value labels. */
 export const BAR_CHART_YAXIS_MIN_HEADROOM = 1;
 /** Extra headroom as a fraction of peak value (kept small to avoid a large top gap). */
@@ -34,6 +40,32 @@ export function resolveBarChartYAxisMax(seriesMax) {
     Math.ceil(peak * BAR_CHART_YAXIS_HEADROOM_RATIO)
   );
   return peak + headroom;
+}
+
+export function resolveBarChartColumnWidth(slotWidthPx) {
+  if (!slotWidthPx || slotWidthPx <= 0) {
+    return `${Math.round(BAR_COLUMN_WIDTH_RATIO * 100)}%`;
+  }
+
+  const dynamicPct = Math.round((BAR_COLUMN_MAX_WIDTH_PX / slotWidthPx) * 100);
+  const boundedPct = Math.min(
+    BAR_COLUMN_MAX_WIDTH_PERCENT,
+    Math.max(BAR_COLUMN_MIN_WIDTH_PERCENT, dynamicPct)
+  );
+  return `${boundedPct}%`;
+}
+
+export function resolveBarCategorySlotWidth(categoryCount, containerWidth) {
+  if (!categoryCount || !containerWidth) return 0;
+  return Math.max(0, containerWidth - BAR_CHART_GRID_GUTTER_PX) / categoryCount;
+}
+
+/** Bars fill the plot edge-to-edge; no side centering or fixed plot width. */
+export function resolveBarGroupLayout(categoryCount, containerWidth, bottomPad) {
+  return {
+    gridPadding: { left: 2, right: 2, top: 0, bottom: bottomPad },
+    slotWidth: resolveBarCategorySlotWidth(categoryCount, containerWidth),
+  };
 }
 
 export function buildBarChartGrid(padding) {

@@ -2,12 +2,15 @@ import React, { useMemo } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../../config/dashboardConfig";
 import { resolveDashboardCssColor } from "../../config/chartColors";
+import { buildHorizontalBarYAxisItem } from "../../config/chartAxisLabels";
 import {
   buildApexChartTooltipOptions,
   buildChartTooltipMarkup,
 } from "../../config/chartTooltipPresentation";
-import { useChartContainerSize } from "../../hooks/useChartContainerSize";
+import { buildHorizontalBarGrid } from "../../config/stackedBarPresentation";
+import { useScrollableChartSize } from "../../hooks/useScrollableChartSize";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../../config/visualizationStyles";
+import ChartScrollViewport from "../ChartScrollViewport";
 
 function formatRatio(value) {
   const n = Number(value);
@@ -25,10 +28,7 @@ function splitAtBreakEven(value, breakEven) {
   };
 }
 
-const HorizontalBarChart = ({ data = [], breakEven = 1 }) => {
-  const { containerRef, containerSize } = useChartContainerSize();
-  const { width: containerWidth, height: containerHeight } = containerSize;
-
+const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
   const rows = useMemo(
     () =>
       (data || []).map((entry) => ({
@@ -42,6 +42,21 @@ const HorizontalBarChart = ({ data = [], breakEven = 1 }) => {
 
   const categories = useMemo(() => rows.map((d) => d.label), [rows]);
   const values = useMemo(() => rows.map((d) => d.value), [rows]);
+
+  const {
+    viewportRef,
+    chartSize,
+    isScrollable,
+    isReady,
+    scrollAxis,
+  } = useScrollableChartSize({
+    scrollKey,
+    categoryCount: categories.length,
+    scrollAxis: "y",
+  });
+
+  const containerWidth = chartSize.width;
+  const containerHeight = chartSize.height;
 
   const belowBreakEvenColor = resolveDashboardCssColor("var(--status-overdue)");
   const atOrAboveBreakEvenColor = resolveDashboardCssColor("var(--status-resolved)");
@@ -79,12 +94,13 @@ const HorizontalBarChart = ({ data = [], breakEven = 1 }) => {
       plotOptions: {
         bar: {
           horizontal: true,
-          borderRadius: 0,
-          barHeight: "62%",
+          borderRadius: 4,
+          borderRadiusApplication: "end",
+          barHeight: "68%",
           dataLabels: {
             total: {
               enabled: true,
-              offsetX: 14,
+              offsetX: 6,
               offsetY: 4,
               hideOverflowingLabels: false,
               style: {
@@ -106,14 +122,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1 }) => {
         axisBorder: { show: false },
         axisTicks: { show: false },
       },
-      yaxis: {
-        labels: {
-          style: { fontSize: "10px" },
-          maxWidth: 140,
-        },
-        axisBorder: { show: false },
-        axisTicks: { show: false },
-      },
+      yaxis: [buildHorizontalBarYAxisItem(categories, containerWidth)],
       colors: [belowBreakEvenColor, atOrAboveBreakEvenColor],
       legend: {
         show: true,
@@ -145,13 +154,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1 }) => {
           },
         ],
       },
-      grid: {
-        borderColor,
-        strokeDashArray: 0,
-        padding: { left: 4, right: 48, top: 4, bottom: 4 },
-        xaxis: { lines: { show: true } },
-        yaxis: { lines: { show: false } },
-      },
+      grid: buildHorizontalBarGrid(),
       tooltip: buildApexChartTooltipOptions({
         shared: false,
         followCursor: true,
@@ -179,6 +182,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1 }) => {
       borderColor,
       breakEven,
       categories,
+      containerWidth,
       foregroundColor,
       mutedColor,
       rows,
@@ -200,11 +204,14 @@ const HorizontalBarChart = ({ data = [], breakEven = 1 }) => {
   if (!hasData) return null;
 
   return (
-    <div
-      ref={containerRef}
-      className={`${horizontalStyles.container} tw-h-full tw-min-h-0 tw-w-full tw-flex-1`}
+    <ChartScrollViewport
+      viewportRef={viewportRef}
+      chartSize={chartSize}
+      isScrollable={isScrollable}
+      chartClassName={horizontalStyles.container}
+      scrollAxis={scrollAxis}
     >
-      {containerHeight > 0 && containerWidth > 0 ? (
+      {isReady ? (
         <Chart
           key={`${containerWidth}-${containerHeight}-${breakEven}-${categories.join("|")}`}
           options={options}
@@ -214,7 +221,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1 }) => {
           width="100%"
         />
       ) : null}
-    </div>
+    </ChartScrollViewport>
   );
 };
 

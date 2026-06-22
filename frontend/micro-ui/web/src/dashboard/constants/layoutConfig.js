@@ -68,13 +68,13 @@ export const DEFAULT_KPI_LAYOUT_ITEM = {
   maxH: 6,
 };
 
-/** Sparkline KPIs — fixed height (minH === maxH); width resizes via se handle like other cards. */
+/** Sparkline KPIs — min height matches default tile; vertical resize grows the trend line. */
 export const DEFAULT_SPARKLINE_KPI_LAYOUT_ITEM = {
   w: 2,
   h: 2,
   minW: 2,
   minH: 2,
-  maxH: 2,
+  maxH: 6,
 };
 
 export const DEFAULT_KPI_LIST_LAYOUT_ITEM = {
@@ -120,7 +120,51 @@ export const WIDGETS = {
   ...chartWidgets,
 };
 
-export const DEFAULT_CHART_LAYOUT = {
+/** One shared size contract per visualization type (uniform min/max across charts). */
+export const UNIFORM_CHART_SIZE_CONSTRAINTS = {
+  minW: 4,
+  minH: 4,
+  maxW: 12,
+  maxH: 10,
+};
+
+/** Progress bar (gauge) — fixed height; width only. */
+export const GAUGE_SIZE_CONSTRAINTS = {
+  minW: 3,
+  minH: 2,
+  maxW: 6,
+  maxH: 2,
+};
+
+export const CHART_TYPE_SIZE_CONSTRAINTS = {
+  "data-table": {
+    minW: TABLE_CARD_GRID.minW,
+    minH: TABLE_CARD_GRID.minH,
+    maxW: TABLE_CARD_GRID.maxW,
+    maxH: TABLE_CARD_GRID.maxH,
+  },
+  "bar-chart": UNIFORM_CHART_SIZE_CONSTRAINTS,
+  "histogram": UNIFORM_CHART_SIZE_CONSTRAINTS,
+  "stacked-bar": UNIFORM_CHART_SIZE_CONSTRAINTS,
+  "horizontal-bar": UNIFORM_CHART_SIZE_CONSTRAINTS,
+  "line-chart": UNIFORM_CHART_SIZE_CONSTRAINTS,
+  "pie-chart": UNIFORM_CHART_SIZE_CONSTRAINTS,
+  "sla-toggle": UNIFORM_CHART_SIZE_CONSTRAINTS,
+  "map": UNIFORM_CHART_SIZE_CONSTRAINTS,
+  "sla-risk-table": {
+    minW: 6,
+    minH: 4,
+    maxW: 12,
+    maxH: 14,
+  },
+  "gauge": GAUGE_SIZE_CONSTRAINTS,
+};
+
+export function getChartTypeSizeConstraints(type) {
+  return CHART_TYPE_SIZE_CONSTRAINTS[type] ?? UNIFORM_CHART_SIZE_CONSTRAINTS;
+}
+
+const RAW_DEFAULT_CHART_LAYOUT = {
   "cl-list-categories": { x: 0, w: 6, ...TABLE_CARD_GRID },
   "cl-table-resolution": { x: 6, w: 6, ...TABLE_CARD_GRID },
   "cl-table-locality": { x: 0, w: 6, ...TABLE_CARD_GRID },
@@ -133,6 +177,14 @@ export const DEFAULT_CHART_LAYOUT = {
   ...DEMO_VIZ_LAYOUT_DEFAULTS,
 };
 
+export const DEFAULT_CHART_LAYOUT = Object.fromEntries(
+  Object.entries(RAW_DEFAULT_CHART_LAYOUT).map(([widgetId, layout]) => {
+    const type = WIDGETS[widgetId]?.type;
+    if (!type) return [widgetId, layout];
+    return [widgetId, { ...layout, ...getChartTypeSizeConstraints(type) }];
+  })
+);
+
 export const TOP_ROW_CHART_IDS = [
   "cl-list-categories",
   "cl-table-resolution",
@@ -141,12 +193,12 @@ export const TOP_ROW_CHART_IDS = [
 ];
 
 export const DEFAULT_LAYOUT = [
-  { i: "cl-metric-total-registered", x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 2, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-metric-total-open", x: 2, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 2, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-metric-total-registered", x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-metric-total-open", x: 2, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-metric-total-resolved", x: 4, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-metric-channel-mix", x: 6, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-metric-new-vs-repeat", x: 8, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-metric-inflow-rate", x: 10, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 2, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-metric-inflow-rate", x: 10, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-list-categories", x: 0, y: 2, w: 6, h: 3, minW: 4, minH: 3, maxW: 12, maxH: 12, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-table-resolution", x: 6, y: 2, w: 6, h: 3, minW: 4, minH: 3, maxW: 12, maxH: 12, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-table-locality", x: 0, y: 5, w: 6, h: 3, minW: 4, minH: 3, maxW: 12, maxH: 12, moved: false, static: false, resizeHandles: ["se"] },
@@ -164,7 +216,11 @@ export const DEFAULT_LAYOUT = [
   { i: "demo-viz-map", x: 0, y: 31, w: 6, h: 6, minW: 4, minH: 5, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
   { i: "demo-viz-line", x: 6, y: 31, w: 6, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
   { i: "demo-viz-sla-risk", x: 0, y: 37, w: 12, h: 5, minW: 6, minH: 4, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
-];
+].map((item) => {
+  const type = WIDGETS[item.i]?.type;
+  if (!type || type === "kpi") return item;
+  return { ...item, ...getChartTypeSizeConstraints(type) };
+});
 
 export const DROPPING_ITEM_ID = "__dropping-kpi__";
 
@@ -193,6 +249,10 @@ export function isHeightLockedChart(widgetId) {
   return WIDGETS[widgetId]?.type === "gauge";
 }
 
+export function getResizeHandles(widgetId) {
+  return ["se"];
+}
+
 /**
  * Current min/max size constraints for a widget, sourced from config.
  * Applied at render time so resize limits always reflect the latest config —
@@ -200,6 +260,11 @@ export function isHeightLockedChart(widgetId) {
  * touching the saved x/y/w/h.
  */
 export function getSizeConstraints(widgetId) {
+  if (!isKpiWidget(widgetId)) {
+    const type = WIDGETS[widgetId]?.type;
+    if (type) return { ...getChartTypeSizeConstraints(type) };
+  }
+
   const source = isKpiWidget(widgetId)
     ? getDefaultKpiLayoutItem(widgetId)
     : DEFAULT_CHART_LAYOUT[widgetId];

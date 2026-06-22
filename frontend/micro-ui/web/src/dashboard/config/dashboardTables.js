@@ -1,7 +1,7 @@
 export const TRENDING_COMPLAINTS_COLUMNS = [
   { id: "rank", label: "#", align: "left", type: "integer", width: "8%" },
-  { id: "label", label: "Sub-type", align: "left", type: "text", width: "42%" },
-  { id: "volume", label: "Volume", align: "right", type: "integer", width: "18%" },
+  { id: "label", label: "Sub-type", align: "left", type: "text", width: "38%" },
+  { id: "volume", label: "Volume", align: "right", type: "integer", width: "20%" },
   { id: "wow", label: "WoW", align: "right", type: "trend", width: "22%" },
 ];
 

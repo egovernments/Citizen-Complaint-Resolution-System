@@ -2,27 +2,24 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
 import { useChartContainerSize } from "../hooks/useChartContainerSize";
+import { useScrollableChartSize } from "../hooks/useScrollableChartSize";
 import {
-  BAR_CHART_XAXIS_LABEL_HEIGHT_COMPACT_PX,
-  BAR_CHART_XAXIS_LABEL_HEIGHT_PX,
   buildBarChartDataLabels,
   buildBarChartGrid,
   buildBarChartLegend,
   buildBarChartPlotDataLabels,
   buildBarChartYAxis,
   getBarChartSeriesColor,
+  resolveBarChartColumnWidth,
+  resolveBarGroupLayout,
 } from "../config/barChartPresentation";
 import { SHARED_CHROME, VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import {
-  resolveLabelSlotWidth,
-  truncateCategoryLabel,
-  Y_AXIS_GUTTER_PX,
-} from "../utils/barChartXAxis";
+  buildWrappedVerticalXAxisLabels,
+} from "../config/chartAxisLabels";
+import { resolveLabelSlotWidth } from "../utils/barChartXAxis";
 import ChartTooltipPortal from "./ChartTooltipPortal";
-
-const MAX_BAR_WIDTH_PX = 44;
-const SPARSE_CATEGORY_THRESHOLD = 4;
-const GROUP_SLOT_WIDTH_PX = 72;
+import ChartScrollViewport from "./ChartScrollViewport";
 
 function normalizeChartData(data, categoryOrder) {
   if (!categoryOrder?.length) {
@@ -42,42 +39,30 @@ function normalizeChartData(data, categoryOrder) {
   }));
 }
 
-function resolveColumnWidth(slotWidthPx) {
-  if (!slotWidthPx) return "65%";
-  const pct = Math.round((MAX_BAR_WIDTH_PX / slotWidthPx) * 100);
-  return `${Math.min(75, Math.max(pct, 40))}%`;
-}
+const BASE_BAR_SLOT_SCROLL_PX = 44;
+const BASE_BAR_SCROLL_GUTTER_PX = 12;
 
-/** Center sparse bar groups on narrow cards; scale slots when the card is wider. */
-function resolveBarGroupLayout(categoryCount, containerWidth, bottomPad) {
-  if (!categoryCount || !containerWidth) {
-    return {
-      gridPadding: { left: 2, right: 2, top: 0, bottom: bottomPad },
-      slotWidth: 0,
-    };
-  }
-
-  const evenSlotWidth = containerWidth / categoryCount;
-
-  if (categoryCount > SPARSE_CATEGORY_THRESHOLD || evenSlotWidth > GROUP_SLOT_WIDTH_PX) {
-    return {
-      gridPadding: { left: 2, right: 2, top: 0, bottom: bottomPad },
-      slotWidth: evenSlotWidth,
-    };
-  }
-
-  const groupWidth = categoryCount * GROUP_SLOT_WIDTH_PX;
-  const plotArea = Math.max(groupWidth, containerWidth - Y_AXIS_GUTTER_PX);
-  const sidePad = Math.max(4, Math.floor((plotArea - groupWidth) / 2));
-
-  return {
-    gridPadding: { left: sidePad, right: sidePad, top: 0, bottom: bottomPad },
-    slotWidth: GROUP_SLOT_WIDTH_PX,
-  };
-}
-
-const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colorsProp }) => {
-  const { containerRef, containerSize } = useChartContainerSize();
+const DepartmentBarChart = ({
+  data,
+  categoryOrder,
+  colors: colorsProp,
+  scrollKey,
+  histogram = false,
+}) => {
+  const categoryCountFromInput = Array.isArray(data) ? data.length : 0;
+  const minContentWidth =
+    categoryCountFromInput > 0
+      ? categoryCountFromInput * BASE_BAR_SLOT_SCROLL_PX + BASE_BAR_SCROLL_GUTTER_PX
+      : 0;
+  const {
+    containerRef: histogramContainerRef,
+    containerSize: histogramContainerSize,
+  } = useChartContainerSize();
+  const effectiveScrollKey = histogram ? undefined : scrollKey;
+  const { viewportRef, chartSize, isScrollable, isReady } = useScrollableChartSize({
+    scrollKey: effectiveScrollKey,
+    minContentWidth: histogram ? 0 : minContentWidth,
+  });
   const [tooltip, setTooltip] = useState(null);
   const distributed = Boolean(colorsProp?.length);
 
@@ -98,32 +83,29 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colo
   );
 
   const categoryCount = categories.length;
-  const containerWidth = containerSize.width;
-  const containerHeight = containerSize.height;
+  const containerWidth = histogram ? histogramContainerSize.width : chartSize.width;
+  const containerHeight = histogram ? histogramContainerSize.height : chartSize.height;
 
   const labelSlotWidth = useMemo(
     () => resolveLabelSlotWidth(categoryCount, containerWidth),
     [categoryCount, containerWidth]
   );
 
-  // At small heights the fixed x-axis label reserve and tick count would crush
-  // the plot area (squished bars). Scale label reserve down; labels always show
-  // (truncated when slots are narrow).
   const isShort = containerHeight > 0 && containerHeight < 200;
-  const xAxisLabelHeight = isShort
-    ? BAR_CHART_XAXIS_LABEL_HEIGHT_COMPACT_PX
-    : BAR_CHART_XAXIS_LABEL_HEIGHT_PX;
-  const yTickAmount = isShort ? 3 : compact ? 4 : 5;
+
+  const xAxisLabelHeight = histogram ? (isShort ? 26 : 30) : isShort ? 36 : 40;
+
+  const yTickAmount = isShort ? 4 : 5;
 
   const { gridPadding, slotWidth } = useMemo(
     () => resolveBarGroupLayout(categoryCount, containerWidth, xAxisLabelHeight),
     [categoryCount, containerWidth, xAxisLabelHeight]
   );
 
-  const columnWidth = useMemo(
-    () => resolveColumnWidth(slotWidth),
-    [slotWidth]
-  );
+  const columnWidth = useMemo(() => {
+    if (histogram) return "74%";
+    return resolveBarChartColumnWidth(slotWidth);
+  }, [histogram, slotWidth]);
 
   const colors = useMemo(
     () => (distributed ? colorsProp : [getBarChartSeriesColor()]),
@@ -184,17 +166,12 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colo
       legend: buildBarChartLegend(),
       xaxis: {
         categories,
-        tickPlacement: "on",
+        tickPlacement: histogram ? "between" : "on",
         labels: {
-          show: true,
-          rotate: 0,
-          rotateAlways: false,
-          trim: false,
-          hideOverlappingLabels: false,
+          ...buildWrappedVerticalXAxisLabels(labelSlotWidth, {
+            maxLines: histogram ? 1 : 2,
+          }),
           maxHeight: xAxisLabelHeight,
-          offsetY: 0,
-          style: { fontSize: "10px" },
-          formatter: (value) => truncateCategoryLabel(value, labelSlotWidth),
         },
         axisBorder: { show: false },
         axisTicks: { show: false },
@@ -217,9 +194,9 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colo
       handleDataPointEnter,
       handleDataPointLeave,
       labelSlotWidth,
-      xAxisLabelHeight,
       yTickAmount,
       seriesMax,
+      histogram,
     ]
   );
 
@@ -231,21 +208,41 @@ const DepartmentBarChart = ({ data, categoryOrder, compact = false, colors: colo
 
   return (
     <>
-      <div
-        ref={containerRef}
-        className={`${barChartClass} tw-h-full tw-min-h-0 tw-w-full tw-flex-1 tw-overflow-visible`}
-      >
-        {containerHeight > 0 && containerWidth > 0 ? (
-          <Chart
-            key={`${containerHeight}-${containerWidth}-${categories.join("|")}`}
-            options={options}
-            series={series}
-            type="bar"
-            height={containerHeight}
-            width="100%"
-          />
-        ) : null}
-      </div>
+      {histogram ? (
+        <div
+          ref={histogramContainerRef}
+          className={`${barChartClass} tw-h-full tw-min-h-0 tw-w-full tw-flex-1`}
+        >
+          {containerHeight > 0 && containerWidth > 0 ? (
+            <Chart
+              key={`hist-${containerHeight}-${containerWidth}-${categories.join("|")}`}
+              options={options}
+              series={series}
+              type="bar"
+              height={containerHeight}
+              width="100%"
+            />
+          ) : null}
+        </div>
+      ) : (
+        <ChartScrollViewport
+          viewportRef={viewportRef}
+          chartSize={chartSize}
+          isScrollable={isScrollable}
+          chartClassName={barChartClass}
+        >
+          {isReady ? (
+            <Chart
+              key={`${containerHeight}-${containerWidth}-${categories.join("|")}`}
+              options={options}
+              series={series}
+              type="bar"
+              height={containerHeight}
+              width={containerWidth}
+            />
+          ) : null}
+        </ChartScrollViewport>
+      )}
       <ChartTooltipPortal tooltip={tooltip}>
         <div className={SHARED_CHROME.chartTooltipTitle}>{tooltip?.label}</div>
         <div className={SHARED_CHROME.chartTooltipRow}>Count : {tooltip?.value}</div>

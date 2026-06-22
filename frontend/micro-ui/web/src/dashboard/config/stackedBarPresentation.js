@@ -2,6 +2,12 @@
  * Shared presentation for stacked bar charts (vertical + horizontal).
  */
 
+import {
+  buildHorizontalBarYAxisItem,
+  buildWrappedVerticalXAxisLabels,
+  resolveVerticalCategorySlotWidth,
+  resolveVerticalXAxisLabelHeight,
+} from "./chartAxisLabels";
 import { resolveDashboardCssColor } from "./chartColors";
 
 export const STACKED_BAR_LEGEND = {
@@ -19,16 +25,27 @@ export const STACKED_BAR_LEGEND = {
   offsetY: 0,
 };
 
-export function buildStackedBarGrid({ horizontal = false } = {}) {
+export const HORIZONTAL_BAR_GRID_PADDING = {
+  left: 0,
+  right: 28,
+  top: 4,
+  bottom: 4,
+};
+
+export function buildStackedBarGrid({ horizontal = false, bottomPadding } = {}) {
   return {
     show: false,
     padding: {
-      left: 4,
-      right: horizontal ? 28 : 4,
-      top: 4,
-      bottom: 4,
+      ...HORIZONTAL_BAR_GRID_PADDING,
+      left: horizontal ? HORIZONTAL_BAR_GRID_PADDING.left : 4,
+      right: horizontal ? HORIZONTAL_BAR_GRID_PADDING.right : 4,
+      bottom: bottomPadding ?? HORIZONTAL_BAR_GRID_PADDING.bottom,
     },
   };
+}
+
+export function buildHorizontalBarGrid({ bottomPadding } = {}) {
+  return buildStackedBarGrid({ horizontal: true, bottomPadding });
 }
 
 export function resolveStackedBarColors(colorTokens) {
@@ -51,6 +68,8 @@ export const STATUS_STACKED_SERIES = [
 ];
 
 export function buildStackedBarPlotOptions({ horizontal = false } = {}) {
+  const totalLabelColor = resolveDashboardCssColor("var(--foreground)");
+
   return {
     bar: {
       horizontal,
@@ -60,11 +79,18 @@ export function buildStackedBarPlotOptions({ horizontal = false } = {}) {
       barHeight: horizontal ? "68%" : undefined,
       dataLabels: {
         total: {
-          enabled: horizontal,
-          offsetX: 6,
+          enabled: true,
+          offsetX: horizontal ? 6 : 0,
+          offsetY: horizontal ? 0 : -8,
           style: {
             fontSize: "11px",
             fontWeight: 600,
+            color: totalLabelColor,
+          },
+          formatter: (value) => {
+            const n = Number(value);
+            if (!Number.isFinite(n) || n <= 0) return "";
+            return String(Math.round(n));
           },
         },
       },
@@ -72,42 +98,62 @@ export function buildStackedBarPlotOptions({ horizontal = false } = {}) {
   };
 }
 
-export function buildStackedBarXAxis({ horizontal, categories }) {
+export function buildStackedBarDataLabels() {
+  return {
+    enabled: true,
+    textAnchor: "middle",
+    offsetX: 0,
+    offsetY: 0,
+    style: {
+      fontSize: "11px",
+      fontWeight: 600,
+      colors: ["#ffffff"],
+    },
+    background: {
+      enabled: false,
+    },
+    formatter: (value) => {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n <= 0) return "";
+      return String(Math.round(n));
+    },
+  };
+}
+
+export function buildStackedBarXAxis({
+  horizontal,
+  categories,
+  containerWidth = 0,
+}) {
   if (horizontal) {
     return {
       categories,
-      labels: {
-        style: { fontSize: "10px" },
-        maxWidth: 140,
-      },
+      labels: { style: { fontSize: "10px" } },
       axisBorder: { show: false },
       axisTicks: { show: false },
     };
   }
+
+  const slotWidthPx = resolveVerticalCategorySlotWidth(categories.length, containerWidth);
+  const labelHeight = resolveVerticalXAxisLabelHeight(categories, slotWidthPx, {
+    minHeightPx: 22,
+    maxHeightPx: 72,
+  });
+
   return {
     categories,
     labels: {
-      style: { fontSize: "10px" },
-      rotate: 0,
-      hideOverlappingLabels: true,
+      ...buildWrappedVerticalXAxisLabels(slotWidthPx),
+      maxHeight: labelHeight,
     },
     axisBorder: { show: false },
     axisTicks: { show: false },
   };
 }
 
-export function buildStackedBarYAxis({ horizontal }) {
+export function buildStackedBarYAxis({ horizontal, categories = [], containerWidth = 0 }) {
   if (horizontal) {
-    return {
-      labels: {
-        style: { fontSize: "10px" },
-        formatter: (val) => Math.round(val),
-      },
-      axisBorder: { show: false },
-      axisTicks: { show: false },
-      min: 0,
-      forceNiceScale: true,
-    };
+    return buildHorizontalBarYAxisItem(categories, containerWidth);
   }
   return {
     labels: {

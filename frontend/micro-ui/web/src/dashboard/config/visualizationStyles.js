@@ -37,6 +37,10 @@ export const SHARED_CHROME = {
   chartTooltipAnchored: "dashboard-chart-tooltip--anchored",
   chartTooltipTitle: "dashboard-chart-tooltip-title",
   chartTooltipRow: "dashboard-chart-tooltip-row",
+  chartScrollViewport: "dashboard-chart-scroll-viewport",
+  chartScrollViewportActive: "dashboard-chart-scroll-viewport--active",
+  chartScrollViewportVertical: "dashboard-chart-scroll-viewport--vertical",
+  chartScrollCanvas: "dashboard-chart-scroll-canvas",
 };
 
 const BAR_CHART_STYLES = {

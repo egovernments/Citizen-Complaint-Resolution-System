@@ -16,6 +16,7 @@ import {
   LINE_CHART_PERIOD_OPTIONS,
   normalizeLineChartSeries,
   resolveLineChartColors,
+  resolveLineChartXAxisLabelHeight,
   resolveLineChartYAxisBounds,
   setLineChartMarkersVisible,
 } from "../config/lineChartPresentation";
@@ -90,6 +91,11 @@ const LineChart = ({
   const yAxisBounds = useMemo(
     () => resolveLineChartYAxisBounds(normalizedSeries, activeYAxis),
     [activeYAxis, normalizedSeries]
+  );
+
+  const xAxisLabelHeight = useMemo(
+    () => resolveLineChartXAxisLabelHeight(categories, containerWidth),
+    [categories, containerWidth]
   );
 
   const revealMarkers = useCallback((chartContext) => {
@@ -167,14 +173,14 @@ const LineChart = ({
       yaxis: buildLineChartYAxis(yAxisBounds),
       colors,
       legend: LINE_CHART_LEGEND,
-      grid: buildLineChartGrid(),
+      grid: buildLineChartGrid({ bottomPadding: xAxisLabelHeight }),
       tooltip: buildLineChartTooltip(categories),
       states: {
         hover: { filter: { type: "none" } },
         active: { filter: { type: "none" } },
       },
     }),
-    [categories, chartEvents, colors, containerWidth, normalizedSeries, yAxisBounds]
+    [categories, chartEvents, colors, containerWidth, normalizedSeries, xAxisLabelHeight, yAxisBounds]
   );
 
   const markerStyleVars = useMemo(

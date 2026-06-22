@@ -60,7 +60,15 @@ const PieChart = ({ data = [] }) => {
                 fontWeight="500"
                 pointerEvents="none"
               >
-                {slice.displayLabel}
+                {slice.labelLines.map((line, lineIndex) => (
+                  <tspan
+                    key={`${slice.label}-${lineIndex}`}
+                    x={slice.labelX}
+                    dy={lineIndex === 0 ? 0 : 12}
+                  >
+                    {line}
+                  </tspan>
+                ))}
               </text>
             </g>
           ))}

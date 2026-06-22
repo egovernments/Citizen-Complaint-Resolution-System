@@ -7,6 +7,7 @@ import {
   WIDGETS,
   getDefaultChartItem,
   getDefaultKpiLayoutItem,
+  getChartTypeSizeConstraints,
   isHeightLockedChart,
   isKpiWidget,
   DEFAULT_CHART_LAYOUT,
@@ -125,14 +126,12 @@ export function swapOnDrop(layout, activeId, origin) {
 
 function normalizeKpiItem(item) {
   const defaults = getDefaultKpiLayoutItem(item.i);
-  const heightLocked = isSparklineKpi(item.i);
   return {
     ...defaults,
     ...item,
-    ...(heightLocked ? { h: defaults.h } : {}),
     minW: item.minW ?? defaults.minW,
-    minH: heightLocked ? defaults.minH : Math.max(item.minH ?? defaults.minH, defaults.minH),
-    maxH: heightLocked ? defaults.maxH : defaults.maxH ?? DEFAULT_KPI_LAYOUT_ITEM.maxH,
+    minH: Math.max(item.minH ?? defaults.minH, defaults.minH),
+    maxH: defaults.maxH ?? item.maxH ?? DEFAULT_KPI_LAYOUT_ITEM.maxH,
   };
 }
 
@@ -217,15 +216,23 @@ function loadLayout() {
 
     const normalized = valid.map((item) => {
       if (isSparklineKpi(item.i)) {
-        return { ...item, h: 2, minH: 2, maxH: 2 };
+        const defaults = getDefaultKpiLayoutItem(item.i);
+        return {
+          ...item,
+          minH: defaults.minH,
+          maxH: defaults.maxH,
+        };
       }
       if (isHeightLockedChart(item.i)) {
         const defaults = DEFAULT_CHART_LAYOUT[item.i];
+        const constraints = getChartTypeSizeConstraints(WIDGETS[item.i]?.type);
         return {
           ...item,
           h: defaults?.h ?? item.h,
-          minH: defaults?.minH ?? item.minH,
-          maxH: defaults?.maxH ?? item.maxH,
+          minH: constraints.minH ?? defaults?.minH ?? item.minH,
+          maxH: constraints.maxH ?? defaults?.maxH ?? item.maxH,
+          minW: constraints.minW ?? defaults?.minW ?? item.minW,
+          maxW: constraints.maxW ?? defaults?.maxW ?? item.maxW,
         };
       }
       return item;
@@ -387,7 +394,12 @@ export function useDashboardLayout() {
    */
   const onResizeStop = useCallback(
     (rglLayout) => {
-      const next = compactVertically(rglLayout);
+      const clamped = rglLayout.map((item) => {
+        if (!isHeightLockedChart(item.i)) return item;
+        const defaults = DEFAULT_CHART_LAYOUT[item.i];
+        return { ...item, h: defaults?.h ?? item.h };
+      });
+      const next = compactVertically(clamped);
       commitLayoutAfterInteraction(next);
     },
     [commitLayoutAfterInteraction]

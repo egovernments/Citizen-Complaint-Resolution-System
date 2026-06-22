@@ -12,6 +12,7 @@ import {
   parseTrendingComplaintsTable,
   parseWorkflowStageTable,
 } from "../config/kpiQueries";
+import { annotateTableThresholds, TABLE_THRESHOLDS } from "../config/tablePresentation";
 import { COMPLAINT_TYPE_OPTIONS, GEOGRAPHY_OPTIONS } from "../config/globalFilterGroups";
 import { hasAuth, runBatchQueries } from "../services/analyticsService";
 
@@ -42,8 +43,11 @@ function extractAsOf(results) {
   return first?.asOf ?? null;
 }
 
-function buildChartData(results, filters) {
-  const useWow = !filters?.dateRangeActive;
+function withTableThreshold(widgetId, rows) {
+  return annotateTableThresholds(rows, TABLE_THRESHOLDS[widgetId]);
+}
+
+function buildChartData(results) {
   const categoryResult = results?.cl_chart_categories;
 
   return {
@@ -54,17 +58,30 @@ function buildChartData(results, filters) {
     officerSlaStacked: parseOfficerSlaStackedChart(results?.cl_chart_officer_sla),
     trendingComplaints: parseTrendingComplaintsTable(
       categoryResult,
-      useWow ? results?.cl_chart_categories_pw : null
+      results?.cl_chart_categories_pw,
+      "service_code",
+      5,
+      {
+        enableWow: true,
+        wowFallbackResult: results?.cl_trending_wow,
+      }
     ),
-    resolutionByType: parseResolutionByTypeTable(
-      results?.rs_table_resolution_by_category
+    resolutionByType: withTableThreshold(
+      "cl-table-resolution",
+      parseResolutionByTypeTable(results?.rs_table_resolution_by_category)
     ),
-    locality: parseLocalityTable(
-      results?.cl_chart_wards,
-      results?.cl_ward_open,
-      results?.cl_ward_ontime
+    locality: withTableThreshold(
+      "cl-table-locality",
+      parseLocalityTable(
+        results?.cl_chart_wards,
+        results?.cl_ward_open,
+        results?.cl_ward_ontime
+      )
     ),
-    workflowStages: parseWorkflowStageTable(results?.ev_table_stage_dwell),
+    workflowStages: withTableThreshold(
+      "cl-table-workflow-stages",
+      parseWorkflowStageTable(results?.ev_table_stage_dwell)
+    ),
   };
 }
 
@@ -107,7 +124,7 @@ export function useDashboardData(filters) {
 
       setSubMetricValues(buildAllSubMetricValues(results, false));
       setAnalyticsResults(results);
-      setChartData(buildChartData(results, filters));
+      setChartData(buildChartData(results));
       setFilterOptions(parseFilterOptions(results));
       setAsOf(extractAsOf(results));
     } catch (err) {

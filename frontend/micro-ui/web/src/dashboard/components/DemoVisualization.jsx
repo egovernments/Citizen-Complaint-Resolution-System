@@ -28,6 +28,7 @@ const DemoVisualization = ({ widgetId, lastUpdatedLabel }) => {
           colors={meta.colors}
           horizontal={Boolean(meta.horizontal)}
           referenceLines={meta.referenceLines}
+          scrollKey={widgetId}
         />
       );
     case "demo-viz-leaderboard":
@@ -35,6 +36,7 @@ const DemoVisualization = ({ widgetId, lastUpdatedLabel }) => {
         <HorizontalBarChart
           data={meta.data ?? meta}
           breakEven={meta.breakEven ?? 1}
+          scrollKey={widgetId}
         />
       );
     case "demo-viz-line":
@@ -55,7 +57,7 @@ const DemoVisualization = ({ widgetId, lastUpdatedLabel }) => {
     case "demo-viz-sla-risk":
       return <SlaAtRiskTable />;
     case "demo-viz-histogram":
-      return <DepartmentBarChart data={meta} compact />;
+      return <DepartmentBarChart data={meta} scrollKey={widgetId} histogram />;
     case "demo-viz-gauge":
       return <DemoGauge {...meta} />;
     default:

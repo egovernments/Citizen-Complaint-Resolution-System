@@ -3,6 +3,7 @@
  */
 
 import { getChartColor, resolveDashboardCssColor } from "./chartColors";
+import { wrapChartLabelToLines } from "../utils/chartLabelWrap";
 
 export const PIE_CHART_VIEWBOX = { width: 320, height: 230 };
 export const PIE_CHART_CX = 160;
@@ -55,11 +56,12 @@ export function pieLabelOffset(midDeg) {
   return 0;
 }
 
-export function truncatePieLabel(label, sweepDeg) {
-  const text = String(label ?? "");
-  const maxChars = sweepDeg < 30 ? 8 : sweepDeg < 55 ? 12 : 18;
-  if (text.length <= maxChars) return text;
-  return `${text.slice(0, Math.max(1, maxChars - 1))}…`;
+export function resolvePieLabelLines(label, sweepDeg) {
+  const arcWidthPx = Math.max(
+    28,
+    ((sweepDeg / 180) * Math.PI * PIE_CHART_LABEL_R) * 0.88
+  );
+  return wrapChartLabelToLines(label, arcWidthPx, { maxLines: 3 });
 }
 
 export function normalizePieChartData(data = []) {
@@ -105,7 +107,7 @@ export function normalizePieChartData(data = []) {
       hoverX: hoverPoint.x,
       hoverY: hoverPoint.y,
       showValue: sweep >= PIE_CHART_MIN_SWEEP_FOR_VALUE,
-      displayLabel: truncatePieLabel(item.label, sweep),
+      labelLines: resolvePieLabelLines(item.label, sweep),
     };
   });
 }
