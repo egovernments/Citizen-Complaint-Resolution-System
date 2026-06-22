@@ -7,43 +7,6 @@ import {
 
 const PANEL_WIDTH_PX = 320; // ~tw-w-80
 
-const SHORT_LABELS = {
-  "cl-metric-total-registered": "Total registered",
-  "cl-metric-total-open": "Open",
-  "cl-metric-total-resolved": "Resolved",
-  "cl-metric-channel-mix": "Channel mix",
-  "cl-metric-new-vs-repeat": "New vs repeat",
-  "cl-metric-inflow-rate": "Inflow rate",
-  "rs-metric-sla-compliance": "On-time resolution",
-  "rs-metric-breach-count": "Breached SLA (open)",
-  "ce-metric-reopen-rate": "Reopen rate",
-  "ce-metric-csat": "Citizen satisfaction",
-  "cl-list-categories": "Trending complaints",
-  "cl-table-locality": "By locality",
-  "cl-table-workflow-stages": "Workflow stages",
-  "cl-chart-categories": "Trending categories",
-  "cl-chart-wards": "By ward",
-  "cl-chart-dow": "Day of week",
-  "cl-chart-status-week": "Status mix per week",
-  "cl-chart-officer-sla": "Team load by SLA",
-  "cl-chart-resolution-subtype": "Resolution by sub-type",
-  "cl-table-resolution": "Resolution by subtype",
-  "demo-viz-stacked": "Status mix (stacked)",
-  "demo-viz-stacked-horizontal": "Team SLA load",
-  "demo-viz-pie": "Channel mix (pie)",
-  "demo-viz-histogram": "Distribution",
-  "demo-viz-gauge": "On-time gauge",
-  "demo-viz-sla-toggle": "Complaints by SLA",
-  "demo-viz-map": "Complaint map",
-  "demo-viz-leaderboard": "Flow ratio by dept",
-  "demo-viz-line": "Logged over time",
-  "demo-viz-sla-risk": "Complaints at risk",
-};
-
-function shortLabel(item) {
-  return SHORT_LABELS[item.id] || item.metric.split(/[·(]/)[0].trim();
-}
-
 function iconKind(item) {
   if (
     item.type === "bar-chart" ||
@@ -233,7 +196,7 @@ const AddKpiDropdown = ({
               >
                 <MetricIcon kind={iconKind(item)} />
                 <span className="dashboard-add-kpi-item-label tw-min-w-0 tw-flex-1 tw-truncate">
-                  {shortLabel(item)}
+                  {item.metric}
                 </span>
                 <span className="dashboard-add-kpi-type">{itemTypeLabel(item)}</span>
                 <button
@@ -245,7 +208,7 @@ const AddKpiDropdown = ({
                     onOpenChange(false);
                   }}
                   className="dashboard-add-kpi-add-btn"
-                  aria-label={`Add ${shortLabel(item)}`}
+                  aria-label={`Add ${item.metric}`}
                 >
                   +
                 </button>

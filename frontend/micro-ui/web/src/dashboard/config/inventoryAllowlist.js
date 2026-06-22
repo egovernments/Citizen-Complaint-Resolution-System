@@ -49,7 +49,6 @@ export const INVENTORY_METRIC_IDS = new Set([
 
 /** Charts and tables addable from inventory (not on default layout) */
 export const INVENTORY_WIDGET_IDS = new Set([
-  "cl-chart-officer-sla", // Team load by SLA
   "cl-chart-resolution-subtype", // Resolution time by sub-type (stacked bar)
   "cl-chart-status-week", // Status mix per week
   "cl-table-resolution", // Resolution rate by subtype (table)
