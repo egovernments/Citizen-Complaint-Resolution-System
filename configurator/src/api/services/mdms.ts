@@ -289,7 +289,9 @@ export const mdmsService = {
       'common-masters.MobileNumberValidation'
     );
     const preferred =
-      results.find((r) => r['default'] === true && r.isActive !== false) ?? null;
+      results.find((r) => r['default'] === true && r.isActive !== false) ??
+      results.find((r) => r.isActive !== false) ??
+      null;
     if (!preferred) return null;
     const regex =
       typeof preferred.mobileNumberRegex === 'string'

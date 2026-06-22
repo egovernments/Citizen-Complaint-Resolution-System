@@ -195,6 +195,7 @@ export function useMobileValidator(): UseMobileValidatorResult {
       const active = data.filter((r) => (r as Record<string, unknown>).isActive !== false);
       const preferred =
         active.find((r) => (r as Record<string, unknown>).default === true) ??
+        active[0] ??
         null;
       if (preferred) return parseRules(preferred as Record<string, unknown>);
     }

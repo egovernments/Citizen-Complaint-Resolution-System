@@ -296,7 +296,9 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
       select: (data) => {
         const list = data?.["common-masters"]?.MobileNumberValidation || [];
         const record =
-          list.find((x) => x.default === true && x.isActive !== false) || null;
+          list.find((x) => x.default === true && x.isActive !== false) ||
+          list.find((x) => x.isActive !== false) ||
+          null;
         if (!record) return null;
         const maxLen = mobileRegexMaxLength(record.mobileNumberRegex) || 15;
         return {

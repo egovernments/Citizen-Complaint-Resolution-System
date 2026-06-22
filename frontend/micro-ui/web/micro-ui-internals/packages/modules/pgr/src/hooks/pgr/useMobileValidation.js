@@ -134,7 +134,7 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
       select: (data) => {
         const all = data?.[moduleName]?.MobileNumberValidation || [];
         const active = all.filter((r) => r.isActive !== false);
-        const defaultRec = active.find((r) => r.default === true) || null;
+        const defaultRec = active.find((r) => r.default === true) || active[0] || null;
         return {
           defaultConfig: defaultRec,
           allConfigs: active,

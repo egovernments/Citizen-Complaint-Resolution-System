@@ -70,7 +70,9 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
       select: (data) => {
         const list = data?.["common-masters"]?.MobileNumberValidation || [];
         const record =
-          list.find((x) => x.default === true && x.isActive !== false) || null;
+          list.find((x) => x.default === true && x.isActive !== false) ||
+          list.find((x) => x.isActive !== false) ||
+          null;
         if (!record) return null;
         const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
         return {
