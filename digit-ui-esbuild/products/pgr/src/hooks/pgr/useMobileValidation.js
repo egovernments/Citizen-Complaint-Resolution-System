@@ -64,7 +64,7 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
 
   /** ---------- Priority 1: MDMS common-masters.MobileNumberValidation ---------- */
   // Flat schema: { countryCode, mobileNumberRegex, default, isActive }.
-  // Only the record with default:true and isActive:true is used. When none
+  // Pick the record that is both default:true and isActive:true. When none
   // matches, mdmsConfig is null and resolution falls through to globalConfig.
   const mobileNumberValidationList = data?.["common-masters"]?.MobileNumberValidation || [];
   const mdmsConfig = mobileNumberValidationList.find(
