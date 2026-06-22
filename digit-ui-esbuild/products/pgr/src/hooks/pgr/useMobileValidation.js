@@ -64,11 +64,12 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
 
   /** ---------- Priority 1: MDMS common-masters.MobileNumberValidation ---------- */
   // Flat schema: { countryCode, mobileNumberRegex, default, isActive }.
-  // Pick the record with default:true; fall back to the first active record.
+  // Only the record with default:true and isActive:true is used. When none
+  // matches, mdmsConfig is null and resolution falls through to globalConfig.
   const mobileNumberValidationList = data?.["common-masters"]?.MobileNumberValidation || [];
   const mdmsConfig = mobileNumberValidationList.find(
     (entry) => entry?.default === true && entry?.isActive !== false,
-  ) || mobileNumberValidationList.find((entry) => entry?.isActive !== false);
+  ) || null;
 
   /** ---------- Priority 2: Global Config ---------- */
   const globalConfig = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS") || {};
