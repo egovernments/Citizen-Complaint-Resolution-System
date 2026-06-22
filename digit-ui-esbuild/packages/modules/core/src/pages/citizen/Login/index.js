@@ -86,12 +86,12 @@ const Login = ({ stateCode, isUserRegistered = true }) => {
     }
   );
 
-  // Priority: globalConfigs.CORE_MOBILE_CONFIGS → MDMS common-masters.MobileNumberValidation → constants fallback.
+  // Priority: MDMS common-masters.MobileNumberValidation → globalConfigs.CORE_MOBILE_CONFIGS → constants fallback.
   const globalCfg = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
   const validationConfig = {
-    countryCode: globalCfg?.countryCode || mdmsValidationConfig?.countryCode,
-    prefix: globalCfg?.countryCode || mdmsValidationConfig?.countryCode,
-    pattern: globalCfg?.mobileNumberRegex || mdmsValidationConfig?.pattern,
+    countryCode: mdmsValidationConfig?.prefix || globalCfg?.countryCode,
+    prefix: mdmsValidationConfig?.prefix || globalCfg?.countryCode,
+    pattern: mdmsValidationConfig?.pattern || globalCfg?.mobileNumberRegex,
     errorMessage: mdmsValidationConfig?.errorMessage,
   };
 

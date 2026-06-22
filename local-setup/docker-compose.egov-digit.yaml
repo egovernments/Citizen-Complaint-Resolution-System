@@ -1270,7 +1270,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
-      SPRING_FLYWAY_ENABLED: "true"
+      # Flyway disabled - migrations run by db-migrations container (pgbouncer transaction mode incompatible with Flyway)
+      SPRING_FLYWAY_ENABLED: "false"
       SERVER_PORT: 8089
       EGOV_OTP_LENGTH: 6
       EGOV_OTP_TTL: 900
