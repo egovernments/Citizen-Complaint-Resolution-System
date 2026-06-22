@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { getProductLabel, getStateLabel } from "../config/dashboardConfig";
+import KpiInventory from "./KpiInventory";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", href: "/digit-ui/employee/dashboard", active: true },

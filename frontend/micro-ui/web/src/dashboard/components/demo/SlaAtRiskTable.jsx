@@ -1,14 +1,17 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import DataTableChrome from "../DataTableChrome";
 import {
   DATA_TABLE_STYLES,
   getDataTableTdClass,
   getDataTableThClass,
+  getSlaRiskBreachPillClass,
   getSlaRiskStatusPillClass,
-  SLA_RISK_TABLE_STYLES,
+  SLA_RISK_TABLE_STYLES
 } from "../../config/visualizationStyles";
 
 const STATUS_LABELS = {
+  assigned: "Assigned",
+  open: "Open",
   in_progress: "In Progress",
   reopened: "Reopened",
 };
@@ -17,62 +20,136 @@ const INITIAL_ROWS = [
   {
     id: "PGR-2026-T5039",
     type: "Sewerage overflow",
+    subtype: "Manhole overflow",
     locality: "Riverside",
     ownerName: "Mohan Lal",
     ownerRole: "Sewerage Supervisor",
     slaLabel: "Breached",
-    slaOver: "+156h over",
+    slaLevel: "breached",
+    durationDays: 7,
     status: "reopened",
   },
   {
-    id: "PGR-2026-T5041",
+    id: "PGR-2026-T5038",
     type: "Water pipeline leakage",
+    subtype: "Mainline leakage",
     locality: "Park Lane",
-    ownerName: "Ravi Kumar",
-    ownerRole: "Water Engineer",
-    slaLabel: "Breached",
-    slaOver: "+89h over",
-    status: "in_progress",
+    ownerName: "Baljeet Kaur",
+    ownerRole: "Water Works Officer",
+    slaLabel: "Nearing breach",
+    slaLevel: "nearing",
+    durationDays: 6,
+    status: "assigned",
   },
   {
-    id: "PGR-2026-T5045",
+    id: "PGR-2026-T5036",
     type: "Garbage not collected",
+    subtype: "Door-to-door collection skipped",
     locality: "Mall Road",
-    ownerName: "Priya Sharma",
-    ownerRole: "Sanitation Lead",
+    ownerName: "Ramesh Kumar",
+    ownerRole: "Sanitary Inspector",
     slaLabel: "Breached",
-    slaOver: "+42h over",
+    slaLevel: "breached",
+    durationDays: 5,
     status: "in_progress",
   },
   {
-    id: "PGR-2026-T5052",
-    type: "Street light outage",
-    locality: "Central Ward",
-    ownerName: "James Otieno",
-    ownerRole: "Electrical Supervisor",
+    id: "PGR-2026-T5033",
+    type: "No water supply",
+    subtype: "Supply interruption",
+    locality: "Crown Plaza",
+    ownerName: "Baljeet Kaur",
+    ownerRole: "Water Works Officer",
+    slaLabel: "Nearing breach",
+    slaLevel: "nearing",
+    durationDays: 4,
+    status: "open",
+  },
+  {
+    id: "PGR-2026-T5037",
+    type: "Streetlight not working",
+    subtype: "Pole non-functional",
+    locality: "Trade Centre",
+    ownerName: "Gurmeet Singh",
+    ownerRole: "Lineman",
     slaLabel: "Breached",
-    slaOver: "+28h over",
-    status: "reopened",
+    slaLevel: "breached",
+    durationDays: 4,
+    status: "in_progress",
   },
 ];
+
+const SORTABLE_COLUMNS = [
+  { id: "id", label: "Complaint ID" },
+  { id: "type", label: "Complaint Type" },
+  { id: "subtype", label: "Complaint Subtype" },
+  { id: "locality", label: "Locality" },
+  { id: "ownerName", label: "Owner" },
+  { id: "status", label: "Status" },
+  { id: "slaLabel", label: "SLA Status" },
+  { id: "durationDays", label: "Duration of Breach" },
+];
+
+function compareValues(a, b, key) {
+  if (key === "durationDays") return (a.durationDays ?? 0) - (b.durationDays ?? 0);
+  if (key === "status") {
+    const left = STATUS_LABELS[a.status] ?? a.status;
+    const right = STATUS_LABELS[b.status] ?? b.status;
+    return left.localeCompare(right);
+  }
+  return String(a[key] ?? "").localeCompare(String(b[key] ?? ""));
+}
 
 const SlaAtRiskTable = () => {
   const tableStyles = DATA_TABLE_STYLES;
   const slaStyles = SLA_RISK_TABLE_STYLES;
-  const rows = INITIAL_ROWS;
+  const [sortState, setSortState] = useState({ key: null, direction: "asc" });
+
+  const rows = useMemo(() => {
+    if (!sortState.key) return INITIAL_ROWS;
+    const next = [...INITIAL_ROWS];
+    next.sort((left, right) => {
+      const result = compareValues(left, right, sortState.key);
+      return sortState.direction === "asc" ? result : -result;
+    });
+    return next;
+  }, [sortState]);
+
+  const handleSort = (key) => {
+    setSortState((current) => {
+      if (current.key !== key) {
+        return { key, direction: "asc" };
+      }
+      return {
+        key,
+        direction: current.direction === "asc" ? "desc" : "asc",
+      };
+    });
+  };
 
   return (
-    <DataTableChrome title="SLA at risk — next 24 hours">
+    <DataTableChrome title="Complaints at risk">
       <table className={tableStyles.table}>
         <thead>
           <tr>
-            <th className={getDataTableThClass()}>No.</th>
-            <th className={getDataTableThClass()}>Type</th>
-            <th className={getDataTableThClass()}>Locality</th>
-            <th className={getDataTableThClass()}>Owner</th>
-            <th className={getDataTableThClass()}>SLA</th>
-            <th className={getDataTableThClass()}>Status</th>
-            <th className={getDataTableThClass()}>Next action</th>
+            {SORTABLE_COLUMNS.map((col) => {
+              const active = sortState.key === col.id;
+              return (
+                <th key={col.id} className={getDataTableThClass(col.align)}>
+                  <button
+                    type="button"
+                    className="dashboard-table-sort-btn"
+                    onClick={() => handleSort(col.id)}
+                    aria-label={`Sort by ${col.label} ${active && sortState.direction === "asc" ? "descending" : "ascending"}`}
+                  >
+                    <span>{col.label}</span>
+                    <span className="dashboard-table-sort-indicator" aria-hidden>
+                      {active ? (sortState.direction === "asc" ? "↑" : "↓") : "↕"}
+                    </span>
+                  </button>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -88,16 +165,11 @@ const SlaAtRiskTable = () => {
                 </a>
               </td>
               <td className={getDataTableTdClass()}>{row.type}</td>
+              <td className={getDataTableTdClass()}>{row.subtype}</td>
               <td className={getDataTableTdClass()}>{row.locality}</td>
               <td className={getDataTableTdClass()}>
                 <div className={slaStyles.ownerName}>{row.ownerName}</div>
                 <div className={tableStyles.muted}>{row.ownerRole}</div>
-              </td>
-              <td className={getDataTableTdClass()}>
-                <div className={slaStyles.slaCell}>
-                  <span className={slaStyles.breachPill}>{row.slaLabel}</span>
-                  <span className={slaStyles.overdue}>{row.slaOver}</span>
-                </div>
               </td>
               <td className={getDataTableTdClass()}>
                 <span className={getSlaRiskStatusPillClass(row.status)}>
@@ -105,13 +177,12 @@ const SlaAtRiskTable = () => {
                 </span>
               </td>
               <td className={getDataTableTdClass()}>
-                <button
-                  type="button"
-                  className={slaStyles.linkButton}
-                  onClick={(e) => e.preventDefault()}
-                >
-                  Resolve
-                </button>
+                <span className={getSlaRiskBreachPillClass(row.slaLevel)}>
+                  {row.slaLabel}
+                </span>
+              </td>
+              <td className={getDataTableTdClass()}>
+                <span className={slaStyles.overdue}>{`+${row.durationDays}d`}</span>
               </td>
             </tr>
           ))}

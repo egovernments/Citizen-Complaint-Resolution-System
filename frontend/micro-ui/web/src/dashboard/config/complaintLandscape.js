@@ -96,6 +96,7 @@ export const LANDSCAPE_METRICS = [
     id: "cl-metric-total-resolved",
     metric: "Total complaints resolved",
     accent: "green",
+    vizType: "number-tile-sparkline",
     filterGroup: "timeWindow",
     defaultSubMetricId: "weekly",
     subMetrics: countSubMetrics("cl_res"),
@@ -276,6 +277,15 @@ export const LANDSCAPE_CHARTS = [
     subMetric: "Complaint composition by week",
     outputFormat: "Stacked bar: status mix over time",
     queryKey: "cl_chart_status_week",
+  },
+  {
+    id: "cl-chart-resolution-subtype",
+    type: "stacked-bar",
+    stackOrientation: "vertical",
+    metric: "Resolution time by sub-type",
+    subMetric: "Top 5 complaint subtypes by average hours to resolve",
+    outputFormat: "Stacked bar: stage dwell hours by sub-type",
+    queryKey: "ev_chart_resolution_dwell_subtype",
   },
   {
     id: "cl-chart-officer-sla",

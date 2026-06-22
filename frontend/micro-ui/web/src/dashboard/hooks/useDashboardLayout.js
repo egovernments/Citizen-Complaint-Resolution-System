@@ -206,7 +206,10 @@ function mergeDefaultStackedWidgets(layout) {
 function loadLayout() {
   try {
     const saved = readSavedLayoutRaw();
-    if (!saved) return DEFAULT_LAYOUT;
+    if (!saved) {
+      persistLayout(DEFAULT_LAYOUT);
+      return DEFAULT_LAYOUT;
+    }
 
     const parsed = JSON.parse(saved);
     if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_LAYOUT;

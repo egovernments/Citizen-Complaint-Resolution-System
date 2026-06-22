@@ -22,6 +22,7 @@ import { VIZ_TYPE } from "./visualizationStyles";
 import {
   SLA_STACKED_SERIES,
   STATUS_STACKED_SERIES,
+  RESOLUTION_DWELL_STACKED_SERIES,
 } from "./stackedBarPresentation";
 
 export { KPI_METRICS, CHART_WIDGETS, getSubMetricDef, subMetricValueKey };
@@ -103,6 +104,20 @@ export const BATCH_QUERIES = {
   cl_res_daily: resolvedWindow("last_1d"),
   cl_res_weekly: resolvedWindow("wtd"),
   cl_res_monthly: resolvedWindow("mtd"),
+  cl_res_sparkline_7d: {
+    grain: "facts",
+    window: { name: "last_7d", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    dimensions: ["created_date"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "created_date", dir: "asc" }],
+    limit: 7,
+  },
+  cl_res_prior_week: {
+    grain: "facts",
+    filters: { is_resolved: true },
+    measures: [{ name: "total", agg: "count" }],
+  },
   cl_channel_app: { grain: "facts", measures: [channelRatio(["app", "mobile"])] },
   cl_channel_phone: { grain: "facts", measures: [channelRatio(["phone"])] },
   cl_channel_walkin: {
@@ -265,6 +280,13 @@ export const BATCH_QUERIES = {
     sort: [{ by: "avg_dwell", dir: "desc" }],
     limit: 8,
   },
+  ev_chart_resolution_dwell_subtype: {
+    grain: "events",
+    dimensions: ["service_code", "status"],
+    filters: { is_current_state: false },
+    measures: [{ name: "avg_dwell", agg: "avg", column: "dwell_ms" }],
+    limit: 200,
+  },
   // Employee performance
   ep_open_by_officer: officerTopCount({ is_open: true }),
   ep_open_list: {
@@ -349,7 +371,49 @@ export const BATCH_QUERIES = {
       },
     ],
   },
+  rs_sla_compliance_sparkline_7d: {
+    grain: "facts",
+    window: { name: "last_7d", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    dimensions: ["created_date"],
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { sla_breached: false } },
+        denominator: { agg: "count" },
+      },
+    ],
+    sort: [{ by: "created_date", dir: "asc" }],
+    limit: 7,
+  },
+  rs_sla_compliance_prior_week: {
+    grain: "facts",
+    filters: { is_resolved: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { sla_breached: false } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
   rs_breach_total: {
+    grain: "facts",
+    filters: { is_open: true, sla_breached: true },
+    measures: [{ name: "total", agg: "count" }],
+  },
+  rs_breach_sparkline_7d: {
+    grain: "facts",
+    window: { name: "last_7d", timeRole: "filed_at" },
+    filters: { is_open: true, sla_breached: true },
+    dimensions: ["created_date"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "created_date", dir: "asc" }],
+    limit: 7,
+  },
+  rs_breach_prior_week: {
     grain: "facts",
     filters: { is_open: true, sla_breached: true },
     measures: [{ name: "total", agg: "count" }],
@@ -499,6 +563,20 @@ export const BATCH_QUERIES = {
     filters: { is_resolved: true, has_rating: true },
     measures: [{ name: "avg", agg: "avg", column: "rating" }],
   },
+  ce_csat_sparkline_7d: {
+    grain: "facts",
+    window: { name: "last_7d", timeRole: "resolved_at" },
+    filters: { is_resolved: true, has_rating: true },
+    dimensions: ["created_date"],
+    measures: [{ name: "avg", agg: "avg", column: "rating" }],
+    sort: [{ by: "created_date", dir: "asc" }],
+    limit: 7,
+  },
+  ce_csat_prior_week: {
+    grain: "facts",
+    filters: { is_resolved: true, has_rating: true },
+    measures: [{ name: "avg", agg: "avg", column: "rating" }],
+  },
   ce_response_rate: {
     grain: "facts",
     window: { name: "wtd", timeRole: "resolved_at" },
@@ -515,6 +593,34 @@ export const BATCH_QUERIES = {
   ce_reopen_7d: {
     grain: "facts",
     window: { name: "last_7d", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_reopened: true } },
+        denominator: { agg: "count" },
+      },
+    ],
+  },
+  ce_reopen_sparkline_7d: {
+    grain: "facts",
+    window: { name: "last_7d", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
+    dimensions: ["created_date"],
+    measures: [
+      {
+        name: "pct",
+        agg: "ratio",
+        numerator: { agg: "count", filter: { is_reopened: true } },
+        denominator: { agg: "count" },
+      },
+    ],
+    sort: [{ by: "created_date", dir: "asc" }],
+    limit: 7,
+  },
+  ce_reopen_prior_week: {
+    grain: "facts",
     filters: { is_resolved: true },
     measures: [
       {
@@ -779,11 +885,31 @@ export function buildBatchQueries(dashboardFilters) {
 
   if (!apiFilters.__dateRange) {
     const priorWeekFilter = { created_at: priorWeekCreatedAtFilter() };
-    for (const key of ["cl_reg_prior_week", "cl_open_prior_week"]) {
+    const priorWeekResolvedFilter = { resolved_at: priorWeekCreatedAtFilter() };
+    for (const key of ["cl_reg_prior_week", "cl_open_prior_week", "rs_breach_prior_week"]) {
       if (queries[key]) {
         queries[key] = {
           ...queries[key],
-          filters: mergeQueryFilters(apiFilters, priorWeekFilter),
+          filters: mergeQueryFilters(queries[key].filters, {
+            ...apiFilters,
+            ...priorWeekFilter,
+          }),
+        };
+      }
+    }
+    for (const key of [
+      "cl_res_prior_week",
+      "rs_sla_compliance_prior_week",
+      "ce_reopen_prior_week",
+      "ce_csat_prior_week",
+    ]) {
+      if (queries[key]) {
+        queries[key] = {
+          ...queries[key],
+          filters: mergeQueryFilters(queries[key].filters, {
+            ...apiFilters,
+            ...priorWeekResolvedFilter,
+          }),
         };
       }
     }
@@ -792,6 +918,13 @@ export function buildBatchQueries(dashboardFilters) {
   if (queries.ev_table_stage_dwell) {
     queries.ev_table_stage_dwell = normalizeStageDwellQuery(
       queries.ev_table_stage_dwell,
+      apiFilters
+    );
+  }
+
+  if (queries.ev_chart_resolution_dwell_subtype) {
+    queries.ev_chart_resolution_dwell_subtype = normalizeStageDwellQuery(
+      queries.ev_chart_resolution_dwell_subtype,
       apiFilters
     );
   }
@@ -1010,13 +1143,24 @@ function readMetricCount(results, queryKey, measureKey = "total") {
   return Number.isFinite(n) ? n : null;
 }
 
-export function parseSparkline7d(result) {
+function normalizeSparklinePoint(raw, measureKey = "total") {
+  const n = Number(raw) || 0;
+  if (measureKey === "pct") {
+    return n <= 1 ? Math.round(n * 1000) / 10 : Math.round(n * 10) / 10;
+  }
+  if (measureKey === "avg") {
+    return Math.round(n * 10) / 10;
+  }
+  return Math.round(n);
+}
+
+export function parseSparkline7d(result, measureKey = "total") {
   const rows = result?.rows;
   if (!rows?.length) return [];
 
   return [...rows]
     .sort((a, b) => String(a.created_date ?? "").localeCompare(String(b.created_date ?? "")))
-    .map((row) => Math.round(Number(row.total) || 0));
+    .map((row) => normalizeSparklinePoint(row[measureKey], measureKey));
 }
 
 function formatSparklineDeltaDisplay(deltaPercent) {
@@ -1048,17 +1192,23 @@ function buildSparklineKpiExtras(metricId, results, loading) {
     current = curTotal == null ? null : curTotal / daysElapsedThisWeek();
     prior = priorTotal == null ? null : priorTotal / 7;
   } else {
-    current = readMetricCount(results, config.currentQueryKey);
-    prior = readMetricCount(results, config.priorQueryKey);
+    const measureKey = config.measureKey || "total";
+    current = readMetricCount(results, config.currentQueryKey, measureKey);
+    prior = readMetricCount(results, config.priorQueryKey, measureKey);
   }
 
   const delta = computeWowPercent(current, prior);
+  const sparklineMeasureKey =
+    config.sparklineMeasureKey || config.measureKey || "total";
 
   return {
     delta,
     deltaLabel: config.deltaLabel,
     deltaDisplay: formatSparklineDeltaDisplay(delta),
-    sparkline: parseSparkline7d(results?.[config.sparklineQueryKey]),
+    sparkline: parseSparkline7d(
+      results?.[config.sparklineQueryKey],
+      sparklineMeasureKey
+    ),
   };
 }
 
@@ -1140,9 +1290,29 @@ function formatWeekStackedLabel(value) {
   return `Wk ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
 }
 
+function msToStackedHours(ms) {
+  const hours = Number(ms) / 3600000;
+  if (!Number.isFinite(hours) || hours <= 0) return 0;
+  return Math.round(hours * 10) / 10;
+}
+
+const RESOLUTION_DWELL_STATUS_KEYS = new Set(
+  RESOLUTION_DWELL_STACKED_SERIES.map((def) => def.key)
+);
+
 function parsePivotStackedChart(
   result,
-  { categoryKey, segmentKey, segmentDefs, categoryLabel, maxCategories = 6, segmentFilter }
+  {
+    categoryKey,
+    segmentKey,
+    segmentDefs,
+    categoryLabel,
+    maxCategories = 6,
+    segmentFilter,
+    measureKey = "total",
+    valueTransform = (value) => Number(value) || 0,
+    aggregate = "sum",
+  }
 ) {
   if (!result?.rows?.length) {
     return { categories: [], series: [], colors: segmentDefs.map((def) => def.color) };
@@ -1151,13 +1321,18 @@ function parsePivotStackedChart(
   const categoryMap = new Map();
 
   for (const row of result.rows) {
-    const segment = String(row[segmentKey] ?? "");
+    const segment = String(row[segmentKey] ?? "").toUpperCase();
     if (segmentFilter && !segmentFilter(segment)) continue;
 
     const category = String(row[categoryKey] ?? "Unknown");
     if (!categoryMap.has(category)) categoryMap.set(category, {});
     const bucket = categoryMap.get(category);
-    bucket[segment] = (bucket[segment] ?? 0) + (Number(row.total) || 0);
+    const value = valueTransform(row[measureKey]);
+    if (aggregate === "set") {
+      bucket[segment] = value;
+    } else {
+      bucket[segment] = (bucket[segment] ?? 0) + value;
+    }
   }
 
   const ranked = [...categoryMap.entries()]
@@ -1178,6 +1353,20 @@ function parsePivotStackedChart(
     })),
     colors: segmentDefs.map((def) => def.color),
   };
+}
+
+export function parseResolutionDwellStackedChart(result, { maxCategories = 5 } = {}) {
+  return parsePivotStackedChart(result, {
+    categoryKey: "service_code",
+    segmentKey: "status",
+    segmentDefs: RESOLUTION_DWELL_STACKED_SERIES,
+    categoryLabel: formatDimensionLabel,
+    maxCategories,
+    measureKey: "avg_dwell",
+    valueTransform: msToStackedHours,
+    aggregate: "set",
+    segmentFilter: (status) => RESOLUTION_DWELL_STATUS_KEYS.has(status),
+  });
 }
 
 export function parseOfficerSlaStackedChart(result, { maxCategories = 6 } = {}) {

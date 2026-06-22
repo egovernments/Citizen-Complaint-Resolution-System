@@ -317,11 +317,65 @@
   }
 
   .dashboard-add-kpi-panel {
-    @apply tw-absolute tw-right-0 tw-top-full tw-z-50 tw-mt-1.5;
+    border: 1px solid var(--border, #e5e2db);
+    border-radius: 6px;
+    background-color: #ffffff;
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.08),
+      0 2px 4px -2px rgb(0 0 0 / 0.06);
+    color: var(--foreground, #1a1917);
+    opacity: 1;
+    isolation: isolate;
+  }
+
+  .dashboard-add-kpi-panel--dragging {
+    @apply tw-pointer-events-none tw-invisible;
+  }
+
+  .dashboard-add-kpi-header {
+    @apply tw-shrink-0 tw-border-b tw-border-border tw-px-4 tw-py-2.5 tw-text-[10px] tw-font-normal tw-uppercase tw-tracking-wider;
+    color: var(--muted-foreground, #6b6860);
+    background-color: #ffffff;
+  }
+
+  .dashboard-add-kpi-list {
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+    background-color: #ffffff;
+  }
+
+  .dashboard-add-kpi-item {
+    font-weight: 400;
+    background-color: #ffffff;
+  }
+
+  .dashboard-add-kpi-item-label {
+    @apply tw-text-[13px] tw-leading-snug;
+    font-weight: 400;
+    color: var(--foreground, #1a1917);
+  }
+
+  .dashboard-add-kpi-type {
+    @apply tw-shrink-0 tw-text-[10px] tw-uppercase tw-tracking-wide;
+    font-weight: 400;
+    color: var(--muted-foreground, #6b6860);
+  }
+
+  .dashboard-add-kpi-add-btn {
+    @apply tw-box-border tw-m-0 tw-inline-flex tw-h-5 tw-w-5 tw-shrink-0 tw-items-center tw-justify-center tw-rounded-sm tw-border-0 tw-bg-transparent tw-p-0 tw-text-[15px] tw-leading-none;
+    font-family: inherit;
+    font-weight: 400;
+    color: var(--muted-foreground, #6b6860);
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .dashboard-add-kpi-add-btn:hover {
+    color: var(--foreground, #1a1917);
   }
 
   .dashboard-add-kpi-item:hover {
-    @apply tw-bg-muted;
+    background-color: var(--muted, #f5f4f1);
   }
 
   .dashboard-filters-card {
@@ -591,6 +645,19 @@
     top: 0;
     z-index: 2;
     background: var(--dashboard-surface, #fff) !important;
+  }
+
+  .dashboard-table-sort-btn {
+    @apply tw-inline-flex tw-w-full tw-items-center tw-gap-1 tw-border-0 tw-bg-transparent tw-p-0 tw-text-left;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .dashboard-table-sort-indicator {
+    @apply tw-shrink-0 tw-text-[10px];
+    color: var(--dashboard-muted-foreground, #6b6860);
+    line-height: 1;
   }
 
   .dashboard-root table.dashboard-table th.dashboard-table-th-right,
@@ -1074,14 +1141,22 @@
   .dashboard-sla-breach-pill {
     display: inline-block;
     border-radius: 4px;
-    background-color: var(--status-breach);
-    color: var(--primary-foreground);
     font-size: 9px;
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: 0.03em;
     line-height: 1.2;
     padding: 2px 6px;
     text-transform: uppercase;
+  }
+
+  .dashboard-sla-breach-pill--breached {
+    background-color: color-mix(in srgb, var(--status-breach) 14%, transparent);
+    color: var(--status-breach);
+  }
+
+  .dashboard-sla-breach-pill--nearing {
+    background-color: color-mix(in srgb, var(--status-progress) 16%, transparent);
+    color: var(--status-progress);
   }
 
   .dashboard-sla-status-pill {
@@ -1098,6 +1173,16 @@
   .dashboard-sla-status-pill--reopened {
     background-color: color-mix(in srgb, var(--chart-4) 14%, transparent);
     color: var(--chart-4);
+  }
+
+  .dashboard-sla-status-pill--assigned {
+    background-color: color-mix(in srgb, var(--chart-1) 14%, transparent);
+    color: var(--chart-1);
+  }
+
+  .dashboard-sla-status-pill--open {
+    background-color: color-mix(in srgb, var(--chart-2) 16%, transparent);
+    color: var(--chart-2);
   }
 
   .dashboard-sla-status-pill--in-progress {

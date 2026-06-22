@@ -67,8 +67,39 @@ export const STATUS_STACKED_SERIES = [
   { key: "ESCALATED", label: "Escalated", color: "var(--chart-3)" },
 ];
 
-export function buildStackedBarPlotOptions({ horizontal = false } = {}) {
+/** Resolution dwell by complaint sub-type — workflow stage stack (bottom → top). */
+export const RESOLUTION_DWELL_STACKED_SERIES = [
+  {
+    key: "PENDINGFORASSIGNMENT",
+    label: "Pending assignment",
+    color: "var(--chart-1)",
+  },
+  { key: "PENDINGATLME", label: "Assigned", color: "var(--chart-2)" },
+  {
+    key: "PENDINGFORREASSIGNMENT",
+    label: "Pending reassignment",
+    color: "var(--chart-3)",
+  },
+  { key: "RESOLVED", label: "Resolved", color: "var(--status-resolved)" },
+];
+
+export function formatStackedBarHours(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  if (Math.abs(n - Math.round(n)) < 0.05) return `${Math.round(n)}h`;
+  return `${n.toFixed(1)}h`;
+}
+
+export function buildStackedBarPlotOptions({ horizontal = false, valueFormat } = {}) {
   const totalLabelColor = resolveDashboardCssColor("var(--foreground)");
+  const formatTotal =
+    valueFormat === "hours"
+      ? formatStackedBarHours
+      : (value) => {
+          const n = Number(value);
+          if (!Number.isFinite(n) || n <= 0) return "";
+          return String(Math.round(n));
+        };
 
   return {
     bar: {
@@ -87,18 +118,23 @@ export function buildStackedBarPlotOptions({ horizontal = false } = {}) {
             fontWeight: 600,
             color: totalLabelColor,
           },
-          formatter: (value) => {
-            const n = Number(value);
-            if (!Number.isFinite(n) || n <= 0) return "";
-            return String(Math.round(n));
-          },
+          formatter: formatTotal,
         },
       },
     },
   };
 }
 
-export function buildStackedBarDataLabels() {
+export function buildStackedBarDataLabels({ valueFormat } = {}) {
+  const formatter =
+    valueFormat === "hours"
+      ? formatStackedBarHours
+      : (value) => {
+          const n = Number(value);
+          if (!Number.isFinite(n) || n <= 0) return "";
+          return String(Math.round(n));
+        };
+
   return {
     enabled: true,
     textAnchor: "middle",
@@ -112,11 +148,7 @@ export function buildStackedBarDataLabels() {
     background: {
       enabled: false,
     },
-    formatter: (value) => {
-      const n = Number(value);
-      if (!Number.isFinite(n) || n <= 0) return "";
-      return String(Math.round(n));
-    },
+    formatter,
   };
 }
 
@@ -151,14 +183,20 @@ export function buildStackedBarXAxis({
   };
 }
 
-export function buildStackedBarYAxis({ horizontal, categories = [], containerWidth = 0 }) {
+export function buildStackedBarYAxis({
+  horizontal,
+  categories = [],
+  containerWidth = 0,
+  valueFormat,
+} = {}) {
   if (horizontal) {
     return buildHorizontalBarYAxisItem(categories, containerWidth);
   }
   return {
     labels: {
       style: { fontSize: "10px" },
-      formatter: (val) => Math.round(val),
+      formatter: (val) =>
+        valueFormat === "hours" ? formatStackedBarHours(val) : Math.round(val),
     },
     axisBorder: { show: false },
     axisTicks: { show: false },

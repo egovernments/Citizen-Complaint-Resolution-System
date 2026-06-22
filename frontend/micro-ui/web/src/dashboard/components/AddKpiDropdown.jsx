@@ -1,27 +1,43 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
-  CHART_WIDGETS,
-  KPI_METRICS,
+  INVENTORY_CHART_WIDGETS,
+  INVENTORY_KPI_METRICS,
 } from "../config/supervisorMetrics";
 
+const PANEL_WIDTH_PX = 320; // ~tw-w-80
+
 const SHORT_LABELS = {
-  "cl-metric-total-registered": "Total",
+  "cl-metric-total-registered": "Total registered",
   "cl-metric-total-open": "Open",
   "cl-metric-total-resolved": "Resolved",
   "cl-metric-channel-mix": "Channel mix",
   "cl-metric-new-vs-repeat": "New vs repeat",
   "cl-metric-inflow-rate": "Inflow rate",
-  "cl-metric-hot-ward": "Hot ward",
-  "demo-viz-stacked": "Stacked bar",
+  "rs-metric-sla-compliance": "On-time resolution",
+  "rs-metric-breach-count": "Breached SLA (open)",
+  "ce-metric-reopen-rate": "Reopen rate",
+  "ce-metric-csat": "Citizen satisfaction",
+  "cl-list-categories": "Trending complaints",
+  "cl-table-locality": "By locality",
+  "cl-table-workflow-stages": "Workflow stages",
+  "cl-chart-categories": "Trending categories",
+  "cl-chart-wards": "By ward",
+  "cl-chart-dow": "Day of week",
+  "cl-chart-status-week": "Status mix per week",
+  "cl-chart-officer-sla": "Team load by SLA",
+  "cl-chart-resolution-subtype": "Resolution by sub-type",
+  "cl-table-resolution": "Resolution by subtype",
+  "demo-viz-stacked": "Status mix (stacked)",
   "demo-viz-stacked-horizontal": "Team SLA load",
-  "demo-viz-leaderboard": "Leaderboard",
-  "demo-viz-line": "Line chart",
-  "demo-viz-pie": "Channel donut",
-  "demo-viz-sla-toggle": "SLA table/bar",
-  "demo-viz-sla-risk": "SLA at risk",
-  "demo-viz-map": "Map demo",
-  "demo-viz-histogram": "Histogram",
-  "demo-viz-gauge": "Gauge",
+  "demo-viz-pie": "Channel mix (pie)",
+  "demo-viz-histogram": "Distribution",
+  "demo-viz-gauge": "On-time gauge",
+  "demo-viz-sla-toggle": "Complaints by SLA",
+  "demo-viz-map": "Complaint map",
+  "demo-viz-leaderboard": "Flow ratio by dept",
+  "demo-viz-line": "Logged over time",
+  "demo-viz-sla-risk": "Complaints at risk",
 };
 
 function shortLabel(item) {
@@ -29,7 +45,18 @@ function shortLabel(item) {
 }
 
 function iconKind(item) {
-  if (item.type === "bar-chart" || item.type === "map" || item.type === "data-table") {
+  if (
+    item.type === "bar-chart" ||
+    item.type === "stacked-bar" ||
+    item.type === "line-chart" ||
+    item.type === "pie-chart" ||
+    item.type === "histogram" ||
+    item.type === "map" ||
+    item.type === "data-table" ||
+    item.type === "sla-risk-table" ||
+    item.type === "sla-toggle" ||
+    item.type === "gauge"
+  ) {
     return "chart";
   }
   const id = item.id || "";
@@ -81,6 +108,10 @@ function MetricIcon({ kind }) {
   );
 }
 
+function itemTypeLabel(item) {
+  return item.itemType === "kpi" ? "STAT" : "CHART";
+}
+
 const AddKpiDropdown = ({
   visibleLayoutIds,
   onAddWidget,
@@ -91,18 +122,48 @@ const AddKpiDropdown = ({
   containerRef,
 }) => {
   const panelRef = useRef(null);
+  const [panelPosition, setPanelPosition] = useState(null);
 
   const availableItems = useMemo(() => {
-    const metrics = KPI_METRICS.filter((m) => !visibleLayoutIds.includes(m.id)).map((m) => ({
+    const metrics = INVENTORY_KPI_METRICS.filter(
+      (m) => !visibleLayoutIds.includes(m.id)
+    ).map((m) => ({
       ...m,
       itemType: "kpi",
     }));
-    const widgets = CHART_WIDGETS.filter((w) => !visibleLayoutIds.includes(w.id)).map((w) => ({
+    const widgets = INVENTORY_CHART_WIDGETS.filter(
+      (w) => !visibleLayoutIds.includes(w.id)
+    ).map((w) => ({
       ...w,
       itemType: "widget",
     }));
     return [...metrics, ...widgets];
   }, [visibleLayoutIds]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPanelPosition(null);
+      return undefined;
+    }
+
+    const syncPosition = () => {
+      const anchor = containerRef?.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      setPanelPosition({
+        top: rect.bottom + 6,
+        left: Math.max(8, rect.right - PANEL_WIDTH_PX),
+      });
+    };
+
+    syncPosition();
+    window.addEventListener("resize", syncPosition);
+    window.addEventListener("scroll", syncPosition, true);
+    return () => {
+      window.removeEventListener("resize", syncPosition);
+      window.removeEventListener("scroll", syncPosition, true);
+    };
+  }, [open, containerRef]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -124,26 +185,41 @@ const AddKpiDropdown = ({
     };
   }, [open, onOpenChange, containerRef]);
 
-  if (!open) return null;
-
   const handleDragStart = (event, widgetId) => {
     event.dataTransfer.setData("text/plain", widgetId);
     event.dataTransfer.effectAllowed = "copy";
     onDragWidgetStart?.(widgetId);
+    // Defer hiding so React does not re-render during dragstart (that cancels the drag).
+    requestAnimationFrame(() => {
+      panelRef.current?.classList.add("dashboard-add-kpi-panel--dragging");
+    });
   };
 
-  return (
+  const handleDragEnd = () => {
+    panelRef.current?.classList.remove("dashboard-add-kpi-panel--dragging");
+    onDragWidgetEnd?.();
+    onOpenChange(false);
+  };
+
+  if (!open || !panelPosition) return null;
+
+  const panel = (
     <div
       ref={panelRef}
-      className="dashboard-add-kpi-panel tw-w-72 tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface tw-shadow-lg"
+      className="dashboard-add-kpi-panel tw-flex tw-max-h-[min(24rem,70vh)] tw-flex-col tw-overflow-hidden"
+      style={{
+        position: "fixed",
+        top: panelPosition.top,
+        left: panelPosition.left,
+        width: PANEL_WIDTH_PX,
+        zIndex: 9999,
+      }}
       role="menu"
     >
-      <p className="tw-border-b tw-border-border tw-px-3 tw-py-2 tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wider tw-text-muted-foreground">
-        Available KPIs
-      </p>
-      <ul className="dashboard-add-kpi-list tw-max-h-80 tw-overflow-y-auto tw-py-1">
+      <p className="dashboard-add-kpi-header">Available KPIs</p>
+      <ul className="dashboard-add-kpi-list tw-min-h-0 tw-flex-1 tw-overflow-y-auto tw-overscroll-contain">
         {availableItems.length === 0 ? (
-          <li className="tw-px-3 tw-py-4 tw-text-center tw-text-[12px] tw-text-muted-foreground">
+          <li className="tw-px-4 tw-py-6 tw-text-center tw-text-[12px] tw-font-normal tw-text-muted-foreground">
             All KPIs are on the dashboard
           </li>
         ) : (
@@ -152,25 +228,26 @@ const AddKpiDropdown = ({
               <div
                 draggable
                 onDragStart={(event) => handleDragStart(event, item.id)}
-                onDragEnd={() => onDragWidgetEnd?.()}
-                className="dashboard-add-kpi-item tw-flex tw-cursor-grab tw-items-center tw-gap-2.5 tw-px-3 tw-py-2 active:tw-cursor-grabbing"
+                onDragEnd={handleDragEnd}
+                className="dashboard-add-kpi-item tw-flex tw-cursor-grab tw-select-none tw-items-center tw-gap-2.5 tw-px-4 tw-py-2.5 active:tw-cursor-grabbing"
               >
                 <MetricIcon kind={iconKind(item)} />
+                <span className="dashboard-add-kpi-item-label tw-min-w-0 tw-flex-1 tw-truncate">
+                  {shortLabel(item)}
+                </span>
+                <span className="dashboard-add-kpi-type">{itemTypeLabel(item)}</span>
                 <button
                   type="button"
-                  role="menuitem"
+                  draggable={false}
+                  onMouseDown={(event) => event.stopPropagation()}
                   onClick={() => {
                     onAddWidget(item.id);
                     onOpenChange(false);
                   }}
-                  className="tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-2.5 tw-border-0 tw-bg-transparent tw-p-0 tw-text-left"
+                  className="dashboard-add-kpi-add-btn"
+                  aria-label={`Add ${shortLabel(item)}`}
                 >
-                  <span className="tw-min-w-0 tw-flex-1 tw-truncate tw-text-[12px] tw-text-foreground">
-                    {shortLabel(item)}
-                  </span>
-                  <span className="tw-shrink-0 tw-text-[10px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-muted-foreground">
-                    Stat +
-                  </span>
+                  +
                 </button>
               </div>
             </li>
@@ -179,6 +256,8 @@ const AddKpiDropdown = ({
       </ul>
     </div>
   );
+
+  return createPortal(panel, document.body);
 };
 
 export default AddKpiDropdown;

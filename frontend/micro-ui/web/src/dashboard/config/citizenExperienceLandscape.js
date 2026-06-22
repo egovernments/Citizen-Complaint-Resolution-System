@@ -11,6 +11,7 @@ export const CITIZEN_EXPERIENCE_METRICS = [
     id: "ce-metric-csat",
     metric: "CSAT / post-resolution rating",
     accent: "teal",
+    vizType: "number-tile-sparkline",
     defaultSubMetricId: "avg_rating_week",
     subMetrics: [
       {
@@ -43,6 +44,7 @@ export const CITIZEN_EXPERIENCE_METRICS = [
     id: "ce-metric-reopen-rate",
     metric: "Reopen rate at zone level",
     accent: "amber",
+    vizType: "number-tile-sparkline",
     defaultSubMetricId: "reopen_7d",
     subMetrics: [
       {

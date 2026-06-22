@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./styles/dashboard.css";
 import DashboardLayout from "./components/DashboardLayout";
 import DashboardGrid from "./components/DashboardGrid";
@@ -51,6 +51,12 @@ const AdminDashboard = () => {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [draggingWidgetId, setDraggingWidgetId] = useState(null);
+  const draggingWidgetIdRef = useRef(null);
+
+  const handleDragWidgetStart = useCallback((widgetId) => {
+    draggingWidgetIdRef.current = widgetId;
+    setDraggingWidgetId(widgetId);
+  }, []);
 
   const searchContext = useMemo(
     () => ({ kpiCardData, chartData }),
@@ -74,15 +80,19 @@ const AdminDashboard = () => {
   );
 
   const handleExternalDragEnd = useCallback(() => {
+    draggingWidgetIdRef.current = null;
     setDraggingWidgetId(null);
   }, []);
 
-  // Safety net: HTML5 dragend always fires, even when drop is outside the grid.
+  // Listen unconditionally so dragend is not missed when it fires before React
+  // re-renders after dragstart (e.g. drag source removed from the DOM).
   useEffect(() => {
-    if (!draggingWidgetId) return undefined;
-    window.addEventListener("dragend", handleExternalDragEnd);
-    return () => window.removeEventListener("dragend", handleExternalDragEnd);
-  }, [draggingWidgetId, handleExternalDragEnd]);
+    const onWindowDragEnd = () => {
+      if (draggingWidgetIdRef.current) handleExternalDragEnd();
+    };
+    window.addEventListener("dragend", onWindowDragEnd);
+    return () => window.removeEventListener("dragend", onWindowDragEnd);
+  }, [handleExternalDragEnd]);
 
   const handleExport = useCallback(() => {
     downloadDashboardExport({
@@ -98,7 +108,7 @@ const AdminDashboard = () => {
       visibleLayoutIds={visibleLayoutIds}
       onAddWidget={addWidgetToLayout}
       onResetLayout={resetLayout}
-      onDragWidgetStart={setDraggingWidgetId}
+      onDragWidgetStart={handleDragWidgetStart}
       onDragWidgetEnd={handleExternalDragEnd}
       searchQuery={searchQuery}
       onSearchQueryChange={setSearchQuery}
@@ -148,6 +158,7 @@ const AdminDashboard = () => {
             onDropWidget={handleDropWidget}
             onExternalDragEnd={handleExternalDragEnd}
             draggingWidgetId={draggingWidgetId}
+            draggingWidgetIdRef={draggingWidgetIdRef}
             searchQuery={searchQuery}
             searchContext={searchContext}
             kpiCardData={kpiCardData}

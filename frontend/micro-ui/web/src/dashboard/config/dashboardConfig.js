@@ -52,7 +52,7 @@ export function getSystemTitle() {
 }
 
 export function getLayoutStorageKey() {
-  return `${getTenantId()}-supervisor-dashboard-layout-v23`;
+  return `${getTenantId()}-supervisor-dashboard-layout-v26`;
 }
 
 export function getSubMetricStorageKey() {

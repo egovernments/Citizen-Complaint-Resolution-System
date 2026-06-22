@@ -135,8 +135,12 @@ export const VISUALIZATION_STYLES = {
     link: "dashboard-sla-link",
     linkButton: "dashboard-sla-link dashboard-sla-link--button",
     breachPill: "dashboard-sla-breach-pill",
+    breachPillBreached: "dashboard-sla-breach-pill--breached",
+    breachPillNearing: "dashboard-sla-breach-pill--nearing",
     overdue: "dashboard-sla-overdue",
     statusPill: "dashboard-sla-status-pill",
+    statusPillAssigned: "dashboard-sla-status-pill--assigned",
+    statusPillOpen: "dashboard-sla-status-pill--open",
     statusPillReopened: "dashboard-sla-status-pill--reopened",
     statusPillInProgress: "dashboard-sla-status-pill--in-progress",
     ownerName: "dashboard-data-table-owner-name",
@@ -214,12 +218,33 @@ export function getDataTableTdClass(align = "left") {
 }
 
 export function getSlaRiskStatusPillClass(status) {
-  const { statusPill, statusPillReopened, statusPillInProgress } =
+  const {
+    statusPill,
+    statusPillAssigned,
+    statusPillOpen,
+    statusPillReopened,
+    statusPillInProgress
+  } =
     VISUALIZATION_STYLES[VIZ_TYPE.SLA_RISK_TABLE];
+  if (status === "assigned") {
+    return `${statusPill} ${statusPillAssigned}`;
+  }
+  if (status === "open") {
+    return `${statusPill} ${statusPillOpen}`;
+  }
   if (status === "reopened") {
     return `${statusPill} ${statusPillReopened}`;
   }
   return `${statusPill} ${statusPillInProgress}`;
+}
+
+export function getSlaRiskBreachPillClass(level) {
+  const { breachPill, breachPillBreached, breachPillNearing } =
+    VISUALIZATION_STYLES[VIZ_TYPE.SLA_RISK_TABLE];
+  if (level === "nearing") {
+    return `${breachPill} ${breachPillNearing}`;
+  }
+  return `${breachPill} ${breachPillBreached}`;
 }
 
 export { DATA_TABLE_STYLES };

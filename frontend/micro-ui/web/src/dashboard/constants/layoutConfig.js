@@ -173,6 +173,7 @@ const RAW_DEFAULT_CHART_LAYOUT = {
   "cl-chart-wards": { x: 4, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
   "cl-chart-dow": { x: 8, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
   "cl-chart-status-week": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
+  "cl-chart-resolution-subtype": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
   "cl-chart-officer-sla": { x: 6, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
   ...DEMO_VIZ_LAYOUT_DEFAULTS,
 };
@@ -193,29 +194,17 @@ export const TOP_ROW_CHART_IDS = [
 ];
 
 export const DEFAULT_LAYOUT = [
-  { i: "cl-metric-total-registered", x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-metric-total-open", x: 2, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "rs-metric-sla-compliance", x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "rs-metric-breach-count", x: 2, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-metric-total-resolved", x: 4, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-metric-channel-mix", x: 6, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-metric-new-vs-repeat", x: 8, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-metric-inflow-rate", x: 10, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-list-categories", x: 0, y: 2, w: 6, h: 3, minW: 4, minH: 3, maxW: 12, maxH: 12, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-table-resolution", x: 6, y: 2, w: 6, h: 3, minW: 4, minH: 3, maxW: 12, maxH: 12, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-table-locality", x: 0, y: 5, w: 6, h: 3, minW: 4, minH: 3, maxW: 12, maxH: 12, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-table-workflow-stages", x: 6, y: 5, w: 6, h: 3, minW: 4, minH: 3, maxW: 12, maxH: 12, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-chart-categories", x: 0, y: 8, w: 4, h: 6, minW: 3, minH: 6, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-chart-wards", x: 4, y: 8, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-chart-dow", x: 8, y: 8, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-stacked", x: 0, y: 14, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-stacked-horizontal", x: 6, y: 14, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-pie", x: 0, y: 20, w: 5, h: 5, minW: 3, minH: 4, maxW: 6, maxH: 8, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-histogram", x: 5, y: 20, w: 4, h: 5, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-gauge", x: 0, y: 25, w: 4, h: 2, minW: 3, minH: 2, maxW: 6, maxH: 2, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-leaderboard", x: 4, y: 25, w: 7, h: 6, minW: 4, minH: 4, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-sla-toggle", x: 0, y: 27, w: 4, h: 4, minW: 4, minH: 3, maxW: 6, maxH: 8, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-map", x: 0, y: 31, w: 6, h: 6, minW: 4, minH: 5, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-line", x: 6, y: 31, w: 6, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-sla-risk", x: 0, y: 37, w: 12, h: 5, minW: 6, minH: 4, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "ce-metric-reopen-rate", x: 6, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "ce-metric-csat", x: 8, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-stacked-horizontal", x: 0, y: 2, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-chart-resolution-subtype", x: 0, y: 8, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-map", x: 0, y: 14, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-leaderboard", x: 0, y: 20, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-line", x: 0, y: 26, w: 12, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "demo-viz-sla-risk", x: 0, y: 32, w: 12, h: 5, minW: 6, minH: 4, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
 ].map((item) => {
   const type = WIDGETS[item.i]?.type;
   if (!type || type === "kpi") return item;

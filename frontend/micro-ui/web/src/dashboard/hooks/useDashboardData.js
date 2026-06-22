@@ -8,6 +8,7 @@ import {
   parseLocalityTable,
   parseOfficerSlaStackedChart,
   parseResolutionByTypeTable,
+  parseResolutionDwellStackedChart,
   parseStatusWeekStackedChart,
   parseTrendingComplaintsTable,
   parseWorkflowStageTable,
@@ -31,6 +32,7 @@ const EMPTY_CHART_DATA = {
   dow: [],
   statusWeekStacked: { categories: [], series: [], colors: [] },
   officerSlaStacked: { categories: [], series: [], colors: [] },
+  resolutionDwellStacked: { categories: [], series: [], colors: [] },
   trendingComplaints: [],
   resolutionByType: [],
   locality: [],
@@ -56,6 +58,9 @@ function buildChartData(results) {
     dow: parseDowChart(results?.cl_chart_dow),
     statusWeekStacked: parseStatusWeekStackedChart(results?.cl_chart_status_week),
     officerSlaStacked: parseOfficerSlaStackedChart(results?.cl_chart_officer_sla),
+    resolutionDwellStacked: parseResolutionDwellStackedChart(
+      results?.ev_chart_resolution_dwell_subtype
+    ),
     trendingComplaints: parseTrendingComplaintsTable(
       categoryResult,
       results?.cl_chart_categories_pw,

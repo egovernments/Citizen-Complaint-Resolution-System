@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useRef } from "react";
 import GridLayout, { WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -115,6 +115,18 @@ function getDropPreviewSize(widgetId) {
   return { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
 }
 
+function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, widgetId) {
+  const { w, h } = getDropPreviewSize(widgetId);
+  const colWidth = (containerWidth - GRID_MARGIN[0] * (GRID_COLS + 1)) / GRID_COLS;
+  const left = clientX - gridRect.left;
+  const top = clientY - gridRect.top;
+  let x = Math.round((left - GRID_MARGIN[0]) / (colWidth + GRID_MARGIN[0]));
+  let y = Math.round((top - GRID_MARGIN[1]) / (KPI_ROW_HEIGHT + GRID_MARGIN[1]));
+  x = Math.max(0, Math.min(GRID_COLS - w, x));
+  y = Math.max(0, y);
+  return { x, y };
+}
+
 const DashboardGrid = ({
   layout,
   onDragStop,
@@ -124,13 +136,16 @@ const DashboardGrid = ({
   onDropWidget,
   onExternalDragEnd,
   draggingWidgetId,
+  draggingWidgetIdRef,
   searchQuery = "",
   searchContext = {},
   kpiCardData = {},
   chartData = {},
   loading = false,
 }) => {
-  const isExternalDrag = Boolean(draggingWidgetId);
+  const gridWrapRef = useRef(null);
+  const externalDropLockRef = useRef(false);
+  const isExternalDrag = Boolean(draggingWidgetIdRef?.current ?? draggingWidgetId);
   const isSearchActive = Boolean(searchQuery?.trim());
 
   // Stamp the load time once. Swap for the API's data-as-of timestamp once a
@@ -228,9 +243,13 @@ const DashboardGrid = ({
     const dataset =
       widgetId === "cl-chart-officer-sla"
         ? chartData.officerSlaStacked
-        : chartData.statusWeekStacked;
+        : widgetId === "cl-chart-resolution-subtype"
+          ? chartData.resolutionDwellStacked
+          : chartData.statusWeekStacked;
 
     const { categories = [], series = [], colors = [] } = dataset || {};
+    const valueFormat =
+      widgetId === "cl-chart-resolution-subtype" ? "hours" : undefined;
     const hasData =
       categories.length > 0 &&
       series.some((entry) => entry.data?.some((value) => Number(value) > 0));
@@ -247,6 +266,7 @@ const DashboardGrid = ({
         colors={colors}
         horizontal={horizontal}
         scrollKey={widgetId}
+        valueFormat={valueFormat}
       />
     );
   };
@@ -294,6 +314,59 @@ const DashboardGrid = ({
     return null;
   };
 
+  const completeExternalDrop = useCallback(
+    (widgetId, position, clientX, clientY) => {
+      if (externalDropLockRef.current) return;
+      const activeId = widgetId || draggingWidgetIdRef?.current;
+      if (!activeId || !WIDGETS[activeId]) return;
+      if (layout.some((entry) => entry.i === activeId)) return;
+
+      let dropPosition = position;
+      if (!dropPosition && clientX != null && clientY != null && gridWrapRef.current) {
+        const gridEl = gridWrapRef.current.querySelector(".react-grid-layout");
+        if (gridEl) {
+          const rect = gridEl.getBoundingClientRect();
+          dropPosition = pixelToGridPosition(
+            rect.width,
+            clientX,
+            clientY,
+            rect,
+            activeId
+          );
+        }
+      }
+      if (!dropPosition) return;
+
+      externalDropLockRef.current = true;
+      onExternalDragEnd?.();
+      requestAnimationFrame(() => {
+        onDropWidget(activeId, dropPosition);
+        externalDropLockRef.current = false;
+      });
+    },
+    [layout, onDropWidget, onExternalDragEnd, draggingWidgetIdRef]
+  );
+
+  const handleWrapDragOver = useCallback(
+    (event) => {
+      const activeId = draggingWidgetIdRef?.current ?? draggingWidgetId;
+      if (!activeId) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    },
+    [draggingWidgetId, draggingWidgetIdRef]
+  );
+
+  const handleWrapDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const widgetId = event.dataTransfer?.getData("text/plain");
+      completeExternalDrop(widgetId, null, event.clientX, event.clientY);
+    },
+    [completeExternalDrop]
+  );
+
   const handleRemove = (event, widgetId) => {
     event.preventDefault();
     event.stopPropagation();
@@ -302,26 +375,21 @@ const DashboardGrid = ({
 
   const handleDrop = useCallback(
     (gridLayout, item, event) => {
-      // Clear external-drag mode before RGL re-syncs so dropping state can't
-      // stick and block normal grid drags until refresh.
-      onExternalDragEnd?.();
-
       const widgetId = event.dataTransfer.getData("text/plain");
-      if (!widgetId || !WIDGETS[widgetId]) return;
-      if (layout.some((entry) => entry.i === widgetId)) return;
-
-      requestAnimationFrame(() => {
-        onDropWidget(widgetId, { x: item.x, y: item.y });
-      });
+      const position = item ? { x: item.x, y: item.y } : null;
+      const clientX = event.nativeEvent?.clientX ?? event.clientX;
+      const clientY = event.nativeEvent?.clientY ?? event.clientY;
+      completeExternalDrop(widgetId, position, clientX, clientY);
     },
-    [layout, onDropWidget, onExternalDragEnd]
+    [completeExternalDrop]
   );
 
   const handleDropDragOver = useCallback(() => {
-    if (!draggingWidgetId || !WIDGETS[draggingWidgetId]) return false;
-    if (layout.some((entry) => entry.i === draggingWidgetId)) return false;
-    return getDropPreviewSize(draggingWidgetId);
-  }, [draggingWidgetId, layout]);
+    const activeId = draggingWidgetIdRef?.current ?? draggingWidgetId;
+    if (!activeId || !WIDGETS[activeId]) return false;
+    if (layout.some((entry) => entry.i === activeId)) return false;
+    return getDropPreviewSize(activeId);
+  }, [draggingWidgetId, draggingWidgetIdRef, layout]);
 
   const handleDragStop = useCallback(
     (nextLayout, oldItem, newItem) => {
@@ -351,9 +419,13 @@ const DashboardGrid = ({
   );
 
   return (
-    <div>
-      <div className={isExternalDrag ? "dashboard-external-drag" : undefined}>
-        <GridLayoutWithWidth
+    <div
+      ref={gridWrapRef}
+      className={isExternalDrag ? "dashboard-external-drag" : undefined}
+      onDragOver={handleWrapDragOver}
+      onDrop={handleWrapDrop}
+    >
+      <GridLayoutWithWidth
           className="layout"
           layout={gridLayout}
           cols={GRID_COLS}
@@ -368,7 +440,7 @@ const DashboardGrid = ({
           compactType={null}
           allowOverlap
           isResizable
-          isDroppable={isExternalDrag}
+          isDroppable
           droppingItem={DROPPING_ITEM}
           onDrop={handleDrop}
           onDropDragOver={handleDropDragOver}
@@ -441,7 +513,6 @@ const DashboardGrid = ({
             );
           })}
         </GridLayoutWithWidth>
-      </div>
     </div>
   );
 };

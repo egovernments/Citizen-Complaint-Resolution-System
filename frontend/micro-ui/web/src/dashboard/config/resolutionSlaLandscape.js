@@ -11,6 +11,7 @@ export const RESOLUTION_SLA_METRICS = [
     id: "rs-metric-sla-compliance",
     metric: "Zone SLA compliance %",
     accent: "teal",
+    vizType: "number-tile-sparkline",
     defaultSubMetricId: "compliance_week",
     subMetrics: [
       {
@@ -43,6 +44,7 @@ export const RESOLUTION_SLA_METRICS = [
     id: "rs-metric-breach-count",
     metric: "Active SLA breach count",
     accent: "red",
+    vizType: "number-tile-sparkline",
     defaultSubMetricId: "total",
     subMetrics: [
       {

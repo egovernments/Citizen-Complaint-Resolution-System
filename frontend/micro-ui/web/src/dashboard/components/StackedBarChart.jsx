@@ -29,6 +29,7 @@ const StackedBarChart = ({
   horizontal = false,
   referenceLines = [],
   scrollKey,
+  valueFormat,
 }) => {
   const {
     viewportRef,
@@ -69,12 +70,12 @@ const StackedBarChart = ({
         fontFamily: DASHBOARD_FONT_FAMILY,
         parentHeightOffset: 0,
       },
-      plotOptions: buildStackedBarPlotOptions({ horizontal }),
-      dataLabels: buildStackedBarDataLabels(),
+      plotOptions: buildStackedBarPlotOptions({ horizontal, valueFormat }),
+      dataLabels: buildStackedBarDataLabels({ valueFormat }),
       xaxis: buildStackedBarXAxis({ horizontal, categories, containerWidth }),
       yaxis: horizontal
-        ? [buildStackedBarYAxis({ horizontal, categories, containerWidth })]
-        : buildStackedBarYAxis({ horizontal, categories, containerWidth }),
+        ? [buildStackedBarYAxis({ horizontal, categories, containerWidth, valueFormat })]
+        : buildStackedBarYAxis({ horizontal, categories, containerWidth, valueFormat }),
       colors: resolvedColors,
       legend: STACKED_BAR_LEGEND,
       grid: buildStackedBarGrid({
@@ -94,6 +95,7 @@ const StackedBarChart = ({
       referenceLines,
       resolvedColors,
       verticalXAxisLabelHeight,
+      valueFormat,
     ]
   );
 
