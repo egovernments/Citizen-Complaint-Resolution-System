@@ -7,9 +7,6 @@ module.exports = {
   // mode: 'development',
   entry: "./src/index.js",
   devtool: "none",
-  // src/ mixes .js and .jsx (dashboard/); webpack's default resolve list has no .jsx,
-  // so extensionless imports of .jsx files only worked on the dev server.
-  resolve: { extensions: [".js", ".jsx", ".json"] },
   module: {
     rules: [
       {
@@ -23,7 +20,10 @@ module.exports = {
         }
       },
       {
-        test: /\.(js|jsx)$/,
+        // Match .jsx too: the src/dashboard/* feature is authored in .jsx,
+        // which this rule (preset-react) must transpile — a bare /\.js$/
+        // silently skips them and webpack fails on the JSX syntax.
+        test: /\.(jsx?)$/,
         exclude: /node_modules/,
         use: {
           loader: "babel-loader",
@@ -46,6 +46,12 @@ module.exports = {
         ],
       },
     ],
+  },
+  resolve: {
+    // Without this, extensionless imports like `./dashboard/AdminDashboard`
+    // only resolve .js — webpack's defaults don't include .jsx — so the
+    // .jsx dashboard modules fail to resolve.
+    extensions: [".js", ".jsx", ".json"],
   },
   output: {
     filename: "[name].bundle.js",

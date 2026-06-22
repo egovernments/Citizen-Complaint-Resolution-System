@@ -2,15 +2,16 @@ import { test, expect } from '@playwright/test';
 import { HrmsCreatePage } from '../pages/hrms-create.page';
 import { HrmsInboxPage } from '../pages/hrms-inbox.page';
 import { getDigitToken, loginViaApi } from '../utils/auth';
-import { uniqueMobile } from '../../utils/mobile';
+import { getMobileValidationRule, generateValidMobile } from '../common/mdms-mobile';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
 const ADMIN_USER = process.env.DIGIT_USERNAME || 'ADMIN';
 const ADMIN_PASS = process.env.DIGIT_PASSWORD || 'eGov@123';
 
-// Unique phone per run, shaped by the target tenant's mobile rules
-const PHONE = uniqueMobile();
+// Tenant-aware phone, sourced from MDMS at suite setup. See
+// common/mdms-mobile.ts — replaces the env-heuristic uniqueMobile().
+let PHONE: string;
 const EMPLOYEE_NAME = 'Playwright Test Employee';
 const DEFAULT_PASSWORD = 'eGov@123';
 
@@ -19,6 +20,16 @@ test.describe.serial('HRMS employee creation and login', () => {
 
   let employeeCode: string | undefined;
   let createSucceeded = false;
+
+  test.beforeAll(async () => {
+    const rule = await getMobileValidationRule(TENANT, {
+      baseURL: BASE_URL,
+      adminUser: ADMIN_USER,
+      adminPassword: ADMIN_PASS,
+    });
+    PHONE = generateValidMobile(rule);
+    console.log(`[hrms-flow] phone=${PHONE} pattern=${rule.pattern} (tenant=${TENANT})`);
+  });
 
   test('login as ADMIN', async ({ page }) => {
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });

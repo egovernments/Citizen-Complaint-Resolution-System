@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { LoginPage } from '../pages/login.page';
-import { EmployeeHomePage } from '../pages/employee-home.page';
-import { getDigitToken } from '../utils/auth';
+import { LoginPage } from '../../pages/login.page';
+import { EmployeeHomePage } from '../../pages/employee-home.page';
+import { getDigitToken } from '../../utils/auth';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';

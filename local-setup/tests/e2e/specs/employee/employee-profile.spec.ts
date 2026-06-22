@@ -8,7 +8,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginViaApi } from '../utils/auth';
+import { loginViaApi } from '../../utils/auth';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT    = process.env.DIGIT_TENANT    || 'uitest.citya';

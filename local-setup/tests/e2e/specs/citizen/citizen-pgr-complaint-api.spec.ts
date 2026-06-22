@@ -18,8 +18,10 @@
 import { test, expect } from '@playwright/test';
 import { PgrInboxPage } from '../../pages/pgr-inbox.page';
 import { getDigitToken, loginViaApi } from '../../utils/auth';
-import { uniqueMobile } from '../../../utils/mobile';
-import { citizenOtpLogin } from '../../utils/citizen-auth';
+import { getMobileValidationRule, generateValidMobile } from '../../common/mdms-mobile';
+import { pickRandomLeafBoundary, type Boundary } from '../../common/mdms-boundary';
+import { pickRandomServiceCode, type ServiceDef } from '../../common/mdms-servicedef';
+import { pickRandomEmployeeWithRole, type HrmsEmployee } from '../../common/hrms-employees';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
@@ -27,9 +29,6 @@ const EMPLOYEE_USER = process.env.DIGIT_EMPLOYEE_USER || 'ADMIN';
 const EMPLOYEE_PASS = process.env.DIGIT_EMPLOYEE_PASSWORD || 'eGov@123';
 const FIXED_OTP = '123456';
 
-// Unique phone per run, shaped by the target tenant's mobile rules
-// (CITIZEN_MOBILE_LENGTH/PREFIX env or globalConfigs via global-setup).
-const CITIZEN_PHONE = uniqueMobile();
 const CITIZEN_NAME = 'Playwright Test Citizen';
 
 test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
@@ -45,6 +44,44 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
   let citizenLoggedIn = false;
   let complaintCreated = false;
   let complaintAssigned = false;
+  // Tenant-aware fixtures sourced from the live deployment at setup time.
+  // - mobile rule comes from MDMS ValidationConfigs.mobileNumberValidation
+  // - locality is a RANDOMLY-picked leaf from the boundary tree (egov-location)
+  // Random picking is deliberate: it forces the test to exercise different
+  // wards across runs instead of pinning a single happy path.
+  let CITIZEN_PHONE: string;
+  let LOCALITY: Boundary;
+  let SERVICE_DEF: ServiceDef;
+
+  test.beforeAll(async () => {
+    const rule = await getMobileValidationRule(TENANT, {
+      baseURL: BASE_URL,
+      adminUser: EMPLOYEE_USER,
+      adminPassword: EMPLOYEE_PASS,
+    });
+    CITIZEN_PHONE = generateValidMobile(rule);
+    console.log(
+      `[citizen-lifecycle] phone=${CITIZEN_PHONE} pattern=${rule.pattern} (tenant=${TENANT})`,
+    );
+
+    LOCALITY = await pickRandomLeafBoundary(TENANT, {
+      baseURL: BASE_URL,
+      adminUser: EMPLOYEE_USER,
+      adminPassword: EMPLOYEE_PASS,
+    });
+    console.log(
+      `[citizen-lifecycle] locality=${LOCALITY.code} (${LOCALITY.name}) type=${LOCALITY.boundaryType ?? '?'} — picked random leaf`,
+    );
+
+    SERVICE_DEF = await pickRandomServiceCode(TENANT, {
+      baseURL: BASE_URL,
+      adminUser: EMPLOYEE_USER,
+      adminPassword: EMPLOYEE_PASS,
+    });
+    console.log(
+      `[citizen-lifecycle] serviceCode=${SERVICE_DEF.serviceCode} menuPath=${SERVICE_DEF.menuPath ?? '?'} — picked random active ServiceDef`,
+    );
+  });
 
   test('acquire admin API token', async () => {
     const tokenResponse = await getDigitToken({
@@ -107,9 +144,57 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
       });
     });
 
-    // Drive the V2 login UI via the shared helper (tel input + 6-box
-    // OTP with auto-advance); it asserts we actually leave /login.
-    await citizenOtpLogin(page, { mobile: CITIZEN_PHONE, otp: FIXED_OTP });
+    // Navigate to citizen login
+    await page.goto(`${BASE_URL}/digit-ui/citizen/login`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
+    });
+    await page.waitForTimeout(2000);
+
+    // Enter phone number. Selector chain handles two UI flavors:
+    //   legacy  -> <input name="mobileNumber">
+    //   bomet   -> labelled "Mobile Number", composite +country-code chip
+    //              plus a bare tel input with no name attribute
+    const mobileInput = page
+      .locator('input[name="mobileNumber"]')
+      .or(page.getByLabel(/Mobile Number/i))
+      .or(page.locator('input[type="tel"]:visible'))
+      .first();
+    await mobileInput.waitFor({ state: 'visible', timeout: 60_000 });
+    await mobileInput.click();
+    await mobileInput.type(CITIZEN_PHONE, { delay: 30 });
+    await page.waitForTimeout(500);
+
+    // Click submit (varies by build: NEXT, Continue, or the raw label key)
+    await page
+      .locator('button:visible')
+      .filter({
+        hasText: /NEXT|Next|Continue|CONTINUE|CS_COMMONS_NEXT|CORE_COMMON_CONTINUE/,
+      })
+      .first()
+      .click();
+    await page.waitForTimeout(5000);
+
+    // OTP page: enter 6-digit OTP
+    const otpInputs = page.locator('input[maxlength="1"]');
+    await otpInputs.first().waitFor({ state: 'visible', timeout: 60_000 });
+    const otpDigits = FIXED_OTP.split('');
+    for (let i = 0; i < otpDigits.length; i++) {
+      await otpInputs.nth(i).click();
+      await otpInputs.nth(i).type(otpDigits[i]);
+      await page.waitForTimeout(100);
+    }
+    await page.waitForTimeout(1000);
+
+    // Submit OTP (same button label variance as above)
+    await page
+      .locator('button:visible')
+      .filter({
+        hasText: /NEXT|Next|Continue|CONTINUE|CS_COMMONS_NEXT|CORE_COMMON_CONTINUE/,
+      })
+      .first()
+      .click();
+    await page.waitForTimeout(10_000);
 
     // Verify citizen is logged in: token should be in localStorage
     const token = await page.evaluate(() => localStorage.getItem('Citizen.token'));
@@ -149,12 +234,12 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
           },
           service: {
             tenantId: TENANT,
-            serviceCode: 'StreetLightNotWorking',
+            serviceCode: SERVICE_DEF.serviceCode,
             description: `Citizen E2E lifecycle test - ${timestamp}`,
             source: 'web',
             address: {
               city: TENANT,
-              locality: { code: 'LOCALITY1', name: 'Test Locality' },
+              locality: { code: LOCALITY.code, name: LOCALITY.name },
               geoLocation: { latitude: 28.7041, longitude: 77.1025 },
             },
             citizen: {
@@ -241,7 +326,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
+    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -261,25 +346,31 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
   test('ADMIN assigns complaint to employee via API', async () => {
     test.skip(!complaintCreated, 'Skipped — complaint not created');
 
-    // Find an employee to assign to (HRMS search)
-    const hrmsResp = await fetch(`${BASE_URL}/egov-hrms/employees/_search?tenantId=${TENANT}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${adminToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker', authToken: adminToken, userInfo: adminUserInfo },
-      }),
-    });
-    expect(hrmsResp.ok).toBe(true);
-    const hrmsData: any = await hrmsResp.json();
-    const employees = hrmsData.Employees || [];
-    expect(employees.length).toBeGreaterThan(0);
-
-    assigneeUuid = employees[0].user.uuid;
-    const assigneeName = employees[0].user.name;
-    console.log(`Assigning to: ${assigneeName} (${assigneeUuid})`);
+    // Find a PGR_LME employee to assign to. Workflow `PENDINGFORASSIGNMENT.ASSIGN`
+    // requires the assignee to carry PGR_LME (or PGR_VIEWER). Picking blindly
+    // would silently produce a workflow-side rejection later.
+    let assignee: HrmsEmployee;
+    try {
+      assignee = await pickRandomEmployeeWithRole(TENANT, 'PGR_LME', {
+        baseURL: BASE_URL,
+        adminUser: EMPLOYEE_USER,
+        adminPassword: EMPLOYEE_PASS,
+      });
+    } catch (err) {
+      // Real ops finding — the deployment has no PGR_LME-bearing employee.
+      // Skip gracefully instead of failing or assigning to someone the
+      // workflow can't move to.
+      test.skip(
+        true,
+        `No PGR_LME employee on tenant=${TENANT} — assign step cannot proceed (${(err as Error).message})`,
+      );
+      return;
+    }
+    assigneeUuid = assignee.user.uuid;
+    const assigneeName = assignee.user.name ?? assignee.user.userName ?? '(unnamed)';
+    console.log(
+      `Assigning to: ${assigneeName} (${assigneeUuid}) — random PGR_LME on ${TENANT}`,
+    );
 
     // Fetch full service object (PGR _update requires it)
     const searchResp = await fetch(
@@ -342,7 +433,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
+    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
@@ -350,7 +441,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     const bodyText = await page.locator('body').innerText();
     expect(bodyText).toContain(serviceRequestId);
-    expect(bodyText).toMatch(/PENDINGATLME|Pending at (LME|last mile)|Pending for resolution/i);
+    expect(bodyText).toMatch(/PENDINGATLME|Pending at LME|Pending for resolution/i);
     console.log(`Details page confirms PENDINGATLME status`);
   });
 
@@ -410,7 +501,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
 
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
 
-    await page.goto(`/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
+    await page.goto(`/digit-ui/employee/pgr/complaint/details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });

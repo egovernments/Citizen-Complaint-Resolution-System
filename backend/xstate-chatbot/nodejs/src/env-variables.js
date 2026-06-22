@@ -21,8 +21,8 @@ const envVariables = {
 
     // Sandbox mode configuration
     enableSandboxMode: process.env.ENABLE_SANDBOX_MODE === 'true',
-    tenantManagementHost: process.env.TENANT_MANAGEMENT_HOST || 'https://sandbox-demo.digit.org',
-    sandboxHost: process.env.SANDBOX_HOST || 'https://sandbox-demo.digit.org',
+    tenantManagementHost: process.env.TENANT_MANAGEMENT_HOST || 'https://sandbox.digit.org',
+    sandboxHost: process.env.SANDBOX_HOST || 'https://sandbox.digit.org',
 
 
 
@@ -90,16 +90,16 @@ const envVariables = {
     },
 
     egovServices: {
-        egovServicesHost: process.env.EGOV_SERVICES_HOST || 'https://sandbox-demo.digit.org/',
-        externalHost: process.env.EXTERNAL_HOST || 'https://sandbox-demo.digit.org/',
-        searcherHost: process.env.EGOV_SEARCHER_HOST || 'https://sandbox-demo.digit.org/',
-        userServiceHost: process.env.USER_SERVICE_HOST || 'https://sandbox-demo.digit.org/',
+        egovServicesHost: process.env.EGOV_SERVICES_HOST || 'https://sandbox.digit.org/',
+        externalHost: process.env.EXTERNAL_HOST || 'https://sandbox.digit.org/',
+        searcherHost: process.env.EGOV_SEARCHER_HOST || 'https://sandbox.digit.org/',
+        userServiceHost: process.env.USER_SERVICE_HOST || 'https://sandbox.digit.org/',
         userServiceOAuthPath: process.env.USER_SERVICE_OAUTH_PATH || 'user/oauth/token',
         userServiceCreateCitizenPath: process.env.USER_SERVICE_CREATE_CITIZEN_PATH || 'user/citizen/_create',
         userServiceUpdateProfilePath: process.env.USER_SERVICE_UPDATE_PROFILE_PATH || 'user/profile/_update',
         userServiceCitizenDetailsPath: process.env.USER_SERVICE_CITIZEN_DETAILS_PATH || 'user/_details',
 
-        egovlocalizationhost: process.env.LOCALISATION_SERVICE_HOST || 'https://sandbox-demo.digit.org/',
+        egovlocalizationhost: process.env.LOCALIZATION_SERVICE_HOST || 'https://sandbox.digit.org/',
         mdmsSearchPath: process.env.MDMS_SEARCH_PATH || 'egov-mdms-service/v1/_search',
         localisationServiceSearchPath: process.env.LOCALISATION_SERVICE_SEARCH_PATH || 'localization/messages/v1/_search',
         billServiceSearchPath: process.env.BILL_SERVICE_SEARCH_PATH || 'billing-service/bill/v2/_fetchbill',
@@ -115,7 +115,7 @@ const envVariables = {
         pgrv1SearchEndpoint: process.env.PGR_SEARCH_ENDPOINT || 'rainmaker-pgr/v1/requests/_search',
         waterConnectionSearch: process.env.WATER_CONNECTION_SEARCH || 'ws-services/wc/_search?searchType=CONNECTION',
         sewerageConnectionSearch: process.env.SEWERAGE_CONNECTION_SEARCH || 'sw-services/swc/_search?searchType=CONNECTION',
-        nlpEngineHost: process.env.NLP_ENGINE_HOST || 'https://sandbox-demo.digit.org/',
+        nlpEngineHost: process.env.NLP_ENGINE_HOST || 'https://sandbox.digit.org/',
         cityFuzzySearch: process.env.CITY_FUZZY_SEARCH || 'nlp-engine/fuzzy/city',
         localityFuzzySearch: process.env.LOCALITY_FUZZY_SEARCH || 'nlp-engine/fuzzy/locality',
 

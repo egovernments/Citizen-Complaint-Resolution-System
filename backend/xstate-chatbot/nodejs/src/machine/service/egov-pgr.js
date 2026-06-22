@@ -126,22 +126,41 @@ class PGRService {
         if (mdmsData['RAINMAKER-PGR'] && mdmsData['RAINMAKER-PGR']['ServiceDefs']) {
           const serviceDefs = mdmsData['RAINMAKER-PGR']['ServiceDefs'];
 
-          // Filter active services and limit to top frequent ones
+          // Filter active services - show all complaint types
           const activeServices = serviceDefs
             .filter(def => def.active === true)
-            .sort((a, b) => (a.order || 999) - (b.order || 999))
-            .slice(0, 5); // Show top 5 frequent complaints
+            .sort((a, b) => (a.order || 999) - (b.order || 999));
+            // Removed slice to show all complaint types
 
           let complaintTypes = [];
           let messageBundle = {};
-
+          let localisationPrefix = "SERVICEDEFS_";
+          
+          // Collect all localization codes
+          let localizationCodes = [];
           for (let service of activeServices) {
             complaintTypes.push(service.serviceCode);
-            // Use the name from MDMS directly
-            messageBundle[service.serviceCode] = {
-              en_IN: service.name || service.serviceCode,
-              hi_IN: service.name || service.serviceCode
-            };
+            localizationCodes.push(localisationPrefix + service.serviceCode.toUpperCase());
+          }
+          
+          // Fetch all localizations at once from API
+          let localizedMessages = await localisationService.getMessagesForCodesAndTenantId(
+            localizationCodes,
+            tenantId
+          );
+          
+          // Build message bundle
+          for (let service of activeServices) {
+            let localizationKey = localisationPrefix + service.serviceCode.toUpperCase();
+            if (localizedMessages[localizationKey] && Object.keys(localizedMessages[localizationKey]).length > 0) {
+              messageBundle[service.serviceCode] = localizedMessages[localizationKey];
+            } else {
+              // Fallback to MDMS name if localization not found
+              messageBundle[service.serviceCode] = {
+                en_IN: service.name || service.serviceCode,
+                hi_IN: service.name || service.serviceCode
+              };
+            }
           }
 
           return { complaintTypes, messageBundle };
@@ -159,16 +178,37 @@ class PGRService {
       );
       let sortedData = complaintTypeMdmsData
         .slice()
-        .sort((a, b) => (a.order || 999) - (b.order || 999))
-        .slice(0, 5); // Show top 5
+        .sort((a, b) => (a.order || 999) - (b.order || 999));
+        // Removed slice to show all complaint types
 
       let complaintTypes = [];
       let messageBundle = {};
-
+      let localisationPrefix = "SERVICEDEFS_";
+      
+      // Collect unique service codes and localization codes
+      let localizationCodes = [];
       for (let data of sortedData) {
         if (!complaintTypes.includes(data.serviceCode)) {
           complaintTypes.push(data.serviceCode);
-          // Try to use name from data if available
+          localizationCodes.push(localisationPrefix + data.serviceCode.toUpperCase());
+        }
+      }
+      
+      // Fetch all localizations at once from API
+      let localizedMessages = await localisationService.getMessagesForCodesAndTenantId(
+        localizationCodes,
+        tenantId
+      );
+      
+      // Build message bundle
+      for (let data of sortedData) {
+        if (messageBundle[data.serviceCode]) continue; // Skip if already processed
+        
+        let localizationKey = localisationPrefix + data.serviceCode.toUpperCase();
+        if (localizedMessages[localizationKey] && Object.keys(localizedMessages[localizationKey]).length > 0) {
+          messageBundle[data.serviceCode] = localizedMessages[localizationKey];
+        } else {
+          // Fallback to MDMS name if localization not found
           messageBundle[data.serviceCode] = {
             en_IN: data.name || data.serviceCode,
             hi_IN: data.name || data.serviceCode
@@ -698,17 +738,59 @@ class PGRService {
     }
   }
 
+
   async preparePGRResult(responseBody, locale) {
     let serviceWrappers = responseBody.ServiceWrappers;
     var results = {};
     results["ServiceWrappers"] = [];
     let localisationPrefix = "SERVICEDEFS_";
+    let statusLocalisationPrefix = "CS_COMMON_";
 
     let complaintLimit = config.pgrUseCase.complaintSearchLimit;
 
     if (serviceWrappers.length < complaintLimit)
       complaintLimit = serviceWrappers.length;
     var count = 0;
+    
+    // Collect all localization codes needed
+    let localizationCodes = [];
+    let statusCodes = [];
+    let tenantId = serviceWrappers.length > 0 ? serviceWrappers[0].service.tenantId : config.rootTenantId;
+    
+    for (let i = 0; i < complaintLimit && i < serviceWrappers.length; i++) {
+      localizationCodes.push(localisationPrefix + serviceWrappers[i].service.serviceCode.toUpperCase());
+      // Add status codes for localization
+      if (serviceWrappers[i].service.applicationStatus) {
+        statusCodes.push(statusLocalisationPrefix + serviceWrappers[i].service.applicationStatus.toUpperCase());
+      }
+    }
+    
+    // Fetch all localizations at once from API
+    let localizedMessages = {};
+    if (localizationCodes.length > 0) {
+      localizedMessages = await localisationService.getMessagesForCodesAndTenantId(
+        localizationCodes,
+        tenantId
+      );
+    }
+    
+    // Fetch status localizations from rainmaker-pgr module
+    let statusLocalizedMessages = {};
+    if (statusCodes.length > 0) {
+      // Use the localization service to fetch messages for the rainmaker-pgr module
+      try {
+        const pgrMessages = await localisationService.getMessagesForModule('rainmaker-pgr', locale, tenantId);
+        
+        // Map the status codes to their localized messages
+        statusCodes.forEach(statusCode => {
+          if (pgrMessages[statusCode]) {
+            statusLocalizedMessages[statusCode] = pgrMessages[statusCode];
+          }
+        });
+      } catch (error) {
+        console.log("Error fetching status localizations:", error);
+      }
+    }
 
     for (let serviceWrapper of serviceWrappers) {
       if (count < complaintLimit) {
@@ -718,15 +800,22 @@ class PGRService {
           serviceRequestId,
           mobileNumber
         );
-        let serviceCode = localisationService.getMessageBundleForCode(
-          localisationPrefix + serviceWrapper.service.serviceCode.toUpperCase()
-        );
+        
+        let localizationKey = localisationPrefix + serviceWrapper.service.serviceCode.toUpperCase();
+        let serviceCode = localizedMessages[localizationKey] || {};
+        
         let filedDate = serviceWrapper.service.auditDetails.createdTime;
         filedDate = moment(filedDate)
           .tz(config.timeZone)
           .format(config.dateFormat);
-        // Use raw applicationStatus instead of trying to localize
+        
+        // Get localized status or fallback to formatted status
         let applicationStatus = serviceWrapper.service.applicationStatus;
+        if (applicationStatus) {
+          let statusKey = statusLocalisationPrefix + applicationStatus.toUpperCase();
+          applicationStatus = statusLocalizedMessages[statusKey] || applicationStatus;
+        }
+        
         var data = {
           complaintType: dialog.get_message(serviceCode, locale),
           complaintNumber: serviceRequestId,
@@ -925,12 +1014,20 @@ class PGRService {
     // Use sandbox-ui for sandbox mode, digit-ui otherwise
     const uiPath = config.enableSandboxMode ? 'sandbox-ui' : 'digit-ui';
 
-    let url =
-      config.egovServices.externalHost +
-      "citizen/otpLogin?mobileNo=" +
-      mobileNumber +
-      `&redirectTo=${uiPath}/citizen/pgr/complaints/` +
-      encodedPath;
+    let url;
+    if (config.enableSandboxMode) {
+      // For sandbox mode, use the proper login page with redirect
+      const sandboxHost = config.sandboxHost || 'https://sandbox.digit.org';
+      url = `${sandboxHost}/sandbox-ui/user/login?redirectTo=/sandbox-ui/citizen/pgr/complaints/${encodedPath}`;
+    } else {
+      // For production mode, use the OTP login
+      url = config.egovServices.externalHost +
+        "citizen/otpLogin?mobileNo=" +
+        mobileNumber +
+        `/digit-ui/citizen/pgr/complaints/` +
+        encodedPath;
+    }
+    
     let shortURL = await this.getShortenedURL(url);
     return shortURL;
   }
