@@ -10,12 +10,18 @@ interface SubTypeTableProps {
   subTypes: SubTypeRecord[];
   /** Soft-deletes the sub-type. Rejecting surfaces the error inside the dialog. */
   onDelete: (record: SubTypeRecord) => Promise<void>;
+  /** Total sub-types in the (unfiltered) type — used for the last-sub-type
+   *  warning. Defaults to the rendered count; pass the real group total so the
+   *  warning stays correct while a search shows only a filtered subset. */
+  totalSubTypes?: number;
 }
 
-export function SubTypeTable({ subTypes, onDelete }: SubTypeTableProps) {
+export function SubTypeTable({ subTypes, onDelete, totalSubTypes }: SubTypeTableProps) {
   const navigate = useNavigate();
   // Deleting the only remaining sub-type empties (and thus removes) the type.
-  const isLastSubType = subTypes.length === 1;
+  // Use the unfiltered total so search (which shrinks `subTypes`) can't trigger
+  // a false "this is the last sub-type" warning.
+  const isLastSubType = (totalSubTypes ?? subTypes.length) === 1;
 
   return (
     // Long, unbreakable service codes can push the Status/Actions columns past

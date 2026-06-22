@@ -85,6 +85,9 @@ export function ComplaintTypeList() {
   );
   const searching = query.trim().length > 0;
   const groups = filterComplaintTypeGroups(allGroups, query);
+  // True sub-type count per type (search shrinks a group's rendered subTypes,
+  // so the SubTypeTable can't infer "last sub-type" from what it's given).
+  const subTypeTotals = new Map(allGroups.map((g) => [g.menuPath, g.count]));
 
   const toggle = (key: string) => {
     setExpanded((prev) => {
@@ -269,7 +272,11 @@ export function ComplaintTypeList() {
                   </div>
                   {isOpen && (
                     <div className="bg-muted/20 border-b border-border px-3 py-2 pl-10">
-                      <SubTypeTable subTypes={g.subTypes} onDelete={handleDeleteSubType} />
+                      <SubTypeTable
+                        subTypes={g.subTypes}
+                        totalSubTypes={subTypeTotals.get(g.menuPath) ?? g.subTypes.length}
+                        onDelete={handleDeleteSubType}
+                      />
                       <button
                         type="button"
                         onClick={(e) => {

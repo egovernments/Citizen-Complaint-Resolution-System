@@ -6,7 +6,13 @@ import { MemoryRouter } from 'react-router-dom';
 vi.mock('@/hooks/useAvailableLocales', () => ({
   useAvailableLocales: () => ({ locales: [] }),
 }));
-vi.mock('@/api/services/localization', () => ({ localizationService: {} }));
+const { uploadComplaintTypeLocalizations, cacheBust } = vi.hoisted(() => ({
+  uploadComplaintTypeLocalizations: vi.fn().mockResolvedValue({ success: 1, failed: 0 }),
+  cacheBust: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/api/services/localization', () => ({
+  localizationService: { uploadComplaintTypeLocalizations, cacheBust },
+}));
 vi.mock('@/providers/bridge', () => ({ digitClient: { stateTenantId: 'pb' } }));
 
 // Capture the props passed to DigitCreate so we can assert on the transform fn.
@@ -86,5 +92,33 @@ describe('ComplaintTypeCreate', () => {
   it('labels the type field as the menu path when adding a sub-type', () => {
     renderAt('?menuPath=Sanitation');
     expect(screen.getByTestId('input-menuPath').dataset.label).toBe('Complaint Type (Menu Path)');
+  });
+
+  it('omits menuPath from the localization seed when adding a sub-type (no parent-label clobber)', async () => {
+    uploadComplaintTypeLocalizations.mockClear();
+    renderAt('?menuPath=Sanitation');
+    await captured.props.afterCreate({
+      serviceCode: 'GARB',
+      name: 'Garbage',
+      department: 'PH',
+      menuPath: 'Sanitation',
+    });
+    expect(uploadComplaintTypeLocalizations).toHaveBeenCalled();
+    const entry = uploadComplaintTypeLocalizations.mock.calls[0][1][0];
+    expect(entry).not.toHaveProperty('menuPath');
+    expect(entry).toMatchObject({ serviceCode: 'GARB', name: 'Garbage', department: 'PH' });
+  });
+
+  it('seeds the parent menuPath label when creating a brand-new type', async () => {
+    uploadComplaintTypeLocalizations.mockClear();
+    renderAt('');
+    await captured.props.afterCreate({
+      serviceCode: 'NEWCODE',
+      name: 'New',
+      department: 'PH',
+      menuPath: 'NewType',
+    });
+    const entry = uploadComplaintTypeLocalizations.mock.calls[0][1][0];
+    expect(entry).toMatchObject({ menuPath: 'NewType' });
   });
 });

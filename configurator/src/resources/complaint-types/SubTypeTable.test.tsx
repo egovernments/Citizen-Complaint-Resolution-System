@@ -68,6 +68,20 @@ describe('SubTypeTable', () => {
     expect(await screen.findByText(/remove the entire complaint type/i)).toBeInTheDocument();
   });
 
+  it('uses the unfiltered total (not the filtered rows) for the last-sub-type warning', async () => {
+    // Search shows 1 matching row, but the type really has 3 sub-types.
+    render(
+      <SubTypeTable
+        subTypes={[sub]}
+        totalSubTypes={3}
+        onDelete={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText('Delete Garbage not collected'));
+    await screen.findByRole('button', { name: 'Delete' });
+    expect(screen.queryByText(/remove the entire complaint type/i)).not.toBeInTheDocument();
+  });
+
   it('does not show the last-sub-type warning when other sub-types remain', async () => {
     render(<SubTypeTable subTypes={twoSubs} onDelete={vi.fn().mockResolvedValue(undefined)} />);
     fireEvent.click(screen.getByLabelText('Delete Garbage not collected'));

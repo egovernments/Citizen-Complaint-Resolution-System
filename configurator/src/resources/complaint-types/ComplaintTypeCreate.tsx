@@ -57,10 +57,19 @@ export function ComplaintTypeCreate() {
     // Dedupe via Set in case StateInfo declares `en_IN` explicitly.
     const targetLocales = new Set<string>([...locales.map((l) => l.value), 'en_IN']);
 
+    // When adding a sub-type to an EXISTING type (presetMenuPath), omit
+    // `menuPath` from the seed: buildComplaintTypeLocalizations would otherwise
+    // upsert SERVICEDEFS.<menuPath> = the raw code, overwriting the parent
+    // type's display label in every locale. Only a brand-new type (no preset)
+    // seeds its own parent label. Mirrors the edit/rename clobber guards.
+    const seedEntry = presetMenuPath
+      ? { serviceCode, name, department: data.department }
+      : { serviceCode, name, department: data.department, menuPath: data.menuPath };
+
     for (const locale of targetLocales) {
       await localizationService.uploadComplaintTypeLocalizations(
         tenantId,
-        [{ serviceCode, name, department: data.department, menuPath: data.menuPath }],
+        [seedEntry],
         locale,
       );
     }
