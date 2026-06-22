@@ -3,20 +3,20 @@
 ## Overview
 
 This document covers the end-to-end design for capturing **category-specific dynamic fields**
-during complaint registration. Fields are defined per complaint `categoryType` in the
-`RAINMAKER-PGR.CategoryFieldConfig` MDMS master. Validated data is stored in the new
+during complaint registration. Categories can be things like Complaints, Grievances, Citizen Feedback etc.. Fields are defined per complaint `categoryType` in the
+`RAINMAKER-PGR.ComplaintTemplateTypes` MDMS master. Validated data is stored in the new
 `extendedAttributes` JSONB column on `eg_pgr_service_v2`. PII fields (complainant address,
 email) are stored directly in the DIGIT user tables. Evidence attachments reuse the existing
 `eg_pgr_document_v2` table. 
 
 | Concern | Approach |
 |---------|----------|
-| Dynamic fields per category type | `RAINMAKER-PGR.CategoryFieldConfig` MDMS master |
-| Storage (category-specific fields) | `extendedAttributes` JSONB column on `eg_pgr_service_v2` |
+| Dynamic fields per category type | `RAINMAKER-PGR.ComplaintTemplateTypes` MDMS master |
+| Storage (template-specific fields) | `extendedAttributes` JSONB column on `eg_pgr_service_v2` |
 | Storage (complainant address) | `eg_user` / `eg_user_address` via User Service |
 | Storage (complainant email) | `eg_user.emailaddress` via User Service |
 | Evidence attachments | Existing `eg_pgr_document_v2` table (multiple docs per complaint) |
-| Validation | Backend reads field schema from MDMS; enforces mandatory + type + category-type rules |
+| Validation | Backend reads field schema from MDMS; enforces mandatory + type + template-type rules |
 | PII encryption | `egov-enc-service` encrypts tagged fields before DB write; decrypts on read |
 | Confidentiality | `isConfidential` flag (default `false`) in `extendedAttributes`; PII masked in all responses when set |
 
@@ -36,10 +36,13 @@ email) are stored directly in the DIGIT user tables. Evidence attachments reuse 
 -- Kept separate from additionalDetails (system-managed metadata: department, serviceName,
 -- escalation) to isolate concerns and allow independent schema evolution.
 ALTER TABLE eg_pgr_service_v2
-    ADD COLUMN IF NOT EXISTS extendedAttributes JSONB;
+    ADD COLUMN IF NOT EXISTS extended_attributes JSONB;
+
+ALTER TABLE eg_pgr_service_v2
+    ADD COLUMN IF NOT EXISTS complaint_template_type varchar;
 
 CREATE INDEX IF NOT EXISTS idx_pgr_svc_extended_attrs_gin
-    ON eg_pgr_service_v2 USING GIN (extendedAttributes);
+    ON eg_pgr_service_v2 USING GIN (extended_attributes);
 ```
 
 **Resulting table columns (relevant):**
@@ -47,7 +50,8 @@ CREATE INDEX IF NOT EXISTS idx_pgr_svc_extended_attrs_gin
 | Column | Type | Purpose |
 |--------|------|---------|
 | `additionalDetails` | JSONB | System metadata (department, escalation). **Existing — unchanged.** |
-| `extendedAttributes` | JSONB | Citizen-supplied dynamic fields + PII flags + confidentiality. **New.** |
+| `extended_attributes` | JSONB | Citizen-supplied dynamic fields + PII flags + confidentiality. **New.** |
+| `complaint_template_type` | JSONB | The type of complaint - grievance, feedback, petition, report. **New.** |
 
 ---
 
@@ -57,7 +61,6 @@ CREATE INDEX IF NOT EXISTS idx_pgr_svc_extended_attrs_gin
 |-------|----------|------|---------|-------|
 | `caseRelatedTo` | Case Related To | string | `extendedAttributes.fields` | Free text |
 | `isConfidential` | Keep details confidential | boolean | `extendedAttributes.isConfidential` | Default `false` |
-| `categoryType` | Category Type | enum | `extendedAttributes.categoryType` | `report` / `petition` / `grievance` / `complaint` |
 | `dateOfFact` | Date of Fact | date | `extendedAttributes.fields` | ISO-8601 `YYYY-MM-DD` |
 | `entityName` | Entity Name | string | `extendedAttributes.fields` | Organisation or person involved |
 | `entityAddress` | Entity Address | string | `extendedAttributes.fields` | Full address string |
@@ -69,9 +72,9 @@ CREATE INDEX IF NOT EXISTS idx_pgr_svc_extended_attrs_gin
 
 ---
 
-## 3. Category-Type Validation Rules
+## 3. Template-Type Validation Rules
 
-| Category Type | Mandatory Fields |
+| Template Type | Mandatory Fields |
 |---------------|-----------------|
 | `report` | `entityName`, `entityAddress`, `dateOfFact`, `description` (on `Service.description`) |
 | `petition` | `description` (on `Service.description`), `entityName` |
@@ -83,16 +86,16 @@ Optional for all types: `caseRelatedTo`, `witnessName`, `witnessNote`, evidence 
 
 ---
 
-## 4. MDMS Master — `CategoryFieldConfig`
+## 4. MDMS Master — `ComplaintTemplateType`
 
 **Stored at:** state tenant (`mz`), module `RAINMAKER-PGR`
 
-**Path:** `<mdms-repo>/data/mz/RAINMAKER-PGR/CategoryFieldConfig.json`
+**Path:** `<mdms-repo>/data/mz/RAINMAKER-PGR/ComplaintTemplateType.json`
 
 ```json
 [
   {
-    "categoryType": "report",
+    "templateType": "report",
     "active": true,
     "fields": [
       { "fieldKey": "caseRelatedTo",  "label": "Case Related To",  "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 500,  "order": 1 },
@@ -165,7 +168,6 @@ Optional for all types: `caseRelatedTo`, `witnessName`, `witnessNote`, evidence 
 
 ```json
 {
-  "categoryType": "report",
   "isConfidential": false,
   "schemaVersion": "1.0",
   "encryptedFields": ["witnessName"],
