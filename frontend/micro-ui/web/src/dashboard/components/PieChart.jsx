@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { resolveDashboardCssColor } from "../config/chartColors";
 import {
   getPieChartValueLabelColor,
   normalizePieChartData,
@@ -10,6 +11,10 @@ const PieChart = ({ data = [] }) => {
   const [activeIndex, setActiveIndex] = useState(null);
 
   const slices = useMemo(() => normalizePieChartData(data), [data]);
+  const sliceStroke = useMemo(
+    () => resolveDashboardCssColor("var(--surface)") || "#ffffff",
+    [slices]
+  );
   const active = activeIndex != null ? slices[activeIndex] : null;
   const pieStyles = VISUALIZATION_STYLES[VIZ_TYPE.PIE_CHART];
   const valueLabelColor = getPieChartValueLabelColor();
@@ -25,12 +30,15 @@ const PieChart = ({ data = [] }) => {
           role="img"
           aria-label="Donut chart"
         >
-          {slices.map((slice) => (
+          {slices.map((slice) => {
+            const fill =
+              resolveDashboardCssColor(slice.color) || slice.color || "currentColor";
+
+            return (
             <g key={slice.label}>
               <path
                 d={slice.path}
-                fill={slice.color}
-                stroke="var(--surface)"
+                style={{ fill, stroke: sliceStroke }}
                 strokeWidth={2}
                 className={pieStyles.slice}
                 onMouseEnter={() => setActiveIndex(slice.index)}
@@ -55,7 +63,7 @@ const PieChart = ({ data = [] }) => {
                 y={slice.labelY}
                 textAnchor={slice.labelAnchor}
                 dominantBaseline="middle"
-                fill={slice.color}
+                fill={fill}
                 fontSize="11"
                 fontWeight="500"
                 pointerEvents="none"
@@ -71,7 +79,8 @@ const PieChart = ({ data = [] }) => {
                 ))}
               </text>
             </g>
-          ))}
+            );
+          })}
         </svg>
         {active ? (
           <div

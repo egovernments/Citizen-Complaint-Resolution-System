@@ -23,21 +23,53 @@ export const KPI_DISPLAY = {
     context: { type: "outOfOpen" },
   },
   "cl-metric-total-resolved": {
-    displayTitle: "Resolved",
+    displayTitle: "Resolved complaints",
     threshold: { kind: "count", higherIsBetter: true, onTrack: 10, breaching: 0 },
-    context: { type: "outOfRegistered" },
   },
   "cl-metric-total-open": {
-    displayTitle: "Open",
+    displayTitle: "Open complaints",
     threshold: { kind: "count", higherIsBetter: false, onTrack: 20, breaching: 50 },
-    context: { type: "outOfRegistered" },
   },
-  "cl-metric-total-registered": {
-    displayTitle: "Registered",
-    context: { type: "timeWindow" },
+  "cl-metric-new-created": {
+    displayTitle: "New complaints created",
   },
-  "cl-metric-inflow-rate": {
-    displayTitle: "Daily inflow",
+  "cl-metric-created-today": {
+    displayTitle: "Complaints created today",
+  },
+  "cl-metric-resolution-rate": {
+    displayTitle: "Resolution rate",
+    threshold: { kind: "percent", higherIsBetter: true, onTrack: 70, breaching: 40 },
+  },
+  "cl-metric-reopen-rate": {
+    displayTitle: "Reopen rate",
+    threshold: { kind: "percent", higherIsBetter: false, onTrack: 10, breaching: 25 },
+  },
+  "cl-metric-csat": {
+    displayTitle: "CSAT",
+    threshold: { kind: "rating", higherIsBetter: true, onTrack: 4, breaching: 3 },
+  },
+  "cl-metric-first-assignment-rate": {
+    displayTitle: "First-assignment rate",
+    threshold: { kind: "percent", higherIsBetter: true, onTrack: 90, breaching: 70 },
+  },
+  "cl-metric-sla-compliance-rate": {
+    displayTitle: "SLA compliance rate",
+    threshold: { kind: "percent", higherIsBetter: true, onTrack: 85, breaching: 60 },
+  },
+  "cl-metric-sla-non-compliance-rate": {
+    displayTitle: "SLA non-compliance rate",
+    threshold: { kind: "percent", higherIsBetter: false, onTrack: 15, breaching: 40 },
+  },
+  "cl-metric-resolved-on-time-rate": {
+    displayTitle: "Resolved on time rate",
+    threshold: { kind: "percent", higherIsBetter: true, onTrack: 85, breaching: 60 },
+  },
+  "cl-metric-oldest-open": {
+    displayTitle: "Oldest complaint",
+    threshold: { kind: "count", higherIsBetter: false, onTrack: 7, breaching: 30 },
+  },
+  "cl-metric-avg-resolution-time": {
+    displayTitle: "Average resolution time",
   },
   "ce-metric-reopen-rate": {
     displayTitle: "Reopen rate",
@@ -48,41 +80,6 @@ export const KPI_DISPLAY = {
     displayTitle: "Citizen satisfaction",
     threshold: { kind: "rating", higherIsBetter: true, onTrack: 4, breaching: 3 },
     context: { type: "acrossResolved" },
-  },
-  "rs-metric-closure-rate": {
-    threshold: { kind: "percent", higherIsBetter: true, onTrack: 70, breaching: 40 },
-  },
-  "ce-metric-negative-feedback": {
-    threshold: { kind: "percent", higherIsBetter: false, onTrack: 10, breaching: 25 },
-  },
-  "ep-metric-reopen-rate": {
-    threshold: { kind: "percent", higherIsBetter: false, onTrack: 10, breaching: 25 },
-  },
-  "ep-metric-open-load": {
-    listQueryKey: "ep_open_list",
-    listLabelKey: "current_assignee_uuid",
-    listMeasureKey: "total",
-  },
-  "ep-metric-closed-week": {
-    listQueryKey: "ep_closed_list",
-    listLabelKey: "current_assignee_uuid",
-    listMeasureKey: "total",
-  },
-  "ep-metric-leaderboard": {
-    listQueryKey: "ep_leaderboard_closed",
-    listLabelKey: "current_assignee_uuid",
-    listMeasureKey: "total",
-  },
-  "rs-metric-resolution-by-category": {
-    listQueryKey: "rs_table_resolution_by_category",
-    listLabelKey: "service_code",
-    listMeasureKey: "closure_pct",
-    listValueFormat: "percentInteger",
-  },
-  "ce-metric-repeat-complainants": {
-    listQueryKey: "ce_top_complainants",
-    listLabelKey: "account_id",
-    listMeasureKey: "total",
   },
 };
 
@@ -143,7 +140,7 @@ export function getStatusValueClass(status) {
 
 /** Value color for number tiles — threshold-driven, shared by every metric card. */
 export function getNumberTileValueClass(status, { unavailable = false } = {}) {
-  const styles = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE];
+  const styles = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_DELTA];
   if (unavailable) return styles.valueUnavailable;
   return getStatusValueClass(status);
 }

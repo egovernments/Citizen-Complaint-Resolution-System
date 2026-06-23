@@ -29,9 +29,10 @@ const AdminDashboard = () => {
         analyticsResults,
         subMetricValues,
         resolveSubMetricId,
-        loading
+        loading,
+        filters
       ),
-    [analyticsResults, subMetricValues, resolveSubMetricId, loading]
+    [analyticsResults, subMetricValues, resolveSubMetricId, loading, filters]
   );
 
   useEffect(() => {

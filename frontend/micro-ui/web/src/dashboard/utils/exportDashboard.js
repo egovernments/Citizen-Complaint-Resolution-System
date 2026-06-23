@@ -90,15 +90,6 @@ function buildExportCsv({ layout, kpiCardData, chartData, filters }) {
       sections.push(
         ...tableSection(meta.metric, tableConfig.columns, chartData[tableConfig.dataKey])
       );
-      return;
-    }
-
-    if (item.i === "cl-chart-categories") {
-      sections.push(...chartBarSection(meta.metric, chartData.categories));
-    } else if (item.i === "cl-chart-wards") {
-      sections.push(...chartBarSection(meta.metric, chartData.wards));
-    } else if (item.i === "cl-chart-dow") {
-      sections.push(...chartBarSection(meta.metric, chartData.dow));
     }
   });
 

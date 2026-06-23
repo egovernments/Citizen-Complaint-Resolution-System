@@ -15,10 +15,94 @@ import {
 import { isSparklineKpi } from "../config/kpiSparkline";
 
 /** Demo stacked bars always included in the default dashboard view. */
-const DEFAULT_VIEW_STACKED_WIDGETS = new Set([
-  "demo-viz-stacked",
-  "demo-viz-stacked-horizontal",
-]);
+const DEFAULT_VIEW_STACKED_WIDGETS = new Set(["demo-viz-stacked-horizontal"]);
+
+const LEGACY_PIE_WIDGET_ID = "demo-viz-pie";
+const LIVE_PIE_WIDGET_ID = "cl-chart-open-by-channel";
+const LEGACY_SLA_RISK_WIDGET_ID = "demo-viz-sla-risk";
+const LIVE_SLA_RISK_WIDGET_ID = "cl-table-complaints-at-risk";
+const LEGACY_FLOW_RATIO_WIDGET_ID = "demo-viz-leaderboard";
+const LIVE_FLOW_RATIO_WIDGET_ID = "cl-chart-department-flow-ratio";
+const LEGACY_GEOGRAPHY_MAP_WIDGET_ID = "demo-viz-map";
+const LIVE_GEOGRAPHY_MAP_WIDGET_ID = "cl-map-geography-choropleth";
+
+/** Swap the demo channel pie for the live open-complaints pie in saved layouts. */
+function migratePieChannelWidget(layout) {
+  const hasLivePie = layout.some((item) => item.i === LIVE_PIE_WIDGET_ID);
+
+  return layout.reduce((next, item) => {
+    if (item.i !== LEGACY_PIE_WIDGET_ID) {
+      next.push(item);
+      return next;
+    }
+
+    if (hasLivePie) return next;
+
+    const defaults = DEFAULT_CHART_LAYOUT[LIVE_PIE_WIDGET_ID] ?? {};
+    next.push({ ...defaults, ...item, i: LIVE_PIE_WIDGET_ID });
+    return next;
+  }, []);
+}
+
+/** Swap the demo SLA-at-risk table for the live complaints-at-risk table. */
+function migrateSlaRiskWidget(layout) {
+  const hasLive = layout.some((item) => item.i === LIVE_SLA_RISK_WIDGET_ID);
+
+  return layout.reduce((next, item) => {
+    if (item.i !== LEGACY_SLA_RISK_WIDGET_ID) {
+      next.push(item);
+      return next;
+    }
+
+    if (hasLive) return next;
+
+    const defaults = DEFAULT_CHART_LAYOUT[LIVE_SLA_RISK_WIDGET_ID] ?? {};
+    next.push({ ...defaults, ...item, i: LIVE_SLA_RISK_WIDGET_ID });
+    return next;
+  }, []);
+}
+
+/** Swap the demo flow-ratio leaderboard for the live department chart. */
+function migrateFlowRatioWidget(layout) {
+  const hasLive = layout.some((item) => item.i === LIVE_FLOW_RATIO_WIDGET_ID);
+
+  return layout.reduce((next, item) => {
+    if (item.i !== LEGACY_FLOW_RATIO_WIDGET_ID) {
+      next.push(item);
+      return next;
+    }
+
+    if (hasLive) return next;
+
+    const defaults = DEFAULT_CHART_LAYOUT[LIVE_FLOW_RATIO_WIDGET_ID] ?? {};
+    next.push({ ...defaults, ...item, i: LIVE_FLOW_RATIO_WIDGET_ID });
+    return next;
+  }, []);
+}
+
+/** Swap the demo pin map for the live geography choropleth. */
+function migrateGeographyMapWidget(layout) {
+  const hasLive = layout.some((item) => item.i === LIVE_GEOGRAPHY_MAP_WIDGET_ID);
+
+  return layout.reduce((next, item) => {
+    if (item.i !== LEGACY_GEOGRAPHY_MAP_WIDGET_ID) {
+      next.push(item);
+      return next;
+    }
+
+    if (hasLive) return next;
+
+    const defaults = DEFAULT_CHART_LAYOUT[LIVE_GEOGRAPHY_MAP_WIDGET_ID] ?? {};
+    next.push({ ...defaults, ...item, i: LIVE_GEOGRAPHY_MAP_WIDGET_ID });
+    return next;
+  }, []);
+}
+
+function migrateSavedLayoutWidgets(layout) {
+  return migrateGeographyMapWidget(
+    migrateFlowRatioWidget(migrateSlaRiskWidget(migratePieChannelWidget(layout)))
+  );
+}
 
 /* -------------------------------------------------------------------------- */
 /* Geometry helpers                                                            */
@@ -217,7 +301,8 @@ function loadLayout() {
     const valid = parsed.filter((item) => item && WIDGETS[item.i]);
     if (valid.length === 0) return DEFAULT_LAYOUT;
 
-    const normalized = valid.map((item) => {
+    const migrated = migrateSavedLayoutWidgets(valid);
+    const normalized = migrated.map((item) => {
       if (isSparklineKpi(item.i)) {
         const defaults = getDefaultKpiLayoutItem(item.i);
         return {
@@ -249,7 +334,11 @@ function loadLayout() {
     }
 
     const withStacked = mergeDefaultStackedWidgets(normalized);
-    if (withStacked.length > normalized.length) {
+    const layoutChanged =
+      withStacked.length > normalized.length ||
+      migrated.some((item, i) => item.i !== valid[i]?.i);
+
+    if (layoutChanged) {
       persistLayout(withStacked);
     } else if (normalized.some((item, i) => item !== valid[i])) {
       persistLayout(normalized);

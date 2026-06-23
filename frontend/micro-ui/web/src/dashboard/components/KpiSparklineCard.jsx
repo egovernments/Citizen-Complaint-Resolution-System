@@ -10,7 +10,7 @@ import ResizeGrip from "./ResizeGrip";
 const SPARKLINE_MIN_HEIGHT = 10;
 
 const sparklineTile = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_SPARKLINE];
-const numberTile = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE];
+const numberTile = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_DELTA];
 
 const RemoveIcon = () => (
   <svg
@@ -32,8 +32,13 @@ const RemoveIcon = () => (
 );
 
 function normalizeSparklineData(points) {
-  if (Array.isArray(points) && points.length >= 2) return points;
-  return [0, 0, 0, 0, 0, 0, 0];
+  if (!Array.isArray(points) || points.length === 0) {
+    return [0, 0, 0, 0, 0, 0, 0];
+  }
+  if (points.length === 1) {
+    return [points[0], points[0]];
+  }
+  return points;
 }
 
 const KpiSparklineCard = ({

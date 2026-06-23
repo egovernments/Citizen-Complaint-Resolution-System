@@ -30,8 +30,13 @@ import KpiCard from "./KpiCard";
 import KpiSparklineCard from "./KpiSparklineCard";
 import DashboardTable from "./DashboardTable";
 import DemoVisualization from "./DemoVisualization";
-import DepartmentBarChart, { WEEKDAY_CHART_ORDER } from "./DepartmentBarChart";
+import ComplaintsAtRiskTable from "./ComplaintsAtRiskTable";
+import HorizontalBarChart from "./HorizontalBarChart";
+import OpenComplaintsByGeographyWidget from "./OpenComplaintsByGeographyWidget";
+import DepartmentBarChart from "./DepartmentBarChart";
 import StackedBarChart from "./StackedBarChart";
+import LineChart from "./LineChart";
+import PieChart from "./PieChart";
 import ResizeGrip from "./ResizeGrip";
 import CardUpdatedStamp from "./CardUpdatedStamp";
 
@@ -92,9 +97,17 @@ const WidgetHeader = ({
 
 // Per-card "last updated" caption — absolute bottom-right on every card.
 const GRID_MARGIN = [16, 16];
+function isScrollableTableWidget(widgetId) {
+  return (
+    isTableWidget(widgetId) ||
+    isDemoTableWidget(widgetId) ||
+    widgetId === "cl-table-complaints-at-risk"
+  );
+}
+
 function gridItemClassName(widgetId) {
   if (isKpiWidget(widgetId)) return "dashboard-grid-item-kpi";
-  if (isTableWidget(widgetId) || isDemoTableWidget(widgetId)) {
+  if (isScrollableTableWidget(widgetId)) {
     return "dashboard-grid-item-chart-clipped";
   }
   const vizType = WIDGETS[widgetId]?.type;
@@ -198,6 +211,8 @@ const DashboardGrid = ({
         value={card.value}
         context={card.context}
         status={card.status}
+        deltaDisplay={card.deltaDisplay}
+        deltaClass={card.deltaClass}
         listItems={card.listItems}
         hasList={card.hasList}
         loading={loading}
@@ -207,31 +222,55 @@ const DashboardGrid = ({
   };
 
   const renderBarChart = (widgetId) => {
-    if (widgetId === "cl-chart-categories") {
-      if (loading && !chartData.categories?.length) {
+    if (widgetId === "cl-chart-departments") {
+      if (loading && !chartData.departments?.length) {
         return <ChartPlaceholder message="Loading…" />;
       }
-      if (!chartData.categories?.length) return <ChartPlaceholder message="No data" />;
-      return <DepartmentBarChart data={chartData.categories} scrollKey={widgetId} />;
+      if (!chartData.departments?.length) return <ChartPlaceholder message="No data" />;
+      return <DepartmentBarChart data={chartData.departments} scrollKey={widgetId} />;
     }
 
-    if (widgetId === "cl-chart-wards") {
-      if (loading && !chartData.wards?.length) {
+    if (widgetId === "cl-chart-department-resolution-rate") {
+      if (loading && !chartData.departmentResolutionRates?.length) {
         return <ChartPlaceholder message="Loading…" />;
       }
-      if (!chartData.wards?.length) return <ChartPlaceholder message="No data" />;
-      return <DepartmentBarChart data={chartData.wards} scrollKey={widgetId} />;
-    }
-
-    if (widgetId === "cl-chart-dow") {
-      if (loading) return <ChartPlaceholder message="Loading…" />;
+      if (!chartData.departmentResolutionRates?.length) {
+        return <ChartPlaceholder message="No data" />;
+      }
       return (
         <DepartmentBarChart
-          data={chartData.dow}
-          categoryOrder={WEEKDAY_CHART_ORDER}
+          data={chartData.departmentResolutionRates}
           scrollKey={widgetId}
+          valueFormat="percent"
         />
       );
+    }
+
+    return null;
+  };
+
+  const renderHistogram = (widgetId) => {
+    if (widgetId === "cl-chart-complaints-by-age") {
+      const hasData = (chartData.complaintsByAge ?? []).some((entry) => Number(entry.count) > 0);
+      if (loading && !hasData) {
+        return <ChartPlaceholder message="Loading…" />;
+      }
+      if (!hasData) return <ChartPlaceholder message="No data" />;
+      return <DepartmentBarChart data={chartData.complaintsByAge} histogram />;
+    }
+
+    return null;
+  };
+
+  const renderPieChart = (widgetId) => {
+    if (widgetId === "cl-chart-open-by-channel") {
+      if (loading && !chartData.openByChannel?.length) {
+        return <ChartPlaceholder message="Loading…" />;
+      }
+      if (!chartData.openByChannel?.length) {
+        return <ChartPlaceholder message="No data" />;
+      }
+      return <PieChart data={chartData.openByChannel} />;
     }
 
     return null;
@@ -240,14 +279,16 @@ const DashboardGrid = ({
   const renderStackedBar = (widgetId) => {
     const meta = WIDGETS[widgetId];
     const horizontal = meta?.stackOrientation === "horizontal";
-    const dataset =
-      widgetId === "cl-chart-officer-sla"
-        ? chartData.officerSlaStacked
-        : widgetId === "cl-chart-resolution-subtype"
-          ? chartData.resolutionDwellStacked
-          : chartData.statusWeekStacked;
+    const datasetByWidget = {
+      "cl-chart-officer-sla": chartData.officerSlaStacked,
+      "cl-chart-open-by-type": chartData.openByTypeStacked,
+      "cl-chart-complaints-by-type": chartData.complaintsByTypeStacked,
+      "cl-chart-resolution-subtype": chartData.resolutionDwellStacked,
+    };
+    const dataset = datasetByWidget[widgetId];
 
     const { categories = [], series = [], colors = [] } = dataset || {};
+    if (!dataset) return null;
     const valueFormat =
       widgetId === "cl-chart-resolution-subtype" ? "hours" : undefined;
     const hasData =
@@ -282,6 +323,38 @@ const DashboardGrid = ({
     return <DashboardTable columns={config.columns} rows={rows} />;
   };
 
+  const renderSlaRiskTable = (widgetId) => {
+    if (widgetId !== "cl-table-complaints-at-risk") return null;
+
+    const rows = chartData.complaintsAtRisk || [];
+    if (loading && !rows.length) return <ChartPlaceholder message="Loading…" />;
+    if (!rows.length) return <ChartPlaceholder message="No data" />;
+
+    return <ComplaintsAtRiskTable rows={rows} />;
+  };
+
+  const renderLineChart = (widgetId) => {
+    if (widgetId !== "cl-chart-over-time") return null;
+
+    const dataset = chartData.complaintsOverTime;
+    const hasStructure =
+      dataset?.periods &&
+      Object.values(dataset.periods).some((period) => period.categories?.length > 0);
+
+    if (loading && !hasStructure) {
+      return <ChartPlaceholder message="Loading…" />;
+    }
+    if (!hasStructure) return <ChartPlaceholder message="No data" />;
+
+    return (
+      <LineChart
+        headerTitle={dataset.title}
+        periods={dataset.periods}
+        defaultPeriod={dataset.defaultPeriod}
+      />
+    );
+  };
+
   const renderWidget = (widgetId) => {
     const meta = WIDGETS[widgetId];
     if (!meta) return null;
@@ -303,12 +376,57 @@ const DashboardGrid = ({
       return renderTableWidget(widgetId);
     }
 
+    if (meta.type === "sla-risk-table" && !isDemoVizWidget(widgetId)) {
+      return renderSlaRiskTable(widgetId);
+    }
+
     if (meta.type === "bar-chart") {
       return renderBarChart(widgetId);
     }
 
+    if (meta.type === "horizontal-bar" && !isDemoVizWidget(widgetId)) {
+      if (widgetId === "cl-chart-department-flow-ratio") {
+        if (loading && !chartData.departmentFlowRatios?.length) {
+          return <ChartPlaceholder message="Loading…" />;
+        }
+        if (!chartData.departmentFlowRatios?.length) {
+          return <ChartPlaceholder message="No data" />;
+        }
+        return (
+          <HorizontalBarChart
+            data={chartData.departmentFlowRatios}
+            breakEven={1}
+            scrollKey={widgetId}
+          />
+        );
+      }
+    }
+
     if (meta.type === "stacked-bar") {
       return renderStackedBar(widgetId);
+    }
+
+    if (meta.type === "pie-chart" && !isDemoVizWidget(widgetId)) {
+      return renderPieChart(widgetId);
+    }
+
+    if (meta.type === "histogram" && !isDemoVizWidget(widgetId)) {
+      return renderHistogram(widgetId);
+    }
+
+    if (meta.type === "line-chart" && !isDemoVizWidget(widgetId)) {
+      return renderLineChart(widgetId);
+    }
+
+    if (meta.type === "map" && !isDemoVizWidget(widgetId)) {
+      if (widgetId === "cl-map-geography-choropleth") {
+        return (
+          <OpenComplaintsByGeographyWidget
+            layers={chartData.geographyMap}
+            loading={loading}
+          />
+        );
+      }
     }
 
     return null;
@@ -449,7 +567,7 @@ const DashboardGrid = ({
             const isKpi = isKpiWidget(item.i);
             const meta = WIDGETS[item.i];
             const vizType = meta?.type;
-            const isTable = isTableWidget(item.i) || isDemoTableWidget(item.i);
+            const isTable = isScrollableTableWidget(item.i);
             const customChrome = meta?.customChrome || hasCustomChrome(item.i);
             const isSearchMatch =
               !isSearchActive ||

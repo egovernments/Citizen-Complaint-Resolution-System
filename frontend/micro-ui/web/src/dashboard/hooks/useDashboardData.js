@@ -3,9 +3,21 @@ import {
   buildAllSubMetricValues,
   buildBatchQueries,
   parseBarChart,
+  parseComplaintsByTypeStackedChart,
+  parseComplaintsAtRiskTable,
+  parseComplaintTypeDetailsTable,
+  parseComplaintsOverTimeChart,
+  parseDepartmentsBarChart,
+  parseDepartmentFlowRatioBarChart,
+  parseDepartmentResolutionRateBarChart,
+  parseEmployeePerformanceTable,
   parseDowChart,
   parseFilterOptions,
+  parseGeographyMapLayers,
   parseLocalityTable,
+  parseOpenComplaintsByTypeStackedChart,
+  parseOpenComplaintsByChannelPieChart,
+  parseOpenComplaintsByAgeHistogram,
   parseOfficerSlaStackedChart,
   parseResolutionByTypeTable,
   parseResolutionDwellStackedChart,
@@ -14,6 +26,7 @@ import {
   parseWorkflowStageTable,
 } from "../config/kpiQueries";
 import { annotateTableThresholds, TABLE_THRESHOLDS } from "../config/tablePresentation";
+import { annotateEmployeePerformanceRows } from "../config/employeePerformanceTablePresentation";
 import { COMPLAINT_TYPE_OPTIONS, GEOGRAPHY_OPTIONS } from "../config/globalFilterGroups";
 import { hasAuth, runBatchQueries } from "../services/analyticsService";
 
@@ -28,15 +41,27 @@ const ANALYTICS_NOT_DEPLOYED_MESSAGE =
 
 const EMPTY_CHART_DATA = {
   categories: [],
+  departments: [],
+  departmentResolutionRates: [],
+  departmentFlowRatios: [],
   wards: [],
   dow: [],
   statusWeekStacked: { categories: [], series: [], colors: [] },
+  complaintsByTypeStacked: { categories: [], series: [], colors: [] },
+  openByTypeStacked: { categories: [], series: [], colors: [] },
+  openByChannel: [],
+  complaintsByAge: [],
   officerSlaStacked: { categories: [], series: [], colors: [] },
   resolutionDwellStacked: { categories: [], series: [], colors: [] },
   trendingComplaints: [],
   resolutionByType: [],
   locality: [],
   workflowStages: [],
+  complaintTypeDetails: [],
+  employeePerformance: [],
+  complaintsAtRisk: [],
+  geographyMap: { created: [], open: [], resolved: [] },
+  complaintsOverTime: null,
 };
 
 function extractAsOf(results) {
@@ -49,18 +74,34 @@ function withTableThreshold(widgetId, rows) {
   return annotateTableThresholds(rows, TABLE_THRESHOLDS[widgetId]);
 }
 
-function buildChartData(results) {
+function buildChartData(results, dashboardFilters) {
   const categoryResult = results?.cl_chart_categories;
 
   return {
     categories: parseBarChart(categoryResult, "service_code"),
+    departments: parseDepartmentsBarChart(results?.cl_chart_departments_by_type),
+    departmentResolutionRates: parseDepartmentResolutionRateBarChart(
+      results?.cl_chart_department_resolution_rate
+    ),
+    departmentFlowRatios: parseDepartmentFlowRatioBarChart(
+      results?.cl_chart_department_resolution_rate
+    ),
     wards: parseBarChart(results?.cl_chart_wards, "ward_code"),
     dow: parseDowChart(results?.cl_chart_dow),
     statusWeekStacked: parseStatusWeekStackedChart(results?.cl_chart_status_week),
+    complaintsByTypeStacked: parseComplaintsByTypeStackedChart(
+      results?.cl_chart_complaints_by_type
+    ),
+    openByTypeStacked: parseOpenComplaintsByTypeStackedChart(
+      results?.cl_chart_open_by_type_stage
+    ),
+    openByChannel: parseOpenComplaintsByChannelPieChart(results?.cl_chart_open_by_channel),
+    complaintsByAge: parseOpenComplaintsByAgeHistogram(results?.cl_chart_open_by_age),
     officerSlaStacked: parseOfficerSlaStackedChart(results?.cl_chart_officer_sla),
     resolutionDwellStacked: parseResolutionDwellStackedChart(
       results?.ev_chart_resolution_dwell_subtype
     ),
+    complaintsOverTime: parseComplaintsOverTimeChart(results, dashboardFilters),
     trendingComplaints: parseTrendingComplaintsTable(
       categoryResult,
       results?.cl_chart_categories_pw,
@@ -86,6 +127,22 @@ function buildChartData(results) {
     workflowStages: withTableThreshold(
       "cl-table-workflow-stages",
       parseWorkflowStageTable(results?.ev_table_stage_dwell)
+    ),
+    complaintTypeDetails: parseComplaintTypeDetailsTable(
+      results?.cl_table_complaint_type_details
+    ),
+    employeePerformance: annotateEmployeePerformanceRows(
+      parseEmployeePerformanceTable(
+        results?.ep_table_employee_performance,
+        results?.ep_table_employee_performance_dept,
+        results?.ep_table_employee_performance_escalations
+      )
+    ),
+    complaintsAtRisk: parseComplaintsAtRiskTable(results?.cl_table_complaints_at_risk),
+    geographyMap: parseGeographyMapLayers(
+      results?.cl_map_ward_created,
+      results?.cl_map_ward_open,
+      results?.cl_map_ward_resolved
     ),
   };
 }
@@ -129,7 +186,7 @@ export function useDashboardData(filters) {
 
       setSubMetricValues(buildAllSubMetricValues(results, false));
       setAnalyticsResults(results);
-      setChartData(buildChartData(results));
+      setChartData(buildChartData(results, filters));
       setFilterOptions(parseFilterOptions(results));
       setAsOf(extractAsOf(results));
     } catch (err) {

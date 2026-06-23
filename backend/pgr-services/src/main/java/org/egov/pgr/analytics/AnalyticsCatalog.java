@@ -57,10 +57,13 @@ public class AnalyticsCatalog {
             // groupable
             setOf("service_code","application_status","source","ward_code","zone_code","boundary_path",
                   "service_group","department_code","aging_bucket","sla_status_bucket",
+                  // Row-grain complaint list (e.g. SLA at-risk table); distinct-countable as well.
+                  "service_request_id",
                   // UUID columns are groupable + distinct-countable but NOT filterable (no eq/in targeting);
                   // account_id powers top-complainants aggregation, mirroring current_assignee_uuid.
                   "current_assignee_uuid","account_id",
                   "is_open","is_resolved","is_reopened","was_rejected","sla_breached","current_state_sla_breached",
+                  "has_been_assigned","is_reassigned",
                   "has_rating","is_negative_rating","is_first_time_complainant","has_geo_pin","filed_on_behalf",
                   "latitude","longitude",   // map pins: group by (lat,long) → one row per complaint location
                   "current_state_seq","created_month","created_week_start","created_year","created_quarter",
@@ -68,9 +71,10 @@ public class AnalyticsCatalog {
             // filterable (NOTE: UUID columns intentionally absent)
             setOf("service_code","application_status","source","ward_code","zone_code","service_group",
                   "department_code","aging_bucket","sla_status_bucket","is_open","is_resolved","is_reopened",
-                  "was_rejected","sla_breached","current_state_sla_breached","has_rating","is_negative_rating",
+                  "was_rejected","sla_breached","current_state_sla_breached","has_been_assigned","is_reassigned",
+                  "has_rating","is_negative_rating",
                   "is_first_time_complainant","has_geo_pin","created_month","created_year","created_quarter",
-                  "created_is_weekend","created_at","resolved_at","rating","current_state_seq"),
+                  "created_is_weekend","created_at","resolved_at","rating","current_state_seq","open_age_ms"),
             // measurable (numeric)
             setOf("resolution_ms","time_to_assign_ms","open_age_ms","current_state_age_ms","first_escalation_ms",
                   "max_dwell_ms","assigned_dwell_ms","unassigned_dwell_ms","transition_count","assignment_count",

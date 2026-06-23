@@ -75,7 +75,7 @@ export function joinWardMapData(wardCounts = [], boundaries = []) {
   const geometrySummary = { point: 0, polygon: 0, other: 0, missing: 0 };
 
   for (const ward of wardCounts) {
-    const code = String(ward.label ?? ward.wardCode ?? "");
+    const code = String(ward.wardCode ?? ward.label ?? "");
     const count = Number(ward.count) || 0;
     maxCount = Math.max(maxCount, count);
 

@@ -55,6 +55,7 @@ export function normalizeLineChartSeries(series = []) {
       data: (entry.data ?? []).map((value) => Number(value) || 0),
       color: entry.color,
       dashArray: dashed ? Number(entry.dashArray) || 5 : 0,
+      yAxisGroup: entry.yAxisGroup === "percent" ? "percent" : "count",
     };
   });
 }
@@ -165,8 +166,52 @@ export function applyLineChartMarkerHoverState(
   });
 }
 
-export function buildLineChartTooltip(categories = []) {
-  return buildApexSeriesHoverTooltip({ categories });
+export function buildLineChartTooltip(categories = [], series = []) {
+  return buildApexSeriesHoverTooltip({
+    categories,
+    formatValue: (value, seriesIndex) => {
+      const entry = series[seriesIndex];
+      if (entry?.yAxisGroup === "percent") {
+        const rounded = Math.round(Number(value) * 10) / 10;
+        const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+        return `${formatted}%`;
+      }
+      return Math.round(Number(value));
+    },
+  });
+}
+
+export function buildCompoundLineChartYAxis(series, yAxisConfig = {}) {
+  const percentNames = series
+    .filter((entry) => entry.yAxisGroup === "percent")
+    .map((entry) => entry.name);
+  const countSeries = series.filter((entry) => entry.yAxisGroup !== "percent");
+
+  if (!percentNames.length || !countSeries.length) {
+    return buildLineChartYAxis(resolveLineChartYAxisBounds(series, yAxisConfig));
+  }
+
+  const countBounds = resolveLineChartYAxisBounds(countSeries, yAxisConfig);
+  const borderColor = resolveDashboardCssColor("var(--border)");
+
+  return [
+    {
+      ...buildLineChartYAxis(countBounds),
+      seriesName: countSeries.map((entry) => entry.name),
+    },
+    {
+      opposite: true,
+      min: 0,
+      max: 100,
+      tickAmount: 5,
+      forceNiceScale: false,
+      show: false,
+      seriesName: percentNames,
+      labels: { show: false },
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+    },
+  ];
 }
 
 export function buildLineChartAnimations() {

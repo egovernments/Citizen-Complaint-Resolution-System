@@ -52,16 +52,56 @@ export function widgetMatchesSearch(widgetId, query, { kpiCardData = {}, chartDa
     if (rows.some((row) => rowMatches(row, q))) return true;
   }
 
-  if (widgetId === "cl-chart-categories" && chartSeriesMatches(chartData.categories, q, "label")) {
+  if (widgetId === "cl-table-complaints-at-risk") {
+    const rows = chartData.complaintsAtRisk || [];
+    if (rows.some((row) => rowMatches(row, q))) return true;
+  }
+
+  if (widgetId === "cl-map-geography-choropleth") {
+    const layers = chartData.geographyMap ?? {};
+    const rows = [...(layers.created ?? []), ...(layers.open ?? []), ...(layers.resolved ?? [])];
+    if (rows.some((row) => rowMatches(row, q))) return true;
+  }
+
+  if (
+    widgetId === "cl-chart-complaints-by-type" &&
+    (chartData.complaintsByTypeStacked?.categories || []).some((label) =>
+      includesQuery(label, q)
+    )
+  ) {
     return true;
   }
-  if (widgetId === "cl-chart-wards" && chartSeriesMatches(chartData.wards, q, "label")) {
+  if (widgetId === "cl-chart-departments" && chartSeriesMatches(chartData.departments, q)) {
     return true;
   }
-  if (widgetId === "cl-chart-dow" && chartSeriesMatches(chartData.dow, q, "label")) {
+  if (
+    widgetId === "cl-chart-department-resolution-rate" &&
+    chartSeriesMatches(chartData.departmentResolutionRates, q)
+  ) {
     return true;
   }
-  if (widgetId === "cl-list-categories" && chartSeriesMatches(chartData.trendingComplaints, q)) {
+  if (
+    widgetId === "cl-chart-department-flow-ratio" &&
+    chartSeriesMatches(chartData.departmentFlowRatios, q, "label")
+  ) {
+    return true;
+  }
+  if (
+    widgetId === "cl-chart-officer-sla" &&
+    (chartData.officerSlaStacked?.categories || []).some((label) => includesQuery(label, q))
+  ) {
+    return true;
+  }
+  if (
+    widgetId === "cl-chart-open-by-type" &&
+    (chartData.openByTypeStacked?.categories || []).some((label) => includesQuery(label, q))
+  ) {
+    return true;
+  }
+  if (widgetId === "cl-chart-open-by-channel" && chartSeriesMatches(chartData.openByChannel, q)) {
+    return true;
+  }
+  if (widgetId === "cl-chart-complaints-by-age" && chartSeriesMatches(chartData.complaintsByAge, q)) {
     return true;
   }
 

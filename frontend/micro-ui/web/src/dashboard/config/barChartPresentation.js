@@ -78,8 +78,33 @@ export function buildBarChartGrid(padding) {
   };
 }
 
-export function buildBarChartDataLabels() {
+export function buildBarChartYAxis({ tickAmount = 5, seriesMax = 0, percent = false } = {}) {
+  return {
+    labels: { show: false },
+    axisBorder: { show: false },
+    axisTicks: { show: false },
+    forceNiceScale: false,
+    min: 0,
+    max: percent ? 100 : resolveBarChartYAxisMax(seriesMax),
+    tickAmount,
+  };
+}
+
+export function formatBarChartPercentOneDecimal(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  const rounded = Math.round(n * 10) / 10;
+  const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return `${formatted}%`;
+}
+
+export function buildBarChartDataLabels({ valueFormat } = {}) {
   const color = getBarChartDataLabelColor();
+  const formatter =
+    valueFormat === "percent"
+      ? (val) => formatBarChartPercentOneDecimal(val)
+      : (val) => (Number.isFinite(Number(val)) ? String(Math.round(Number(val))) : "");
+
   return {
     enabled: true,
     // Apex anchors column labels at the bar top; negative offset lifts them above the fill.
@@ -89,7 +114,7 @@ export function buildBarChartDataLabels() {
       fontWeight: 600,
       colors: [color],
     },
-    formatter: (val) => (Number.isFinite(Number(val)) ? String(Math.round(Number(val))) : ""),
+    formatter,
   };
 }
 
@@ -103,16 +128,4 @@ export function buildBarChartPlotDataLabels() {
 
 export function buildBarChartLegend() {
   return { show: false };
-}
-
-export function buildBarChartYAxis({ tickAmount = 5, seriesMax = 0 } = {}) {
-  return {
-    labels: { show: false },
-    axisBorder: { show: false },
-    axisTicks: { show: false },
-    forceNiceScale: false,
-    min: 0,
-    max: resolveBarChartYAxisMax(seriesMax),
-    tickAmount,
-  };
 }

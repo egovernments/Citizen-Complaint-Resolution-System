@@ -7,7 +7,9 @@
  */
 
 export const VIZ_TYPE = {
-  NUMBER_TILE: "number-tile",
+  /** Value + optional delta + context (no sparkline). */
+  NUMBER_TILE: "number-tile-delta",
+  NUMBER_TILE_DELTA: "number-tile-delta",
   NUMBER_TILE_SPARKLINE: "number-tile-sparkline",
   BAR_CHART: "bar-chart",
   HORIZONTAL_BAR: "horizontal-bar",
@@ -75,17 +77,27 @@ const DATA_TABLE_STYLES = {
   legendSwatch: "dashboard-data-table-legend-swatch",
   legendLabel: "dashboard-data-table-legend-label",
   valueEmphasis: "dashboard-data-table-value-emphasis",
+  thresholdCell: "dashboard-table-threshold-cell",
+  thresholdWatch: "dashboard-table-threshold-watch",
+  thresholdGood: "dashboard-table-threshold-good",
 };
 
 /**
  * CSS class names and layout flags per visualization type.
  */
 export const VISUALIZATION_STYLES = {
-  [VIZ_TYPE.NUMBER_TILE]: {
+  [VIZ_TYPE.NUMBER_TILE_DELTA]: {
     card: "dashboard-kpi-card",
     cardMetric: "dashboard-kpi-card--metric",
+    cardDelta: "dashboard-kpi-card--delta",
     title: "dashboard-kpi-title",
     value: "dashboard-kpi-value",
+    valueRow: "dashboard-kpi-sparkline-value-row",
+    delta: "dashboard-kpi-sparkline-delta",
+    deltaMuted: "dashboard-kpi-sparkline-delta--muted",
+    deltaNeutral: "dashboard-kpi-sparkline-delta--neutral",
+    deltaPositive: "dashboard-kpi-sparkline-delta--positive",
+    deltaNegative: "dashboard-kpi-sparkline-delta--negative",
     context: "dashboard-kpi-context",
     valueLoading: "tw-animate-pulse",
     valueUnavailable: "tw-text-muted-foreground",
@@ -175,10 +187,14 @@ export const VIZ_GRID_BEHAVIOR = {
   [VIZ_TYPE.PIE_CHART]: { chartOverflowVisible: true },
   [VIZ_TYPE.STACKED_BAR]: { chartOverflowVisible: true },
   [VIZ_TYPE.HISTOGRAM]: { chartOverflowVisible: true },
+  [VIZ_TYPE.HORIZONTAL_BAR]: { chartOverflowVisible: true },
   [VIZ_TYPE.SLA_TOGGLE]: { chartOverflowVisible: true },
 };
 
 export function getVisualizationStyles(vizType) {
+  if (vizType === VIZ_TYPE.NUMBER_TILE) {
+    return VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_DELTA];
+  }
   return VISUALIZATION_STYLES[vizType] || null;
 }
 

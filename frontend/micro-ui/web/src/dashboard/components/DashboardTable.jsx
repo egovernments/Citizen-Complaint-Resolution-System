@@ -3,6 +3,7 @@ import {
   DATA_TABLE_STYLES,
   getDataTableTdClass,
   getDataTableThClass,
+  getSlaRiskStatusPillClass,
 } from "../config/visualizationStyles";
 
 const TrendCell = ({ value }) => {
@@ -37,6 +38,28 @@ const formatHours = (ms) => {
   return `${formatted}h`;
 };
 
+const MS_PER_HOUR = 3600000;
+const MS_PER_DAY = 86400000;
+
+const formatHoursDays = (ms) => {
+  if (ms == null || !Number.isFinite(ms)) return "—";
+  const hours = ms / MS_PER_HOUR;
+  if (hours < 48) {
+    const rounded = Math.round(hours * 10) / 10;
+    const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    return `${formatted} ${rounded === 1 ? "hr" : "hrs"}`;
+  }
+  const days = ms / MS_PER_DAY;
+  const rounded = Math.round(days * 10) / 10;
+  const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return `${formatted} ${rounded === 1 ? "day" : "days"}`;
+};
+
+const formatRating = (value) => {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${Number(value).toFixed(1)}/5`;
+};
+
 const formatInteger = (value) => {
   if (value == null || !Number.isFinite(value)) return "—";
   return String(Math.round(value));
@@ -47,8 +70,42 @@ const CELL_RENDERERS = {
   integer: (value) => formatInteger(value),
   percent: (value) => formatPercent(value),
   hours: (value) => formatHours(value),
+  hoursDays: (value) => formatHoursDays(value),
+  rating: (value) => formatRating(value),
   trend: (value) => <TrendCell value={value} />,
+  tags: (value) => value,
 };
+
+function resolveCellToneClass(tone, styles) {
+  if (tone === "breach") return styles.thresholdCell;
+  if (tone === "watch") return styles.thresholdWatch;
+  if (tone === "good") return styles.thresholdGood;
+  return undefined;
+}
+
+function renderStatusTags(tags, styles) {
+  const items = Array.isArray(tags) ? tags : [];
+  if (!items.length) return <span className={styles.muted}>—</span>;
+
+  return (
+    <span className="tw-flex tw-flex-wrap tw-gap-1">
+      {items.map((tag) => {
+        const normalized = String(tag).toLowerCase();
+        const pillClass =
+          normalized === "on track"
+            ? getSlaRiskStatusPillClass("open")
+            : normalized.includes("high") || normalized.includes("low")
+              ? getSlaRiskStatusPillClass("reopened")
+              : getSlaRiskStatusPillClass("assigned");
+        return (
+          <span key={tag} className={pillClass}>
+            {tag}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 const DashboardTable = ({ columns, rows }) => {
   const styles = DATA_TABLE_STYLES;
@@ -85,10 +142,19 @@ const DashboardTable = ({ columns, rows }) => {
           >
             {columns.map((col) => {
               const raw = row[col.id];
-              const isLabel = col.id === "label";
+              const isLabel =
+                col.id === "label" || col.id === "subtypeLabel" || col.id === "officerName";
               const render = CELL_RENDERERS[col.type] ?? CELL_RENDERERS.text;
-              const content = col.type === "trend" ? render(raw) : render(raw);
+              const content =
+                col.type === "tags"
+                  ? renderStatusTags(raw, styles)
+                  : col.type === "trend"
+                    ? render(raw)
+                    : render(raw);
               const labelText = typeof raw === "string" ? raw : String(raw ?? "");
+              const toneKey = col.thresholdKey ?? col.id;
+              const toneClass = resolveCellToneClass(row.cellTones?.[toneKey], styles);
+              const isThresholdCell = row.cellHighlights?.[col.id];
 
               return (
                 <td key={col.id} className={getDataTableTdClass(col.align)}>
@@ -100,7 +166,9 @@ const DashboardTable = ({ columns, rows }) => {
                       ) : null}
                     </span>
                   ) : (
-                    content
+                    <span className={toneClass ?? (isThresholdCell ? styles.thresholdCell : undefined)}>
+                      {content}
+                    </span>
                   )}
                 </td>
               );

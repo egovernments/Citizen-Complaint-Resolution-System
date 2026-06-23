@@ -26,22 +26,70 @@ export const WORKFLOW_STAGE_COLUMNS = [
   { id: "samples", label: "Samples", align: "right", type: "integer", width: "20%" },
 ];
 
+export const EMPLOYEE_PERFORMANCE_COLUMNS = [
+  { id: "officerName", label: "Name", align: "left", type: "text", width: "14%" },
+  { id: "role", label: "Role", align: "left", type: "text", width: "10%" },
+  { id: "dept", label: "Dept", align: "left", type: "text", width: "12%" },
+  { id: "statusTags", label: "Status", align: "left", type: "tags", width: "14%" },
+  { id: "assigned", label: "Assigned", align: "right", type: "integer", width: "8%" },
+  { id: "open", label: "Open", align: "right", type: "integer", width: "7%", thresholdKey: "open" },
+  { id: "resolved", label: "Resolved", align: "right", type: "integer", width: "8%" },
+  {
+    id: "reopenRate",
+    label: "Reopen rate",
+    align: "right",
+    type: "percent",
+    width: "9%",
+    thresholdKey: "reopenRate",
+  },
+  { id: "avgCsat", label: "CSAT", align: "right", type: "rating", width: "7%", thresholdKey: "avgCsat" },
+  {
+    id: "escalationRate",
+    label: "Escalation rate",
+    align: "right",
+    type: "percent",
+    width: "11%",
+    thresholdKey: "escalationRate",
+  },
+];
+
+export const COMPLAINT_TYPE_DETAILS_COLUMNS = [
+  { id: "subtypeLabel", label: "Subtype", align: "left", type: "text", width: "16%" },
+  { id: "typeLabel", label: "Type", align: "left", type: "text", width: "12%" },
+  {
+    id: "avgResolutionMs",
+    label: "Avg resolution time",
+    align: "right",
+    type: "hoursDays",
+    width: "13%",
+  },
+  { id: "idealSlaMs", label: "Ideal (SLA)", align: "right", type: "hoursDays", width: "11%" },
+  { id: "reopenRate", label: "Reopen rate", align: "right", type: "percent", width: "10%" },
+  {
+    id: "oldestOpenMs",
+    label: "Oldest complaint",
+    align: "right",
+    type: "hoursDays",
+    width: "13%",
+  },
+  {
+    id: "ontimeRate",
+    label: "Resolved on-time rate",
+    align: "right",
+    type: "percent",
+    width: "13%",
+  },
+  { id: "avgCsat", label: "CSAT", align: "right", type: "rating", width: "8%" },
+];
+
 export const TABLE_WIDGET_CONFIG = {
-  "cl-list-categories": {
-    columns: TRENDING_COMPLAINTS_COLUMNS,
-    dataKey: "trendingComplaints",
+  "cl-table-complaint-type-details": {
+    columns: COMPLAINT_TYPE_DETAILS_COLUMNS,
+    dataKey: "complaintTypeDetails",
   },
-  "cl-table-resolution": {
-    columns: RESOLUTION_BY_TYPE_COLUMNS,
-    dataKey: "resolutionByType",
-  },
-  "cl-table-locality": {
-    columns: LOCALITY_COLUMNS,
-    dataKey: "locality",
-  },
-  "cl-table-workflow-stages": {
-    columns: WORKFLOW_STAGE_COLUMNS,
-    dataKey: "workflowStages",
+  "ep-table-employee-performance": {
+    columns: EMPLOYEE_PERFORMANCE_COLUMNS,
+    dataKey: "employeePerformance",
   },
   /** @deprecated saved layouts may still reference this id */
   "cl-chart-workflow-stages": {

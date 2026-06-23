@@ -27,17 +27,40 @@ export function polarOnPie(cx, cy, r, deg) {
 }
 
 export function buildPieArcPath(cx, cy, rOuter, rInner, startDeg, endDeg) {
+  const sweep = endDeg - startDeg;
+  if (sweep >= 359.9) {
+    return buildFullDonutRingPath(cx, cy, rOuter, rInner);
+  }
+
   const outerStart = polarOnPie(cx, cy, rOuter, startDeg);
   const outerEnd = polarOnPie(cx, cy, rOuter, endDeg);
   const innerEnd = polarOnPie(cx, cy, rInner, endDeg);
   const innerStart = polarOnPie(cx, cy, rInner, startDeg);
-  const largeArc = endDeg - startDeg > 180 ? 1 : 0;
+  const largeArc = sweep > 180 ? 1 : 0;
 
   return [
     `M ${outerStart.x.toFixed(2)} ${outerStart.y.toFixed(2)}`,
     `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${outerEnd.x.toFixed(2)} ${outerEnd.y.toFixed(2)}`,
     `L ${innerEnd.x.toFixed(2)} ${innerEnd.y.toFixed(2)}`,
     `A ${rInner} ${rInner} 0 ${largeArc} 0 ${innerStart.x.toFixed(2)} ${innerStart.y.toFixed(2)}`,
+    "Z",
+  ].join(" ");
+}
+
+/** Full 360° donut ring — two semicircle arcs so start/end never coincide. */
+export function buildFullDonutRingPath(cx, cy, rOuter, rInner) {
+  const outerTop = polarOnPie(cx, cy, rOuter, 0);
+  const outerBottom = polarOnPie(cx, cy, rOuter, 180);
+  const innerTop = polarOnPie(cx, cy, rInner, 0);
+  const innerBottom = polarOnPie(cx, cy, rInner, 180);
+
+  return [
+    `M ${outerTop.x.toFixed(2)} ${outerTop.y.toFixed(2)}`,
+    `A ${rOuter} ${rOuter} 0 1 1 ${outerBottom.x.toFixed(2)} ${outerBottom.y.toFixed(2)}`,
+    `A ${rOuter} ${rOuter} 0 1 1 ${outerTop.x.toFixed(2)} ${outerTop.y.toFixed(2)}`,
+    `L ${innerTop.x.toFixed(2)} ${innerTop.y.toFixed(2)}`,
+    `A ${rInner} ${rInner} 0 1 0 ${innerBottom.x.toFixed(2)} ${innerBottom.y.toFixed(2)}`,
+    `A ${rInner} ${rInner} 0 1 0 ${innerTop.x.toFixed(2)} ${innerTop.y.toFixed(2)}`,
     "Z",
   ].join(" ");
 }

@@ -123,7 +123,7 @@ export function buildApexSeriesHoverTooltip({
 
           return {
             label: names[index] ?? `Series ${index + 1}`,
-            value: formatValue(value),
+            value: formatValue(value, index),
             color: palette[index] ?? palette[0],
           };
         })

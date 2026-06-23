@@ -7,7 +7,7 @@ export const GRID_COLS = 12;
 export const KPI_ROW_HEIGHT = 52;
 export const GRID_MARGIN_Y = 16;
 
-export const RANKED_LIST_WIDGET_ID = "cl-list-categories";
+export const RANKED_LIST_WIDGET_ID = "cl-table-complaint-type-details";
 
 /** Default grid size for data-table cards (header + rows + updated stamp). */
 export const TABLE_CARD_GRID = {
@@ -165,17 +165,21 @@ export function getChartTypeSizeConstraints(type) {
 }
 
 const RAW_DEFAULT_CHART_LAYOUT = {
-  "cl-list-categories": { x: 0, w: 6, ...TABLE_CARD_GRID },
-  "cl-table-resolution": { x: 6, w: 6, ...TABLE_CARD_GRID },
-  "cl-table-locality": { x: 0, w: 6, ...TABLE_CARD_GRID },
-  "cl-table-workflow-stages": { x: 6, w: 6, ...TABLE_CARD_GRID },
-  "cl-chart-categories": { x: 0, w: 4, h: 6, minW: 3, minH: 6, maxW: 8, maxH: 10 },
-  "cl-chart-wards": { x: 4, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
-  "cl-chart-dow": { x: 8, w: 4, h: 6, minW: 3, minH: 4, maxW: 8, maxH: 10 },
-  "cl-chart-status-week": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
+  "cl-table-complaint-type-details": { x: 0, w: 12, ...TABLE_CARD_GRID },
+  "cl-table-complaints-at-risk": { x: 0, w: 12, h: 5, minW: 6, minH: 4, maxW: 12, maxH: 14 },
+  "ep-table-employee-performance": { x: 0, w: 12, h: 6, minW: 6, minH: 4, maxW: 12, maxH: 12 },
+  "cl-chart-complaints-by-type": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
+  "cl-chart-departments": { x: 6, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
+  "cl-chart-department-resolution-rate": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
+  "cl-chart-department-flow-ratio": { x: 8, w: 4, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
+  "cl-map-geography-choropleth": { x: 0, w: 8, h: 6, minW: 4, minH: 5, maxW: 12, maxH: 14 },
+  "cl-chart-over-time": { x: 0, w: 12, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
   "cl-chart-resolution-subtype": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
   "cl-chart-officer-sla": { x: 6, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  ...DEMO_VIZ_LAYOUT_DEFAULTS,
+  "cl-chart-open-by-type": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
+  "cl-chart-open-by-channel": { x: 6, w: 4, h: 5, minW: 3, minH: 4, maxW: 6, maxH: 8 },
+  "cl-chart-complaints-by-age": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
+  "demo-viz-stacked-horizontal": DEMO_VIZ_LAYOUT_DEFAULTS["demo-viz-stacked-horizontal"],
 };
 
 export const DEFAULT_CHART_LAYOUT = Object.fromEntries(
@@ -186,12 +190,7 @@ export const DEFAULT_CHART_LAYOUT = Object.fromEntries(
   })
 );
 
-export const TOP_ROW_CHART_IDS = [
-  "cl-list-categories",
-  "cl-table-resolution",
-  "cl-table-locality",
-  "cl-table-workflow-stages",
-];
+export const TOP_ROW_CHART_IDS = [];
 
 export const DEFAULT_LAYOUT = [
   { i: "rs-metric-sla-compliance", x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
@@ -201,10 +200,11 @@ export const DEFAULT_LAYOUT = [
   { i: "ce-metric-csat", x: 8, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: true, static: false, resizeHandles: ["se"] },
   { i: "demo-viz-stacked-horizontal", x: 0, y: 2, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-chart-resolution-subtype", x: 8, y: 2, w: 4, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-map", x: 0, y: 8, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-leaderboard", x: 8, y: 8, w: 4, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-line", x: 0, y: 14, w: 12, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-sla-risk", x: 0, y: 20, w: 12, h: 5, minW: 6, minH: 4, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-map-geography-choropleth", x: 0, y: 8, w: 8, h: 6, minW: 4, minH: 5, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-chart-department-flow-ratio", x: 8, y: 8, w: 4, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-chart-over-time", x: 0, y: 14, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-chart-open-by-channel", x: 8, y: 14, w: 4, h: 5, minW: 3, minH: 4, maxW: 6, maxH: 8, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-table-complaints-at-risk", x: 0, y: 20, w: 12, h: 5, minW: 6, minH: 4, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
 ].map((item) => {
   const type = WIDGETS[item.i]?.type;
   if (!type || type === "kpi") return item;

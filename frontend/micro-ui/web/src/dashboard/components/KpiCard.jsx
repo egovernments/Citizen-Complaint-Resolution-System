@@ -3,7 +3,7 @@ import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import { getNumberTileValueClass } from "../config/kpiDisplay";
 import ResizeGrip from "./ResizeGrip";
 
-const numberTile = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE];
+const numberTile = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_DELTA];
 
 const RemoveIcon = () => (
   <svg
@@ -29,6 +29,8 @@ const KpiCard = ({
   value,
   context,
   status,
+  deltaDisplay,
+  deltaClass,
   listItems = [],
   hasList = false,
   loading = false,
@@ -37,13 +39,16 @@ const KpiCard = ({
   const isUnavailable = value === "—";
   const displayValue = value ?? (loading ? "…" : "—");
   const valueClass = getNumberTileValueClass(status, { unavailable: isUnavailable });
+  const showDelta = Boolean(deltaDisplay) || (loading && deltaClass != null);
 
   return (
     <div
       className={`${numberTile.card} tw-group${
         hasList
           ? " tw-flex tw-h-full tw-min-h-0 tw-flex-col"
-          : ` ${numberTile.cardMetric}`
+          : showDelta
+            ? ` ${numberTile.cardDelta}`
+            : ` ${numberTile.cardMetric}`
       }`}
     >
       {onRemove ? (
@@ -63,13 +68,32 @@ const KpiCard = ({
         {title}
       </div>
 
-      <div
-        className={`${numberTile.value} ${valueClass} ${
-          loading ? numberTile.valueLoading : ""
-        }`}
-      >
-        {displayValue}
-      </div>
+      {showDelta ? (
+        <div className={numberTile.valueRow}>
+          <div
+            className={`${numberTile.value} ${valueClass} ${
+              loading ? numberTile.valueLoading : ""
+            }`}
+          >
+            {displayValue}
+          </div>
+          {deltaDisplay ? (
+            <div className={`${numberTile.delta} ${deltaClass ?? valueClass}`}>
+              {deltaDisplay}
+            </div>
+          ) : loading ? (
+            <div className={`${numberTile.delta} ${numberTile.deltaMuted}`}>…</div>
+          ) : null}
+        </div>
+      ) : (
+        <div
+          className={`${numberTile.value} ${valueClass} ${
+            loading ? numberTile.valueLoading : ""
+          }`}
+        >
+          {displayValue}
+        </div>
+      )}
 
       {!hasList ? (
         <div className={numberTile.context}>{context || "\u00A0"}</div>

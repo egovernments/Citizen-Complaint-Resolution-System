@@ -262,7 +262,7 @@
 }
 
 /* ---------------------------------------------------------------
-   * Viz type: number-tile (metric KPI cards + demo number tiles)
+   * Viz type: number-tile-delta (metric KPI cards — value + delta + context)
    * Class names are referenced from config/visualizationStyles.js
    * --------------------------------------------------------------- */
 
@@ -327,6 +327,35 @@
 }
 
 .dashboard-kpi-card--metric .dashboard-kpi-context{
+  align-self: flex-start;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dashboard-kpi-card--delta{
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(26px, auto) 26px minmax(0, 1fr);
+  gap: 0.25rem;
+}
+
+.dashboard-kpi-card--delta .dashboard-kpi-title{
+  align-self: flex-start;
+  overflow: hidden;
+  padding-right: 1.25rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dashboard-kpi-card--delta .dashboard-kpi-value{
+  flex-shrink: 0;
+  align-self: auto;
+}
+
+.dashboard-kpi-card--delta .dashboard-kpi-context{
   align-self: flex-start;
   overflow: hidden;
   display: -webkit-box;
@@ -1092,6 +1121,20 @@
   color: var(--status-breach);
 }
 
+.dashboard-table-threshold-cell{
+  font-weight: 600;
+  color: var(--status-breach);
+}
+
+.dashboard-table-threshold-watch{
+  font-weight: 600;
+  color: var(--status-nearing);
+}
+
+.dashboard-table-threshold-good {
+  color: var(--status-resolved);
+}
+
 .dashboard-table-row-highlight {
   background-color: color-mix(in srgb, var(--status-breach) 3%, transparent);
 }
@@ -1563,7 +1606,7 @@
   min-height: 0px;
   flex: 1 1 0%;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   padding-left: 0.5rem;
   padding-right: 0.5rem;
   padding-top: 0px;
@@ -1755,20 +1798,52 @@
   position: relative;
 }
 
+.tw-inset-0{
+  inset: 0px;
+}
+
 .tw-bottom-1{
   bottom: 0.25rem;
+}
+
+.tw-bottom-3{
+  bottom: 0.75rem;
+}
+
+.tw-left-3{
+  left: 0.75rem;
+}
+
+.tw-right-3{
+  right: 0.75rem;
 }
 
 .tw-right-5{
   right: 1.25rem;
 }
 
+.tw-top-3{
+  top: 0.75rem;
+}
+
 .tw-z-\[2\]{
   z-index: 2;
 }
 
+.tw-z-\[400\]{
+  z-index: 400;
+}
+
+.tw-z-\[500\]{
+  z-index: 500;
+}
+
 .tw-m-0{
   margin: 0px;
+}
+
+.tw-mb-1{
+  margin-bottom: 0.25rem;
 }
 
 .tw-mb-3{
@@ -1823,6 +1898,10 @@
   height: 4rem;
 }
 
+.tw-h-2\.5{
+  height: 0.625rem;
+}
+
 .tw-h-3\.5{
   height: 0.875rem;
 }
@@ -1847,6 +1926,10 @@
   min-height: 0px;
 }
 
+.tw-min-h-\[220px\]{
+  min-height: 220px;
+}
+
 .tw-w-10{
   width: 2.5rem;
 }
@@ -1857,6 +1940,10 @@
 
 .tw-w-4{
   width: 1rem;
+}
+
+.tw-w-5{
+  width: 1.25rem;
 }
 
 .tw-w-60{
@@ -1937,6 +2024,14 @@
 
 .tw-justify-between{
   justify-content: space-between;
+}
+
+.tw-gap-0\.5{
+  gap: 0.125rem;
+}
+
+.tw-gap-1{
+  gap: 0.25rem;
 }
 
 .tw-gap-1\.5{
@@ -2099,6 +2194,10 @@
 
 .tw-p-0{
   padding: 0px;
+}
+
+.tw-p-2{
+  padding: 0.5rem;
 }
 
 .tw-p-3{

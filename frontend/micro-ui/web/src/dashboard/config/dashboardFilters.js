@@ -5,11 +5,7 @@ import {
 } from "./globalFilterGroups";
 import { KPI_METRICS } from "./supervisorMetrics";
 
-const TIME_WINDOW_METRIC_IDS = [
-  "cl-metric-total-registered",
-  "cl-metric-total-open",
-  "cl-metric-total-resolved",
-];
+const TIME_WINDOW_METRIC_IDS = [];
 
 function loadLegacySubMetricSelection() {
   try {

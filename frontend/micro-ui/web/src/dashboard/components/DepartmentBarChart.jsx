@@ -9,6 +9,7 @@ import {
   buildBarChartLegend,
   buildBarChartPlotDataLabels,
   buildBarChartYAxis,
+  formatBarChartPercentOneDecimal,
   getBarChartSeriesColor,
   resolveBarChartColumnWidth,
   resolveBarGroupLayout,
@@ -48,7 +49,9 @@ const DepartmentBarChart = ({
   colors: colorsProp,
   scrollKey,
   histogram = false,
+  valueFormat = "count",
 }) => {
+  const isPercent = valueFormat === "percent";
   const categoryCountFromInput = Array.isArray(data) ? data.length : 0;
   const minContentWidth =
     categoryCountFromInput > 0
@@ -73,8 +76,8 @@ const DepartmentBarChart = ({
 
   const categories = useMemo(() => chartData.map((d) => d.label), [chartData]);
   const series = useMemo(
-    () => [{ name: "Count", data: chartData.map((d) => d.count) }],
-    [chartData]
+    () => [{ name: isPercent ? "Resolution rate" : "Count", data: chartData.map((d) => d.count) }],
+    [chartData, isPercent]
   );
 
   const seriesMax = useMemo(
@@ -162,7 +165,7 @@ const DepartmentBarChart = ({
           dataLabels: buildBarChartPlotDataLabels(),
         },
       },
-      dataLabels: buildBarChartDataLabels(),
+      dataLabels: buildBarChartDataLabels({ valueFormat }),
       legend: buildBarChartLegend(),
       xaxis: {
         categories,
@@ -176,7 +179,11 @@ const DepartmentBarChart = ({
         axisBorder: { show: false },
         axisTicks: { show: false },
       },
-      yaxis: buildBarChartYAxis({ tickAmount: yTickAmount, seriesMax }),
+      yaxis: buildBarChartYAxis({
+        tickAmount: yTickAmount,
+        seriesMax,
+        percent: isPercent,
+      }),
       colors,
       grid: buildBarChartGrid(gridPadding),
       tooltip: { enabled: false },
@@ -197,6 +204,7 @@ const DepartmentBarChart = ({
       yTickAmount,
       seriesMax,
       histogram,
+      isPercent,
     ]
   );
 
@@ -245,7 +253,12 @@ const DepartmentBarChart = ({
       )}
       <ChartTooltipPortal tooltip={tooltip}>
         <div className={SHARED_CHROME.chartTooltipTitle}>{tooltip?.label}</div>
-        <div className={SHARED_CHROME.chartTooltipRow}>Count : {tooltip?.value}</div>
+        <div className={SHARED_CHROME.chartTooltipRow}>
+          {isPercent ? "Resolution rate" : "Count"} :{" "}
+          {isPercent
+            ? formatBarChartPercentOneDecimal(tooltip?.value)
+            : tooltip?.value}
+        </div>
       </ChartTooltipPortal>
     </>
   );

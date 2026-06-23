@@ -11,13 +11,13 @@ import {
   buildLineChartTooltip,
   buildLineChartXAxis,
   buildLineChartYAxis,
+  buildCompoundLineChartYAxis,
   getLineChartMarkerSurfaceColor,
   LINE_CHART_LEGEND,
   LINE_CHART_PERIOD_OPTIONS,
   normalizeLineChartSeries,
   resolveLineChartColors,
   resolveLineChartXAxisLabelHeight,
-  resolveLineChartYAxisBounds,
   setLineChartMarkersVisible,
 } from "../config/lineChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE, SHARED_CHROME } from "../config/visualizationStyles";
@@ -88,9 +88,9 @@ const LineChart = ({
   surfaceColorRef.current = getLineChartMarkerSurfaceColor();
   isAnimatingRef.current = isAnimating;
 
-  const yAxisBounds = useMemo(
-    () => resolveLineChartYAxisBounds(normalizedSeries, activeYAxis),
-    [activeYAxis, normalizedSeries]
+  const yAxisConfig = useMemo(
+    () => buildCompoundLineChartYAxis(normalizedSeries, activeYAxis ?? yAxis),
+    [activeYAxis, normalizedSeries, yAxis]
   );
 
   const xAxisLabelHeight = useMemo(
@@ -170,17 +170,17 @@ const LineChart = ({
       stroke: buildLineChartStroke(normalizedSeries),
       markers: buildLineChartMarkers(colors),
       xaxis: buildLineChartXAxis(categories, containerWidth),
-      yaxis: buildLineChartYAxis(yAxisBounds),
+      yaxis: yAxisConfig,
       colors,
       legend: LINE_CHART_LEGEND,
       grid: buildLineChartGrid({ bottomPadding: xAxisLabelHeight }),
-      tooltip: buildLineChartTooltip(categories),
+      tooltip: buildLineChartTooltip(categories, normalizedSeries),
       states: {
         hover: { filter: { type: "none" } },
         active: { filter: { type: "none" } },
       },
     }),
-    [categories, chartEvents, colors, containerWidth, normalizedSeries, xAxisLabelHeight, yAxisBounds]
+    [categories, chartEvents, colors, containerWidth, normalizedSeries, xAxisLabelHeight, yAxisConfig]
   );
 
   const markerStyleVars = useMemo(
@@ -190,14 +190,12 @@ const LineChart = ({
     [colors]
   );
 
-  const hasData =
-    categories.length > 0 &&
-    normalizedSeries.some((entry) => entry.data.some((value) => Number(value) > 0));
+  const hasChartStructure = categories.length > 0 && normalizedSeries.length > 0;
 
   const lineStyles = VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART];
   const showHeader = Boolean(headerTitle && periods);
 
-  const chart = !hasData ? null : (
+  const chart = !hasChartStructure ? null : (
     <div
       ref={containerRef}
       className={`${lineStyles.container} tw-h-full tw-min-h-0 tw-w-full tw-flex-1 tw-overflow-visible${
@@ -218,7 +216,7 @@ const LineChart = ({
     </div>
   );
 
-  if (!hasData) return null;
+  if (!hasChartStructure) return null;
 
   if (!showHeader) {
     return chart;

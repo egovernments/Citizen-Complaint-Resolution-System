@@ -67,6 +67,30 @@ export const STATUS_STACKED_SERIES = [
   { key: "ESCALATED", label: "Escalated", color: "var(--chart-3)" },
 ];
 
+/** Open complaints by subtype — current workflow stage (facts.application_status). */
+export const OPEN_COMPLAINT_WORKFLOW_SERIES = [
+  {
+    key: "PENDINGFORASSIGNMENT",
+    label: "Pending assignment",
+    color: "var(--chart-1)",
+  },
+  { key: "PENDINGATLME", label: "Assigned", color: "var(--chart-2)" },
+  {
+    key: "PENDINGFORREASSIGNMENT",
+    label: "Pending reassignment",
+    color: "var(--chart-3)",
+  },
+  {
+    key: "PENDINGATSUPERVISOR",
+    label: "Pending at supervisor",
+    color: "var(--chart-4)",
+  },
+];
+
+export const OPEN_COMPLAINT_WORKFLOW_STAGE_KEYS = new Set(
+  OPEN_COMPLAINT_WORKFLOW_SERIES.map((def) => def.key)
+);
+
 /** Resolution dwell by complaint sub-type — workflow stage stack (bottom → top). */
 export const RESOLUTION_DWELL_STACKED_SERIES = [
   {

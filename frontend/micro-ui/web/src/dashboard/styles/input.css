@@ -146,7 +146,7 @@
   }
 
   /* ---------------------------------------------------------------
-   * Viz type: number-tile (metric KPI cards + demo number tiles)
+   * Viz type: number-tile-delta (metric KPI cards — value + delta + context)
    * Class names are referenced from config/visualizationStyles.js
    * --------------------------------------------------------------- */
   .dashboard-kpi-card {
@@ -193,6 +193,32 @@
   }
 
   .dashboard-kpi-card--metric .dashboard-kpi-context {
+    @apply tw-self-start tw-overflow-hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .dashboard-kpi-card--delta {
+    @apply tw-h-full;
+    display: grid;
+    grid-template-rows: minmax(26px, auto) 26px minmax(0, 1fr);
+    gap: 0.25rem;
+  }
+
+  .dashboard-kpi-card--delta .dashboard-kpi-title {
+    @apply tw-self-start tw-overflow-hidden;
+    padding-right: 1.25rem;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .dashboard-kpi-card--delta .dashboard-kpi-value {
+    @apply tw-self-auto tw-shrink-0;
+  }
+
+  .dashboard-kpi-card--delta .dashboard-kpi-context {
     @apply tw-self-start tw-overflow-hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -696,6 +722,20 @@
     color: var(--status-breach);
   }
 
+  .dashboard-table-threshold-cell {
+    @apply tw-font-semibold;
+    color: var(--status-breach);
+  }
+
+  .dashboard-table-threshold-watch {
+    @apply tw-font-semibold;
+    color: var(--status-nearing);
+  }
+
+  .dashboard-table-threshold-good {
+    color: var(--status-resolved);
+  }
+
   .dashboard-table-row-highlight {
     background-color: color-mix(in srgb, var(--status-breach) 3%, transparent);
   }
@@ -1040,7 +1080,7 @@
   }
 
   .dashboard-pie-chart-body {
-    @apply tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-px-2 tw-pt-0;
+    @apply tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-visible tw-px-2 tw-pt-0;
     margin-top: -10px;
     padding-bottom: 1.125rem;
   }
