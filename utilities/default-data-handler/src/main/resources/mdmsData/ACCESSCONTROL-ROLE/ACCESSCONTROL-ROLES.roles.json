@@ -1,5 +1,10 @@
 [
   {
+    "code": "CMS_SCREENING_OFFICER",
+    "name": "CMS Screening Officer",
+    "description": "Screens complaints and routes them to the correct department"
+  },
+  {
     "code": "CONFIG_ADMIN",
     "name": "Config Admin",
     "description": "One who can access configs"
