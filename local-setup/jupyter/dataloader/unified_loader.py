@@ -375,23 +375,61 @@ class UnifiedExcelReader:
 
         return departments, designations, dept_localizations, desig_localizations, dept_name_to_code
 
-    def read_complaint_types(self, tenant_id: str, dept_name_to_code: dict = None):
-        """Read Complaint Type Master from Common Master Excel
-        Auto-generates service codes and handles hierarchical structure
+    # Default hierarchy type for the merged ComplaintHierarchy / ComplaintHierarchyDefinition masters.
+    COMPLAINT_HIERARCHY_TYPE = 'PGR'
+    COMPLAINT_CATEGORY_LEVEL = 'CATEGORY'
+    COMPLAINT_LEAF_LEVEL = 'SUB_TYPE'
+
+    def complaint_hierarchy_definition(self, hierarchy_type: str = None):
+        """Build the RAINMAKER-PGR.ComplaintHierarchyDefinition record for the flat
+        2-level CATEGORY -> SUB_TYPE tree the Excel template encodes.
+
+        The Excel column contract (Complaint Type* = category, Complaint sub type* = leaf)
+        maps to exactly two levels; SUB_TYPE is the leaf level whose codes are stored as
+        serviceCodes on complaints. Mirrors configurator hierarchyMigration.ts flatLevels().
+
+        Returns:
+            dict: a single ComplaintHierarchyDefinition data object (keyed by hierarchyType)
+        """
+        hierarchy_type = hierarchy_type or self.COMPLAINT_HIERARCHY_TYPE
+        return {
+            'hierarchyType': hierarchy_type,
+            'active': True,
+            'levels': [
+                {'levelCode': self.COMPLAINT_CATEGORY_LEVEL, 'order': 1, 'parentLevel': None,
+                 'isFreeText': False, 'isLeafServiceCode': False, 'label': 'Category'},
+                {'levelCode': self.COMPLAINT_LEAF_LEVEL, 'order': 2, 'parentLevel': self.COMPLAINT_CATEGORY_LEVEL,
+                 'isFreeText': False, 'isLeafServiceCode': True, 'label': 'Sub-Type'},
+            ],
+        }
+
+    def read_complaint_types(self, tenant_id: str, dept_name_to_code: dict = None,
+                             hierarchy_type: str = None):
+        """Read Complaint Type Master from Common Master Excel into RAINMAKER-PGR.ComplaintHierarchy rows.
+
+        Produces a single adjacency list (interior CATEGORY nodes AND leaf SUB_TYPE rows together),
+        matching the merged 2-master model. Interior nodes carry no department/slaHours; leaf rows
+        carry department/departments/slaHours/keywords and their 'code' IS the serviceCode stored on
+        a complaint (verbatim). 'menuPath' is NOT emitted — grouping is derived from parentCode/path.
 
         Args:
             tenant_id: Tenant ID for context
             dept_name_to_code: Dictionary mapping department names to codes
+            hierarchy_type: hierarchyType stamped on every row (default 'PGR')
 
         Returns:
-            tuple: (complaint_types_list, localization_list)
+            tuple: (complaint_hierarchy_rows, localization_list)
+                   complaint_hierarchy_rows = interior CATEGORY nodes followed by leaf SUB_TYPE rows.
+                   For the ComplaintHierarchyDefinition record, call complaint_hierarchy_definition().
         """
+        hierarchy_type = hierarchy_type or self.COMPLAINT_HIERARCHY_TYPE
         df = pd.read_excel(self.excel_file, sheet_name='Complaint Type Master')
 
-        complaint_types = []
+        category_nodes = []   # interior nodes (RAINMAKER-PGR.ComplaintHierarchy, no department/slaHours)
+        leaf_rows = []        # leaf complaint types (code == serviceCode verbatim)
         localizations = []
         current_parent = None
-        localized_parent_types = set()
+        seen_category_codes = set()
 
         # If no mapping provided, create empty dict
         if dept_name_to_code is None:
@@ -406,16 +444,32 @@ class UnifiedExcelReader:
                 dept_name = str(row['Department Name*']).strip() if pd.notna(row.get('Department Name*')) else None
                 dept_code = dept_name_to_code.get(dept_name, dept_name) if dept_name else None
 
+                # The category 'code' is the parent type string verbatim (== leaf.parentCode).
+                # This matches the configurator migration's derive mode (parentCode = menuPath/category).
                 current_parent = {
-                    'type': parent_type,
+                    'code': parent_type,
+                    'name': parent_type,
                     'department': dept_code,
                     'slaHours': int(float(row['Resolution Time (Hours)*'])) if pd.notna(row.get('Resolution Time (Hours)*')) else None,
                     'keywords': str(row['Search Words (comma separated)*']).strip() if pd.notna(row.get('Search Words (comma separated)*')) else "",
                     'order': int(float(row['Priority'])) if pd.notna(row.get('Priority')) else None
                 }
 
-                # Auto-generate localization for parent type (only once)
-                if parent_type not in localized_parent_types:
+                # Emit the interior CATEGORY node once per distinct parent (no department/slaHours).
+                if parent_type not in seen_category_codes:
+                    category_nodes.append({
+                        'hierarchyType': hierarchy_type,
+                        'levelCode': self.COMPLAINT_CATEGORY_LEVEL,
+                        'code': parent_type,
+                        'parentCode': None,
+                        'name': parent_type,
+                        'order': len(seen_category_codes) + 1,
+                        'active': True,
+                        'path': parent_type,
+                    })
+                    seen_category_codes.add(parent_type)
+
+                    # Auto-generate localization for parent type (only once)
                     # Generate code by removing spaces and capitalizing, but keep original for message
                     parent_type_code = ''.join(word.capitalize() for word in parent_type.split())
                     loc_code = f"SERVICEDFS.{parent_type_code.upper()}"
@@ -425,37 +479,43 @@ class UnifiedExcelReader:
                         'module': 'rainmaker-pgr',
                         'locale': 'en_IN'
                     })
-                    localized_parent_types.add(parent_type)
 
             # Every row should have a sub-type
             if pd.notna(row.get('Complaint sub type*')) and str(row['Complaint sub type*']).strip() != '':
                 sub_type_name = str(row['Complaint sub type*']).strip()
 
-                # Use the exact sub-type name as service code (preserve user input)
+                # Use the exact sub-type name as service code (preserve user input).
+                # The leaf row 'code' IS the serviceCode stored on a complaint (verbatim).
                 service_code = sub_type_name
+                parent_code = current_parent['code'] if current_parent else sub_type_name
+                parent_path = current_parent['code'] if current_parent else sub_type_name
 
-                # Keep original parent type format for menuPath
-                menu_path_value = current_parent['type'] if current_parent else sub_type_name
-
-                ct = {
-                    'serviceCode': service_code,  # Keep exact user input as service code
+                leaf = {
+                    'hierarchyType': hierarchy_type,
+                    'levelCode': self.COMPLAINT_LEAF_LEVEL,
+                    'code': service_code,  # serviceCode verbatim
+                    'parentCode': parent_code,
                     'name': sub_type_name,  # Keep original format with spaces
-                    'menuPath': menu_path_value,  # Keep original parent type format
-                    'active': True
+                    'order': len(leaf_rows) + 1,
+                    'active': True,
+                    'path': f"{parent_path}.{service_code}",
                 }
 
-                # Add parent-level fields
+                # Leaf-only routing fields (interior nodes omit these).
                 if current_parent:
                     if current_parent.get('department'):
-                        ct['department'] = current_parent['department']
+                        leaf['department'] = current_parent['department']
+                        # departments[] re-expresses the removed ComplaintTypeDepartments master.
+                        # Excel currently encodes a single owning department, so the list mirrors it.
+                        leaf['departments'] = [current_parent['department']]
                     if current_parent.get('slaHours'):
-                        ct['slaHours'] = current_parent['slaHours']
+                        leaf['slaHours'] = current_parent['slaHours']
                     # Always include keywords, use empty string if not provided
-                    ct['keywords'] = current_parent.get('keywords', "")
+                    leaf['keywords'] = current_parent.get('keywords', "")
                     if current_parent.get('order'):
-                        ct['order'] = current_parent['order']
+                        leaf['order'] = current_parent['order']
 
-                complaint_types.append(ct)
+                leaf_rows.append(leaf)
 
                 # Auto-generate localization for sub-type
                 # Create a code-friendly version for localization key (remove spaces, uppercase)
@@ -468,7 +528,9 @@ class UnifiedExcelReader:
                     'locale': 'en_IN'
                 })
 
-        return complaint_types, localizations
+        # Interior nodes first so parents are created before children (path/parentCode resolve).
+        complaint_hierarchy_rows = category_nodes + leaf_rows
+        return complaint_hierarchy_rows, localizations
 
     # ========================================================================
     # OTHER UTILITY READERS (Employee, Boundary, Workflow, Localization)
@@ -1672,7 +1734,31 @@ class APIUploader:
                 }
                 transformed.append(excel_record)
 
-        # Handle Complaint Types - show department name and extract complaint type/subtype
+        # Handle ComplaintHierarchy leaf rows - reverse-map to the Excel contract.
+        # 'Complaint Type*' (the category/group) derives from the leaf's parentCode; only
+        # leaf rows (department/slaHours present) map back to a sub-type row.
+        elif 'ComplaintHierarchy' in schema_code and 'Definition' not in schema_code:
+            for record in records:
+                # Skip interior CATEGORY nodes (no department/slaHours) — they have no Excel row.
+                if record.get('department') is None and record.get('slaHours') is None:
+                    continue
+                dept_code = record.get('department', '')
+                dept_name = dept_code_to_name.get(dept_code, dept_code)
+
+                excel_record = {
+                    'Complaint Type*': record.get('parentCode', ''),
+                    'Complaint sub type*': record.get('name', ''),
+                    'Department Name*': dept_name,
+                    'Resolution Time (Hours)*': record.get('slaHours', ''),
+                    'Search Words (comma separated)*': record.get('keywords', ''),
+                    'Priority': record.get('order', ''),
+                    '_STATUS': record.get('_STATUS'),
+                    '_STATUS_CODE': record.get('_STATUS_CODE'),
+                    '_ERROR_MESSAGE': record.get('_ERROR_MESSAGE')
+                }
+                transformed.append(excel_record)
+
+        # Handle Complaint Types (LEGACY ServiceDefs) - show department name and extract complaint type/subtype
         elif 'ServiceDefs' in schema_code:
             for record in records:
                 dept_code = record.get('department', '')
