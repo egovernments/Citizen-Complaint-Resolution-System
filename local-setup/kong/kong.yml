@@ -127,12 +127,6 @@ services:
     paths:
     - /user-otp
     strip_path: false
-    plugins:
-    - name: request-termination
-      config:
-        status_code: 200
-        content_type: application/json
-        body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":null,"ts":null,"resMsgId":"uief87324","msgId":null,"status":"successful"},"otp":{"identity":"","tenantId":"","type":"","otp":"","expiryTime":0}}'
 - name: enc-service
   url: http://egov-enc-service:1234
   tags:
