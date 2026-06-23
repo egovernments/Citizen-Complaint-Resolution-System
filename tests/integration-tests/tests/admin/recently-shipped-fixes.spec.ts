@@ -261,11 +261,11 @@ If this row goes missing or its copy changes, several PGR UI tests in this suite
 // TODO(Phase 7): add a skip-when-locale-not-seeded guard (probe
 // /localization/messages with module=rainmaker-common,locale=sw_KE and
 // short-circuit if rows === 0) instead of asserting unconditionally.
-test.describe('CCRS#42 — Complaint Type menuPathName labels', () => {
-  test('API: 19 SERVICEDEFS.<menuPath> rows exist in en_IN AND sw_KE', {
+test.describe('CCRS#42 — Complaint Type category labels', () => {
+  test('API: 19 SERVICEDEFS.<categoryCode> rows exist in en_IN AND sw_KE', {
     annotation: {
       type: 'description',
-      description: `Catches CCRS#42 (Complaint Type dropdown blank rows). The 19 SERVICEDEFS.<MENUPATH> localization rows must exist in BOTH en_IN and sw_KE locales. Pre-fix the configurator's complaint type seed didn't push these keys, so the citizen dropdown rendered 19 blank options.
+      description: `Catches CCRS#42 (Complaint Type dropdown blank rows). The 19 SERVICEDEFS.<CATEGORYCODE> localization rows must exist in BOTH en_IN and sw_KE locales. These category codes are the parentCode values of the leaf complaint types (interior category nodes of RAINMAKER-PGR.ComplaintHierarchy) — they replaced the legacy menuPath grouping key, but the localization key form SERVICEDEFS.<code> is unchanged. Pre-fix the configurator's complaint type seed didn't push these keys, so the citizen dropdown rendered 19 blank group options.
 
 Steps:
 1. For each locale in [en_IN, sw_KE]:
@@ -273,15 +273,17 @@ Steps:
    - For each requested code, find the matching message in response.
    - Assert message exists with non-empty text.
 
-Tests 5 representative codes across the 19 menuPath values — fewer assertions but covers the full breadth via locale × multiple codes.`,
+Tests 5 representative codes across the 19 category (parentCode) values — fewer assertions but covers the full breadth via locale × multiple codes.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:42', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
+    // Complaint-type labels moved off the legacy SERVICEDEFS.* namespace to
+    // key-based COMPLAINT_HIERARCHY.<categoryCode> (seeded for every node).
     const codes = [
-      'SERVICEDEFS.ADMINISTRATION',
-      'SERVICEDEFS.WATERRELATED',
-      'SERVICEDEFS.LANDRATES',
-      'SERVICEDEFS.MOBILITYANDWORKS',
-      'SERVICEDEFS.FINANCEANDREVENUE',
+      'COMPLAINT_HIERARCHY.ADMINISTRATION',
+      'COMPLAINT_HIERARCHY.WATERRELATED',
+      'COMPLAINT_HIERARCHY.LANDRATES',
+      'COMPLAINT_HIERARCHY.MOBILITYANDWORKS',
+      'COMPLAINT_HIERARCHY.FINANCEANDREVENUE',
     ];
     for (const locale of ['en_IN', 'sw_KE']) {
       const r = await fetch(

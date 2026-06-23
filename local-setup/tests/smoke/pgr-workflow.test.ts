@@ -111,7 +111,7 @@ describe('PGR End-to-End Workflow', () => {
           moduleDetails: [
             {
               moduleName: 'RAINMAKER-PGR',
-              masterDetails: [{ name: 'ServiceDefs' }],
+              masterDetails: [{ name: 'ComplaintHierarchy' }],
             },
           ],
         },
@@ -120,7 +120,7 @@ describe('PGR End-to-End Workflow', () => {
       expect(response.ok).toBe(true);
 
       const data = response.data as {
-        MdmsRes?: { 'RAINMAKER-PGR'?: { ServiceDefs?: unknown[] } };
+        MdmsRes?: { 'RAINMAKER-PGR'?: { ComplaintHierarchy?: unknown[] } };
       };
 
       // Service definitions should exist (may be in different MDMS format)
