@@ -464,11 +464,11 @@ async function main(): Promise<void> {
     assertEndpointReachable(res.status, '/mdms-v2/v2/_search');
   });
 
-  // mdms search: ServiceDefs (PGR complaint types)
-  await test('MDMS: _search RAINMAKER-PGR.ServiceDefs', 'MDMS', async () => {
+  // mdms search: ComplaintHierarchy (PGR complaint types + grouping nodes)
+  await test('MDMS: _search RAINMAKER-PGR.ComplaintHierarchy', 'MDMS', async () => {
     const res = await apiPost('/mdms-v2/v2/_search', {
       RequestInfo: buildRequestInfo(token),
-      MdmsCriteria: { tenantId: STATE_TENANT, schemaCode: 'RAINMAKER-PGR.ServiceDefs', limit: 100 },
+      MdmsCriteria: { tenantId: STATE_TENANT, schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy', limit: 100 },
     }, token);
     assertSearchResponse(res, 'mdms', '/mdms-v2/v2/_search');
   });

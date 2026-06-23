@@ -147,32 +147,59 @@ workflow_create(tenant_id="<root>.<city>", copy_from_tenant="pg.citya")
 If response says `skipped: ["PGR"]` — workflow already exists, proceed.
 **GATE**: Call `workflow_business_services(tenant_id="<root>", business_services=["PGR"])`. Must return the PGR state machine.
 
-### Step 5 — Create service definitions
-Must register at BOTH state root AND city level.
+### Step 5 — Create complaint types (ComplaintHierarchy)
+Complaint types now live in the 2-master model:
+- `RAINMAKER-PGR.ComplaintHierarchyDefinition` — the level ladder (one row per `hierarchyType`).
+- `RAINMAKER-PGR.ComplaintHierarchy` — ONE adjacency list holding BOTH interior
+  grouping nodes AND leaf complaint types. `RAINMAKER-PGR.ServiceDefs` /
+  `ClassificationNode` / `ComplaintTypeDepartments` are GONE — do NOT write them.
+
+A LEAF row's `code` IS the serviceCode stored on a complaint (verbatim). Leaf rows
+carry `department`/`slaHours`/`keywords`; interior nodes omit them. Grouping/labels
+derive from the tree (`parentCode` + the parent node's `name`) — there is NO `menuPath`.
+
+Register at BOTH state root AND city level.
 ```
-# 5a — State root (required for pgr_create to resolve service codes)
+# 5a — Definition (the level ladder), once per hierarchyType at the state root
 mdms_create(
   tenant_id = "<root>",
-  schema_code = "RAINMAKER-PGR.ServiceDefs",
-  unique_identifier = "<ServiceCode>",
-  data = { serviceCode, name, keywords: "comma,separated", menuPath: "<Category>",
-           department, slaHours, active: true }
+  schema_code = "RAINMAKER-PGR.ComplaintHierarchyDefinition",
+  unique_identifier = "PGR",
+  data = { hierarchyType: "PGR", active: true, levels: [
+    { levelCode: "CATEGORY", order: 1, parentLevel: null,       isFreeText: false, isLeafServiceCode: false, label: "Category" },
+    { levelCode: "SUB_TYPE", order: 2, parentLevel: "CATEGORY", isFreeText: false, isLeafServiceCode: true,  label: "Sub-Type" }
+  ] }
 )
 
-# 5b — City level (required for city-scoped filtering)
+# 5b — Interior CATEGORY node(s) — the grouping
 mdms_create(
-  tenant_id = "<root>.<city>",
-  schema_code = "RAINMAKER-PGR.ServiceDefs",
+  tenant_id = "<root>",  # then repeat for "<root>.<city>"
+  schema_code = "RAINMAKER-PGR.ComplaintHierarchy",
+  unique_identifier = "<CategoryCode>",
+  data = { hierarchyType: "PGR", levelCode: "CATEGORY", code: "<CategoryCode>",
+           parentCode: null, name: "<Category Name>", order, active: true, path: "<CategoryCode>" }
+)
+
+# 5c — Leaf complaint type(s) — code == serviceCode (required for pgr_create to resolve)
+mdms_create(
+  tenant_id = "<root>",  # then repeat for "<root>.<city>"
+  schema_code = "RAINMAKER-PGR.ComplaintHierarchy",
   unique_identifier = "<ServiceCode>",
-  data = { serviceCode, name, keywords: "...", department, slaHours, active: true }
+  data = { hierarchyType: "PGR", levelCode: "SUB_TYPE", code: "<ServiceCode>",
+           parentCode: "<CategoryCode>", name, order, active: true,
+           path: "<CategoryCode>.<ServiceCode>",
+           department, departments: ["<dept>"], slaHours, keywords: "comma,separated" }
 )
 ```
 Field rules:
 - `keywords` must be a plain string (e.g. `"road,pothole,damaged"`), not a JSON array
-- Do NOT include `menuPathName` or `description` — schema rejects them
-- Use `menuPath` (no "Name") at root level only
+- Do NOT include `menuPath` / `menuPathName` / `description` — they are gone from the master
+- Leaf rows MUST set `department`/`slaHours` (that's how leaves are distinguished from nodes)
+- Create interior nodes BEFORE leaves so each leaf's `parentCode` target exists
 
-**GATE**: Call `validate_complaint_types(tenant_id="<root>.<city>")`. Must list all created service codes.
+**GATE**: Call `validate_complaint_types(tenant_id="<root>.<city>")`. It reads
+`RAINMAKER-PGR.ComplaintHierarchy`, keeps only LEAF rows (those with `department`/`slaHours`),
+and must list all created service codes (the leaf `code`s).
 
 ### Step 6 — Create employees
 ```
