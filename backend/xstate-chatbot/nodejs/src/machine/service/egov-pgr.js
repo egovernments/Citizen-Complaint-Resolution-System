@@ -168,7 +168,7 @@ class PGRService {
 
           let complaintTypes = [];
           let messageBundle = {};
-          let localisationPrefix = "SERVICEDEFS_";
+          let localisationPrefix = "COMPLAINT_HIERARCHY.";
           
           // Collect all localization codes
           let localizationCodes = [];
@@ -217,7 +217,7 @@ class PGRService {
 
       let complaintTypes = [];
       let messageBundle = {};
-      let localisationPrefix = "SERVICEDEFS_";
+      let localisationPrefix = "COMPLAINT_HIERARCHY.";
       
       // Collect unique service codes and localization codes
       let localizationCodes = [];
@@ -293,7 +293,7 @@ class PGRService {
     complaintCategories = complaintCategories.filter(
       (complaintCategory) => complaintCategory != ""
     ); // To remove any empty category
-    let localisationPrefix = "SERVICEDEFS_";
+    let localisationPrefix = "COMPLAINT_HIERARCHY.";
     let messageBundle = {};
     for (let complaintCategory of complaintCategories) {
       let message = localisationService.getMessageBundleForCode(
@@ -317,7 +317,7 @@ class PGRService {
     let complaintItems = this.mapHierarchyToServiceDefs(hierarchyRows)
       .filter((def) => def.menuPath == category)
       .map((def) => def.serviceCode);
-    let localisationPrefix = "SERVICEDEFS_";
+    let localisationPrefix = "COMPLAINT_HIERARCHY.";
     let messageBundle = {};
     for (let complaintItem of complaintItems) {
       let message = localisationService.getMessageBundleForCode(
@@ -786,7 +786,7 @@ class PGRService {
     let serviceWrappers = responseBody.ServiceWrappers;
     var results = {};
     results["ServiceWrappers"] = [];
-    let localisationPrefix = "SERVICEDEFS_";
+    let localisationPrefix = "COMPLAINT_HIERARCHY.";
     let statusLocalisationPrefix = "CS_COMMON_";
 
     let complaintLimit = config.pgrUseCase.complaintSearchLimit;
