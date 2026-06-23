@@ -78,6 +78,45 @@ class LocalisationService {
         }
     }
 
+    async getMessagesForModule(module, locale, tenantId) {
+        // Fetch messages for a specific module
+        var url = config.egovServices.egovlocalizationhost + config.egovServices.localisationServiceSearchPath + 
+                  '?tenantId=' + tenantId + '&locale=' + locale + '&module=' + module;
+        
+        var requestBody = {
+            RequestInfo: {
+                apiId: "Rainmaker",
+                msgId: Date.now() + "|" + locale,
+                plainAccessRequest: {}
+            }
+        };
+        
+        var options = {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        }
+        
+        try {
+            const response = await fetch(url, options);
+            const data = await response.json();
+            
+            // Convert to a code->message map
+            const messageMap = {};
+            if (data['messages']) {
+                data['messages'].forEach(msg => {
+                    messageMap[msg.code] = msg.message;
+                });
+            }
+            return messageMap;
+        } catch (error) {
+            console.error('Error fetching module messages:', error);
+            return {};
+        }
+    }
+
 }
 
 const localisationService = new LocalisationService();
