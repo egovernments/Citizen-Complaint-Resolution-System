@@ -1,79 +1,50 @@
 import React, { useMemo, useState } from "react";
-import { getChartColor } from "../../config/chartColors";
 import {
-  DATA_TABLE_STYLES,
-  getDataTableTdClass,
-  getDataTableThClass,
-  VISUALIZATION_STYLES,
+  buildWidgetHeaderClassName,
+  getWidgetBodyClassName,
+  getWidgetScrollClassName,
+  SHARED_CHROME,
   VIZ_TYPE,
 } from "../../config/visualizationStyles";
-import DataTableChrome from "../DataTableChrome";
+import DashboardTable from "../DashboardTable";
 import DepartmentBarChart from "../DepartmentBarChart";
 import ViewToggle from "./ViewToggle";
 
 const SLA_BUCKETS = [
-  { id: "within", label: "Within SLA", count: 11, color: getChartColor(0) },
-  { id: "breaching", label: "Breaching SLA", count: 15, color: getChartColor(1) },
-  { id: "breached", label: "Breached SLA", count: 34, color: getChartColor(2) },
+  { id: "within", label: "Within SLA", count: 11 },
+  { id: "breaching", label: "Breaching SLA", count: 15 },
+  { id: "breached", label: "Breached SLA", count: 34 },
 ];
 
-const SlaBucketTable = ({ rows }) => {
-  const styles = DATA_TABLE_STYLES;
-
-  return (
-    <table className={styles.table}>
-      <thead>
-        <tr>
-          <th className={getDataTableThClass()}>Bucket</th>
-          <th className={getDataTableThClass("right")}>Count</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.id}>
-            <td className={getDataTableTdClass()}>
-              <span className={styles.legendLabel}>
-                <span
-                  className={styles.legendSwatch}
-                  style={{ backgroundColor: row.color }}
-                  aria-hidden
-                />
-                <span>{row.label}</span>
-              </span>
-            </td>
-            <td
-              className={`${getDataTableTdClass("right")} ${styles.valueEmphasis}`}
-              style={{ color: row.color }}
-            >
-              {row.count}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-};
+const SLA_TABLE_COLUMNS = [
+  { id: "label", label: "Bucket", align: "left", type: "text" },
+  { id: "count", label: "Count", align: "right", type: "integer" },
+];
 
 const ComplaintsBySlaWidget = () => {
   const [view, setView] = useState("table");
-  const tableStyles = DATA_TABLE_STYLES;
-  const barBodyClass = VISUALIZATION_STYLES[VIZ_TYPE.BAR_CHART].body;
-  const slaToggleBodyBar = VISUALIZATION_STYLES[VIZ_TYPE.SLA_TOGGLE].bodyBar;
+  const isTable = view === "table";
+  const vizType = isTable ? VIZ_TYPE.DATA_TABLE : VIZ_TYPE.BAR_CHART;
+
+  const tableRows = useMemo(
+    () => SLA_BUCKETS.map(({ id, label, count }) => ({ id, label, count })),
+    []
+  );
 
   const barChartData = useMemo(
     () => SLA_BUCKETS.map(({ label, count }) => ({ label, count })),
     []
   );
 
-  const bodyClassName =
-    view === "table"
-      ? tableStyles.body
-      : `${barBodyClass} ${slaToggleBodyBar} tw-min-w-0 tw-w-full tw-flex-1`;
-
   return (
-    <DataTableChrome
-      title="Complaints by SLA"
-      headerActions={
+    <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col">
+      <header
+        className={`${buildWidgetHeaderClassName(vizType)} tw-flex tw-shrink-0 tw-items-center tw-justify-between tw-gap-3 tw-pr-8`}
+      >
+        <div className="tw-min-w-0 tw-flex-1">
+          <h2 className={SHARED_CHROME.dragHandleTitle}>Complaints by SLA</h2>
+          <p className={SHARED_CHROME.dragHandleSubtitle}>Table and bar views</p>
+        </div>
         <ViewToggle
           value={view}
           onChange={setView}
@@ -82,16 +53,17 @@ const ComplaintsBySlaWidget = () => {
             { id: "bar", label: "Bar" },
           ]}
         />
-      }
-      bodyClassName={bodyClassName}
-      scrollable={view === "table"}
-    >
-      {view === "table" ? (
-        <SlaBucketTable rows={SLA_BUCKETS} />
-      ) : (
-        <DepartmentBarChart data={barChartData} scrollKey="demo-viz-sla-toggle" />
-      )}
-    </DataTableChrome>
+      </header>
+      <div className={getWidgetBodyClassName(vizType, { isTable })}>
+        {isTable ? (
+          <div className={getWidgetScrollClassName()}>
+            <DashboardTable columns={SLA_TABLE_COLUMNS} rows={tableRows} />
+          </div>
+        ) : (
+          <DepartmentBarChart data={barChartData} scrollKey="demo-viz-sla-toggle" />
+        )}
+      </div>
+    </div>
   );
 };
 
