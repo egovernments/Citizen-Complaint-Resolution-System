@@ -1,4 +1,5 @@
 import _ from "lodash";
+import { complaintLabel } from "../utils/complaintLabel";
 import { useLocation, useHistory, Link, useParams } from "react-router-dom";
 import React, { useState, Fragment } from "react";
 import { DeleteIconv2, DownloadIcon, FileIcon, Button, Card, CardSubHeader, EditIcon, ArrowForward, Modal, CloseSvg, Close, } from "@egovernments/digit-ui-react-components";
@@ -1664,16 +1665,21 @@ export const UICustomizations = {
                 </Link>
               </span>
               {(() => {
-                // Show the Complaint Type (menuPath / category) instead of
-                // the sub-type (serviceCode). serviceDefs are cached in
-                // SessionStorage by useServiceDefs (the inbox filter loads
-                // them on mount). Fall back to the serviceCode key if the
-                // def or its menuPath is unavailable.
+                // Complaint Type label = the parent group's NODE NAME, straight
+                // from ComplaintHierarchy — no SERVICEDEFS localization key. The
+                // leaf def already carries its parent's name as menuPathName; for
+                // a complaint filed on an interior node (no-leaf branch), fall
+                // back to the full code→name map, then the raw code.
                 const sc = row?.businessObject?.service?.serviceCode;
                 const defs = Digit.SessionStorage.get("serviceDefs") || [];
                 const def = Array.isArray(defs) ? defs.find((d) => d?.serviceCode === sc) : null;
-                const typeCode = def?.menuPath || sc;
-                return <span>{t(`SERVICEDEFS.${(typeCode || "").toUpperCase()}`)}</span>;
+                const nameByCode = Digit.SessionStorage.get("complaintHierarchyNameByCode") || {};
+                // Label the complaint by its parent group, key-based
+                // (COMPLAINT_HIERARCHY.<code>) like every other service, falling
+                // back to the node name when the key isn't seeded.
+                const parentCode = def?.menuPath || sc;
+                const fallback = def?.menuPathName || nameByCode[parentCode] || nameByCode[sc] || sc;
+                return <span>{complaintLabel(t, parentCode, fallback)}</span>;
               })()}
             </div>
           );

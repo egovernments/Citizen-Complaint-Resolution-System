@@ -47,15 +47,15 @@ const CreateComplaintForm = ({
   const { data: hasHierarchy } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
-    [{ name: "ComplaintHierarchyDefinition" }, { name: "ClassificationNode" }],
+    [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
     {
       cacheTime: Infinity,
       select: (raw) => {
         const defs = (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter(
           (d) => d?.active !== false
         );
-        const nodes = raw?.["RAINMAKER-PGR"]?.ClassificationNode || [];
-        return defs.some((d) => nodes.some((n) => n?.hierarchyType === d?.hierarchyType));
+        const rows = raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [];
+        return defs.some((d) => rows.some((n) => n?.hierarchyType === d?.hierarchyType));
       },
     },
     { schemaCode: "PGR_HIER_PRESENT" }
