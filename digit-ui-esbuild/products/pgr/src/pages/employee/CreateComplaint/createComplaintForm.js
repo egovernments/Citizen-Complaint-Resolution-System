@@ -41,48 +41,7 @@ const CreateComplaintForm = ({
   // Fetch the list of service definitions (e.g., complaint types) for current tenant
   const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
 
-  // Logged-in employee's department — needed to gate the Sub-Type dropdown
-  // so an employee can only file sub-types of their own department. The user
-  // token doesn't carry the department, so look it up from HRMS by the
-  // current user's uuid (same source AssigneeComponent uses).
-  const hrmsContext = window?.globalConfigs?.getConfig?.("HRMS_CONTEXT_PATH") || "egov-hrms";
-  const { data: currentEmployeeData } = Digit.Hooks.useCustomAPIHook({
-    url: `/${hrmsContext}/employees/_search`,
-    params: { tenantId, uuids: user?.info?.uuid },
-    config: { enabled: !!user?.info?.uuid },
-  });
-  // All departments the logged-in employee is actively assigned to. A user
-  // can hold multiple assignments (e.g. a department head / high-level user),
-  // so collect every active assignment's department — not just the first.
-  // This drives the department gating for the Type + Sub-Type dropdowns, with
-  // no dependency on role names (which can be customised/renamed).
-  const loggedInUserDepartments = useMemo(() => {
-    const employees = currentEmployeeData?.Employees || [];
-    const set = new Set();
-    employees.forEach((e) =>
-      (e?.assignments || [])
-        .filter((a) => a?.isCurrentAssignment !== false && a?.department)
-        .forEach((a) => set.add(a.department))
-    );
-    return [...set];
-  }, [currentEmployeeData]);
 
-  // Admin-style roles aren't tied to a single department, so they should always
-  // see the full Type/Sub-Type list rather than be scoped to one (or none).
-  const PRIVILEGED_ROLES = ["SUPERUSER", "PGR_ADMIN", "PGR-ADMIN"];
-  const isPrivileged = (user?.info?.roles || []).some((r) => PRIVILEGED_ROLES.includes(r?.code));
-
-  // Department gating is a *refinement*, never a hard block: only scope the
-  // Type/Sub-Type dropdowns to the employee's department(s) when doing so still
-  // leaves something to pick. If the user has no department, a privileged role,
-  // or a department that matches no ServiceDef (HRMS dept codes can diverge from
-  // the ServiceDefs `department`), gating is disabled and every type is shown —
-  // otherwise the dropdowns went blank even though MDMS has the data (issue #810).
-  const departmentGate = useMemo(() => {
-    const scoped = (serviceDefs || []).filter((d) => loggedInUserDepartments.includes(d.department));
-    const enabled = !isPrivileged && loggedInUserDepartments.length > 0 && scoped.length > 0;
-    return { enabled, scoped };
-  }, [serviceDefs, loggedInUserDepartments, isPrivileged]);
 
   useEffect(() => {
     if (toast?.show) {
@@ -126,35 +85,17 @@ const CreateComplaintForm = ({
 
 
   function getUniqueMenuPaths(data) {
-    // Dedupe by menuPath + department (not menuPath alone). The same menuPath
-    // can exist under more than one department; for a multi-department user
-    // both must stay selectable, so keep one Type option per
-    // (menuPath, department). For single-department users this collapses to
-    // the same result as menuPath-only dedupe.
-    const seen = new Set();
+    const seenMenuPaths = new Set();
     const uniqueItems = [];
-    for (const item of data || []) {
-      const key = `${item.menuPath}__${item.department}`;
-      if (!seen.has(key)) {
-        seen.add(key);
+
+    for (const item of data) {
+      if (!seenMenuPaths.has(item.menuPath)) {
+        seenMenuPaths.add(item.menuPath);
         uniqueItems.push(item);
       }
     }
 
-    // Disambiguate only when the SAME menuPath spans multiple departments in
-    // the (already department-scoped) option set — otherwise a multi-dept user
-    // would see identical labels. Single-department users never trip this, so
-    // their labels stay plain.
-    const deptCountByMenuPath = uniqueItems.reduce((acc, it) => {
-      acc[it.menuPath] = (acc[it.menuPath] || 0) + 1;
-      return acc;
-    }, {});
-
-    return uniqueItems.map((it) =>
-      deptCountByMenuPath[it.menuPath] > 1
-        ? { ...it, menuPathName: `${it.menuPathName} - ${t(`DEPARTMENT_${it.department}`)}` }
-        : it
-    );
+    return uniqueItems;
   }
 
   function getSubTypesByDepartment(baseItem, allItems) {
@@ -164,22 +105,7 @@ const CreateComplaintForm = ({
       return [];
     }
 
-    // Gate sub-types by the selected Type's department ONLY when department
-    // gating is active (see departmentGate / issue #810). When it's disabled —
-    // no/mismatched department or a privileged user — skip the gate so sub-types
-    // still appear for the chosen Type.
-    if (departmentGate.enabled && !loggedInUserDepartments.includes(baseItem.department)) {
-      return [];
-    }
-
-    // Sub-types = services under the SELECTED Type — match both menuPath and
-    // department, not department alone (department-only would leak services
-    // from other menuPaths in the same department into this Type's sub-list).
-    return allItems.filter(
-      (item) =>
-        item.department === baseItem.department &&
-        item.menuPath === baseItem.menuPath
-    );
+    return allItems.filter(item => item.department === baseItem.department);
   }
 
 
@@ -195,13 +121,6 @@ const CreateComplaintForm = ({
 
   const updatedConfig = useMemo(() => {
 
-    // Complaint Type options: scoped to the employee's department(s) when
-    // departmentGate is active (e.g. an "ambiental" user doesn't see the
-    // "Water"/DEPT_36 Type), otherwise the full list. The gate is disabled
-    // rather than yielding an empty list when the user has no/mismatched
-    // department or is privileged (issue #810).
-    const departmentScopedDefs = departmentGate.enabled ? departmentGate.scoped : (serviceDefs || []);
-
     const baseConfig = Digit.Utils.preProcessMDMSConfig(
       t,
       createComplaintConfig,
@@ -209,7 +128,7 @@ const CreateComplaintForm = ({
         updateDependent: [
           {
             key: "SelectComplaintType",
-            value: [getUniqueMenuPaths(departmentScopedDefs) ? getUniqueMenuPaths(departmentScopedDefs) : []],
+            value: [getUniqueMenuPaths(serviceDefs) ? getUniqueMenuPaths(serviceDefs) : []],
           },
           {
             key: "SelectSubComplaintType",
@@ -243,7 +162,7 @@ const CreateComplaintForm = ({
     });
 
     return { ...baseConfig, form: updatedForm };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, departmentGate]);
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType]);
 
 
 
