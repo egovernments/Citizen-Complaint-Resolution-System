@@ -58,10 +58,12 @@ export function downloadCommonMastersTemplate() {
 /**
  * Dynamic complaint-hierarchy template. Columns are generated from the
  * operator-defined levels (one column per level, top→leaf) plus the leaf
- * attribute columns. Each row is one leaf complaint type carrying its full
- * ancestor path — the parser derives ClassificationNodes (non-leaf cells,
- * de-duped) and ServiceDefs (leaf rows). The number/identity of columns
- * therefore reflects whatever hierarchy the operator defined — fully dynamic.
+ * attribute columns (Department Name*, Resolution Time (Hours)*, Search Words*,
+ * which map to the leaf fields department / slaHours / keywords). Each row is
+ * one leaf complaint type carrying its full ancestor path — the parser folds
+ * the non-leaf cells (de-duped) and the leaf rows into the ONE ComplaintHierarchy
+ * node array. The number/identity of columns reflects whatever hierarchy the
+ * operator defined — fully dynamic.
  */
 export function downloadComplaintHierarchyTemplate(hierarchyType: string, levelCodes: string[]) {
   const levels = levelCodes.filter((l) => l && l.trim());
@@ -79,7 +81,7 @@ export function downloadComplaintHierarchyTemplate(hierarchyType: string, levelC
     sla: number,
     kw: string
   ): Row => {
-    const path = safe.map((lc, i) => {
+    const path = safe.map((_lc, i) => {
       if (i === leafIdx) return leaf;
       if (i === leafIdx - 1 && sectorOverride) return sectorOverride;
       return ancestor[i];

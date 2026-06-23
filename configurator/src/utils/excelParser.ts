@@ -922,7 +922,11 @@ export function parseEmployeeExcel(workbook: XLSX.WorkBook): {
 // Complaint Hierarchy (configurable N-level) Parser
 // ============================================
 
-export interface ClassificationNodeRow {
+// One row of the single 2-master ComplaintHierarchy adjacency list. Interior
+// nodes and leaves share this shape; LEAF rows ALSO carry the leaf fields
+// (department/departments/slaHours/keywords). `menuPath` is gone — grouping is
+// carried by `parentCode` / the parent node's name.
+export interface ComplaintHierarchyRow {
   hierarchyType: string;
   levelCode: string;
   code: string;
@@ -931,36 +935,33 @@ export interface ClassificationNodeRow {
   order: number;
   active: boolean;
   path: string;
+  /** Leaf-only: set on rows at the leaf (isLeafServiceCode) level. */
+  isLeaf?: boolean;
+  department?: string;
+  departments?: string[];
+  slaHours?: number;
+  keywords?: string;
 }
-export interface HierarchyServiceDefRow {
-  serviceCode: string;
-  name: string;
-  department: string;
-  slaHours: number;
-  keywords: string;
-  active: boolean;
-  order: number;
-  menuPath: string;
-  parentCode: string;
-  sector?: string;
-  category?: string;
-  authorityType?: string;
-  hierarchyType: string;
-  path: string;
-}
+
+// Back-compat alias — older imports referenced ClassificationNodeRow.
+export type ClassificationNodeRow = ComplaintHierarchyRow;
+
 export interface ComplaintHierarchyParseResult {
-  classificationNodes: ClassificationNodeRow[];
-  serviceDefs: HierarchyServiceDefRow[];
+  /** Every node in the hierarchy: interior classification nodes AND leaves. */
+  nodes: ComplaintHierarchyRow[];
+  /** Convenience view — just the leaf rows (nodes where isLeaf === true). */
+  leaves: ComplaintHierarchyRow[];
   validation: ValidationResult;
 }
 
 /**
  * Parse an uploaded complaint-hierarchy workbook against the operator-defined
- * levels. One column per level (top→leaf) plus leaf attribute columns. Derives
- * de-duped ClassificationNodes for the non-leaf cells and one ServiceDef per
- * leaf row. Codes are PascalCase of the cell text (matching the rest of the
- * loader stack); the leaf's menuPath/parentCode point at the immediate (sector)
- * node so the citizen renderer can link leaves to their sector.
+ * levels. One column per level (top→leaf) plus leaf attribute columns. Produces
+ * ONE de-duped node array for the single ComplaintHierarchy master: interior
+ * cells become interior nodes; each leaf row becomes a leaf node carrying the
+ * leaf fields (department/slaHours/keywords). Codes are PascalCase of the cell
+ * text (matching the rest of the loader stack); a leaf's `parentCode` points at
+ * its immediate (sector) node so the citizen renderer can group leaves by it.
  */
 export function parseComplaintHierarchyExcel(
   workbook: XLSX.WorkBook,
@@ -987,8 +988,8 @@ export function parseComplaintHierarchyExcel(
   const sheet = sheetName ? workbook.Sheets[sheetName] : undefined;
   if (!sheet) {
     return {
-      classificationNodes: [],
-      serviceDefs: [],
+      nodes: [],
+      leaves: [],
       validation: {
         valid: false,
         errors: [{ row: 0, field: 'sheet', message: 'No sheet found in workbook', code: 'NO_SHEET' }],
@@ -1006,8 +1007,9 @@ export function parseComplaintHierarchyExcel(
     return '';
   };
 
-  const nodeMap = new Map<string, ClassificationNodeRow>();
-  const serviceDefs: HierarchyServiceDefRow[] = [];
+  // ONE map for the whole hierarchy: interior nodes AND leaves share it, so the
+  // output is the single adjacency list the ComplaintHierarchy master expects.
+  const nodeMap = new Map<string, ComplaintHierarchyRow>();
   const seen = new Set<string>();
 
   json.forEach((row, idx) => {
@@ -1029,7 +1031,7 @@ export function parseComplaintHierarchyExcel(
       // DISTINCT node codes. Without this they collapse into one node and
       // collide on MDMS's (hierarchyType, code) uniqueIdentifier, mis-parenting
       // one authority's subtree under another.
-      const code = parentCode ? `${parentCode}_${toPascal(name)}` : toPascal(name);
+      const code: string = parentCode ? `${parentCode}_${toPascal(name)}` : toPascal(name);
       codeChain.push(code);
       const key = code; // globally unique within the hierarchy now
       if (!nodeMap.has(key)) {
@@ -1049,38 +1051,50 @@ export function parseComplaintHierarchyExcel(
     const sectorCode = parentCode || '';
 
     const leafName = pathVals[leafIdx];
+    // The leaf's code IS the serviceCode stored verbatim on a complaint.
     const serviceCode = toPascal(`${leafIdx > 0 ? pathVals[leafIdx - 1] + ' ' : ''}${leafName}`);
     if (seen.has(serviceCode)) {
       warnings.push({ row: rowNo, field: 'serviceCode', message: `Row ${rowNo}: duplicate ${serviceCode} skipped`, code: 'DUP' });
       return;
     }
     seen.add(serviceCode);
-    const department = cell(row, 'Department Name*', 'Department Name', 'department', 'Department');
+    // ── MULTI-DEPT (revertible) ──────────────────────────────────────────────
+    //  "Department Name*" may be a comma-separated list (one complaint type → many
+    //  departments). department = first (primary); departments[] = all (trimmed,
+    //  de-duped). REVERT: replace these 3 lines with the single original line
+    //      const department = cell(row, 'Department Name*', 'Department Name', 'department', 'Department');
+    //  and remove the `departments,` line from the nodeMap.set() below.
+    const departmentRaw = cell(row, 'Department Name*', 'Department Name', 'department', 'Department');
+    const departments = [...new Set(departmentRaw.split(',').map((s) => s.trim()).filter(Boolean))];
+    const department = departments[0] || '';
+    // ── end MULTI-DEPT ───────────────────────────────────────────────────────
     const slaHours = parseInt(cell(row, 'Resolution Time (Hours)*', 'Resolution Time (Hours)', 'slaHours', 'sla') || '24', 10) || 24;
     const keywords = cell(row, 'Search Words*', 'Search Words (comma separated)*', 'Search Words', 'keywords');
     if (!department) warnings.push({ row: rowNo, field: 'department', message: `Row ${rowNo}: no department`, code: 'NO_DEPT' });
 
-    serviceDefs.push({
-      serviceCode,
+    // Leaf row: a node at the leaf level carrying the leaf fields. Lives in the
+    // SAME node array as the interior nodes (single-master adjacency list).
+    nodeMap.set(serviceCode, {
+      hierarchyType,
+      levelCode: levels[leafIdx],
+      code: serviceCode,
       name: leafName,
+      parentCode: sectorCode || null,
+      order: nodeMap.size + 1,
+      active: true,
+      path: [...codeChain, serviceCode].join('.'),
+      isLeaf: true,
       department,
+      departments, // ── MULTI-DEPT (revertible): remove this line to revert ──
       slaHours,
       keywords,
-      active: true,
-      order: serviceDefs.length + 1,
-      menuPath: sectorCode,
-      parentCode: sectorCode,
-      sector: sectorCode || undefined,
-      category: codeChain.length >= 2 ? codeChain[1] : undefined,
-      authorityType: codeChain.length >= 1 ? codeChain[0] : undefined,
-      hierarchyType,
-      path: [...codeChain, serviceCode].join('.'),
     });
   });
 
+  const nodes = Array.from(nodeMap.values());
   return {
-    classificationNodes: Array.from(nodeMap.values()),
-    serviceDefs,
+    nodes,
+    leaves: nodes.filter((n) => n.isLeaf),
     validation: { valid: errors.length === 0, errors, warnings },
   };
 }

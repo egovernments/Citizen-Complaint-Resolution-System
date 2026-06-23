@@ -12,23 +12,24 @@ import { mdmsService, localizationService } from '@/api';
 import {
   parseExcelFile,
   parseComplaintHierarchyExcel,
-  type ClassificationNodeRow,
-  type HierarchyServiceDefRow,
+  type ComplaintHierarchyRow,
 } from '@/utils/excelParser';
 import { downloadComplaintHierarchyTemplate } from '@/utils/templateBuilder';
 
 type Step = 'define' | 'template' | 'verify';
 
+// 2-master complaint hierarchy: just the Definition (levels) + the single
+// ComplaintHierarchy adjacency list (interior nodes AND leaf complaint types).
+// RAINMAKER-PGR.ServiceDefs / .ClassificationNode are gone.
 const HDEF_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchyDefinition';
-const NODE_SCHEMA = 'RAINMAKER-PGR.ClassificationNode';
-const SERVICEDEF_SCHEMA = 'RAINMAKER-PGR.ServiceDefs';
+const HIERARCHY_SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchy';
 
 export interface ComplaintHierarchySetupProps {
   /** City/onboarding tenant the citizen UI reads from. */
   targetTenant: string;
   /** State-root tenant pgr-services validates serviceCode against. */
   stateTenant: string;
-  /** Called after the hierarchy + nodes + serviceDefs are ingested. */
+  /** Called after the definition + hierarchy rows are ingested. */
   onDone: (summary: { nodes: number; defs: number }) => void;
   /** Optional error sink so the host phase can surface failures. */
   onError?: (message: string) => void;
@@ -50,8 +51,10 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
   const [levels, setLevels] = useState<string[]>(['AUTHORITY_TYPE', 'MAIN_CATEGORY', 'SECTOR', 'SUB_TYPE']);
 
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [nodes, setNodes] = useState<ClassificationNodeRow[]>([]);
-  const [serviceDefs, setServiceDefs] = useState<HierarchyServiceDefRow[]>([]);
+  // The single adjacency list (interior nodes AND leaves) + a leaf-only view
+  // for the verify table / counts.
+  const [nodes, setNodes] = useState<ComplaintHierarchyRow[]>([]);
+  const [leaves, setLeaves] = useState<ComplaintHierarchyRow[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
 
   const fail = (m: string) => {
@@ -60,6 +63,10 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
   };
 
   const validLevels = () => levels.map((l) => l.trim()).filter(Boolean);
+
+  // Interior (non-leaf) nodes for the verify table — `nodes` holds the whole
+  // adjacency list (interior + leaves) since both share the one master.
+  const interiorNodes = nodes.filter((n) => !n.isLeaf);
 
   const buildDefinitionLevels = () =>
     validLevels().map((lc, i, arr) => ({
@@ -93,13 +100,13 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
         fail(result.validation.errors.map((er) => er.message).join('; '));
         return;
       }
-      if (result.serviceDefs.length === 0) {
+      if (result.leaves.length === 0) {
         fail('No complaint sub-types found in the sheet. Fill at least one row.');
         return;
       }
       setUploadedFile(file);
-      setNodes(result.classificationNodes);
-      setServiceDefs(result.serviceDefs);
+      setNodes(result.nodes);
+      setLeaves(result.leaves);
       setWarnings(result.validation.warnings.map((w) => w.message));
       setStep('verify');
     } catch (err) {
@@ -125,36 +132,28 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
         levels: buildDefinitionLevels(),
       })
     );
+    // Write the single ComplaintHierarchy adjacency list: interior nodes AND
+    // leaf rows go to the SAME master. Leaf rows carry the leaf fields
+    // (department/departments/slaHours/keywords) which is also what marks them
+    // as leaves on read. `menuPath` is gone — grouping is carried by parentCode.
     for (const n of nodes) {
-      await swallow(
-        mdmsService.create(tenant, NODE_SCHEMA, n.code, {
-          hierarchyType: n.hierarchyType,
-          levelCode: n.levelCode,
-          code: n.code,
-          parentCode: n.parentCode,
-          name: n.name,
-          order: n.order,
-          active: true,
-          path: n.path,
-        })
-      );
-    }
-    // Leaf ServiceDefs: only base fields + menuPath (= sector code) so the live
-    // additionalProperties:false ServiceDefs schema accepts them; the citizen
-    // renderer links leaves to their sector via menuPath.
-    for (const s of serviceDefs) {
-      await swallow(
-        mdmsService.create(tenant, SERVICEDEF_SCHEMA, s.serviceCode, {
-          serviceCode: s.serviceCode,
-          name: s.name,
-          keywords: s.keywords,
-          department: s.department || 'NA',
-          slaHours: s.slaHours,
-          active: true,
-          order: s.order,
-          menuPath: s.menuPath,
-        })
-      );
+      const data: Record<string, unknown> = {
+        hierarchyType: n.hierarchyType,
+        levelCode: n.levelCode,
+        code: n.code,
+        parentCode: n.parentCode,
+        name: n.name,
+        order: n.order,
+        active: true,
+        path: n.path,
+      };
+      if (n.isLeaf) {
+        data.department = n.department || 'NA';
+        if (n.departments) data.departments = n.departments;
+        data.slaHours = n.slaHours;
+        data.keywords = n.keywords;
+      }
+      await swallow(mdmsService.create(tenant, HIERARCHY_SCHEMA, n.code, data));
     }
   };
 
@@ -171,12 +170,21 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
       await localizationService
         .uploadComplaintTypeLocalizations(
           targetTenant,
-          serviceDefs.map((s) => ({ serviceCode: s.serviceCode, name: s.name, department: s.department, menuPath: s.menuPath })),
+          // Seed SERVICEDEFS.<code> for EVERY node — interior nodes (category /
+          // sector) too, not just leaves. The inbox and complaint lists label a
+          // complaint by its PARENT group key (SERVICEDEFS.<parentCode>), and a
+          // leaf-less branch is now filed against an interior node directly, so
+          // both must be localized or they render the raw key.
+          nodes.map((s) => ({
+            serviceCode: s.code,
+            name: s.name,
+            department: s.isLeaf ? s.department : undefined,
+          })),
           'en_IN'
         )
         .catch((e) => console.warn('[ComplaintHierarchy] localization failed (non-fatal):', e));
       await localizationService.cacheBust().catch(() => undefined);
-      onDone({ nodes: nodes.length, defs: serviceDefs.length });
+      onDone({ nodes: nodes.length, defs: leaves.length });
     } catch (err) {
       console.error('Ingest error:', err);
       fail(err instanceof Error ? err.message : 'Failed to ingest the complaint hierarchy.');
@@ -306,24 +314,24 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
           )}
           <Tabs defaultValue="leaves">
             <TabsList className="bg-muted">
-              <TabsTrigger value="leaves" className="text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-white">Sub-types ({serviceDefs.length})</TabsTrigger>
-              <TabsTrigger value="nodes" className="text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-white">Hierarchy nodes ({nodes.length})</TabsTrigger>
+              <TabsTrigger value="leaves" className="text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-white">Sub-types ({leaves.length})</TabsTrigger>
+              <TabsTrigger value="nodes" className="text-xs sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-white">Hierarchy nodes ({interiorNodes.length})</TabsTrigger>
             </TabsList>
             <TabsContent value="leaves" className="mt-4 overflow-x-auto">
               <Table>
                 <TableHeader><TableRow className="bg-muted/50">
                   <TableHead className="text-xs font-condensed">serviceCode</TableHead>
                   <TableHead className="text-xs font-condensed">Name</TableHead>
-                  <TableHead className="text-xs font-condensed">Sector</TableHead>
+                  <TableHead className="text-xs font-condensed">Parent</TableHead>
                   <TableHead className="text-xs font-condensed">Dept</TableHead>
                   <TableHead className="text-xs font-condensed">SLA</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {serviceDefs.slice(0, 25).map((s) => (
-                    <TableRow key={s.serviceCode}>
-                      <TableCell className="font-mono text-xs">{s.serviceCode}</TableCell>
+                  {leaves.slice(0, 25).map((s) => (
+                    <TableRow key={s.code}>
+                      <TableCell className="font-mono text-xs">{s.code}</TableCell>
                       <TableCell className="text-xs">{s.name}</TableCell>
-                      <TableCell className="font-mono text-xs">{s.menuPath}</TableCell>
+                      <TableCell className="font-mono text-xs">{s.parentCode || '-'}</TableCell>
                       <TableCell className="text-xs">{s.department || '-'}</TableCell>
                       <TableCell className="text-xs">{s.slaHours}</TableCell>
                     </TableRow>
@@ -340,7 +348,7 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
                   <TableHead className="text-xs font-condensed">Parent</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {nodes.slice(0, 25).map((n) => (
+                  {interiorNodes.slice(0, 25).map((n) => (
                     <TableRow key={`${n.levelCode}-${n.code}`}>
                       <TableCell className="text-xs">{n.levelCode}</TableCell>
                       <TableCell className="font-mono text-xs">{n.code}</TableCell>
@@ -353,16 +361,17 @@ export function ComplaintHierarchySetup({ targetTenant, stateTenant, onDone, onE
             </TabsContent>
           </Tabs>
           <p className="text-xs sm:text-sm text-muted-foreground my-4">
-            Will create 1 hierarchy definition, <span className="text-primary">{nodes.length}</span> nodes,{' '}
-            <span className="text-primary">{serviceDefs.length}</span> complaint sub-types
+            Will create 1 hierarchy definition and <span className="text-primary">{nodes.length}</span> hierarchy rows
+            (<span className="text-primary">{interiorNodes.length}</span> nodes +{' '}
+            <span className="text-primary">{leaves.length}</span> complaint sub-types)
             {stateTenant !== targetTenant ? ` (on ${targetTenant} and ${stateTenant})` : ''}.
           </p>
           <div className="flex justify-between">
             <Button variant="ghost" size="sm" onClick={() => setStep('template')} className="text-muted-foreground hover:text-primary">← Back</Button>
             <SubmitBar
-              label={loading ? 'Creating…' : `Create ${serviceDefs.length} Sub-types`}
+              label={loading ? 'Creating…' : `Create ${leaves.length} Sub-types`}
               onSubmit={handleIngest}
-              disabled={loading || serviceDefs.length === 0}
+              disabled={loading || leaves.length === 0}
               icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
             />
           </div>

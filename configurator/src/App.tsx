@@ -115,7 +115,11 @@ function ManagementAdmin() {
         <Resource name="tenants" list={TenantList} show={TenantShow} edit={TenantEdit} />
         <Resource name="departments" list={DepartmentList} show={DepartmentShow} edit={DepartmentEdit} create={DepartmentCreate} />
         <Resource name="designations" list={DesignationList} show={DesignationShow} edit={DesignationEdit} create={DesignationCreate} />
-        <Resource name="complaint-types" list={ComplaintTypeList} show={ComplaintTypeShow} edit={ComplaintTypeEdit} create={ComplaintTypeCreate} />
+        {/* Complaint types are the LEAF rows of the single ComplaintHierarchy
+            master (registry key 'complaint-hierarchy'); the data provider
+            filters leaves and maps them to the legacy ServiceDefs shape so
+            these dedicated views keep working unchanged. */}
+        <Resource name="complaint-hierarchy" list={ComplaintTypeList} show={ComplaintTypeShow} edit={ComplaintTypeEdit} create={ComplaintTypeCreate} />
         <Resource name="employees" list={EmployeeList} show={EmployeeShow} edit={EmployeeEdit} create={EmployeeCreate} />
         <Resource name="complaints" list={ComplaintList} show={ComplaintShow} edit={ComplaintEdit} create={ComplaintCreate} />
         <Resource name="boundaries" list={BoundaryList} show={BoundaryShow} edit={BoundaryEdit} create={BoundaryCreate} />
