@@ -428,6 +428,9 @@ export function registerValidatorTools(registry: ToolRegistry): void {
           ...r,
           serviceCode: r.code,
           serviceName: r.serviceName ?? r.name,
+          department: r.department,
+          slaHours: r.slaHours,
+          active: r.active,
         }));
 
       const result: ValidationResult = {

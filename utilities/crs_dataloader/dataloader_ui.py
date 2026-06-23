@@ -935,7 +935,7 @@ def workflow_ui(state: State):
                 uploader = _uploader(state)
             except RuntimeError as e:
                 print(str(e)); return
-            path = wf_file[0] or _wf_path[0]
+            path = wf_file[0]
             if not path or not os.path.exists(path):
                 print("Download the template (Step 5a) or upload a JSON file first"); return
             try:
