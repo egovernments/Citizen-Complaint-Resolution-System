@@ -56,7 +56,7 @@ export const CreateComplaint = ({ parentUrl }) => {
 
   const countryCode = mobileValidationConfig?.countryCode || window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.countryCode || DEFAULT_MOBILE_PREFIX;
   const mobilePattern = mobileValidationConfig?.pattern || window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberRegex || DEFAULT_MOBILE_PATTERN;
-  const mobileMaxLength = mobileValidationConfig?.maxLength || computeMobileLengths(mobilePattern).max || 15;
+  const mobileMaxLength = computeMobileLengths(mobilePattern).max || 15;
   const [showToast, setShowToast] = useState(null);
   const { t } = useTranslation();
 
