@@ -634,6 +634,107 @@
       when:
         - build_digit_ui | default(false)
 
+    # ---- Keycloak readiness BEFORE the dependent compose-up (converge-abort fix) ----
+    # The compose-up below waits on keycloak: service_healthy, but the keycloak DB
+    # secret is otherwise written to .env only AFTER it (the OpenBao block further
+    # down). So the first compose-up runs keycloak with the compose-default
+    # password, recreates keycloak/keycloak-postgres when .env later changes,
+    # keycloak races its DB / fails the healthcheck inside compose's dependency
+    # wait, and the whole play ABORTS — silently skipping every post-compose-up
+    # task (configurator build, overpass, etc.). Bring up OpenBao +
+    # keycloak-postgres, unseal, write the keycloak secrets to .env, and align the
+    # DB-user password HERE so the compose-up finds keycloak able to start healthy
+    # and the play runs to completion. All gated on enable_keycloak; idempotent.
+    - name: "Keycloak prep — bring up OpenBao + keycloak-postgres first"
+      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d openbao keycloak-postgres
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+      when: enable_keycloak | default(false)
+
+    - name: "Keycloak prep — wait for OpenBao to bind 18200"
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 18200
+        timeout: 120
+      when: enable_keycloak | default(false)
+
+    - name: "Keycloak prep — load OpenBao init state"
+      ansible.builtin.slurp:
+        src: "{{ digit_dir }}/.openbao/init.json"
+      register: kcprep_init
+      no_log: true
+      when: enable_keycloak | default(false)
+
+    - name: "Keycloak prep — parse OpenBao init state"
+      ansible.builtin.set_fact:
+        kcprep_unseal_key: "{{ (kcprep_init.content | b64decode | from_json).keys_base64[0] }}"
+        kcprep_root_token: "{{ (kcprep_init.content | b64decode | from_json).root_token }}"
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_init.content is defined
+
+    - name: "Keycloak prep — read OpenBao seal status"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/seal-status
+        status_code: [200]
+      register: kcprep_seal
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_root_token is defined
+
+    - name: "Keycloak prep — unseal OpenBao if sealed"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/unseal
+        method: POST
+        body_format: json
+        body:
+          key: "{{ kcprep_unseal_key }}"
+        status_code: [200]
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_seal.json.sealed | default(false)
+
+    - name: "Keycloak prep — read secrets from OpenBao"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        headers:
+          X-Vault-Token: "{{ kcprep_root_token }}"
+        status_code: [200]
+      register: kcprep_secrets
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_root_token is defined
+
+    - name: "Keycloak prep — write KEYCLOAK SECRETS into .env BEFORE compose-up"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        block: |
+          KC_ADMIN_PASSWORD={{ kcprep_secrets.json.data.data.keycloak_admin_password | default('') }}
+          KC_DB_PASSWORD={{ kcprep_secrets.json.data.data.keycloak_db_password | default('') }}
+          TOKEN_EXCHANGE_SYSTEM_PASSWORD={{ kcprep_secrets.json.data.data.token_exchange_system_password | default('eGov@123') }}
+        marker: "# {mark} KEYCLOAK SECRETS"
+        create: false
+        mode: '0600'
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_secrets.json is defined
+
+    - name: "Keycloak prep — align keycloak DB-user password to OpenBao value"
+      ansible.builtin.shell: >-
+        docker exec keycloak-postgres psql -U keycloak -d keycloak -c
+        "ALTER USER keycloak WITH PASSWORD '{{ kcprep_secrets.json.data.data.keycloak_db_password }}';"
+      no_log: true
+      changed_when: true
+      failed_when: false
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_secrets.json.data.data.keycloak_db_password | default('') | length > 0
+
     - name: Pull all images from VPC registry
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
       args:
