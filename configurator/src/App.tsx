@@ -6,6 +6,7 @@ import Phase1Page from './pages/Phase1Page';
 import Phase2Page from './pages/Phase2Page';
 import Phase3Page from './pages/Phase3Page';
 import Phase4Page from './pages/Phase4Page';
+import CommunicationsPage from './pages/CommunicationsPage';
 import CompletePage from './pages/CompletePage';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
 import { QueryClient } from '@tanstack/react-query';
@@ -337,7 +338,7 @@ function App() {
     setState(s => ({
       ...s,
       completedPhases: [...new Set([...s.completedPhases, phase])],
-      currentPhase: Math.min(phase + 1, 5),
+      currentPhase: Math.min(phase + 1, 6),
     }));
     trackEvent('phase_complete', { phase, tenant: state.tenant });
 
@@ -441,6 +442,7 @@ function App() {
             <Route path="phase/2" element={<Phase2Page />} />
             <Route path="phase/3" element={<Phase3Page />} />
             <Route path="phase/4" element={<Phase4Page />} />
+            <Route path="phase/5" element={<CommunicationsPage />} />
             <Route path="complete" element={<CompletePage />} />
           </Route>
 

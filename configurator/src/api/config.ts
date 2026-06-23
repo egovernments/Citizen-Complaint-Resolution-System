@@ -51,6 +51,12 @@ export const ENDPOINTS = {
   // Filestore
   FILESTORE_UPLOAD: '/filestore/v1/files',
   FILESTORE_URL: '/filestore/v1/files/url',
+
+  // Config service (notification channel toggles etc.). Create/update take a
+  // trailing /{schemaCode}; search does not.
+  CONFIG_CREATE: '/config-service/config/v1/_create',
+  CONFIG_UPDATE: '/config-service/config/v1/_update',
+  CONFIG_SEARCH: '/config-service/config/v1/_search',
 };
 
 // MDMS Schema codes
@@ -63,6 +69,11 @@ export const MDMS_SCHEMAS = {
   ROLES: 'ACCESSCONTROL-ROLES.roles',
   PGR_SERVICE_DEFS: 'RAINMAKER-PGR.ServiceDefs',
   TENANT: 'tenant.tenants',
+};
+
+// config-service schema codes (resolved/searched via CONFIG_* endpoints, not MDMS)
+export const CONFIG_SCHEMAS = {
+  NOTIFICATION_CHANNEL: 'NotificationChannel',
 };
 
 // OAuth credentials

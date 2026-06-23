@@ -1,12 +1,14 @@
 // DIGIT API - Main Export
 export { apiClient, ApiClientError, DigitApiClient } from './client';
-export { getApiBaseUrl, ENDPOINTS, MDMS_SCHEMAS, OAUTH_CONFIG, DEFAULT_PASSWORD } from './config';
+export { getApiBaseUrl, ENDPOINTS, MDMS_SCHEMAS, CONFIG_SCHEMAS, OAUTH_CONFIG, DEFAULT_PASSWORD } from './config';
 
 // Services
 export { mdmsService } from './services/mdms';
 export { boundaryService } from './services/boundary';
 export { hrmsService } from './services/hrms';
 export { localizationService } from './services/localization';
+export { configService } from './services/config';
+export type { NotificationChannelConfig } from './services/config';
 
 // Types
 export type {

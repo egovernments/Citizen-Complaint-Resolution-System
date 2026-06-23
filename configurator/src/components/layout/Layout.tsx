@@ -8,6 +8,7 @@ import {
   MapPin,
   FileSpreadsheet,
   Users,
+  MessageSquare,
   Check,
   Settings,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ const phases = [
   { id: 2, name: 'Boundary', fullName: 'Boundary Setup', icon: MapPin },
   { id: 3, name: 'Common', fullName: 'Common Masters', icon: FileSpreadsheet },
   { id: 4, name: 'Employee', fullName: 'Employee Onboarding', icon: Users },
+  { id: 5, name: 'Comms', fullName: 'Communications', icon: MessageSquare },
 ];
 
 export default function Layout() {

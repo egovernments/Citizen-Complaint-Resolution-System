@@ -366,7 +366,7 @@ export default function Phase4Page() {
 
   const handleContinue = () => {
     completePhase(4);
-    navigate('/complete');
+    navigate('/phase/5');
   };
 
   const handleDownloadTemplate = () => {
