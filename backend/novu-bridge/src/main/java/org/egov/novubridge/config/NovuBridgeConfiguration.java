@@ -7,7 +7,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.TimeZone;
+import java.util.stream.Collectors;
 
 @Component
 @Data
@@ -26,12 +30,32 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.kafka.dlq.topic:novu-bridge.dlq}")
     private String dlqTopic;
 
-    // Default channel for dispatch. SMS is the safer default — works
-    // with any Twilio SMS-capable sender out of the box. WhatsApp
-    // requires a pre-approved Twilio Programmable WhatsApp sender
-    // (sandbox or production). Override via NOVU_BRIDGE_CHANNEL env.
-    @Value("${novu.bridge.channel:SMS}")
+    // Global channel allow-list for dispatch, as a comma-separated value
+    // (e.g. "whatsapp" or "whatsapp,sms"). This is the deployment-wide guard:
+    // a tenant can only dispatch on a channel that is BOTH enabled in its
+    // NotificationChannel config AND present here. Lets ops keep a channel
+    // globally paused (e.g. SMS pending Twilio A2P) regardless of tenant
+    // toggles. Override via NOVU_BRIDGE_CHANNEL env.
+    @Value("${novu.bridge.channel:whatsapp}")
     private String channel;
+
+    /**
+     * The {@link #channel} CSV parsed into a normalised (lowercase, de-duped) allow-list.
+     * Channel codes are compared lowercase everywhere so they match the lowercase
+     * channel values used in ProviderDetail/TemplateBinding seed data and the
+     * lowercased NotificationChannel.code values.
+     */
+    public List<String> getAllowedChannels() {
+        if (channel == null) {
+            return Collections.emptyList();
+        }
+        return Arrays.stream(channel.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(s -> s.toLowerCase())
+                .distinct()
+                .collect(Collectors.toList());
+    }
 
     @Value("${novu.bridge.default.locale:en_IN}")
     private String defaultLocale;

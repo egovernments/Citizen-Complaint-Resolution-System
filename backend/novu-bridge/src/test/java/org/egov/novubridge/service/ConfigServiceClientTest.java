@@ -14,6 +14,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,6 +39,7 @@ public class ConfigServiceClientTest {
         config = new NovuBridgeConfiguration();
         config.setConfigHost("http://config-service");
         config.setConfigResolvePath("/config-service/config/v1/_resolve");
+        config.setConfigSearchPath("/config-service/config/v1/_search");
         client = new ConfigServiceClient(restTemplate, config);
     }
 
@@ -91,5 +93,33 @@ public class ConfigServiceClientTest {
         Map<String, Object> resolveRequest = (Map<String, Object>) sent.get("resolveRequest");
         Map<String, Object> criteria = (Map<String, Object>) resolveRequest.get("criteria");
         assertTrue("WHATSAPP".equals(criteria.get("code")));
+    }
+
+    @Test
+    void getEnabledChannels_returnsEnabledCodesLowercased() {
+        Map<String, Object> body = Map.of("configData", java.util.List.of(
+                Map.of("data", Map.of("code", "WHATSAPP", "enabled", true)),
+                Map.of("data", Map.of("code", "SMS", "enabled", false)),   // filtered out
+                Map.of("data", Map.of("code", "EMAIL", "enabled", true))));
+        stubResolve(new ResponseEntity<>(body, HttpStatus.OK));
+
+        java.util.List<String> channels = client.getEnabledChannels("pb.amritsar");
+
+        assertEquals(java.util.List.of("whatsapp", "email"), channels);
+    }
+
+    @Test
+    void getEnabledChannels_noRecords_returnsEmpty() {
+        stubResolve(new ResponseEntity<>(Map.of(), HttpStatus.OK));
+
+        assertTrue(client.getEnabledChannels("pb.amritsar").isEmpty());
+    }
+
+    @Test
+    void getEnabledChannels_lookupThrows_failsClosed() {
+        when(restTemplate.exchange(any(String.class), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
+                .thenThrow(new RuntimeException("config-service unreachable"));
+
+        assertTrue(client.getEnabledChannels("pb.amritsar").isEmpty());
     }
 }

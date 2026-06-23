@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -278,6 +279,56 @@ public class ConfigServiceClient {
             // Fail closed: config-service hiccups must never silently start sending on a channel.
             log.warn("Channel-enabled check failed for tenant={} channel={}; treating as DISABLED", tenantId, channel, e);
             return false;
+        }
+    }
+
+    /**
+     * Returns the lowercased channel codes the tenant has explicitly enabled (NotificationChannel
+     * records with enabled=true). Defaults to an empty list (nothing enabled) when no records exist
+     * or the lookup fails, so dispatch never fans out to a channel without an explicit opt-in.
+     */
+    public List<String> getEnabledChannels(String tenantId) {
+        Map<String, Object> searchCriteria = new HashMap<>();
+        searchCriteria.put("schemaCode", "NotificationChannel");
+        searchCriteria.put("tenantId", tenantId);
+        searchCriteria.put("criteria", Map.of("enabled", true));
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("RequestInfo", new HashMap<>());
+        payload.put("criteria", searchCriteria);
+
+        try {
+            String url = config.getConfigHost() + config.getConfigSearchPath();
+            log.info("Enabled-channels search: url={}, schemaCode=NotificationChannel, tenantId={}", url, tenantId);
+
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                log.warn("Enabled-channels search returned non-success for tenant={}; treating as none enabled", tenantId);
+                return Collections.emptyList();
+            }
+
+            List<Map<String, Object>> configDataList = (List<Map<String, Object>>) response.getBody().get("configData");
+            if (configDataList == null) {
+                return Collections.emptyList();
+            }
+
+            List<String> channels = new ArrayList<>();
+            for (Map<String, Object> configItem : configDataList) {
+                Map<String, Object> data = (Map<String, Object>) configItem.get("data");
+                if (data == null || !Boolean.TRUE.equals(data.get("enabled"))) {
+                    continue;
+                }
+                Object code = data.get("code");
+                if (code != null) {
+                    channels.add(String.valueOf(code).toLowerCase());
+                }
+            }
+            log.info("Enabled-channels result: tenantId={}, channels={}", tenantId, channels);
+            return channels;
+        } catch (Exception e) {
+            // Fail closed: never fan out to channels we could not confirm are enabled.
+            log.warn("Enabled-channels search failed for tenant={}; treating as none enabled", tenantId, e);
+            return Collections.emptyList();
         }
     }
 }
