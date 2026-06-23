@@ -721,10 +721,10 @@ export default function Phase1Page() {
               {BRANDING_FIELDS.some(({ key }) => brandingData[key]) ? (
                 <div className="space-y-2">
                   {BRANDING_FIELDS.map(({ key, label }) => brandingData[key] && (
-                    <div key={key} className="flex items-center gap-2 text-sm">
-                      <Image className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-muted-foreground">{label}:</span>
-                      <span className="font-medium truncate">{brandingData[key]}</span>
+                    <div key={key} className="flex items-start gap-2 text-sm min-w-0">
+                      <Image className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                      <span className="text-muted-foreground flex-shrink-0">{label}:</span>
+                      <span className="font-medium break-all min-w-0">{brandingData[key]}</span>
                     </div>
                   ))}
                 </div>
@@ -807,7 +807,7 @@ export default function Phase1Page() {
               const uploaded = brandingData[key];
               const rowError = brandingErrors[key];
               return (
-                <div key={key} className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 border border-border rounded bg-card">
+                <div key={key} className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 border border-border rounded bg-card min-w-0">
                   <div className="w-12 h-12 sm:w-16 sm:h-16 bg-muted rounded flex items-center justify-center flex-shrink-0">
                     {uploaded ? (
                       <Check className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
@@ -818,8 +818,8 @@ export default function Phase1Page() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground text-sm sm:text-base">{label}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-                    <p className="text-xs sm:text-sm text-muted-foreground mt-1 truncate">
-                      {uploaded ? <>Uploaded ✓ <span className="font-mono text-[11px]">(filestore id: {uploaded})</span></> : 'Not uploaded'}
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-1 min-w-0">
+                      {uploaded ? <>Uploaded ✓ <span className="font-mono text-[11px] break-all">(filestore id: {uploaded})</span></> : 'Not uploaded'}
                     </p>
                     {rowError && (
                       <p className="text-xs text-destructive mt-1 flex items-start gap-1">
