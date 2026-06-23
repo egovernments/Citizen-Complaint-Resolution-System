@@ -55,6 +55,21 @@ public class DispatchPipelineService {
         log.info("Derived context: eventId={}, audience={}, recipientMobile={}, recipientUserId={}, locale={}",
                 event.getEventId(), context.getAudience(), context.getRecipientMobile(),
                 context.getRecipientUserId(), context.getLocale());
+
+        // Tenant-level channel gate (default OFF). A channel is dispatched only when the tenant
+        // has an enabled NotificationChannel config; otherwise skip cleanly before any further work.
+        if (!configServiceClient.isChannelEnabled(event.getTenantId(), context.getChannel())) {
+            persist(event, context, null, "SKIPPED", "NB_CHANNEL_DISABLED",
+                    context.getChannel() + " channel disabled for tenant " + event.getTenantId(), null, 1);
+            return DispatchResult.builder()
+                    .valid(true)
+                    .preferenceAllowed(false)
+                    .derivedContext(context)
+                    .novuTriggered(false)
+                    .diagnostics(Collections.singletonList("Channel disabled for tenant"))
+                    .build();
+        }
+
         String recipientUuid = userServiceClient.resolveUserUuid(
                 event.getTenantId(), context.getAudience(), context.getRecipientUserId(), context.getRecipientMobile());
         if (!StringUtils.hasText(recipientUuid)) {
