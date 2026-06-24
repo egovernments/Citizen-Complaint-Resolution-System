@@ -11,6 +11,10 @@
 > fallback** — every tenant must be migrated before backend cutover, or it has a hard
 > outage. Rollback is via MDMS snapshot, not by deleting a record.
 >
+> **▶ Running the migration?** Use the proven step-by-step in
+> **[operator-runbook.md](./operator-runbook.md)** (one-command path + every gotcha hit in practice).
+> This document is the design/reference rationale.
+>
 > See also: [feature overview](../complaint-hierarchy-feature.md) ·
 > [design](../design/complaint-hierarchy-design.md) ·
 > [two‑master rework plan](../design/complaint-hierarchy-2master-rework-plan.md) ·
