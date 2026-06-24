@@ -1,3 +1,5 @@
+import { formatDimensionLabel } from "./kpiQueries";
+
 function formatWowPct(wowPct) {
   if (!Number.isFinite(wowPct)) return "new spike";
   const rounded = Math.round(wowPct);
@@ -46,6 +48,27 @@ export function buildMapHoverTooltipHtml(ward = {}, { geoLevel = "Locality" } = 
         ${slaPill("dashboard-map-hover-dot--breaching", breaching, "breaching")}
         ${slaPill("dashboard-map-hover-dot--breached", breached, "breached")}
       </div>
+    </div>
+  `;
+}
+
+/** Hover card for an individual complaint pin. */
+export function buildComplaintPinTooltipHtml(pin = {}) {
+  const title = pin.serviceCode || "Complaint";
+  const status = pin.status || "—";
+  const ward = pin.wardCode ? formatDimensionLabel(pin.wardCode) : null;
+
+  return `
+    <div class="dashboard-map-hover-card dashboard-map-hover-card--pin">
+      <div class="dashboard-map-hover-title">${escapeHtml(title)}</div>
+      ${metricRow("Status", status)}
+      ${ward ? metricRow("Ward", ward) : ""}
+      ${pin.serviceRequestId ? metricRow("ID", pin.serviceRequestId) : ""}
+      ${
+        pin.approximate
+          ? '<div class="dashboard-map-hover-note">Approximate location (ward centroid)</div>'
+          : ""
+      }
     </div>
   `;
 }

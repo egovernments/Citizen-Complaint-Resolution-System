@@ -615,6 +615,20 @@ export const BATCH_QUERIES = {
     measures: [{ name: "total", agg: "count" }],
     limit: 600,
   },
+  cl_map_complaint_pins: {
+    grain: "facts",
+    filters: { is_open: true },
+    dimensions: [
+      "service_request_id",
+      "latitude",
+      "longitude",
+      "ward_code",
+      "service_code",
+      "application_status",
+    ],
+    measures: [{ name: "total", agg: "count" }],
+    limit: 2000,
+  },
   cl_chart_status_week: {
     grain: "facts",
     window: { name: "last_28d", timeRole: "filed_at" },
@@ -1574,6 +1588,53 @@ function priorPeriodCreatedAtFilter(bounds) {
   return { gte: bounds.fromMs - duration, lt: bounds.fromMs };
 }
 
+/** Complaints filed in the 7 days immediately before the rolling last-7d window. */
+function priorRolling7dCreatedAtFilter() {
+  const now = Date.now();
+  return { gte: now - 14 * MS_PER_DAY, lt: now - 7 * MS_PER_DAY };
+}
+
+function applyMapWowQueries(queries, dashboardFilters, apiFilters, dateRangeBounds) {
+  const currentKey = "cl_map_ward_wow_current";
+  const priorKey = "cl_map_ward_wow_prior";
+  const baseCurrent = BATCH_QUERIES[currentKey];
+  const basePrior = BATCH_QUERIES[priorKey];
+  if (!baseCurrent || !basePrior) return;
+
+  const { __dateRange, ...dimensionFilters } = apiFilters || {};
+
+  if (dashboardFilters?.dateRangeActive && dateRangeBounds) {
+    queries[currentKey] = applySelectedDateRangeToQuery(
+      { ...baseCurrent },
+      dashboardFilters,
+      apiFilters
+    );
+    const priorFilters = { ...(basePrior.filters || {}) };
+    delete priorFilters.created_at;
+    queries[priorKey] = {
+      ...basePrior,
+      filters: mergeQueryFilters(priorFilters, {
+        ...dimensionFilters,
+        created_at: priorPeriodCreatedAtFilter(dateRangeBounds),
+      }),
+    };
+    delete queries[priorKey].window;
+    return;
+  }
+
+  queries[currentKey] = applyDashboardFiltersToQuery({ ...baseCurrent }, dimensionFilters);
+  const priorFilters = { ...(basePrior.filters || {}) };
+  delete priorFilters.created_at;
+  queries[priorKey] = {
+    ...basePrior,
+    filters: mergeQueryFilters(priorFilters, {
+      ...dimensionFilters,
+      created_at: priorRolling7dCreatedAtFilter(),
+    }),
+  };
+  delete queries[priorKey].window;
+}
+
 function applySelectedDateRangeToQuery(query, dashboardFilters, apiFilters) {
   const bounds = selectedDateRangeBounds(dashboardFilters, apiFilters);
   if (!bounds) return query;
@@ -1912,7 +1973,7 @@ export function buildBatchQueries(dashboardFilters) {
   if (!apiFilters.__dateRange) {
     const priorWeekFilter = { created_at: priorWeekCreatedAtFilter() };
     const priorWeekResolvedFilter = { resolved_at: priorWeekCreatedAtFilter() };
-    for (const key of ["cl_reg_prior_week", "cl_open_prior_week", "rs_breach_prior_week", "cl_map_ward_wow_prior"]) {
+    for (const key of ["cl_reg_prior_week", "cl_open_prior_week", "rs_breach_prior_week"]) {
       if (queries[key]) {
         queries[key] = {
           ...queries[key],
@@ -1956,6 +2017,7 @@ export function buildBatchQueries(dashboardFilters) {
   }
 
   applyTodayKpiQueries(queries, apiFilters);
+  applyMapWowQueries(queries, dashboardFilters, apiFilters, dateRangeBounds);
 
   return queries;
 }
@@ -2604,11 +2666,7 @@ export function buildKpiCardData(
 
   if (!isSparkline && !isDeltaTile) return base;
 
-  const deltaClass = resolveKpiDeltaClass(
-    deltaExtras.delta,
-    metric.id,
-    value
-  );
+  const deltaClass = resolveKpiDeltaClass(metric.id, deltaExtras.delta, value);
 
   if (!isSparkline) {
     return {
@@ -2908,6 +2966,33 @@ export function parseGeographyMapLayers(
   return { wow_change, sla_breach, wardDetails };
 }
 
+/** Open complaints for the map — one row per service_request_id. */
+export function parseComplaintMapPins(result) {
+  if (!result?.rows?.length) return [];
+
+  return result.rows
+    .map((row, index) => {
+      const lat = Number(row.latitude);
+      const lng = Number(row.longitude);
+      const serviceCode = String(row.service_code ?? "").trim();
+      const wardCode = String(row.ward_code ?? "").trim();
+      const serviceRequestId = String(row.service_request_id ?? "").trim();
+      const count = Number(row.total) || 1;
+
+      return {
+        id: serviceRequestId || `pin-${index}`,
+        serviceRequestId,
+        wardCode,
+        lat: Number.isFinite(lat) ? lat : null,
+        lng: Number.isFinite(lng) ? lng : null,
+        count,
+        serviceCode: serviceCode ? formatDimensionLabel(serviceCode) : "Complaint",
+        status: formatWorkflowStatusLabel(row.application_status),
+      };
+    })
+    .filter((pin) => pin.wardCode || (pin.lat != null && pin.lng != null));
+}
+
 export function parseDepartmentFlowRatioBarChart(result, { maxDepartments = 12 } = {}) {
   if (!result?.rows?.length) return [];
 
@@ -2938,7 +3023,7 @@ export function parseDepartmentFlowRatioBarChart(result, { maxDepartments = 12 }
     }))
     .filter((row) => row.created > 0)
     .sort((a, b) => {
-      const ratioDiff = b.value - a.value;
+      const ratioDiff = a.value - b.value;
       if (Math.abs(ratioDiff) > 0.0001) return ratioDiff;
       return a.label.localeCompare(b.label);
     })
@@ -3681,11 +3766,6 @@ export function parseComplaintTypeDetailsTable(result, limit = 30) {
     const typeKey = String(row.service_group ?? "").trim();
     const avgResolutionMs = Number(row.avg_resolution_ms);
     const idealSlaMs = Number(row.ideal_sla_ms);
-    const overSla =
-      Number.isFinite(avgResolutionMs) &&
-      Number.isFinite(idealSlaMs) &&
-      idealSlaMs > 0 &&
-      avgResolutionMs > idealSlaMs;
 
     return {
       id: `type-details-${index}-${subtypeKey}`,
@@ -3699,9 +3779,6 @@ export function parseComplaintTypeDetailsTable(result, limit = 30) {
         : null,
       ontimeRate: Number(row.ontime_rate),
       avgCsat: Number.isFinite(Number(row.avg_csat)) ? Number(row.avg_csat) : null,
-      highlight: overSla,
-      badge: overSla ? "OVER SLA" : null,
-      cellHighlights: overSla ? { avgResolutionMs: true, idealSlaMs: true } : undefined,
     };
   });
 }

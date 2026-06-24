@@ -8,7 +8,17 @@ export const GRID_MARGIN_Y = 16;
 
 export const RANKED_LIST_WIDGET_ID = "cl-table-complaint-type-details";
 
-/** Default grid size for data-table cards (header + rows + updated stamp). */
+/** Default grid size for full-width data tables (header + rows + updated stamp). */
+export const FULL_WIDTH_TABLE_GRID = {
+  w: 12,
+  h: 6,
+  minW: 6,
+  minH: 4,
+  maxW: 12,
+  maxH: 14,
+};
+
+/** Default grid size for compact ranked-list table cards. */
 export const TABLE_CARD_GRID = {
   h: 3,
   minH: 3,
@@ -145,10 +155,10 @@ export const MAP_SIZE_CONSTRAINTS = {
 
 export const CHART_TYPE_SIZE_CONSTRAINTS = {
   "data-table": {
-    minW: TABLE_CARD_GRID.minW,
-    minH: TABLE_CARD_GRID.minH,
-    maxW: TABLE_CARD_GRID.maxW,
-    maxH: TABLE_CARD_GRID.maxH,
+    minW: FULL_WIDTH_TABLE_GRID.minW,
+    minH: FULL_WIDTH_TABLE_GRID.minH,
+    maxW: FULL_WIDTH_TABLE_GRID.maxW,
+    maxH: FULL_WIDTH_TABLE_GRID.maxH,
   },
   "bar-chart": UNIFORM_CHART_SIZE_CONSTRAINTS,
   "histogram": UNIFORM_CHART_SIZE_CONSTRAINTS,
@@ -159,10 +169,10 @@ export const CHART_TYPE_SIZE_CONSTRAINTS = {
   "sla-toggle": UNIFORM_CHART_SIZE_CONSTRAINTS,
   "map": MAP_SIZE_CONSTRAINTS,
   "sla-risk-table": {
-    minW: 6,
-    minH: 4,
-    maxW: 12,
-    maxH: 14,
+    minW: FULL_WIDTH_TABLE_GRID.minW,
+    minH: FULL_WIDTH_TABLE_GRID.minH,
+    maxW: FULL_WIDTH_TABLE_GRID.maxW,
+    maxH: FULL_WIDTH_TABLE_GRID.maxH,
   },
   "gauge": GAUGE_SIZE_CONSTRAINTS,
 };
@@ -172,9 +182,9 @@ export function getChartTypeSizeConstraints(type) {
 }
 
 const RAW_DEFAULT_CHART_LAYOUT = {
-  "cl-table-complaint-type-details": { x: 0, w: 12, ...TABLE_CARD_GRID },
-  "cl-table-complaints-at-risk": { x: 0, w: 12, h: 5, minW: 6, minH: 4, maxW: 12, maxH: 14 },
-  "ep-table-employee-performance": { x: 0, w: 12, h: 6, minW: 6, minH: 4, maxW: 12, maxH: 12 },
+  "cl-table-complaint-type-details": { x: 0, ...FULL_WIDTH_TABLE_GRID },
+  "cl-table-complaints-at-risk": { x: 0, ...FULL_WIDTH_TABLE_GRID },
+  "ep-table-employee-performance": { x: 0, ...FULL_WIDTH_TABLE_GRID },
   "cl-chart-complaints-by-type": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
   "cl-chart-departments": { x: 6, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
   "cl-chart-department-resolution-rate": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
@@ -192,7 +202,17 @@ export const DEFAULT_CHART_LAYOUT = Object.fromEntries(
   Object.entries(RAW_DEFAULT_CHART_LAYOUT).map(([widgetId, layout]) => {
     const type = WIDGETS[widgetId]?.type;
     if (!type) return [widgetId, layout];
-    return [widgetId, { ...layout, ...getChartTypeSizeConstraints(type) }];
+    const typeConstraints = getChartTypeSizeConstraints(type);
+    return [
+      widgetId,
+      {
+        ...layout,
+        minW: layout.minW ?? typeConstraints.minW,
+        minH: layout.minH ?? typeConstraints.minH,
+        maxW: layout.maxW ?? typeConstraints.maxW,
+        maxH: layout.maxH ?? typeConstraints.maxH,
+      },
+    ];
   })
 );
 
@@ -203,13 +223,13 @@ export const DEFAULT_LAYOUT = [
   { i: "rs-metric-breach-count", x: 2, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-metric-total-resolved", x: 4, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-metric-reopen-rate", x: 6, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "ce-metric-csat", x: 8, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: true, static: false, resizeHandles: ["se"] },
+  { i: "cl-metric-csat", x: 8, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: true, static: false, resizeHandles: ["se"] },
   { i: "cl-chart-officer-sla", x: 0, y: 2, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-chart-resolution-subtype", x: 8, y: 2, w: 4, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-map-geography-choropleth", x: 0, y: 8, w: 8, h: 6, minW: 4, minH: 5, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-chart-department-flow-ratio", x: 8, y: 8, w: 4, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-chart-over-time", x: 0, y: 14, w: 12, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-table-complaints-at-risk", x: 0, y: 20, w: 12, h: 5, minW: 6, minH: 4, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-table-complaints-at-risk", x: 0, y: 20, w: 12, h: 6, minW: 6, minH: 4, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
 ].map((item) => {
   const type = WIDGETS[item.i]?.type;
   if (!type || type === "kpi") return item;
@@ -236,6 +256,128 @@ export function getDefaultChartItem(widgetId) {
   const defaults = DEFAULT_CHART_LAYOUT[widgetId];
   if (!defaults) return null;
   return { i: widgetId, ...defaults };
+}
+
+/** Full default grid item (KPI or chart/table) from catalog config. */
+export function getDefaultLayoutItem(widgetId) {
+  if (isKpiWidget(widgetId)) {
+    return { i: widgetId, ...getDefaultKpiLayoutItem(widgetId) };
+  }
+  return getDefaultChartItem(widgetId);
+}
+
+/** Default w/h for external drag preview and drop placeholder sizing. */
+export function getDropPreviewSize(widgetId) {
+  const defaults = getDefaultLayoutItem(widgetId);
+  if (!defaults?.w || !defaults?.h) {
+    return { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
+  }
+  return { w: defaults.w, h: defaults.h };
+}
+
+/** react-grid-layout dropping placeholder — sized per dragged widget. */
+export function getDroppingItem(widgetId) {
+  const { w, h } = getDropPreviewSize(widgetId);
+  return {
+    i: DROPPING_ITEM_ID,
+    w,
+    h,
+    ...getSizeConstraints(widgetId),
+  };
+}
+
+/** Next open slot on the bottom row when adding without an explicit drop position. */
+export function computeNextOpenPosition(layout) {
+  if (!layout.length) return { x: 0, y: 0 };
+  const maxY = Math.max(...layout.map((item) => item.y + item.h));
+  return { x: 0, y: maxY };
+}
+
+/** Next KPI tile position when adding via inventory click (not drag-drop). */
+export function computeNextKpiPosition(layout) {
+  const kpiItems = layout.filter((item) => isKpiWidget(item.i));
+  if (kpiItems.length === 0) return { x: 0, y: 0 };
+
+  const maxY = Math.max(...kpiItems.map((item) => item.y + item.h));
+  const bottomRow = kpiItems.filter((item) => item.y + item.h === maxY);
+  const usedWidth = bottomRow.reduce((sum, item) => sum + item.w, 0);
+
+  if (usedWidth + DEFAULT_KPI_LAYOUT_ITEM.w <= GRID_COLS) {
+    return { x: usedWidth, y: bottomRow[0].y };
+  }
+  return { x: 0, y: maxY };
+}
+
+/**
+ * Pin catalog w/h and size constraints onto a layout item.
+ * Position (x/y) is preserved; dimensions always come from config.
+ */
+export function applyCatalogDimensions(item) {
+  const defaults = getDefaultLayoutItem(item.i);
+  if (!defaults) return item;
+
+  const heightLocked = isHeightLockedChart(item.i);
+  return {
+    ...item,
+    w: defaults.w,
+    h: defaults.h,
+    minW: defaults.minW,
+    minH: defaults.minH,
+    maxW: defaults.maxW,
+    maxH: defaults.maxH,
+    ...(heightLocked ? { h: defaults.h } : {}),
+  };
+}
+
+/** Repair widgets saved with the 2×2 KPI drop placeholder or legacy table heights. */
+export function reconcileInventoryWidgetDimensions(item) {
+  if (isKpiWidget(item.i)) return item;
+
+  const defaults = getDefaultLayoutItem(item.i);
+  if (!defaults?.w || !defaults?.h) return item;
+
+  const widgetType = WIDGETS[item.i]?.type;
+  const isTableWidget =
+    widgetType === "data-table" || widgetType === "sla-risk-table";
+
+  const savedWithKpiPlaceholder =
+    item.w === DEFAULT_KPI_LAYOUT_ITEM.w &&
+    item.h === DEFAULT_KPI_LAYOUT_ITEM.h &&
+    (defaults.w !== item.w || defaults.h !== item.h);
+
+  const savedWithLegacyTableHeight =
+    isTableWidget &&
+    item.w === defaults.w &&
+    (item.h === 3 || item.h === 5) &&
+    defaults.h === FULL_WIDTH_TABLE_GRID.h;
+
+  if (!savedWithKpiPlaceholder && !savedWithLegacyTableHeight) return item;
+  return applyCatalogDimensions(item);
+}
+
+/**
+ * Build a layout item for a widget newly added from inventory (drop or click).
+ * Always uses catalog default w/h; only x/y come from the drop position or fallback.
+ */
+export function buildNewLayoutItem(widgetId, position, existingLayout = []) {
+  const defaults = getDefaultLayoutItem(widgetId);
+  if (!defaults) return null;
+
+  const fallback = isKpiWidget(widgetId)
+    ? computeNextKpiPosition(existingLayout)
+    : computeNextOpenPosition(existingLayout);
+
+  const x = position?.x ?? fallback.x;
+  const y = position?.y ?? fallback.y;
+
+  return applyCatalogDimensions({
+    i: widgetId,
+    x,
+    y,
+    static: false,
+    moved: false,
+    resizeHandles: getResizeHandles(widgetId),
+  });
 }
 
 /** Charts with a fixed grid height (width still resizes). */

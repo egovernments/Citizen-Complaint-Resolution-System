@@ -7,7 +7,7 @@ import {
   getGeographyMapLegendFooter,
   getGeographyMapLegendTitle,
 } from "../config/geographyMapPresentation";
-import { buildMapHoverTooltipHtml } from "../config/mapHoverPresentation";
+import { buildMapHoverTooltipHtml, buildComplaintPinTooltipHtml } from "../config/mapHoverPresentation";
 import { fetchBoundariesByCodes } from "../services/boundaryService";
 import { useMapResize } from "../hooks/useMapResize";
 import {
@@ -18,6 +18,9 @@ import {
   getMapCityLabel,
   getMapZoomTier,
   joinWardMapData,
+  MAP_COMPLAINT_PIN_MIN_ZOOM,
+  MAP_COMPLAINT_PIN_MAX_ZOOM,
+  MAP_WARD_UNCLUSTER_ZOOM,
   markerRadiusForZoom,
   wowPctToFillStyle,
 } from "../utils/mapGeoUtils";
@@ -42,6 +45,7 @@ function bindFeatureInteractions({
   map,
   resetView,
   setFocusedCode,
+  zoomLevel,
 }) {
   const code = feature?.properties?.code;
   const props = feature?.properties ?? {};
@@ -49,7 +53,7 @@ function bindFeatureInteractions({
   layer.bindTooltip(buildMapHoverTooltipHtml(props, { geoLevel }), HOVER_TOOLTIP_OPTIONS);
 
   layer.on("mouseover", () => {
-    const style = resolveFeatureStyle(feature, layerMode, focusedCode);
+    const style = resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel);
     layer.setStyle({
       ...style,
       weight: 2,
@@ -59,13 +63,13 @@ function bindFeatureInteractions({
   });
 
   layer.on("mouseout", () => {
-    layer.setStyle(resolveFeatureStyle(feature, layerMode, focusedCode));
+    layer.setStyle(resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel));
   });
 
   layer.on("click", () => {
-    const props = feature?.properties ?? {};
+    const clickProps = feature?.properties ?? {};
 
-    if (props.isCluster && feature.memberFeatures?.length > 1) {
+    if (clickProps.isCluster && feature.memberFeatures?.length > 1) {
       const group = L.featureGroup();
       L.geoJSON(
         { type: "FeatureCollection", features: feature.memberFeatures },
@@ -79,7 +83,7 @@ function bindFeatureInteractions({
       if (bounds?.isValid()) {
         map.fitBounds(bounds.pad(0.18), {
           animate: true,
-          maxZoom: Math.min(map.getZoom() + 2, 15),
+          maxZoom: Math.min(map.getZoom() + 2, MAP_COMPLAINT_PIN_MAX_ZOOM),
         });
       }
       return;
@@ -91,14 +95,17 @@ function bindFeatureInteractions({
         return null;
       }
       if (layer.getBounds?.().isValid()) {
-        map.fitBounds(layer.getBounds().pad(0.2), { animate: true, maxZoom: 14 });
+        map.fitBounds(layer.getBounds().pad(0.2), {
+          animate: true,
+          maxZoom: MAP_COMPLAINT_PIN_MAX_ZOOM,
+        });
       }
       return code;
     });
   });
 }
 
-function resolveFeatureStyle(feature, layerMode, focusedCode) {
+function resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel = 0) {
   const props = feature?.properties ?? {};
   const isFocused = focusedCode && props.code === focusedCode;
   const base =
@@ -106,13 +113,26 @@ function resolveFeatureStyle(feature, layerMode, focusedCode) {
       ? breachShareToFillStyle(props.breachSharePct)
       : wowPctToFillStyle(props.wowPct);
 
+  const dimChoropleth = zoomLevel >= MAP_COMPLAINT_PIN_MIN_ZOOM;
+
   return {
     fillColor: base.fillColor,
     color: isFocused ? "#111827" : base.strokeColor,
     weight: isFocused ? 2.5 : 1.5,
     opacity: 1,
-    fillOpacity: isFocused ? Math.min(base.fillOpacity + 0.08, 0.88) : base.fillOpacity,
+    fillOpacity: dimChoropleth
+      ? Math.min(base.fillOpacity, 0.28)
+      : isFocused
+        ? Math.min(base.fillOpacity + 0.08, 0.88)
+        : base.fillOpacity,
   };
+}
+
+function buildComplaintPinPopup(pin) {
+  const root = document.createElement("div");
+  root.className = "dashboard-map-pin-popup";
+  root.innerHTML = buildComplaintPinTooltipHtml(pin);
+  return root;
 }
 
 const HomeIcon = () => (
@@ -148,6 +168,7 @@ const FullscreenIcon = ({ active }) => (
 
 const GeographyChoroplethMap = ({
   wardCounts = [],
+  complaintPins = [],
   layerMode = "wow_change",
   onLayerModeChange,
   layerOptions = [],
@@ -159,6 +180,7 @@ const GeographyChoroplethMap = ({
   const mapRef = useRef(null);
   const choroplethRef = useRef(null);
   const markersRef = useRef(null);
+  const complaintPinsRef = useRef(null);
   const layerByCodeRef = useRef({});
   const defaultViewRef = useRef({ center: getMapCenter(), zoom: DEFAULT_ZOOM });
 
@@ -174,11 +196,13 @@ const GeographyChoroplethMap = ({
   const zoomTier = getMapZoomTier(zoomLevel);
   const geoLevel = focusedCode
     ? "Ward"
-    : zoomTier === "city"
-      ? "City"
-      : zoomTier === "locality"
-        ? "Locality"
-        : layerMeta?.zoomLevelLabel ?? "Ward";
+    : zoomTier === "complaint"
+      ? "Complaint"
+      : zoomTier === "city"
+        ? "City"
+        : zoomTier === "locality"
+          ? "Locality"
+          : layerMeta?.zoomLevelLabel ?? "Ward";
   const zoomLevelLabel = geoLevel;
 
   const { resizeToken } = useMapResize(mapRef, frameRef);
@@ -231,8 +255,8 @@ const GeographyChoroplethMap = ({
   );
 
   const displayLayers = useMemo(
-    () => buildMapDisplayLayers(joined, zoomLevel),
-    [joined, zoomLevel]
+    () => buildMapDisplayLayers(joined, zoomLevel, complaintPins),
+    [joined, zoomLevel, complaintPins]
   );
 
   useEffect(() => {
@@ -295,7 +319,7 @@ const GeographyChoroplethMap = ({
   useEffect(() => {
     if (!elRef.current || mapRef.current) return;
     const map = L.map(elRef.current, {
-      scrollWheelZoom: false,
+      scrollWheelZoom: true,
       zoomControl: false,
     }).setView(getMapCenter(), DEFAULT_ZOOM);
 
@@ -305,22 +329,35 @@ const GeographyChoroplethMap = ({
       maxZoom: 19,
     }).addTo(map);
 
+    if (!map.getPane("complaintPins")) {
+      map.createPane("complaintPins");
+      map.getPane("complaintPins").style.zIndex = 650;
+    }
+
     choroplethRef.current = L.layerGroup().addTo(map);
     markersRef.current = L.layerGroup().addTo(map);
+    complaintPinsRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     defaultViewRef.current = { center: getMapCenter(), zoom: DEFAULT_ZOOM };
 
-    const syncZoom = () => setZoomLevel(map.getZoom());
-    map.on("zoomend", syncZoom);
-    syncZoom();
+    const syncMapView = () => {
+      setZoomLevel(map.getZoom());
+    };
+    map.on("zoom", syncMapView);
+    map.on("zoomend", syncMapView);
+    map.on("moveend", syncMapView);
+    syncMapView();
 
     setTimeout(() => map.invalidateSize(), 150);
     return () => {
-      map.off("zoomend", syncZoom);
+      map.off("zoom", syncMapView);
+      map.off("zoomend", syncMapView);
+      map.off("moveend", syncMapView);
       map.remove();
       mapRef.current = null;
       choroplethRef.current = null;
       markersRef.current = null;
+      complaintPinsRef.current = null;
       layerByCodeRef.current = {};
     };
   }, []);
@@ -329,17 +366,21 @@ const GeographyChoroplethMap = ({
     const map = mapRef.current;
     const choroplethLayer = choroplethRef.current;
     const markerLayer = markersRef.current;
-    if (!map || !choroplethLayer || !markerLayer) return;
+    const complaintPinLayer = complaintPinsRef.current;
+    if (!map || !choroplethLayer || !markerLayer || !complaintPinLayer) return;
 
     choroplethLayer.clearLayers();
     markerLayer.clearLayers();
+    complaintPinLayer.clearLayers();
     layerByCodeRef.current = {};
 
-    const { geoFeatures, pointMarkers } = displayLayers;
+    const { geoFeatures, pointMarkers, complaintPins: visiblePins } = displayLayers;
+
+    const showComplaintPins = zoomLevel >= MAP_COMPLAINT_PIN_MIN_ZOOM;
 
     if (geoFeatures?.features?.length) {
       L.geoJSON(geoFeatures, {
-        style: (feature) => resolveFeatureStyle(feature, layerMode, focusedCode),
+        style: (feature) => resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel),
         onEachFeature: (feature, layer) => {
           layer.feature = feature;
           const code = feature?.properties?.code;
@@ -353,48 +394,77 @@ const GeographyChoroplethMap = ({
             map,
             resetView,
             setFocusedCode,
+            zoomLevel,
           });
         },
       }).addTo(choroplethLayer);
     }
 
-    pointMarkers.forEach((marker) => {
-      const style =
-        layerMode === "sla_breach"
-          ? breachShareToFillStyle(marker.breachSharePct)
-          : wowPctToFillStyle(marker.wowPct);
-      const isFocused = focusedCode && marker.code === focusedCode;
-      const markerFeature = { properties: { ...marker, code: marker.code } };
-      const circle = L.circleMarker([marker.lat, marker.lng], {
-        radius: markerRadiusForZoom(zoomLevel, isFocused),
-        color: isFocused ? "#111827" : style.strokeColor,
-        weight: isFocused ? 2 : 1,
-        fillColor: style.fillColor,
-        fillOpacity: style.fillOpacity,
+    if (!showComplaintPins) {
+      pointMarkers.forEach((marker) => {
+        const style =
+          layerMode === "sla_breach"
+            ? breachShareToFillStyle(marker.breachSharePct)
+            : wowPctToFillStyle(marker.wowPct);
+        const isFocused = focusedCode && marker.code === focusedCode;
+        const markerFeature = { properties: { ...marker, code: marker.code } };
+        const circle = L.circleMarker([marker.lat, marker.lng], {
+          radius: markerRadiusForZoom(zoomLevel, isFocused),
+          color: isFocused ? "#111827" : style.strokeColor,
+          weight: isFocused ? 2 : 1,
+          fillColor: style.fillColor,
+          fillOpacity: style.fillOpacity,
+        });
+        circle.feature = markerFeature;
+        bindFeatureInteractions({
+          layer: circle,
+          feature: markerFeature,
+          layerMode,
+          focusedCode,
+          geoLevel,
+          map,
+          resetView,
+          setFocusedCode: (updater) => {
+            setFocusedCode((prev) => {
+              const next = typeof updater === "function" ? updater(prev) : updater;
+              if (next === marker.code && prev !== marker.code) {
+                map.flyTo([marker.lat, marker.lng], Math.max(map.getZoom(), MAP_WARD_UNCLUSTER_ZOOM));
+              } else if (next === null && prev === marker.code) {
+                resetView();
+              }
+              return next;
+            });
+          },
+          zoomLevel,
+        });
+        circle.addTo(markerLayer);
       });
-      circle.feature = markerFeature;
-      bindFeatureInteractions({
-        layer: circle,
-        feature: markerFeature,
-        layerMode,
-        focusedCode,
-        geoLevel,
-        map,
-        resetView,
-        setFocusedCode: (updater) => {
-          setFocusedCode((prev) => {
-            const next = typeof updater === "function" ? updater(prev) : updater;
-            if (next === marker.code && prev !== marker.code) {
-              map.flyTo([marker.lat, marker.lng], Math.max(map.getZoom(), 13));
-            } else if (next === null && prev === marker.code) {
-              resetView();
-            }
-            return next;
-          });
-        },
+    }
+
+    visiblePins.forEach((pin) => {
+      const circle = L.circleMarker([pin.lat, pin.lng], {
+        pane: "complaintPins",
+        radius: markerRadiusForZoom(zoomLevel, false, { complaint: true }),
+        color: "#0f766e",
+        weight: 2,
+        fillColor: "#14b8a6",
+        fillOpacity: 0.95,
       });
-      circle.addTo(markerLayer);
+      circle.bindTooltip(buildComplaintPinTooltipHtml(pin), HOVER_TOOLTIP_OPTIONS);
+      circle.on("mouseover", () => {
+        circle.setStyle({ weight: 3, fillOpacity: 1 });
+        circle.bringToFront?.();
+      });
+      circle.on("mouseout", () => {
+        circle.setStyle({ weight: 2, fillOpacity: 0.95 });
+      });
+      circle.bindPopup(buildComplaintPinPopup(pin));
+      circle.addTo(complaintPinLayer);
     });
+
+    if (visiblePins.length) {
+      complaintPinLayer.bringToFront?.();
+    }
   }, [displayLayers, focusedCode, geoLevel, layerMode, resetView, zoomLevel]);
 
   useEffect(() => {
@@ -434,9 +504,9 @@ const GeographyChoroplethMap = ({
     Object.entries(layerByCodeRef.current).forEach(([, layer]) => {
       const feature = layer.feature;
       if (!feature) return;
-      layer.setStyle(resolveFeatureStyle(feature, layerMode, focusedCode));
+      layer.setStyle(resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel));
     });
-  }, [focusedCode, layerMode]);
+  }, [focusedCode, layerMode, zoomLevel]);
 
   const showEmpty =
     !boundariesLoading && !wardCounts.length && !boundariesError;

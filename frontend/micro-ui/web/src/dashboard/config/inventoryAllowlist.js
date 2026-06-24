@@ -26,7 +26,7 @@ export const DEFAULT_VIEW_KPI_IDS = new Set([
   "rs-metric-breach-count",
   "cl-metric-total-resolved",
   "cl-metric-reopen-rate",
-  "ce-metric-csat",
+  "cl-metric-csat",
 ]);
 
 /**

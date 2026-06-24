@@ -5,11 +5,11 @@
 import {
   buildHorizontalBarYAxisItem,
   buildWrappedVerticalXAxisLabels,
-  resolveVerticalCategorySlotWidth,
-  resolveVerticalXAxisLabelHeight,
 } from "./chartAxisLabels";
 import { resolveDashboardCssColor } from "./chartColors";
 import {
+  BAR_CHART_XAXIS_RESERVED_HEIGHT_PX,
+  buildBarChartGrid,
   resolveBarCategorySlotWidth,
   resolveBarChartColumnWidth,
 } from "./barChartPresentation";
@@ -33,7 +33,7 @@ export function buildStackedBarLegend({ horizontal = false } = {}) {
   return {
     ...STACKED_BAR_LEGEND,
     horizontalAlign: horizontal ? "center" : STACKED_BAR_LEGEND.horizontalAlign,
-    offsetY: horizontal ? 8 : STACKED_BAR_LEGEND.offsetY,
+    offsetY: horizontal ? 8 : 6,
   };
 }
 
@@ -68,13 +68,20 @@ export function buildHorizontalCategoryYAxis(categories, containerWidth) {
 }
 
 export function buildStackedBarGrid({ horizontal = false, bottomPadding } = {}) {
+  if (!horizontal) {
+    return buildBarChartGrid({
+      left: 2,
+      right: 2,
+      top: 0,
+      bottom: bottomPadding ?? BAR_CHART_XAXIS_RESERVED_HEIGHT_PX,
+    });
+  }
+
   return {
     show: false,
     padding: {
       ...HORIZONTAL_BAR_GRID_PADDING,
-      top: horizontal ? -6 : HORIZONTAL_BAR_GRID_PADDING.top,
-      left: horizontal ? HORIZONTAL_BAR_GRID_PADDING.left : 4,
-      right: horizontal ? HORIZONTAL_BAR_GRID_PADDING.right : 4,
+      top: -6,
       bottom: bottomPadding ?? HORIZONTAL_BAR_GRID_PADDING.bottom,
     },
   };
@@ -150,6 +157,106 @@ export function formatStackedBarHours(value) {
   return `${n.toFixed(1)}h`;
 }
 
+const STACKED_BAR_LABEL_CHAR_WIDTH_PX = 7;
+const STACKED_BAR_LABEL_HEIGHT_PX = 14;
+const STACKED_BAR_LABEL_PADDING_PX = 4;
+/** Extra vertical room — Apex centers with +height/2, which clips the bottom of glyphs. */
+const STACKED_BAR_LABEL_VERTICAL_INSET_PX = 8;
+const STACKED_BAR_SEGMENT_LABEL_OFFSET_Y = 7;
+
+function formatStackedBarSegmentValue(value, valueFormat) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return valueFormat === "hours" ? formatStackedBarHours(n) : String(Math.round(n));
+}
+
+function readStackTotal(opts) {
+  const idx = opts.dataPointIndex;
+  const series = opts.w?.config?.series ?? [];
+  return series.reduce((sum, entry) => sum + (Number(entry.data?.[idx]) || 0), 0);
+}
+
+function labelBoxForText(text) {
+  return {
+    width: text.length * STACKED_BAR_LABEL_CHAR_WIDTH_PX + STACKED_BAR_LABEL_PADDING_PX,
+    height: STACKED_BAR_LABEL_HEIGHT_PX + STACKED_BAR_LABEL_PADDING_PX,
+  };
+}
+
+/** Hide segment labels that cannot fit — show full value or nothing. */
+export function shouldShowStackedSegmentLabel(value, opts, { horizontal, valueFormat } = {}) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return false;
+
+  const text = formatStackedBarSegmentValue(n, valueFormat);
+  if (!text) return false;
+
+  const stackTotal = readStackTotal(opts);
+  if (stackTotal <= 0) return false;
+
+  const { width: labelW, height: labelH } = labelBoxForText(text);
+  const globals = opts.w?.globals ?? {};
+  const idx = opts.dataPointIndex;
+
+  if (horizontal) {
+    const niceMax = Number(globals.xAxisScale?.niceMax);
+    const gridWidth = Number(globals.gridWidth) || 0;
+    const barH = Number(globals.barHeight?.[idx]) || 0;
+    if (niceMax > 0 && gridWidth > 0 && barH > 0) {
+      const segmentW = (n / niceMax) * gridWidth;
+      return segmentW >= labelW && barH >= labelH;
+    }
+    return n / stackTotal >= 0.14;
+  }
+
+  const barH = Number(globals.barHeight?.[idx]) || 0;
+  if (barH > 0) {
+    const segmentH = (n / stackTotal) * barH;
+    const categories = Math.max(1, globals.labels?.length ?? 1);
+    const barW =
+      Number(globals.barWidth?.[idx]) ||
+      (Number(globals.gridWidth) || 0) / categories;
+    const minSegmentH = labelH + STACKED_BAR_LABEL_VERTICAL_INSET_PX * 2;
+    return segmentH >= minSegmentH && barW >= labelW;
+  }
+
+  return n / stackTotal >= 0.11;
+}
+
+function shouldShowStackedTotalLabel(total, opts, { horizontal, valueFormat } = {}) {
+  const n = Number(total);
+  if (!Number.isFinite(n) || n <= 0) return false;
+
+  const text = formatStackedBarSegmentValue(n, valueFormat);
+  if (!text) return false;
+
+  const { width: labelW, height: labelH } = labelBoxForText(text);
+  const globals = opts.w?.globals ?? {};
+  const idx = opts.dataPointIndex;
+
+  if (horizontal) {
+    const niceMax = Number(globals.xAxisScale?.niceMax);
+    const gridWidth = Number(globals.gridWidth) || 0;
+    const barH = Number(globals.barHeight?.[idx]) || 0;
+    if (niceMax > 0 && gridWidth > 0 && barH > 0) {
+      const barW = (n / niceMax) * gridWidth;
+      const roomAfterBar = Math.max(0, gridWidth - barW - 6);
+      return roomAfterBar >= labelW && barH >= labelH;
+    }
+    return true;
+  }
+
+  const niceMax = Number(globals.yAxisScale?.[0]?.niceMax ?? globals.maxY);
+  const gridHeight = Number(globals.gridHeight) || 0;
+  const barH = Number(globals.barHeight?.[idx]) || 0;
+  if (niceMax > 0 && gridHeight > 0 && barH > 0) {
+    const headroom = gridHeight - (n / niceMax) * gridHeight;
+    return headroom >= labelH + 8;
+  }
+
+  return true;
+}
+
 export function buildStackedBarPlotOptions({
   horizontal = false,
   valueFormat,
@@ -157,14 +264,15 @@ export function buildStackedBarPlotOptions({
   categoryCount = 0,
 } = {}) {
   const totalLabelColor = resolveDashboardCssColor("var(--foreground)");
-  const formatTotal =
-    valueFormat === "hours"
-      ? formatStackedBarHours
-      : (value) => {
-          const n = Number(value);
-          if (!Number.isFinite(n) || n <= 0) return "";
-          return String(Math.round(n));
-        };
+  const formatTotal = (value, opts) => {
+    if (
+      opts &&
+      !shouldShowStackedTotalLabel(value, opts, { horizontal, valueFormat })
+    ) {
+      return "";
+    }
+    return formatStackedBarSegmentValue(value, valueFormat);
+  };
 
   const slotWidth = horizontal
     ? 0
@@ -179,8 +287,12 @@ export function buildStackedBarPlotOptions({
       columnWidth,
       barHeight: horizontal ? HORIZONTAL_STACKED_BAR_HEIGHT : undefined,
       dataLabels: {
+        hideOverflowingLabels: true,
+        position: "center",
+        orientation: "horizontal",
         total: {
           enabled: true,
+          hideOverflowingLabels: true,
           offsetX: horizontal ? 6 : 0,
           offsetY: horizontal ? 0 : -8,
           style: {
@@ -195,21 +307,13 @@ export function buildStackedBarPlotOptions({
   };
 }
 
-export function buildStackedBarDataLabels({ valueFormat } = {}) {
-  const formatter =
-    valueFormat === "hours"
-      ? formatStackedBarHours
-      : (value) => {
-          const n = Number(value);
-          if (!Number.isFinite(n) || n <= 0) return "";
-          return String(Math.round(n));
-        };
-
+export function buildStackedBarDataLabels({ valueFormat, horizontal = false } = {}) {
   return {
     enabled: true,
+    hideOverflowingLabels: true,
     textAnchor: "middle",
     offsetX: 0,
-    offsetY: 0,
+    offsetY: horizontal ? 0 : STACKED_BAR_SEGMENT_LABEL_OFFSET_Y,
     style: {
       fontSize: "11px",
       fontWeight: 600,
@@ -218,7 +322,12 @@ export function buildStackedBarDataLabels({ valueFormat } = {}) {
     background: {
       enabled: false,
     },
-    formatter,
+    formatter(value, opts) {
+      if (!shouldShowStackedSegmentLabel(value, opts, { horizontal, valueFormat })) {
+        return "";
+      }
+      return formatStackedBarSegmentValue(value, valueFormat);
+    },
   };
 }
 
@@ -236,16 +345,13 @@ export function buildStackedBarXAxis({
     };
   }
 
-  const slotWidthPx = resolveVerticalCategorySlotWidth(categories.length, containerWidth);
-  const labelHeight = resolveVerticalXAxisLabelHeight(categories, slotWidthPx, {
-    minHeightPx: 22,
-    maxHeightPx: 72,
-  });
+  const slotWidthPx = resolveBarCategorySlotWidth(categories.length, containerWidth);
+  const labelHeight = BAR_CHART_XAXIS_RESERVED_HEIGHT_PX;
 
   return {
     categories,
     labels: {
-      ...buildWrappedVerticalXAxisLabels(slotWidthPx),
+      ...buildWrappedVerticalXAxisLabels(slotWidthPx, { maxLines: 2 }),
       maxHeight: labelHeight,
     },
     axisBorder: { show: false },

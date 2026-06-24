@@ -2,7 +2,7 @@
  * Threshold coloring and status tags for the employee performance table.
  */
 
-/** @typedef {'breach' | 'watch' | 'good'} MetricTone */
+import { evaluateMetricTone, storeCellTone } from "./tablePresentation";
 
 export const EMPLOYEE_PERFORMANCE_METRIC_THRESHOLDS = {
   open: { higherIsBetter: false, watch: 8, breach: 15 },
@@ -18,29 +18,14 @@ const TAG_LABELS = {
   escalationRate: { breach: "High escalation", watch: "Escalation risk" },
 };
 
-export function evaluateEmployeeMetricTone(value, config) {
-  if (!Number.isFinite(value) || !config) return null;
-  const { higherIsBetter, watch, breach } = config;
-
-  if (higherIsBetter) {
-    if (value < breach) return "breach";
-    if (value < watch) return "watch";
-    return "good";
-  }
-
-  if (value > breach) return "breach";
-  if (value > watch) return "watch";
-  return "good";
-}
-
-function buildStatusTags(cellTones) {
-  const tags = [];
+function buildStatusTagItems(cellTones) {
+  const items = [];
   for (const [metricKey, tone] of Object.entries(cellTones ?? {})) {
-    if (tone === "good" || tone == null) continue;
     const label = TAG_LABELS[metricKey]?.[tone];
-    if (label) tags.push(label);
+    if (label) items.push({ label, tone });
   }
-  return tags.length ? tags : ["On track"];
+  if (!items.length) return [{ label: "On track", tone: null }];
+  return items;
 }
 
 export function annotateEmployeePerformanceRows(rows) {
@@ -49,14 +34,16 @@ export function annotateEmployeePerformanceRows(rows) {
   return rows.map((row) => {
     const cellTones = {};
     for (const [metricKey, config] of Object.entries(EMPLOYEE_PERFORMANCE_METRIC_THRESHOLDS)) {
-      const tone = evaluateEmployeeMetricTone(row[metricKey], config);
-      if (tone) cellTones[metricKey] = tone;
+      storeCellTone(cellTones, metricKey, evaluateMetricTone(row[metricKey], config));
     }
+
+    const statusTagItems = buildStatusTagItems(cellTones);
 
     return {
       ...row,
       cellTones,
-      statusTags: buildStatusTags(cellTones),
+      statusTagItems,
+      statusTags: statusTagItems.map((item) => item.label),
     };
   });
 }

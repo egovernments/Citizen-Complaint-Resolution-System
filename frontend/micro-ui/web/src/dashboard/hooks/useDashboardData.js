@@ -14,6 +14,7 @@ import {
   parseDowChart,
   parseFilterOptions,
   parseGeographyMapLayers,
+  parseComplaintMapPins,
   parseLocalityTable,
   parseOpenComplaintsByTypeStackedChart,
   parseOpenComplaintsByChannelPieChart,
@@ -26,6 +27,7 @@ import {
   parseWorkflowStageTable,
 } from "../config/kpiQueries";
 import { annotateTableThresholds, TABLE_THRESHOLDS } from "../config/tablePresentation";
+import { annotateComplaintTypeDetailsRows } from "../config/complaintTypeDetailsTablePresentation";
 import { annotateEmployeePerformanceRows } from "../config/employeePerformanceTablePresentation";
 import { COMPLAINT_TYPE_OPTIONS, GEOGRAPHY_OPTIONS } from "../config/globalFilterGroups";
 import { hasAuth, runBatchQueries } from "../services/analyticsService";
@@ -60,7 +62,7 @@ const EMPTY_CHART_DATA = {
   complaintTypeDetails: [],
   employeePerformance: [],
   complaintsAtRisk: [],
-  geographyMap: { wow_change: [], sla_breach: [], wardDetails: {} },
+  geographyMap: { wow_change: [], sla_breach: [], wardDetails: {}, complaintPins: [] },
   complaintsOverTime: null,
 };
 
@@ -128,8 +130,8 @@ function buildChartData(results, dashboardFilters) {
       "cl-table-workflow-stages",
       parseWorkflowStageTable(results?.ev_table_stage_dwell)
     ),
-    complaintTypeDetails: parseComplaintTypeDetailsTable(
-      results?.cl_table_complaint_type_details
+    complaintTypeDetails: annotateComplaintTypeDetailsRows(
+      parseComplaintTypeDetailsTable(results?.cl_table_complaint_type_details)
     ),
     employeePerformance: annotateEmployeePerformanceRows(
       parseEmployeePerformanceTable(
@@ -139,13 +141,16 @@ function buildChartData(results, dashboardFilters) {
       )
     ),
     complaintsAtRisk: parseComplaintsAtRiskTable(results?.cl_table_complaints_at_risk),
-    geographyMap: parseGeographyMapLayers(
-      results?.cl_map_ward_wow_current,
-      results?.cl_map_ward_wow_prior,
-      results?.cl_map_ward_sla_breach,
-      results?.cl_map_ward_open,
-      results?.cl_map_ward_sla_buckets
-    ),
+    geographyMap: {
+      ...parseGeographyMapLayers(
+        results?.cl_map_ward_wow_current,
+        results?.cl_map_ward_wow_prior,
+        results?.cl_map_ward_sla_breach,
+        results?.cl_map_ward_open,
+        results?.cl_map_ward_sla_buckets
+      ),
+      complaintPins: parseComplaintMapPins(results?.cl_map_complaint_pins),
+    },
   };
 }
 

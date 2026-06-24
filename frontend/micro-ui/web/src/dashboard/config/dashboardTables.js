@@ -62,15 +62,30 @@ export const COMPLAINT_TYPE_DETAILS_COLUMNS = [
     align: "right",
     type: "hoursDays",
     width: "13%",
+    thresholdKey: "avgResolutionMs",
   },
-  { id: "idealSlaMs", label: "Ideal (SLA)", align: "right", type: "hoursDays", width: "11%" },
-  { id: "reopenRate", label: "Reopen rate", align: "right", type: "percent", width: "10%" },
+  {
+    id: "idealSlaMs",
+    label: "SLA",
+    align: "right",
+    type: "hoursDays",
+    width: "11%",
+  },
+  {
+    id: "reopenRate",
+    label: "Reopen rate",
+    align: "right",
+    type: "percent",
+    width: "10%",
+    thresholdKey: "reopenRate",
+  },
   {
     id: "oldestOpenMs",
     label: "Oldest complaint",
     align: "right",
     type: "hoursDays",
     width: "13%",
+    thresholdKey: "oldestOpenMs",
   },
   {
     id: "ontimeRate",
@@ -78,8 +93,16 @@ export const COMPLAINT_TYPE_DETAILS_COLUMNS = [
     align: "right",
     type: "percent",
     width: "13%",
+    thresholdKey: "ontimeRate",
   },
-  { id: "avgCsat", label: "CSAT", align: "right", type: "rating", width: "8%" },
+  {
+    id: "avgCsat",
+    label: "CSAT",
+    align: "right",
+    type: "rating",
+    width: "8%",
+    thresholdKey: "avgCsat",
+  },
 ];
 
 export const TABLE_WIDGET_CONFIG = {

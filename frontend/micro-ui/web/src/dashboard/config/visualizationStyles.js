@@ -62,6 +62,7 @@ const DATA_TABLE_STYLES = {
   subtitle: SHARED_CHROME.dragHandleSubtitle,
   scroll: "dashboard-table-scroll",
   table: "dashboard-table",
+  tableEqualCols: "dashboard-table--equal-cols",
   th: "dashboard-table-th",
   thRight: "dashboard-table-th-right",
   td: "dashboard-table-td",
@@ -81,6 +82,13 @@ const DATA_TABLE_STYLES = {
   thresholdCell: "dashboard-table-threshold-cell",
   thresholdWatch: "dashboard-table-threshold-watch",
   thresholdGood: "dashboard-table-threshold-good",
+  cellToneBreach: "dashboard-table-cell-tone--breach",
+  cellToneWatch: "dashboard-table-cell-tone--watch",
+  cellToneGood: "dashboard-table-cell-tone--good",
+  statusTag: "dashboard-table-status-tag",
+  statusTagBreach: "dashboard-table-status-tag--breach",
+  statusTagWatch: "dashboard-table-status-tag--watch",
+  statusTagGood: "dashboard-table-status-tag--good",
 };
 
 /**
@@ -145,6 +153,7 @@ export const VISUALIZATION_STYLES = {
   },
   [VIZ_TYPE.DATA_TABLE]: DATA_TABLE_STYLES,
   [VIZ_TYPE.SLA_RISK_TABLE]: {
+    table: "dashboard-sla-risk-table",
     link: "dashboard-sla-link",
     linkButton: "dashboard-sla-link dashboard-sla-link--button",
     breachPill: "dashboard-sla-breach-pill",

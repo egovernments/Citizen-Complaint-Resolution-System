@@ -18,7 +18,7 @@ const COLUMNS = [
   { id: "ownerRole", label: "Owner role", align: "left" },
   { id: "statusLabel", label: "Status", align: "left" },
   { id: "slaLabel", label: "SLA status", align: "left" },
-  { id: "breachDurationMs", label: "Breach duration", align: "right" },
+  { id: "breachDurationMs", label: "Breach duration", align: "left" },
 ];
 
 function compareRows(left, right, key) {
@@ -58,7 +58,14 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
   };
 
   return (
-    <table className={tableStyles.table}>
+    <table
+      className={`${tableStyles.table} ${tableStyles.tableEqualCols} ${slaStyles.table}`}
+    >
+      <colgroup>
+        {COLUMNS.map((col) => (
+          <col key={col.id} style={{ width: `${100 / COLUMNS.length}%` }} />
+        ))}
+      </colgroup>
       <thead>
         <tr>
           {COLUMNS.map((col) => {
@@ -82,7 +89,14 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
         </tr>
       </thead>
       <tbody>
-        {sortedRows.map((row) => (
+        {sortedRows.length === 0 ? (
+          <tr>
+            <td colSpan={COLUMNS.length} className={tableStyles.empty}>
+              No complaints at risk
+            </td>
+          </tr>
+        ) : (
+          sortedRows.map((row) => (
           <tr key={row.id}>
             <td className={getDataTableTdClass()}>
               <a href={complaintDetailHref(row.id)} className={slaStyles.link}>
@@ -108,15 +122,22 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
                 {row.slaLabel}
               </span>
             </td>
-            <td className={getDataTableTdClass("right")}>
+            <td className={getDataTableTdClass()}>
               {row.breachDurationLabel ? (
-                <span className={slaStyles.overdue}>{row.breachDurationLabel}</span>
+                <span
+                  className={
+                    row.slaLevel === "breached" ? slaStyles.overdue : tableStyles.muted
+                  }
+                >
+                  {row.breachDurationLabel}
+                </span>
               ) : (
                 <span className={tableStyles.muted}>—</span>
               )}
             </td>
           </tr>
-        ))}
+          ))
+        )}
       </tbody>
     </table>
   );

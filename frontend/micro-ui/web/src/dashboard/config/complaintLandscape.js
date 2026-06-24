@@ -130,7 +130,7 @@ export const LANDSCAPE_METRICS = [
   },
   {
     id: "cl-metric-csat",
-    metric: "CSAT",
+    metric: "Citizen satisfaction",
     accent: "teal",
     vizType: "number-tile-delta",
     defaultSubMetricId: "avg",

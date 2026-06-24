@@ -14,7 +14,6 @@ export const SPARKLINE_KPI_IDS = new Set([
   "rs-metric-sla-compliance",
   "rs-metric-breach-count",
   "ce-metric-reopen-rate",
-  "ce-metric-csat",
 ]);
 
 /**
@@ -122,14 +121,6 @@ export const SPARKLINE_KPI_QUERIES = {
     deltaLabel: "WoW",
     measureKey: "pct",
     sparklineMeasureKey: "pct",
-  },
-  "ce-metric-csat": {
-    sparklineQueryKey: "ce_csat_sparkline_7d",
-    currentQueryKey: "ce_csat_avg_week",
-    priorQueryKey: "ce_csat_prior_week",
-    deltaLabel: "WoW",
-    measureKey: "avg",
-    sparklineMeasureKey: "avg",
   },
   "cl-metric-oldest-open": {
     currentQueryKey: "cl_oldest_open_age",

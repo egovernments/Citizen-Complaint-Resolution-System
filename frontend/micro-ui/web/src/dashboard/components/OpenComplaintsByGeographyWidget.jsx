@@ -38,6 +38,7 @@ const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
       </header>
       <GeographyChoroplethMap
         wardCounts={wardCounts}
+        complaintPins={layers?.complaintPins ?? []}
         layerMode={resolvedLayer}
         onLayerModeChange={setActiveLayer}
         layerOptions={GEOGRAPHY_MAP_LAYERS}

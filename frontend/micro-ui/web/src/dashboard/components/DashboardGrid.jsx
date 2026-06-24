@@ -8,9 +8,9 @@ import {
   GRID_COLS,
   KPI_ROW_HEIGHT,
   WIDGETS,
+  getDropPreviewSize,
+  getDroppingItem,
   getSizeConstraints,
-  getDefaultChartItem,
-  getDefaultKpiLayoutItem,
   getResizeHandles,
   isChartWidget,
   isKpiWidget,
@@ -121,16 +121,6 @@ function gridItemClassName(widgetId) {
   return undefined;
 }
 
-function getDropPreviewSize(widgetId) {
-  if (isKpiWidget(widgetId)) {
-    const defaults = getDefaultKpiLayoutItem(widgetId);
-    return { w: defaults.w, h: defaults.h };
-  }
-  const defaults = getDefaultChartItem(widgetId);
-  if (defaults) return { w: defaults.w, h: defaults.h };
-  return { w: DROPPING_ITEM.w, h: DROPPING_ITEM.h };
-}
-
 function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, widgetId) {
   const { w, h } = getDropPreviewSize(widgetId);
   const colWidth = (containerWidth - GRID_MARGIN[0] * (GRID_COLS + 1)) / GRID_COLS;
@@ -161,7 +151,12 @@ const DashboardGrid = ({
 }) => {
   const gridWrapRef = useRef(null);
   const externalDropLockRef = useRef(false);
-  const isExternalDrag = Boolean(draggingWidgetIdRef?.current ?? draggingWidgetId);
+  const activeDragWidgetId = draggingWidgetIdRef?.current ?? draggingWidgetId;
+  const isExternalDrag = Boolean(activeDragWidgetId);
+  const droppingItem = useMemo(
+    () => (activeDragWidgetId ? getDroppingItem(activeDragWidgetId) : DROPPING_ITEM),
+    [activeDragWidgetId]
+  );
   const isSearchActive = Boolean(searchQuery?.trim());
 
   // Stamp the load time once. Swap for the API's data-as-of timestamp once a
@@ -321,7 +316,6 @@ const DashboardGrid = ({
 
     const rows = chartData[config.dataKey] || [];
     if (loading && !rows.length) return <ChartPlaceholder message="Loading…" />;
-    if (!rows.length) return <ChartPlaceholder message="No data" />;
 
     return <DashboardTable columns={config.columns} rows={rows} />;
   };
@@ -331,7 +325,6 @@ const DashboardGrid = ({
 
     const rows = chartData.complaintsAtRisk || [];
     if (loading && !rows.length) return <ChartPlaceholder message="Loading…" />;
-    if (!rows.length) return <ChartPlaceholder message="No data" />;
 
     return <ComplaintsAtRiskTable rows={rows} />;
   };
@@ -459,9 +452,9 @@ const DashboardGrid = ({
       if (!dropPosition) return;
 
       externalDropLockRef.current = true;
-      onExternalDragEnd?.();
       requestAnimationFrame(() => {
         onDropWidget(activeId, dropPosition);
+        onExternalDragEnd?.();
         externalDropLockRef.current = false;
       });
     },
@@ -562,7 +555,7 @@ const DashboardGrid = ({
           allowOverlap
           isResizable
           isDroppable
-          droppingItem={DROPPING_ITEM}
+          droppingItem={droppingItem}
           onDrop={handleDrop}
           onDropDragOver={handleDropDragOver}
         >

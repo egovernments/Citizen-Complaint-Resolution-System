@@ -1,16 +1,16 @@
 import { useCallback, useRef, useState } from "react";
 import { getLayoutStorageKey } from "../config/dashboardConfig";
 import {
-  DEFAULT_KPI_LAYOUT_ITEM,
   DEFAULT_LAYOUT,
-  GRID_COLS,
   WIDGETS,
-  getDefaultChartItem,
+  buildNewLayoutItem,
   getDefaultKpiLayoutItem,
   getChartTypeSizeConstraints,
   isHeightLockedChart,
   isKpiWidget,
   DEFAULT_CHART_LAYOUT,
+  applyCatalogDimensions,
+  reconcileInventoryWidgetDimensions,
 } from "../constants/layoutConfig";
 import { isSparklineKpi } from "../config/kpiSparkline";
 
@@ -27,6 +27,8 @@ const LEGACY_GEOGRAPHY_MAP_WIDGET_ID = "demo-viz-map";
 const LIVE_GEOGRAPHY_MAP_WIDGET_ID = "cl-map-geography-choropleth";
 const DEFAULT_REOPEN_RATE_KPI_ID = "cl-metric-reopen-rate";
 const LEGACY_ZONE_REOPEN_RATE_KPI_ID = "ce-metric-reopen-rate";
+const DEFAULT_CSAT_KPI_ID = "cl-metric-csat";
+const LEGACY_ZONE_CSAT_KPI_ID = "ce-metric-csat";
 const DEFAULT_RESOLUTION_RATE_KPI_ID = "cl-metric-resolution-rate";
 const LEGACY_ON_TIME_SLA_KPI_ID = "rs-metric-sla-compliance";
 const LEGACY_RESOLVED_ON_TIME_RATE_KPI_ID = "cl-metric-resolved-on-time-rate";
@@ -44,7 +46,7 @@ function migratePieChannelWidget(layout) {
     if (hasLivePie) return next;
 
     const defaults = DEFAULT_CHART_LAYOUT[LIVE_PIE_WIDGET_ID] ?? {};
-    next.push({ ...defaults, ...item, i: LIVE_PIE_WIDGET_ID });
+    next.push(applyCatalogDimensions({ ...item, i: LIVE_PIE_WIDGET_ID }));
     return next;
   }, []);
 }
@@ -61,8 +63,7 @@ function migrateSlaRiskWidget(layout) {
 
     if (hasLive) return next;
 
-    const defaults = DEFAULT_CHART_LAYOUT[LIVE_SLA_RISK_WIDGET_ID] ?? {};
-    next.push({ ...defaults, ...item, i: LIVE_SLA_RISK_WIDGET_ID });
+    next.push(applyCatalogDimensions({ ...item, i: LIVE_SLA_RISK_WIDGET_ID }));
     return next;
   }, []);
 }
@@ -79,8 +80,7 @@ function migrateFlowRatioWidget(layout) {
 
     if (hasLive) return next;
 
-    const defaults = DEFAULT_CHART_LAYOUT[LIVE_FLOW_RATIO_WIDGET_ID] ?? {};
-    next.push({ ...defaults, ...item, i: LIVE_FLOW_RATIO_WIDGET_ID });
+    next.push(applyCatalogDimensions({ ...item, i: LIVE_FLOW_RATIO_WIDGET_ID }));
     return next;
   }, []);
 }
@@ -97,8 +97,7 @@ function migrateDemoStackedToOfficerSla(layout) {
 
     if (hasLive) return next;
 
-    const defaults = DEFAULT_CHART_LAYOUT[LIVE_OFFICER_SLA_WIDGET_ID] ?? {};
-    next.push({ ...defaults, ...item, i: LIVE_OFFICER_SLA_WIDGET_ID });
+    next.push(applyCatalogDimensions({ ...item, i: LIVE_OFFICER_SLA_WIDGET_ID }));
     return next;
   }, []);
 }
@@ -115,8 +114,24 @@ function migrateGeographyMapWidget(layout) {
 
     if (hasLive) return next;
 
-    const defaults = DEFAULT_CHART_LAYOUT[LIVE_GEOGRAPHY_MAP_WIDGET_ID] ?? {};
-    next.push({ ...defaults, ...item, i: LIVE_GEOGRAPHY_MAP_WIDGET_ID });
+    next.push(applyCatalogDimensions({ ...item, i: LIVE_GEOGRAPHY_MAP_WIDGET_ID }));
+    return next;
+  }, []);
+}
+
+/** Use complaint-landscape CSAT tile in place of the zone sparkline CSAT KPI. */
+function migrateDefaultCsatKpi(layout) {
+  const hasLive = layout.some((item) => item.i === DEFAULT_CSAT_KPI_ID);
+
+  return layout.reduce((next, item) => {
+    if (item.i !== LEGACY_ZONE_CSAT_KPI_ID) {
+      next.push(item);
+      return next;
+    }
+
+    if (hasLive) return next;
+
+    next.push({ ...item, i: DEFAULT_CSAT_KPI_ID });
     return next;
   }, []);
 }
@@ -141,6 +156,7 @@ function migrateDefaultReopenRateKpi(layout) {
 const LEGACY_REMOVED_KPI_IDS = new Set([
   "rs-metric-sla-compliance",
   "ce-metric-reopen-rate",
+  "ce-metric-csat",
 ]);
 
 function purgeRemovedKpis(layout) {
@@ -178,6 +194,7 @@ function migrateDefaultResolutionRateKpi(layout) {
 function migrateSavedLayoutWidgets(layout) {
   return purgeRemovedKpis(
     migrateDefaultResolutionRateKpi(
+      migrateDefaultCsatKpi(
       migrateDefaultReopenRateKpi(
         migrateGeographyMapWidget(
           migrateFlowRatioWidget(
@@ -186,6 +203,7 @@ function migrateSavedLayoutWidgets(layout) {
             )
           )
         )
+      )
       )
     )
   );
@@ -292,41 +310,11 @@ export function swapOnDrop(layout, activeId, origin) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Item normalization (only for newly added widgets)                          */
-/* -------------------------------------------------------------------------- */
-
-function normalizeKpiItem(item) {
-  const defaults = getDefaultKpiLayoutItem(item.i);
-  return {
-    ...defaults,
-    ...item,
-    minW: item.minW ?? defaults.minW,
-    minH: Math.max(item.minH ?? defaults.minH, defaults.minH),
-    maxH: defaults.maxH ?? item.maxH ?? DEFAULT_KPI_LAYOUT_ITEM.maxH,
-  };
-}
-
-function normalizeChartItem(item) {
-  const defaults = DEFAULT_CHART_LAYOUT[item.i];
-  if (!defaults) return item;
-  const heightLocked = isHeightLockedChart(item.i);
-  return {
-    ...defaults,
-    ...item,
-    ...(heightLocked ? { h: defaults.h } : {}),
-    minW: item.minW ?? defaults.minW,
-    minH: heightLocked ? defaults.minH : (item.minH ?? defaults.minH),
-    maxW: defaults.maxW ?? item.maxW,
-    maxH: heightLocked ? defaults.maxH : (defaults.maxH ?? item.maxH),
-  };
-}
-
-/* -------------------------------------------------------------------------- */
 /* localStorage persistence                                                    */
 /* -------------------------------------------------------------------------- */
 
 const LEGACY_LAYOUT_VERSIONS = [
-  "v29", "v28", "v27", "v20", "v19", "v18", "v17", "v16", "v15", "v14", "v13", "v12", "v11", "v10", "v9",
+  "v30", "v29", "v28", "v27", "v20", "v19", "v18", "v17", "v16", "v15", "v14", "v13", "v12", "v11", "v10", "v9",
 ];
 
 function getAllLayoutStorageKeys() {
@@ -409,7 +397,7 @@ function loadLayout() {
           maxW: constraints.maxW ?? defaults?.maxW ?? item.maxW,
         };
       }
-      return item;
+      return reconcileInventoryWidgetDimensions(item);
     });
 
     if (hasOverlaps(normalized)) {
@@ -420,11 +408,12 @@ function loadLayout() {
     }
 
     const withTeamSla = mergeDefaultTeamSlaWidget(normalized);
+    const dimensionsRepaired = normalized.some((item, i) => item !== migrated[i]);
     const layoutChanged =
       withTeamSla.length > normalized.length ||
       migrated.some((item, i) => item.i !== valid[i]?.i);
 
-    if (layoutChanged) {
+    if (layoutChanged || dimensionsRepaired) {
       persistLayout(withTeamSla);
     } else if (normalized.some((item, i) => item !== valid[i])) {
       persistLayout(normalized);
@@ -434,24 +423,6 @@ function loadLayout() {
   } catch {
     return DEFAULT_LAYOUT;
   }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Positioning for newly added KPI cards                                       */
-/* -------------------------------------------------------------------------- */
-
-function nextKpiPosition(layout) {
-  const kpiItems = layout.filter((item) => isKpiWidget(item.i));
-  if (kpiItems.length === 0) return { x: 0, y: 0 };
-
-  const maxY = Math.max(...kpiItems.map((item) => item.y + item.h));
-  const bottomRow = kpiItems.filter((item) => item.y + item.h === maxY);
-  const usedWidth = bottomRow.reduce((sum, item) => sum + item.w, 0);
-
-  if (usedWidth + DEFAULT_KPI_LAYOUT_ITEM.w <= GRID_COLS) {
-    return { x: usedWidth, y: bottomRow[0].y };
-  }
-  return { x: 0, y: maxY };
 }
 
 /** Same post-drop pipeline as onDragStop: swap with overlapped card, then compact. */
@@ -600,18 +571,20 @@ export function useDashboardLayout() {
     [stampSync]
   );
 
-  const addKpiToLayout = useCallback(
+  const addWidgetToLayout = useCallback(
     (widgetId, position) => {
-      if (!isKpiWidget(widgetId)) return;
+      if (!WIDGETS[widgetId]) return;
+
+      const dropPosition =
+        position != null && (position.x != null || position.y != null)
+          ? { x: position.x, y: position.y }
+          : undefined;
+
       setLayout((prev) => {
         if (prev.some((item) => item.i === widgetId)) return prev;
 
-        const fallback = nextKpiPosition(prev);
-        const newItem = normalizeKpiItem({
-          i: widgetId,
-          x: position?.x ?? fallback.x,
-          y: position?.y ?? fallback.y,
-        });
+        const newItem = buildNewLayoutItem(widgetId, dropPosition, prev);
+        if (!newItem) return prev;
 
         const next = placeNewItemInLayout(prev, newItem);
         persistLayout(next);
@@ -621,32 +594,12 @@ export function useDashboardLayout() {
     [stampSync]
   );
 
-  const addWidgetToLayout = useCallback(
+  const addKpiToLayout = useCallback(
     (widgetId, position) => {
-      if (!WIDGETS[widgetId]) return;
-
-      if (isKpiWidget(widgetId)) {
-        addKpiToLayout(widgetId, position);
-        return;
-      }
-
-      setLayout((prev) => {
-        if (prev.some((item) => item.i === widgetId)) return prev;
-
-        const defaultItem = getDefaultChartItem(widgetId);
-        if (!defaultItem) return prev;
-
-        const newItem = normalizeChartItem({
-          ...defaultItem,
-          ...(position && { x: position.x, y: position.y }),
-        });
-
-        const next = placeNewItemInLayout(prev, newItem);
-        persistLayout(next);
-        return stampSync(next);
-      });
+      if (!isKpiWidget(widgetId)) return;
+      addWidgetToLayout(widgetId, position);
     },
-    [addKpiToLayout, stampSync]
+    [addWidgetToLayout]
   );
 
   const visibleLayoutIds = layout.map((item) => item.i);

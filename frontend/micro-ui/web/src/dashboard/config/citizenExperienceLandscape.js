@@ -8,31 +8,6 @@ export const CITIZEN_EXPERIENCE_SECTION = "Citizen experience";
 /** @type {Array<{id:string, metric:string, accent:string, defaultSubMetricId:string, subMetrics:object[]}>} */
 export const CITIZEN_EXPERIENCE_METRICS = [
   {
-    id: "ce-metric-csat",
-    metric: "CSAT / post-resolution rating",
-    accent: "teal",
-    vizType: "number-tile-sparkline",
-    defaultSubMetricId: "avg_rating_week",
-    subMetrics: [
-      {
-        id: "avg_rating_week",
-        label: "Avg. rating (zone, this week)",
-        outputFormat: "Decimal (1 place, out of 5)",
-        format: "decimalOne",
-        measureKey: "avg",
-        queryKey: "ce_csat_avg_week",
-      },
-      {
-        id: "response_rate",
-        label: "% rated (response rate)",
-        outputFormat: "% (round to nearest integer)",
-        format: "percentInteger",
-        measureKey: "pct",
-        queryKey: "ce_response_rate",
-      },
-    ],
-  },
-  {
     id: "ce-metric-reopen-rate",
     metric: "Reopen rate at zone level",
     accent: "amber",

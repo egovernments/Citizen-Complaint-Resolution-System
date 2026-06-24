@@ -20,13 +20,13 @@ function formatRatio(value) {
   return n.toFixed(2);
 }
 
-function splitAtBreakEven(value, breakEven) {
+function breakEvenSeriesValues(value, breakEven) {
   const v = Math.max(0, Number(value) || 0);
   const threshold = Math.max(0, Number(breakEven) || 0);
-  return {
-    below: Math.min(v, threshold),
-    above: Math.max(0, v - threshold),
-  };
+  if (v >= threshold) {
+    return { below: 0, above: v };
+  }
+  return { below: v, above: 0 };
 }
 
 const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
@@ -69,7 +69,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
     const below = [];
     const above = [];
     for (const value of values) {
-      const split = splitAtBreakEven(value, breakEven);
+      const split = breakEvenSeriesValues(value, breakEven);
       below.push(split.below);
       above.push(split.above);
     }

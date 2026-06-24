@@ -56,9 +56,11 @@ export function getGeographyMapLegendTitle(layerId) {
 }
 
 export function getGeographyMapLegendFooter(layerId) {
-  return layerId === "wow_change"
-    ? "Click a locality to focus · click again to clear"
-    : "Click a ward to focus · click again to clear";
+  const focusHint =
+    layerId === "wow_change"
+      ? "Click a locality to focus · click again to clear"
+      : "Click a ward to focus · click again to clear";
+  return `${focusHint} · Zoom to level 10+ to see complaint pins (hover for details)`;
 }
 
 export function getWowChangeBucket(wowPct) {

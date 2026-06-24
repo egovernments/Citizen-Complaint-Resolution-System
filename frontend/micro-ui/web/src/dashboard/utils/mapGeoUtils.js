@@ -191,18 +191,120 @@ export function resolveJoinedMapBounds(joined) {
   return bounds?.isValid() ? bounds : null;
 }
 
+/** Zoom at which ward polygons stop merging into clusters. */
+export const MAP_WARD_UNCLUSTER_ZOOM = 12;
+
+/** Zoom at which individual complaint location pins appear. */
+export const MAP_COMPLAINT_PIN_MIN_ZOOM = 10;
+
+/** Fit bounds padding when zooming to complaint pins. */
+export const MAP_COMPLAINT_PIN_MAX_ZOOM = 17;
+
 /** Zoom tier shown in the toolbar badge. */
 export function getMapZoomTier(zoom) {
-  if (zoom >= 13) return "ward";
-  if (zoom >= 11) return "locality";
+  if (zoom >= MAP_COMPLAINT_PIN_MIN_ZOOM) return "complaint";
+  if (zoom >= MAP_WARD_UNCLUSTER_ZOOM) return "ward";
+  if (zoom >= 8) return "locality";
   return "city";
 }
 
-/** Grid cell size (degrees) — smaller zoom ⇒ larger cells ⇒ fewer merged clusters. */
+/** Grid cell size (degrees) — larger cells at low zoom, none once wards are unclustered. */
 function getClusterCellSize(zoom) {
-  if (zoom >= 13) return null;
-  if (zoom >= 11) return 0.022;
-  return 0.055;
+  if (zoom >= MAP_WARD_UNCLUSTER_ZOOM) return null;
+  if (zoom >= 10) return 0.016;
+  return 0.048;
+}
+
+export function filterPinsInBounds(pins, bounds, { padRatio = 0.12 } = {}) {
+  if (!bounds?.isValid?.()) return pins;
+  const padded = padRatio > 0 ? bounds.pad(padRatio) : bounds;
+  return pins.filter((pin) => padded.contains([pin.lat, pin.lng]));
+}
+
+function hashSeed(value) {
+  const str = String(value ?? "");
+  let hash = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    hash = (hash * 31 + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function jitterAroundCentroid(centroid, seed, slot) {
+  const angle = ((hashSeed(seed) + slot * 47) % 360) * (Math.PI / 180);
+  const dist = 0.0008 + (hashSeed(`${seed}-${slot}`) % 5) * 0.00025;
+  return {
+    lat: centroid.lat + Math.sin(angle) * dist,
+    lng: centroid.lng + Math.cos(angle) * dist,
+  };
+}
+
+function isNearMapCenter(lat, lng) {
+  const [centerLat, centerLng] = getMapCenter();
+  return Math.abs(lat - centerLat) < 1.5 && Math.abs(lng - centerLng) < 1.5;
+}
+
+function hasUsableGeoPin(pin) {
+  if (pin?.lat == null || pin?.lng == null) return false;
+  if (Math.abs(pin.lat) < 0.0001 && Math.abs(pin.lng) < 0.0001) return false;
+  return isNearMapCenter(pin.lat, pin.lng);
+}
+
+/** Ward/locality centroids keyed by boundary code. */
+export function buildWardCentroidIndex(joined) {
+  const index = {};
+  const { geoFeatures, markers } = joined ?? {};
+
+  for (const feature of geoFeatures?.features ?? []) {
+    const code = String(feature?.properties?.code ?? "").trim();
+    const centroid = geometryCentroid(feature.geometry);
+    if (code && centroid) index[code] = centroid;
+  }
+
+  for (const marker of markers ?? []) {
+    const code = String(marker.code ?? "").trim();
+    if (code) index[code] = { lat: marker.lat, lng: marker.lng };
+  }
+
+  return index;
+}
+
+/**
+ * Place each open complaint on the map using geo coordinates when valid,
+ * otherwise ward centroid with a small jitter so stacked complaints separate.
+ */
+export function resolveComplaintPinPositions(pins = [], joined) {
+  const wardCentroids = buildWardCentroidIndex(joined);
+  const wardSlot = new Map();
+
+  return pins
+    .map((pin, index) => {
+      if (hasUsableGeoPin(pin)) {
+        return { ...pin, lat: pin.lat, lng: pin.lng, approximate: false };
+      }
+
+      const wardCode = pin.wardCode;
+      if (!wardCode) return null;
+
+      const centroid = wardCentroids[wardCode];
+      if (!centroid) return null;
+
+      const slot = wardSlot.get(wardCode) ?? 0;
+      wardSlot.set(wardCode, slot + 1);
+      const jittered = jitterAroundCentroid(
+        centroid,
+        pin.id || pin.serviceRequestId || String(index),
+        slot
+      );
+
+      return {
+        ...pin,
+        lat: jittered.lat,
+        lng: jittered.lng,
+        approximate: true,
+      };
+    })
+    .filter(Boolean);
 }
 
 function crossProduct(origin, a, b) {
@@ -375,20 +477,33 @@ function clusterGeoFeatures(features, zoom) {
 /**
  * Build choropleth + point layers for the current zoom.
  * Low zoom merges adjacent wards into cluster polygons; zooming in splits them apart.
+ * At MAP_COMPLAINT_PIN_MIN_ZOOM+, individual complaint pins are included.
  */
-export function buildMapDisplayLayers(joined, zoom) {
+export function buildMapDisplayLayers(joined, zoom, complaintPins = []) {
   const { geoFeatures, markers } = joined ?? {};
   const rawFeatures = geoFeatures?.features ?? [];
   const displayFeatures = clusterGeoFeatures(rawFeatures, zoom);
 
+  let visibleComplaintPins = [];
+  if (zoom >= MAP_COMPLAINT_PIN_MIN_ZOOM && complaintPins.length) {
+    visibleComplaintPins = resolveComplaintPinPositions(complaintPins, joined);
+  }
+
   return {
     geoFeatures: { type: "FeatureCollection", features: displayFeatures },
     pointMarkers: markers ?? [],
+    complaintPins: visibleComplaintPins,
   };
 }
 
-/** Point-only wards: tiny markers when zoomed out, slightly larger when zoomed in. */
-export function markerRadiusForZoom(zoom, isFocused = false) {
+/** Ward centroid markers and complaint pins scale with zoom. */
+export function markerRadiusForZoom(zoom, isFocused = false, { complaint = false } = {}) {
+  if (complaint) {
+    if (zoom >= 16) return isFocused ? 8 : 6;
+    if (zoom >= 13) return isFocused ? 7 : 5;
+    if (zoom >= MAP_COMPLAINT_PIN_MIN_ZOOM) return isFocused ? 6 : 4;
+    return 3;
+  }
   if (zoom <= 10) return isFocused ? 4 : 2;
   if (zoom <= 12) return isFocused ? 5 : 3;
   return isFocused ? 6 : 4;

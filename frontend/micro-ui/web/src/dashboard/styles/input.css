@@ -52,6 +52,8 @@
     --status-assigned-bg: lab(94.4979% -9.48459 -3.96528);
     --status-progress: lab(41.816% 17.1944 63.4163);
     --status-progress-bg: lab(95.4544% 2.6814 15.3591);
+    --status-nearing: var(--status-progress);
+    --status-nearing-bg: var(--status-progress-bg);
     --status-resolved: lab(36.3321% -35.6256 3.05576);
     --status-resolved-bg: lab(94.7185% -13.6163 1.20147);
     --status-rejected: lab(36.1728% -1.98329 -7.04196);
@@ -636,6 +638,17 @@
     overflow: visible;
   }
 
+  .dashboard-root table.dashboard-table.dashboard-table--equal-cols {
+    table-layout: fixed;
+  }
+
+  .dashboard-root table.dashboard-table.dashboard-table--equal-cols th.dashboard-table-th,
+  .dashboard-root table.dashboard-table.dashboard-table--equal-cols td.dashboard-table-td {
+    width: 1% !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .dashboard-root table.dashboard-table thead tr {
     text-align: left;
     color: var(--dashboard-muted-foreground, #6b6860);
@@ -710,15 +723,15 @@
   }
 
   .dashboard-table-primary {
-    @apply tw-flex tw-min-w-0 tw-items-center tw-gap-1;
+    @apply tw-flex tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-x-1 tw-gap-y-0.5 tw-overflow-hidden;
   }
 
   .dashboard-table-label {
-    @apply tw-min-w-0;
+    @apply tw-min-w-0 tw-truncate;
   }
 
   .dashboard-table-badge {
-    @apply tw-shrink-0 tw-text-[8px] tw-font-bold tw-uppercase tw-tracking-wide;
+    @apply tw-shrink-0 tw-basis-full tw-text-[8px] tw-font-bold tw-uppercase tw-tracking-wide;
     color: var(--status-breach);
   }
 
@@ -733,11 +746,50 @@
   }
 
   .dashboard-table-threshold-good {
+    @apply tw-font-semibold;
+    color: var(--status-resolved);
+  }
+
+  .dashboard-table-cell-tone--breach {
+    background-color: color-mix(in srgb, var(--status-breach) 14%, transparent);
+  }
+
+  .dashboard-table-cell-tone--watch {
+    background-color: color-mix(in srgb, var(--status-nearing) 14%, transparent);
+  }
+
+  .dashboard-table-cell-tone--good {
+    background-color: color-mix(in srgb, var(--status-resolved) 10%, transparent);
+  }
+
+  .dashboard-table-status-tag {
+    display: inline-block;
+    border-radius: 9999px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    line-height: 1.3;
+    padding: 2px 8px;
+    text-transform: uppercase;
+  }
+
+  .dashboard-table-status-tag--breach {
+    background-color: color-mix(in srgb, var(--status-breach) 16%, transparent);
+    color: var(--status-breach);
+  }
+
+  .dashboard-table-status-tag--watch {
+    background-color: color-mix(in srgb, var(--status-nearing) 16%, transparent);
+    color: var(--status-nearing);
+  }
+
+  .dashboard-table-status-tag--good {
+    background-color: color-mix(in srgb, var(--status-resolved) 14%, transparent);
     color: var(--status-resolved);
   }
 
   .dashboard-table-row-highlight {
-    background-color: color-mix(in srgb, var(--status-breach) 3%, transparent);
+    background-color: color-mix(in srgb, var(--status-breach) 6%, transparent);
   }
 
   .dashboard-table-trend-up {
@@ -968,15 +1020,16 @@
   .dashboard-stacked-bar-body {
     @apply tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden tw-px-2 tw-pt-0;
     margin-top: -6px;
-    padding-bottom: 1.125rem;
+    padding-bottom: 0.125rem;
   }
 
   .dashboard-stacked-bar-body:has(.dashboard-stacked-bar--horizontal) {
     @apply tw-pl-1.5 tw-pr-1.5;
+    padding-bottom: 1.125rem;
   }
 
   .dashboard-stacked-bar-header {
-    @apply tw-border-b-0 tw-px-3 tw-pb-0 tw-pt-1.5;
+    @apply tw-border-b-0 tw-px-3 tw-pb-1 tw-pt-1.5;
   }
 
   .dashboard-stacked-bar-header .dashboard-drag-handle-title {
@@ -999,7 +1052,15 @@
 
   .dashboard-stacked-bar .apexcharts-legend {
     padding-bottom: 0 !important;
-    margin-bottom: -6px !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Apex column labels sit low in the segment rect; keep glyphs inside the fill. */
+  .dashboard-stacked-bar:not(.dashboard-stacked-bar--horizontal)
+    .apexcharts-bar-series
+    .apexcharts-datalabels
+    text {
+    dominant-baseline: central;
   }
 
   .dashboard-stacked-bar--horizontal .apexcharts-legend {
@@ -1401,6 +1462,12 @@
 
   .dashboard-sla-link--button {
     @apply tw-border-0 tw-bg-transparent tw-p-0;
+  }
+
+  .dashboard-root table.dashboard-table.dashboard-sla-risk-table th.dashboard-table-th,
+  .dashboard-root table.dashboard-table.dashboard-sla-risk-table td.dashboard-table-td {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
   }
 
   .dashboard-sla-breach-pill {

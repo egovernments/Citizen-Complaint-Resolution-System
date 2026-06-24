@@ -45,7 +45,7 @@ export const KPI_DISPLAY = {
     threshold: { kind: "percent", higherIsBetter: false, onTrack: 10, breaching: 25 },
   },
   "cl-metric-csat": {
-    displayTitle: "CSAT",
+    displayTitle: "Citizen satisfaction",
     threshold: { kind: "rating", higherIsBetter: true, onTrack: 4, breaching: 3 },
   },
   "cl-metric-first-assignment-rate": {
@@ -55,12 +55,10 @@ export const KPI_DISPLAY = {
   "cl-metric-sla-compliance-rate": {
     displayTitle: "SLA compliance rate",
     threshold: { kind: "percent", higherIsBetter: true, onTrack: 85, breaching: 60 },
-    deltaColorMode: "value",
   },
   "cl-metric-sla-non-compliance-rate": {
     displayTitle: "SLA non-compliance rate",
     threshold: { kind: "percent", higherIsBetter: false, onTrack: 15, breaching: 40 },
-    deltaColorMode: "value",
   },
   "cl-metric-resolved-on-time-rate": {
     displayTitle: "Resolved on time rate",
@@ -77,11 +75,6 @@ export const KPI_DISPLAY = {
     displayTitle: "Reopen rate",
     threshold: { kind: "percent", higherIsBetter: false, onTrack: 10, breaching: 25 },
     context: { type: "csatSnapshot" },
-  },
-  "ce-metric-csat": {
-    displayTitle: "Citizen satisfaction",
-    threshold: { kind: "rating", higherIsBetter: true, onTrack: 4, breaching: 3 },
-    context: { type: "acrossResolved" },
   },
 };
 
@@ -129,6 +122,7 @@ export function resolveThresholdStatus(metricId, displayValue) {
   return KPI_STATUS.NORMAL;
 }
 
+/** On track → green, breaching → red, normal → black. */
 export function getStatusValueClass(status) {
   switch (status) {
     case KPI_STATUS.ON_TRACK:
@@ -140,6 +134,26 @@ export function getStatusValueClass(status) {
   }
 }
 
+/** Delta text — same threshold mapping via dashboard delta color tokens. */
+export function getNumberTileDeltaClass(status, { unavailable = false } = {}) {
+  const {
+    deltaMuted,
+    deltaNeutral,
+    deltaPositive,
+    deltaNegative,
+  } = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_DELTA];
+
+  if (unavailable) return deltaMuted;
+  switch (status) {
+    case KPI_STATUS.ON_TRACK:
+      return deltaPositive;
+    case KPI_STATUS.BREACHING:
+      return deltaNegative;
+    default:
+      return deltaNeutral;
+  }
+}
+
 /** Value color for number tiles — threshold-driven, shared by every metric card. */
 export function getNumberTileValueClass(status, { unavailable = false } = {}) {
   const styles = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_DELTA];
@@ -147,37 +161,13 @@ export function getNumberTileValueClass(status, { unavailable = false } = {}) {
   return getStatusValueClass(status);
 }
 
-/** Delta color for KPI tiles — threshold-aligned or trend-based per metric config. */
-export function resolveKpiDeltaClass(metricId, deltaPercent, displayValue) {
-  const config = getKpiDisplayConfig(metricId);
+/** Delta color for KPI tiles — matches the main value (threshold-driven). */
+export function resolveKpiDeltaClass(metricId, _deltaPercent, displayValue) {
   const unavailable =
     displayValue == null || displayValue === "—" || displayValue === "…";
-  if (config.deltaColorMode === "value") {
-    return getNumberTileValueClass(resolveThresholdStatus(metricId, displayValue), {
-      unavailable,
-    });
-  }
-  return getSparklineDeltaClass(deltaPercent, metricId);
-}
-
-/** Delta arrow color — uses metric threshold when set, else treats volume increases as negative. */
-export function getSparklineDeltaClass(deltaPercent, metricId) {
-  const {
-    deltaMuted,
-    deltaNeutral,
-    deltaPositive,
-    deltaNegative,
-  } = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_SPARKLINE];
-
-  if (deltaPercent == null || !Number.isFinite(deltaPercent)) {
-    return deltaMuted;
-  }
-  if (deltaPercent === 0) return deltaNeutral;
-
-  const threshold = getKpiDisplayConfig(metricId).threshold;
-  const higherIsBetter = threshold?.higherIsBetter ?? false;
-  const improving = higherIsBetter ? deltaPercent > 0 : deltaPercent < 0;
-  return improving ? deltaPositive : deltaNegative;
+  return getNumberTileDeltaClass(resolveThresholdStatus(metricId, displayValue), {
+    unavailable,
+  });
 }
 
 export function statusValueToCssColor(statusClass) {

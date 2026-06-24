@@ -2,7 +2,36 @@
  * Shared table presentation — threshold highlighting for dashboard data tables.
  */
 
+/** @typedef {'breach' | 'watch' | 'good'} MetricTone */
+/** @typedef {{ higherIsBetter: boolean, watch: number, breach: number }} MetricThresholdConfig */
 /** @typedef {{ column: string, extremum?: 'min' | 'max', badge?: string }} TableThresholdConfig */
+
+export function evaluateMetricTone(value, config) {
+  if (!Number.isFinite(value) || !config) return null;
+  const { higherIsBetter, watch, breach } = config;
+
+  let v = value;
+  if (watch <= 1 && breach <= 1 && v > 1 && v <= 100) {
+    v = v / 100;
+  }
+
+  if (higherIsBetter) {
+    if (v < breach) return "breach";
+    if (v < watch) return "watch";
+    return "good";
+  }
+
+  if (v > breach) return "breach";
+  if (v > watch) return "watch";
+  return "good";
+}
+
+/** Breach and watch tones are stored; only breach is surfaced as cell/row chrome. */
+export function storeCellTone(cellTones, key, tone) {
+  if (tone === "breach" || tone === "watch") {
+    cellTones[key] = tone;
+  }
+}
 
 export const TABLE_THRESHOLDS = {
   "cl-table-workflow-stages": {
@@ -32,7 +61,8 @@ export function getTableThreshold(widgetId) {
 }
 
 /**
- * Highlight the row at the min or max of `column` (needs at least 2 finite values).
+ * Highlight a single row at the min or max of `column` (needs at least 2 finite values).
+ * When multiple rows tie, only the first extremum row is flagged.
  */
 export function annotateTableThresholds(rows, threshold) {
   if (!threshold || !rows?.length || rows.length < 2) return rows;
@@ -46,13 +76,13 @@ export function annotateTableThresholds(rows, threshold) {
   const target =
     extremum === "min" ? Math.min(...values) : Math.max(...values);
 
-  return rows.map((row) => {
-    const value = row[column];
-    const isExtremum = Number.isFinite(value) && value === target;
-    return {
-      ...row,
-      highlight: isExtremum,
-      badge: isExtremum && badge ? badge : null,
-    };
-  });
+  const highlightIndex = rows.findIndex(
+    (row) => Number.isFinite(row[column]) && row[column] === target
+  );
+
+  return rows.map((row, index) => ({
+    ...row,
+    highlight: index === highlightIndex,
+    badge: index === highlightIndex && badge ? badge : null,
+  }));
 }
