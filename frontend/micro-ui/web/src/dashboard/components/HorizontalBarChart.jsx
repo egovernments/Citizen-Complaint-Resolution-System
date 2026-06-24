@@ -97,7 +97,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
           horizontal: true,
           borderRadius: 4,
           borderRadiusApplication: "end",
-          barHeight: "68%",
+          barHeight: "58%",
           dataLabels: {
             total: {
               enabled: true,

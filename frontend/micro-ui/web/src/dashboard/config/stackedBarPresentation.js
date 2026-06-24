@@ -13,6 +13,7 @@ import {
   resolveBarCategorySlotWidth,
   resolveBarChartColumnWidth,
 } from "./barChartPresentation";
+import { CHART_AXIS_WRAPPED_LABEL_MAX_LINES } from "../utils/chartLabelWrap";
 
 export const STACKED_BAR_LEGEND = {
   position: "top",
@@ -47,7 +48,7 @@ export const HORIZONTAL_BAR_LABEL_LAYOUT = {
   min: 40,
   maxCap: 140,
   ratio: 0.28,
-  maxLines: 2,
+  maxLines: CHART_AXIS_WRAPPED_LABEL_MAX_LINES,
 };
 
 export const HORIZONTAL_BAR_GRID_PADDING = {
@@ -57,7 +58,8 @@ export const HORIZONTAL_BAR_GRID_PADDING = {
   bottom: 4,
 };
 
-export const HORIZONTAL_STACKED_BAR_HEIGHT = "82%";
+/** Thinner bars leave more vertical room between category rows. */
+export const HORIZONTAL_STACKED_BAR_HEIGHT = "62%";
 
 export function buildHorizontalCategoryYAxis(categories, containerWidth) {
   return buildHorizontalBarYAxisItem(categories, containerWidth, {

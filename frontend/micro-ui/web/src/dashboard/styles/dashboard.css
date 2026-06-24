@@ -1456,6 +1456,11 @@
   overflow: visible;
 }
 
+.dashboard-widget-surface .apexcharts-xaxis-label tspan:not(:first-child),
+  .dashboard-widget-surface .apexcharts-yaxis-label tspan:not(:first-child) {
+  dy: 9px;
+}
+
 /* Viz type: horizontal-bar — ranked / ratio bars */
 
 .dashboard-horizontal-bar {
@@ -1502,7 +1507,6 @@
   text-anchor: start;
   transform-box: fill-box;
   transform-origin: left center;
-  transform: scaleY(0.82);
 }
 
 .dashboard-horizontal-bar .apexcharts-legend,
