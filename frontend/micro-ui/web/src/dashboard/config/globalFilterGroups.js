@@ -51,11 +51,18 @@ export function buildDefaultFilters() {
 
 export function hasActiveFilters(filters) {
   if (!filters) return false;
-  if (filters.dateRangeActive) return true;
   const defaults = buildDefaultFilters();
+  const geography = filters.geography ?? defaults.geography;
+  const complaintType = filters.complaintType ?? defaults.complaintType;
+  const dateFrom = filters.dateFrom ?? defaults.dateFrom;
+  const dateTo = filters.dateTo ?? defaults.dateTo;
+
   return (
-    filters.geography !== defaults.geography ||
-    filters.complaintType !== defaults.complaintType
+    filters.dateRangeActive === true ||
+    geography !== defaults.geography ||
+    complaintType !== defaults.complaintType ||
+    dateFrom !== defaults.dateFrom ||
+    dateTo !== defaults.dateTo
   );
 }
 

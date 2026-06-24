@@ -370,14 +370,53 @@
     scrollbar-gutter: stable;
     -webkit-overflow-scrolling: touch;
     background-color: #ffffff;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    text-align: left;
   }
 
   .dashboard-add-kpi-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    cursor: grab;
+    user-select: none;
     font-weight: 400;
     background-color: #ffffff;
   }
 
+  .dashboard-add-kpi-item:active {
+    cursor: grabbing;
+  }
+
+  .dashboard-add-kpi-item-main {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .dashboard-add-kpi-item-aside {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin-left: 0.75rem;
+  }
+
   .dashboard-add-kpi-item-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
     @apply tw-text-[13px] tw-leading-snug;
     font-weight: 400;
     color: var(--foreground, #1a1917);
@@ -385,6 +424,7 @@
 
   .dashboard-add-kpi-type {
     @apply tw-shrink-0 tw-text-[10px] tw-uppercase tw-tracking-wide;
+    text-align: right;
     font-weight: 400;
     color: var(--muted-foreground, #6b6860);
   }
@@ -402,8 +442,49 @@
     color: var(--foreground, #1a1917);
   }
 
-  .dashboard-add-kpi-item:hover {
+  .dashboard-add-kpi-item:hover,
+  .dashboard-add-kpi-item--hover {
     background-color: var(--muted, #f5f4f1);
+  }
+
+  .dashboard-add-kpi-preview {
+    border: 1px solid var(--border, #e5e2db);
+    border-radius: 8px;
+    background-color: #ffffff;
+    box-shadow:
+      0 10px 24px -8px rgb(0 0 0 / 0.12),
+      0 4px 8px -4px rgb(0 0 0 / 0.08);
+    padding: 0.75rem;
+    pointer-events: none;
+  }
+
+  .dashboard-add-kpi-preview-card {
+    border: 1px solid var(--border, #e5e2db);
+    border-radius: 6px;
+    background-color: #ffffff;
+    padding: 0.625rem 0.75rem;
+  }
+
+  .dashboard-add-kpi-preview-title {
+    @apply tw-text-[10px] tw-font-medium tw-uppercase tw-tracking-wider;
+    color: var(--muted-foreground, #6b6860);
+    line-height: 1.3;
+  }
+
+  .dashboard-add-kpi-preview-value {
+    @apply tw-mt-1 tw-text-[22px] tw-font-semibold tw-leading-tight;
+    color: var(--foreground, #1a1917);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dashboard-add-kpi-preview-target {
+    @apply tw-mt-0.5 tw-text-[11px] tw-leading-snug;
+    color: var(--muted-foreground, #6b6860);
+  }
+
+  .dashboard-add-kpi-preview-desc {
+    @apply tw-mb-0 tw-mt-2.5 tw-text-[11px] tw-leading-snug;
+    color: var(--muted-foreground, #6b6860);
   }
 
   .dashboard-filters-card {
@@ -483,6 +564,12 @@
 
   .dashboard-filters-clear-inline {
     @apply tw-box-border tw-m-0 tw-inline-flex tw-h-7 tw-shrink-0 tw-items-center tw-self-center tw-rounded-sm tw-border-0 tw-bg-transparent tw-px-2 tw-py-0 tw-text-[11px] tw-font-medium tw-leading-none tw-text-muted-foreground hover:tw-text-foreground;
+  }
+
+  .dashboard-filters-clear-inline:disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
   }
 
   .dashboard-widget-surface {

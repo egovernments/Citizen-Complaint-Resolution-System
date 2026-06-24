@@ -38,7 +38,7 @@ export function loadDashboardFilters() {
     /* fall through */
   }
 
-  return { timeWindow: migrateTimeWindowFromLegacy() };
+  return sanitizeFilters({ timeWindow: migrateTimeWindowFromLegacy() });
 }
 
 export function clearDashboardFilters() {

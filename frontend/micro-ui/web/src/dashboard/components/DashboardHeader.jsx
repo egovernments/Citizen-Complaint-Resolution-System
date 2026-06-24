@@ -51,6 +51,7 @@ const DashboardHeader = ({
   onExport,
   filters,
   filterOptions,
+  kpiCardData,
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
   const addKpiRef = useRef(null);
@@ -108,6 +109,7 @@ const DashboardHeader = ({
               open={addKpiOpen}
               onOpenChange={setAddKpiOpen}
               containerRef={addKpiRef}
+              kpiCardData={kpiCardData}
             />
           </div>
 

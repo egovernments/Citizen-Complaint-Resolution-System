@@ -119,6 +119,7 @@ const AdminDashboard = () => {
       onClearFilters={clearFilters}
       filterOptions={filterOptions}
       filterOptionsLoading={loading}
+      kpiCardData={kpiCardData}
     >
       {error && (
         <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] tw-bg-status-breach-bg tw-px-4 tw-py-3 tw-text-sm tw-text-destructive">

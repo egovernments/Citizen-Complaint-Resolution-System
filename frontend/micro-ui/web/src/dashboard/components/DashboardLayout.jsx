@@ -19,6 +19,7 @@ const DashboardLayout = ({
   onClearFilters,
   filterOptions,
   filterOptionsLoading,
+  kpiCardData,
 }) => {
   const brandStyle = useMemo(() => {
     const theme = getBrandTheme();
@@ -47,6 +48,7 @@ const DashboardLayout = ({
           onExport={onExport}
           filters={filters}
           filterOptions={filterOptions}
+          kpiCardData={kpiCardData}
         />
         <main className="tw-flex-1 tw-overflow-auto tw-bg-background tw-p-4 lg:tw-p-6">
           <DashboardFilters
