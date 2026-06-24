@@ -16,7 +16,7 @@ export default function CommunicationsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const { enabledMap, setEnabled, loading, saving, error, save } = useNotificationChannels(targetTenant);
+  const { enabledMap, setEnabled, loading, saving, error, loadError, save } = useNotificationChannels(targetTenant);
 
   const finish = () => {
     completePhase(5);
@@ -51,6 +51,13 @@ export default function CommunicationsPage() {
 
         <ChannelToggleList enabledMap={enabledMap} onToggle={setEnabled} loading={loading} disabled={saving} />
 
+        {loadError && (
+          <Alert variant="destructive" className="mt-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{loadError}</AlertDescription>
+          </Alert>
+        )}
+
         {error && (
           <Alert variant="destructive" className="mt-4">
             <AlertCircle className="h-4 w-4" />
@@ -65,7 +72,7 @@ export default function CommunicationsPage() {
           <SubmitBar
             label={saving ? 'Saving…' : 'Save & Continue'}
             onSubmit={handleSave}
-            disabled={saving || loading}
+            disabled={saving || loading || !!loadError}
             icon={saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           />
         </div>

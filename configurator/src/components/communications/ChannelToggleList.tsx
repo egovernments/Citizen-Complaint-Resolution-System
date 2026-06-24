@@ -6,10 +6,12 @@ function Toggle({
   enabled,
   onChange,
   label,
+  disabled,
 }: {
   enabled: boolean;
   onChange: (v: boolean) => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -17,8 +19,10 @@ function Toggle({
       role="switch"
       aria-checked={enabled}
       aria-label={label}
+      disabled={disabled}
+      aria-disabled={disabled}
       onClick={() => onChange(!enabled)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
         enabled ? 'bg-primary' : 'bg-gray-300'
       }`}
     >
@@ -71,6 +75,7 @@ export function ChannelToggleList({
             <Toggle
               enabled={enabled}
               label={`Enable ${c.name}`}
+              disabled={disabled}
               onChange={(v) => !disabled && onToggle(c.code, v)}
             />
           </div>

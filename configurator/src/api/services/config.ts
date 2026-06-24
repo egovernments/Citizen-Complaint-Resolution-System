@@ -68,32 +68,58 @@ export const configService = {
       if (!isDuplicate(err)) throw err;
     }
 
-    // Duplicate -> find the existing row (match on data.code) and update it in place,
-    // keeping whatever uniqueIdentifier/id it already carries.
+    // Duplicate -> find the existing row (match on data.code, case-insensitively) and update it in
+    // place, keeping whatever uniqueIdentifier/id it already carries.
     const search = await apiClient.post(ENDPOINTS.CONFIG_SEARCH, {
       RequestInfo: apiClient.buildRequestInfo(),
       criteria: { tenantId, schemaCode: SCHEMA },
     });
     const existing = ((search as { configData?: ConfigDataRecord[] }).configData || [])
-      .find((r) => r.data?.code === channel.code);
+      .find((r) => r.data?.code?.toUpperCase() === channel.code.toUpperCase());
+
+    // config-service _update hard-requires a valid id; sending undefined yields a misleading
+    // INVALID_ID. If the duplicate can't be located, fail with a clear message instead.
+    if (!existing?.id) {
+      throw new Error(
+        `Channel ${channel.code} already exists for ${tenantId} but could not be located to update.`
+      );
+    }
 
     await apiClient.post(`${ENDPOINTS.CONFIG_UPDATE}/${SCHEMA}`, {
       RequestInfo: apiClient.buildRequestInfo(),
       configData: {
         ...configData,
-        id: existing?.id,
-        uniqueIdentifier: existing?.uniqueIdentifier || uid,
+        id: existing.id,
+        uniqueIdentifier: existing.uniqueIdentifier || uid,
       },
     });
   },
 
-  /** Persist all channel toggles for a tenant, sequentially (small, fixed set). */
+  /**
+   * Persist all channel toggles for a tenant. Best-effort: every channel is attempted (config-service
+   * has no transaction), and if any fail the others are still saved and a combined error is thrown so
+   * the caller can report exactly what didn't save rather than masking partial success.
+   */
   async saveNotificationChannels(
     tenantId: string,
     channels: NotificationChannelConfig[]
   ): Promise<void> {
-    for (const channel of channels) {
-      await this.upsertNotificationChannel(tenantId, channel);
+    const results = await Promise.allSettled(
+      channels.map((channel) => this.upsertNotificationChannel(tenantId, channel))
+    );
+    const failures = results
+      .map((r, i) => ({ r, code: channels[i].code }))
+      .filter((x) => x.r.status === 'rejected');
+    if (failures.length) {
+      const detail = failures
+        .map((f) => {
+          const reason = (f.r as PromiseRejectedResult).reason;
+          const msg = reason instanceof ApiClientError ? reason.firstError
+            : reason instanceof Error ? reason.message : String(reason);
+          return `${f.code}: ${msg}`;
+        })
+        .join('; ');
+      throw new Error(`Failed to save ${failures.length} of ${channels.length} channels — ${detail}`);
     }
   },
 };

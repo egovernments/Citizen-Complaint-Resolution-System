@@ -79,6 +79,58 @@ describe('configService.upsertNotificationChannel', () => {
     ).rejects.toBeInstanceOf(ApiClientError);
     expect(post).toHaveBeenCalledTimes(1); // no _search / _update attempted
   });
+
+  it('matches the existing row case-insensitively on reconcile', async () => {
+    post
+      .mockRejectedValueOnce(new ApiClientError([{ code: 'DUPLICATE_RECORD', message: 'exists' }], 400))
+      .mockResolvedValueOnce({ configData: [{ id: 'id-1', uniqueIdentifier: 'u', data: { code: 'whatsapp' } }] })
+      .mockResolvedValueOnce({});
+
+    await configService.upsertNotificationChannel('pb.amritsar', { code: 'WHATSAPP', name: 'WhatsApp', enabled: true });
+
+    expect(post.mock.calls[2][1].configData.id).toBe('id-1'); // found despite lowercase stored code
+  });
+
+  it('throws a clear error (not INVALID_ID) when the duplicate cannot be located', async () => {
+    post
+      .mockRejectedValueOnce(new ApiClientError([{ code: 'DUPLICATE_RECORD', message: 'exists' }], 400))
+      .mockResolvedValueOnce({ configData: [] }); // search finds nothing
+
+    await expect(
+      configService.upsertNotificationChannel('pb.amritsar', { code: 'WHATSAPP', name: 'WhatsApp', enabled: true })
+    ).rejects.toThrow(/could not be located/i);
+    expect(post).toHaveBeenCalledTimes(2); // no _update attempted with undefined id
+  });
+});
+
+describe('configService.saveNotificationChannels', () => {
+  it('attempts every channel and aggregates failures (best-effort, no abort)', async () => {
+    // WHATSAPP create ok; SMS create fails hard; EMAIL create ok -> all three attempted.
+    post
+      .mockResolvedValueOnce({})                                                              // WHATSAPP create
+      .mockRejectedValueOnce(new ApiClientError([{ code: 'X', message: 'sms boom' }], 500))   // SMS create
+      .mockResolvedValueOnce({});                                                             // EMAIL create
+
+    await expect(
+      configService.saveNotificationChannels('pb.amritsar', [
+        { code: 'WHATSAPP', name: 'WhatsApp', enabled: true },
+        { code: 'SMS', name: 'SMS', enabled: false },
+        { code: 'EMAIL', name: 'Email', enabled: false },
+      ])
+    ).rejects.toThrow(/Failed to save 1 of 3.*SMS: sms boom/);
+
+    // all three were attempted (not aborted after SMS failed)
+    expect(post).toHaveBeenCalledTimes(3);
+  });
+
+  it('resolves when all channels save', async () => {
+    post.mockResolvedValue({});
+    await expect(
+      configService.saveNotificationChannels('pb.amritsar', [
+        { code: 'WHATSAPP', name: 'WhatsApp', enabled: true },
+      ])
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe('configService.getNotificationChannels', () => {
