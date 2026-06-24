@@ -821,7 +821,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         codes: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Optional: filter by specific schema codes (e.g. ["RAINMAKER-PGR.ServiceDefs"])',
+          description: 'Optional: filter by specific schema codes (e.g. ["RAINMAKER-PGR.ComplaintHierarchy"])',
         },
       },
       required: ['tenant_id'],
@@ -870,7 +870,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         },
         code: {
           type: 'string',
-          description: 'Schema code (e.g. "RAINMAKER-PGR.ServiceDefs", "common-masters.Department")',
+          description: 'Schema code (e.g. "RAINMAKER-PGR.ComplaintHierarchy", "common-masters.Department")',
         },
         description: {
           type: 'string',
@@ -1252,10 +1252,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         'common-masters.CronJobAPIConfig',
         'common-masters.ThemeConfig',
         // ── PGR ──
-        // ServiceDefs (complaint types) are intentionally excluded: they are
-        // tenant-specific and must be loaded by the operator via Phase 3 of
-        // the configurator. Copying them from the source (pg.citest) would
-        // pollute the target with unrelated demo/test complaint types.
+        // ComplaintHierarchy (complaint types + grouping nodes) is intentionally
+        // excluded: it is tenant-specific and must be loaded by the operator via
+        // Phase 3 of the configurator. Copying it from the source (pg.citest)
+        // would pollute the target with unrelated demo/test complaint types.
         'RAINMAKER-PGR.UIConstants',
         // ── workflow (definition is copied separately in Step 6 below;
         //    these are the MDMS-side companion configs) ──
@@ -1337,7 +1337,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         'egov-hrms.Degree':                    ['tenantId'],
         'egov-hrms.EmploymentTest':            ['tenantId'],
         'egov-hrms.Specalization':             ['tenantId'],
-        'RAINMAKER-PGR.ServiceDefs':           ['tenantId'],
+        'RAINMAKER-PGR.ComplaintHierarchy':    ['tenantId'],
+        'RAINMAKER-PGR.ComplaintHierarchyDefinition': ['tenantId'],
         'RAINMAKER-PGR.UIConstants':           ['tenantId'],
         'DataSecurity.DecryptionABAC':         ['tenantId'],
         'DataSecurity.EncryptionPolicy':       ['tenantId'],
@@ -1901,9 +1902,12 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                 if (typeof rec.code !== 'string') continue;
                 const code = rec.code.trim();
                 if (!code) continue;
-                // ServiceDefs localization (SERVICEDEFS.* / SERVICEDEFS_*) is
-                // intentionally excluded — mirrors the MDMS ServiceDefs data
-                // exclusion above. These keys are tenant-specific and must be
+                // Complaint-type localization (SERVICEDEFS.* / SERVICEDEFS_*) is
+                // intentionally excluded — mirrors the MDMS ComplaintHierarchy
+                // data exclusion above. (The localization key prefix stays
+                // SERVICEDEFS.* — that is the message-code convention the
+                // citizen UI reads, independent of the MDMS master name.)
+                // These keys are tenant-specific and must be
                 // seeded by Phase 3 of the configurator. Copying them from
                 // source tenants (e.g. statea has SERVICEDEFS.GARBAGE) causes
                 // a duplicate-constraint 400 when Phase 3 later tries to insert
@@ -2259,7 +2263,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
 
               // PGR's validateDepartment checks that the assignee's HRMS
               // Employee has an assignment in the complaint's required
-              // department (RAINMAKER-PGR.ServiceDefs.department). On a
+              // department (RAINMAKER-PGR.ComplaintHierarchy leaf .department). On a
               // tenant with one employee (ADMIN), every complaint targeting
               // a different department would fail with INVALID_ASSIGNMENT.
               // Give ADMIN one assignment per available department so it
@@ -3729,7 +3733,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         tenant_id: { type: 'string', description: 'The city tenant_id to destroy, e.g. "ke.maputopoc".' },
         department_codes: { type: 'array', items: { type: 'string' }, description: 'Department codes (at root) to deactivate. From the masters XLSX.' },
         designation_codes: { type: 'array', items: { type: 'string' }, description: 'Designation codes (at root) to deactivate.' },
-        complaint_type_codes: { type: 'array', items: { type: 'string' }, description: 'Complaint type (RAINMAKER-PGR.ServiceDefs) codes (at root) to deactivate.' },
+        complaint_type_codes: { type: 'array', items: { type: 'string' }, description: 'Complaint type (RAINMAKER-PGR.ComplaintHierarchy leaf) codes (at root) to deactivate.' },
         remove_tenant_registration: { type: 'boolean', description: 'Also deactivate the tenant.tenants record for this city at the root. Default true.' },
         dry_run: { type: 'boolean' },
       },
@@ -3761,7 +3765,9 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         rootRecordsToDeactivate.push({ schemaCode: 'common-masters.Designation', uniqueIdentifier: code });
       }
       for (const code of ctCodes) {
-        rootRecordsToDeactivate.push({ schemaCode: 'RAINMAKER-PGR.ServiceDefs', uniqueIdentifier: code });
+        // Complaint types are LEAF rows of the single RAINMAKER-PGR.ComplaintHierarchy
+        // adjacency-list master. The leaf row's uniqueIdentifier (code) IS the serviceCode.
+        rootRecordsToDeactivate.push({ schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy', uniqueIdentifier: code });
       }
       if (removeRegistration) {
         rootRecordsToDeactivate.push({ schemaCode: 'tenant.tenants', uniqueIdentifier: cityCode });

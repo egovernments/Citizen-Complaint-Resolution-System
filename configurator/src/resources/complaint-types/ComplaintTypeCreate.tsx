@@ -8,7 +8,6 @@ const defaultRecord = {
   active: true,
   keywords: 'complaint',
   order: 0,
-  menuPath: 'Complaint',
 };
 
 export function ComplaintTypeCreate() {
@@ -32,7 +31,6 @@ export function ComplaintTypeCreate() {
       serviceCode?: string;
       name?: string;
       department?: string;
-      menuPath?: string;
     };
     const serviceCode = data.serviceCode?.trim();
     const name = data.name?.trim();
@@ -47,7 +45,7 @@ export function ComplaintTypeCreate() {
     for (const locale of targetLocales) {
       await localizationService.uploadComplaintTypeLocalizations(
         tenantId,
-        [{ serviceCode, name, department: data.department, menuPath: data.menuPath }],
+        [{ serviceCode, name, department: data.department }],
         locale,
       );
     }
@@ -60,7 +58,10 @@ export function ComplaintTypeCreate() {
 
   return (
     <DigitCreate title="Create Complaint Type" record={defaultRecord} afterCreate={afterCreate}>
-      <DigitFormInput source="menuPath" label="Complaint Type (Menu Path)" validate={v.required} />
+      {/* The grouping key is the parent node's code in the ComplaintHierarchy
+          tree (replaces the old free-text menuPath). Optional here — leaves
+          created standalone sit ungrouped until parented. */}
+      <DigitFormInput source="parentCode" label="Parent (group code)" />
       <DigitFormSelect
         source="department"
         label="Department"

@@ -165,6 +165,53 @@ const getEffectiveServiceCode = (mainType, subType) => {
 };
 
 
+/**
+ * ADAPTER: ComplaintHierarchy (single adjacency list) -> legacy ServiceDefs shape.
+ *
+ * The MDMS master `RAINMAKER-PGR.ServiceDefs` has been replaced by
+ * `RAINMAKER-PGR.ComplaintHierarchy` (one adjacency list holding both interior
+ * nodes and leaf complaint types). This helper keeps only the LEAF rows and maps
+ * each one to the legacy ServiceDefs object so downstream components keep working
+ * with the same field names they always used (serviceCode, name, menuPath, ...).
+ *
+ * Leaf detection heuristic: a row is a leaf iff it carries `department` or
+ * `slaHours` (interior nodes omit both).
+ *
+ * Derived fields:
+ *   menuPath     = row.parentCode (group key)
+ *   menuPathName = name of the ComplaintHierarchy node whose code === row.parentCode
+ *
+ * @param {Array} rows - raw RAINMAKER-PGR.ComplaintHierarchy rows
+ * @returns {Array} legacy ServiceDefs-shaped rows
+ */
+export const adaptComplaintHierarchyToServiceDefs = (rows) => {
+  if (!Array.isArray(rows)) return [];
+
+  const isLeaf = (row) =>
+    row && (row.department != null || row.slaHours != null);
+
+  // code -> name lookup so leaves can resolve their parent node's display name
+  const nameByCode = {};
+  rows.forEach((row) => {
+    if (row && row.code != null) nameByCode[row.code] = row.name;
+  });
+
+  return rows.filter(isLeaf).map((row) => ({
+    serviceCode: row.code,
+    name: row.name,
+    department: row.department,
+    departments: row.departments,
+    slaHours: row.slaHours,
+    keywords: row.keywords,
+    order: row.order,
+    active: row.active,
+    parentCode: row.parentCode,
+    menuPath: row.parentCode,
+    menuPathName: nameByCode[row.parentCode] ?? row.parentCode,
+  }));
+};
+
+
 
 export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchyLevels = []) => {
   const userInfo = {

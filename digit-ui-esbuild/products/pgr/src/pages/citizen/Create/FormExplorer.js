@@ -1,5 +1,7 @@
-
-
+// ⚠️ DEPRECATED / DORMANT — NOT routed (the live citizen create flow is CreatePGRFlowV2.tsx; see Module.js).
+// This legacy FormExplorer still reads the REMOVED `RAINMAKER-PGR.ServiceDefs` master + `menuPath` grouping.
+// Do NOT re-enable without repointing to `RAINMAKER-PGR.ComplaintHierarchy`
+// (use utils/index.js → selectServiceDefsFromComplaintHierarchy). Kept only as a short-term rollback reference.
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Card, Header, Toast, FormComposerV2 } from "@egovernments/digit-ui-components";

@@ -134,42 +134,62 @@ export const mdmsService = {
   // Complaint Type / Service Definition Methods
   // ============================================
 
+  // Read complaint types from the single ComplaintHierarchy master, keeping
+  // only LEAF rows (a row is a leaf iff it carries `department` or `slaHours`;
+  // interior classification nodes omit them) and mapping each to the legacy
+  // ComplaintType shape so callers stay unchanged. A leaf's `code` IS the
+  // serviceCode; grouping derives from `parentCode` (no more menuPath).
   async getComplaintTypes(tenantId: string): Promise<ComplaintType[]> {
     const results = await this.search<Record<string, unknown>>(
       tenantId,
-      MDMS_SCHEMAS.PGR_SERVICE_DEFS
+      MDMS_SCHEMAS.COMPLAINT_HIERARCHY
     );
 
-    return results.map((r) => ({
-      serviceCode: r.serviceCode as string,
+    const isLeaf = (r: Record<string, unknown>) =>
+      r.department != null || r.slaHours != null;
+
+    return results.filter(isLeaf).map((r) => ({
+      serviceCode: (r.code ?? r.serviceCode) as string,
       name: (r.name || r.serviceName) as string,
       keywords: (r.keywords as string) || '',
       department: r.department as string,
+      departments: Array.isArray(r.departments) ? (r.departments as string[]) : undefined,
       slaHours: r.slaHours as number,
-      menuPath: r.menuPath as string | undefined,
+      levelCode: r.levelCode as string | undefined,
+      parentCode: r.parentCode as string | undefined,
+      path: r.path as string | undefined,
       active: r.active as boolean,
       order: r.order as number | undefined,
     }));
   },
 
+  // Write a complaint type as a ComplaintHierarchy LEAF row. The unique
+  // identifier and `code` are the serviceCode; leaf fields (department/
+  // departments/slaHours/keywords) mark it as a leaf. `menuPath` is gone —
+  // grouping is carried by `parentCode`. levelCode/path are written verbatim
+  // when the caller has them (the bulk-hierarchy flow computes them).
   async createComplaintType(
     tenantId: string,
     complaintType: ComplaintType
   ): Promise<MdmsRecord> {
+    const data: Record<string, unknown> = {
+      code: complaintType.serviceCode,
+      name: complaintType.name,
+      keywords: complaintType.keywords,
+      department: complaintType.department,
+      slaHours: complaintType.slaHours,
+      active: complaintType.active,
+      order: complaintType.order || 1,
+    };
+    if (complaintType.departments) data.departments = complaintType.departments;
+    if (complaintType.levelCode) data.levelCode = complaintType.levelCode;
+    if (complaintType.parentCode) data.parentCode = complaintType.parentCode;
+    if (complaintType.path) data.path = complaintType.path;
     return this.create(
       tenantId,
-      MDMS_SCHEMAS.PGR_SERVICE_DEFS,
+      MDMS_SCHEMAS.COMPLAINT_HIERARCHY,
       complaintType.serviceCode,
-      {
-        serviceCode: complaintType.serviceCode,
-        name: complaintType.name,
-        keywords: complaintType.keywords,
-        department: complaintType.department,
-        slaHours: complaintType.slaHours,
-        menuPath: complaintType.menuPath || 'Complaint',
-        active: complaintType.active,
-        order: complaintType.order || 1,
-      }
+      data
     );
   },
 

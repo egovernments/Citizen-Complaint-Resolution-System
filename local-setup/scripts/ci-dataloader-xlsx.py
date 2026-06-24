@@ -575,8 +575,8 @@ def main():
         print("WARNING: Some boundary relationships failed (continuing)")
 
     # Step 5: Load common masters at BOTH root and city level
-    # PGR resolves ServiceDefs at root level, UI filters at city level
-    print(f"\n[5/{total_steps}] Load common masters (departments, complaint types)")
+    # PGR resolves the ComplaintHierarchy at root level, UI filters at city level
+    print(f"\n[5/{total_steps}] Load common masters (departments, complaint hierarchy)")
     masters_xlsx = os.path.join(output_dir, "Common and Complaint Master.xlsx")
     for target in [BOOT_ROOT, BOOT_TENANT]:
         print(f"\n   Loading to: {target}")
@@ -643,8 +643,8 @@ def main():
             json={
                 "MdmsCriteria": {
                     "tenantId": search_tenant,
-                    "schemaCode": "RAINMAKER-PGR.ServiceDefs",
-                    "limit": 5,
+                    "schemaCode": "RAINMAKER-PGR.ComplaintHierarchy",
+                    "limit": 100,
                 },
                 "RequestInfo": {"apiId": "Rainmaker"},
             },
@@ -652,9 +652,11 @@ def main():
             timeout=REQUEST_TIMEOUT,
         )
         if svc_resp.ok:
-            defs = svc_resp.json().get("mdms", [])
-            if defs:
-                service_code = defs[0].get("data", {}).get("serviceCode")
+            rows = svc_resp.json().get("mdms", [])
+            # Leaf rows carry a department; a leaf's 'code' IS the serviceCode.
+            leaves = [r for r in rows if r.get("data", {}).get("department")]
+            if leaves:
+                service_code = leaves[0].get("data", {}).get("code")
                 print(f"   Using service code: {service_code} (from {search_tenant})")
                 break
 

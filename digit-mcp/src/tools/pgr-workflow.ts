@@ -208,8 +208,15 @@ export function registerPgrWorkflowTools(registry: ToolRegistry): void {
         if (digitApi.isAuthenticated()) {
           try {
             const stateRoot = tenantId.includes('.') ? tenantId.split('.')[0] : tenantId;
-            const types = await digitApi.mdmsV2Search(stateRoot, 'RAINMAKER-PGR.ServiceDefs');
-            const codes = types.map((t) => (t.data as Record<string, unknown>)?.serviceCode);
+            // Complaint types are now LEAF rows of RAINMAKER-PGR.ComplaintHierarchy
+            // (the one adjacency-list master). A leaf is identified by having
+            // 'department' or 'slaHours'; its 'code' IS the serviceCode stored on
+            // a complaint (verbatim). Interior/grouping nodes omit those fields.
+            const rows = await digitApi.mdmsV2Search(stateRoot, 'RAINMAKER-PGR.ComplaintHierarchy');
+            const codes = rows
+              .map((t) => t.data as Record<string, unknown>)
+              .filter((d) => d && (d.department != null || d.slaHours != null))
+              .map((d) => d.code);
             if (!codes.includes(serviceCode)) {
               issues.push(`Service code "${serviceCode}" not found. Available: ${codes.slice(0, 10).join(', ')}`);
             }

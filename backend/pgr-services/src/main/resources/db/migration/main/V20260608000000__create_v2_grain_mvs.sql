@@ -138,16 +138,18 @@ cur AS (
          boundary_path, ward_code, zone_code
   FROM complaint_events WHERE is_current_state
 ),
-mdms AS (   -- ServiceDefs; dedupe by serviceCode preferring the root (shortest) tenant
-  SELECT DISTINCT ON (data->>'serviceCode')
-         data->>'serviceCode'            AS service_code,
+mdms AS (   -- ComplaintHierarchy LEAF rows; dedupe by code preferring the root (shortest) tenant.
+            -- service_group is the parent category code (menuPath was removed from masters).
+  SELECT DISTINCT ON (data->>'code')
+         data->>'code'                   AS service_code,
          (data->>'slaHours')::int        AS mdms_sla_hours,
-         NULLIF(data->>'menuPath','')    AS service_group,
+         NULLIF(data->>'parentCode','')  AS service_group,
          (data->>'order')::smallint      AS service_order,
          data->>'department'             AS department_code
   FROM eg_mdms_data
-  WHERE schemacode = 'RAINMAKER-PGR.ServiceDefs' AND isactive
-  ORDER BY data->>'serviceCode', length(tenantid)
+  WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive
+        AND data->>'department' IS NOT NULL   -- leaf rows only (interior nodes carry no department)
+  ORDER BY data->>'code', length(tenantid)
 ),
 seq AS (
   SELECT id, row_number() OVER (PARTITION BY accountid ORDER BY createdtime, id) AS complaint_seq_for_citizen
