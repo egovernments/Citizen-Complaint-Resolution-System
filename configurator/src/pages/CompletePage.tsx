@@ -105,12 +105,12 @@ export default function CompletePage() {
 
           {/* Progress summary - DIGIT style */}
           <div className="flex items-center justify-center gap-1 sm:gap-2 mb-6 sm:mb-8">
-            {[1, 2, 3, 4].map((phase) => (
+            {[1, 2, 3, 4, 5].map((phase) => (
               <div key={phase} className="flex items-center gap-1 sm:gap-2">
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-primary rounded-full flex items-center justify-center">
                   <Check className="w-3 h-3 sm:w-4 sm:h-4 text-primary-foreground" />
                 </div>
-                {phase < 4 && <div className="w-4 sm:w-8 h-1 bg-primary rounded" />}
+                {phase < 5 && <div className="w-4 sm:w-8 h-1 bg-primary rounded" />}
               </div>
             ))}
           </div>
@@ -164,6 +164,10 @@ export default function CompletePage() {
                   <TableRow>
                     <TableCell className="text-xs sm:text-sm">Phase 4: Employees</TableCell>
                     <TableCell className="text-primary text-xs sm:text-sm font-medium">{cell(summary.employees, 'employees')}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="text-xs sm:text-sm">Phase 5: Communications</TableCell>
+                    <TableCell className="text-muted-foreground text-xs sm:text-sm">Notification channels</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>

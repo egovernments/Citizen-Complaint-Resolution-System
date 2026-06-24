@@ -342,8 +342,8 @@ function App() {
     }));
     trackEvent('phase_complete', { phase, tenant: state.tenant });
 
-    // Track onboarding completion
-    if (phase === 4) {
+    // Track onboarding completion (Communications is the final phase, 5)
+    if (phase === 5) {
       trackEvent('onboarding_complete', { tenant: state.tenant });
     }
   };
