@@ -201,20 +201,55 @@ server {
 
 {% endif %}
 {% if enable_novu | default(false) %}
-  # Novu dashboard (SPA). The official ghcr.io/novuhq/novu/dashboard
-  # image is built with Vite `base=/`, despite VITE_BASE_PATH=/novu
-  # being set at runtime (only API/WS hostnames are honored at
-  # runtime; the asset paths bake at build time). That means the
-  # dashboard HTML references /assets/, /images/, /manifest.json,
-  # /favicon-*, /auth/ — all UNPREFIXED. Below we proxy `/novu/`
+{% if build_novu_dashboard | default(false) %}
+  # Novu dashboard (SPA) — REBASED image (backend/novu-dashboard/Dockerfile,
+  # built when `build_novu_dashboard: true`). The dist is baked to base=/novu, so the
+  # served HTML/JS reference /novu/assets, /novu/manifest.json, /novu/favicon-*
+  # consistently. The files still live at the container ROOT, so the trailing
+  # slash on proxy_pass strips the /novu prefix and hits them. One /novu/ block
+  # therefore covers shell + assets + manifest + favicons + SPA fallback.
+  #
+  # Two residues still surface at the root and are handled below:
+  #   - Novu's auth shim navigates to /auth/sign-in|sign-up|organization-list
+  #     and ignores the router basename (can't be moved under /novu).
+  #   - A few decorative logos/background are fetched at /images/* at runtime.
+  location = /novu { return 302 /novu/; }
+  location /novu/ {
+    proxy_pass http://127.0.0.1:14000/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+  }
+
+  # Novu's auth shim uses these three ROOT paths regardless of base. They do
+  # NOT overlap Keycloak (which serves /auth/realms|admin|resources/*), so scope
+  # exactly these to the dashboard and let everything else under /auth/ fall
+  # through to the keycloak vhost block. `^~` stops regex-location evaluation;
+  # being a longer prefix than a generic `/auth/`, these win for these paths.
+  location ^~ /auth/sign-in           { proxy_pass http://127.0.0.1:14000; proxy_set_header Host $host; proxy_http_version 1.1; }
+  location ^~ /auth/sign-up           { proxy_pass http://127.0.0.1:14000; proxy_set_header Host $host; proxy_http_version 1.1; }
+  location ^~ /auth/organization-list { proxy_pass http://127.0.0.1:14000; proxy_set_header Host $host; proxy_http_version 1.1; }
+
+  # Decorative dashboard logos/background, fetched unprefixed at runtime.
+  location /images/ {
+    proxy_pass http://127.0.0.1:14000/images/;
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+  }
+{% else %}
+  # Novu dashboard (SPA) — STOCK image. The official ghcr.io/novuhq/novu/dashboard
+  # image is built with Vite `base=/`, despite VITE_BASE_PATH=/novu being set at
+  # runtime (only API/WS hostnames are honored at runtime; the asset paths bake
+  # at build time). That means the dashboard HTML references /assets/, /images/,
+  # /manifest.json, /favicon-*, /auth/ — all UNPREFIXED. Below we proxy `/novu/`
   # plus those root-level paths.
   #
-  # ⚠ WORKAROUND. Proper fix: rebuild the dashboard image with
-  # `VITE_BASE_PATH=/novu` at build time so the served HTML uses
-  # `/novu/assets/…` consistently. Then most of the unprefixed
-  # locations below can be removed (only /novu/ and /novu-api/ would
-  # remain). Tracked in the dashboard image build pipeline — not
-  # something we can fix from this repo without forking the image.
+  # ⚠ WORKAROUND. Proper fix: set `build_novu_dashboard: true` to build the
+  # subpath-rebased image (build/novu-dashboard/Dockerfile); then this branch is
+  # replaced by the tidy one above. The stock branch ALSO hijacks the entire
+  # `/auth/` prefix, so it is unsafe to combine with Keycloak on the same domain.
   location = /novu { return 302 /novu/; }
   location /novu/ {
     proxy_pass http://127.0.0.1:14000/novu/;
@@ -223,32 +258,6 @@ server {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_http_version 1.1;
-  }
-
-  # Novu API (REST) — used by the dashboard SPA running in the
-  # browser. Exposed on the host so VITE_API_HOSTNAME can resolve.
-  location /novu-api/ {
-    proxy_pass http://127.0.0.1:14002/;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header Authorization $http_authorization;
-    proxy_http_version 1.1;
-  }
-
-  # Novu websocket — used by the dashboard for live notification
-  # status updates. Proxy upgrades the connection to WS.
-  location /novu-ws/ {
-    proxy_pass http://127.0.0.1:14003/;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_read_timeout 24h;
   }
 
   # ⚠ WORKAROUND for the upstream Vite base=/ bug. These root-level
@@ -285,7 +294,9 @@ server {
   # route from Kong (e.g. the keycloak-route in kong.yml). Without
   # this proxy, hard-refreshes at /auth/* fall through to Kong's
   # /auth → keycloak upstream and 500 with a DNS resolve failure
-  # when keycloak isn't deployed.
+  # when keycloak isn't deployed. ⚠ This shadows ALL of /auth/, so do
+  # not enable the stock branch on a domain that also runs Keycloak —
+  # use build_novu_dashboard: true (rebased branch) there instead.
   location /auth/ {
     proxy_pass http://127.0.0.1:14000;
     proxy_set_header Host $host;
@@ -303,6 +314,33 @@ server {
   location = /favicon.ico {
     proxy_pass http://127.0.0.1:14000/favicon.ico;
     proxy_set_header Host $host;
+  }
+{% endif %}
+
+  # Novu API (REST) — used by the dashboard SPA running in the
+  # browser. Exposed on the host so VITE_API_HOSTNAME can resolve.
+  location /novu-api/ {
+    proxy_pass http://127.0.0.1:14002/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Authorization $http_authorization;
+    proxy_http_version 1.1;
+  }
+
+  # Novu websocket — used by the dashboard for live notification
+  # status updates. Proxy upgrades the connection to WS.
+  location /novu-ws/ {
+    proxy_pass http://127.0.0.1:14003/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 24h;
   }
 
   # novu-bridge REST endpoints (diagnostics: _validate, _dry-run,

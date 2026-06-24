@@ -1806,7 +1806,13 @@ services:
       - egov-network
 
   novu-dashboard:
-    image: ghcr.io/novuhq/novu/dashboard:2.3.0
+    # Image ref is wired through .env (NOVU_DASHBOARD_IMAGE) so the deploy can
+    # either use a locally-built, subpath-rebased image (built when
+    # `build_novu_dashboard: true`, tagged `novu-dashboard:local`) or pull the
+    # stock registry image. Default (build off) = stock, which serves at base=/
+    # and needs the legacy root-path nginx workarounds. See
+    # backend/novu-dashboard/Dockerfile and the nginx-site.conf.j2 enable_novu branch.
+    image: ${NOVU_DASHBOARD_IMAGE:-ghcr.io/novuhq/novu/dashboard:2.3.0}
     container_name: novu-dashboard
     restart: unless-stopped
     profiles: ["notifications"]

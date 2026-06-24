@@ -270,6 +270,17 @@ enable_overpass: false
 # Novu still comes up, operator can configure it via the UI later.
 enable_novu: false
 
+# Build a subpath-rebased Novu dashboard image locally so the SPA serves cleanly
+# under /novu (backend/novu-dashboard/Dockerfile, tagged novu-dashboard:local).
+# Strongly recommended — REQUIRED when Keycloak shares this domain (enable_keycloak),
+# because the stock dashboard's nginx workaround hijacks the whole /auth/ prefix.
+# When false, the stock image is pulled and the legacy root-path nginx workaround
+# is rendered instead. See nginx-site.conf.j2 (enable_novu branch).
+build_novu_dashboard: false
+# novu_dashboard_version: "2.3.0"   # upstream tag to rebase FROM
+# novu_base_path: "/novu"           # subpath to bake into the rebased dist
+# novu_dashboard_image: ""          # override to pin a prebuilt image instead of building
+
 # Pasted from the Novu dashboard after first sign-up.
 # https://docs.novu.co/sdks/api-keys for where to find it.
 novu_api_key: ""
