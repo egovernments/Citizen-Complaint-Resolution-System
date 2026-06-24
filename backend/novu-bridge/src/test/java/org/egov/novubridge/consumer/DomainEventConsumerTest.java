@@ -20,6 +20,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -115,5 +116,34 @@ public class DomainEventConsumerTest {
 
         verify(producer).push(eq(TENANT), eq(DLQ), any());
         verify(producer, never()).push(eq(TENANT), eq(RETRY), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void retryPayload_survivesJsonRoundTripAndReconsumes() throws Exception {
+        failProcessing();
+
+        // 1) input failure -> capture the exact payload pushed to the retry topic
+        consumer.listen(asInputRecord(event()), INPUT);
+        ArgumentCaptor<Object> pushed = ArgumentCaptor.forClass(Object.class);
+        verify(producer).push(eq(TENANT), eq(RETRY), pushed.capture());
+
+        // 2) simulate Kafka: serialize the pushed value and deserialize it back to a HashMap,
+        //    exactly as the JsonSerializer/consumer would when the message comes off the retry topic.
+        String onTheWire = mapper.writeValueAsString(pushed.getValue());
+        HashMap<String, Object> reconsumed = mapper.readValue(onTheWire, HashMap.class);
+
+        // 3) re-consume from the retry topic (still failing)
+        consumer.listen(reconsumed, RETRY);
+
+        // the wrapped event survived the round trip (eventId intact) and reached the pipeline again
+        ArgumentCaptor<ComplaintsDomainEvent> dispatched = ArgumentCaptor.forClass(ComplaintsDomainEvent.class);
+        verify(dispatch, times(2)).processEnabledChannels(dispatched.capture(), anyBoolean(), any());
+        assertEquals("evt-1", dispatched.getAllValues().get(1).getEventId());
+
+        // and the attempt advanced 1 -> 2 across the round trip
+        ArgumentCaptor<Object> rePushed = ArgumentCaptor.forClass(Object.class);
+        verify(producer, times(2)).push(eq(TENANT), eq(RETRY), rePushed.capture());
+        assertEquals(2, ((Map<String, Object>) rePushed.getAllValues().get(1)).get("attempt"));
     }
 }
