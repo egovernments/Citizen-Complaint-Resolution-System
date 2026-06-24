@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Seeds notification MDMS schemas + per-tenant TemplateBinding /
-# ProviderDetail records into a running DIGIT.
+# Seeds notification MDMS schemas (TemplateBinding, ProviderDetail,
+# NotificationChannel) + per-tenant TemplateBinding / ProviderDetail
+# records into a running DIGIT. NotificationChannel registers the schema
+# only — channel enable/disable is set per tenant (default OFF) via the
+# onboarding UI, not seeded here.
 #
 # Architectural note: novu-bridge resolves templates by calling
 # digit-config-service, which has its OWN postgres table
@@ -68,7 +71,7 @@ echo "    got userInfo: ${USERINFO_JSON:0:60}..."
 # config-service validates against the schema registered here on
 # every `_create`. The schemas are tenant-agnostic — register at
 # root only.
-for schema in TemplateBinding ProviderDetail; do
+for schema in TemplateBinding ProviderDetail NotificationChannel; do
   echo "==> Registering schema: $schema"
   body="$(jq -cn \
     --arg code "$schema" \

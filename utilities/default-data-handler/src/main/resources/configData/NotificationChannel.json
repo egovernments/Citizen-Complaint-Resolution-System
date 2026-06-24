@@ -2,7 +2,7 @@
   {
     "code": "WHATSAPP",
     "name": "WhatsApp",
-    "enabled": true,
+    "enabled": false,
     "providerName": "twilio",
     "priority": 1
   }
