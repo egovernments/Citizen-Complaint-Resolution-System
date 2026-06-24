@@ -7,6 +7,7 @@ import Phase2Page from './pages/Phase2Page';
 import Phase3Page from './pages/Phase3Page';
 import Phase4Page from './pages/Phase4Page';
 import CommunicationsPage from './pages/CommunicationsPage';
+import CommunicationsSettingsPage from './pages/CommunicationsSettingsPage';
 import CompletePage from './pages/CompletePage';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
 import { QueryClient } from '@tanstack/react-query';
@@ -139,6 +140,7 @@ function ManagementAdmin() {
         {/* Custom routes */}
         <CustomRoutes>
           <Route path="/advanced" element={<AdvancedPage />} />
+          <Route path="/communications" element={<CommunicationsSettingsPage />} />
           <Route path="/pgr-dashboard" element={<PgrDashboard />} />
           <Route path="/employees/bulk" element={<EmployeeBulkImport />} />
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
