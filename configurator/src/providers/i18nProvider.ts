@@ -54,6 +54,7 @@ const customEnglishMessages: TranslationMessages = {
       processes: 'Processes',
       mdms_schemas: 'MDMS Schemas',
       boundaries: 'Boundaries',
+      communications: 'Communications',
       advanced: 'Advanced',
       switch_to_onboarding: 'Switch to Onboarding',
     },

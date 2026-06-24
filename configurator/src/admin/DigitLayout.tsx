@@ -70,6 +70,7 @@ const navGroups = [
       { id: 'workflow-processes', nameKey: 'app.nav.processes', path: '/manage/workflow-processes', icon: History },
       { id: 'mdms-schemas', nameKey: 'app.nav.mdms_schemas', path: '/manage/mdms-schemas', icon: FileCode },
       { id: 'boundaries', nameKey: 'app.nav.boundaries', path: '/manage/boundaries', icon: MapPin },
+      { id: 'communications', nameKey: 'app.nav.communications', path: '/manage/communications', icon: Bell },
     ],
   },
 ];
@@ -188,19 +189,6 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
             >
               <BarChart3 className="w-5 h-5 flex-shrink-0" />
               {!sidebarCollapsed && <span className="text-sm font-medium">PGR Dashboard</span>}
-            </button>
-            <button
-              onClick={() => navigate('/manage/communications')}
-              className={`
-                w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors
-                ${location.pathname === '/manage/communications'
-                  ? 'bg-primary/10 text-primary border-l-2 border-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
-              `}
-              title={sidebarCollapsed ? 'Communications' : undefined}
-            >
-              <Bell className="w-5 h-5 flex-shrink-0" />
-              {!sidebarCollapsed && <span className="text-sm font-medium">Communications</span>}
             </button>
           </div>
 
