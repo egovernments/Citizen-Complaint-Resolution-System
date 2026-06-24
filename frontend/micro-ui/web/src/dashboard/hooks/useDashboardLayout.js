@@ -25,6 +25,11 @@ const LEGACY_FLOW_RATIO_WIDGET_ID = "demo-viz-leaderboard";
 const LIVE_FLOW_RATIO_WIDGET_ID = "cl-chart-department-flow-ratio";
 const LEGACY_GEOGRAPHY_MAP_WIDGET_ID = "demo-viz-map";
 const LIVE_GEOGRAPHY_MAP_WIDGET_ID = "cl-map-geography-choropleth";
+const DEFAULT_REOPEN_RATE_KPI_ID = "cl-metric-reopen-rate";
+const LEGACY_ZONE_REOPEN_RATE_KPI_ID = "ce-metric-reopen-rate";
+const DEFAULT_RESOLUTION_RATE_KPI_ID = "cl-metric-resolution-rate";
+const LEGACY_ON_TIME_SLA_KPI_ID = "rs-metric-sla-compliance";
+const LEGACY_RESOLVED_ON_TIME_RATE_KPI_ID = "cl-metric-resolved-on-time-rate";
 
 /** Swap the demo channel pie for the live open-complaints pie in saved layouts. */
 function migratePieChannelWidget(layout) {
@@ -116,11 +121,71 @@ function migrateGeographyMapWidget(layout) {
   }, []);
 }
 
+/** Use complaint-landscape reopen tile (delta) in place of the zone sparkline reopen KPI. */
+function migrateDefaultReopenRateKpi(layout) {
+  const hasLive = layout.some((item) => item.i === DEFAULT_REOPEN_RATE_KPI_ID);
+
+  return layout.reduce((next, item) => {
+    if (item.i !== LEGACY_ZONE_REOPEN_RATE_KPI_ID) {
+      next.push(item);
+      return next;
+    }
+
+    if (hasLive) return next;
+
+    next.push({ ...item, i: DEFAULT_REOPEN_RATE_KPI_ID });
+    return next;
+  }, []);
+}
+
+const LEGACY_REMOVED_KPI_IDS = new Set([
+  "rs-metric-sla-compliance",
+  "ce-metric-reopen-rate",
+]);
+
+function purgeRemovedKpis(layout) {
+  return layout.filter((item) => !LEGACY_REMOVED_KPI_IDS.has(item.i));
+}
+
+function migrateDefaultResolutionRateKpi(layout) {
+  const hasLive = layout.some((item) => item.i === DEFAULT_RESOLUTION_RATE_KPI_ID);
+
+  if (hasLive) {
+    return layout.filter(
+      (item) =>
+        item.i !== LEGACY_ON_TIME_SLA_KPI_ID &&
+        item.i !== LEGACY_RESOLVED_ON_TIME_RATE_KPI_ID
+    );
+  }
+
+  let migrated = false;
+  return layout.reduce((next, item) => {
+    if (
+      item.i === LEGACY_ON_TIME_SLA_KPI_ID ||
+      item.i === LEGACY_RESOLVED_ON_TIME_RATE_KPI_ID
+    ) {
+      if (migrated) return next;
+      migrated = true;
+      next.push({ ...item, i: DEFAULT_RESOLUTION_RATE_KPI_ID });
+      return next;
+    }
+
+    next.push(item);
+    return next;
+  }, []);
+}
+
 function migrateSavedLayoutWidgets(layout) {
-  return migrateGeographyMapWidget(
-    migrateFlowRatioWidget(
-      migrateSlaRiskWidget(
-        migratePieChannelWidget(migrateDemoStackedToOfficerSla(layout))
+  return purgeRemovedKpis(
+    migrateDefaultResolutionRateKpi(
+      migrateDefaultReopenRateKpi(
+        migrateGeographyMapWidget(
+          migrateFlowRatioWidget(
+            migrateSlaRiskWidget(
+              migratePieChannelWidget(migrateDemoStackedToOfficerSla(layout))
+            )
+          )
+        )
       )
     )
   );
@@ -261,7 +326,7 @@ function normalizeChartItem(item) {
 /* -------------------------------------------------------------------------- */
 
 const LEGACY_LAYOUT_VERSIONS = [
-  "v20", "v19", "v18", "v17", "v16", "v15", "v14", "v13", "v12", "v11", "v10", "v9",
+  "v29", "v28", "v27", "v20", "v19", "v18", "v17", "v16", "v15", "v14", "v13", "v12", "v11", "v10", "v9",
 ];
 
 function getAllLayoutStorageKeys() {

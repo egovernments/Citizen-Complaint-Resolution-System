@@ -4,6 +4,7 @@ import {
   KPI_METRICS,
   INVENTORY_SECTIONS,
 } from "../config/supervisorMetrics";
+import { isInventoryMetric, isInventoryWidget } from "../config/inventoryAllowlist";
 
 const DRAG_TYPE = "application/x-supervisor-dashboard-kpi";
 
@@ -49,11 +50,13 @@ const KpiInventory = ({
         const metrics = (section.metricIds || [])
           .map((id) => METRIC_LOOKUP[id])
           .filter(Boolean)
+          .filter((m) => isInventoryMetric(m.id))
           .filter((m) => !visibleLayoutIds.includes(m.id));
 
         const widgets = (section.widgetIds || [])
           .map((id) => WIDGET_LOOKUP[id])
           .filter(Boolean)
+          .filter((w) => isInventoryWidget(w.id))
           .filter((w) => !visibleLayoutIds.includes(w.id));
 
         return {

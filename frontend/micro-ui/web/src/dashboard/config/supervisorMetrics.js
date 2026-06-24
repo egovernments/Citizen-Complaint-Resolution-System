@@ -39,7 +39,8 @@ export const INVENTORY_SECTIONS = [
   {
     id: "employee-performance",
     label: EMPLOYEE_PERFORMANCE_SECTION,
-    description: "Officer workload, rankings, and performance tables",
+    description:
+      "Employees with most open complaints (stacked bar) and employee performance table",
     metricIds: [],
     widgetIds: EMPLOYEE_PERFORMANCE_CHARTS.map((chart) => chart.id),
   },

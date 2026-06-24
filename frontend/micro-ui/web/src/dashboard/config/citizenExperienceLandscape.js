@@ -30,14 +30,6 @@ export const CITIZEN_EXPERIENCE_METRICS = [
         measureKey: "pct",
         queryKey: "ce_response_rate",
       },
-      {
-        id: "avg_by_category",
-        label: "Avg. rating by category",
-        outputFormat: "Decimal (1 place) per category",
-        format: "na",
-        measureKey: null,
-        queryKey: null,
-      },
     ],
   },
   {

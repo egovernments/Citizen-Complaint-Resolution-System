@@ -7,7 +7,7 @@ import {
 import {
   buildKpiContextText,
   getKpiDisplayTitle,
-  getSparklineDeltaClass,
+  resolveKpiDeltaClass,
   getStatusValueClass,
   isKpiListMetric,
   parseKpiListItems,
@@ -31,7 +31,7 @@ import {
   resolveDepartmentForServiceType,
 } from "./complaintTypeDepartmentConfig";
 import {
-  COMPLAINT_CHANNELS,
+  PIE_CHART_CHANNELS,
   resolveChannelForSource,
 } from "./complaintChannelConfig";
 import {
@@ -450,11 +450,14 @@ export const BATCH_QUERIES = {
     filters: { is_resolved: true },
     measures: [{ name: "total", agg: "count" }],
   },
-  cl_channel_app: { grain: "facts", measures: [channelRatio(["app", "mobile"])] },
-  cl_channel_phone: { grain: "facts", measures: [channelRatio(["phone"])] },
+  cl_channel_app: {
+    grain: "facts",
+    measures: [channelRatio(["app", "mobile", "mobileapp", "mobile_app"])],
+  },
+  cl_channel_phone: { grain: "facts", measures: [channelRatio(["phone", "ivr"])] },
   cl_channel_walkin: {
     grain: "facts",
-    measures: [channelRatio(["walk_in", "walk-in", "walkin"])],
+    measures: [channelRatio(["walk_in", "walk-in", "walkin", "counter", "csc"])],
   },
   cl_channel_online: {
     grain: "facts",
@@ -1721,12 +1724,17 @@ function normalizeStageDwellQuery(query, apiFilters) {
   };
 }
 
-function sanitizeLiveOpenComplaintsQuery(queries) {
-  const query = queries.cl_open_complaints_live;
-  if (!query) return;
-  const filters = { ...(query.filters || {}) };
-  delete filters.created_at;
-  queries.cl_open_complaints_live = { ...query, filters };
+function sanitizeLiveOpenSnapshotQueries(queries) {
+  for (const [key, query] of Object.entries(queries)) {
+    if (!query?.filters?.is_open) continue;
+    if (query.grain === "daily") continue;
+    if (DATE_RANGE_KPI_QUERY_KEYS.has(key)) continue;
+
+    const filters = { ...(query.filters || {}) };
+    if (filters.created_at == null) continue;
+    delete filters.created_at;
+    queries[key] = { ...query, filters };
+  }
 }
 
 function sanitizeLiveOldestOpenAgeQuery(queries) {
@@ -1776,7 +1784,7 @@ export function buildBatchQueries(dashboardFilters) {
   for (const [key, query] of Object.entries(BATCH_QUERIES)) {
     queries[key] = applyDashboardFiltersToQuery(query, apiFilters);
   }
-  sanitizeLiveOpenComplaintsQuery(queries);
+  sanitizeLiveOpenSnapshotQueries(queries);
   sanitizeLiveOldestOpenAgeQuery(queries);
 
   const dateRangeBounds = selectedDateRangeBounds(dashboardFilters, apiFilters);
@@ -2596,7 +2604,11 @@ export function buildKpiCardData(
 
   if (!isSparkline && !isDeltaTile) return base;
 
-  const deltaClass = getSparklineDeltaClass(deltaExtras.delta, metric.id);
+  const deltaClass = resolveKpiDeltaClass(
+    deltaExtras.delta,
+    metric.id,
+    value
+  );
 
   if (!isSparkline) {
     return {
@@ -2942,7 +2954,7 @@ export function parseDepartmentFlowRatioBarChart(result, { maxDepartments = 12 }
 export function parseOpenComplaintsByChannelPieChart(result) {
   if (!result?.rows?.length) return [];
 
-  const totalsByChannel = new Map(COMPLAINT_CHANNELS.map((channel) => [channel.id, 0]));
+  const totalsByChannel = new Map(PIE_CHART_CHANNELS.map((channel) => [channel.id, 0]));
 
   for (const row of result.rows) {
     const count = Number(row.total) || 0;
@@ -2954,7 +2966,7 @@ export function parseOpenComplaintsByChannelPieChart(result) {
     totalsByChannel.set(channelId, (totalsByChannel.get(channelId) ?? 0) + count);
   }
 
-  return COMPLAINT_CHANNELS.map((channel) => ({
+  return PIE_CHART_CHANNELS.map((channel) => ({
     label: channel.label,
     count: totalsByChannel.get(channel.id) ?? 0,
     color: channel.color,

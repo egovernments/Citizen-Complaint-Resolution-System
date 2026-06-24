@@ -55,10 +55,12 @@ export const KPI_DISPLAY = {
   "cl-metric-sla-compliance-rate": {
     displayTitle: "SLA compliance rate",
     threshold: { kind: "percent", higherIsBetter: true, onTrack: 85, breaching: 60 },
+    deltaColorMode: "value",
   },
   "cl-metric-sla-non-compliance-rate": {
     displayTitle: "SLA non-compliance rate",
     threshold: { kind: "percent", higherIsBetter: false, onTrack: 15, breaching: 40 },
+    deltaColorMode: "value",
   },
   "cl-metric-resolved-on-time-rate": {
     displayTitle: "Resolved on time rate",
@@ -143,6 +145,19 @@ export function getNumberTileValueClass(status, { unavailable = false } = {}) {
   const styles = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_DELTA];
   if (unavailable) return styles.valueUnavailable;
   return getStatusValueClass(status);
+}
+
+/** Delta color for KPI tiles — threshold-aligned or trend-based per metric config. */
+export function resolveKpiDeltaClass(metricId, deltaPercent, displayValue) {
+  const config = getKpiDisplayConfig(metricId);
+  const unavailable =
+    displayValue == null || displayValue === "—" || displayValue === "…";
+  if (config.deltaColorMode === "value") {
+    return getNumberTileValueClass(resolveThresholdStatus(metricId, displayValue), {
+      unavailable,
+    });
+  }
+  return getSparklineDeltaClass(deltaPercent, metricId);
 }
 
 /** Delta arrow color — uses metric threshold when set, else treats volume increases as negative. */

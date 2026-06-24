@@ -13,7 +13,7 @@ export const COMPLAINT_CHANNELS = [
   {
     id: "mobile",
     label: "Mobile",
-    sources: ["app", "mobile"],
+    sources: ["app", "mobile", "mobileapp", "mobile_app"],
     color: "var(--chart-1)",
   },
   {
@@ -25,8 +25,32 @@ export const COMPLAINT_CHANNELS = [
   {
     id: "walk_in",
     label: "Walk-in",
-    sources: ["walk_in", "walk-in", "walkin", "counter"],
+    sources: ["walk_in", "walk-in", "walkin", "counter", "csc"],
     color: "var(--chart-4)",
+  },
+  {
+    id: "sms",
+    label: "SMS",
+    sources: ["sms"],
+    color: "var(--chart-5)",
+  },
+  {
+    id: "email",
+    label: "Email",
+    sources: ["email"],
+    color: "var(--chart-5)",
+  },
+  {
+    id: "whatsapp",
+    label: "WhatsApp",
+    sources: ["whatsapp"],
+    color: "var(--chart-1)",
+  },
+  {
+    id: "other",
+    label: "Other",
+    sources: [],
+    color: "var(--muted-foreground)",
   },
 ];
 
@@ -46,10 +70,13 @@ export function normalizeSourceKey(source) {
 export function resolveChannelForSource(source) {
   const key = normalizeSourceKey(source);
   if (!key) return null;
-  return SOURCE_TO_CHANNEL.get(key) ?? null;
+  return SOURCE_TO_CHANNEL.get(key) ?? "other";
 }
 
 export function formatChannelLabel(channelId) {
   const channel = COMPLAINT_CHANNELS.find((entry) => entry.id === channelId);
   return channel?.label ?? "Other";
 }
+
+/** Channels shown in pie / breakdown charts (includes Other for unmapped sources). */
+export const PIE_CHART_CHANNELS = COMPLAINT_CHANNELS;

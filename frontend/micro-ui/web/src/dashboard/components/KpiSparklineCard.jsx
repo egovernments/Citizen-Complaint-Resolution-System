@@ -46,6 +46,7 @@ const KpiSparklineCard = ({
   value,
   status,
   deltaDisplay,
+  deltaClass,
   seriesColor = "var(--chart-1)",
   sparkline = [],
   loading = false,
@@ -109,7 +110,9 @@ const KpiSparklineCard = ({
           {displayValue}
         </div>
         {deltaDisplay ? (
-          <div className={`${sparklineTile.delta} ${valueClass}`}>{deltaDisplay}</div>
+          <div className={`${sparklineTile.delta} ${deltaClass ?? valueClass}`}>
+            {deltaDisplay}
+          </div>
         ) : loading ? (
           <div className={`${sparklineTile.delta} ${sparklineTile.deltaMuted}`}>…</div>
         ) : null}

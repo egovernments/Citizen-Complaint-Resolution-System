@@ -199,10 +199,10 @@ export const DEFAULT_CHART_LAYOUT = Object.fromEntries(
 export const TOP_ROW_CHART_IDS = [];
 
 export const DEFAULT_LAYOUT = [
-  { i: "rs-metric-sla-compliance", x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-metric-resolution-rate", x: 0, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "rs-metric-breach-count", x: 2, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-metric-total-resolved", x: 4, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "ce-metric-reopen-rate", x: 6, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-metric-reopen-rate", x: 6, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "ce-metric-csat", x: 8, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: true, static: false, resizeHandles: ["se"] },
   { i: "cl-chart-officer-sla", x: 0, y: 2, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-chart-resolution-subtype", x: 8, y: 2, w: 4, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },

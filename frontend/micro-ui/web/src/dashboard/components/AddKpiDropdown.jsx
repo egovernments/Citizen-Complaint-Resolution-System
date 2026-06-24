@@ -72,7 +72,9 @@ function MetricIcon({ kind }) {
 }
 
 function itemTypeLabel(item) {
-  return item.itemType === "kpi" ? "STAT" : "CHART";
+  if (item.itemType === "kpi") return "STAT";
+  if (item.type === "data-table" || item.type === "sla-risk-table") return "TABLE";
+  return "CHART";
 }
 
 const AddKpiDropdown = ({
