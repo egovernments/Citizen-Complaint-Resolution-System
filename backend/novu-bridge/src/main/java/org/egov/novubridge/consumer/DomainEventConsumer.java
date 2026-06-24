@@ -36,16 +36,67 @@ public class DomainEventConsumer {
 
     @KafkaListener(topics = {"${novu.bridge.kafka.input.topic}", "${novu.bridge.kafka.retry.topic}"})
     public void listen(final HashMap<String, Object> record, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
-        ComplaintsDomainEvent event = mapper.convertValue(record, ComplaintsDomainEvent.class);
+        boolean fromRetry = topic != null && topic.equals(config.getRetryTopic());
+
+        // Retry-topic messages are wrapped { event, attempt, ... }; input-topic messages are the raw event.
+        ComplaintsDomainEvent event = fromRetry
+                ? mapper.convertValue(record.get("event"), ComplaintsDomainEvent.class)
+                : mapper.convertValue(record, ComplaintsDomainEvent.class);
+        int attempt = fromRetry ? asInt(record.get("attempt")) : 0;
+
+        // Space out retries so a brief downstream outage isn't burned through instantly.
+        if (fromRetry) {
+            backoff();
+        }
+
         try {
             dispatchPipelineService.processEnabledChannels(event, true, null);
         } catch (CustomException ce) {
-            log.error("Domain event processing failed for eventId={} code={}", event.getEventId(), ce.getCode(), ce);
-            publishDlq(event, ce.getCode(), ce.getMessage());
+            handleFailure(event, attempt, ce.getCode(), ce.getMessage(), ce);
         } catch (Exception e) {
-            log.error("Domain event processing failed for eventId={} topic={}", event.getEventId(), topic, e);
-            publishDlq(event, "NB_PROCESSING_ERROR", e.getMessage());
+            handleFailure(event, attempt, "NB_PROCESSING_ERROR", e.getMessage(), e);
         }
+    }
+
+    /**
+     * Bounded automatic retry: re-queue the event on the retry topic (incrementing the attempt count)
+     * until maxRetries is exhausted, then route it to the DLQ. Recovers from transient downstream
+     * failures (e.g. a brief config-service blip) without a manual replay, while still bounding the
+     * work and never silently dropping the event.
+     */
+    private void handleFailure(ComplaintsDomainEvent event, int attempt, String code, String message, Exception cause) {
+        int maxRetries = config.getMaxRetries() != null ? config.getMaxRetries() : 0;
+        int nextAttempt = attempt + 1;
+        if (nextAttempt <= maxRetries) {
+            log.warn("Processing failed for eventId={} code={}; scheduling retry {}/{}",
+                    event.getEventId(), code, nextAttempt, maxRetries, cause);
+            Map<String, Object> retry = new HashMap<>();
+            retry.put("event", event);
+            retry.put("attempt", nextAttempt);
+            retry.put("lastErrorCode", code);
+            retry.put("lastErrorMessage", message);
+            producer.push(event.getTenantId(), config.getRetryTopic(), retry);
+        } else {
+            log.error("Processing failed for eventId={} code={}; retries exhausted ({}), routing to DLQ",
+                    event.getEventId(), code, maxRetries, cause);
+            publishDlq(event, code, message);
+        }
+    }
+
+    private void backoff() {
+        int delay = config.getRetryDelayMs() != null ? config.getRetryDelayMs() : 0;
+        if (delay <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(delay);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static int asInt(Object value) {
+        return (value instanceof Number n) ? n.intValue() : 0;
     }
 
     private void publishDlq(ComplaintsDomainEvent event, String errorCode, String errorMessage) {
