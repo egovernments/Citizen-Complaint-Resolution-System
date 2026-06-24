@@ -139,23 +139,27 @@ export function buildMobileErrorMessage(pattern, t) {
   return `${base} (${lenPart}${startPart})`;
 }
 
-/**
- * Derive { min, max } digit counts from a mobile regex pattern string.
- * `max` is -1 when the pattern is unbounded (e.g. contains `+` or `*`).
- * Use this instead of separate mobileNumberLength / maxLength config fields —
- * the regex is the single source of truth.
- *
- * Examples:
- *   computeMobileLengths("^[79][0-9]{8}$")     → { min: 9,  max: 9  }
- *   computeMobileLengths("^[6-9][0-9]{9}$")    → { min: 10, max: 10 }
- *   computeMobileLengths("^0?[17][0-9]{8}$")   → { min: 9,  max: 10 }
- */
-export function computeMobileLengths(pattern) {
-  if (!pattern) return { min: 0, max: -1 };
-  const s = pattern.replace(/^\^/, "").replace(/\$$/, "");
+// Split a regex fragment by top-level | (depth-aware, skips [...] and nested groups).
+function _splitAlternation(s) {
+  const parts = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === "[") { const e = s.indexOf("]", i + 1); if (e !== -1) i = e; }
+    else if (s[i] === "(") depth++;
+    else if (s[i] === ")") depth--;
+    else if (s[i] === "|" && depth === 0) { parts.push(s.slice(start, i)); start = i + 1; }
+  }
+  parts.push(s.slice(start));
+  return parts;
+}
+
+// Compute { min, max } for a stripped regex fragment (no ^ / $). Recurses into groups.
+function _computeFragmentLengths(s) {
   let min = 0, max = 0, i = 0;
   while (i < s.length) {
     let atomEnd = i;
+    let baseMin = 1, baseMax = 1;
+
     if (s[i] === "[") {
       const end = s.indexOf("]", i + 1);
       atomEnd = end === -1 ? i + 1 : end + 1;
@@ -168,29 +172,69 @@ export function computeMobileLengths(pattern) {
         else if (s[atomEnd] === ")") depth--;
         atomEnd++;
       }
+      let inner = s.slice(i + 1, atomEnd - 1);
+      if (/^\?[=!]/.test(inner) || /^\?<[=!]/.test(inner)) {
+        // zero-width assertion — consumes no characters
+        baseMin = 0; baseMax = 0;
+      } else {
+        if (inner.startsWith("?:")) inner = inner.slice(2);
+        else if (inner.startsWith("?")) inner = inner.slice(1);
+        const alts = _splitAlternation(inner);
+        if (alts.length > 1) {
+          const lens = alts.map(_computeFragmentLengths);
+          baseMin = Math.min(...lens.map(l => l.min));
+          const maxes = lens.map(l => l.max);
+          baseMax = maxes.includes(-1) ? Infinity : Math.max(...maxes);
+        } else {
+          const g = _computeFragmentLengths(inner);
+          baseMin = g.min;
+          baseMax = g.max === -1 ? Infinity : g.max;
+        }
+      }
     } else {
       atomEnd = i + 1;
     }
-    let atomMin = 1, atomMax = 1, qi = atomEnd;
+
+    // Quantifier multiplies the atom's base width
+    let repMin = 1, repMax = 1, qi = atomEnd;
     if (qi < s.length) {
-      if (s[qi] === "?") { atomMin = 0; atomMax = 1; qi++; }
-      else if (s[qi] === "*") { atomMin = 0; atomMax = Infinity; qi++; }
-      else if (s[qi] === "+") { atomMin = 1; atomMax = Infinity; qi++; }
+      if (s[qi] === "?") { repMin = 0; repMax = 1; qi++; }
+      else if (s[qi] === "*") { repMin = 0; repMax = Infinity; qi++; }
+      else if (s[qi] === "+") { repMin = 1; repMax = Infinity; qi++; }
       else if (s[qi] === "{") {
         const end = s.indexOf("}", qi);
         if (end !== -1) {
           const parts = s.slice(qi + 1, end).split(",");
-          atomMin = parseInt(parts[0], 10) || 0;
-          atomMax = parts.length > 1
+          repMin = parseInt(parts[0], 10) || 0;
+          repMax = parts.length > 1
             ? (parts[1].trim() ? parseInt(parts[1], 10) : Infinity)
-            : atomMin;
+            : repMin;
           qi = end + 1;
         }
       }
     }
-    min += atomMin;
-    max += atomMax;
+
+    min += baseMin * repMin;
+    max += (baseMax === Infinity || repMax === Infinity) ? Infinity : baseMax * repMax;
     i = qi;
   }
   return { min, max: isFinite(max) ? max : -1 };
+}
+
+/**
+ * Derive { min, max } digit counts from a mobile regex pattern string.
+ * `max` is -1 when the pattern is unbounded (e.g. contains `+` or `*`).
+ * Use this instead of separate mobileNumberLength / maxLength config fields —
+ * the regex is the single source of truth.
+ *
+ * Examples:
+ *   computeMobileLengths("^[79][0-9]{8}$")        → { min: 9,  max: 9  }
+ *   computeMobileLengths("^[6-9][0-9]{9}$")       → { min: 10, max: 10 }
+ *   computeMobileLengths("^0?[17][0-9]{8}$")      → { min: 9,  max: 10 }
+ *   computeMobileLengths("^(254)[17][0-9]{8}$")   → { min: 12, max: 12 }
+ */
+export function computeMobileLengths(pattern) {
+  if (!pattern) return { min: 0, max: -1 };
+  const s = pattern.replace(/^\^/, "").replace(/\$$/, "");
+  return _computeFragmentLengths(s);
 }
