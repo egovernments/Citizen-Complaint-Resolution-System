@@ -12,18 +12,21 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for the tenant-level channel toggle ({@link ConfigServiceClient#isChannelEnabled}).
- * Verifies the default-OFF / fail-closed contract that gates dispatch.
+ * Unit tests for the tenant channel config lookup ({@link ConfigServiceClient#getEnabledChannels}).
+ * Verifies the legacy-fallback contract: null = unconfigured (caller falls back to the allow-list),
+ * list = the enabled codes (empty when everything is explicitly disabled).
  */
 public class ConfigServiceClientTest {
 
@@ -43,83 +46,65 @@ public class ConfigServiceClientTest {
         client = new ConfigServiceClient(restTemplate, config);
     }
 
-    private void stubResolve(ResponseEntity<Map> response) {
+    private void stubSearch(ResponseEntity<Map> response) {
         when(restTemplate.exchange(any(String.class), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
                 .thenReturn(response);
     }
 
     @Test
-    void enabledRecord_returnsTrue() {
-        Map<String, Object> body = Map.of("configData", Map.of("data", Map.of("code", "WHATSAPP", "enabled", true)));
-        stubResolve(new ResponseEntity<>(body, HttpStatus.OK));
+    void getEnabledChannels_returnsEnabledCodesLowercased() {
+        Map<String, Object> body = Map.of("configData", List.of(
+                Map.of("data", Map.of("code", "WHATSAPP", "enabled", true)),
+                Map.of("data", Map.of("code", "SMS", "enabled", false)),     // filtered out
+                Map.of("data", Map.of("code", "EMAIL", "enabled", true))));
+        stubSearch(new ResponseEntity<>(body, HttpStatus.OK));
 
-        assertTrue(client.isChannelEnabled("pb.amritsar", "whatsapp"));
+        assertEquals(List.of("whatsapp", "email"), client.getEnabledChannels("pb.amritsar"));
     }
 
     @Test
-    void disabledRecord_returnsFalse() {
-        Map<String, Object> body = Map.of("configData", Map.of("data", Map.of("code", "WHATSAPP", "enabled", false)));
-        stubResolve(new ResponseEntity<>(body, HttpStatus.OK));
+    void getEnabledChannels_configuredButAllDisabled_returnsEmptyList() {
+        Map<String, Object> body = Map.of("configData", List.of(
+                Map.of("data", Map.of("code", "WHATSAPP", "enabled", false))));
+        stubSearch(new ResponseEntity<>(body, HttpStatus.OK));
 
-        assertFalse(client.isChannelEnabled("pb.amritsar", "whatsapp"));
+        // Configured (records exist) but nothing enabled -> empty list, NOT null (no legacy fallback).
+        assertTrue(client.getEnabledChannels("pb.amritsar").isEmpty());
     }
 
     @Test
-    void noRecord_defaultsOff() {
-        // config-service returns 200 with no configData -> tenant never opted in
-        stubResolve(new ResponseEntity<>(Map.of(), HttpStatus.OK));
+    void getEnabledChannels_noRecords_returnsNullForLegacyFallback() {
+        stubSearch(new ResponseEntity<>(Map.of(), HttpStatus.OK));         // no configData
+        assertNull(client.getEnabledChannels("pb.amritsar"));
 
-        assertFalse(client.isChannelEnabled("pb.amritsar", "whatsapp"));
+        stubSearch(new ResponseEntity<>(Map.of("configData", List.of()), HttpStatus.OK)); // empty list
+        assertNull(client.getEnabledChannels("pb.amritsar"));
     }
 
     @Test
-    void lookupThrows_failsClosed() {
+    void getEnabledChannels_lookupThrows_returnsNullForLegacyFallback() {
         when(restTemplate.exchange(any(String.class), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
                 .thenThrow(new RuntimeException("config-service unreachable"));
 
-        assertFalse(client.isChannelEnabled("pb.amritsar", "whatsapp"));
+        // Favour delivery on a transient error: fall back to legacy (null), not drop.
+        assertNull(client.getEnabledChannels("pb.amritsar"));
     }
 
     @Test
-    void normalisesLowercaseChannelToUppercaseCode() {
-        Map<String, Object> body = Map.of("configData", Map.of("data", Map.of("code", "WHATSAPP", "enabled", true)));
+    void getEnabledChannels_searchRequestHasNoEnabledFilter() {
+        Map<String, Object> body = Map.of("configData", List.of(
+                Map.of("data", Map.of("code", "WHATSAPP", "enabled", true))));
         ArgumentCaptor<HttpEntity> captor = ArgumentCaptor.forClass(HttpEntity.class);
         when(restTemplate.exchange(any(String.class), eq(HttpMethod.POST), captor.capture(), eq(Map.class)))
                 .thenReturn(new ResponseEntity<>(body, HttpStatus.OK));
 
-        client.isChannelEnabled("pb.amritsar", "whatsapp");
+        client.getEnabledChannels("pb.amritsar");
 
         Map<String, Object> sent = (Map<String, Object>) captor.getValue().getBody();
-        Map<String, Object> resolveRequest = (Map<String, Object>) sent.get("resolveRequest");
-        Map<String, Object> criteria = (Map<String, Object>) resolveRequest.get("criteria");
-        assertTrue("WHATSAPP".equals(criteria.get("code")));
-    }
-
-    @Test
-    void getEnabledChannels_returnsEnabledCodesLowercased() {
-        Map<String, Object> body = Map.of("configData", java.util.List.of(
-                Map.of("data", Map.of("code", "WHATSAPP", "enabled", true)),
-                Map.of("data", Map.of("code", "SMS", "enabled", false)),   // filtered out
-                Map.of("data", Map.of("code", "EMAIL", "enabled", true))));
-        stubResolve(new ResponseEntity<>(body, HttpStatus.OK));
-
-        java.util.List<String> channels = client.getEnabledChannels("pb.amritsar");
-
-        assertEquals(java.util.List.of("whatsapp", "email"), channels);
-    }
-
-    @Test
-    void getEnabledChannels_noRecords_returnsEmpty() {
-        stubResolve(new ResponseEntity<>(Map.of(), HttpStatus.OK));
-
-        assertTrue(client.getEnabledChannels("pb.amritsar").isEmpty());
-    }
-
-    @Test
-    void getEnabledChannels_lookupThrows_failsClosed() {
-        when(restTemplate.exchange(any(String.class), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
-                .thenThrow(new RuntimeException("config-service unreachable"));
-
-        assertTrue(client.getEnabledChannels("pb.amritsar").isEmpty());
+        Map<String, Object> criteria = (Map<String, Object>) sent.get("criteria");
+        assertEquals("NotificationChannel", criteria.get("schemaCode"));
+        assertEquals("pb.amritsar", criteria.get("tenantId"));
+        // We fetch ALL records (to detect "unconfigured"), so no enabled filter is sent.
+        assertFalse(criteria.containsKey("criteria"));
     }
 }

@@ -94,13 +94,32 @@ public class DispatchPipelineServiceMultiChannelTest {
     }
 
     @Test
-    void noEnabledChannels_dispatchesNothing() {
+    void configuredButAllDisabled_dispatchesNothing() {
+        // Empty list (not null) = the tenant has config but every channel is disabled -> no fallback.
         when(configServiceClient.getEnabledChannels("pb.amritsar")).thenReturn(List.of());
 
         List<DispatchResult> results = service.processEnabledChannels(event(), true, null);
 
         assertTrue(results.isEmpty());
         verifyNoInteractions(novuClient);
+    }
+
+    @Test
+    void unconfiguredTenant_fallsBackToAllowList() {
+        config.setChannel("whatsapp");   // global allow-list
+        // null = the tenant has NO NotificationChannel config -> legacy fallback to the allow-list.
+        when(configServiceClient.getEnabledChannels("pb.amritsar")).thenReturn(null);
+        stubHappyRecipient();
+        when(configServiceClient.resolveProvidersByChannel("pb.amritsar", "whatsapp"))
+                .thenReturn(List.of(ResolvedProvider.builder().providerName("twilio").channel("whatsapp").build()));
+        when(novuClient.triggerWithProviderConfig(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of()).build());
+
+        List<DispatchResult> results = service.processEnabledChannels(event(), true, null);
+
+        assertEquals(1, results.size());
+        assertEquals(Boolean.TRUE, results.get(0).getNovuTriggered(), "unconfigured tenant should dispatch on the allow-list");
+        verify(configServiceClient).resolveProvidersByChannel("pb.amritsar", "whatsapp");
     }
 
     @Test

@@ -235,63 +235,24 @@ public class ConfigServiceClient {
     }
 
     /**
-     * Tenant-level channel toggle. Resolves the NotificationChannel config for the given
-     * tenant + channel and reports whether it is enabled.
+     * Returns the tenant's NotificationChannel configuration, distinguishing "unconfigured" from
+     * "configured but disabled" so the caller can stay backward-compatible:
      *
-     * Defaults to DISABLED (returns false) when no record exists or the lookup fails, so a
-     * channel is only ever dispatched when a tenant has explicitly opted in. NotificationChannel.code
-     * is the uppercase enum (WHATSAPP/SMS/EMAIL); the dispatch channel is lowercase, so we normalise.
-     */
-    public boolean isChannelEnabled(String tenantId, String channel) {
-        String code = channel == null ? "" : channel.toUpperCase();
-        Map<String, Object> resolveRequest = new HashMap<>();
-        resolveRequest.put("schemaCode", "NotificationChannel");
-        resolveRequest.put("tenantId", tenantId);
-        resolveRequest.put("criteria", Map.of("code", code));
-
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("RequestInfo", new HashMap<>());
-        payload.put("resolveRequest", resolveRequest);
-
-        try {
-            String url = config.getConfigHost() + config.getConfigResolvePath();
-            log.info("Channel-enabled check: url={}, schemaCode=NotificationChannel, code={}, tenantId={}",
-                    url, code, tenantId);
-
-            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
-            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                log.warn("Channel-enabled check returned non-success for tenant={} channel={}; treating as DISABLED",
-                        tenantId, channel);
-                return false;
-            }
-
-            Map<String, Object> configData = (Map<String, Object>) response.getBody().get("configData");
-            if (configData == null) {
-                // No NotificationChannel record for this tenant+channel -> default OFF.
-                return false;
-            }
-
-            Map<String, Object> data = (Map<String, Object>) configData.get("data");
-            boolean enabled = data != null && Boolean.TRUE.equals(data.get("enabled"));
-            log.info("Channel-enabled result: tenantId={}, channel={}, enabled={}", tenantId, channel, enabled);
-            return enabled;
-        } catch (Exception e) {
-            // Fail closed: config-service hiccups must never silently start sending on a channel.
-            log.warn("Channel-enabled check failed for tenant={} channel={}; treating as DISABLED", tenantId, channel, e);
-            return false;
-        }
-    }
-
-    /**
-     * Returns the lowercased channel codes the tenant has explicitly enabled (NotificationChannel
-     * records with enabled=true). Defaults to an empty list (nothing enabled) when no records exist
-     * or the lookup fails, so dispatch never fans out to a channel without an explicit opt-in.
+     *   null            -> the tenant has NO NotificationChannel records (unconfigured). The caller
+     *                      should fall back to legacy behaviour (dispatch on the global allow-list),
+     *                      so existing tenants keep working without a backfill.
+     *   list (lowercased)-> the channel codes the tenant has ENABLED (may be empty if every record
+     *                      is explicitly disabled -> nothing dispatched).
+     *
+     * On a lookup error we also return null (legacy fallback) to favour delivery over silently
+     * dropping notifications; per-recipient consent and the global allow-list still apply.
+     * NotificationChannel.code is the uppercase enum (WHATSAPP/SMS/EMAIL); we normalise to lowercase
+     * to match the channel values used elsewhere (ProviderDetail/TemplateBinding, the allow-list).
      */
     public List<String> getEnabledChannels(String tenantId) {
         Map<String, Object> searchCriteria = new HashMap<>();
         searchCriteria.put("schemaCode", "NotificationChannel");
         searchCriteria.put("tenantId", tenantId);
-        searchCriteria.put("criteria", Map.of("enabled", true));
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("RequestInfo", new HashMap<>());
@@ -299,17 +260,19 @@ public class ConfigServiceClient {
 
         try {
             String url = config.getConfigHost() + config.getConfigSearchPath();
-            log.info("Enabled-channels search: url={}, schemaCode=NotificationChannel, tenantId={}", url, tenantId);
+            log.info("Channel-config search: url={}, schemaCode=NotificationChannel, tenantId={}", url, tenantId);
 
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                log.warn("Enabled-channels search returned non-success for tenant={}; treating as none enabled", tenantId);
-                return Collections.emptyList();
+                log.warn("Channel-config search returned non-success for tenant={}; falling back to legacy allow-list", tenantId);
+                return null;
             }
 
             List<Map<String, Object>> configDataList = (List<Map<String, Object>>) response.getBody().get("configData");
-            if (configDataList == null) {
-                return Collections.emptyList();
+            if (configDataList == null || configDataList.isEmpty()) {
+                // Unconfigured tenant -> legacy fallback (no backfill needed for existing tenants).
+                log.info("No NotificationChannel config for tenant={}; falling back to legacy allow-list", tenantId);
+                return null;
             }
 
             List<String> channels = new ArrayList<>();
@@ -323,12 +286,12 @@ public class ConfigServiceClient {
                     channels.add(String.valueOf(code).toLowerCase());
                 }
             }
-            log.info("Enabled-channels result: tenantId={}, channels={}", tenantId, channels);
+            log.info("Channel-config result: tenantId={}, enabledChannels={}", tenantId, channels);
             return channels;
         } catch (Exception e) {
-            // Fail closed: never fan out to channels we could not confirm are enabled.
-            log.warn("Enabled-channels search failed for tenant={}; treating as none enabled", tenantId, e);
-            return Collections.emptyList();
+            // Favour delivery on a transient error: fall back to legacy behaviour rather than drop.
+            log.warn("Channel-config search failed for tenant={}; falling back to legacy allow-list", tenantId, e);
+            return null;
         }
     }
 }

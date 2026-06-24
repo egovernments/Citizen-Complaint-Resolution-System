@@ -57,15 +57,10 @@ public class DispatchPipelineService {
 
         envelopeValidator.validate(event);
 
-        List<String> allowed = config.getAllowedChannels();
-        List<String> enabled = configServiceClient.getEnabledChannels(event.getTenantId());
-        List<String> effective = enabled.stream()
-                .filter(allowed::contains)
-                .distinct()
-                .collect(java.util.stream.Collectors.toList());
+        List<String> effective = effectiveChannels(event.getTenantId());
         if (effective.isEmpty()) {
-            log.info("No enabled+allowed channels for tenant={}, eventId={} (enabled={}, allowed={}); nothing dispatched",
-                    event.getTenantId(), event.getEventId(), enabled, allowed);
+            log.info("No effective channels for tenant={}, eventId={}; nothing dispatched",
+                    event.getTenantId(), event.getEventId());
             return Collections.emptyList();
         }
 
@@ -98,17 +93,18 @@ public class DispatchPipelineService {
                 event.getEventId(), channel, context.getAudience(), context.getRecipientMobile(),
                 context.getRecipientUserId(), context.getLocale());
 
-        // Tenant-level channel gate (default OFF). A channel is dispatched only when the tenant
-        // has an enabled NotificationChannel config; otherwise skip cleanly before any further work.
-        if (!configServiceClient.isChannelEnabled(event.getTenantId(), channel)) {
+        // Tenant-level channel gate. The channel is dispatched when the tenant has enabled it, or when
+        // the tenant has no NotificationChannel config at all (legacy fallback, see effectiveChannels);
+        // otherwise skip cleanly before any further work.
+        if (!effectiveChannels(event.getTenantId()).contains(channel)) {
             persist(event, context, null, "SKIPPED", "NB_CHANNEL_DISABLED",
-                    channel + " channel disabled for tenant " + event.getTenantId(), null, 1);
+                    channel + " channel not enabled for tenant " + event.getTenantId(), null, 1);
             return DispatchResult.builder()
                     .valid(true)
                     .preferenceAllowed(false)
                     .derivedContext(context)
                     .novuTriggered(false)
-                    .diagnostics(Collections.singletonList("Channel disabled for tenant"))
+                    .diagnostics(Collections.singletonList("Channel not enabled for tenant"))
                     .build();
         }
 
@@ -276,6 +272,24 @@ public class DispatchPipelineService {
     private String primaryChannel() {
         List<String> allowed = config.getAllowedChannels();
         return allowed.isEmpty() ? config.getChannel() : allowed.get(0);
+    }
+
+    /**
+     * The channels to dispatch on for a tenant: the explicitly-enabled NotificationChannel codes
+     * intersected with the global allow-list, OR — when the tenant has no NotificationChannel config
+     * at all — the full allow-list (legacy back-compat, so existing tenants keep working with no
+     * backfill). A tenant that has config but has disabled everything dispatches on nothing.
+     */
+    private List<String> effectiveChannels(String tenantId) {
+        List<String> allowed = config.getAllowedChannels();
+        List<String> configured = configServiceClient.getEnabledChannels(tenantId); // null => unconfigured
+        if (configured == null) {
+            return allowed;
+        }
+        return configured.stream()
+                .filter(allowed::contains)
+                .distinct()
+                .collect(java.util.stream.Collectors.toList());
     }
 
     public NovuClient.NovuResponse testTrigger(String templateKey, String subscriberId, String phone,
