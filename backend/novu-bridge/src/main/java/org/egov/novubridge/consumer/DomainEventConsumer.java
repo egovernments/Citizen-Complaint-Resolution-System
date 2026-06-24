@@ -8,8 +8,6 @@ import org.egov.novubridge.service.DispatchPipelineService;
 import org.egov.novubridge.web.models.ComplaintsDomainEvent;
 import org.egov.tracer.model.CustomException;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.support.KafkaHeaders;
-import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -34,21 +32,27 @@ public class DomainEventConsumer {
         this.config = config;
     }
 
-    @KafkaListener(topics = {"${novu.bridge.kafka.input.topic}", "${novu.bridge.kafka.retry.topic}"})
-    public void listen(final HashMap<String, Object> record, @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
-        boolean fromRetry = topic != null && topic.equals(config.getRetryTopic());
+    /** Live events: raw domain event, attempt 0. */
+    @KafkaListener(topics = "${novu.bridge.kafka.input.topic}")
+    public void listenInput(final HashMap<String, Object> record) {
+        process(mapper.convertValue(record, ComplaintsDomainEvent.class), 0);
+    }
 
-        // Retry-topic messages are wrapped { event, attempt, ... }; input-topic messages are the raw event.
-        ComplaintsDomainEvent event = fromRetry
-                ? mapper.convertValue(record.get("event"), ComplaintsDomainEvent.class)
-                : mapper.convertValue(record, ComplaintsDomainEvent.class);
-        int attempt = fromRetry ? asInt(record.get("attempt")) : 0;
+    /**
+     * Retries: a separate listener from the input topic so the backoff sleep can never head-of-line
+     * block live notifications. Capped at one record per poll so a full retry backlog (each sleeping
+     * retryDelayMs) cannot exceed max.poll.interval.ms and trigger a rebalance.
+     * Retry messages are the wrapper { event, attempt, ... }.
+     */
+    @KafkaListener(topics = "${novu.bridge.kafka.retry.topic}", properties = {"max.poll.records=1"})
+    public void listenRetry(final HashMap<String, Object> record) {
+        ComplaintsDomainEvent event = mapper.convertValue(record.get("event"), ComplaintsDomainEvent.class);
+        int attempt = asInt(record.get("attempt"));
+        backoff(); // space out retries so a brief downstream outage isn't burned through instantly
+        process(event, attempt);
+    }
 
-        // Space out retries so a brief downstream outage isn't burned through instantly.
-        if (fromRetry) {
-            backoff();
-        }
-
+    private void process(ComplaintsDomainEvent event, int attempt) {
         try {
             dispatchPipelineService.processEnabledChannels(event, true, null);
         } catch (CustomException ce) {

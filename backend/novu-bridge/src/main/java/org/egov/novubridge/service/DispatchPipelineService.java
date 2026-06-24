@@ -94,11 +94,27 @@ public class DispatchPipelineService {
                 context.getRecipientUserId(), context.getLocale());
 
         // Tenant-level channel gate. The channel is dispatched when the tenant has enabled it, or when
-        // the tenant has no NotificationChannel config at all (legacy fallback, see effectiveChannels);
-        // otherwise skip cleanly before any further work.
-        if (!effectiveChannels(event.getTenantId()).contains(channel)) {
-            persist(event, context, null, "SKIPPED", "NB_CHANNEL_DISABLED",
-                    channel + " channel not enabled for tenant " + event.getTenantId(), null, 1);
+        // the tenant has no NotificationChannel config at all (legacy fallback, see effectiveChannels).
+        // This is also the diagnostic path (_validate/_dry-run): a config-service failure must not 500
+        // the endpoint, so report it as a diagnostic result instead of letting it throw.
+        List<String> effective;
+        try {
+            effective = effectiveChannels(event.getTenantId());
+        } catch (CustomException e) {
+            return DispatchResult.builder()
+                    .valid(false)
+                    .preferenceAllowed(false)
+                    .derivedContext(context)
+                    .novuTriggered(false)
+                    .diagnostics(Collections.singletonList("Channel config unavailable: " + e.getCode()))
+                    .build();
+        }
+        if (!effective.contains(channel)) {
+            // Only record a SKIPPED dispatch-log row when actually sending; _validate must be side-effect-free.
+            if (send) {
+                persist(event, context, null, "SKIPPED", "NB_CHANNEL_DISABLED",
+                        channel + " channel not enabled for tenant " + event.getTenantId(), null, 1);
+            }
             return DispatchResult.builder()
                     .valid(true)
                     .preferenceAllowed(false)
@@ -255,16 +271,19 @@ public class DispatchPipelineService {
                     .novuResponse(novuResponse.getResponse())
                     .diagnostics(Collections.singletonList("Dispatch successful"))
                     .build();
-        } catch (CustomException e) {
-            // Isolate per-channel failures: record FAILED and let sibling channels proceed.
-            log.error("Dispatch failed for eventId={} channel={} code={}", event.getEventId(), channel, e.getCode(), e);
-            persist(event, context, null, "FAILED", e.getCode(), e.getMessage(), null, 1);
+        } catch (Exception e) {
+            // Isolate ALL per-channel failures (not just CustomException): record FAILED and let sibling
+            // channels proceed. Catching broadly is deliberate — letting an unexpected error bubble would
+            // re-queue the whole event for retry and re-send channels that already succeeded (duplicates).
+            String code = (e instanceof CustomException) ? ((CustomException) e).getCode() : "NB_DISPATCH_ERROR";
+            log.error("Dispatch failed for eventId={} channel={} code={}", event.getEventId(), channel, code, e);
+            persist(event, context, null, "FAILED", code, e.getMessage(), null, 1);
             return DispatchResult.builder()
                     .valid(false)
                     .preferenceAllowed(true)
                     .derivedContext(context)
                     .novuTriggered(false)
-                    .diagnostics(Collections.singletonList(channel + " failed: " + e.getCode()))
+                    .diagnostics(Collections.singletonList(channel + " failed: " + code))
                     .build();
         }
     }

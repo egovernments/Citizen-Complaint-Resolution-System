@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Seeds notification MDMS schemas (TemplateBinding, ProviderDetail,
 # NotificationChannel) + per-tenant TemplateBinding / ProviderDetail
-# records into a running DIGIT. NotificationChannel registers the schema
-# only — channel enable/disable is set per tenant (default OFF) via the
-# onboarding UI, not seeded here.
+# records into a running DIGIT. NotificationChannel registers the SCHEMA
+# only — no per-tenant channel records are seeded here, so a tenant seeded
+# via this script has NO NotificationChannel config and the bridge falls
+# back to legacy behaviour (dispatch on the NOVU_BRIDGE_CHANNEL allow-list).
+# Set explicit per-channel enable/disable via the onboarding/Management UI
+# (tenants provisioned through default-data-handler get a disabled default).
 #
 # Architectural note: novu-bridge resolves templates by calling
 # digit-config-service, which has its OWN postgres table
