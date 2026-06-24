@@ -55,16 +55,23 @@ public class AnalyticsCatalog {
             mapOf("filed_at","created_at", "resolved_at","resolved_at"),
             setOf("created_at","resolved_at","last_transition_at","first_assigned_at","facts_built_at"),
             // groupable
+            // service_request_id is the complaint PK: normally a distinct-only identity key
+            // (grouping by it yields one row per complaint), but it is intentionally promoted
+            // here to back bounded detail tables (e.g. Complaints-at-Risk: filtered + limited).
             setOf("service_code","application_status","source","ward_code","zone_code","boundary_path",
                   "service_group","department_code","aging_bucket","sla_status_bucket","current_assignee_uuid",
                   "is_open","is_resolved","is_reopened","was_rejected","sla_breached","current_state_sla_breached",
+                  "has_been_assigned","is_reassigned",
                   "has_rating","is_negative_rating","is_first_time_complainant","has_geo_pin","filed_on_behalf",
                   "current_state_seq","created_month","created_week_start","created_year","created_quarter",
-                  "created_date","created_dow","created_is_weekend","created_is_business_hr","tenant_id"),
+                  "created_date","created_dow","created_is_weekend","created_is_business_hr",
+                  "service_request_id","tenant_id"),
             // filterable (NOTE: UUID columns intentionally absent)
             setOf("service_code","application_status","source","ward_code","zone_code","service_group",
                   "department_code","aging_bucket","sla_status_bucket","is_open","is_resolved","is_reopened",
-                  "was_rejected","sla_breached","current_state_sla_breached","has_rating","is_negative_rating",
+                  "was_rejected","sla_breached","current_state_sla_breached",
+                  "has_been_assigned","is_reassigned",
+                  "has_rating","is_negative_rating",
                   "is_first_time_complainant","has_geo_pin","created_month","created_year","created_quarter",
                   "created_is_weekend","created_at","resolved_at","rating","current_state_seq"),
             // measurable (numeric)
