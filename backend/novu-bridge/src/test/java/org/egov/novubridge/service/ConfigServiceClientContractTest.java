@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,11 +14,13 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -40,6 +43,7 @@ public class ConfigServiceClientContractTest {
 
     private final AtomicReference<String> searchBody = new AtomicReference<>();
     private final AtomicReference<String> searchResponse = new AtomicReference<>("{\"configData\":[]}");
+    private final AtomicInteger searchStatus = new AtomicInteger(200);
 
     @BeforeEach
     void setUp() throws IOException {
@@ -48,7 +52,7 @@ public class ConfigServiceClientContractTest {
             searchBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             byte[] out = searchResponse.get().getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, out.length);
+            exchange.sendResponseHeaders(searchStatus.get(), out.length);
             exchange.getResponseBody().write(out);
             exchange.close();
         });
@@ -96,5 +100,13 @@ public class ConfigServiceClientContractTest {
     void getEnabledChannels_configuredButAllDisabled_returnsEmptyList() {
         searchResponse.set("{\"configData\":[{\"data\":{\"code\":\"WHATSAPP\",\"enabled\":false}}]}");
         assertTrue(client.getEnabledChannels("pb.amritsar").isEmpty());
+    }
+
+    @Test
+    void getEnabledChannels_serverError_throwsForRetry() {
+        // A real 5xx from config-service must propagate (retry/DLQ), not be read as "unconfigured".
+        searchStatus.set(500);
+        searchResponse.set("{\"error\":\"boom\"}");
+        assertThrows(CustomException.class, () -> client.getEnabledChannels("pb.amritsar"));
     }
 }

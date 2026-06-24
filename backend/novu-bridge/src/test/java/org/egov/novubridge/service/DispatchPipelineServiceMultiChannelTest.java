@@ -7,6 +7,7 @@ import org.egov.novubridge.web.models.DispatchResult;
 import org.egov.novubridge.web.models.ResolvedProvider;
 import org.egov.novubridge.web.models.ResolvedTemplate;
 import org.egov.novubridge.web.models.Stakeholder;
+import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -101,6 +103,17 @@ public class DispatchPipelineServiceMultiChannelTest {
         List<DispatchResult> results = service.processEnabledChannels(event(), true, null);
 
         assertTrue(results.isEmpty());
+        verifyNoInteractions(novuClient);
+    }
+
+    @Test
+    void configLookupError_propagatesToDlq() {
+        // A hard config-service error throws (not null/legacy), so the event hits the consumer's DLQ
+        // path instead of being silently dropped or wrongly falling back over an explicit disable.
+        when(configServiceClient.getEnabledChannels("pb.amritsar"))
+                .thenThrow(new CustomException("NB_CHANNEL_CONFIG_SEARCH_FAILED", "down"));
+
+        assertThrows(CustomException.class, () -> service.processEnabledChannels(event(), true, null));
         verifyNoInteractions(novuClient);
     }
 
