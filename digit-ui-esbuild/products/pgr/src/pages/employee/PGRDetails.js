@@ -409,8 +409,21 @@ const PGRDetails = () => {
       ? (freeComment ? `[${reasonCode}] ${freeComment}` : `[${reasonCode}]`)
       : freeComment;
 
+    // Record the routed department: when the officer assigns to an employee,
+    // stamp that employee's department onto additionalDetail so the complaint
+    // reflects WHERE it was routed — instead of the stale type department / "NA"
+    // carried over from filing time. Only applied when an assignee with a
+    // department is picked (REJECT/RESOLVE etc. leave additionalDetail untouched).
+    const baseService = pgrData?.ServiceWrappers[0].service;
+    const assigneeDept = _data?.SelectedAssignee?.department;
+    const baseAdditionalDetail =
+      baseService?.additionalDetail && typeof baseService.additionalDetail === "object"
+        ? baseService.additionalDetail
+        : {};
     const updateRequest = {
-      service: { ...pgrData?.ServiceWrappers[0].service },
+      service: assigneeDept
+        ? { ...baseService, additionalDetail: { ...baseAdditionalDetail, department: assigneeDept } }
+        : { ...baseService },
       workflow: {
         action: selectedAction.action,
         assignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
