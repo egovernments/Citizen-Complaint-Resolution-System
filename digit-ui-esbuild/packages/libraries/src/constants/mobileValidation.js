@@ -20,16 +20,16 @@
  */
 
 /** Full-anchor regex — the single source of truth for all derived constraints. */
-export const DEFAULT_MOBILE_PATTERN = "^0?[17][0-9]{8}$";
+export const DEFAULT_MOBILE_PATTERN = "^[6-9][0-9]{9}$";
 
 /**
  * Lax (no-anchor) variant for inbox search fields that accept an empty string
  * or a partial mobile number (e.g. `"^$|<lax>"`).
  */
-export const DEFAULT_MOBILE_PATTERN_LAX = "0?[17][0-9]{8}";
+export const DEFAULT_MOBILE_PATTERN_LAX = "[6-9][0-9]{9}";
 
 /** E.164 country-code prefix displayed in front of mobile inputs. */
-export const DEFAULT_MOBILE_PREFIX = "+254";
+export const DEFAULT_MOBILE_PREFIX = "+91";
 
 /**
  * Extract the set of allowed starting digits from a mobile regex pattern.
@@ -86,37 +86,57 @@ export function extractAllowedStartingDigits(pattern) {
 }
 
 /**
- * Build a human-readable validation error message from a mobile regex pattern.
+ * Build a localised validation error message from a mobile regex pattern.
  *
- * Examples:
- *   buildMobileErrorMessage("^[17][0-9]{8}$")   →
- *     "Please enter a valid mobile number (9-10 digits, starting with 1 or 7)"
+ * Accepts an optional translation function `t(key, fallback)`. When provided,
+ * every token is looked up via the i18n system; when omitted, English fallbacks
+ * are used so existing callers without i18n continue to work.
+ *
+ * Localization keys used:
+ *   ERR_INVALID_MOBILE_NUMBER   — "Please enter a valid mobile number"
+ *   MOBILE_VALIDATION_DIGITS    — "digits"
+ *   MOBILE_VALIDATION_AT_LEAST  — "at least"
+ *   MOBILE_VALIDATION_STARTING_WITH — "starting with"
+ *   MOBILE_VALIDATION_OR        — "or"
+ *
+ * Examples (English fallback):
  *   buildMobileErrorMessage("^[6-9][0-9]{9}$")  →
  *     "Please enter a valid mobile number (10 digits, starting with 6-9)"
+ *   buildMobileErrorMessage("^0?[17][0-9]{8}$") →
+ *     "Please enter a valid mobile number (9-10 digits, starting with 1 or 7)"
  */
-export function buildMobileErrorMessage(pattern) {
-  if (!pattern) return null;
+export function buildMobileErrorMessage(pattern, t) {
+  const tr = typeof t === "function" ? t : (key, fallback) => fallback;
+
+  const base = tr("ERR_INVALID_MOBILE_NUMBER", "Please enter a valid mobile number");
+  if (!pattern) return base;
+
   const { min, max } = computeMobileLengths(pattern);
   const startDigits = extractAllowedStartingDigits(pattern);
 
+  const digits   = tr("MOBILE_VALIDATION_DIGITS",    "digits");
+  const atLeast  = tr("MOBILE_VALIDATION_AT_LEAST",  "at least");
+
   const lenPart =
-    min === max ? `${min} digits` :
-    max === -1  ? `at least ${min} digits` :
-    `${min}-${max} digits`;
+    min === max ? `${min} ${digits}` :
+    max === -1  ? `${atLeast} ${min} ${digits}` :
+    `${min}-${max} ${digits}`;
 
   let startPart = "";
   if (startDigits && startDigits.length > 0) {
     const unique = [...new Set(startDigits)];
+    const sw = tr("MOBILE_VALIDATION_STARTING_WITH", "starting with");
+    const or = tr("MOBILE_VALIDATION_OR",            "or");
     if (unique.length === 1) {
-      startPart = `, starting with ${unique[0]}`;
+      startPart = `, ${sw} ${unique[0]}`;
     } else if (unique.length === 2) {
-      startPart = `, starting with ${unique[0]} or ${unique[1]}`;
+      startPart = `, ${sw} ${unique[0]} ${or} ${unique[1]}`;
     } else {
-      startPart = `, starting with ${unique.slice(0, -1).join(", ")}, or ${unique[unique.length - 1]}`;
+      startPart = `, ${sw} ${unique.slice(0, -1).join(", ")}, ${or} ${unique[unique.length - 1]}`;
     }
   }
 
-  return `Please enter a valid mobile number (${lenPart}${startPart})`;
+  return `${base} (${lenPart}${startPart})`;
 }
 
 /**

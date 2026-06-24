@@ -95,26 +95,34 @@ function _extractAllowedStartingDigits(pattern) {
   return null;
 }
 
-function _buildMobileErrorMessage(pattern) {
-  if (!pattern) return "Please enter a valid mobile number";
+// Keys: ERR_INVALID_MOBILE_NUMBER, MOBILE_VALIDATION_DIGITS, MOBILE_VALIDATION_AT_LEAST,
+//       MOBILE_VALIDATION_STARTING_WITH, MOBILE_VALIDATION_OR
+function _buildMobileErrorMessage(pattern, t) {
+  const tr = typeof t === "function" ? t : (key, fallback) => fallback;
+  const base = tr("ERR_INVALID_MOBILE_NUMBER", "Please enter a valid mobile number");
+  if (!pattern) return base;
   const { min, max } = _computeMobileLengths(pattern);
   const startDigits = _extractAllowedStartingDigits(pattern);
-  const lenPart = min === max ? `${min} digits` : max === -1 ? `at least ${min} digits` : `${min}-${max} digits`;
+  const digits  = tr("MOBILE_VALIDATION_DIGITS",    "digits");
+  const atLeast = tr("MOBILE_VALIDATION_AT_LEAST",  "at least");
+  const lenPart = min === max ? `${min} ${digits}` : max === -1 ? `${atLeast} ${min} ${digits}` : `${min}-${max} ${digits}`;
   let startPart = "";
   if (startDigits && startDigits.length > 0) {
-    const u = [...new Set(startDigits)];
+    const u  = [...new Set(startDigits)];
+    const sw = tr("MOBILE_VALIDATION_STARTING_WITH", "starting with");
+    const or = tr("MOBILE_VALIDATION_OR",            "or");
     startPart = u.length === 1
-      ? `, starting with ${u[0]}`
+      ? `, ${sw} ${u[0]}`
       : u.length === 2
-        ? `, starting with ${u[0]} or ${u[1]}`
-        : `, starting with ${u.slice(0, -1).join(", ")}, or ${u[u.length - 1]}`;
+        ? `, ${sw} ${u[0]} ${or} ${u[1]}`
+        : `, ${sw} ${u.slice(0, -1).join(", ")}, ${or} ${u[u.length - 1]}`;
   }
-  return `Please enter a valid mobile number (${lenPart}${startPart})`;
+  return `${base} (${lenPart}${startPart})`;
 }
 
 // ── defaults ──────────────────────────────────────────────────────────────────
-const _DEFAULT_PATTERN = "^0?[17][0-9]{8}$";
-const _DEFAULT_PREFIX  = "+254";
+const _DEFAULT_PATTERN = "^[6-9][0-9]{9}$";
+const _DEFAULT_PREFIX  = "+91";
 
 // ── hook ─────────────────────────────────────────────────────────────────────
 
