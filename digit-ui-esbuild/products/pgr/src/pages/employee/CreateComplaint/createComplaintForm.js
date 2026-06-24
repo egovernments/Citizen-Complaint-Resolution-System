@@ -81,7 +81,8 @@ const CreateComplaintForm = ({
     const set = new Set();
     employees.forEach((e) =>
       (e?.assignments || [])
-        .filter((a) => a?.isCurrentAssignment !== false && a?.department)
+        .filter((a) => a?.is
+                Assignment !== false && a?.department)
         .forEach((a) => set.add(a.department))
     );
     return [...set];
@@ -146,35 +147,17 @@ const CreateComplaintForm = ({
 
 
   function getUniqueMenuPaths(data) {
-    // Dedupe by menuPath + department (not menuPath alone). The same menuPath
-    // can exist under more than one department; for a multi-department user
-    // both must stay selectable, so keep one Type option per
-    // (menuPath, department). For single-department users this collapses to
-    // the same result as menuPath-only dedupe.
-    const seen = new Set();
+    const seenMenuPaths = new Set();
     const uniqueItems = [];
-    for (const item of data || []) {
-      const key = `${item.menuPath}__${item.department}`;
-      if (!seen.has(key)) {
-        seen.add(key);
+
+    for (const item of data) {
+      if (!seenMenuPaths.has(item.menuPath)) {
+        seenMenuPaths.add(item.menuPath);
         uniqueItems.push(item);
       }
     }
 
-    // Disambiguate only when the SAME menuPath spans multiple departments in
-    // the (already department-scoped) option set — otherwise a multi-dept user
-    // would see identical labels. Single-department users never trip this, so
-    // their labels stay plain.
-    const deptCountByMenuPath = uniqueItems.reduce((acc, it) => {
-      acc[it.menuPath] = (acc[it.menuPath] || 0) + 1;
-      return acc;
-    }, {});
-
-    return uniqueItems.map((it) =>
-      deptCountByMenuPath[it.menuPath] > 1
-        ? { ...it, menuPathName: `${it.menuPathName} - ${t(`DEPARTMENT_${it.department}`)}` }
-        : it
-    );
+    return uniqueItems;
   }
 
   function getSubTypesByDepartment(baseItem, allItems) {
@@ -184,22 +167,7 @@ const CreateComplaintForm = ({
       return [];
     }
 
-    // Gate sub-types by the selected Type's department ONLY when department
-    // gating is active (see departmentGate / issue #810). When it's disabled —
-    // no/mismatched department or a privileged user — skip the gate so sub-types
-    // still appear for the chosen Type.
-    if (departmentGate.enabled && !loggedInUserDepartments.includes(baseItem.department)) {
-      return [];
-    }
-
-    // Sub-types = services under the SELECTED Type — match both menuPath and
-    // department, not department alone (department-only would leak services
-    // from other menuPaths in the same department into this Type's sub-list).
-    return allItems.filter(
-      (item) =>
-        item.department === baseItem.department &&
-        item.menuPath === baseItem.menuPath
-    );
+    return allItems.filter(item => item.department === baseItem.department);
   }
 
 
@@ -215,13 +183,6 @@ const CreateComplaintForm = ({
 
   const updatedConfig = useMemo(() => {
 
-    // Complaint Type options: scoped to the employee's department(s) when
-    // departmentGate is active (e.g. an "ambiental" user doesn't see the
-    // "Water"/DEPT_36 Type), otherwise the full list. The gate is disabled
-    // rather than yielding an empty list when the user has no/mismatched
-    // department or is privileged (issue #810).
-    const departmentScopedDefs = departmentGate.enabled ? departmentGate.scoped : (serviceDefs || []);
-
     const baseConfig = Digit.Utils.preProcessMDMSConfig(
       t,
       createComplaintConfig,
@@ -229,7 +190,7 @@ const CreateComplaintForm = ({
         updateDependent: [
           {
             key: "SelectComplaintType",
-            value: [getUniqueMenuPaths(departmentScopedDefs) ? getUniqueMenuPaths(departmentScopedDefs) : []],
+            value: [getUniqueMenuPaths(serviceDefs) ? getUniqueMenuPaths(serviceDefs) : []],
           },
           {
             key: "SelectSubComplaintType",
