@@ -42,6 +42,7 @@ export const SHARED_CHROME = {
   chartScrollViewport: "dashboard-chart-scroll-viewport",
   chartScrollViewportActive: "dashboard-chart-scroll-viewport--active",
   chartScrollViewportVertical: "dashboard-chart-scroll-viewport--vertical",
+  chartScrollViewportHorizontal: "dashboard-chart-scroll-viewport--horizontal",
   chartScrollCanvas: "dashboard-chart-scroll-canvas",
 };
 
@@ -189,6 +190,7 @@ export const VIZ_GRID_BEHAVIOR = {
   [VIZ_TYPE.HISTOGRAM]: { chartOverflowVisible: true },
   [VIZ_TYPE.HORIZONTAL_BAR]: { chartOverflowVisible: true },
   [VIZ_TYPE.SLA_TOGGLE]: { chartOverflowVisible: true },
+  [VIZ_TYPE.MAP]: { chartOverflowVisible: true },
 };
 
 export function getVisualizationStyles(vizType) {

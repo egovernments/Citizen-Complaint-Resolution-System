@@ -11,6 +11,7 @@ import {
   buildBarChartYAxis,
   formatBarChartPercentOneDecimal,
   getBarChartSeriesColor,
+  BAR_CHART_XAXIS_RESERVED_HEIGHT_PX,
   resolveBarChartColumnWidth,
   resolveBarGroupLayout,
 } from "../config/barChartPresentation";
@@ -40,9 +41,6 @@ function normalizeChartData(data, categoryOrder) {
   }));
 }
 
-const BASE_BAR_SLOT_SCROLL_PX = 44;
-const BASE_BAR_SCROLL_GUTTER_PX = 12;
-
 const DepartmentBarChart = ({
   data,
   categoryOrder,
@@ -52,20 +50,11 @@ const DepartmentBarChart = ({
   valueFormat = "count",
 }) => {
   const isPercent = valueFormat === "percent";
-  const categoryCountFromInput = Array.isArray(data) ? data.length : 0;
-  const minContentWidth =
-    categoryCountFromInput > 0
-      ? categoryCountFromInput * BASE_BAR_SLOT_SCROLL_PX + BASE_BAR_SCROLL_GUTTER_PX
-      : 0;
   const {
     containerRef: histogramContainerRef,
     containerSize: histogramContainerSize,
   } = useChartContainerSize();
   const effectiveScrollKey = histogram ? undefined : scrollKey;
-  const { viewportRef, chartSize, isScrollable, isReady } = useScrollableChartSize({
-    scrollKey: effectiveScrollKey,
-    minContentWidth: histogram ? 0 : minContentWidth,
-  });
   const [tooltip, setTooltip] = useState(null);
   const distributed = Boolean(colorsProp?.length);
 
@@ -73,6 +62,12 @@ const DepartmentBarChart = ({
     () => normalizeChartData(data, categoryOrder),
     [data, categoryOrder]
   );
+
+  const { viewportRef, chartSize, isScrollable, isReady, scrollAxis } = useScrollableChartSize({
+    scrollKey: effectiveScrollKey,
+    categoryCount: histogram ? 0 : chartData.length,
+    scrollAxis: histogram ? "xy" : "x",
+  });
 
   const categories = useMemo(() => chartData.map((d) => d.label), [chartData]);
   const series = useMemo(
@@ -96,7 +91,11 @@ const DepartmentBarChart = ({
 
   const isShort = containerHeight > 0 && containerHeight < 200;
 
-  const xAxisLabelHeight = histogram ? (isShort ? 26 : 30) : isShort ? 36 : 40;
+  const xAxisLabelHeight = histogram
+    ? isShort
+      ? 26
+      : 30
+    : BAR_CHART_XAXIS_RESERVED_HEIGHT_PX;
 
   const yTickAmount = isShort ? 4 : 5;
 
@@ -237,6 +236,7 @@ const DepartmentBarChart = ({
           viewportRef={viewportRef}
           chartSize={chartSize}
           isScrollable={isScrollable}
+          scrollAxis={scrollAxis}
           chartClassName={barChartClass}
         >
           {isReady ? (

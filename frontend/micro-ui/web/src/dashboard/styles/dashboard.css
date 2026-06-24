@@ -1206,8 +1206,8 @@
   padding-left: 0.5rem;
   padding-right: 0.5rem;
   padding-top: 0px;
-  margin-top: -10px;
-  padding-bottom: 0.375rem;
+  margin-top: -18px;
+  padding-bottom: 0.125rem;
 }
 
 .dashboard-bar-chart-header{
@@ -1215,7 +1215,7 @@
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   padding-bottom: 0px;
-  padding-top: 0.375rem;
+  padding-top: 0.125rem;
 }
 
 .dashboard-bar-chart-header .dashboard-drag-handle-title{
@@ -1243,6 +1243,11 @@
 .dashboard-chart-scroll-viewport--vertical.dashboard-chart-scroll-viewport--active {
   overflow-x: hidden !important;
   overflow-y: auto !important;
+}
+
+.dashboard-chart-scroll-viewport--horizontal.dashboard-chart-scroll-viewport--active {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
 }
 
 .dashboard-chart-scroll-canvas {
@@ -1392,8 +1397,8 @@
   flex: 1 1 0%;
   flex-direction: column;
   overflow: hidden;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
   padding-top: 0px;
   margin-top: -6px;
   padding-bottom: 1.125rem;
@@ -1424,6 +1429,20 @@
 .dashboard-horizontal-bar .apexcharts-yaxis-texts-g .apexcharts-yaxis-label,
   .dashboard-stacked-bar--horizontal .apexcharts-yaxis-texts-g .apexcharts-yaxis-label {
   text-anchor: start;
+  transform-box: fill-box;
+  transform-origin: left center;
+  transform: scaleY(0.82);
+}
+
+.dashboard-horizontal-bar .apexcharts-legend,
+  .dashboard-stacked-bar--horizontal .apexcharts-legend {
+  justify-content: center !important;
+  padding-bottom: 0 !important;
+  margin-bottom: -6px !important;
+}
+
+.dashboard-stacked-bar--horizontal .apexcharts-legend {
+  margin-bottom: -14px !important;
 }
 
 /* Viz type: stacked-bar — vertical + horizontal stacked bars */
@@ -1443,6 +1462,11 @@
   padding-top: 0px;
   margin-top: -6px;
   padding-bottom: 1.125rem;
+}
+
+.dashboard-stacked-bar-body:has(.dashboard-stacked-bar--horizontal){
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
 }
 
 .dashboard-stacked-bar-header{
@@ -1470,6 +1494,15 @@
 .dashboard-stacked-bar .apexcharts-gridlines-horizontal line,
   .dashboard-stacked-bar .apexcharts-gridlines-vertical line {
   display: none;
+}
+
+.dashboard-stacked-bar .apexcharts-legend {
+  padding-bottom: 0 !important;
+  margin-bottom: -6px !important;
+}
+
+.dashboard-stacked-bar--horizontal .apexcharts-legend {
+  margin-bottom: -14px !important;
 }
 
 .dashboard-line-chart {
@@ -1659,6 +1692,287 @@
   line-height: 1.25;
 }
 
+.dashboard-map-header-bar{
+  border-bottom-width: 0px;
+}
+
+.dashboard-map-frame{
+  position: relative;
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dashboard-map-toolbar-row{
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom-width: 1px;
+  border-color: var(--border);
+  background-color: var(--surface);
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.dashboard-map-path{
+  display: flex;
+  min-width: 0px;
+  flex: 1 1 0%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.dashboard-map-shell{
+  position: relative;
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.dashboard-map-canvas{
+  position: relative;
+  z-index: 1;
+  border-radius: 0px;
+}
+
+.dashboard-map-canvas .leaflet-container {
+  height: 100%;
+  width: 100%;
+  font-family: inherit;
+}
+
+.dashboard-map-legend {
+  width: 196px;
+  border: 1px solid var(--border);
+  border-radius: 0.125rem;
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+  -webkit-backdrop-filter: blur(6px);
+          backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+.dashboard-map-filter-chip {
+  z-index: 1000;
+}
+
+.layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle {
+  z-index: 1200;
+  pointer-events: auto;
+}
+
+.layout .react-grid-item.dashboard-grid-item-map:hover > .react-resizable-handle {
+  opacity: 1;
+}
+
+.layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-s {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 12px;
+  cursor: s-resize;
+}
+
+.layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-e {
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 100%;
+  margin-top: 0;
+  cursor: e-resize;
+}
+
+.dashboard-map-breadcrumb{
+  display: flex;
+  min-width: 0px;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.dashboard-map-zoom-badge {
+  -webkit-backdrop-filter: blur(4px);
+          backdrop-filter: blur(4px);
+}
+
+.dashboard-map-controls{
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 4px;
+  border-width: 1px;
+  border-color: var(--border);
+  background-color: var(--surface);
+  --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+
+.dashboard-map-control-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  border-width: 0px;
+  background-color: transparent;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.dashboard-map-control-btn:hover{
+  background-color: var(--muted);
+}
+
+.dashboard-map-control-btn + .dashboard-map-control-btn{
+  border-left-width: 1px;
+  border-color: var(--border);
+}
+
+.dashboard-map-control-btn--text{
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
+}
+
+.dashboard-map-filter-chip {
+  -webkit-backdrop-filter: blur(4px);
+          backdrop-filter: blur(4px);
+}
+
+.dashboard-map-filter-clear{
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--chart-1);
+  cursor: pointer;
+}
+
+.dashboard-map-filter-clear:hover {
+  text-decoration: underline;
+}
+
+.dashboard-map-legend-toggle{
+  height: 1.25rem;
+  width: 1.25rem;
+  border-width: 0px;
+  background-color: transparent;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  line-height: 1;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.dashboard-map-legend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-map-legend-swatch{
+  display: inline-block;
+  height: 0.75rem;
+  width: 0.75rem;
+  flex-shrink: 0;
+  border-radius: 4px;
+  border-width: 1px;
+}
+
+.leaflet-tooltip.dashboard-map-hover-tooltip {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin-top: -8px;
+}
+
+.dashboard-map-hover-card {
+  min-width: 168px;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  padding: 0.625rem 0.75rem;
+}
+
+.dashboard-map-hover-title{
+  margin-bottom: 0.375rem;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.dashboard-map-hover-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 10px;
+  line-height: 1.375;
+  color: var(--muted-foreground);
+}
+
+.dashboard-map-hover-row strong{
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.dashboard-map-hover-sla{
+  margin-top: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-top-width: 1px;
+  border-color: var(--border);
+  padding-top: 0.5rem;
+}
+
+.dashboard-map-hover-pill{
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+  font-size: 9px;
+  color: var(--foreground);
+}
+
+.dashboard-map-hover-dot{
+  height: 0.5rem;
+  width: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+}
+
+.dashboard-map-hover-dot--within {
+  background: var(--chart-1);
+}
+
+.dashboard-map-hover-dot--breaching {
+  background: var(--chart-2);
+}
+
+.dashboard-map-hover-dot--breached {
+  background: var(--status-breach);
+}
+
 .dashboard-pie-slice {
   cursor: default;
 }
@@ -1674,7 +1988,8 @@
 }
 
 .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se,
-  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-e {
+  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-e,
+  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-s {
   opacity: 1;
 }
 
@@ -1694,6 +2009,15 @@
   height: 18px;
   margin-top: -9px;
   cursor: e-resize;
+  z-index: 3;
+}
+
+.layout .react-grid-item > .react-resizable-handle.react-resizable-handle-s {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 12px;
+  cursor: s-resize;
   z-index: 3;
 }
 
@@ -1790,6 +2114,10 @@
   pointer-events: none;
 }
 
+.tw-pointer-events-auto{
+  pointer-events: auto;
+}
+
 .tw-absolute{
   position: absolute;
 }
@@ -1822,16 +2150,24 @@
   right: 1.25rem;
 }
 
+.tw-top-12{
+  top: 3rem;
+}
+
 .tw-top-3{
   top: 0.75rem;
 }
 
-.tw-z-\[2\]{
-  z-index: 2;
+.tw-z-\[1000\]{
+  z-index: 1000;
 }
 
-.tw-z-\[400\]{
-  z-index: 400;
+.tw-z-\[1100\]{
+  z-index: 1100;
+}
+
+.tw-z-\[2\]{
+  z-index: 2;
 }
 
 .tw-z-\[500\]{
@@ -1840,10 +2176,6 @@
 
 .tw-m-0{
   margin: 0px;
-}
-
-.tw-mb-1{
-  margin-bottom: 0.25rem;
 }
 
 .tw-mb-3{
@@ -1898,10 +2230,6 @@
   height: 4rem;
 }
 
-.tw-h-2\.5{
-  height: 0.625rem;
-}
-
 .tw-h-3\.5{
   height: 0.875rem;
 }
@@ -1940,10 +2268,6 @@
 
 .tw-w-4{
   width: 1rem;
-}
-
-.tw-w-5{
-  width: 1.25rem;
 }
 
 .tw-w-60{
@@ -2026,10 +2350,6 @@
   justify-content: space-between;
 }
 
-.tw-gap-0\.5{
-  gap: 0.125rem;
-}
-
 .tw-gap-1{
   gap: 0.25rem;
 }
@@ -2066,6 +2386,12 @@
   --tw-space-y-reverse: 0;
   margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
   margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
+}
+
+.tw-space-y-1\.5 > :not([hidden]) ~ :not([hidden]){
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.375rem * var(--tw-space-y-reverse));
 }
 
 .tw-space-y-2 > :not([hidden]) ~ :not([hidden]){
@@ -2196,10 +2522,6 @@
   padding: 0px;
 }
 
-.tw-p-2{
-  padding: 0.5rem;
-}
-
 .tw-p-3{
   padding: 0.75rem;
 }
@@ -2295,6 +2617,10 @@
 
 .tw-pb-0{
   padding-bottom: 0px;
+}
+
+.tw-pb-2{
+  padding-bottom: 0.5rem;
 }
 
 .tw-pl-1{

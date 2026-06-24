@@ -8,14 +8,14 @@ import {
   GEOGRAPHY_MAP_LAYERS,
   isGeographyMapLayerId,
 } from "../config/geographyMapPresentation";
-import ViewToggle from "./demo/ViewToggle";
+import { getMapCityLabel } from "../utils/mapGeoUtils";
 import GeographyChoroplethMap from "./GeographyChoroplethMap";
 
 const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
-  const [activeLayer, setActiveLayer] = useState("open");
+  const [activeLayer, setActiveLayer] = useState("wow_change");
+  const cityLabel = getMapCityLabel();
 
-  const resolvedLayer = isGeographyMapLayerId(activeLayer) ? activeLayer : "open";
-  const layerMeta = GEOGRAPHY_MAP_LAYERS.find((layer) => layer.id === resolvedLayer);
+  const resolvedLayer = isGeographyMapLayerId(activeLayer) ? activeLayer : "wow_change";
   const wardCounts = useMemo(
     () => layers?.[resolvedLayer] ?? [],
     [layers, resolvedLayer]
@@ -32,24 +32,17 @@ const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
   return (
     <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col">
       <header
-        className={`${buildWidgetHeaderClassName(VIZ_TYPE.MAP)} tw-flex tw-shrink-0 tw-items-center tw-justify-between tw-gap-3 tw-pr-8`}
+        className={`${buildWidgetHeaderClassName(VIZ_TYPE.MAP)} dashboard-map-header-bar ${SHARED_CHROME.dragHandle} tw-flex tw-shrink-0 tw-items-center tw-px-3 tw-pb-2 tw-pt-2 tw-pr-8`}
       >
-        <div className="tw-min-w-0 tw-flex-1">
-          <h2 className={SHARED_CHROME.dragHandleTitle}>Open complaints by geography</h2>
-          <p className={SHARED_CHROME.dragHandleSubtitle}>
-            Choropleth by ward — {layerMeta?.description ?? "toggle layer"}
-          </p>
-        </div>
-        <ViewToggle
-          value={resolvedLayer}
-          onChange={setActiveLayer}
-          options={GEOGRAPHY_MAP_LAYERS.map((layer) => ({
-            id: layer.id,
-            label: layer.label,
-          }))}
-        />
+        <h2 className={SHARED_CHROME.dragHandleTitle}>Complaint map · {cityLabel}</h2>
       </header>
-      <GeographyChoroplethMap wardCounts={wardCounts} layerLabel={layerMeta?.label ?? "Open"} />
+      <GeographyChoroplethMap
+        wardCounts={wardCounts}
+        layerMode={resolvedLayer}
+        onLayerModeChange={setActiveLayer}
+        layerOptions={GEOGRAPHY_MAP_LAYERS}
+        cityLabel={cityLabel}
+      />
     </div>
   );
 };

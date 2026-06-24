@@ -12,11 +12,11 @@ import {
   buildStackedBarAnnotations,
   buildStackedBarDataLabels,
   buildStackedBarGrid,
+  buildStackedBarLegend,
   buildStackedBarPlotOptions,
   buildStackedBarXAxis,
   buildStackedBarYAxis,
   resolveStackedBarColors,
-  STACKED_BAR_LEGEND,
 } from "../config/stackedBarPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import { useScrollableChartSize } from "../hooks/useScrollableChartSize";
@@ -40,7 +40,7 @@ const StackedBarChart = ({
   } = useScrollableChartSize({
     scrollKey,
     categoryCount: categories.length,
-    scrollAxis: horizontal ? "y" : "xy",
+    scrollAxis: horizontal ? "y" : "x",
   });
 
   const containerWidth = chartSize.width;
@@ -70,14 +70,19 @@ const StackedBarChart = ({
         fontFamily: DASHBOARD_FONT_FAMILY,
         parentHeightOffset: 0,
       },
-      plotOptions: buildStackedBarPlotOptions({ horizontal, valueFormat }),
+      plotOptions: buildStackedBarPlotOptions({
+        horizontal,
+        valueFormat,
+        containerWidth,
+        categoryCount: categories.length,
+      }),
       dataLabels: buildStackedBarDataLabels({ valueFormat }),
       xaxis: buildStackedBarXAxis({ horizontal, categories, containerWidth }),
       yaxis: horizontal
         ? [buildStackedBarYAxis({ horizontal, categories, containerWidth, valueFormat })]
         : buildStackedBarYAxis({ horizontal, categories, containerWidth, valueFormat }),
       colors: resolvedColors,
-      legend: STACKED_BAR_LEGEND,
+      legend: buildStackedBarLegend({ horizontal }),
       grid: buildStackedBarGrid({
         horizontal,
         bottomPadding: verticalXAxisLabelHeight,

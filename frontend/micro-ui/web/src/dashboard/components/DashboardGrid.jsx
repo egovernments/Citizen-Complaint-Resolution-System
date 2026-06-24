@@ -107,6 +107,9 @@ function isScrollableTableWidget(widgetId) {
 
 function gridItemClassName(widgetId) {
   if (isKpiWidget(widgetId)) return "dashboard-grid-item-kpi";
+  if (widgetId === "cl-map-geography-choropleth") {
+    return "dashboard-grid-item-chart-visible dashboard-grid-item-map";
+  }
   if (isScrollableTableWidget(widgetId)) {
     return "dashboard-grid-item-chart-clipped";
   }

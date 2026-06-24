@@ -1,5 +1,5 @@
 /**
- * Employee performance landscape — table widget only (no standalone KPI cards).
+ * Employee performance landscape — officer workload charts and performance table.
  */
 
 export const EMPLOYEE_PERFORMANCE_SECTION = "Employee performance";
@@ -7,6 +7,16 @@ export const EMPLOYEE_PERFORMANCE_SECTION = "Employee performance";
 export const EMPLOYEE_PERFORMANCE_METRICS = [];
 
 export const EMPLOYEE_PERFORMANCE_CHARTS = [
+  {
+    id: "cl-chart-officer-sla",
+    type: "stacked-bar",
+    stackOrientation: "horizontal",
+    metric: "Employees with most open complaints",
+    subMetric: "Open complaints by SLA state per officer",
+    outputFormat:
+      "On track / Nearing breach / Breached — sorted by most breached",
+    queryKey: "cl_chart_officer_sla",
+  },
   {
     id: "ep-table-employee-performance",
     type: "data-table",

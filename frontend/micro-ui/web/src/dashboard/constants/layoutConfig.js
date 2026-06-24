@@ -135,6 +135,14 @@ export const GAUGE_SIZE_CONSTRAINTS = {
   maxH: 2,
 };
 
+/** Map widgets benefit from taller resize range. */
+export const MAP_SIZE_CONSTRAINTS = {
+  minW: 4,
+  minH: 5,
+  maxW: 12,
+  maxH: 14,
+};
+
 export const CHART_TYPE_SIZE_CONSTRAINTS = {
   "data-table": {
     minW: TABLE_CARD_GRID.minW,
@@ -149,7 +157,7 @@ export const CHART_TYPE_SIZE_CONSTRAINTS = {
   "line-chart": UNIFORM_CHART_SIZE_CONSTRAINTS,
   "pie-chart": UNIFORM_CHART_SIZE_CONSTRAINTS,
   "sla-toggle": UNIFORM_CHART_SIZE_CONSTRAINTS,
-  "map": UNIFORM_CHART_SIZE_CONSTRAINTS,
+  "map": MAP_SIZE_CONSTRAINTS,
   "sla-risk-table": {
     minW: 6,
     minH: 4,
@@ -236,6 +244,9 @@ export function isHeightLockedChart(widgetId) {
 }
 
 export function getResizeHandles(widgetId) {
+  if (widgetId === "cl-map-geography-choropleth") {
+    return ["se", "s", "e"];
+  }
   return ["se"];
 }
 

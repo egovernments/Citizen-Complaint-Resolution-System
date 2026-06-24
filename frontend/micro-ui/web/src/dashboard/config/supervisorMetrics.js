@@ -4,11 +4,13 @@
 import {
   LANDSCAPE_CHARTS,
   LANDSCAPE_METRICS,
+  INVENTORY_SECTIONS as COMPLAINT_INVENTORY_SECTIONS,
   getSubMetricDef,
   subMetricValueKey,
 } from "./complaintLandscape";
 import {
   EMPLOYEE_PERFORMANCE_CHARTS,
+  EMPLOYEE_PERFORMANCE_SECTION,
 } from "./employeePerformanceLandscape";
 import {
   RESOLUTION_SLA_METRICS,
@@ -31,7 +33,17 @@ export {
   isInventoryWidget,
 };
 export { DEFAULT_VIEW_KPI_IDS, DEFAULT_VIEW_WIDGET_IDS } from "./inventoryAllowlist";
-export { INVENTORY_SECTIONS } from "./complaintLandscape";
+
+export const INVENTORY_SECTIONS = [
+  ...COMPLAINT_INVENTORY_SECTIONS,
+  {
+    id: "employee-performance",
+    label: EMPLOYEE_PERFORMANCE_SECTION,
+    description: "Officer workload, rankings, and performance tables",
+    metricIds: [],
+    widgetIds: EMPLOYEE_PERFORMANCE_CHARTS.map((chart) => chart.id),
+  },
+];
 
 export const CHART_WIDGETS = [
   ...LANDSCAPE_CHARTS,

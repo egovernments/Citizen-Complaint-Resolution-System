@@ -574,8 +574,24 @@ export const BATCH_QUERIES = {
     measures: [{ name: "total", agg: "count" }],
     limit: 10,
   },
-  cl_map_ward_created: {
+  cl_map_ward_wow_current: {
     grain: "facts",
+    window: { name: "last_7d", timeRole: "filed_at" },
+    dimensions: ["ward_code"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "total", dir: "desc" }],
+    limit: 200,
+  },
+  cl_map_ward_wow_prior: {
+    grain: "facts",
+    dimensions: ["ward_code"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "total", dir: "desc" }],
+    limit: 200,
+  },
+  cl_map_ward_sla_breach: {
+    grain: "facts",
+    filters: { is_open: true, sla_breached: true },
     dimensions: ["ward_code"],
     measures: [{ name: "total", agg: "count" }],
     sort: [{ by: "total", dir: "desc" }],
@@ -589,13 +605,12 @@ export const BATCH_QUERIES = {
     sort: [{ by: "total", dir: "desc" }],
     limit: 200,
   },
-  cl_map_ward_resolved: {
+  cl_map_ward_sla_buckets: {
     grain: "facts",
-    filters: { is_resolved: true },
-    dimensions: ["ward_code"],
+    filters: { is_open: true },
+    dimensions: ["ward_code", "sla_status_bucket"],
     measures: [{ name: "total", agg: "count" }],
-    sort: [{ by: "total", dir: "desc" }],
-    limit: 200,
+    limit: 600,
   },
   cl_chart_status_week: {
     grain: "facts",
@@ -1889,7 +1904,7 @@ export function buildBatchQueries(dashboardFilters) {
   if (!apiFilters.__dateRange) {
     const priorWeekFilter = { created_at: priorWeekCreatedAtFilter() };
     const priorWeekResolvedFilter = { resolved_at: priorWeekCreatedAtFilter() };
-    for (const key of ["cl_reg_prior_week", "cl_open_prior_week", "rs_breach_prior_week"]) {
+    for (const key of ["cl_reg_prior_week", "cl_open_prior_week", "rs_breach_prior_week", "cl_map_ward_wow_prior"]) {
       if (queries[key]) {
         queries[key] = {
           ...queries[key],
@@ -2753,12 +2768,132 @@ function parseWardCountSeries(result) {
     });
 }
 
-export function parseGeographyMapLayers(createdResult, openResult, resolvedResult) {
-  return {
-    created: parseWardCountSeries(createdResult),
-    open: parseWardCountSeries(openResult),
-    resolved: parseWardCountSeries(resolvedResult),
-  };
+function parseWardSlaBuckets(result) {
+  const byWard = {};
+
+  for (const row of result?.rows ?? []) {
+    const wardCode = String(row.ward_code ?? "").trim();
+    if (!wardCode || wardCode === "null") continue;
+
+    const bucket = String(row.sla_status_bucket ?? "").toLowerCase();
+    const count = Number(row.total) || 0;
+    if (!byWard[wardCode]) {
+      byWard[wardCode] = { slaWithin: 0, slaApproaching: 0, slaBreached: 0 };
+    }
+
+    if (bucket === "within") byWard[wardCode].slaWithin += count;
+    else if (bucket === "approaching") byWard[wardCode].slaApproaching += count;
+    else if (bucket === "breached") byWard[wardCode].slaBreached += count;
+  }
+
+  return byWard;
+}
+
+export function parseGeographyMapLayers(
+  wowCurrentResult,
+  wowPriorResult,
+  slaBreachResult,
+  openResult,
+  slaBucketsResult
+) {
+  const currentByWard = Object.fromEntries(
+    parseWardCountSeries(wowCurrentResult).map((row) => [row.wardCode, row.count])
+  );
+  const priorByWard = Object.fromEntries(
+    parseWardCountSeries(wowPriorResult).map((row) => [row.wardCode, row.count])
+  );
+  const breachedByWard = Object.fromEntries(
+    parseWardCountSeries(slaBreachResult).map((row) => [row.wardCode, row.count])
+  );
+  const openByWard = Object.fromEntries(
+    parseWardCountSeries(openResult).map((row) => [row.wardCode, row.count])
+  );
+  const slaBucketsByWard = parseWardSlaBuckets(slaBucketsResult);
+  const wowCodes = new Set([...Object.keys(currentByWard), ...Object.keys(priorByWard)]);
+  const slaCodes = new Set([
+    ...Object.keys(breachedByWard),
+    ...Object.keys(openByWard),
+    ...Object.keys(slaBucketsByWard),
+  ]);
+  const allCodes = new Set([...wowCodes, ...slaCodes]);
+  const wardDetails = {};
+
+  for (const wardCode of allCodes) {
+    const current = currentByWard[wardCode] ?? 0;
+    const prior = priorByWard[wardCode] ?? 0;
+    const open = openByWard[wardCode] ?? 0;
+    const breached = breachedByWard[wardCode] ?? 0;
+    const buckets = slaBucketsByWard[wardCode] ?? {
+      slaWithin: 0,
+      slaApproaching: 0,
+      slaBreached: 0,
+    };
+    const wowPct =
+      prior <= 0 && current > 0
+        ? Number.POSITIVE_INFINITY
+        : prior <= 0
+          ? 0
+          : ((current - prior) / prior) * 100;
+
+    wardDetails[wardCode] = {
+      wardCode,
+      label: formatDimensionLabel(wardCode),
+      count: current,
+      current,
+      prior,
+      wowPct,
+      total: current,
+      open,
+      breached,
+      breachSharePct: open > 0 ? (breached / open) * 100 : 0,
+      ...buckets,
+    };
+  }
+
+  const wow_change = [...wowCodes].map((wardCode) => {
+    const detail = wardDetails[wardCode];
+    return {
+      wardCode,
+      label: detail.label,
+      count: detail.current,
+      current: detail.current,
+      prior: detail.prior,
+      wowPct: detail.wowPct,
+      ...detail,
+    };
+  });
+
+  const sla_breach = [...slaCodes].map((wardCode) => {
+    const detail = wardDetails[wardCode] ?? {
+      wardCode,
+      label: formatDimensionLabel(wardCode),
+      count: 0,
+      open: 0,
+      breached: 0,
+      breachSharePct: 0,
+      slaWithin: 0,
+      slaApproaching: 0,
+      slaBreached: 0,
+    };
+
+    return {
+      wardCode,
+      label: detail.label,
+      count: detail.breached,
+      open: detail.open,
+      breached: detail.breached,
+      breachSharePct: detail.breachSharePct,
+      current: detail.current,
+      prior: detail.prior,
+      wowPct: detail.wowPct,
+      total: detail.total,
+      slaWithin: detail.slaWithin,
+      slaApproaching: detail.slaApproaching,
+      slaBreached: detail.slaBreached,
+    };
+  });
+
+  return { wow_change, sla_breach, wardDetails };
 }
 
 export function parseDepartmentFlowRatioBarChart(result, { maxDepartments = 12 } = {}) {

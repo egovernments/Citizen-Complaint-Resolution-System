@@ -73,12 +73,11 @@ export function resolveVerticalXAxisLabelHeight(
 
 export function buildWrappedHorizontalCategoryLabels(
   wrapWidthPx,
-  { align = "left", minWidth } = {}
+  { minWidth, offsetX = 0 } = {}
 ) {
   return {
     show: true,
-    align,
-    offsetX: 0,
+    offsetX,
     trim: false,
     hideOverlappingLabels: false,
     minWidth,
@@ -88,20 +87,36 @@ export function buildWrappedHorizontalCategoryLabels(
 }
 
 export function buildHorizontalBarYAxisItem(categories, containerWidth, extra = {}) {
-  const { wrapWidthPx, minWidth } = resolveHorizontalCategoryLabelLayout(
+  const {
+    labels: extraLabels,
+    labelLayout,
+    labelBarGapPx = 0,
+    labelLeftMarginPx = 0,
+    ...restExtra
+  } = extra;
+  const { wrapWidthPx, minWidth: labelMinWidth } = resolveHorizontalCategoryLabelLayout(
     categories,
-    containerWidth
+    containerWidth,
+    labelLayout
   );
+  // Total column = left margin + estimated text width + gap-to-bar.
+  // offsetX shifts ApexCharts' default right-edge x to (x = labelLeftMarginPx),
+  // and CSS text-anchor:start makes all labels begin at that same left position.
+  const gapPx = Math.max(0, labelBarGapPx);
+  const marginPx = Math.max(0, labelLeftMarginPx);
+  const axisLabelWidth = Math.ceil(marginPx + labelMinWidth + gapPx);
+  const offsetX = -(Math.ceil(labelMinWidth + gapPx));
 
   return {
     labels: {
       ...buildWrappedHorizontalCategoryLabels(wrapWidthPx, {
-        align: "left",
-        minWidth,
+        minWidth: axisLabelWidth,
+        offsetX,
       }),
+      ...(extraLabels ?? {}),
     },
     axisBorder: { show: false },
     axisTicks: { show: false },
-    ...extra,
+    ...restExtra,
   };
 }

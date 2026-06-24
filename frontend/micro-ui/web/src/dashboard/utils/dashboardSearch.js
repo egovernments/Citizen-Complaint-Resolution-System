@@ -59,7 +59,7 @@ export function widgetMatchesSearch(widgetId, query, { kpiCardData = {}, chartDa
 
   if (widgetId === "cl-map-geography-choropleth") {
     const layers = chartData.geographyMap ?? {};
-    const rows = [...(layers.created ?? []), ...(layers.open ?? []), ...(layers.resolved ?? [])];
+    const rows = [...(layers.wow_change ?? []), ...(layers.sla_breach ?? [])];
     if (rows.some((row) => rowMatches(row, q))) return true;
   }
 

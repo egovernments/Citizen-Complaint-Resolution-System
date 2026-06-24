@@ -9,10 +9,14 @@ import {
   resolveVerticalXAxisLabelHeight,
 } from "./chartAxisLabels";
 import { resolveDashboardCssColor } from "./chartColors";
+import {
+  resolveBarCategorySlotWidth,
+  resolveBarChartColumnWidth,
+} from "./barChartPresentation";
 
 export const STACKED_BAR_LEGEND = {
   position: "top",
-  horizontalAlign: "left",
+  horizontalAlign: "center",
   fontSize: "11px",
   markers: {
     width: 10,
@@ -22,21 +26,53 @@ export const STACKED_BAR_LEGEND = {
     offsetX: -2,
   },
   itemMargin: { horizontal: 12, vertical: 0 },
-  offsetY: 0,
+  offsetY: 2,
+};
+
+export function buildStackedBarLegend({ horizontal = false } = {}) {
+  return {
+    ...STACKED_BAR_LEGEND,
+    horizontalAlign: horizontal ? "center" : STACKED_BAR_LEGEND.horizontalAlign,
+    offsetY: horizontal ? 8 : STACKED_BAR_LEGEND.offsetY,
+  };
+}
+
+/** Left margin inside the y-axis column before label text begins. */
+export const HORIZONTAL_BAR_LABEL_LEFT_MARGIN_PX = 8;
+/** Space between y-axis label text end and bar start (horizontal bar + stacked). */
+export const HORIZONTAL_BAR_LABEL_GAP_PX = 14;
+
+/** Y-axis label column sizing — minWidth grows to fit longest label line. */
+export const HORIZONTAL_BAR_LABEL_LAYOUT = {
+  min: 40,
+  maxCap: 140,
+  ratio: 0.28,
+  maxLines: 2,
 };
 
 export const HORIZONTAL_BAR_GRID_PADDING = {
-  left: 0,
-  right: 28,
-  top: 4,
+  left: 8,
+  right: 16,
+  top: 0,
   bottom: 4,
 };
+
+export const HORIZONTAL_STACKED_BAR_HEIGHT = "82%";
+
+export function buildHorizontalCategoryYAxis(categories, containerWidth) {
+  return buildHorizontalBarYAxisItem(categories, containerWidth, {
+    labelLayout: HORIZONTAL_BAR_LABEL_LAYOUT,
+    labelBarGapPx: HORIZONTAL_BAR_LABEL_GAP_PX,
+    labelLeftMarginPx: HORIZONTAL_BAR_LABEL_LEFT_MARGIN_PX,
+  });
+}
 
 export function buildStackedBarGrid({ horizontal = false, bottomPadding } = {}) {
   return {
     show: false,
     padding: {
       ...HORIZONTAL_BAR_GRID_PADDING,
+      top: horizontal ? -6 : HORIZONTAL_BAR_GRID_PADDING.top,
       left: horizontal ? HORIZONTAL_BAR_GRID_PADDING.left : 4,
       right: horizontal ? HORIZONTAL_BAR_GRID_PADDING.right : 4,
       bottom: bottomPadding ?? HORIZONTAL_BAR_GRID_PADDING.bottom,
@@ -114,7 +150,12 @@ export function formatStackedBarHours(value) {
   return `${n.toFixed(1)}h`;
 }
 
-export function buildStackedBarPlotOptions({ horizontal = false, valueFormat } = {}) {
+export function buildStackedBarPlotOptions({
+  horizontal = false,
+  valueFormat,
+  containerWidth = 0,
+  categoryCount = 0,
+} = {}) {
   const totalLabelColor = resolveDashboardCssColor("var(--foreground)");
   const formatTotal =
     valueFormat === "hours"
@@ -125,13 +166,18 @@ export function buildStackedBarPlotOptions({ horizontal = false, valueFormat } =
           return String(Math.round(n));
         };
 
+  const slotWidth = horizontal
+    ? 0
+    : resolveBarCategorySlotWidth(categoryCount, containerWidth);
+  const columnWidth = horizontal ? undefined : resolveBarChartColumnWidth(slotWidth);
+
   return {
     bar: {
       horizontal,
       borderRadius: 4,
       borderRadiusApplication: "end",
-      columnWidth: horizontal ? undefined : "55%",
-      barHeight: horizontal ? "68%" : undefined,
+      columnWidth,
+      barHeight: horizontal ? HORIZONTAL_STACKED_BAR_HEIGHT : undefined,
       dataLabels: {
         total: {
           enabled: true,
@@ -214,7 +260,7 @@ export function buildStackedBarYAxis({
   valueFormat,
 } = {}) {
   if (horizontal) {
-    return buildHorizontalBarYAxisItem(categories, containerWidth);
+    return buildHorizontalCategoryYAxis(categories, containerWidth);
   }
   return {
     labels: {

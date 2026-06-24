@@ -16,25 +16,37 @@ export function getBarChartDataLabelColor() {
   return resolveDashboardCssColor(BAR_CHART_DATA_LABEL_COLOR);
 }
 
-/** Grid lines off; small top inset so value labels on the tallest bar don't clip. */
-export const BAR_CHART_GRID_TOP_PAD = 4;
 /** Space reserved below plot for x-axis category labels (inside the chart). */
 export const BAR_CHART_XAXIS_LABEL_HEIGHT_PX = 22;
 export const BAR_CHART_XAXIS_LABEL_HEIGHT_COMPACT_PX = 18;
+/** Fixed bottom reserve for normal vertical bar charts (2 wrapped label lines). */
+export const BAR_CHART_XAXIS_RESERVED_HEIGHT_PX = 28;
+/** Room above the plot for value labels on bar tops (pairs with data label offsetY). */
+export const BAR_CHART_GRID_TOP_PAD = 6;
+export const BAR_CHART_DATA_LABEL_OFFSET_Y = -16;
 /** Bar thickness as a fraction of each category slot — same on every vertical bar chart. */
-export const BAR_COLUMN_WIDTH_RATIO = 0.62;
-export const BAR_COLUMN_MAX_WIDTH_PX = 44;
-export const BAR_COLUMN_MIN_WIDTH_PERCENT = 20;
-export const BAR_COLUMN_MAX_WIDTH_PERCENT = 75;
+export const BAR_COLUMN_WIDTH_RATIO = 0.88;
+export const BAR_COLUMN_MAX_WIDTH_PX = 56;
+export const BAR_COLUMN_MIN_WIDTH_PERCENT = 70;
+export const BAR_COLUMN_MAX_WIDTH_PERCENT = 92;
 export const BAR_CHART_GRID_GUTTER_PX = 4;
 /** Minimum y-axis headroom (data units) above the tallest bar for value labels. */
 export const BAR_CHART_YAXIS_MIN_HEADROOM = 1;
 /** Extra headroom as a fraction of peak value (kept small to avoid a large top gap). */
-export const BAR_CHART_YAXIS_HEADROOM_RATIO = 0.05;
+export const BAR_CHART_YAXIS_HEADROOM_RATIO = 0.02;
 
-export function resolveBarChartYAxisMax(seriesMax) {
+export function resolveBarChartYAxisMax(seriesMax, { percent = false } = {}) {
   const peak = Math.max(Number(seriesMax) || 0, 0);
-  if (peak === 0) return 1;
+  if (peak === 0) return percent ? 10 : 1;
+
+  if (percent) {
+    const headroom = Math.max(
+      1,
+      Math.ceil(peak * BAR_CHART_YAXIS_HEADROOM_RATIO * 10) / 10
+    );
+    return Math.min(100, Math.ceil((peak + headroom) * 10) / 10);
+  }
+
   const headroom = Math.max(
     BAR_CHART_YAXIS_MIN_HEADROOM,
     Math.ceil(peak * BAR_CHART_YAXIS_HEADROOM_RATIO)
@@ -47,12 +59,16 @@ export function resolveBarChartColumnWidth(slotWidthPx) {
     return `${Math.round(BAR_COLUMN_WIDTH_RATIO * 100)}%`;
   }
 
-  const dynamicPct = Math.round((BAR_COLUMN_MAX_WIDTH_PX / slotWidthPx) * 100);
+  const preferredPct = BAR_COLUMN_WIDTH_RATIO * 100;
+  const maxPctFromPx = (BAR_COLUMN_MAX_WIDTH_PX / slotWidthPx) * 100;
   const boundedPct = Math.min(
     BAR_COLUMN_MAX_WIDTH_PERCENT,
-    Math.max(BAR_COLUMN_MIN_WIDTH_PERCENT, dynamicPct)
+    Math.max(
+      BAR_COLUMN_MIN_WIDTH_PERCENT,
+      Math.min(preferredPct, maxPctFromPx)
+    )
   );
-  return `${boundedPct}%`;
+  return `${Math.round(boundedPct)}%`;
 }
 
 export function resolveBarCategorySlotWidth(categoryCount, containerWidth) {
@@ -85,7 +101,7 @@ export function buildBarChartYAxis({ tickAmount = 5, seriesMax = 0, percent = fa
     axisTicks: { show: false },
     forceNiceScale: false,
     min: 0,
-    max: percent ? 100 : resolveBarChartYAxisMax(seriesMax),
+    max: resolveBarChartYAxisMax(seriesMax, { percent }),
     tickAmount,
   };
 }
@@ -108,7 +124,7 @@ export function buildBarChartDataLabels({ valueFormat } = {}) {
   return {
     enabled: true,
     // Apex anchors column labels at the bar top; negative offset lifts them above the fill.
-    offsetY: -22,
+    offsetY: BAR_CHART_DATA_LABEL_OFFSET_Y,
     style: {
       fontSize: "11px",
       fontWeight: 600,

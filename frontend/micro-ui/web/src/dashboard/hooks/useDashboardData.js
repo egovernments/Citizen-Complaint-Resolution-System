@@ -60,7 +60,7 @@ const EMPTY_CHART_DATA = {
   complaintTypeDetails: [],
   employeePerformance: [],
   complaintsAtRisk: [],
-  geographyMap: { created: [], open: [], resolved: [] },
+  geographyMap: { wow_change: [], sla_breach: [], wardDetails: {} },
   complaintsOverTime: null,
 };
 
@@ -140,9 +140,11 @@ function buildChartData(results, dashboardFilters) {
     ),
     complaintsAtRisk: parseComplaintsAtRiskTable(results?.cl_table_complaints_at_risk),
     geographyMap: parseGeographyMapLayers(
-      results?.cl_map_ward_created,
+      results?.cl_map_ward_wow_current,
+      results?.cl_map_ward_wow_prior,
+      results?.cl_map_ward_sla_breach,
       results?.cl_map_ward_open,
-      results?.cl_map_ward_resolved
+      results?.cl_map_ward_sla_buckets
     ),
   };
 }

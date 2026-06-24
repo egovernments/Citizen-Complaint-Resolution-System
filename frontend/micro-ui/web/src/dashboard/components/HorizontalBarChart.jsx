@@ -2,12 +2,14 @@ import React, { useMemo } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
 import { resolveDashboardCssColor } from "../config/chartColors";
-import { buildHorizontalBarYAxisItem } from "../config/chartAxisLabels";
 import {
   buildApexChartTooltipOptions,
   buildChartTooltipMarkup,
 } from "../config/chartTooltipPresentation";
-import { buildHorizontalBarGrid } from "../config/stackedBarPresentation";
+import {
+  buildHorizontalBarGrid,
+  buildHorizontalCategoryYAxis,
+} from "../config/stackedBarPresentation";
 import { useScrollableChartSize } from "../hooks/useScrollableChartSize";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import ChartScrollViewport from "./ChartScrollViewport";
@@ -121,13 +123,14 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
         axisBorder: { show: false },
         axisTicks: { show: false },
       },
-      yaxis: [buildHorizontalBarYAxisItem(categories, containerWidth)],
+      yaxis: [buildHorizontalCategoryYAxis(categories, containerWidth)],
       colors: [belowBreakEvenColor, atOrAboveBreakEvenColor],
       legend: {
         show: true,
         position: "top",
-        horizontalAlign: "left",
+        horizontalAlign: "center",
         fontSize: "11px",
+        offsetY: 2,
         customLegendItems: ["Falling behind (<1.0)", "Catching up (≥1.0)"],
         markers: {
           fillColors: [belowBreakEvenColor, atOrAboveBreakEvenColor],

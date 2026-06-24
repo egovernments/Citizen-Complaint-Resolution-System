@@ -292,10 +292,10 @@ export const LANDSCAPE_CHARTS = [
   {
     id: "cl-map-geography-choropleth",
     type: "map",
-    metric: "Open complaints by geography",
-    subMetric: "Choropleth by ward",
-    outputFormat: "Created, open, or resolved — toggleable polygon layers",
-    queryKey: "cl_map_ward_open",
+    metric: "Complaint map",
+    subMetric: "WoW change or SLA breach by locality",
+    outputFormat: "Choropleth — toggle WoW change vs SLA breach",
+    queryKey: "cl_map_ward_wow_current",
     customChrome: true,
   },
   {
@@ -364,16 +364,6 @@ export const LANDSCAPE_CHARTS = [
     subMetric: "Top 5 complaint subtypes by average hours to resolve",
     outputFormat: "Stacked bar: stage dwell hours by sub-type",
     queryKey: "ev_chart_resolution_dwell_subtype",
-  },
-  {
-    id: "cl-chart-officer-sla",
-    type: "stacked-bar",
-    stackOrientation: "horizontal",
-    metric: "Team load by SLA",
-    subMetric: "Open complaints by SLA state per officer",
-    outputFormat:
-      "On track / Nearing breach / Breached — sorted by most breached",
-    queryKey: "cl_chart_officer_sla",
   },
   {
     id: "cl-table-complaint-type-details",
