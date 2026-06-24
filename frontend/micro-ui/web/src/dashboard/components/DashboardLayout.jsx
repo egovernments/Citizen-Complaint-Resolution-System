@@ -1,16 +1,24 @@
 import React, { useMemo } from "react";
 import { getBrandTheme } from "../config/dashboardConfig";
+import DashboardHeader from "./DashboardHeader";
+import DashboardFilters from "./DashboardFilters";
 import Sidebar from "./Sidebar";
-import Navbar from "./Navbar";
 
 const DashboardLayout = ({
   children,
+  visibleLayoutIds,
+  onAddWidget,
   onResetLayout,
-  visibleKpiIds,
-  onAddKpi,
-  onDragKpiStart,
-  onDragKpiEnd,
-  asOf,
+  onDragWidgetStart,
+  onDragWidgetEnd,
+  searchQuery,
+  onSearchQueryChange,
+  onExport,
+  filters,
+  onFilterChange,
+  onClearFilters,
+  filterOptions,
+  filterOptionsLoading,
 }) => {
   const brandStyle = useMemo(() => {
     const theme = getBrandTheme();
@@ -23,18 +31,33 @@ const DashboardLayout = ({
 
   return (
     <div
-      className="tw-flex tw-h-screen tw-overflow-hidden tw-bg-slate-100"
+      className="dashboard-root tw-flex tw-h-screen tw-overflow-hidden tw-bg-background tw-font-sans tw-text-foreground"
       style={brandStyle}
     >
-      <Sidebar
-        visibleKpiIds={visibleKpiIds}
-        onAddKpi={onAddKpi}
-        onDragKpiStart={onDragKpiStart}
-        onDragKpiEnd={onDragKpiEnd}
-      />
-      <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col">
-        <Navbar onResetLayout={onResetLayout} asOf={asOf} />
-        <main className="tw-flex-1 tw-overflow-auto tw-p-6">{children}</main>
+      <Sidebar />
+      <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
+        <DashboardHeader
+          visibleLayoutIds={visibleLayoutIds}
+          onAddWidget={onAddWidget}
+          onResetLayout={onResetLayout}
+          onDragWidgetStart={onDragWidgetStart}
+          onDragWidgetEnd={onDragWidgetEnd}
+          searchQuery={searchQuery}
+          onSearchQueryChange={onSearchQueryChange}
+          onExport={onExport}
+          filters={filters}
+          filterOptions={filterOptions}
+        />
+        <main className="tw-flex-1 tw-overflow-auto tw-bg-background tw-p-4 lg:tw-p-6">
+          <DashboardFilters
+            filters={filters}
+            onFilterChange={onFilterChange}
+            onClearFilters={onClearFilters}
+            filterOptions={filterOptions}
+            filterOptionsLoading={filterOptionsLoading}
+          />
+          {children}
+        </main>
       </div>
     </div>
   );

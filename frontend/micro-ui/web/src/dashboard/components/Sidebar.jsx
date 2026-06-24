@@ -1,24 +1,18 @@
 import React, { useMemo } from "react";
 import { getProductLabel, getStateLabel } from "../config/dashboardConfig";
-import KpiInventory from "./KpiInventory";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", href: "/digit-ui/employee/dashboard", active: true },
 ];
 
-const Sidebar = ({
-  visibleKpiIds,
-  onAddKpi,
-  onDragKpiStart,
-  onDragKpiEnd,
-}) => {
+const Sidebar = () => {
   const stateLabel = useMemo(() => getStateLabel(), []);
   const productLabel = useMemo(() => getProductLabel(), []);
 
   return (
-    <aside className="tw-flex tw-h-full tw-w-60 tw-flex-shrink-0 tw-flex-col tw-bg-brand-dark tw-text-white">
-      <div className="tw-border-b tw-border-teal-800 tw-px-5 tw-py-5">
-        <p className="tw-text-xs tw-font-medium tw-uppercase tw-tracking-wider tw-text-teal-200">
+    <aside className="tw-flex tw-h-full tw-w-60 tw-flex-shrink-0 tw-flex-col tw-bg-chrome tw-text-chrome-foreground">
+      <div className="tw-border-b tw-border-[color-mix(in_srgb,var(--chrome-foreground)_15%,transparent)] tw-px-5 tw-py-5">
+        <p className="tw-text-xs tw-font-medium tw-uppercase tw-tracking-wider tw-text-chrome-muted">
           {stateLabel}
         </p>
         <h1 className="tw-mt-1 tw-text-lg tw-font-bold tw-leading-tight">
@@ -31,20 +25,17 @@ const Sidebar = ({
             key={item.id}
             href={item.href}
             className={`tw-block tw-rounded-md tw-px-3 tw-py-2 tw-text-sm tw-font-medium ${
-              item.active ? "tw-bg-teal-700 tw-text-white" : "tw-text-teal-100 hover:tw-bg-teal-800"
+              item.active
+                ? "tw-bg-primary tw-text-primary-foreground"
+                : "tw-text-chrome-foreground hover:tw-bg-[color-mix(in_srgb,var(--chrome-foreground)_12%,transparent)]"
             }`}
           >
             {item.label}
           </a>
         ))}
       </nav>
-      <KpiInventory
-        visibleKpiIds={visibleKpiIds}
-        onAddKpi={onAddKpi}
-        onDragKpiStart={onDragKpiStart}
-        onDragKpiEnd={onDragKpiEnd}
-      />
-      <div className="tw-border-t tw-border-teal-800 tw-p-4 tw-text-xs tw-text-teal-300">
+      <div className="tw-flex-1" />
+      <div className="tw-border-t tw-border-[color-mix(in_srgb,var(--chrome-foreground)_15%,transparent)] tw-p-4 tw-text-xs tw-text-chrome-muted">
         Supervisor
       </div>
     </aside>

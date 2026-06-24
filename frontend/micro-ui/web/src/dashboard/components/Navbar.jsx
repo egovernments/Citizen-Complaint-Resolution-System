@@ -34,12 +34,12 @@ const Navbar = ({ onResetLayout, asOf }) => {
   const asOfLabel = formatAsOf(asOf);
 
   return (
-    <header className="tw-flex tw-h-16 tw-flex-shrink-0 tw-items-center tw-justify-between tw-border-b tw-border-slate-200 tw-bg-white tw-px-6 tw-shadow-sm">
+    <header className="tw-flex tw-h-16 tw-flex-shrink-0 tw-items-center tw-justify-between tw-border-b tw-border-border tw-bg-surface tw-px-6 tw-shadow-sm">
       <div>
-        <h2 className="tw-text-lg tw-font-semibold tw-text-slate-800">
+        <h2 className="tw-text-lg tw-font-semibold tw-text-foreground">
           {systemTitle}
         </h2>
-        <p className="tw-text-xs tw-text-slate-500">
+        <p className="tw-text-xs tw-text-muted-foreground">
           {asOfLabel ? `Data as of ${asOfLabel}` : "Supervisor dashboard"}
         </p>
       </div>
@@ -47,15 +47,15 @@ const Navbar = ({ onResetLayout, asOf }) => {
         <button
           type="button"
           onClick={onResetLayout}
-          className="tw-rounded-md tw-border tw-border-slate-300 tw-bg-white tw-px-3 tw-py-1.5 tw-text-xs tw-font-medium tw-text-slate-600 hover:tw-bg-slate-50"
+          className="tw-rounded-md tw-border tw-border-border tw-bg-surface tw-px-3 tw-py-1.5 tw-text-xs tw-font-medium tw-text-muted-foreground hover:tw-bg-muted"
         >
           Reset layout
         </button>
         <div className="tw-text-right">
-          <p className="tw-text-sm tw-font-medium tw-text-slate-800">{displayName}</p>
-          <p className="tw-text-xs tw-text-slate-500">{displayRole}</p>
+          <p className="tw-text-sm tw-font-medium tw-text-foreground">{displayName}</p>
+          <p className="tw-text-xs tw-text-muted-foreground">{displayRole}</p>
         </div>
-        <div className="tw-flex tw-h-10 tw-w-10 tw-items-center tw-justify-center tw-rounded-full tw-bg-brand-teal tw-text-sm tw-font-bold tw-text-white">
+        <div className="tw-flex tw-h-10 tw-w-10 tw-items-center tw-justify-center tw-rounded-full tw-bg-primary tw-text-sm tw-font-bold tw-text-primary-foreground">
           {displayName.charAt(0).toUpperCase()}
         </div>
       </div>
