@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useGetList, type Validator } from 'ra-core';
+import { useGetList, useTranslate, type Validator } from 'ra-core';
 
 export interface MobileRules {
   mobileNumberRegex: string;
@@ -10,61 +10,89 @@ export interface MobileRules {
   errorMessage: string;
 }
 
-const FALLBACK_REGEX = '^0?[17][0-9]{8}$';
-const FALLBACK_COUNTRY_CODE = '+254';
+const FALLBACK_REGEX = '^[6-9][0-9]{9}$';
+const FALLBACK_COUNTRY_CODE = '+91';
 
 // ── regex analysers ──────────────────────────────────────────────────────────
 // Parse a regex string to derive min/max digit length and the first mandatory
 // character class — both used to build a human-readable error message.
 
-function computeRegexLengths(pattern: string): { min: number; max: number } {
-  const s = pattern.replace(/^\^/, '').replace(/\$$/, '');
-  let min = 0, max = 0, i = 0;
+function _splitAlternation(s: string): string[] {
+  const parts: string[] = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '[') { const e = s.indexOf(']', i + 1); if (e !== -1) i = e; }
+    else if (s[i] === '(') depth++;
+    else if (s[i] === ')') depth--;
+    else if (s[i] === '|' && depth === 0) { parts.push(s.slice(start, i)); start = i + 1; }
+  }
+  parts.push(s.slice(start));
+  return parts;
+}
 
+function _computeFragmentLengths(s: string): { min: number; max: number } {
+  let min = 0, max = 0, i = 0;
   while (i < s.length) {
-    // Determine where this atom ends
     let atomEnd = i;
+    let baseMin = 1, baseMax = 1;
     if (s[i] === '[') {
       const end = s.indexOf(']', i + 1);
       atomEnd = end === -1 ? i + 1 : end + 1;
     } else if (s[i] === '\\') {
       atomEnd = i + 2;
     } else if (s[i] === '(') {
-      let depth = 1;
-      atomEnd = i + 1;
+      let depth = 1; atomEnd = i + 1;
       while (atomEnd < s.length && depth > 0) {
         if (s[atomEnd] === '(') depth++;
         else if (s[atomEnd] === ')') depth--;
         atomEnd++;
       }
+      let inner = s.slice(i + 1, atomEnd - 1);
+      if (/^\?[=!]/.test(inner) || /^\?<[=!]/.test(inner)) {
+        baseMin = 0; baseMax = 0;
+      } else {
+        if (inner.startsWith('?:')) inner = inner.slice(2);
+        else if (inner.startsWith('?')) inner = inner.slice(1);
+        const alts = _splitAlternation(inner);
+        if (alts.length > 1) {
+          const lens = alts.map(_computeFragmentLengths);
+          baseMin = Math.min(...lens.map(l => l.min));
+          const maxes = lens.map(l => l.max);
+          baseMax = maxes.includes(-1) ? Infinity : Math.max(...maxes);
+        } else {
+          const g = _computeFragmentLengths(inner);
+          baseMin = g.min;
+          baseMax = g.max === -1 ? Infinity : g.max;
+        }
+      }
     } else {
       atomEnd = i + 1;
     }
-
-    // Determine quantifier contribution
-    let atomMin = 1, atomMax = 1, qi = atomEnd;
+    let repMin = 1, repMax = 1, qi = atomEnd;
     if (qi < s.length) {
-      if (s[qi] === '?') { atomMin = 0; atomMax = 1; qi++; }
-      else if (s[qi] === '*') { atomMin = 0; atomMax = 999; qi++; }
-      else if (s[qi] === '+') { atomMin = 1; atomMax = 999; qi++; }
+      if (s[qi] === '?') { repMin = 0; repMax = 1; qi++; }
+      else if (s[qi] === '*') { repMin = 0; repMax = Infinity; qi++; }
+      else if (s[qi] === '+') { repMin = 1; repMax = Infinity; qi++; }
       else if (s[qi] === '{') {
         const end = s.indexOf('}', qi);
         if (end !== -1) {
           const parts = s.slice(qi + 1, end).split(',');
-          atomMin = parseInt(parts[0], 10) || 0;
-          atomMax = parts.length > 1
-            ? (parts[1].trim() ? parseInt(parts[1], 10) : 999)
-            : atomMin;
+          repMin = parseInt(parts[0], 10) || 0;
+          repMax = parts.length > 1 ? (parts[1].trim() ? parseInt(parts[1], 10) : Infinity) : repMin;
           qi = end + 1;
         }
       }
     }
-    min += atomMin;
-    max += atomMax;
+    min += baseMin * repMin;
+    max += (baseMax === Infinity || repMax === Infinity) ? Infinity : baseMax * repMax;
     i = qi;
   }
+  return { min, max: isFinite(max) ? max : -1 };
+}
 
-  return { min, max: max > 900 ? -1 : max };
+function computeRegexLengths(pattern: string): { min: number; max: number } {
+  const s = pattern.replace(/^\^/, '').replace(/\$$/, '');
+  return _computeFragmentLengths(s);
 }
 
 function extractFirstMandatoryClass(pattern: string): string | null {
@@ -79,21 +107,21 @@ function extractFirstMandatoryClass(pattern: string): string | null {
       content = s.slice(i + 1, end);
       atomEnd = end + 1;
     } else if (s[i] === '\\') {
-      // \d treated as any digit class
       content = s[i + 1] === 'd' ? '0-9' : null;
       atomEnd = i + 2;
     } else {
-      content = s[i]; // literal character
+      content = s[i];
       atomEnd = i + 1;
     }
-    // Skip optional atoms
     if (atomEnd < s.length && s[atomEnd] === '?') { i = atomEnd + 1; continue; }
     return content;
   }
   return null;
 }
 
-function describeCharClass(cls: string): string {
+type TranslateFn = (key: string, fallback: string) => string;
+
+function describeCharClass(cls: string, or: string): string {
   const parts: string[] = [];
   let i = 0;
   while (i < cls.length) {
@@ -107,35 +135,36 @@ function describeCharClass(cls: string): string {
   }
   if (parts.length === 0) return '';
   if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[0]} or ${parts[1]}`;
-  return `${parts.slice(0, -1).join(', ')}, or ${parts[parts.length - 1]}`;
+  if (parts.length === 2) return `${parts[0]} ${or} ${parts[1]}`;
+  return `${parts.slice(0, -1).join(', ')}, ${or} ${parts[parts.length - 1]}`;
 }
 
-// Build a human-readable validation hint from the regex alone.
-// Examples:
-//   ^0?[17][0-9]{8}$  →  "Please enter a valid mobile number (9-10 digits, starting with 1 or 7)"
-//   ^[6-9][0-9]{9}$   →  "Please enter a valid mobile number (10 digits, starting with 6-9)"
-function buildErrorMessage(regex: string): string {
+// Localization keys (module: configurator-ui):
+//   ERR_INVALID_MOBILE_NUMBER, MOBILE_VALIDATION_DIGITS, MOBILE_VALIDATION_AT_LEAST,
+//   MOBILE_VALIDATION_STARTING_WITH, MOBILE_VALIDATION_OR
+function buildErrorMessage(regex: string, t: TranslateFn = (_, fb) => fb): string {
+  const base    = t('ERR_INVALID_MOBILE_NUMBER',       'Please enter a valid mobile number');
+  const digits  = t('MOBILE_VALIDATION_DIGITS',        'digits');
+  const atLeast = t('MOBILE_VALIDATION_AT_LEAST',      'at least');
+  const sw      = t('MOBILE_VALIDATION_STARTING_WITH', 'starting with');
+  const or      = t('MOBILE_VALIDATION_OR',            'or');
+
   const { min, max } = computeRegexLengths(regex);
   const firstClass = extractFirstMandatoryClass(regex);
-
-  const isGeneric =
-    !firstClass || firstClass === '0-9' || firstClass === 'd' || firstClass === '\\d';
-  const startPart = !isGeneric
-    ? `, starting with ${describeCharClass(firstClass!)}`
-    : '';
+  const isGeneric = !firstClass || firstClass === '0-9' || firstClass === 'd' || firstClass === '\\d';
 
   const lenPart =
-    min === max ? `${min} digits` :
-    max === -1  ? `at least ${min} digits` :
-    `${min}-${max} digits`;
+    min === max ? `${min} ${digits}` :
+    max === -1  ? `${atLeast} ${min} ${digits}` :
+    `${min}-${max} ${digits}`;
 
-  return `Please enter a valid mobile number (${lenPart}${startPart})`;
+  const startPart = !isGeneric ? `, ${sw} ${describeCharClass(firstClass!, or)}` : '';
+
+  return `${base} (${lenPart}${startPart})`;
 }
 
 // ── globalConfigs fallback ───────────────────────────────────────────────────
 // Read CORE_MOBILE_CONFIGS from globalConfigs.js (injected by Ansible/nginx).
-// Fields: countryCode (E.164 prefix) + mobileNumberRegex.
 
 function readGlobalMobileConfig(): { mobileNumberRegex: string; countryCode: string } | null {
   if (typeof window === 'undefined') return null;
@@ -150,10 +179,8 @@ function readGlobalMobileConfig(): { mobileNumberRegex: string; countryCode: str
 }
 
 // ── rule builder ─────────────────────────────────────────────────────────────
-// Convert an MDMS record or globalConfigs object into MobileRules.
-// min/max lengths are derived from the regex; error message is built dynamically.
 
-function parseRules(record: Record<string, unknown>): MobileRules {
+function parseRules(record: Record<string, unknown>, t: TranslateFn = (_, fb) => fb): MobileRules {
   const regex =
     typeof record.mobileNumberRegex === 'string' ? record.mobileNumberRegex :
     typeof record.mobileNumberPattern === 'string' ? record.mobileNumberPattern :
@@ -169,7 +196,7 @@ function parseRules(record: Record<string, unknown>): MobileRules {
     countryCode,
     prefix: countryCode,
     maxLength: max === -1 ? 15 : max,
-    errorMessage: buildErrorMessage(regex),
+    errorMessage: buildErrorMessage(regex, t),
   };
 }
 
@@ -180,16 +207,16 @@ export interface UseMobileValidatorResult {
 }
 
 export function useMobileValidator(): UseMobileValidatorResult {
-  // Source priority:
-  //   1. MDMS common-masters.MobileNumberValidation (operator-managed, per-tenant)
-  //   2. globalConfigs.CORE_MOBILE_CONFIGS (Ansible-injected, per-deployment)
-  //   3. Hardcoded fallback (Kenya defaults — keeps the app functional on bare dev boxes)
+  const raTranslate = useTranslate();
+
   const { data, isLoading } = useGetList('mobile-number-validation', {
     pagination: { page: 1, perPage: 50 },
     sort: { field: 'countryCode', order: 'ASC' },
   });
 
   const rules = useMemo<MobileRules>(() => {
+    const t: TranslateFn = (key, fallback) => raTranslate(key, { _: fallback });
+
     // 1. MDMS
     if (data && data.length > 0) {
       const active = data.filter((r) => (r as Record<string, unknown>).isActive !== false);
@@ -197,14 +224,14 @@ export function useMobileValidator(): UseMobileValidatorResult {
         active.find((r) => (r as Record<string, unknown>).default === true) ??
         active[0] ??
         null;
-      if (preferred) return parseRules(preferred as Record<string, unknown>);
+      if (preferred) return parseRules(preferred as Record<string, unknown>, t);
     }
     // 2. globalConfigs
     const gc = readGlobalMobileConfig();
-    if (gc) return parseRules(gc);
+    if (gc) return parseRules(gc, t);
     // 3. Hard fallback
-    return parseRules({ mobileNumberRegex: FALLBACK_REGEX, countryCode: FALLBACK_COUNTRY_CODE });
-  }, [data]);
+    return parseRules({ mobileNumberRegex: FALLBACK_REGEX, countryCode: FALLBACK_COUNTRY_CODE }, t);
+  }, [data, raTranslate]);
 
   const validator = useMemo<Validator>(() => {
     let compiled: RegExp | null = null;
@@ -219,8 +246,6 @@ export function useMobileValidator(): UseMobileValidatorResult {
       if (compiled && !compiled.test(s)) return rules.errorMessage;
       return undefined;
     };
-    // ra-core reads isRequired from the validator function to decide whether to
-    // render the "*" required marker on the field label.
     (fn as unknown as { isRequired?: boolean }).isRequired = true;
     return fn;
   }, [rules]);

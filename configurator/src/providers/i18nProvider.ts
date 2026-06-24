@@ -4,7 +4,8 @@
  * Architecture:
  * - English is the ONLY fully-bundled locale (needed synchronously on boot).
  * - All `app.*` translations for non-English locales are fetched from DIGIT's
- *   localization API on demand (module: "configurator-ui").
+ *   localization API on demand (modules: "rainmaker-common" + "configurator-ui";
+ *   configurator-ui takes precedence on conflicts).
  * - `ra.*` framework strings (react-admin internals) are bundled per-locale
  *   since they're not stored in DIGIT. These are compact — just action/page/
  *   navigation/validation strings.
@@ -482,11 +483,19 @@ async function fetchAppTranslations(locale: string): Promise<Record<string, stri
     // the localization call at a hardcoded `'pg'` that doesn't exist on every
     // deployment.
     if (!tenantId) return {};
-    const messages = await digitClient.localizationSearch(tenantId, locale, 'configurator-ui');
+
+    // Fetch from both modules in parallel. rainmaker-common provides shared keys
+    // (e.g. ERR_INVALID_MOBILE_NUMBER, MOBILE_VALIDATION_*); configurator-ui
+    // provides app-specific overrides and takes precedence on conflicts.
+    const [configuratorMsgs, commonMsgs] = await Promise.all([
+      digitClient.localizationSearch(tenantId, locale, 'configurator-ui').catch(() => [] as unknown[]),
+      digitClient.localizationSearch(tenantId, locale, 'rainmaker-common').catch(() => [] as unknown[]),
+    ]);
+
     const flat: Record<string, string> = {};
-    for (const msg of messages) {
-      const code = msg.code as string | undefined;
-      const text = msg.message as string | undefined;
+    for (const msg of [...commonMsgs, ...configuratorMsgs]) {
+      const code = (msg as Record<string, unknown>).code as string | undefined;
+      const text = (msg as Record<string, unknown>).message as string | undefined;
       if (code && text) flat[code] = text;
     }
     if (Object.keys(flat).length > 0) {
