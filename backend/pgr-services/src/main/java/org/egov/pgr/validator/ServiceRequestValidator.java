@@ -171,9 +171,20 @@ public class ServiceRequestValidator {
             throw new CustomException("JSONPATH_ERROR","Failed to parse mdms response for department");
         }
 
+        // Unmapped complaint type: the ComplaintHierarchy leaf carries no real
+        // department — either the `department` field is absent, or it is the "NA"
+        // placeholder the configurator writes when the onboarding sheet leaves it
+        // blank. Such a type has no department constraint, so a CMS Screening Officer
+        // can route it to ANY department: skip the assignee/department match instead
+        // of blocking with INVALID_ASSIGNMENT. serviceCode validity is already
+        // enforced by validateMDMS earlier in validateCreate/validateUpdate.
         if(CollectionUtils.isEmpty(res))
-            throw new CustomException("PARSING_ERROR","Failed to fetch department from mdms data for serviceCode: "+serviceCode);
-        else departmentFromMDMS = res.get(0);
+            return;
+
+        departmentFromMDMS = res.get(0);
+        if(departmentFromMDMS == null || departmentFromMDMS.trim().isEmpty()
+                || "NA".equalsIgnoreCase(departmentFromMDMS))
+            return;
 
         Map<String, String> errorMap = new HashMap<>();
 
