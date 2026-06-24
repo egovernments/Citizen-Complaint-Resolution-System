@@ -63,6 +63,12 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.max.retries:3}")
     private Integer maxRetries;
 
+    // Fixed backoff applied before reprocessing a message consumed from the retry topic, so a brief
+    // downstream outage (e.g. config-service) gets spacing between attempts instead of burning all
+    // retries instantly. Bounded by maxRetries. 0 disables the wait (used in tests).
+    @Value("${novu.bridge.retry.delay.ms:5000}")
+    private Integer retryDelayMs;
+
     @Value("${novu.bridge.preference.enabled:true}")
     private Boolean preferenceEnabled;
 
