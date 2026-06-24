@@ -14,8 +14,8 @@ import {
 } from "../constants/layoutConfig";
 import { isSparklineKpi } from "../config/kpiSparkline";
 
-/** Demo stacked bars always included in the default dashboard view. */
-const DEFAULT_VIEW_STACKED_WIDGETS = new Set(["demo-viz-stacked-horizontal"]);
+const LEGACY_DEMO_STACKED_WIDGET_ID = "demo-viz-stacked-horizontal";
+const LIVE_OFFICER_SLA_WIDGET_ID = "cl-chart-officer-sla";
 
 const LEGACY_PIE_WIDGET_ID = "demo-viz-pie";
 const LIVE_PIE_WIDGET_ID = "cl-chart-open-by-channel";
@@ -80,6 +80,24 @@ function migrateFlowRatioWidget(layout) {
   }, []);
 }
 
+/** Swap the demo team SLA stacked bar for the live officer SLA chart. */
+function migrateDemoStackedToOfficerSla(layout) {
+  const hasLive = layout.some((item) => item.i === LIVE_OFFICER_SLA_WIDGET_ID);
+
+  return layout.reduce((next, item) => {
+    if (item.i !== LEGACY_DEMO_STACKED_WIDGET_ID) {
+      next.push(item);
+      return next;
+    }
+
+    if (hasLive) return next;
+
+    const defaults = DEFAULT_CHART_LAYOUT[LIVE_OFFICER_SLA_WIDGET_ID] ?? {};
+    next.push({ ...defaults, ...item, i: LIVE_OFFICER_SLA_WIDGET_ID });
+    return next;
+  }, []);
+}
+
 /** Swap the demo pin map for the live geography choropleth. */
 function migrateGeographyMapWidget(layout) {
   const hasLive = layout.some((item) => item.i === LIVE_GEOGRAPHY_MAP_WIDGET_ID);
@@ -100,7 +118,11 @@ function migrateGeographyMapWidget(layout) {
 
 function migrateSavedLayoutWidgets(layout) {
   return migrateGeographyMapWidget(
-    migrateFlowRatioWidget(migrateSlaRiskWidget(migratePieChannelWidget(layout)))
+    migrateFlowRatioWidget(
+      migrateSlaRiskWidget(
+        migratePieChannelWidget(migrateDemoStackedToOfficerSla(layout))
+      )
+    )
   );
 }
 
@@ -269,14 +291,13 @@ function clearSavedLayout() {
   }
 }
 
-/** Add default stacked-bar demos when missing from a persisted layout. */
-function mergeDefaultStackedWidgets(layout) {
+/** Re-add the default team SLA chart when missing from a persisted layout. */
+function mergeDefaultTeamSlaWidget(layout) {
   const existing = new Set(layout.map((item) => item.i));
-  const missing = DEFAULT_LAYOUT.filter(
-    (item) => DEFAULT_VIEW_STACKED_WIDGETS.has(item.i) && !existing.has(item.i)
-  );
-  if (!missing.length) return layout;
-  return compactVertically([...layout, ...missing]);
+  if (existing.has(LIVE_OFFICER_SLA_WIDGET_ID)) return layout;
+  const defaultItem = DEFAULT_LAYOUT.find((item) => item.i === LIVE_OFFICER_SLA_WIDGET_ID);
+  if (!defaultItem) return layout;
+  return compactVertically([...layout, defaultItem]);
 }
 
 /**
@@ -328,23 +349,23 @@ function loadLayout() {
 
     if (hasOverlaps(normalized)) {
       const repaired = compactVertically(normalized);
-      const withStacked = mergeDefaultStackedWidgets(repaired);
-      persistLayout(withStacked);
-      return withStacked;
+      const withTeamSla = mergeDefaultTeamSlaWidget(repaired);
+      persistLayout(withTeamSla);
+      return withTeamSla;
     }
 
-    const withStacked = mergeDefaultStackedWidgets(normalized);
+    const withTeamSla = mergeDefaultTeamSlaWidget(normalized);
     const layoutChanged =
-      withStacked.length > normalized.length ||
+      withTeamSla.length > normalized.length ||
       migrated.some((item, i) => item.i !== valid[i]?.i);
 
     if (layoutChanged) {
-      persistLayout(withStacked);
+      persistLayout(withTeamSla);
     } else if (normalized.some((item, i) => item !== valid[i])) {
       persistLayout(normalized);
     }
 
-    return withStacked;
+    return withTeamSla;
   } catch {
     return DEFAULT_LAYOUT;
   }

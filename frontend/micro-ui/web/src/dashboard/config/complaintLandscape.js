@@ -369,7 +369,7 @@ export const LANDSCAPE_CHARTS = [
     id: "cl-chart-officer-sla",
     type: "stacked-bar",
     stackOrientation: "horizontal",
-    metric: "Employees with most open complaints",
+    metric: "Team load by SLA",
     subMetric: "Open complaints by SLA state per officer",
     outputFormat:
       "On track / Nearing breach / Breached — sorted by most breached",

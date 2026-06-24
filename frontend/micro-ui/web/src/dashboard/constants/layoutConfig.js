@@ -1,5 +1,4 @@
 import { CHART_WIDGETS, KPI_METRICS } from "../config/supervisorMetrics";
-import { DEMO_VIZ_LAYOUT_DEFAULTS } from "../config/demoVisualizations";
 import { isKpiListMetric } from "../config/kpiDisplay";
 import { isSparklineKpi } from "../config/kpiSparkline";
 
@@ -175,11 +174,10 @@ const RAW_DEFAULT_CHART_LAYOUT = {
   "cl-map-geography-choropleth": { x: 0, w: 8, h: 6, minW: 4, minH: 5, maxW: 12, maxH: 14 },
   "cl-chart-over-time": { x: 0, w: 12, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
   "cl-chart-resolution-subtype": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  "cl-chart-officer-sla": { x: 6, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
+  "cl-chart-officer-sla": { x: 0, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
   "cl-chart-open-by-type": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
   "cl-chart-open-by-channel": { x: 6, w: 4, h: 5, minW: 3, minH: 4, maxW: 6, maxH: 8 },
   "cl-chart-complaints-by-age": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  "demo-viz-stacked-horizontal": DEMO_VIZ_LAYOUT_DEFAULTS["demo-viz-stacked-horizontal"],
 };
 
 export const DEFAULT_CHART_LAYOUT = Object.fromEntries(
@@ -198,12 +196,11 @@ export const DEFAULT_LAYOUT = [
   { i: "cl-metric-total-resolved", x: 4, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "ce-metric-reopen-rate", x: 6, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: false, static: false, resizeHandles: ["se"] },
   { i: "ce-metric-csat", x: 8, y: 0, w: 2, h: 2, minW: 2, minH: 2, maxH: 6, moved: true, static: false, resizeHandles: ["se"] },
-  { i: "demo-viz-stacked-horizontal", x: 0, y: 2, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-chart-officer-sla", x: 0, y: 2, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-chart-resolution-subtype", x: 8, y: 2, w: 4, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-map-geography-choropleth", x: 0, y: 8, w: 8, h: 6, minW: 4, minH: 5, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-chart-department-flow-ratio", x: 8, y: 8, w: 4, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-chart-over-time", x: 0, y: 14, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
-  { i: "cl-chart-open-by-channel", x: 8, y: 14, w: 4, h: 5, minW: 3, minH: 4, maxW: 6, maxH: 8, moved: false, static: false, resizeHandles: ["se"] },
+  { i: "cl-chart-over-time", x: 0, y: 14, w: 12, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10, moved: false, static: false, resizeHandles: ["se"] },
   { i: "cl-table-complaints-at-risk", x: 0, y: 20, w: 12, h: 5, minW: 6, minH: 4, maxW: 12, maxH: 14, moved: false, static: false, resizeHandles: ["se"] },
 ].map((item) => {
   const type = WIDGETS[item.i]?.type;

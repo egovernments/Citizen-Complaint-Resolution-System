@@ -17,7 +17,7 @@ export const DEFAULT_VIEW_KPI_IDS = new Set([
  * Keep in sync with non-KPI entries in DEFAULT_LAYOUT (layoutConfig.js).
  */
 export const DEFAULT_VIEW_WIDGET_IDS = new Set([
-  "demo-viz-stacked-horizontal",
+  "cl-chart-officer-sla",
   "cl-chart-resolution-subtype",
   "cl-map-geography-choropleth",
   "cl-chart-department-flow-ratio",
