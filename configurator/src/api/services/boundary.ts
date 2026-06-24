@@ -110,7 +110,10 @@ export const boundaryService = {
       if (!tb.boundary) continue;
       const items = Array.isArray(tb.boundary) ? tb.boundary : [tb.boundary];
       for (const root of items) {
-        this.flattenBoundaries(root, boundaries, seen, tb.hierarchyType);
+        // Prefer the wrapper's hierarchyType; fall back to the caller's
+        // options.hierarchyType because the API often returns null in the
+        // wrapper even when the filter was supplied.
+        this.flattenBoundaries(root, boundaries, seen, tb.hierarchyType ?? options?.hierarchyType);
       }
     }
 

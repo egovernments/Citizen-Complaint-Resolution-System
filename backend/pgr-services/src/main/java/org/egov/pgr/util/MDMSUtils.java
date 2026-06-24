@@ -88,8 +88,24 @@ public class MDMSUtils {
     public Object mDMSCall(ServiceRequest request){
         RequestInfo requestInfo = request.getRequestInfo();
         String tenantId = request.getService().getTenantId();
-        MdmsCriteriaReq mdmsCriteriaReq = getMDMSRequest(requestInfo,multiStateInstanceUtil.getStateLevelTenant(tenantId));
+
+        MdmsCriteriaReq mdmsCriteriaReq = getMDMSRequest(requestInfo, tenantId);
         Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), mdmsCriteriaReq);
+
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        if (!stateTenant.equals(tenantId)) {
+            try {
+                List<?> serviceDefs = JsonPath.read(result, MDMS_DATA_JSONPATH);
+                if (serviceDefs == null || serviceDefs.isEmpty()) {
+                    mdmsCriteriaReq = getMDMSRequest(requestInfo, stateTenant);
+                    result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), mdmsCriteriaReq);
+                }
+            } catch (Exception e) {
+                mdmsCriteriaReq = getMDMSRequest(requestInfo, stateTenant);
+                result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), mdmsCriteriaReq);
+            }
+        }
+
         return result;
     }
 
