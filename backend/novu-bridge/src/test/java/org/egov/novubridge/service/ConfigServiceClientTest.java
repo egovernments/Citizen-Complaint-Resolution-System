@@ -1,6 +1,7 @@
 package org.egov.novubridge.service;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -18,6 +19,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -82,12 +84,19 @@ public class ConfigServiceClientTest {
     }
 
     @Test
-    void getEnabledChannels_lookupThrows_returnsNullForLegacyFallback() {
+    void getEnabledChannels_lookupThrows_propagatesForRetry() {
         when(restTemplate.exchange(any(String.class), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
                 .thenThrow(new RuntimeException("config-service unreachable"));
 
-        // Favour delivery on a transient error: fall back to legacy (null), not drop.
-        assertNull(client.getEnabledChannels("pb.amritsar"));
+        // A hard error must NOT be confused with "unconfigured": throw so the event is retried/DLQ'd
+        // rather than silently falling back (which would ignore an explicit disable) or dropping.
+        assertThrows(CustomException.class, () -> client.getEnabledChannels("pb.amritsar"));
+    }
+
+    @Test
+    void getEnabledChannels_nonSuccessResponse_throws() {
+        stubSearch(new ResponseEntity<>(Map.of(), HttpStatus.INTERNAL_SERVER_ERROR));
+        assertThrows(CustomException.class, () -> client.getEnabledChannels("pb.amritsar"));
     }
 
     @Test

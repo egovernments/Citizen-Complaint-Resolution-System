@@ -238,14 +238,16 @@ public class ConfigServiceClient {
      * Returns the tenant's NotificationChannel configuration, distinguishing "unconfigured" from
      * "configured but disabled" so the caller can stay backward-compatible:
      *
-     *   null            -> the tenant has NO NotificationChannel records (unconfigured). The caller
-     *                      should fall back to legacy behaviour (dispatch on the global allow-list),
-     *                      so existing tenants keep working without a backfill.
+     *   null            -> the tenant genuinely has NO NotificationChannel records (unconfigured).
+     *                      The caller should fall back to legacy behaviour (dispatch on the global
+     *                      allow-list), so existing tenants keep working without a backfill.
      *   list (lowercased)-> the channel codes the tenant has ENABLED (may be empty if every record
      *                      is explicitly disabled -> nothing dispatched).
      *
-     * On a lookup error we also return null (legacy fallback) to favour delivery over silently
-     * dropping notifications; per-recipient consent and the global allow-list still apply.
+     * On a hard lookup error (non-2xx / unreachable / unparseable) we THROW rather than guess: a
+     * transient config-service failure must not be confused with "unconfigured" (which would ignore
+     * an explicit disable) nor silently drop the event. Throwing routes the event to the consumer's
+     * retry/DLQ path so it is reprocessed once config-service recovers.
      * NotificationChannel.code is the uppercase enum (WHATSAPP/SMS/EMAIL); we normalise to lowercase
      * to match the channel values used elsewhere (ProviderDetail/TemplateBinding, the allow-list).
      */
@@ -264,13 +266,13 @@ public class ConfigServiceClient {
 
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                log.warn("Channel-config search returned non-success for tenant={}; falling back to legacy allow-list", tenantId);
-                return null;
+                throw new CustomException("NB_CHANNEL_CONFIG_SEARCH_FAILED",
+                        "NotificationChannel search returned non-success response");
             }
 
             List<Map<String, Object>> configDataList = (List<Map<String, Object>>) response.getBody().get("configData");
             if (configDataList == null || configDataList.isEmpty()) {
-                // Unconfigured tenant -> legacy fallback (no backfill needed for existing tenants).
+                // Genuinely unconfigured tenant -> legacy fallback (no backfill needed for existing tenants).
                 log.info("No NotificationChannel config for tenant={}; falling back to legacy allow-list", tenantId);
                 return null;
             }
@@ -288,10 +290,12 @@ public class ConfigServiceClient {
             }
             log.info("Channel-config result: tenantId={}, enabledChannels={}", tenantId, channels);
             return channels;
+        } catch (CustomException e) {
+            throw e;
         } catch (Exception e) {
-            // Favour delivery on a transient error: fall back to legacy behaviour rather than drop.
-            log.warn("Channel-config search failed for tenant={}; falling back to legacy allow-list", tenantId, e);
-            return null;
+            // Don't guess on a transient failure — propagate so the event is retried/DLQ'd.
+            log.error("Channel-config search failed for tenant={}; propagating for retry/DLQ", tenantId, e);
+            throw new CustomException("NB_CHANNEL_CONFIG_SEARCH_FAILED", "Failed searching NotificationChannel config");
         }
     }
 }
