@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -68,6 +69,27 @@ public class DispatchPipelineServiceMultiChannelTest {
         when(preferenceServiceClient.isChannelAllowed(any(), any(), any(), any())).thenReturn(true);
         when(configServiceClient.resolveTemplate(any(), any(), any(), any()))
                 .thenReturn(ResolvedTemplate.builder().templateKey("tk").build());
+    }
+
+    @Test
+    void unexpectedErrorOnOneChannel_isIsolatedNotBubbled() {
+        // An UNEXPECTED (non-CustomException) error on one channel must be caught per-channel (FAILED),
+        // not bubble out and re-queue the whole event — which would re-send the channel that succeeded.
+        when(configServiceClient.getEnabledChannels("pb.amritsar")).thenReturn(List.of("whatsapp", "sms"));
+        stubHappyRecipient();
+        when(configServiceClient.resolveProvidersByChannel(eq("pb.amritsar"), any()))
+                .thenReturn(List.of(ResolvedProvider.builder().providerName("twilio").build()));
+        // first channel (whatsapp) succeeds, second (sms) throws an unexpected runtime error
+        when(novuClient.triggerWithProviderConfig(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of()).build())
+                .thenThrow(new RuntimeException("twilio SDK blew up"));
+
+        // must NOT throw out of processEnabledChannels
+        List<DispatchResult> results = service.processEnabledChannels(event(), true, null);
+
+        assertEquals(2, results.size());
+        assertEquals(Boolean.TRUE, results.get(0).getNovuTriggered(), "whatsapp should have dispatched");
+        assertEquals(Boolean.FALSE, results.get(1).getValid(), "sms should be isolated as failed");
     }
 
     @Test

@@ -80,7 +80,7 @@ public class DomainEventConsumerTest {
 
     @Test
     void success_neitherRetriesNorDlqs() {
-        consumer.listen(asInputRecord(event()), INPUT);
+        consumer.listenInput(asInputRecord(event()));
         verifyNoInteractions(producer);
     }
 
@@ -88,7 +88,7 @@ public class DomainEventConsumerTest {
     void inputFailure_requeuedToRetryWithAttemptOne() {
         failProcessing();
 
-        consumer.listen(asInputRecord(event()), INPUT);
+        consumer.listenInput(asInputRecord(event()));
 
         ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
         verify(producer).push(eq(TENANT), eq(RETRY), payload.capture());
@@ -100,7 +100,7 @@ public class DomainEventConsumerTest {
     void retryFailureBelowMax_requeuedWithIncrementedAttempt() {
         failProcessing();
 
-        consumer.listen(asRetryRecord(event(), 1), RETRY);
+        consumer.listenRetry(asRetryRecord(event(), 1));
 
         ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
         verify(producer).push(eq(TENANT), eq(RETRY), payload.capture());
@@ -112,7 +112,7 @@ public class DomainEventConsumerTest {
         failProcessing();
 
         // attempt 3 == maxRetries -> next would be 4 (> 3) -> DLQ, not another retry
-        consumer.listen(asRetryRecord(event(), 3), RETRY);
+        consumer.listenRetry(asRetryRecord(event(), 3));
 
         verify(producer).push(eq(TENANT), eq(DLQ), any());
         verify(producer, never()).push(eq(TENANT), eq(RETRY), any());
@@ -124,7 +124,7 @@ public class DomainEventConsumerTest {
         failProcessing();
 
         // 1) input failure -> capture the exact payload pushed to the retry topic
-        consumer.listen(asInputRecord(event()), INPUT);
+        consumer.listenInput(asInputRecord(event()));
         ArgumentCaptor<Object> pushed = ArgumentCaptor.forClass(Object.class);
         verify(producer).push(eq(TENANT), eq(RETRY), pushed.capture());
 
@@ -134,7 +134,7 @@ public class DomainEventConsumerTest {
         HashMap<String, Object> reconsumed = mapper.readValue(onTheWire, HashMap.class);
 
         // 3) re-consume from the retry topic (still failing)
-        consumer.listen(reconsumed, RETRY);
+        consumer.listenRetry(reconsumed);
 
         // the wrapped event survived the round trip (eventId intact) and reached the pipeline again
         ArgumentCaptor<ComplaintsDomainEvent> dispatched = ArgumentCaptor.forClass(ComplaintsDomainEvent.class);
