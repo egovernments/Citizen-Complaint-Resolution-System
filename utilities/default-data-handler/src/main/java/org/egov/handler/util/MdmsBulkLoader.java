@@ -55,6 +55,12 @@ public class MdmsBulkLoader {
 
                 String schemaCode = fileName.replace(".json", "");
 
+                if (serviceConfig.getExcludedMdmsSchemaCodes() != null
+                        && serviceConfig.getExcludedMdmsSchemaCodes().contains(schemaCode)) {
+                    log.info("Skipping excluded schemaCode: {}", schemaCode);
+                    continue;
+                }
+
                 // Idempotency guard: skip seeding this schemaCode's bundled data if the
                 // target tenant already has rows for it. Seed bundles are fixed/all-or-
                 // nothing, so any existing row means it was already seeded (e.g. by the
