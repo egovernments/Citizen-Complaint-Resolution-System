@@ -4,7 +4,7 @@
     "data": {
       "id": "supervisor-default",
       "description": "Default supervisor dashboard pack — complaint metrics, officer SLA chart, map, and at-risk table",
-      "roles": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"],
+      "roles": ["PGR_SUPERVISOR", "GRO", "DGRO", "PGR_LME", "PGR_ADMIN", "SUPERUSER"],
       "tiles": [
         "cl_resolution_rate_count",
         "rs_breach_total",
