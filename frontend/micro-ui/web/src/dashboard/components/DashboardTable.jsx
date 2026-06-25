@@ -4,6 +4,7 @@ import {
   getDataTableTdClass,
   getDataTableThClass,
 } from "../config/visualizationStyles";
+import { buildRedSeverityStyle } from "../config/tablePresentation";
 
 const TrendCell = ({ value }) => {
   const { muted, trendUp, trendDown } = DATA_TABLE_STYLES;
@@ -159,6 +160,15 @@ const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
           <tr
             key={row.id ?? rowIndex}
             className={row.highlight ? styles.rowHighlight : undefined}
+            style={
+              row.highlight
+                ? {
+                    "--row-sla-severity": String(
+                      row.highlightSeverity != null ? row.highlightSeverity : 1
+                    ),
+                  }
+                : undefined
+            }
           >
             {columns.map((col) => {
               const raw = row[col.id];
@@ -174,10 +184,22 @@ const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
               const labelText = typeof raw === "string" ? raw : String(raw ?? "");
               const toneKey = col.thresholdKey ?? col.id;
               const tone = row.cellTones?.[toneKey];
-              const cellToneClass = resolveToneClass(tone, styles);
-              const textToneClass = resolveToneTextClass(tone, styles);
+              const severity = row.cellToneSeverity?.[toneKey];
+              const severityStyle =
+                severity != null ? buildRedSeverityStyle(severity) : undefined;
+              const usesSeverity = severityStyle != null;
+              const suppressCellBackground = Boolean(row.highlight);
+              const cellToneClass =
+                suppressCellBackground || usesSeverity
+                  ? undefined
+                  : resolveToneClass(tone, styles);
+              const textToneClass = usesSeverity
+                ? styles.slaOverrun
+                : resolveToneTextClass(tone, styles);
               const legacyHighlight =
-                !tone && row.cellHighlights?.[col.id] ? styles.cellToneBreach : undefined;
+                !tone && !usesSeverity && !suppressCellBackground && row.cellHighlights?.[col.id]
+                  ? styles.cellToneBreach
+                  : undefined;
 
               return (
                 <td
@@ -194,7 +216,9 @@ const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
                       ) : null}
                     </span>
                   ) : (
-                    <span className={textToneClass}>{content}</span>
+                    <span className={textToneClass} style={usesSeverity ? severityStyle : undefined}>
+                      {content}
+                    </span>
                   )}
                 </td>
               );

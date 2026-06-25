@@ -85,6 +85,7 @@ const DATA_TABLE_STYLES = {
   cellToneBreach: "dashboard-table-cell-tone--breach",
   cellToneWatch: "dashboard-table-cell-tone--watch",
   cellToneGood: "dashboard-table-cell-tone--good",
+  slaOverrun: "dashboard-table-sla-overrun",
   statusTag: "dashboard-table-status-tag",
   statusTagBreach: "dashboard-table-status-tag--breach",
   statusTagWatch: "dashboard-table-status-tag--watch",

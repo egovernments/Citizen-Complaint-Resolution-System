@@ -802,7 +802,20 @@
   }
 
   .dashboard-root table.dashboard-table tbody tr.dashboard-table-row-highlight td.dashboard-table-td {
-    background-color: color-mix(in srgb, var(--status-breach) 3%, transparent) !important;
+    background-color: color-mix(
+      in srgb,
+      var(--status-breach) calc(var(--row-sla-severity, 1) * 14%),
+      transparent
+    ) !important;
+  }
+
+  .dashboard-table-sla-overrun {
+    font-weight: 600;
+    color: color-mix(
+      in srgb,
+      var(--status-breach) calc(var(--sla-overrun-severity, 1) * 100%),
+      var(--foreground)
+    );
   }
 
   .dashboard-root table.dashboard-table col.dashboard-table-col-fixed {

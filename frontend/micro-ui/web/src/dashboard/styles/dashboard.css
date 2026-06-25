@@ -601,21 +601,19 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding-top: 0.625rem;
-  padding-bottom: 0.625rem;
-  padding-left: 1rem;
-  padding-right: 1rem;
+  padding: 0.625rem 1rem;
   cursor: grab;
-  user-select: none;
+  -webkit-user-select: none;
+          user-select: none;
   font-weight: 400;
   background-color: #ffffff;
 }
 
-.dashboard-add-kpi-item:active{
+.dashboard-add-kpi-item:active {
   cursor: grabbing;
 }
 
-.dashboard-add-kpi-item-main{
+.dashboard-add-kpi-item-main {
   display: flex;
   min-width: 0;
   flex: 1 1 auto;
@@ -625,7 +623,7 @@
   text-align: left;
 }
 
-.dashboard-add-kpi-item-aside{
+.dashboard-add-kpi-item-aside {
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -634,7 +632,7 @@
   margin-left: 0.75rem;
 }
 
-.dashboard-add-kpi-item-label{
+.dashboard-add-kpi-item-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -692,8 +690,8 @@
   border-radius: 8px;
   background-color: #ffffff;
   box-shadow:
-    0 10px 24px -8px rgb(0 0 0 / 0.12),
-    0 4px 8px -4px rgb(0 0 0 / 0.08);
+      0 10px 24px -8px rgb(0 0 0 / 0.12),
+      0 4px 8px -4px rgb(0 0 0 / 0.08);
   padding: 0.75rem;
   pointer-events: none;
 }
@@ -731,8 +729,8 @@
 }
 
 .dashboard-add-kpi-preview-desc{
-  margin-top: 0.625rem;
   margin-bottom: 0px;
+  margin-top: 0.625rem;
   font-size: 11px;
   line-height: 1.375;
   color: var(--muted-foreground, #6b6860);
@@ -930,7 +928,7 @@
   color: var(--foreground);
 }
 
-.dashboard-filters-clear-inline:disabled{
+.dashboard-filters-clear-inline:disabled {
   opacity: 0.4;
   cursor: default;
   pointer-events: none;
@@ -1220,7 +1218,20 @@
 }
 
 .dashboard-root table.dashboard-table tbody tr.dashboard-table-row-highlight td.dashboard-table-td {
-  background-color: color-mix(in srgb, var(--status-breach) 3%, transparent) !important;
+  background-color: color-mix(
+      in srgb,
+      var(--status-breach) calc(var(--row-sla-severity, 1) * 14%),
+      transparent
+    ) !important;
+}
+
+.dashboard-table-sla-overrun {
+  font-weight: 600;
+  color: color-mix(
+      in srgb,
+      var(--status-breach) calc(var(--sla-overrun-severity, 1) * 100%),
+      var(--foreground)
+    );
 }
 
 .dashboard-root table.dashboard-table col.dashboard-table-col-fixed {
@@ -2591,11 +2602,6 @@
   cursor: grab;
 }
 
-.tw-select-none{
-  -webkit-user-select: none;
-          user-select: none;
-}
-
 .tw-list-none{
   list-style-type: none;
 }
@@ -2634,10 +2640,6 @@
 
 .tw-gap-2{
   gap: 0.5rem;
-}
-
-.tw-gap-2\.5{
-  gap: 0.625rem;
 }
 
 .tw-gap-3{
@@ -2867,11 +2869,6 @@
 .tw-py-2{
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
-}
-
-.tw-py-2\.5{
-  padding-top: 0.625rem;
-  padding-bottom: 0.625rem;
 }
 
 .tw-py-3{

@@ -22,15 +22,16 @@ function resolutionTableValue(ms) {
   return Math.round((ms / MS_PER_DAY) * 10) / 10 * 24;
 }
 
-function toneForResolutionVsSla(avgMs, slaMs) {
+/** Same gate as OVER SLA; severity = (avgMs − slaMs) / slaMs in raw time. */
+function resolutionOverSlaSeverity(avgMs, slaMs) {
+  if (!Number.isFinite(avgMs) || !Number.isFinite(slaMs)) return null;
   const avg = resolutionTableValue(avgMs);
   const sla = resolutionTableValue(slaMs);
   if (avg == null || sla == null || avg <= sla) return null;
-  if (sla === 0) return "breach";
-  const ratio = avg / sla;
-  if (ratio > 1.15) return "breach";
-  if (ratio > 1) return "watch";
-  return null;
+
+  const overrunMs = avgMs - slaMs;
+  const scaleMs = slaMs > 0 ? slaMs : MS_PER_DAY;
+  return Math.min(1, overrunMs / scaleMs);
 }
 
 function isOverSla(avgMs, slaMs) {
@@ -44,10 +45,11 @@ export function annotateComplaintTypeDetailsRows(rows) {
 
   return rows.map((row) => {
     const cellTones = {};
+    const cellToneSeverity = {};
 
-    const resolutionTone = toneForResolutionVsSla(row.avgResolutionMs, row.idealSlaMs);
-    if (resolutionTone) {
-      cellTones.avgResolutionMs = resolutionTone;
+    const resolutionSeverity = resolutionOverSlaSeverity(row.avgResolutionMs, row.idealSlaMs);
+    if (resolutionSeverity != null) {
+      cellToneSeverity.avgResolutionMs = resolutionSeverity;
     }
 
     for (const [key, config] of Object.entries(COMPLAINT_TYPE_DETAILS_THRESHOLDS)) {
@@ -59,7 +61,9 @@ export function annotateComplaintTypeDetailsRows(rows) {
     return {
       ...row,
       cellTones,
+      cellToneSeverity,
       highlight: overSla,
+      highlightSeverity: resolutionSeverity,
       badge: overSla ? "OVER SLA" : null,
     };
   });

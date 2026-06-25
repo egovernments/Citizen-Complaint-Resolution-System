@@ -33,6 +33,42 @@ export function storeCellTone(cellTones, key, tone) {
   }
 }
 
+/**
+ * Red text/background scaled by severity (0–1), linear — no artificial floor.
+ */
+export function buildRedSeverityStyle(severity) {
+  const s = Math.min(1, Math.max(0, severity));
+  if (s <= 0) return null;
+  return {
+    "--sla-overrun-severity": String(s),
+  };
+}
+
+/**
+ * How far past a breach threshold a value is (0–1). Null when not in breach.
+ */
+export function breachSeverity(value, config) {
+  if (!Number.isFinite(value) || !config) return null;
+  const tone = evaluateMetricTone(value, config);
+  if (tone !== "breach") return null;
+
+  const { higherIsBetter, watch, breach } = config;
+  let v = value;
+  if (watch <= 1 && breach <= 1 && v > 1 && v <= 100) {
+    v = v / 100;
+  }
+
+  if (higherIsBetter) {
+    const floor = Math.max(0, breach - (watch - breach));
+    const span = breach - floor || 1;
+    return Math.min(1, (breach - v) / span);
+  }
+
+  const ceiling = breach + (breach - watch);
+  const span = ceiling - breach || 1;
+  return Math.min(1, (v - breach) / span);
+}
+
 export const TABLE_THRESHOLDS = {
   "cl-table-workflow-stages": {
     column: "avgDwellMs",

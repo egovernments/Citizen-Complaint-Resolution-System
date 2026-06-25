@@ -287,25 +287,63 @@ export function getDroppingItem(widgetId) {
 }
 
 /** Next open slot on the bottom row when adding without an explicit drop position. */
-export function computeNextOpenPosition(layout) {
-  if (!layout.length) return { x: 0, y: 0 };
-  const maxY = Math.max(...layout.map((item) => item.y + item.h));
+function rectsOverlap(a, b) {
+  return (
+    a.x < b.x + b.w &&
+    a.x + a.w > b.x &&
+    a.y < b.y + b.h &&
+    a.y + a.h > b.y
+  );
+}
+
+function collidesAt(x, y, w, h, layout) {
+  const candidate = { x, y, w, h };
+  return layout.some((other) => rectsOverlap(candidate, other));
+}
+
+/** First grid slot (reading order) that fits w×h without overlapping any item. */
+export function findFirstOpenPosition(layout, w, h, cols = GRID_COLS) {
+  const maxY = layout.length
+    ? Math.max(...layout.map((item) => item.y + item.h))
+    : 0;
+  const yLimit = maxY + h + 12;
+
+  for (let y = 0; y <= yLimit; y += 1) {
+    for (let x = 0; x <= cols - w; x += 1) {
+      if (!collidesAt(x, y, w, h, layout)) {
+        return { x, y };
+      }
+    }
+  }
+
   return { x: 0, y: maxY };
 }
 
+export function computeNextOpenPosition(layout, w = 2, h = 2) {
+  return findFirstOpenPosition(layout, w, h);
+}
+
 /** Next KPI tile position when adding via inventory click (not drag-drop). */
-export function computeNextKpiPosition(layout) {
+export function computeNextKpiPosition(layout, widgetId) {
+  const defaults = getDefaultKpiLayoutItem(widgetId);
+  const w = defaults?.w ?? DEFAULT_KPI_LAYOUT_ITEM.w;
+  const h = defaults?.h ?? DEFAULT_KPI_LAYOUT_ITEM.h;
+
   const kpiItems = layout.filter((item) => isKpiWidget(item.i));
-  if (kpiItems.length === 0) return { x: 0, y: 0 };
+  if (kpiItems.length === 0) {
+    return findFirstOpenPosition(layout, w, h);
+  }
 
   const maxY = Math.max(...kpiItems.map((item) => item.y + item.h));
   const bottomRow = kpiItems.filter((item) => item.y + item.h === maxY);
-  const usedWidth = bottomRow.reduce((sum, item) => sum + item.w, 0);
+  const nextX = bottomRow.reduce((max, item) => Math.max(max, item.x + item.w), 0);
+  const rowY = bottomRow[0].y;
 
-  if (usedWidth + DEFAULT_KPI_LAYOUT_ITEM.w <= GRID_COLS) {
-    return { x: usedWidth, y: bottomRow[0].y };
+  if (nextX + w <= GRID_COLS && !collidesAt(nextX, rowY, w, h, layout)) {
+    return { x: nextX, y: rowY };
   }
-  return { x: 0, y: maxY };
+
+  return findFirstOpenPosition(layout, w, h);
 }
 
 /**
@@ -363,9 +401,12 @@ export function buildNewLayoutItem(widgetId, position, existingLayout = []) {
   const defaults = getDefaultLayoutItem(widgetId);
   if (!defaults) return null;
 
+  const w = defaults.w;
+  const h = defaults.h;
+
   const fallback = isKpiWidget(widgetId)
-    ? computeNextKpiPosition(existingLayout)
-    : computeNextOpenPosition(existingLayout);
+    ? computeNextKpiPosition(existingLayout, widgetId)
+    : computeNextOpenPosition(existingLayout, w, h);
 
   const x = position?.x ?? fallback.x;
   const y = position?.y ?? fallback.y;

@@ -4,6 +4,7 @@ import {
   DEFAULT_LAYOUT,
   WIDGETS,
   buildNewLayoutItem,
+  findFirstOpenPosition,
   getDefaultKpiLayoutItem,
   getChartTypeSizeConstraints,
   isHeightLockedChart,
@@ -425,11 +426,31 @@ function loadLayout() {
   }
 }
 
-/** Same post-drop pipeline as onDragStop: swap with overlapped card, then compact. */
+function collidesWithAny(item, layout) {
+  return layout.some(
+    (other) =>
+      item.x < other.x + other.w &&
+      item.x + item.w > other.x &&
+      item.y < other.y + other.h &&
+      item.y + item.h > other.y
+  );
+}
+
+/**
+ * Insert a newly-added widget WITHOUT relocating any existing card.
+ *
+ * Existing cards stay exactly where react-grid-layout already renders them, so
+ * there is nothing for RGL to "fail to re-sync" — a render overlap is therefore
+ * impossible. If the requested drop position collides with anything, the new
+ * card is moved to the first grid slot that fits it; every other card is left
+ * untouched. (Drag/resize of existing cards still uses swap + compaction.)
+ */
 function placeNewItemInLayout(prev, newItem) {
-  const origin = { x: newItem.x, y: newItem.y };
-  const swapped = swapOnDrop([...prev, newItem], newItem.i, origin);
-  return compactVertically(swapped);
+  if (!collidesWithAny(newItem, prev)) {
+    return [...prev, newItem];
+  }
+  const slot = findFirstOpenPosition(prev, newItem.w, newItem.h);
+  return [...prev, { ...newItem, x: slot.x, y: slot.y }];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -575,13 +596,13 @@ export function useDashboardLayout() {
     (widgetId, position) => {
       if (!WIDGETS[widgetId]) return;
 
-      const dropPosition =
-        position != null && (position.x != null || position.y != null)
-          ? { x: position.x, y: position.y }
-          : undefined;
-
       setLayout((prev) => {
         if (prev.some((item) => item.i === widgetId)) return prev;
+
+        const dropPosition =
+          position != null && (position.x != null || position.y != null)
+            ? { x: position.x, y: position.y }
+            : undefined;
 
         const newItem = buildNewLayoutItem(widgetId, dropPosition, prev);
         if (!newItem) return prev;
