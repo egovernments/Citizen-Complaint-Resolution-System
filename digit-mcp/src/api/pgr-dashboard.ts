@@ -62,11 +62,15 @@ export async function handlePgrDashboard(
   try {
     const deptQuery = `
       WITH service_dept AS (
-        SELECT DISTINCT ON (data->>'serviceCode')
-          data->>'serviceCode' AS service_code,
-          data->>'department'  AS dept_code
+        -- Complaint types are LEAF rows of the single RAINMAKER-PGR.ComplaintHierarchy
+        -- adjacency-list master. A leaf carries 'department' (interior grouping
+        -- nodes do not), and its 'code' IS the serviceCode stored on a complaint.
+        SELECT DISTINCT ON (data->>'code')
+          data->>'code'       AS service_code,
+          data->>'department' AS dept_code
         FROM eg_mdms_data
-        WHERE schemacode = 'RAINMAKER-PGR.ServiceDefs' AND isactive = true
+        WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive = true
+          AND data->>'department' IS NOT NULL
       ),
       dept_names AS (
         SELECT DISTINCT ON (data->>'code')

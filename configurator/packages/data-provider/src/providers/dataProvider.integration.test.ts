@@ -271,9 +271,9 @@ describe('DataProvider Integration Tests', () => {
     });
   });
 
-  describe('MDMS: complaint-types', () => {
+  describe('MDMS: complaint-hierarchy (leaf complaint types)', () => {
     it('getList returns complaint types', async () => {
-      const result = await dpRoot.getList('complaint-types', {
+      const result = await dpRoot.getList('complaint-hierarchy', {
         pagination: { page: 1, perPage: 10 }, sort: { field: 'serviceCode', order: 'ASC' }, filter: {},
       });
       assert.ok(result.data.length > 0, 'Should have complaint types');
@@ -282,21 +282,21 @@ describe('DataProvider Integration Tests', () => {
     });
 
     it('getOne fetches by serviceCode', async () => {
-      const list = await dpRoot.getList('complaint-types', {
+      const list = await dpRoot.getList('complaint-hierarchy', {
         pagination: { page: 1, perPage: 1 }, sort: { field: 'serviceCode', order: 'ASC' }, filter: {},
       });
       const id = String(list.data[0].id);
-      const result = await dpRoot.getOne('complaint-types', { id });
+      const result = await dpRoot.getOne('complaint-hierarchy', { id });
       assert.equal(String(result.data.id), id);
     });
 
     it('getManyReference finds complaint types by department', async () => {
-      const list = await dpRoot.getList('complaint-types', {
+      const list = await dpRoot.getList('complaint-hierarchy', {
         pagination: { page: 1, perPage: 1 }, sort: { field: 'serviceCode', order: 'ASC' }, filter: {},
       });
       const dept = (list.data[0] as any).department;
       assert.ok(dept, 'Precondition: complaint type should have department field');
-      const result = await dpRoot.getManyReference('complaint-types', {
+      const result = await dpRoot.getManyReference('complaint-hierarchy', {
         target: 'department', id: dept,
         pagination: { page: 1, perPage: 100 }, sort: { field: 'serviceCode', order: 'ASC' }, filter: {},
       });
@@ -793,7 +793,7 @@ describe('DataProvider Integration Tests', () => {
 
       // Create a test complaint via client API (not DataProvider — setup data)
       try {
-        const ctResult = await dpRoot.getList('complaint-types', {
+        const ctResult = await dpRoot.getList('complaint-hierarchy', {
           pagination: { page: 1, perPage: 1 }, sort: { field: 'serviceCode', order: 'ASC' }, filter: {},
         });
         const serviceCode = ctResult.data.length > 0 ? String((ctResult.data[0] as any).serviceCode) : 'StreetLightNotWorking';
@@ -858,7 +858,7 @@ describe('DataProvider Integration Tests', () => {
     });
 
     it('create creates a new PGR complaint', async () => {
-      const ctResult = await dpRoot.getList('complaint-types', {
+      const ctResult = await dpRoot.getList('complaint-hierarchy', {
         pagination: { page: 1, perPage: 1 }, sort: { field: 'serviceCode', order: 'ASC' }, filter: {},
       });
       const serviceCode = ctResult.data.length > 0 ? String((ctResult.data[0] as any).serviceCode) : 'StreetLightNotWorking';
@@ -891,7 +891,7 @@ describe('DataProvider Integration Tests', () => {
 
     it('updateMany transitions multiple complaints', async () => {
       // Create a fresh complaint for updateMany
-      const ctResult = await dpRoot.getList('complaint-types', {
+      const ctResult = await dpRoot.getList('complaint-hierarchy', {
         pagination: { page: 1, perPage: 1 }, sort: { field: 'serviceCode', order: 'ASC' }, filter: {},
       });
       const serviceCode = ctResult.data.length > 0 ? String((ctResult.data[0] as any).serviceCode) : 'StreetLightNotWorking';
@@ -920,7 +920,7 @@ describe('DataProvider Integration Tests', () => {
 
     it('delete rejects a PGR complaint', async () => {
       // Create a fresh complaint to delete (reject)
-      const ctResult = await dpRoot.getList('complaint-types', {
+      const ctResult = await dpRoot.getList('complaint-hierarchy', {
         pagination: { page: 1, perPage: 1 }, sort: { field: 'serviceCode', order: 'ASC' }, filter: {},
       });
       const serviceCode = ctResult.data.length > 0 ? String((ctResult.data[0] as any).serviceCode) : 'StreetLightNotWorking';
@@ -946,7 +946,7 @@ describe('DataProvider Integration Tests', () => {
     });
 
     it('deleteMany rejects multiple PGR complaints', async () => {
-      const ctResult = await dpRoot.getList('complaint-types', {
+      const ctResult = await dpRoot.getList('complaint-hierarchy', {
         pagination: { page: 1, perPage: 1 }, sort: { field: 'serviceCode', order: 'ASC' }, filter: {},
       });
       const serviceCode = ctResult.data.length > 0 ? String((ctResult.data[0] as any).serviceCode) : 'StreetLightNotWorking';
@@ -1135,7 +1135,7 @@ describe('DataProvider Integration Tests', () => {
   describe('Scenario: PGR Full Lifecycle', () => {
     it('create → assign → resolve → rate', async () => {
       // 1. Create complaint
-      const ctResult = await dpRoot.getList('complaint-types', {
+      const ctResult = await dpRoot.getList('complaint-hierarchy', {
         pagination: { page: 1, perPage: 1 }, sort: { field: 'serviceCode', order: 'ASC' }, filter: {},
       });
       const serviceCode = ctResult.data.length > 0 ? String((ctResult.data[0] as any).serviceCode) : 'StreetLightNotWorking';
@@ -1526,7 +1526,7 @@ describe('DataProvider Integration Tests', () => {
     it('all dedicated resources have at least a getList test above', () => {
       const dedicated = getDedicatedResources();
       const expected = [
-        'tenants', 'departments', 'designations', 'complaint-types',
+        'tenants', 'departments', 'designations', 'complaint-hierarchy',
         'employees', 'boundaries', 'complaints', 'localization',
         'users', 'workflow-business-services', 'workflow-processes',
         'access-roles', 'mdms-schemas', 'boundary-hierarchies',

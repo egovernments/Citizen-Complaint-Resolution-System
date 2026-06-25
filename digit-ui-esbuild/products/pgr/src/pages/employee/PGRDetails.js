@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { complaintLabel } from "../../utils/complaintLabel";
 import { useTranslation } from "react-i18next";
 import { useHistory, useParams } from "react-router-dom/cjs/react-router-dom.min";
 import { HeaderComponent, Button, Card, Footer, SummaryCard, Tag, Timeline, Toast, NoResultsFound } from "@egovernments/digit-ui-components";
@@ -9,6 +10,8 @@ import PGRWorkflowModal from "../../components/PGRWorkflowModal";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import Urls from "../../utils/urls";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
+import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
+import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -26,7 +29,7 @@ const ACTION_CONFIGS = [
           body: [
             {
               type: "component",
-              isMandatory: false,
+              isMandatory: true,
               component: "PGRAssigneeComponent",
               key: "SelectedAssignee",
               label: "CS_COMMON_EMPLOYEE_NAME",
@@ -257,30 +260,63 @@ const PGRDetails = () => {
   const UpdateComplaintSession = Digit.Hooks.useSessionStorage("COMPLAINT_UPDATE", {});
   const [sessionFormData, setSessionFormData, clearSessionFormData] = UpdateComplaintSession;
 
-  // Load master data from MDMS
+  // Service definitions (leaf complaint types) adapted from the single
+  // RAINMAKER-PGR.ComplaintHierarchy master — drives department + category
+  // lookups below. Legacy ServiceDefs shape preserved (serviceCode/menuPath/
+  // department) so getServiceCategoryByCode / getUpdatedConfig stay unchanged.
   const { isLoading: isMDMSLoading, data: serviceDefs } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
-    [{ name: "ServiceDefs" }],
+    [{ name: "ComplaintHierarchy" }],
     {
       cacheTime: Infinity,
-      select: (data) => data?.["RAINMAKER-PGR"]?.ServiceDefs,
+      select: selectServiceDefsFromComplaintHierarchy,
     },
-    { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
   );
 
-  // Return SERVICEDEFS.* localization keys so callers can hand the result to t().
-  // Mirrors the pattern every other PGR surface uses (inbox filter, DesktopInbox, ComplaintDetails…),
-  // which in turn matches the keys the configurator seeds for every ServiceDef record.
-  function getServiceCategoryByCode(serviceCode, services) {
-    if (!serviceCode || !Array.isArray(services)) return null;
-    const match = services.find(item => item.serviceCode === serviceCode);
-    return match?.menuPath ? `SERVICEDEFS.${match.menuPath.toUpperCase()}` : null;
+  // Complaint classification hierarchy (configurable N levels). Absent on
+  // un-migrated tenants -> buildComplaintPath returns null and the flat
+  // Type/Sub-Type rows are kept below. `nodes` is the full adjacency list
+  // (interior + leaf) that buildComplaintPath walks via parentCode.
+  const { data: hier } = Digit.Hooks.useCustomMDMS(
+    tenantId,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
+    {
+      cacheTime: Infinity,
+      select: (raw) => {
+        const defs = (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter((d) => d?.active !== false);
+        const allRows = raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [];
+        const def = defs.find((d) => allRows.some((n) => n?.hierarchyType === d?.hierarchyType)) || defs[0] || null;
+        const nodes = def ? allRows.filter((n) => n?.hierarchyType === def.hierarchyType) : [];
+        return { def, nodes };
+      },
+    },
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
+  );
+
+  // Key-based labels (COMPLAINT_HIERARCHY.<code>) like every other service,
+  // with a node-name fallback so a not-yet-seeded key never shows raw. The leaf
+  // def carries its parent group + own name; a complaint filed on an interior
+  // node is resolved from the full adjacency list (nodes) via parentCode.
+  function getServiceCategoryLabel(t, serviceCode, services, nodes) {
+    if (!serviceCode) return null;
+    const match = Array.isArray(services) ? services.find((item) => item.serviceCode === serviceCode) : null;
+    if (match?.menuPath) return complaintLabel(t, match.menuPath, match.menuPathName); // leaf → parent group
+    const byCode = new Map((nodes || []).map((n) => [n.code, n]));
+    const self = byCode.get(serviceCode);
+    if (self?.parentCode) return complaintLabel(t, self.parentCode, byCode.get(self.parentCode)?.name);
+    return self ? complaintLabel(t, self.code, self.name) : null;
   }
 
-  function getServiceNameByCode(serviceCode) {
+  function getServiceLeafLabel(t, serviceCode, services, nodes) {
     if (!serviceCode) return null;
-    return `SERVICEDEFS.${serviceCode.toUpperCase()}`;
+    const match = Array.isArray(services) ? services.find((item) => item.serviceCode === serviceCode) : null;
+    if (match) return complaintLabel(t, match.serviceCode, match.name);
+    const byCode = new Map((nodes || []).map((n) => [n.code, n]));
+    const self = byCode.get(serviceCode);
+    return self ? complaintLabel(t, self.code, self.name) : null;
   }
 
   // Fetch complaint details
@@ -373,8 +409,21 @@ const PGRDetails = () => {
       ? (freeComment ? `[${reasonCode}] ${freeComment}` : `[${reasonCode}]`)
       : freeComment;
 
+    // Record the routed department: when the officer assigns to an employee,
+    // stamp that employee's department onto additionalDetail so the complaint
+    // reflects WHERE it was routed — instead of the stale type department / "NA"
+    // carried over from filing time. Only applied when an assignee with a
+    // department is picked (REJECT/RESOLVE etc. leave additionalDetail untouched).
+    const baseService = pgrData?.ServiceWrappers[0].service;
+    const assigneeDept = _data?.SelectedAssignee?.department;
+    const baseAdditionalDetail =
+      baseService?.additionalDetail && typeof baseService.additionalDetail === "object"
+        ? baseService.additionalDetail
+        : {};
     const updateRequest = {
-      service: { ...pgrData?.ServiceWrappers[0].service },
+      service: assigneeDept
+        ? { ...baseService, additionalDetail: { ...baseAdditionalDetail, department: assigneeDept } }
+        : { ...baseService },
       workflow: {
         action: selectedAction.action,
         assignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
@@ -412,13 +461,24 @@ const PGRDetails = () => {
   // Enhance config with roles and department dynamically
   const getUpdatedConfig = (selectedAction, workflowData, configs, serviceDefs, complaintData) => {
     const actionConfig = configs.find((config) => config.actionType === selectedAction.action);
-    const department = serviceDefs?.find((def) => def.serviceCode === complaintData?.ServiceWrappers[0]?.service?.serviceCode)?.department;
+    const def = serviceDefs?.find((d) => d.serviceCode === complaintData?.ServiceWrappers[0]?.service?.serviceCode);
+    const department = def?.department;
     if (!actionConfig) return null;
     // The dropdown is the *assignee* picker, so we want the roles that can ACT on
     // the next state — not the roles that can perform the current action. The
     // latter (selectedAction.roles) was returning the GRO/PGR_VIEWER set, which
     // matches almost every employee in HRMS and produced a 37-row mega-dropdown.
     const roles = selectedAction?.assigneeRoles?.length ? selectedAction.assigneeRoles : (selectedAction?.roles || []);
+
+    // A CMS_SCREENING_OFFICER screens the complaint and routes it to the CORRECT
+    // department — at its discretion across the WHOLE tenant, not just the
+    // departments this complaint type maps to. So its assignee picker shows
+    // EVERY department's assignable employees (allDepartments), grouped by
+    // department. Every other actor stays scoped to the complaint type's single
+    // primary department. (Backend validateDepartment still scopes to the primary
+    // until relaxed — cross-department assigns will be rejected at submit for now.)
+    const userRoles = userInfo?.info?.roles?.map((r) => r.code) || [];
+    const allDepartments = userRoles.includes("CMS_SCREENING_OFFICER");
 
     return {
       ...actionConfig.formConfig,
@@ -430,7 +490,8 @@ const PGRDetails = () => {
             ...bodyItem.populators,
             roles,
             department,
-            props: { ...bodyItem.populators.props, department },
+            allDepartments,
+            props: { ...bodyItem.populators.props, department, allDepartments },
           },
         })),
       })),
@@ -492,6 +553,15 @@ const PGRDetails = () => {
   // Display loader until required data loads
   if (isLoading || isMDMSLoading || isWorkflowLoading) return <Loader />;
 
+  // Full hierarchy breakdown for the selected complaint type (null => flat).
+  const complaintServiceCode = pgrData?.ServiceWrappers?.[0]?.service?.serviceCode;
+  const complaintClassification = buildComplaintPath({
+    serviceCode: complaintServiceCode,
+    def: hier?.def,
+    nodes: hier?.nodes,
+    t,
+  });
+
   return (
     <div className="v2-pgr-details v2-scope">
       {/* Header */}
@@ -516,18 +586,29 @@ const PGRDetails = () => {
                     type: "text",
                     value: pgrData?.ServiceWrappers[0].service?.serviceRequestId || "NA",
                   },
-                  {
-                    inline: true,
-                    label: t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE"),
-                    type: "text",
-                    value: t(getServiceCategoryByCode(pgrData?.ServiceWrappers[0].service?.serviceCode, serviceDefs) || "NA"),
-                  },
-                  {
-                    inline: true,
-                    label: t("CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE"),
-                    type: "text",
-                    value: t(getServiceNameByCode(pgrData?.ServiceWrappers[0].service?.serviceCode) || "NA"),
-                  },
+                  // Hierarchy tenants: one row per level (Main Category › Sector ›
+                  // Sub-Type …). Flat tenants: the legacy Type + Sub-Type pair.
+                  ...(complaintClassification
+                    ? complaintClassification.map((r) => ({
+                        inline: true,
+                        label: r.label,
+                        type: "text",
+                        value: r.value || "NA",
+                      }))
+                    : [
+                        {
+                          inline: true,
+                          label: t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE"),
+                          type: "text",
+                          value: getServiceCategoryLabel(t, pgrData?.ServiceWrappers[0].service?.serviceCode, serviceDefs, hier?.nodes) || t("NA"),
+                        },
+                        {
+                          inline: true,
+                          label: t("CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE"),
+                          type: "text",
+                          value: getServiceLeafLabel(t, pgrData?.ServiceWrappers[0].service?.serviceCode, serviceDefs, hier?.nodes) || t("NA"),
+                        },
+                      ]),
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_FILED_DATE"),

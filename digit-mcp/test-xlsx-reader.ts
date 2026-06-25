@@ -350,8 +350,13 @@ async function run() {
     assert.strictEqual(complaintTypes[1].serviceCode, 'coleta_lixo');
     assert.strictEqual(complaintTypes[1].slaHours, 48);
 
-    assert.strictEqual(localizations.length, 2);
-    assert.strictEqual(localizations[0].code, 'SERVICEDEFS.REPARO_BURACOS');
+    // Labels are now seeded key-based under COMPLAINT_HIERARCHY.<code> (exact +
+    // uppercase per node), replacing the legacy SERVICEDEFS.* keys.
+    assert.ok(localizations.length >= 2);
+    assert.ok(
+      localizations.some((l) => l.code === 'COMPLAINT_HIERARCHY.REPARO_BURACOS'),
+      'expected COMPLAINT_HIERARCHY.REPARO_BURACOS localization'
+    );
   });
 
   await test('readEmployees: configurator format with employeeCode + mobileNumber + userName + dob + jurisdictions', () => {

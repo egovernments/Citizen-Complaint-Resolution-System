@@ -19,7 +19,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   tenants: Building2,
   departments: Briefcase,
   designations: Award,
-  'complaint-types': AlertTriangle,
+  'complaint-hierarchy': AlertTriangle,
   employees: Users,
   complaints: MessageSquare,
   boundaries: MapPin,

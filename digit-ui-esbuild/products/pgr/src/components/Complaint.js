@@ -1,4 +1,5 @@
 import React from "react";
+import { complaintLabel } from "../utils/complaintLabel";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
 import { Card, DateWrap, KeyNote } from "@egovernments/digit-ui-react-components";
@@ -22,7 +23,13 @@ const Complaint = ({ data, path }) => {
   return (
     <React.Fragment>
       <Card onClick={handleClick}>
-        <CardSubHeader>{t(`SERVICEDEFS.${serviceCode.toUpperCase()}`)}</CardSubHeader>
+        <CardSubHeader>{(() => {
+          // Key-based label (COMPLAINT_HIERARCHY.<code>) with node-name fallback.
+          const defs = Digit.SessionStorage.get("serviceDefs") || [];
+          const leaf = Array.isArray(defs) ? defs.find((d) => d?.serviceCode === serviceCode) : null;
+          const nameByCode = Digit.SessionStorage.get("complaintHierarchyNameByCode") || {};
+          return complaintLabel(t, serviceCode, leaf?.name || nameByCode[serviceCode]);
+        })()}</CardSubHeader>
 
         <DateWrap date={Digit.DateUtils.ConvertTimestampToDate(data.auditDetails.createdTime)} />
 

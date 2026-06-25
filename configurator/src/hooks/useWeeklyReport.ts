@@ -323,12 +323,18 @@ export function useWeeklyReport() {
         // Schema may not exist yet — use defaults
       }
 
-      // 3. Load complaint type display names
-      const typeRecords = await digitClient.mdmsSearch(stateTenant, 'RAINMAKER-PGR.ServiceDefs');
+      // 3. Load complaint type display names from the single ComplaintHierarchy
+      //    master, keeping only LEAF rows (those carrying department/slaHours).
+      //    A leaf's `code` IS the serviceCode stored on a complaint.
+      const typeRecords = await digitClient.mdmsSearch(stateTenant, 'RAINMAKER-PGR.ComplaintHierarchy');
       const typeNameMap = new Map<string, string>();
       for (const r of typeRecords) {
         const d = r.data as Record<string, unknown>;
-        typeNameMap.set(d.serviceCode as string, (d.name || d.serviceName || d.serviceCode) as string);
+        const isLeaf = d.department != null || d.slaHours != null;
+        if (!isLeaf) continue;
+        const code = (d.code ?? d.serviceCode) as string;
+        if (!code) continue;
+        typeNameMap.set(code, (d.name || d.serviceName || code) as string);
       }
 
       // 4. Calculate week end (Friday end-of-day for a Mon-Fri week, or Sun for full week)

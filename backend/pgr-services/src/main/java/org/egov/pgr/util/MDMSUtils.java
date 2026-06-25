@@ -30,14 +30,15 @@ import static org.egov.pgr.util.PGRConstants.MDMS_DATA_SERVICE_CODE_KEYWORD;
 @Component
 public class MDMSUtils {
 
-    // serviceCode -> SLA millis (from RAINMAKER-PGR.ServiceDefs.slaHours), cached per
-    // state-level tenant. Backs per-complaint-type SLA ordering of the inbox (issue
+    // serviceCode -> SLA millis (from RAINMAKER-PGR.ComplaintHierarchy LEAF rows' slaHours),
+    // cached per state-level tenant. Backs per-complaint-type SLA ordering of the inbox (issue
     // #432). Cache lives for the process lifetime — slaHours changes in MDMS need a
     // pgr-services restart to take effect, same staleness window the migration map had.
     private final Map<String, Map<String, Long>> serviceCodeToSlaCache = new ConcurrentHashMap<>();
 
     /**
-     * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ServiceDefs.slaHours.
+     * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ComplaintHierarchy leaf rows'
+     * slaHours (interior nodes carry no slaHours and are skipped by the Number guard below).
      * Cached per state-level tenant. Returns an empty map (never null) on MDMS failure,
      * so callers can fall back to the uniform business-level SLA.
      */

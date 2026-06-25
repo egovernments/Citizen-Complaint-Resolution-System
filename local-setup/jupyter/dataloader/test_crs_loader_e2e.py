@@ -292,7 +292,7 @@ def run_all_tests():
             # Check each schema was processed - report results
             total_deleted = 0
             total_failed = 0
-            for schema in ['common-masters.Department', 'common-masters.Designation', 'RAINMAKER-PGR.ServiceDefs']:
+            for schema in ['common-masters.Department', 'common-masters.Designation', 'RAINMAKER-PGR.ComplaintHierarchy']:
                 if schema in result:
                     schema_result = result[schema]
                     deleted = schema_result.get('deleted', 0)
@@ -312,7 +312,7 @@ def run_all_tests():
             # Use include_inactive=False to only get active MDMS records
             print("   Verifying no active MDMS records remain...")
             active_count = 0
-            for schema in ['common-masters.Department', 'common-masters.Designation', 'RAINMAKER-PGR.ServiceDefs']:
+            for schema in ['common-masters.Department', 'common-masters.Designation', 'RAINMAKER-PGR.ComplaintHierarchy']:
                 # Only get active records (isActive=true on MDMS wrapper)
                 records = loader.uploader.search_mdms_data(schema, TARGET_TENANT, limit=200, include_inactive=False)
                 if records:

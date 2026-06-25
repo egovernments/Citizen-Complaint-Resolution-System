@@ -317,7 +317,14 @@ export default function Phase4Page() {
                 return {
                   boundary: resolved.match.code,
                   boundaryType: resolved.match.boundaryType,
-                  hierarchyType: resolved.match.hierarchyType ?? 'ADMIN',
+                  // eg_hrms_jurisdiction.hierarchy is NOT-NULL. The boundary
+                  // resolver often has no hierarchyType (boundary-service search
+                  // doesn't return it), which made buildEmployee write
+                  // hierarchy=null → persister insert fails → the WHOLE employee
+                  // rolls back (egov-user created, HRMS record never lands).
+                  // Fall back to the tenant's boundary hierarchy ('ADMIN'),
+                  // matching the bulk-import path.
+                  hierarchyType: resolved.match.hierarchyType || 'ADMIN',
                 };
               })
             : [];

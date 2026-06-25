@@ -22,7 +22,7 @@ public class PGRConstants {
 
     public static final String PGR_WF_REOPEN = "REOPEN";
 
-    public static final String MDMS_SERVICEDEF = "ServiceDefs";
+    public static final String MDMS_SERVICEDEF = "ComplaintHierarchy";
 
     public static final String MDMS_MODULE_NAME = "RAINMAKER-PGR";
 
@@ -30,13 +30,16 @@ public class PGRConstants {
 
     public static final String MDMS_DEPT_MASTER = "Department";
 
-    public static final String MDMS_SERVICEDEF_SEARCH = "$.MdmsRes.RAINMAKER-PGR.ServiceDefs[?(@.serviceCode=='{SERVICEDEF}')]";
+    // Leaf complaint types now live in the merged ComplaintHierarchy master; a leaf is matched by its
+    // `code` (== the serviceCode stored on a complaint). Codes are globally unique across the merged
+    // interior+leaf keyspace (enforced by the masters migration), so matching `code` is unambiguous.
+    public static final String MDMS_SERVICEDEF_SEARCH = "$.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy[?(@.code=='{SERVICEDEF}')]";
 
-    public static final String MDMS_DEPARTMENT_SEARCH = "$.MdmsRes.RAINMAKER-PGR.ServiceDefs[?(@.serviceCode=='{SERVICEDEF}')].department";
+    public static final String MDMS_DEPARTMENT_SEARCH = "$.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy[?(@.code=='{SERVICEDEF}')].department";
 
     public static final String MDMS_DEPARTMENT_NAME_SEARCH = "$.MdmsRes.common-masters.Department[?(@.code=='{CODE}')].name";
 
-    public static final String MDMS_SERVICENAME_SEARCH = "$.MdmsRes.RAINMAKER-PGR.ServiceDefs[?(@.serviceCode=='{SERVICEDEF}')].name";
+    public static final String MDMS_SERVICENAME_SEARCH = "$.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy[?(@.code=='{SERVICEDEF}')].name";
 
     public static final String HRMS_DEPARTMENT_JSONPATH = "$.Employees.*.assignments.*.department";
 
@@ -141,9 +144,10 @@ public class PGRConstants {
 
     public static final String IMAGE_DOCUMENT_TYPE = "PHOTO";
 
-    public static final String MDMS_DATA_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.ServiceDefs";
+    public static final String MDMS_DATA_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy";
 
-    public static final String MDMS_DATA_SERVICE_CODE_KEYWORD = "serviceCode";
+    // Leaf rows key the serviceCode in the merged master's `code` field.
+    public static final String MDMS_DATA_SERVICE_CODE_KEYWORD = "code";
 
     public static final String MDMS_DATA_SLA_KEYWORD = "slaHours";
 

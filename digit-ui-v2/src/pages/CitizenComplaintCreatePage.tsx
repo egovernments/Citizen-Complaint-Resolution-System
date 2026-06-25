@@ -1,8 +1,10 @@
 /**
  * Citizen "File a complaint" — 4-step wizard.
  *
- * Step 1 — Type:        parent serviceCode from MDMS ServiceDefs
- * Step 2 — Details:     sub-type (if the parent has children) + description + landmark
+ * Step 1 — Type:        parent group (derived from the ComplaintHierarchy
+ *                       master's parentCode) — see useServiceDefs
+ * Step 2 — Details:     sub-type (leaf serviceCode, if the group has children)
+ *                       + description + landmark
  * Step 3 — Location:    map pick (Leaflet) + locality + photo upload (filestore)
  * Step 4 — Review:      readonly summary + submit to /pgr-services/v2/request/_create
  *

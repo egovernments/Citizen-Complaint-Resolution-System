@@ -29,16 +29,15 @@ import {
   parseExcelFile,
   parseDepartmentExcel,
   parseDesignationExcel,
-  parseComplaintTypeExcel,
 } from '@/utils/excelParser';
 import { downloadCommonMastersTemplate } from '@/utils/templateBuilder';
+import { ComplaintHierarchySetup } from '@/components/ComplaintHierarchySetup';
 import type {
   DepartmentExcelRow,
   DesignationExcelRow,
-  ComplaintTypeExcelRow,
 } from '@/api/types';
 
-type Step = 'landing' | 'upload' | 'preview' | 'creating-depts' | 'creating-complaints' | 'complete';
+type Step = 'landing' | 'upload' | 'preview' | 'creating-depts' | 'hierarchy' | 'complete';
 
 export default function Phase3Page() {
   const { completePhase, addUndo, state } = useApp();
@@ -55,7 +54,6 @@ export default function Phase3Page() {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [departments, setDepartments] = useState<DepartmentExcelRow[]>([]);
   const [designations, setDesignations] = useState<DesignationExcelRow[]>([]);
-  const [complaintTypes, setComplaintTypes] = useState<ComplaintTypeExcelRow[]>([]);
 
   // Created counts
   const [createdDepts, setCreatedDepts] = useState(0);
@@ -84,15 +82,10 @@ export default function Phase3Page() {
         setDesignations(desigResult.data);
       }
 
-      // Try to parse complaint types
-      const complaintResult = parseComplaintTypeExcel(workbook);
-      if (complaintResult.data.length > 0) {
-        setComplaintTypes(complaintResult.data);
-      }
-
-      // Check if we have any data
-      if (deptResult.data.length === 0 && desigResult.data.length === 0 && complaintResult.data.length === 0) {
-        setError('No valid data found in Excel file. Please check the format.');
+      // Complaint types are defined in Step 3.2 (the hierarchy flow), not from
+      // this Common Master workbook anymore — the flat ComplaintType sheet is retired.
+      if (deptResult.data.length === 0 && desigResult.data.length === 0) {
+        setError('No departments or designations found in the file. Please check the format.');
         return;
       }
 
@@ -121,7 +114,6 @@ export default function Phase3Page() {
       // counts from this run, hence the local mirrors.
       let deptsCreated = 0;
       let desigsCreated = 0;
-      let complaintsCreated = 0;
 
       if (departments.length > 0) {
         setProgressMessage('Creating departments...');
@@ -182,60 +174,11 @@ export default function Phase3Page() {
 
       addUndo('create_departments', `Created ${deptsCreated} departments and ${desigsCreated} designations`);
 
-      // Switch to complaint types
-      setStep('creating-complaints');
-      setProgress(0);
-
-      // Create complaint types
-      // pgr-services backend queries ServiceDefs at the STATE-LEVEL tenant
-      // (via getStateLevelTenant), while digit-ui queries at the city tenant.
-      // Write to both so ASSIGN validation works regardless of tenant level.
-      if (complaintTypes.length > 0) {
-        setProgressMessage('Creating complaint types...');
-        const ctPayload = complaintTypes.map(ct => ({
-          serviceCode: ct.serviceCode,
-          name: ct.name,
-          keywords: ct.keywords,
-          department: ct.department,
-          slaHours: ct.slaHours,
-          active: ct.active,
-          // group code derived from the sheet's "Complaint Type*" column —
-          // distinct menuPath values become the citizen UI's complaint menu
-          menuPath: ct.menuPath,
-        }));
-
-        const complaintResults = await mdmsService.createComplaintTypes(targetTenant, ctPayload);
-        complaintsCreated = complaintResults.success.length;
-        setCreatedComplaints(complaintsCreated);
-
-        // Also write at the state-level (root) tenant when city ≠ root
-        // const stateTenant = targetTenant.includes('.')? targetTenant.split('.')[0]: targetTenant;
-        // if (stateTenant && stateTenant !== targetTenant) {
-        //   await mdmsService.createComplaintTypes(stateTenant, ctPayload).catch(e =>
-        //     console.warn('complaint types at state-level failed (non-fatal):', e)
-        //   );
-        // }
-
-        // Create localizations for complaint types
-        await localizationService.uploadComplaintTypeLocalizations(
-          targetTenant,
-          complaintTypes.map(ct => ({
-            serviceCode: ct.serviceCode,
-            name: ct.name,
-            department: ct.department,
-            menuPath: ct.menuPath,
-            menuName: ct.menuName,
-          })),
-          'en_IN'
-        );
-
-        setProgress(100);
-      }
-
       await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
 
-      addUndo('create_complaints', `Created ${complaintsCreated} complaint types`);
-      setStep('complete');
+      // Complaint types are defined next in Step 3.2 via the configurable
+      // hierarchy flow (the replacement for the old flat ComplaintType sheet).
+      setStep('hierarchy');
     } catch (err) {
       console.error('MDMS creation error:', err);
       if (err instanceof ApiClientError) {
@@ -414,9 +357,6 @@ export default function Phase3Page() {
               <TabsTrigger value="depts" className="text-xs sm:text-sm flex-1 sm:flex-none data-[state=active]:bg-primary data-[state=active]:text-white">
                 Depts ({departments.length}) & Desig ({designations.length})
               </TabsTrigger>
-              <TabsTrigger value="complaints" className="text-xs sm:text-sm flex-1 sm:flex-none data-[state=active]:bg-primary data-[state=active]:text-white">
-                Complaints ({complaintTypes.length})
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="depts">
@@ -510,65 +450,20 @@ export default function Phase3Page() {
               </div>
             </TabsContent>
 
-            <TabsContent value="complaints">
-              {complaintTypes.length > 0 ? (
-                <div className="overflow-x-auto -mx-4 sm:mx-0">
-                  <div className="min-w-[500px] sm:min-w-0 px-4 sm:px-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/50">
-                          <TableHead className="text-xs sm:text-sm font-condensed">Status</TableHead>
-                          <TableHead className="text-xs sm:text-sm font-condensed">Service Code</TableHead>
-                          <TableHead className="text-xs sm:text-sm font-condensed">Service Name</TableHead>
-                          <TableHead className="text-xs sm:text-sm font-condensed">SLA</TableHead>
-                          <TableHead className="text-xs sm:text-sm font-condensed">Dept</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {complaintTypes.slice(0, 15).map((type) => (
-                          <TableRow key={type.serviceCode}>
-                            <TableCell>
-                              <Badge className="gap-1 text-xs bg-success text-white">
-                                <Check className="w-3 h-3" /> Valid
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="font-mono text-xs sm:text-sm">{type.serviceCode}</TableCell>
-                            <TableCell className="text-xs sm:text-sm">{type.name}</TableCell>
-                            <TableCell className="text-xs sm:text-sm">{type.slaHours}h</TableCell>
-                            <TableCell className="font-mono text-xs sm:text-sm">{type.department}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    {complaintTypes.length > 15 && (
-                      <p className="text-xs text-muted-foreground text-center py-2">
-                        Showing first 15 of {complaintTypes.length} complaint types
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <Alert variant="warning">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>No complaint types found in the file.</AlertDescription>
-                </Alert>
-              )}
-            </TabsContent>
           </Tabs>
 
           <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-6">
             Summary:
             <span className="text-primary font-medium"> {departments.length} departments</span> •
-            <span className="text-primary font-medium"> {designations.length} designations</span> •
-            <span className="text-primary font-medium"> {complaintTypes.length} complaint types</span>
+            <span className="text-primary font-medium"> {designations.length} designations</span>
           </p>
 
           <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
             <Button variant="ghost" size="sm" onClick={() => setStep('upload')} className="text-muted-foreground hover:text-primary">← Change File</Button>
             <SubmitBar
-              label={loading ? 'Creating...' : 'Create All'}
+              label={loading ? 'Creating...' : 'Create & Continue'}
               onSubmit={handleUpload}
-              disabled={loading || (departments.length === 0 && designations.length === 0 && complaintTypes.length === 0)}
+              disabled={loading || (departments.length === 0 && designations.length === 0)}
               icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
             />
           </div>
@@ -606,34 +501,19 @@ export default function Phase3Page() {
         </DigitCard>
       )}
 
-      {/* Creating Complaints */}
-      {step === 'creating-complaints' && (
+      {/* Step 3.2: Complaint Hierarchy — the configurable-levels replacement
+          for the old flat complaint-type sheet. */}
+      {step === 'hierarchy' && (
         <DigitCard>
-          <SubHeader>Step 3.3: Creating Complaint Types</SubHeader>
-
-          <div className="mb-4 sm:mb-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs sm:text-sm font-medium">{progressMessage}</span>
-              <span className="text-xs sm:text-sm text-primary font-medium">{progress}%</span>
-            </div>
-            <Progress value={progress} className="h-2" />
-          </div>
-
-          <div className="space-y-2">
-            {complaintTypes.slice(0, 5).map((type, idx) => (
-              <div key={type.serviceCode} className="flex items-center gap-3 text-xs sm:text-sm">
-                {progress >= ((idx + 1) / complaintTypes.length) * 100 ? (
-                  <Check className="w-4 h-4 text-success" />
-                ) : (
-                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                )}
-                <span>{type.serviceCode} - {type.name}</span>
-              </div>
-            ))}
-            {complaintTypes.length > 5 && (
-              <p className="text-xs text-muted-foreground">...and {complaintTypes.length - 5} more</p>
-            )}
-          </div>
+          <ComplaintHierarchySetup
+            targetTenant={targetTenant}
+            stateTenant={state.tenant}
+            onError={(m) => setError(m)}
+            onDone={({ defs }) => {
+              setCreatedComplaints(defs);
+              setStep('complete');
+            }}
+          />
         </DigitCard>
       )}
 

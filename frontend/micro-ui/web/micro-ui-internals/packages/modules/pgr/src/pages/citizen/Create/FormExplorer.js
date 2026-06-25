@@ -14,6 +14,7 @@ import { additionalDetails } from "./steps-config/additionalDetails";
 import { locationDetails } from "./steps-config/locationDetails";
 import { useQueryClient } from "react-query";
 import { useHistory, useRouteMatch, useParams } from "react-router-dom";
+import { adaptComplaintHierarchyToServiceDefs } from "../../../utils";
 
 const configs = [
   createComplaint,
@@ -80,15 +81,19 @@ const FormExplorer = () => {
     }
   }
 
+  // Complaint types now come from RAINMAKER-PGR.ComplaintHierarchy (single adjacency
+  // list). We keep only leaf rows and adapt them to the legacy ServiceDefs shape so
+  // the rest of this component (menuPath grouping, getEffectiveServiceCode, etc.) is
+  // unchanged.
   const { isLoading: isMDMSLoading, data: serviceDefs } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
-    [{ name: "ServiceDefs" }],
+    [{ name: "ComplaintHierarchy" }],
     {
       cacheTime: Infinity,
-      select: (data) => data?.["RAINMAKER-PGR"]?.ServiceDefs,
+      select: (data) => adaptComplaintHierarchyToServiceDefs(data?.["RAINMAKER-PGR"]?.ComplaintHierarchy),
     },
-    { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
+    { schemaCode: "COMPLAINT_HIERARCHY_MASTER_DATA" }
   );
 
 

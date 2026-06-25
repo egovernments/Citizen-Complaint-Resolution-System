@@ -4,7 +4,8 @@ import { StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 
 const columns: DigitColumn[] = [
-  { source: 'menuPath', label: 'app.fields.menu_path' },
+  // Grouping key — the leaf's parent node code in the hierarchy (was menuPath).
+  { source: 'parentCode', label: 'app.fields.parent' },
   { source: 'serviceCode', label: 'app.fields.service_code' },
   { source: 'name', label: 'app.fields.name', editable: true },
   {
@@ -12,8 +13,22 @@ const columns: DigitColumn[] = [
     label: 'app.fields.department',
     editable: { type: 'reference', reference: 'departments', displayField: 'name' },
     render: (record) => {
-      const dept = String(record.department ?? '');
-      return dept ? <EntityLink resource="departments" id={dept} /> : <span className="text-muted-foreground">--</span>;
+      // A complaint type can map to MANY departments (departments[]); the single
+      // `department` is just the primary. Show all of them.
+      const list =
+        Array.isArray(record.departments) && record.departments.length
+          ? (record.departments as string[])
+          : record.department
+          ? [String(record.department)]
+          : [];
+      if (!list.length) return <span className="text-muted-foreground">--</span>;
+      return (
+        <div className="flex flex-wrap gap-1">
+          {list.map((d) => (
+            <EntityLink key={d} resource="departments" id={d} />
+          ))}
+        </div>
+      );
     },
   },
   { source: 'slaHours', label: 'app.fields.sla_hours', editable: { type: 'number' } },

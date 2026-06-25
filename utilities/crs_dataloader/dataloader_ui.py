@@ -42,6 +42,7 @@ class State:
         self.result_dept            = None
         self.result_desig           = None
         self.result_ct              = None
+        self.result_ct_def          = None
         self.result_employees       = None
 
 
@@ -734,11 +735,17 @@ def common_masters_ui(state: State):
                     clean_nans(desig_loc), state.selected_tenant, "Designation_Localization")
             ct_data, ct_loc = reader.read_complaint_types(state.selected_tenant, dept_name_to_code)
             if ct_data:
+                # Merged 2-master model: ComplaintHierarchyDefinition (levels) first,
+                # then ComplaintHierarchy (interior CATEGORY nodes + leaf SUB_TYPE rows).
+                hierarchy_def = reader.complaint_hierarchy_definition()
+                state.result_ct_def = uploader.create_mdms_data(
+                    "RAINMAKER-PGR.ComplaintHierarchyDefinition", clean_nans([hierarchy_def]),
+                    state.selected_tenant, "Complaint Type Master", dest)
                 state.result_ct = uploader.create_mdms_data(
-                    "RAINMAKER-PGR.ServiceDefs", clean_nans(ct_data),
+                    "RAINMAKER-PGR.ComplaintHierarchy", clean_nans(ct_data),
                     state.selected_tenant, "Complaint Type Master", dest)
                 r = state.result_ct
-                print(f"Complaint Types: {r.get('created',0)} created, "
+                print(f"Complaint Hierarchy: {r.get('created',0)} created, "
                       f"{r.get('exists',0)} exist, {r.get('failed',0)} failed")
             if ct_loc:
                 uploader.create_localization_messages(
@@ -928,7 +935,7 @@ def workflow_ui(state: State):
                 uploader = _uploader(state)
             except RuntimeError as e:
                 print(str(e)); return
-            path = wf_file[0] or _wf_path[0]
+            path = wf_file[0]
             if not path or not os.path.exists(path):
                 print("Download the template (Step 5a) or upload a JSON file first"); return
             try:

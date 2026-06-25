@@ -1,6 +1,7 @@
-import { DigitCreate, DigitFormInput, DigitFormSelect, v } from '@/admin';
+import { DigitCreate, DigitFormInput, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { LocalityPicker } from './LocalityPicker';
+import { ComplaintHierarchyCascade } from './ComplaintHierarchyCascade';
 import { useApp } from '../../App';
 
 export function ComplaintCreate() {
@@ -30,12 +31,9 @@ export function ComplaintCreate() {
     <DigitCreate title="File Complaint" record={{}} transform={transform}>
       <FieldSection title="Complaint">
         <div className="space-y-4">
-          <DigitFormSelect
+          <ComplaintHierarchyCascade
             source="serviceCode"
             label="Complaint Type"
-            reference="complaint-types"
-            optionValue="serviceCode"
-            placeholder="Select complaint type..."
             validate={v.required}
           />
           <DigitFormInput

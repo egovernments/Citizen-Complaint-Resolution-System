@@ -706,28 +706,48 @@ async function runMastersPhase(
   }
   if (desigFailures.length) result.designation_failures = desigFailures;
 
-  // ── Complaint Types ──
-  let complaintTypes: Array<Record<string, unknown>> = [];
+  // ── Complaint Types (RAINMAKER-PGR.ComplaintHierarchy, 2-master model) ──
+  // The reader emits the level Definition + ONE adjacency list (interior
+  // CATEGORY nodes AND leaf complaint types). Each row is keyed by its `code`
+  // (a leaf's code IS its serviceCode). menuPath is gone; grouping is the tree.
+  let complaintDefinition: Record<string, unknown> | null = null;
+  let complaintHierarchy: Array<Record<string, unknown>> = [];
   let complaintLocalizations: Array<{ code: string; message: string; module: string }> = [];
   try {
     const parsed = readComplaintTypes(workbook, deptNameToCode);
-    complaintTypes = parsed.complaintTypes as unknown as Array<Record<string, unknown>>;
+    complaintDefinition = parsed.definition as unknown as Record<string, unknown>;
+    complaintHierarchy = parsed.hierarchy as unknown as Array<Record<string, unknown>>;
     complaintLocalizations = parsed.localizations;
   } catch {
     // Complaint Type Master sheet may be absent — that's OK
   }
 
   const ctStats = result.complaint_types as Record<string, number>;
-  for (const ct of complaintTypes) {
+  if (complaintDefinition && complaintHierarchy.length > 0) {
+    // 1) Level definition (idempotent; keyed by hierarchyType).
     try {
-      await digitApi.mdmsV2Create(root, 'RAINMAKER-PGR.ServiceDefs', ct.serviceCode as string, ct);
-      ctStats.created++;
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      if (/already exists|duplicate|unique/i.test(msg)) {
-        ctStats.exists++;
-      } else {
-        ctStats.failed++;
+      await digitApi.mdmsV2Create(
+        root,
+        'RAINMAKER-PGR.ComplaintHierarchyDefinition',
+        complaintDefinition.hierarchyType as string,
+        complaintDefinition,
+      );
+    } catch {
+      // Already present from a prior run / state seed — non-fatal.
+    }
+    // 2) Adjacency list. Interior nodes are emitted before leaves so each
+    //    leaf's parentCode target already exists.
+    for (const row of complaintHierarchy) {
+      try {
+        await digitApi.mdmsV2Create(root, 'RAINMAKER-PGR.ComplaintHierarchy', row.code as string, row);
+        ctStats.created++;
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (/already exists|duplicate|unique/i.test(msg)) {
+          ctStats.exists++;
+        } else {
+          ctStats.failed++;
+        }
       }
     }
   }
