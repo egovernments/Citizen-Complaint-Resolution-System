@@ -587,7 +587,6 @@
 }
 
 .dashboard-add-kpi-list {
-  scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
   background-color: #ffffff;
   list-style: none;
@@ -3079,6 +3078,20 @@
   transition-property: transform;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
+}
+
+/* Scroll works; scrollbar thumbs/tracks are hidden across the dashboard. */
+
+.dashboard-root,
+.dashboard-root * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.dashboard-root *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* Beat global digit-ui Roboto rules on bare form/table elements */
