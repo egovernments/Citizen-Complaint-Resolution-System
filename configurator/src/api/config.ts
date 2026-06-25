@@ -61,7 +61,10 @@ export const MDMS_SCHEMAS = {
   EMPLOYEE_STATUS: 'egov-hrms.EmployeeStatus',
   EMPLOYEE_TYPE: 'egov-hrms.EmployeeType',
   ROLES: 'ACCESSCONTROL-ROLES.roles',
-  PGR_SERVICE_DEFS: 'RAINMAKER-PGR.ServiceDefs',
+  // 2-master complaint hierarchy: the single adjacency-list master holding
+  // both interior classification nodes AND leaf complaint types. The old
+  // RAINMAKER-PGR.ServiceDefs / .ClassificationNode masters are gone.
+  COMPLAINT_HIERARCHY: 'RAINMAKER-PGR.ComplaintHierarchy',
   TENANT: 'tenant.tenants',
 };
 

@@ -30,14 +30,15 @@ import static org.egov.pgr.util.PGRConstants.MDMS_DATA_SERVICE_CODE_KEYWORD;
 @Component
 public class MDMSUtils {
 
-    // serviceCode -> SLA millis (from RAINMAKER-PGR.ServiceDefs.slaHours), cached per
-    // state-level tenant. Backs per-complaint-type SLA ordering of the inbox (issue
+    // serviceCode -> SLA millis (from RAINMAKER-PGR.ComplaintHierarchy LEAF rows' slaHours),
+    // cached per state-level tenant. Backs per-complaint-type SLA ordering of the inbox (issue
     // #432). Cache lives for the process lifetime — slaHours changes in MDMS need a
     // pgr-services restart to take effect, same staleness window the migration map had.
     private final Map<String, Map<String, Long>> serviceCodeToSlaCache = new ConcurrentHashMap<>();
 
     /**
-     * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ServiceDefs.slaHours.
+     * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ComplaintHierarchy leaf rows'
+     * slaHours (interior nodes carry no slaHours and are skipped by the Number guard below).
      * Cached per state-level tenant. Returns an empty map (never null) on MDMS failure,
      * so callers can fall back to the uniform business-level SLA.
      */
@@ -88,8 +89,24 @@ public class MDMSUtils {
     public Object mDMSCall(ServiceRequest request){
         RequestInfo requestInfo = request.getRequestInfo();
         String tenantId = request.getService().getTenantId();
-        MdmsCriteriaReq mdmsCriteriaReq = getMDMSRequest(requestInfo,multiStateInstanceUtil.getStateLevelTenant(tenantId));
+
+        MdmsCriteriaReq mdmsCriteriaReq = getMDMSRequest(requestInfo, tenantId);
         Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), mdmsCriteriaReq);
+
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        if (!stateTenant.equals(tenantId)) {
+            try {
+                List<?> serviceDefs = JsonPath.read(result, MDMS_DATA_JSONPATH);
+                if (serviceDefs == null || serviceDefs.isEmpty()) {
+                    mdmsCriteriaReq = getMDMSRequest(requestInfo, stateTenant);
+                    result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), mdmsCriteriaReq);
+                }
+            } catch (Exception e) {
+                mdmsCriteriaReq = getMDMSRequest(requestInfo, stateTenant);
+                result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), mdmsCriteriaReq);
+            }
+        }
+
         return result;
     }
 

@@ -92,10 +92,16 @@ export default function Phase4Page() {
       setLoadingRefs(true);
       setRefsError(null);
       try {
+        // Fetch hierarchy type first so boundaries come back with the correct
+        // hierarchyType populated — the boundary-relationships API returns
+        // hierarchyType=null in its wrapper unless explicitly filtered by it.
+        const hierarchies = await boundaryService.getHierarchies(targetTenant).catch(() => []);
+        const hierarchyType = hierarchies[0]?.hierarchyType;
+
         const [depts, desigs, bounds, fetchedRoles, fetchedMobileRules] = await Promise.all([
           mdmsService.getDepartments(targetTenant),
           mdmsService.getDesignations(targetTenant),
-          boundaryService.searchBoundaries(targetTenant),
+          boundaryService.searchBoundaries(targetTenant, hierarchyType ? { hierarchyType } : undefined),
           mdmsService.getRoles(targetTenant).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(targetTenant).catch(() => null),
         ]);
@@ -311,7 +317,14 @@ export default function Phase4Page() {
                 return {
                   boundary: resolved.match.code,
                   boundaryType: resolved.match.boundaryType,
-                  hierarchyType: resolved.match.hierarchyType,
+                  // eg_hrms_jurisdiction.hierarchy is NOT-NULL. The boundary
+                  // resolver often has no hierarchyType (boundary-service search
+                  // doesn't return it), which made buildEmployee write
+                  // hierarchy=null → persister insert fails → the WHOLE employee
+                  // rolls back (egov-user created, HRMS record never lands).
+                  // Fall back to the tenant's boundary hierarchy ('ADMIN'),
+                  // matching the bulk-import path.
+                  hierarchyType: resolved.match.hierarchyType || 'ADMIN',
                 };
               })
             : [];

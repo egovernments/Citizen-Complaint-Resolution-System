@@ -18,6 +18,7 @@ import { Card } from "@egovernments/digit-ui-components-v2";
 import { AlertCircle } from "lucide-react";
 
 import { LOCALIZATION_KEY } from "../../constants/Localization";
+import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import TimeLine from "../../components/TimeLine";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
@@ -164,9 +165,46 @@ const ComplaintDetailsPage = () => {
     id,
   });
 
+  // Complaint classification hierarchy (configurable N levels). Absent on
+  // un-migrated tenants -> buildComplaintPath returns null and the legacy flat
+  // Type/Sub-Type rows from `details` are shown unchanged.
+  // Single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes +
+  // leaf complaint types). buildComplaintPath finds the leaf (code===serviceCode)
+  // and walks parentCode up through these same rows.
+  const { data: hier } = Digit.Hooks.useCustomMDMS(
+    tenantId,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
+    {
+      cacheTime: Infinity,
+      select: (raw) => {
+        const defs = (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter((d) => d?.active !== false);
+        const allRows = raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [];
+        const def = defs.find((d) => allRows.some((n) => n?.hierarchyType === d?.hierarchyType)) || defs[0] || null;
+        const nodes = def ? allRows.filter((n) => n?.hierarchyType === def.hierarchyType) : [];
+        return { def, nodes };
+      },
+    },
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
+  );
+
+  const classification = buildComplaintPath({
+    serviceCode: complaintDetails?.service?.serviceCode,
+    def: hier?.def,
+    nodes: hier?.nodes,
+    t,
+  });
+
   const tr = (key, fallback) => {
     const v = t(key);
     return v === key ? fallback : v;
+  };
+
+  // When a hierarchy applies, the level rows below replace the flat Type/Sub-Type
+  // entries the details hook injects — drop those by their displayed label.
+  const isFlatTypeRow = (key) => {
+    const lbl = String(t(key) || "").toLowerCase().replace(/[-_]+/g, " ").trim();
+    return lbl === "complaint type" || lbl === "complaint sub type" || lbl === "complaint subtype";
   };
 
   const geoLocation = complaintDetails?.service?.address?.geoLocation;
@@ -281,18 +319,31 @@ const ComplaintDetailsPage = () => {
           </Card>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {classification && classification.length > 0 ? (
+              <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <SectionTitle>{tr("CS_COMPLAINT_CLASSIFICATION", "Complaint Classification")}</SectionTitle>
+                <div>
+                  {classification.map((r) => (
+                    <DetailRow key={r.levelCode} label={r.label} value={r.value || "N/A"} />
+                  ))}
+                </div>
+              </Card>
+            ) : null}
+
             <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
               {/* Sub-type already appears as its own "Complaint Sub Type"
                   row below; the redundant header chip was removed. */}
               <SectionTitle>{t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}</SectionTitle>
               <div>
-                {Object.keys(complaintDetails.details).map((flag) => (
-                  <DetailRow
-                    key={flag}
-                    label={t(flag)}
-                    value={renderRowValue(complaintDetails.details[flag], t)}
-                  />
-                ))}
+                {Object.keys(complaintDetails.details)
+                  .filter((flag) => !(classification && isFlatTypeRow(flag)))
+                  .map((flag) => (
+                    <DetailRow
+                      key={flag}
+                      label={t(flag)}
+                      value={renderRowValue(complaintDetails.details[flag], t)}
+                    />
+                  ))}
               </div>
               {complaintDetails?.workflow?.verificationDocuments?.length > 0 ? (
                 <div style={{ marginTop: "12px" }}>

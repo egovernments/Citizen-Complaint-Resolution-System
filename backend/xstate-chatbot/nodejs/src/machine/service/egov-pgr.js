@@ -107,6 +107,36 @@ class PGRService {
     return data.MdmsRes || data.mdms || {};
   }
 
+  // ComplaintHierarchy is a single adjacency list holding interior nodes AND leaf
+  // complaint types. A row is a LEAF iff it carries `department` or `slaHours`
+  // (interior nodes omit both). The old RAINMAKER-PGR.ServiceDefs master is gone,
+  // so this adapter fetches ComplaintHierarchy, keeps the leaf rows, and maps each
+  // to the legacy ServiceDef shape so the rest of this file is unchanged.
+  //   serviceCode := row.code        menuPath     := row.parentCode
+  //                                  menuPathName := name of parent node (code === parentCode)
+  mapHierarchyToServiceDefs(rows) {
+    if (!Array.isArray(rows)) return [];
+    const isLeaf = (r) =>
+      r && (r.department !== undefined || r.slaHours !== undefined);
+    const nameByCode = {};
+    for (const r of rows) {
+      if (r && r.code !== undefined) nameByCode[r.code] = r.name;
+    }
+    return rows.filter(isLeaf).map((r) => ({
+      serviceCode: r.code,
+      name: r.name,
+      department: r.department,
+      departments: r.departments,
+      slaHours: r.slaHours,
+      keywords: r.keywords,
+      order: r.order,
+      active: r.active,
+      parentCode: r.parentCode,
+      menuPath: r.parentCode,
+      menuPathName: r.parentCode !== undefined ? nameByCode[r.parentCode] : undefined,
+    }));
+  }
+
   async fetchFrequentComplaints(tenantId, user) {
     try {
 
@@ -117,14 +147,18 @@ class PGRService {
           [
             {
               moduleName: "RAINMAKER-PGR",
-              masterDetails: [{ name: "ServiceDefs" }]
+              masterDetails: [{ name: "ComplaintHierarchy" }]
             }
           ],
           user
         );
 
-        if (mdmsData['RAINMAKER-PGR'] && mdmsData['RAINMAKER-PGR']['ServiceDefs']) {
-          const serviceDefs = mdmsData['RAINMAKER-PGR']['ServiceDefs'];
+        if (mdmsData['RAINMAKER-PGR'] && mdmsData['RAINMAKER-PGR']['ComplaintHierarchy']) {
+          // ComplaintHierarchy holds interior + leaf rows; keep leaves mapped to
+          // the legacy ServiceDef shape so downstream logic is unchanged.
+          const serviceDefs = this.mapHierarchyToServiceDefs(
+            mdmsData['RAINMAKER-PGR']['ComplaintHierarchy']
+          );
 
           // Filter active services - show all complaint types
           const activeServices = serviceDefs
@@ -134,7 +168,7 @@ class PGRService {
 
           let complaintTypes = [];
           let messageBundle = {};
-          let localisationPrefix = "SERVICEDEFS_";
+          let localisationPrefix = "COMPLAINT_HIERARCHY.";
           
           // Collect all localization codes
           let localizationCodes = [];
@@ -168,22 +202,22 @@ class PGRService {
       } catch (v2Error) {
       }
 
-      // Fallback to MDMS v1
+      // Fallback to MDMS v1. ComplaintHierarchy holds interior + leaf rows; the
+      // adapter keeps only leaves (mapped to the legacy ServiceDef shape).
       let complaintTypeMdmsData = await this.fetchMdmsData(
         tenantId,
         "RAINMAKER-PGR",
-        "ServiceDefs",
+        "ComplaintHierarchy",
         "$.[?(@.active == true)]",
         user
       );
-      let sortedData = complaintTypeMdmsData
-        .slice()
+      let sortedData = this.mapHierarchyToServiceDefs(complaintTypeMdmsData)
         .sort((a, b) => (a.order || 999) - (b.order || 999));
         // Removed slice to show all complaint types
 
       let complaintTypes = [];
       let messageBundle = {};
-      let localisationPrefix = "SERVICEDEFS_";
+      let localisationPrefix = "COMPLAINT_HIERARCHY.";
       
       // Collect unique service codes and localization codes
       let localizationCodes = [];
@@ -244,18 +278,22 @@ class PGRService {
 
 
   async fetchComplaintCategories(tenantId) {
-    //
-    let complaintCategories = await this.fetchMdmsData(
+    // Categories = parent nodes of the active leaf complaint types. ServiceDefs
+    // is gone; the leaf's parentCode replaces the legacy menuPath grouping key.
+    let hierarchyRows = await this.fetchMdmsData(
       tenantId,
       "RAINMAKER-PGR",
-      "ServiceDefs",
-      "$.[?(@.active == true)].menuPath"
+      "ComplaintHierarchy",
+      "$.[?(@.active == true)]"
+    );
+    let complaintCategories = this.mapHierarchyToServiceDefs(hierarchyRows).map(
+      (def) => def.menuPath
     );
     complaintCategories = [...new Set(complaintCategories)];
     complaintCategories = complaintCategories.filter(
       (complaintCategory) => complaintCategory != ""
     ); // To remove any empty category
-    let localisationPrefix = "SERVICEDEFS_";
+    let localisationPrefix = "COMPLAINT_HIERARCHY.";
     let messageBundle = {};
     for (let complaintCategory of complaintCategories) {
       let message = localisationService.getMessageBundleForCode(
@@ -268,13 +306,18 @@ class PGRService {
 
 
   async fetchComplaintItemsForCategory(category, tenantId) {
-    let complaintItems = await this.fetchMdmsData(
+    // Leaf complaint types under a category = leaves whose parentCode (legacy
+    // menuPath) matches the category. ServiceDefs is gone; read ComplaintHierarchy.
+    let hierarchyRows = await this.fetchMdmsData(
       tenantId,
       "RAINMAKER-PGR",
-      "ServiceDefs",
-      '$.[?(@.active == true && @.menuPath == "' + category + '")].serviceCode'
+      "ComplaintHierarchy",
+      "$.[?(@.active == true)]"
     );
-    let localisationPrefix = "SERVICEDEFS_";
+    let complaintItems = this.mapHierarchyToServiceDefs(hierarchyRows)
+      .filter((def) => def.menuPath == category)
+      .map((def) => def.serviceCode);
+    let localisationPrefix = "COMPLAINT_HIERARCHY.";
     let messageBundle = {};
     for (let complaintItem of complaintItems) {
       let message = localisationService.getMessageBundleForCode(
@@ -743,7 +786,7 @@ class PGRService {
     let serviceWrappers = responseBody.ServiceWrappers;
     var results = {};
     results["ServiceWrappers"] = [];
-    let localisationPrefix = "SERVICEDEFS_";
+    let localisationPrefix = "COMPLAINT_HIERARCHY.";
     let statusLocalisationPrefix = "CS_COMMON_";
 
     let complaintLimit = config.pgrUseCase.complaintSearchLimit;

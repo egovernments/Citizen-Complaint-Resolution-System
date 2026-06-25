@@ -13,8 +13,11 @@ const getThumbnails = async (ids, tenantId) => {
 const getDetailsRow = ({ id, service, complaintType }) => ({
   CS_COMPLAINT_DETAILS_COMPLAINT_NO: id,
   CS_COMPLAINT_DETAILS_APPLICATION_STATUS: `CS_COMMON_${service.applicationStatus}`,
-  CS_ADDCOMPLAINT_COMPLAINT_TYPE: complaintType === "" ? `SERVICEDEFS.OTHERS` : `SERVICEDEFS.${complaintType}`,
-  CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE: `SERVICEDEFS.${service.serviceCode.toUpperCase()}`,
+  // Key-based (COMPLAINT_HIERARCHY.<code>) — the display t()s these values, so
+  // they resolve per-locale like every other service. complaintType is the
+  // parent node code (already upper-cased); serviceCode is the leaf.
+  CS_ADDCOMPLAINT_COMPLAINT_TYPE: complaintType === "" ? `CS_COMPLAINT_TYPE_OTHERS` : `COMPLAINT_HIERARCHY.${complaintType}`,
+  CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE: `COMPLAINT_HIERARCHY.${service.serviceCode.toUpperCase()}`,
   CS_COMPLAINT_ADDTIONAL_DETAILS: service.description,
   CS_COMPLAINT_FILED_DATE: Digit.DateUtils.ConvertTimestampToDate(service.auditDetails.createdTime),
   ES_CREATECOMPLAINT_ADDRESS: [
@@ -51,12 +54,16 @@ const transformDetails = ({ id, service, workflow, thumbnails, complaintType }) 
 };
 
 const fetchComplaintDetails = async (tenantId, id) => {
+  // getServiceDefs sources leaf complaint types from ComplaintHierarchy and
+  // adapts them to the legacy shape (the leaf row whose `code` === serviceCode).
   var serviceDefs = await Digit.MDMSService.getServiceDefs(tenantId, "PGR");
   const { service, workflow } = (await Digit.PGRService.search(tenantId, { serviceRequestId: id })).ServiceWrappers[0] || {};
   Digit.SessionStorage.set("complaintDetails", { service, workflow });
   if (service && workflow && serviceDefs) {
     const matchedDef = serviceDefs.find((def) => def.serviceCode === service.serviceCode);
-    const complaintType = (matchedDef?.menuPath || "").toUpperCase();
+    // Type label derives from the leaf's parent node (parentCode), which the
+    // adapter mirrors onto `menuPath`. No standalone menuPath master anymore.
+    const complaintType = (matchedDef?.parentCode || matchedDef?.menuPath || "").toUpperCase();
     const ids = workflow.verificationDocuments
       ? workflow.verificationDocuments.filter((doc) => doc.documentType === "PHOTO").map((photo) => photo.fileStoreId || photo.id)
       : null;

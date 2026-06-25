@@ -1,59 +1,6 @@
 [
   {
     "tenantId": "{tenantid}",
-    "code": "RAINMAKER-PGR.ServiceDefs",
-    "description": "RAINMAKER-PGR.ServiceDefs",
-    "isActive": true,
-    "definition": {
-      "type": "object",
-      "title": "Generated schema for Root",
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "required": [
-        "serviceCode",
-        "name",
-        "keywords",
-        "department",
-        "slaHours",
-        "active"
-      ],
-      "x-unique": [
-        "serviceCode"
-      ],
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "order": {
-          "type": "number"
-        },
-        "active": {
-          "type": "boolean"
-        },
-        "keywords": {
-          "type": "string"
-        },
-        "menuPath": {
-          "type": "string"
-        },
-        "slaHours": {
-          "type": "number"
-        },
-        "department": {
-          "type": "string"
-        },
-        "serviceCode": {
-          "type": "string"
-        },
-        "menuPathName": {
-          "type": "string"
-        }
-      },
-      "x-ref-schema": [],
-      "additionalProperties": false
-    }
-  },
-  {
-    "tenantId": "{tenantid}",
     "code": "RAINMAKER-PGR.UIConstants",
     "description": "RAINMAKER-PGR.UIConstants",
     "isActive": true,
@@ -79,7 +26,7 @@
   {
     "tenantId": "{tenantid}",
     "code": "RAINMAKER-PGR.EscalationConfig",
-    "description": "Per-tenant auto-escalation config consumed by pgr-services EscalationScheduler. `defaultSlaByLevel` is an array of SLA windows in MILLISECONDS, one per escalation depth (level 0 = first scan); `overrides` keys by serviceCode for per-complaint-type SLA arrays; `maxDepth` caps how many times a single complaint can be auto-escalated before stopping. Per-level enablement is opt-in via `enabledByLevel` (boolean array, same length as `defaultSlaByLevel`; defaults to all-true when omitted) and `overrides[<serviceCode>].enabledByLevel` for per-service-code overrides. Without an EscalationConfig record pgr-services falls back to its 5-day default SLA — see https://github.com/egovernments/Citizen-Complaint-Resolution-System/issues/585.",
+    "description": "Per-tenant auto-escalation config consumed by pgr-services EscalationScheduler. defaultSlaByLevel is SLA windows in ms (one per escalation depth); overrides keys by serviceCode for per-complaint-type SLA; maxDepth caps how many times a complaint auto-escalates. enabledByLevel opts in per level. Without a record pgr-services uses its 5-day default SLA (issue #585).",
     "isActive": true,
     "definition": {
       "type": "object",
@@ -141,6 +88,143 @@
               }
             ]
           }
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.ComplaintHierarchyDefinition",
+    "description": "Declares the ORDERED, CONFIGURABLE levels of a complaint-type hierarchy for a tenant. Direct analogue of boundary-service's HierarchyDefinition. One record per (tenantId, hierarchyType). The number/identity of levels is pure data in `levels[]` — add/remove an element to change depth, no schema or code change.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Complaint Hierarchy Definition",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "hierarchyType",
+        "levels"
+      ],
+      "x-unique": [
+        "hierarchyType"
+      ],
+      "properties": {
+        "hierarchyType": {
+          "type": "string",
+          "description": "Short uppercase identifier for this hierarchy, e.g. PGR."
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "levels": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Ordered top->leaf levels. Exactly one level should set isLeafServiceCode=true; the codes of ComplaintHierarchy rows at that level are the serviceCodes stored on complaints.",
+          "items": {
+            "type": "object",
+            "required": [
+              "levelCode",
+              "order"
+            ],
+            "properties": {
+              "levelCode": {
+                "type": "string"
+              },
+              "order": {
+                "type": "number"
+              },
+              "parentLevel": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "isFreeText": {
+                "type": "boolean"
+              },
+              "isLeafServiceCode": {
+                "type": "boolean"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.ComplaintHierarchy",
+    "description": "Single adjacency-list master for the whole complaint-type tree: interior level nodes and leaf sub-types in one table. levelCode matches a ComplaintHierarchyDefinition level; parentCode points at the parent (null at root); path is the materialised path. Leaf rows add department, departments[], slaHours and keywords, and a leaf's code IS the serviceCode stored on a complaint. Replaces the old ClassificationNode + ServiceDefs masters.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Complaint Hierarchy",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "hierarchyType",
+        "levelCode",
+        "code",
+        "name"
+      ],
+      "x-unique": [
+        "hierarchyType",
+        "code"
+      ],
+      "properties": {
+        "hierarchyType": {
+          "type": "string"
+        },
+        "levelCode": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string",
+          "description": "Node code, unique within (hierarchyType, code). For a leaf row this IS the serviceCode stored on a complaint."
+        },
+        "parentCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "department": {
+          "type": "string",
+          "description": "Leaf rows only — the PRIMARY owning department code (the single value backend routing/validation uses). Omitted on interior nodes."
+        },
+        "departments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Leaf rows only — ALL departments this complaint type routes to (re-expresses the removed ComplaintTypeDepartments master inline). `department` above is the primary of this list. Omitted on interior nodes."
+        },
+        "slaHours": {
+          "type": "number",
+          "description": "Leaf rows only — resolution SLA in hours. Omitted on interior nodes."
+        },
+        "keywords": {
+          "type": "string",
+          "description": "Leaf rows only — comma-separated search keywords. Omitted on interior nodes."
         }
       },
       "x-ref-schema": [],
