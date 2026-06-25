@@ -51,7 +51,7 @@ CREATE INDEX IF NOT EXISTS idx_pgr_svc_extended_attrs_gin
 |--------|------|---------|
 | `additionalDetails` | JSONB | System metadata (department, escalation). **Existing — unchanged.** |
 | `extended_attributes` | JSONB | Citizen-supplied dynamic fields + PII flags + confidentiality. **New.** |
-| `complaint_template_type` | JSONB | The type of complaint - grievance, feedback, petition, report. **New.** |
+| `complaint_template_type` | varchar | The type of complaint template — IGE, IGSAE. **New.** |
 
 ---
 
@@ -64,7 +64,8 @@ CREATE INDEX IF NOT EXISTS idx_pgr_svc_extended_attrs_gin
 | `dateOfFact` | Date of Fact | date | `extendedAttributes.fields` | ISO-8601 `YYYY-MM-DD` |
 | `entityName` | Entity Name | string | `extendedAttributes.fields` | Organisation or person involved |
 | `entityAddress` | Entity Address | string | `extendedAttributes.fields` | Full address string |
-| `witnessName` | Witness Name | string | `extendedAttributes.fields` | Optional; PII; encrypted |
+| `witnessName` | Witness Name | string | `extendedAttributes.fields` | Optional; PII; maskable; encrypted |
+| `witnessAddress` | Witness Address | string | `extendedAttributes.fields` | Optional; PII; maskable; encrypted |
 | `witnessNote` | Witness Note | string | `extendedAttributes.fields` | Optional |
 | `complainantAddress` | Complainant Address | string | `eg_user_address` via User Service | **Not** stored in extendedAttributes |
 | `email` | Email Address | string | `eg_user.emailaddress` via User Service | **Not** stored in extendedAttributes |
@@ -76,13 +77,10 @@ CREATE INDEX IF NOT EXISTS idx_pgr_svc_extended_attrs_gin
 
 | Template Type | Mandatory Fields |
 |---------------|-----------------|
-| `report` | `entityName`, `entityAddress`, `dateOfFact`, `description` (on `Service.description`) |
-| `petition` | `description` (on `Service.description`), `entityName` |
-| `grievance` | `description` (on `Service.description`), `entityName` |
-| `complaint` | `description` (on `Service.description`), `entityName` |
+| `IGE`   | `instituteName`, `description` (on `Service.description`) |
+| `IGSAE` | `entityName`, `entityAddress`, `dateOfFact`, `description` (on `Service.description`) |
 
-Optional for all types: `caseRelatedTo`, `witnessName`, `witnessNote`, evidence attachments,
-`dateOfFact` (except `report` where it is mandatory), `entityAddress` (except `report`).
+Optional for all types: `caseRelatedTo`, `witnessName`, `witnessNote`, evidence attachments.
 
 ---
 
@@ -92,55 +90,34 @@ Optional for all types: `caseRelatedTo`, `witnessName`, `witnessNote`, evidence 
 
 **Path:** `<mdms-repo>/data/mz/RAINMAKER-PGR/ComplaintTemplateType.json`
 
+Dev seed: `utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.ComplaintTemplateType.json`
+
 ```json
 [
   {
-    "templateType": "report",
+    "categoryType": "IGE",
     "active": true,
+    "schemaRef": "IgeComplaintExtendedAttributes",
     "fields": [
       { "fieldKey": "caseRelatedTo",  "label": "Case Related To",  "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 500,  "order": 1 },
-      { "fieldKey": "categoryType",   "label": "Category Type",    "dataType": "string", "mandatory": true,  "pii": false, "maskable": false, "encrypted": false,                    "order": 2 },
-      { "fieldKey": "entityName",     "label": "Entity Name",      "dataType": "string", "mandatory": true,  "pii": true, "maskable": false, "encrypted": false, "maxLength": 300,  "order": 3 },
-      { "fieldKey": "entityAddress",  "label": "Entity Address",   "dataType": "string", "mandatory": true,  "pii": true, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 4 },
-      { "fieldKey": "dateOfFact",     "label": "Date of Fact",     "dataType": "date",   "mandatory": true,  "pii": false, "maskable": false, "encrypted": false,                    "order": 5 },
-      { "fieldKey": "witnessName",    "label": "Witness Name",     "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 200,  "order": 6 },
-      { "fieldKey": "witnessNote",    "label": "Witness Note",     "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 7 }
+      { "fieldKey": "instituteName",  "label": "Institute Name",   "dataType": "string", "mandatory": true,  "pii": true,  "maskable": true,  "encrypted": false, "maxLength": 300,  "order": 2 },
+      { "fieldKey": "witnessName",    "label": "Witness Name",     "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 200,  "order": 3 },
+      { "fieldKey": "witnessAddress", "label": "Witness Address",  "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 1000, "order": 4 },
+      { "fieldKey": "witnessNote",    "label": "Witness Note",     "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 5 }
     ]
   },
   {
-    "categoryType": "petition",
+    "categoryType": "IGSAE",
     "active": true,
+    "schemaRef": "IgsaeComplaintExtendedAttributes",
     "fields": [
-      { "fieldKey": "caseRelatedTo",  "label": "Case Related To",  "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 500,  "order": 1 },
-      { "fieldKey": "categoryType",   "label": "Category Type",    "dataType": "string", "mandatory": true,  "pii": false, "maskable": false, "encrypted": false,                    "order": 2 },
-      { "fieldKey": "entityName",     "label": "Entity Name",      "dataType": "string", "mandatory": true,  "pii": true, "maskable": false, "encrypted": false, "maxLength": 300,  "order": 3 },
-      { "fieldKey": "entityAddress",  "label": "Entity Address",   "dataType": "string", "mandatory": false, "pii": true, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 4 } ,
-      { "fieldKey": "witnessName",    "label": "Witness Name",     "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 200,  "order": 5},
-      { "fieldKey": "witnessNote",    "label": "Witness Note",     "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 6 }
-    ]
-  },
-  {
-    "categoryType": "grievance",
-    "active": true,
-    "fields": [
-      { "fieldKey": "caseRelatedTo",  "label": "Case Related To",  "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 500,  "order": 1 },
-      { "fieldKey": "categoryType",   "label": "Category Type",    "dataType": "string", "mandatory": true,  "pii": false, "maskable": false, "encrypted": false,                    "order": 2 },
-      { "fieldKey": "entityName",     "label": "Entity Name",      "dataType": "string", "mandatory": true,  "pii": true, "maskable": false, "encrypted": false, "maxLength": 300,  "order": 3 },
-      { "fieldKey": "entityAddress",  "label": "Entity Address",   "dataType": "string", "mandatory": false, "pii": true, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 4 }, 
-      { "fieldKey": "witnessName",    "label": "Witness Name",     "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 200,  "order": 5},
-      { "fieldKey": "witnessNote",    "label": "Witness Note",     "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 6 }
-    ]
-  },
-  {
-    "categoryType": "complaint",
-    "active": true,
-    "fields": [
-      { "fieldKey": "caseRelatedTo",  "label": "Case Related To",  "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 500,  "order": 1 },
-      { "fieldKey": "categoryType",   "label": "Category Type",    "dataType": "string", "mandatory": true,  "pii": false, "maskable": false, "encrypted": false,                    "order": 2 },
-      { "fieldKey": "entityName",     "label": "Entity Name",      "dataType": "string", "mandatory": true,  "pii": true, "maskable": false, "encrypted": false, "maxLength": 300,  "order": 3 },
-      { "fieldKey": "entityAddress",  "label": "Entity Address",   "dataType": "string", "mandatory": false, "pii": true, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 4 },
-      { "fieldKey": "witnessName",    "label": "Witness Name",     "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 200,  "order": 5 },
-      { "fieldKey": "witnessNote",    "label": "Witness Note",     "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 6 }
+      { "fieldKey": "caseRelatedTo",   "label": "Case Related To",  "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 500,  "order": 1 },
+      { "fieldKey": "dateOfFact",      "label": "Date of Fact",     "dataType": "date",   "mandatory": true,  "pii": true,  "maskable": true,  "encrypted": false,                    "order": 2 },
+      { "fieldKey": "entityName",      "label": "Entity Name",      "dataType": "string", "mandatory": true,  "pii": true,  "maskable": true,  "encrypted": false, "maxLength": 300,  "order": 3 },
+      { "fieldKey": "entityAddress",   "label": "Entity Address",   "dataType": "string", "mandatory": true,  "pii": true,  "maskable": true,  "encrypted": false, "maxLength": 1000, "order": 4 },
+      { "fieldKey": "witnessName",     "label": "Witness Name",     "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 200,  "order": 5 },
+      { "fieldKey": "witnessAddress",  "label": "Witness Address",  "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 1000, "order": 6 },
+      { "fieldKey": "witnessNote",     "label": "Witness Note",     "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 7 }
     ]
   }
 ]
@@ -164,58 +141,39 @@ Optional for all types: `caseRelatedTo`, `witnessName`, `witnessNote`, evidence 
 
 ## 5. `extendedAttributes` JSONB — Stored Structure
 
-### 5.1 `report`
+### 5.1 `IGE`
 
 ```json
 {
+  "categoryType": "IGE",
   "isConfidential": false,
   "schemaVersion": "1.0",
   "encryptedFields": ["witnessName"],
   "fields": {
-    "caseRelatedTo":  "Illegal dumping near residential area",
-    "categoryType":   "report",
-    "entityName":     "Empresa Alfa Lda",
-    "entityAddress":  "Av. 24 de Julho, 123, Maputo",
-    "dateOfFact":     "2026-06-15",
+    "caseRelatedTo":  "Irregular public procurement process",
+    "instituteName":  "Instituto Nacional de Gestão do Estado",
     "witnessName":    "<encrypted-cipher-text>",
-    "witnessNote":    "Witness saw the truck arrive at night"
+    "witnessNote":    "Witness observed the signing of inflated contracts"
   }
 }
 ```
 
-### 5.2 `petition` (isConfidential = true)
+### 5.2 `IGSAE` (isConfidential = true)
 
 ```json
 {
-  "categoryType": "petition",
+  "categoryType": "IGSAE",
   "isConfidential": true,
   "schemaVersion": "1.0",
   "encryptedFields": ["witnessName"],
   "fields": {
-    "caseRelatedTo":  "Unfair dismissal by employer",
-    "categoryType":   "petition",
+    "caseRelatedTo":  "Abuse of authority by district administrator",
+    "dateOfFact":     "2026-06-10",
     "entityName":     "Empresa Beta SA",
     "entityAddress":  "Rua dos Trabalhadores, 45, Beira",
     "witnessName":    "<encrypted-cipher-text>",
-    "witnessNote":    "Colleague present at the time of dismissal"
+    "witnessNote":    "Colleague present at the time of the incident"
   }
-}
-```
-
-### 5.3 `grievance` / `complaint`
-
-```json
-{
-  "categoryType": "grievance",
-  "isConfidential": false,
-  "schemaVersion": "1.0",
-  "encryptedFields": [],
-  "fields": {
-    "caseRelatedTo": "Public health concern",
-    "categoryType":  "grievance",
-    "entityName":    "Centro de Saúde da Polana",
-    "entityAddress": "Av. Julius Nyerere, Maputo"
-   }
 }
 ```
 
@@ -290,7 +248,7 @@ public class ExtendedAttributes {
 
     // Top-level control fields (persisted in JSONB)
     private Boolean      isConfidential;    // default false
-    private String       categoryType;      // report | petition | grievance | complaint
+    private String       categoryType;      // IGE | IGSAE
     private String       schemaVersion;
     private List<String> encryptedFields;
 
@@ -348,11 +306,9 @@ public class CategoryFieldConfig {
 ### 8.3 Constants (`PGRConstants.java`)
 
 ```java
-public static final String MDMS_CATEGORY_FIELD_CONFIG = "CategoryFieldConfig";
-public static final String CATEGORY_REPORT    = "report";
-public static final String CATEGORY_PETITION  = "petition";
-public static final String CATEGORY_GRIEVANCE = "grievance";
-public static final String CATEGORY_COMPLAINT = "complaint";
+public static final String MDMS_COMPLAINT_TEMPLATE_TYPE = "ComplaintTemplateType";
+public static final String CATEGORY_IGE   = "IGE";
+public static final String CATEGORY_IGSAE = "IGSAE";
 public static final String ROLE_CONFIDENTIAL_VIEWER = "CONFIDENTIAL_COMPLAINT_VIEWER";
 ```
 
@@ -363,7 +319,7 @@ public CategoryFieldConfig fetchCategoryFieldConfig(RequestInfo requestInfo,
                                                      String stateTenantId,
                                                      String categoryType) {
     List<MasterDetail> details = List.of(MasterDetail.builder()
-        .name(MDMS_CATEGORY_FIELD_CONFIG)
+        .name(MDMS_COMPLAINT_TEMPLATE_TYPE)
         .filter("$.[?(@.active==true && @.categoryType=='" + categoryType + "')]")
         .build());
     MdmsCriteriaReq req = MdmsCriteriaReq.builder()
@@ -376,7 +332,7 @@ public CategoryFieldConfig fetchCategoryFieldConfig(RequestInfo requestInfo,
         .build();
     Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), req);
     List<CategoryFieldConfig> configs =
-        JsonPath.read(result, "$.MdmsRes.RAINMAKER-PGR.CategoryFieldConfig");
+        JsonPath.read(result, "$.MdmsRes.RAINMAKER-PGR.ComplaintTemplateType");
     return (configs != null && !configs.isEmpty()) ? configs.get(0) : null;
 }
 ```
@@ -388,7 +344,7 @@ public CategoryFieldConfig fetchCategoryFieldConfig(RequestInfo requestInfo,
 public class ExtendedAttributesValidationService {
 
     private static final Set<String> VALID_TYPES =
-        Set.of(CATEGORY_REPORT, CATEGORY_PETITION, CATEGORY_GRIEVANCE, CATEGORY_COMPLAINT);
+        Set.of(CATEGORY_IGE, CATEGORY_IGSAE);
 
     public void validate(ExtendedAttributes ext,
                          CategoryFieldConfig config, Service service) {
@@ -396,7 +352,7 @@ public class ExtendedAttributesValidationService {
 
         if (!VALID_TYPES.contains(ext.getCategoryType()))
             throw new CustomException("INVALID_CATEGORY_TYPE",
-                "categoryType must be: report, petition, grievance, complaint");
+                "categoryType must be: IGE, IGSAE");
 
         if (service.getDescription() == null || service.getDescription().isBlank())
             throw new CustomException("DESCRIPTION_REQUIRED", "description is mandatory");
@@ -404,12 +360,12 @@ public class ExtendedAttributesValidationService {
         Map<String, Object> fields =
             ext.getFields() != null ? ext.getFields() : Collections.emptyMap();
 
-        if (CATEGORY_REPORT.equals(ext.getCategoryType())) {
+        if (CATEGORY_IGE.equals(ext.getCategoryType())) {
+            require(fields, "instituteName", "Institute Name");
+        } else if (CATEGORY_IGSAE.equals(ext.getCategoryType())) {
             require(fields, "entityName",    "Entity Name");
             require(fields, "entityAddress", "Entity Address");
             require(fields, "dateOfFact",    "Date of Fact");
-        } else {
-            require(fields, "entityName", "Entity Name");
         }
 
         if (config == null) return;
@@ -588,23 +544,20 @@ Add to both INSERT (create) and UPDATE persister query maps.
 POST /pgr-services/v2/request/_create?tenantId=mz.ige
 {
   "service": {
-    "tenantId": "mz.ige", "serviceCode": "REPORT_ENV", "source": "web",
-    "description": "Illegal dumping causing health hazard near Escola Primária",
+    "tenantId": "mz.ige", "serviceCode": "IGE_PROCUREMENT", "source": "web",
+    "description": "Irregular procurement process in public institution",
     "address": { "locality": { "code": "LOC_001" },
                  "geoLocation": { "latitude": -25.9, "longitude": 32.5 } },
     "extendedAttributes": {
-      "categoryType":       "report",
+      "categoryType":       "IGE",
       "isConfidential":     false,
       "complainantAddress": "Av. Eduardo Mondlane, 200, Maputo",
       "email":              "citizen@example.com",
       "fields": {
-        "caseRelatedTo":  "Environmental pollution",
-        "categoryType":   "report",
-        "entityName":     "Empresa Alfa Lda",
-        "entityAddress":  "Av. 24 de Julho, 123, Maputo",
-        "dateOfFact":     "2026-06-15",
+        "caseRelatedTo":  "Irregular public procurement process",
+        "instituteName":  "Instituto Nacional de Gestão do Estado",
         "witnessName":    "Maria da Silva",
-        "witnessNote":    "Saw the truck arrive at night"
+        "witnessNote":    "Witness observed the signing of inflated contracts"
       }
     },
     "documents": [
@@ -621,13 +574,13 @@ POST /pgr-services/v2/request/_create?tenantId=mz.ige
 ```json
 {
   "extendedAttributes": {
-    "categoryType": "report", "isConfidential": false,
+    "categoryType": "IGE", "isConfidential": false,
     "encryptedFields": ["witnessName"],
     "fields": {
-      "caseRelatedTo": "Environmental pollution", "categoryType": "report",
-      "entityName": "Empresa Alfa Lda", "entityAddress": "Av. 24 de Julho, 123, Maputo",
-      "dateOfFact": "2026-06-15", "witnessName": "Maria da Silva",
-      "witnessNote": "Saw the truck arrive at night"
+      "caseRelatedTo": "Irregular public procurement process",
+      "instituteName": "Instituto Nacional de Gestão do Estado",
+      "witnessName": "Maria da Silva",
+      "witnessNote": "Witness observed the signing of inflated contracts"
     }
   }
 }
@@ -638,9 +591,10 @@ POST /pgr-services/v2/request/_create?tenantId=mz.ige
 ```json
 {
   "extendedAttributes": {
-    "categoryType": "petition", "isConfidential": true,
+    "categoryType": "IGSAE", "isConfidential": true,
     "fields": {
-      "caseRelatedTo": "Unfair dismissal", "categoryType": "petition",
+      "caseRelatedTo": "Abuse of authority by district administrator",
+      "dateOfFact": "2026-06-10",
       "entityName": "****", "entityAddress": "****",
       "witnessName": "****"
     }
@@ -668,10 +622,10 @@ sequenceDiagram
     participant KF as Kafka
     participant DB as PostgreSQL
 
-    Citizen->>UI: Select complaint + category type (e.g. report)
-    UI->>MDMS: Fetch CategoryFieldConfig for categoryType=report
-    MDMS-->>UI: FieldDefinition[] — entityName★, entityAddress★, dateOfFact★, witnessName(pii)
-    Note over UI: ★ = mandatory for report
+    Citizen->>UI: Select complaint + category type (e.g. IGE)
+    UI->>MDMS: Fetch ComplaintTemplateType for categoryType=IGE
+    MDMS-->>UI: FieldDefinition[] — instituteName★, witnessName(pii)
+    Note over UI: ★ = mandatory for IGE
 
     UI-->>Citizen: Render dynamic form (required fields marked)
     Citizen->>UI: Fill fields + complainantAddress + email + evidence files
@@ -681,7 +635,7 @@ sequenceDiagram
     Citizen->>UI: Submit
     UI->>PGR: POST _create { extendedAttributes:{...}, documents:[EVIDENCE,...] }
 
-    PGR->>MDMS: Fetch CategoryFieldConfig (server-side verify)
+    PGR->>MDMS: Fetch ComplaintTemplateType (server-side verify)
     MDMS-->>PGR: FieldDefinition[]
     Note over PGR: Validate mandatory fields by categoryType\nValidate data types + maxLength
 
@@ -723,7 +677,7 @@ sequenceDiagram
     PGR->>ENC: Decrypt encryptedFields[]
     ENC-->>PGR: Plain text
 
-    PGR->>MDMS: Fetch CategoryFieldConfig for categoryType
+    PGR->>MDMS: Fetch ComplaintTemplateType for categoryType
     MDMS-->>PGR: FieldDefinition[] (maskable flags)
 
     alt isConfidential=true AND no CONFIDENTIAL_COMPLAINT_VIEWER role
@@ -743,10 +697,10 @@ flowchart TD
     A[Create request] --> B{extendedAttributes present?}
     B -- no  --> C[Skip — existing flow unchanged]
     B -- yes --> D[Default isConfidential = false]
-    D --> E[Fetch CategoryFieldConfig from MDMS]
-    E --> F{categoryType = report?}
-    F -- yes --> G[Require: entityName + entityAddress + dateOfFact + description]
-    F -- no  --> H[Require: entityName + description]
+    D --> E[Fetch ComplaintTemplateType from MDMS]
+    E --> F{categoryType = IGE?}
+    F -- yes --> G[Require: instituteName + description]
+    F -- no  --> H[Require: entityName + dateOfFact + description]
     G --> I[Validate field types + maxLength]
     H --> I
     I --> J[Encrypt encrypted=true fields via egov-enc-service]
@@ -769,8 +723,8 @@ flowchart TD
 
 | Component | Change |
 |-----------|--------|
-| `FormValues` | Add `categoryType`, `isConfidential`, `complainantAddress`, `email`, `caseRelatedTo`, `entityName`, `entityAddress`, `dateOfFact`, `witnessName`, `witnessNote`, `evidenceFiles[]` |
-| `useCategoryFieldConfig` hook | Fetch `CategoryFieldConfig` from MDMS by `categoryType` (state tenant) |
+| `FormValues` | Add `categoryType` (`IGE`\|`IGSAE`), `isConfidential`, `complainantAddress`, `email`, `caseRelatedTo`, `instituteName` (IGE), `entityName` (IGSAE), `entityAddress` (IGSAE), `dateOfFact` (IGSAE), `witnessName`, `witnessNote`, `evidenceFiles[]` |
+| `useCategoryFieldConfig` hook | Fetch `ComplaintTemplateType` from MDMS by `categoryType` (state tenant) |
 | New wizard step | Category type selector, complainant address + email, dynamic MDMS-driven fields, confidentiality toggle, evidence uploader |
 | Submit payload | Include `extendedAttributes`; merge EVIDENCE docs into `documents[]` |
 | Complaint detail view | `ExtendedAttributesView` with confidential banner and `****` → `●●●●` masking |
@@ -806,7 +760,7 @@ Do **not** grant to: self-service `CITIZEN` role.
 
 ### Phase 1 — Database & MDMS
 - [ ] Apply `V20260621000000__add_extended_attributes.sql`
-- [ ] Create `CategoryFieldConfig.json` in MDMS (4 category types)
+- [ ] Create `ComplaintTemplateType.json` in MDMS (2 template types: IGE, IGSAE)
 - [ ] Register `CONFIDENTIAL_COMPLAINT_VIEWER` role in access-control master
 - [ ] Register `pgr-pii-key` in `egov-enc-service`
 
@@ -834,9 +788,9 @@ Do **not** grant to: self-service `CITIZEN` role.
 - [ ] `ExtendedAttributesView` in complaint detail
 
 ### Phase 4 — Testing
-- [ ] Unit: `ExtendedAttributesValidationService` — all four category types, mandatory rules
+- [ ] Unit: `ExtendedAttributesValidationService` — both template types (IGE, IGSAE), mandatory rules
 - [ ] Unit: `EncryptionDecryptionService` — round-trip, mask
-- [ ] Integration: create `report` → DB has cipher text for `witnessName`
+- [ ] Integration: create `IGE` → DB has cipher text for `witnessName`; create `IGSAE` → DB has cipher text for `witnessName`
 - [ ] Integration: `isConfidential=true` + no viewer role → `****` in response
 - [ ] Integration: `CONFIDENTIAL_COMPLAINT_VIEWER` role → plain text
 - [ ] Integration: `eg_user.emailaddress` + `eg_user_address` updated after create
@@ -853,7 +807,7 @@ Do **not** grant to: self-service `CITIZEN` role.
 | `complainantAddress` + `email` → User Service | PII anchored to user identity, consistent with DIGIT data model |
 | Evidence reuses `eg_pgr_document_v2` | Zero schema change; `documentType=EVIDENCE` distinguishes from photos |
 | `isConfidential` defaults to `false` | Opt-in confidentiality; no masking unless citizen explicitly requests it |
-| `witnessName` encrypted, `witnessNote` plain | Identity is PII; operational notes are for case officers |
+| `witnessName` + `witnessAddress` encrypted; `witnessNote` plain | Witness identity and location are PII; operational notes are for case officers |
 | `CONFIDENTIAL_COMPLAINT_VIEWER` role | Fine-grained access — officers see PII; citizen portal never receives other citizens' raw PII |
 | Encrypt before Kafka push | No PII in message bus logs |
 | Decrypt in-process for API response | No client-side key management required |

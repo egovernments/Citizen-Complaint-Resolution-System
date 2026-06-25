@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "IgeComplaintExtendedAttributes",
+  "title": "IGE Complaint Extended Attributes",
+  "description": "Validates the extendedAttributes JSONB stored for IGE template-type complaints.",
+  "type": "object",
+  "required": ["categoryType", "fields"],
+  "properties": {
+    "isConfidential": { "type": "boolean", "default": false },
+    "categoryType":   { "type": "string", "const": "IGE" },
+    "schemaVersion":  { "type": "string" },
+    "encryptedFields": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "fields": {
+      "type": "object",
+      "required": ["instituteName"],
+      "properties": {
+        "caseRelatedTo":   { "type": "string", "maxLength": 500 },
+        "instituteName":   { "type": "string", "maxLength": 300 },
+        "witnessName":     { "type": "string", "maxLength": 200 },
+        "witnessAddress":  { "type": "string", "maxLength": 1000 },
+        "witnessNote":     { "type": "string", "maxLength": 1000 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
