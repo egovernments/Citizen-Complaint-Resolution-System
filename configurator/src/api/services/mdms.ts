@@ -57,7 +57,10 @@ export const mdmsService = {
   // ============================================
 
   async getDepartments(tenantId: string): Promise<Department[]> {
-    return this.search<Department>(tenantId, MDMS_SCHEMAS.DEPARTMENT);
+    // Pull the full master, not the search() default page (100). Tenants like
+    // mz.ige have 120+ departments; a partial fetch makes bulk-employee
+    // validation wrongly flag the unloaded ones as "Department not found".
+    return this.search<Department>(tenantId, MDMS_SCHEMAS.DEPARTMENT, { limit: 5000 });
   },
 
   async createDepartment(tenantId: string, department: Department): Promise<MdmsRecord> {
@@ -95,7 +98,9 @@ export const mdmsService = {
   // ============================================
 
   async getDesignations(tenantId: string): Promise<Designation[]> {
-    return this.search<Designation>(tenantId, MDMS_SCHEMAS.DESIGNATION);
+    // Same as getDepartments: fetch the full master so employee-bulk validation
+    // doesn't false-negative on designations beyond the default page.
+    return this.search<Designation>(tenantId, MDMS_SCHEMAS.DESIGNATION, { limit: 5000 });
   },
 
   async createDesignation(tenantId: string, designation: Designation): Promise<MdmsRecord> {
@@ -142,7 +147,8 @@ export const mdmsService = {
   async getComplaintTypes(tenantId: string): Promise<ComplaintType[]> {
     const results = await this.search<Record<string, unknown>>(
       tenantId,
-      MDMS_SCHEMAS.COMPLAINT_HIERARCHY
+      MDMS_SCHEMAS.COMPLAINT_HIERARCHY,
+      { limit: 5000 } // full hierarchy can be thousands of leaves; don't truncate at the 100 default
     );
 
     const isLeaf = (r: Record<string, unknown>) =>
