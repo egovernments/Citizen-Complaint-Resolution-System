@@ -1,0 +1,36 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "supervisor-default",
+      "description": "Default supervisor dashboard pack — complaint metrics, officer SLA chart, map, and at-risk table",
+      "roles": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"],
+      "tiles": [
+        "cl_resolution_rate_count",
+        "rs_breach_total",
+        "cl_resolved_date_range_count",
+        "cl_reopen_rate_count",
+        "ce_csat_avg_week",
+        "cl_chart_officer_sla",
+        "ev_chart_resolution_dwell_subtype",
+        "cl_map_ward_wow_current",
+        "cl_chart_department_resolution_rate",
+        "cl_chart_over_time_created_daily",
+        "cl_table_complaints_at_risk"
+      ],
+      "layout": [
+        { "kpiId": "cl_resolution_rate_count", "x": 0, "y": 0, "w": 2, "h": 2 },
+        { "kpiId": "rs_breach_total", "x": 2, "y": 0, "w": 2, "h": 2 },
+        { "kpiId": "cl_resolved_date_range_count", "x": 4, "y": 0, "w": 2, "h": 2 },
+        { "kpiId": "cl_reopen_rate_count", "x": 6, "y": 0, "w": 2, "h": 2 },
+        { "kpiId": "ce_csat_avg_week", "x": 8, "y": 0, "w": 2, "h": 2 },
+        { "kpiId": "cl_chart_officer_sla", "x": 0, "y": 2, "w": 8, "h": 6 },
+        { "kpiId": "ev_chart_resolution_dwell_subtype", "x": 8, "y": 2, "w": 4, "h": 6 },
+        { "kpiId": "cl_map_ward_wow_current", "x": 0, "y": 8, "w": 8, "h": 6 },
+        { "kpiId": "cl_chart_department_resolution_rate", "x": 8, "y": 8, "w": 4, "h": 6 },
+        { "kpiId": "cl_chart_over_time_created_daily", "x": 0, "y": 14, "w": 12, "h": 6 },
+        { "kpiId": "cl_table_complaints_at_risk", "x": 0, "y": 20, "w": 12, "h": 5 }
+      ]
+    }
+  }
+]

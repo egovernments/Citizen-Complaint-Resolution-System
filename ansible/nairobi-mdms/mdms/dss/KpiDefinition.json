@@ -1,0 +1,2759 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_reg_daily",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "last_1d", "timeRole": "filed_at" },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REG_DAILY",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_reg_weekly",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REG_WEEKLY",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_reg_monthly",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "mtd", "timeRole": "filed_at" },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REG_MONTHLY",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "mtd", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_new_created_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_created_today_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_resolution_rate_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_resolved": true } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "green",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_reopen_rate_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_resolved": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_reopened": true } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_csat_avg",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_resolved": true, "has_rating": true },
+        "measures": [{ "name": "avg", "agg": "avg", "column": "rating" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "decimalOne",
+        "valueKey": "avg",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_first_assignment_rate_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "has_been_assigned": true, "is_reassigned": false } },
+            "denominator": { "agg": "count", "filter": { "has_been_assigned": true } }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "green",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_sla_compliance_rate_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_resolved": true, "sla_breached": false } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_resolved_on_time_rate_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_resolved": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "sla_breached": false } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_open_complaints_live",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_resolved_date_range_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_resolved": true },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "green",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_oldest_open_age",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "measures": [{ "name": "max_age_ms", "agg": "max", "column": "open_age_ms" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "hoursDays",
+        "valueKey": "max_age_ms",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_avg_resolution_time",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_resolved": true },
+        "measures": [{ "name": "avg_ms", "agg": "avg", "column": "resolution_ms" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "hoursDays",
+        "valueKey": "avg_ms",
+        "accent": "green",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_new_complainants",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count",
+            "filter": { "is_first_time_complainant": true }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_NEW_COMPLAINANTS",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_repeat_complainants",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count",
+            "filter": { "is_first_time_complainant": false }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REPEAT_COMPLAINANTS",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_repeat_pct",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_first_time_complainant": false } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REPEAT_PCT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_channel_app",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "source": { "in": ["app", "mobile", "mobileapp", "mobile_app"] } } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHANNEL_APP",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_channel_phone",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "source": { "in": ["phone", "ivr"] } } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "blue",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHANNEL_PHONE",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_channel_walkin",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "source": { "in": ["walk_in", "walk-in", "walkin", "counter", "csc"] } } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "orange",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHANNEL_WALKIN",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_channel_online",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "source": { "in": ["web", "online", "citizen"] } } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "slate",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHANNEL_ONLINE",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_open_daily",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_DAILY",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_open_weekly",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "filters": { "is_open": true },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_WEEKLY",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_open_monthly",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "mtd", "timeRole": "filed_at" },
+        "filters": { "is_open": true },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_MONTHLY",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "mtd", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_res_daily",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "last_1d", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "green",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RES_DAILY",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_res_weekly",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "green",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RES_WEEKLY",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_res_monthly",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "mtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "green",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RES_MONTHLY",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "mtd", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_categories",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "dimensions": ["service_code"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 5
+      },
+      "viz": {
+        "kind": "bar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_CATEGORIES",
+        "dimensionKey": "service_code",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_complaints_by_type",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "dimensions": ["service_code"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 8
+      },
+      "viz": {
+        "kind": "bar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
+        "dimensionKey": "service_code",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_departments_by_type",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "dimensions": ["service_code", "department_code"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "limit": 500
+      },
+      "viz": {
+        "kind": "bar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENTS_BY_TYPE",
+        "dimensionKey": "department_code",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_department_resolution_rate",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "dimensions": ["service_code", "department_code"],
+        "measures": [
+          { "name": "filed", "agg": "count" },
+          { "name": "resolved", "agg": "count", "filter": { "is_resolved": true } }
+        ],
+        "limit": 500
+      },
+      "viz": {
+        "kind": "bar",
+        "format": "percentOneDecimal",
+        "valueKey": "resolved",
+        "accent": "green",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
+        "dimensionKey": "department_code",
+        "measureKeys": ["filed", "resolved"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_wards",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "dimensions": ["ward_code"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 10
+      },
+      "viz": {
+        "kind": "rankedList",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_WARDS",
+        "dimensionKey": "ward_code",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_dow",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "dimensions": ["created_dow"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "created_dow", "dir": "asc" }]
+      },
+      "viz": {
+        "kind": "dow",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DOW",
+        "dimensionKey": "created_dow",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_officer_sla",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "dimensions": ["current_assignee_uuid", "sla_status_bucket"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "limit": 120
+      },
+      "viz": {
+        "kind": "bar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "employee-performance",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
+        "dimensionKey": "current_assignee_uuid",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": { "dimension": "current_assignee_uuid" }
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_open_by_type_stage",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "dimensions": ["service_code", "application_status"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "limit": 300
+      },
+      "viz": {
+        "kind": "bar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE",
+        "dimensionKey": "service_code",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_open_by_channel",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "dimensions": ["source"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 50
+      },
+      "viz": {
+        "kind": "bar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL",
+        "dimensionKey": "source",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_open_by_age",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "dimensions": ["aging_bucket"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "limit": 10
+      },
+      "viz": {
+        "kind": "bar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE",
+        "dimensionKey": "aging_bucket",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_map_ward_wow_current",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "last_7d", "timeRole": "filed_at" },
+        "dimensions": ["ward_code"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 200
+      },
+      "viz": {
+        "kind": "map",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
+        "dimensionKey": "ward_code",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_map_ward_sla_breach",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true, "sla_breached": true },
+        "dimensions": ["ward_code"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 200
+      },
+      "viz": {
+        "kind": "map",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "red",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_SLA_BREACH",
+        "dimensionKey": "ward_code",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_map_ward_open",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "dimensions": ["ward_code"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 200
+      },
+      "viz": {
+        "kind": "map",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_OPEN",
+        "dimensionKey": "ward_code",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_ward_open",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "dimensions": ["ward_code"],
+        "filters": { "is_open": true },
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 15
+      },
+      "viz": {
+        "kind": "rankedList",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_WARD_OPEN",
+        "dimensionKey": "ward_code",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_ward_ontime",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "dimensions": ["ward_code"],
+        "filters": { "is_resolved": true },
+        "measures": [
+          {
+            "name": "ontime_pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "sla_breached": false } },
+            "denominator": { "agg": "count" }
+          }
+        ],
+        "sort": [{ "by": "ontime_pct", "dir": "desc" }],
+        "limit": 15
+      },
+      "viz": {
+        "kind": "rankedList",
+        "format": "percentOneDecimal",
+        "valueKey": "ontime_pct",
+        "accent": "green",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_WARD_ONTIME",
+        "dimensionKey": "ward_code",
+        "measureKeys": ["ontime_pct"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "rs_table_resolution_by_category",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "dimensions": ["service_code"],
+        "measures": [
+          {
+            "name": "closure_pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_resolved": true } },
+            "denominator": { "agg": "count" }
+          },
+          {
+            "name": "ontime_pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_resolved": true, "sla_breached": false } },
+            "denominator": { "agg": "count", "filter": { "is_resolved": true } }
+          },
+          {
+            "name": "avg_ttr_ms",
+            "agg": "avg",
+            "column": "resolution_ms",
+            "filter": { "is_resolved": true }
+          }
+        ],
+        "sort": [{ "by": "closure_pct", "dir": "desc" }],
+        "limit": 15
+      },
+      "viz": {
+        "kind": "rankedList",
+        "format": "percentOneDecimal",
+        "valueKey": "closure_pct",
+        "accent": "teal",
+        "group": "resolution-sla",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_TABLE_RESOLUTION_BY_CATEGORY",
+        "dimensionKey": "service_code",
+        "measureKeys": ["closure_pct", "ontime_pct", "avg_ttr_ms"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_complaint_type_details",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "dimensions": ["service_code", "service_group"],
+        "measures": [
+          { "name": "avg_resolution_ms", "agg": "avg", "column": "resolution_ms", "filter": { "is_resolved": true } },
+          { "name": "ideal_sla_ms", "agg": "avg", "column": "sla_target_ms" },
+          { "name": "reopen_rate", "agg": "ratio", "numerator": { "agg": "count", "filter": { "is_reopened": true } }, "denominator": { "agg": "count", "filter": { "is_resolved": true } } },
+          { "name": "oldest_open_ms", "agg": "max", "column": "open_age_ms", "filter": { "is_open": true } },
+          { "name": "ontime_rate", "agg": "ratio", "numerator": { "agg": "count", "filter": { "is_resolved": true, "sla_breached": false } }, "denominator": { "agg": "count", "filter": { "is_resolved": true } } },
+          { "name": "avg_csat", "agg": "avg", "column": "rating", "filter": { "is_resolved": true, "has_rating": true } }
+        ],
+        "sort": [{ "by": "avg_resolution_ms", "dir": "desc" }],
+        "limit": 30
+      },
+      "viz": {
+        "kind": "rankedList",
+        "format": "hoursDays",
+        "valueKey": "avg_resolution_ms",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
+        "dimensionKey": "service_code",
+        "measureKeys": ["avg_resolution_ms", "ideal_sla_ms", "reopen_rate", "oldest_open_ms", "ontime_rate", "avg_csat"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_complaints_at_risk",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true, "sla_status_bucket": { "in": ["approaching", "breached"] } },
+        "dimensions": ["service_request_id", "service_code", "service_group", "ward_code", "application_status", "sla_status_bucket", "current_assignee_uuid"],
+        "measures": [
+          { "name": "open_age_ms", "agg": "max", "column": "open_age_ms" },
+          { "name": "sla_target_ms", "agg": "max", "column": "sla_target_ms" }
+        ],
+        "limit": 50
+      },
+      "viz": {
+        "kind": "rankedList",
+        "format": "hoursDays",
+        "valueKey": "open_age_ms",
+        "accent": "red",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK",
+        "dimensionKey": "service_request_id",
+        "measureKeys": ["open_age_ms", "sla_target_ms"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ev_table_stage_dwell",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "events",
+        "dimensions": ["status"],
+        "filters": { "is_current_state": false },
+        "measures": [
+          { "name": "avg_dwell", "agg": "avg", "column": "dwell_ms" },
+          { "name": "median_dwell", "agg": "percentile", "column": "dwell_ms", "p": 50 },
+          { "name": "samples", "agg": "count" }
+        ],
+        "sort": [{ "by": "avg_dwell", "dir": "desc" }],
+        "limit": 8
+      },
+      "viz": {
+        "kind": "rankedList",
+        "format": "hoursDays",
+        "valueKey": "avg_dwell",
+        "accent": "slate",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EV_TABLE_STAGE_DWELL",
+        "dimensionKey": "status",
+        "measureKeys": ["avg_dwell", "median_dwell", "samples"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ev_chart_resolution_dwell_subtype",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "events",
+        "dimensions": ["service_code", "status"],
+        "filters": { "is_current_state": false },
+        "measures": [{ "name": "avg_dwell", "agg": "avg", "column": "dwell_ms" }],
+        "limit": 200
+      },
+      "viz": {
+        "kind": "bar",
+        "format": "hoursDays",
+        "valueKey": "avg_dwell",
+        "accent": "slate",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EV_CHART_RESOLUTION_DWELL_SUBTYPE",
+        "dimensionKey": "service_code",
+        "measureKeys": ["avg_dwell"],
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ep_open_by_officer",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "dimensions": ["current_assignee_uuid"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 1
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "employee-performance",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_OPEN_BY_OFFICER",
+        "compose": null,
+        "pii": { "dimension": "current_assignee_uuid" }
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ep_open_list",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "dimensions": ["current_assignee_uuid"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 5
+      },
+      "viz": {
+        "kind": "rankedList",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "employee-performance",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_OPEN_LIST",
+        "dimensionKey": "current_assignee_uuid",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": { "dimension": "current_assignee_uuid" }
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ep_ttr_avg",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [{ "name": "avg_ms", "agg": "avg", "column": "resolution_ms" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "hoursDays",
+        "valueKey": "avg_ms",
+        "accent": "teal",
+        "group": "employee-performance",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TTR_AVG",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ep_ttr_median",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [{ "name": "median_ms", "agg": "percentile", "column": "resolution_ms", "p": 50 }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "hoursDays",
+        "valueKey": "median_ms",
+        "accent": "teal",
+        "group": "employee-performance",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TTR_MEDIAN",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ep_closed_by_officer",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "dimensions": ["current_assignee_uuid"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 1
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "green",
+        "group": "employee-performance",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_CLOSED_BY_OFFICER",
+        "compose": null,
+        "pii": { "dimension": "current_assignee_uuid" }
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ep_closed_list",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "dimensions": ["current_assignee_uuid"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 5
+      },
+      "viz": {
+        "kind": "rankedList",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "green",
+        "group": "employee-performance",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_CLOSED_LIST",
+        "dimensionKey": "current_assignee_uuid",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": { "dimension": "current_assignee_uuid" }
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ep_leaderboard_closed",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "dimensions": ["current_assignee_uuid"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 5
+      },
+      "viz": {
+        "kind": "rankedList",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "green",
+        "group": "employee-performance",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_LEADERBOARD_CLOSED",
+        "dimensionKey": "current_assignee_uuid",
+        "measureKeys": ["total"],
+        "compose": null,
+        "pii": { "dimension": "current_assignee_uuid" }
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ep_table_employee_performance",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "dimensions": ["current_assignee_uuid"],
+        "measures": [
+          { "name": "assigned", "agg": "count" },
+          { "name": "open", "agg": "count", "filter": { "is_open": true } },
+          { "name": "resolved", "agg": "count", "filter": { "is_resolved": true } },
+          { "name": "reopen_rate", "agg": "ratio", "numerator": { "agg": "count", "filter": { "is_reopened": true, "is_resolved": true } }, "denominator": { "agg": "count", "filter": { "is_resolved": true } } },
+          { "name": "avg_csat", "agg": "avg", "column": "rating", "filter": { "is_resolved": true, "has_rating": true } }
+        ],
+        "sort": [{ "by": "open", "dir": "desc" }, { "by": "assigned", "dir": "desc" }],
+        "limit": 40
+      },
+      "viz": {
+        "kind": "rankedList",
+        "format": "integer",
+        "valueKey": "open",
+        "accent": "amber",
+        "group": "employee-performance",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE",
+        "dimensionKey": "current_assignee_uuid",
+        "measureKeys": ["assigned", "open", "resolved", "reopen_rate", "avg_csat"],
+        "compose": null,
+        "pii": { "dimension": "current_assignee_uuid" }
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ep_reopen_7d",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "last_7d", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_reopened": true } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "amber",
+        "group": "employee-performance",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_REOPEN_7D",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ep_reopen_30d",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "last_30d", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_reopened": true } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "amber",
+        "group": "employee-performance",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_REOPEN_30D",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_30d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "rs_sla_compliance_week",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "sla_breached": false } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentNoDecimal",
+        "valueKey": "pct",
+        "accent": "teal",
+        "group": "resolution-sla",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_SLA_COMPLIANCE_WEEK",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "rs_breach_total",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true, "sla_breached": true },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "red",
+        "group": "resolution-sla",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_BREACH_TOTAL",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "rs_zone_ttr_avg",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [{ "name": "avg_ms", "agg": "avg", "column": "resolution_ms" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "hoursDays",
+        "valueKey": "avg_ms",
+        "accent": "teal",
+        "group": "resolution-sla",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_ZONE_TTR_AVG",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "rs_zone_ttr_median",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [{ "name": "median_ms", "agg": "percentile", "column": "resolution_ms", "p": 50 }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "hoursDays",
+        "valueKey": "median_ms",
+        "accent": "teal",
+        "group": "resolution-sla",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_ZONE_TTR_MEDIAN",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "rs_closure_rate",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_resolved": true } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "green",
+        "group": "resolution-sla",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_CLOSURE_RATE",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "rs_inflow_daily",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "last_1d", "timeRole": "filed_at" },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "resolution-sla",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_INFLOW_DAILY",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "rs_outflow_daily",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "last_1d", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "green",
+        "group": "resolution-sla",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_OUTFLOW_DAILY",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "er_aging_safe",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "sla_status_bucket": "within" } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentInteger",
+        "valueKey": "pct",
+        "accent": "green",
+        "group": "escalations-risk",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_AGING_SAFE",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "er_aging_approaching",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "sla_status_bucket": "approaching" } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentInteger",
+        "valueKey": "pct",
+        "accent": "amber",
+        "group": "escalations-risk",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_AGING_APPROACHING",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "er_aging_breached",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "sla_breached": true } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentInteger",
+        "valueKey": "pct",
+        "accent": "red",
+        "group": "escalations-risk",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_AGING_BREACHED",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "er_aging_critical",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "aging_bucket": { "in": [">7d", "7-14d", "14d+"] } } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentInteger",
+        "valueKey": "pct",
+        "accent": "red",
+        "group": "escalations-risk",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_AGING_CRITICAL",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "er_overnight_escalations",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "events",
+        "window": { "name": "last_1d", "timeRole": "event_at" },
+        "filters": { "is_escalation": true },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "red",
+        "group": "escalations-risk",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_OVERNIGHT_ESCALATIONS",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "er_overnight_auto_pct",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "events",
+        "window": { "name": "last_1d", "timeRole": "event_at" },
+        "filters": { "is_escalation": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "escalation_source": "auto" } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentInteger",
+        "valueKey": "pct",
+        "accent": "slate",
+        "group": "escalations-risk",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_OVERNIGHT_AUTO_PCT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "er_overnight_manual_pct",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "events",
+        "window": { "name": "last_1d", "timeRole": "event_at" },
+        "filters": { "is_escalation": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "escalation_source": "manual" } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentInteger",
+        "valueKey": "pct",
+        "accent": "slate",
+        "group": "escalations-risk",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_OVERNIGHT_MANUAL_PCT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "er_critical_breach",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true, "aging_bucket": { "in": [">7d", "7-14d", "14d+"] } },
+        "measures": [{ "name": "total", "agg": "count" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "red",
+        "group": "escalations-risk",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_CRITICAL_BREACH",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "er_critical_by_officer",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": { "is_open": true, "aging_bucket": { "in": [">7d", "7-14d", "14d+"] } },
+        "dimensions": ["current_assignee_uuid"],
+        "measures": [{ "name": "total", "agg": "count" }],
+        "sort": [{ "by": "total", "dir": "desc" }],
+        "limit": 1
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "red",
+        "group": "escalations-risk",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_CRITICAL_BY_OFFICER",
+        "compose": null,
+        "pii": { "dimension": "current_assignee_uuid" }
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "er_escalation_auto_pct",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "events",
+        "window": { "name": "wtd", "timeRole": "event_at" },
+        "filters": { "is_escalation": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "escalation_source": "auto" } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentInteger",
+        "valueKey": "pct",
+        "accent": "slate",
+        "group": "escalations-risk",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_ESCALATION_AUTO_PCT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "er_escalation_manual_pct",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "events",
+        "window": { "name": "wtd", "timeRole": "event_at" },
+        "filters": { "is_escalation": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "escalation_source": "manual" } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentInteger",
+        "valueKey": "pct",
+        "accent": "slate",
+        "group": "escalations-risk",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_ESCALATION_MANUAL_PCT",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ce_csat_avg_week",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true, "has_rating": true },
+        "measures": [{ "name": "avg", "agg": "avg", "column": "rating" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "decimalOne",
+        "valueKey": "avg",
+        "accent": "teal",
+        "group": "citizen-experience",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_CSAT_AVG_WEEK",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ce_response_rate",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "has_rating": true } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentInteger",
+        "valueKey": "pct",
+        "accent": "teal",
+        "group": "citizen-experience",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_RESPONSE_RATE",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ce_reopen_7d",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "last_7d", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_reopened": true } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "amber",
+        "group": "citizen-experience",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_REOPEN_7D",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ce_reopen_30d",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "last_30d", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_reopened": true } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "amber",
+        "group": "citizen-experience",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_REOPEN_30D",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_30d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ce_repeat_complainants",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "last_30d", "timeRole": "filed_at" },
+        "filters": { "is_first_time_complainant": false },
+        "measures": [{ "name": "total", "agg": "count_distinct", "column": "account_id" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "citizen-experience",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_REPEAT_COMPLAINANTS",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_30d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ce_negative_rate",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "resolved_at" },
+        "filters": { "is_resolved": true, "has_rating": true },
+        "measures": [
+          {
+            "name": "pct",
+            "agg": "ratio",
+            "numerator": { "agg": "count", "filter": { "is_negative_rating": true } },
+            "denominator": { "agg": "count" }
+          }
+        ]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "red",
+        "group": "citizen-experience",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_NEGATIVE_RATE",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ce_tfr_avg",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "measures": [{ "name": "avg_ms", "agg": "avg", "column": "time_to_assign_ms" }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "hoursDecimal",
+        "valueKey": "avg_ms",
+        "accent": "teal",
+        "group": "citizen-experience",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_TFR_AVG",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "ce_tfr_median",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "measures": [{ "name": "median_ms", "agg": "percentile", "column": "time_to_assign_ms", "p": 50 }]
+      },
+      "viz": {
+        "kind": "scalar",
+        "format": "hoursDecimal",
+        "valueKey": "median_ms",
+        "accent": "teal",
+        "group": "citizen-experience",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_TFR_MEDIAN",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_reg_daily_avg",
+      "version": "1.0.0",
+      "status": "published",
+      "query": null,
+      "viz": {
+        "kind": "scalar",
+        "format": "decimalOne",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REG_DAILY_AVG",
+        "compose": {
+          "type": "dailyAvgFromWeekly",
+          "sourceKpiIds": ["cl_reg_weekly"],
+          "elapsedFromAsOf": true
+        },
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_reg_hourly_avg",
+      "version": "1.0.0",
+      "status": "published",
+      "query": null,
+      "viz": {
+        "kind": "scalar",
+        "format": "decimalOne",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REG_HOURLY_AVG",
+        "compose": {
+          "type": "hourlyAvgFromDaily",
+          "sourceKpiIds": ["cl_reg_daily"],
+          "elapsedFromAsOf": true
+        },
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "rs_open_rate",
+      "version": "1.0.0",
+      "status": "published",
+      "query": null,
+      "viz": {
+        "kind": "scalar",
+        "format": "percentOneDecimal",
+        "valueKey": "pct",
+        "accent": "amber",
+        "group": "resolution-sla",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_OPEN_RATE",
+        "compose": {
+          "type": "openRateComplement",
+          "sourceKpiIds": ["rs_closure_rate"],
+          "elapsedFromAsOf": false
+        },
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "rs_net_backlog_daily",
+      "version": "1.0.0",
+      "status": "published",
+      "query": null,
+      "viz": {
+        "kind": "scalar",
+        "format": "signedInteger",
+        "valueKey": "total",
+        "accent": "slate",
+        "group": "resolution-sla",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_NET_BACKLOG_DAILY",
+        "compose": {
+          "type": "netBacklogDaily",
+          "sourceKpiIds": ["rs_inflow_daily", "rs_outflow_daily"],
+          "elapsedFromAsOf": false
+        },
+        "pii": false
+      },
+      "params": [
+        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+      ],
+      "rbac": { "visibleTo": [] }
+    }
+  }
+]
