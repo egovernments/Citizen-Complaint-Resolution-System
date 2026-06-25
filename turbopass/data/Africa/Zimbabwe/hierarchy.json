@@ -1,0 +1,888 @@
+{
+  "code": "ZW",
+  "name": "Zimbabwe",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "ZW-HA",
+      "parent_code": "ZW",
+      "name": "Harare",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-282335934",
+          "parent_code": "ZW-HA",
+          "name": "Harare",
+          "type": "city",
+          "population": "1606000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2617611732",
+          "parent_code": "ZW-HA",
+          "name": "Epworth",
+          "type": "city",
+          "population": "152116",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3049269847",
+          "parent_code": "ZW-HA",
+          "name": "Chitungwiza",
+          "type": "city",
+          "population": "321782",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ZW-MA",
+      "parent_code": "ZW",
+      "name": "Manicaland Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-253237975",
+          "parent_code": "ZW-MA",
+          "name": "Mutare",
+          "type": "city",
+          "population": "188243",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-302734175",
+          "parent_code": "ZW-MA",
+          "name": "Rusape",
+          "type": "city",
+          "population": "25054",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-305463169",
+          "parent_code": "ZW-MA",
+          "name": "Chipinge",
+          "type": "city",
+          "population": "17458",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331743007",
+          "parent_code": "ZW-MA",
+          "name": "Nyazura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1363423672",
+          "parent_code": "ZW-MA",
+          "name": "Chimanimani",
+          "type": "city",
+          "population": "2752",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2690896474",
+          "parent_code": "ZW-MA",
+          "name": "Birchenough Bridge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2782974709",
+          "parent_code": "ZW-MA",
+          "name": "Checheche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3088963878",
+          "parent_code": "ZW-MA",
+          "name": "Buhera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3093040885",
+          "parent_code": "ZW-MA",
+          "name": "Murambinda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4538241946",
+          "parent_code": "ZW-MA",
+          "name": "Nyanga",
+          "type": "city",
+          "population": "4850",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4586982195",
+          "parent_code": "ZW-MA",
+          "name": "Hauna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4606175926",
+          "parent_code": "ZW-MA",
+          "name": "Nyanyadzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5777231718",
+          "parent_code": "ZW-MA",
+          "name": "Mutasa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6008139869",
+          "parent_code": "ZW-MA",
+          "name": "Zimunya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6530453281",
+          "parent_code": "ZW-MA",
+          "name": "Arda Transau",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9629571707",
+          "parent_code": "ZW-MA",
+          "name": "Tsanzaguru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZW-MC",
+      "parent_code": "ZW",
+      "name": "Mashonaland Central Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-307152707",
+          "parent_code": "ZW-MC",
+          "name": "Bindura",
+          "type": "city",
+          "population": "40233",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-307524303",
+          "parent_code": "ZW-MC",
+          "name": "Glendale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2285985957",
+          "parent_code": "ZW-MC",
+          "name": "Mvurwi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2543884067",
+          "parent_code": "ZW-MC",
+          "name": "Shamva",
+          "type": "city",
+          "population": "10317",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3049269846",
+          "parent_code": "ZW-MC",
+          "name": "Centenary",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3050298101",
+          "parent_code": "ZW-MC",
+          "name": "Mount Darwin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3739512817",
+          "parent_code": "ZW-MC",
+          "name": "Concession",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4692634343",
+          "parent_code": "ZW-MC",
+          "name": "Mashumbi Pools",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5357610634",
+          "parent_code": "ZW-MC",
+          "name": "Guruve",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6190470435",
+          "parent_code": "ZW-MC",
+          "name": "St Alberts",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6203600872",
+          "parent_code": "ZW-MC",
+          "name": "Manhenga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6604718887",
+          "parent_code": "ZW-MC",
+          "name": "Muzarabani Township",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZW-ME",
+      "parent_code": "ZW",
+      "name": "Mashonaland East Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-253224182",
+          "parent_code": "ZW-ME",
+          "name": "Marondera",
+          "type": "city",
+          "population": "52283",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-305575296",
+          "parent_code": "ZW-ME",
+          "name": "Chivhu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-307644553",
+          "parent_code": "ZW-ME",
+          "name": "Mutoko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-307644779",
+          "parent_code": "ZW-ME",
+          "name": "Kotwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1042038700",
+          "parent_code": "ZW-ME",
+          "name": "Wedza",
+          "type": "city",
+          "population": "70968",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2238449365",
+          "parent_code": "ZW-ME",
+          "name": "Nyamapanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3851414254",
+          "parent_code": "ZW-ME",
+          "name": "Juru",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4092359007",
+          "parent_code": "ZW-ME",
+          "name": "Ruwa",
+          "type": "city",
+          "population": "22038",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4226449007",
+          "parent_code": "ZW-ME",
+          "name": "Arcturus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4226449008",
+          "parent_code": "ZW-ME",
+          "name": "Goromonzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4541555929",
+          "parent_code": "ZW-ME",
+          "name": "Macheke",
+          "type": "city",
+          "population": "1888",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4606923096",
+          "parent_code": "ZW-ME",
+          "name": "Sadza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8676222047",
+          "parent_code": "ZW-ME",
+          "name": "Dema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9383313569",
+          "parent_code": "ZW-ME",
+          "name": "Melfort",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZW-MW",
+      "parent_code": "ZW",
+      "name": "Mashonaland West Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-253241617",
+          "parent_code": "ZW-MW",
+          "name": "Kadoma",
+          "type": "city",
+          "population": "77749",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-295148550",
+          "parent_code": "ZW-MW",
+          "name": "Chegutu",
+          "type": "city",
+          "population": "42959",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-306131781",
+          "parent_code": "ZW-MW",
+          "name": "Makuti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-306639497",
+          "parent_code": "ZW-MW",
+          "name": "Kariba",
+          "type": "city",
+          "population": "24210",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-307615357",
+          "parent_code": "ZW-MW",
+          "name": "Karoi",
+          "type": "city",
+          "population": "22293",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2026290872",
+          "parent_code": "ZW-MW",
+          "name": "Magunje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2027807212",
+          "parent_code": "ZW-MW",
+          "name": "Sanyati",
+          "type": "city",
+          "population": "2918",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2029212820",
+          "parent_code": "ZW-MW",
+          "name": "Chakari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2029212822",
+          "parent_code": "ZW-MW",
+          "name": "Golden Valley",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2035227273",
+          "parent_code": "ZW-MW",
+          "name": "Murombedzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2039553399",
+          "parent_code": "ZW-MW",
+          "name": "Alaska",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3028263335",
+          "parent_code": "ZW-MW",
+          "name": "Chinhoyi",
+          "type": "city",
+          "population": "56794",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3028263336",
+          "parent_code": "ZW-MW",
+          "name": "Mhangura",
+          "type": "city",
+          "population": "2930",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3802043943",
+          "parent_code": "ZW-MW",
+          "name": "Norton",
+          "type": "city",
+          "population": "44054",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4222345045",
+          "parent_code": "ZW-MW",
+          "name": "Turf Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4437853734",
+          "parent_code": "ZW-MW",
+          "name": "Eiffel Flats",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4959414768",
+          "parent_code": "ZW-MW",
+          "name": "Nyabira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5230787576",
+          "parent_code": "ZW-MW",
+          "name": "Banket",
+          "type": "city",
+          "population": "9641",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZW-MV",
+      "parent_code": "ZW",
+      "name": "Masvingo Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-253129357",
+          "parent_code": "ZW-MV",
+          "name": "Masvingo",
+          "type": "city",
+          "population": "72527",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-305478461",
+          "parent_code": "ZW-MV",
+          "name": "Chivi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1238962193",
+          "parent_code": "ZW-MV",
+          "name": "Gutu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1243605851",
+          "parent_code": "ZW-MV",
+          "name": "Chiredzi",
+          "type": "city",
+          "population": "26129",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1243607791",
+          "parent_code": "ZW-MV",
+          "name": "Triangle",
+          "type": "city",
+          "population": "1490",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2194192682",
+          "parent_code": "ZW-MV",
+          "name": "Jerera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4252486610",
+          "parent_code": "ZW-MV",
+          "name": "Nyika Growth Point",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4508925599",
+          "parent_code": "ZW-MV",
+          "name": "Neshuro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13833848689",
+          "parent_code": "ZW-MV",
+          "name": "Morgenster",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZW-MN",
+      "parent_code": "ZW",
+      "name": "Matabeleland North Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-241500809",
+          "parent_code": "ZW-MN",
+          "name": "Victoria Falls",
+          "type": "city",
+          "population": "33060",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-253287072",
+          "parent_code": "ZW-MN",
+          "name": "Siabuwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-253381658",
+          "parent_code": "ZW-MN",
+          "name": "Dete",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-296424664",
+          "parent_code": "ZW-MN",
+          "name": "Binga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-966679467",
+          "parent_code": "ZW-MN",
+          "name": "Nkayi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1199446592",
+          "parent_code": "ZW-MN",
+          "name": "Hwange",
+          "type": "city",
+          "population": "42581",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2839095762",
+          "parent_code": "ZW-MN",
+          "name": "Tsholotsho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3049315880",
+          "parent_code": "ZW-MN",
+          "name": "Lupane",
+          "type": "city",
+          "population": "1600",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11207765884",
+          "parent_code": "ZW-MN",
+          "name": "Hwange",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZW-MS",
+      "parent_code": "ZW",
+      "name": "Matabeleland South Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-297522524",
+          "parent_code": "ZW-MS",
+          "name": "Gwanda",
+          "type": "city",
+          "population": "14450",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-298003865",
+          "parent_code": "ZW-MS",
+          "name": "West Nicholson",
+          "type": "city",
+          "population": "1633",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-310399116",
+          "parent_code": "ZW-MS",
+          "name": "Plumtree",
+          "type": "city",
+          "population": "11626",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2144877644",
+          "parent_code": "ZW-MS",
+          "name": "Beitbridge",
+          "type": "city",
+          "population": "41767",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3325871940",
+          "parent_code": "ZW-MS",
+          "name": "Ndolwane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4011613743",
+          "parent_code": "ZW-MS",
+          "name": "Filabusi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZW-MI",
+      "parent_code": "ZW",
+      "name": "Midlands Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-252622793",
+          "parent_code": "ZW-MI",
+          "name": "Kwekwe",
+          "type": "city",
+          "population": "93072",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-253192754",
+          "parent_code": "ZW-MI",
+          "name": "Gweru",
+          "type": "city",
+          "population": "141260",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-253286428",
+          "parent_code": "ZW-MI",
+          "name": "Gokwe",
+          "type": "city",
+          "population": "17633",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-301430334",
+          "parent_code": "ZW-MI",
+          "name": "Shurugwi",
+          "type": "city",
+          "population": "16866",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-309376734",
+          "parent_code": "ZW-MI",
+          "name": "Zvishavane",
+          "type": "city",
+          "population": "35229",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-925374110",
+          "parent_code": "ZW-MI",
+          "name": "Mvuma",
+          "type": "city",
+          "population": "7000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2288155260",
+          "parent_code": "ZW-MI",
+          "name": "Redcliff",
+          "type": "city",
+          "population": "32346",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3828382298",
+          "parent_code": "ZW-MI",
+          "name": "Mberengwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4947569880",
+          "parent_code": "ZW-MI",
+          "name": "Chireya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4947602731",
+          "parent_code": "ZW-MI",
+          "name": "Nembudziya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6049592391",
+          "parent_code": "ZW-MI",
+          "name": "Empress Mine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6166822764",
+          "parent_code": "ZW-MI",
+          "name": "Zhombe Joel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZW-BU",
+      "parent_code": "ZW",
+      "name": "Bulawayo Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-4155841482",
+          "parent_code": "ZW-BU",
+          "name": "Bulawayo",
+          "type": "city",
+          "population": "653337",
+          "place_type": "city"
+        }
+      ]
+    }
+  ]
+}

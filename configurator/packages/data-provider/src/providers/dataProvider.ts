@@ -56,6 +56,92 @@ function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord
   } as RaRecord;
 }
 
+// --- Complaint-hierarchy leaf adapter -------------------------------------
+//
+// The 2-master complaint hierarchy stores BOTH interior classification nodes
+// and leaf complaint types in one adjacency-list master
+// (RAINMAKER-PGR.ComplaintHierarchy). A row is a LEAF iff it carries
+// `department` or `slaHours` (interior nodes omit them). The dedicated
+// complaint-type UI (List/Show/Edit/Create) and the complaint pickers still
+// speak the legacy ServiceDefs vocabulary, so for the `leafServiceDefAdapter`
+// resource we keep only the leaves and project each onto that shape here, at
+// the data-access layer — downstream components stay unchanged.
+
+function isLeafHierarchyRow(data: Record<string, unknown>): boolean {
+  return data.department != null || data.slaHours != null;
+}
+
+/** Map one ComplaintHierarchy leaf row onto the legacy ServiceDefs shape.
+ *  `parentNameByCode` resolves the parent node's display name for menuPathName;
+ *  the leaf's own `code` IS the serviceCode stored verbatim on a complaint. */
+function mapLeafToServiceDef(
+  data: Record<string, unknown>,
+  parentNameByCode: Map<string, string>,
+): Record<string, unknown> {
+  const parentCode = data.parentCode == null ? '' : String(data.parentCode);
+  return {
+    ...data,
+    serviceCode: data.code,
+    name: data.name,
+    department: data.department,
+    departments: data.departments,
+    slaHours: data.slaHours,
+    keywords: data.keywords,
+    order: data.order,
+    active: data.active,
+    parentCode,
+    // menuPath is NO LONGER a master field — it's derived from the tree:
+    // group key = leaf.parentCode, group label = parent node's name.
+    menuPath: parentCode,
+    menuPathName: parentNameByCode.get(parentCode) ?? parentCode,
+  };
+}
+
+/** Translate an inbound complaint-type form payload (legacy ServiceDefs
+ *  vocabulary) into a ComplaintHierarchy LEAF row for writing. `serviceCode`
+ *  becomes the row `code`; the adapter-only synthetic fields (menuPath /
+ *  menuPathName / serviceCode) are dropped — grouping derives from parentCode.
+ *  The metadata strip (id / `_*`) is left to the caller. */
+function serviceDefToLeafWrite(data: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...data };
+  // serviceCode -> code (the leaf's code IS the serviceCode stored on a complaint)
+  if (out.serviceCode != null && out.code == null) out.code = out.serviceCode;
+  delete out.serviceCode;
+  // menuPath / menuPathName are adapter projections, never master fields.
+  delete out.menuPath;
+  delete out.menuPathName;
+  return out;
+}
+
+/** Reduce a full ComplaintHierarchy record set to ServiceDefs-shaped leaf
+ *  RaRecords (keyed by uniqueIdentifier == leaf code). */
+function adaptHierarchyLeaves(records: MdmsRecord[], config: ResourceConfig): RaRecord[] {
+  const parentNameByCode = new Map<string, string>();
+  const hasChildren = new Set<string>();
+  for (const r of records) {
+    const d = (r.data || {}) as Record<string, unknown>;
+    if (d.code != null && d.name != null) parentNameByCode.set(String(d.code), String(d.name));
+    if (r.isActive && d.parentCode != null) hasChildren.add(String(d.parentCode));
+  }
+  // A row is a FILEABLE complaint type if it is a LEAF (carries department/SLA)
+  // OR it is a TERMINAL node — nothing lists it as a parent. The terminal case
+  // covers a branch that stops before the declared leaf level (e.g. 3 levels
+  // declared but this SECTOR has no SUB_TYPE): its own `code` is a valid
+  // serviceCode the backend accepts, so it must be pickable here too — matching
+  // the citizen/employee create flows (which now submit the deepest node).
+  const isFileableType = (d: Record<string, unknown>): boolean =>
+    isLeafHierarchyRow(d) || !hasChildren.has(String(d.code));
+  return records
+    .filter((r) => r.isActive && isFileableType((r.data || {}) as Record<string, unknown>))
+    .map((r) => {
+      const adapted: MdmsRecord = {
+        ...r,
+        data: mapLeafToServiceDef((r.data || {}) as Record<string, unknown>, parentNameByCode),
+      };
+      return normalizeMdmsRecord(adapted, config);
+    });
+}
+
 function clientSort(records: RaRecord[], field: string, order: string): RaRecord[] {
   return [...records].sort((a, b) => {
     const aVal = getNestedValue(a as unknown as Record<string, unknown>, field);
@@ -103,6 +189,7 @@ function clientPaginate(records: RaRecord[], page: number, perPage: number): RaR
 async function mdmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
   const tenant = pickTenant(tenantId, filter);
   const records = await client.mdmsSearch(tenant, config.schema!, { limit: 500 });
+  if (config.leafServiceDefAdapter) return adaptHierarchyLeaves(records, config);
   return records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
 }
 
@@ -160,7 +247,13 @@ async function hrmsFindOne(
 }
 
 async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string): Promise<RaRecord[]> {
-  function flattenTrees(trees: Record<string, unknown>[]): RaRecord[] {
+  // The boundary-relationships endpoint repeats each child node under its
+  // parent in the payload, so a naive flatten emits the same code many times
+  // (a 22-boundary tree rendered as 300+ duplicate rows). Dedup by code as we
+  // walk — same fix boundary.ts's searchBoundaries already applies. The set is
+  // shared across every hierarchy/tenant tree so a code seeded under two
+  // hierarchies still shows once.
+  function flattenTrees(trees: Record<string, unknown>[], seen: Set<string>): RaRecord[] {
     const flat: RaRecord[] = [];
     function flatten(
       nodes: unknown[],
@@ -170,23 +263,27 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
     ) {
       if (!Array.isArray(nodes)) return;
       for (const node of nodes as Record<string, unknown>[]) {
-        // Stamp tenantId + hierarchyType on every flattened node from its
-        // enclosing tree wrapper. Downstream editors (JurisdictionEditor)
-        // use these to scope jurisdiction rows to the boundary's home
-        // tenant, not the session tenant.
-        flat.push(
-          normalizeRecord(
-            {
-              ...node,
-              parentCode,
-              tenantId: (node.tenantId as string | undefined) ?? treeTenantId,
-              hierarchyType: (node.hierarchyType as string | undefined) ?? treeHierarchyType,
-            },
-            config,
-          ),
-        );
+        const code = typeof node.code === 'string' ? node.code : undefined;
+        if (code && !seen.has(code)) {
+          seen.add(code);
+          // Stamp tenantId + hierarchyType on every flattened node from its
+          // enclosing tree wrapper. Downstream editors (JurisdictionEditor)
+          // use these to scope jurisdiction rows to the boundary's home
+          // tenant, not the session tenant.
+          flat.push(
+            normalizeRecord(
+              {
+                ...node,
+                parentCode,
+                tenantId: (node.tenantId as string | undefined) ?? treeTenantId,
+                hierarchyType: (node.hierarchyType as string | undefined) ?? treeHierarchyType,
+              },
+              config,
+            ),
+          );
+        }
         if (Array.isArray(node.children)) {
-          flatten(node.children as unknown[], node.code as string, treeTenantId, treeHierarchyType);
+          flatten(node.children as unknown[], code, treeTenantId, treeHierarchyType);
         }
       }
     }
@@ -212,7 +309,8 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
     const treeLists = await Promise.all(
       types.map((ht) => client.boundaryRelationshipSearch(t, ht).catch(() => [])),
     );
-    return treeLists.flatMap((trees) => flattenTrees(trees as Record<string, unknown>[]));
+    const seen = new Set<string>();
+    return treeLists.flatMap((trees) => flattenTrees(trees as Record<string, unknown>[], seen));
   }
 
   // Always fetch the session tenant's tree(s) first.
@@ -498,6 +596,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async getOne(resource, params): Promise<GetOneResult> {
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
+        // Leaf-adapter resources need the full record set to resolve a leaf's
+        // menuPathName (its parent node's name), so always go through the
+        // adapted list path rather than the single-uid fast path.
+        if (config.leafServiceDefAdapter) {
+          const all = await mdmsGetList(client, config, tenantId);
+          const found = all.find((r) => String(r.id) === String(params.id));
+          if (!found) throw new Error(`Record not found: ${params.id}`);
+          return { data: found };
+        }
         // Try uniqueIdentifier lookup first (fast path for records we created)
         const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
         const active = records.filter((r) => r.isActive);
@@ -554,12 +661,16 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async getMany(resource, params): Promise<GetManyResult> {
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
-        // Try uniqueIdentifier lookup first (fast path)
-        const records = await client.mdmsSearch(tenantId, config.schema!, {
-          uniqueIdentifiers: params.ids.map(String),
-        });
-        const found = records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
-        if (found.length === params.ids.length) return { data: found };
+        // Leaf-adapter resources must be filtered/mapped from the full set
+        // (menuPathName needs sibling parent nodes), so skip the uid fast path.
+        if (!config.leafServiceDefAdapter) {
+          // Try uniqueIdentifier lookup first (fast path)
+          const records = await client.mdmsSearch(tenantId, config.schema!, {
+            uniqueIdentifiers: params.ids.map(String),
+          });
+          const found = records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+          if (found.length === params.ids.length) return { data: found };
+        }
         // Fall back to fetching all and matching by id field (handles hash-based UIDs)
         const all = await mdmsGetList(client, config, tenantId);
         const ids = new Set(params.ids.map(String));
@@ -587,7 +698,9 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     async create(resource, params): Promise<CreateResult> {
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
-        const incoming = params.data as Record<string, unknown>;
+        const incoming = config.leafServiceDefAdapter
+          ? serviceDefToLeafWrite(params.data as Record<string, unknown>)
+          : (params.data as Record<string, unknown>);
         // Same metadata-strip the update path applies (PR #40). The
         // create path didn't have it, so any defaultRecord that included
         // `id` (some forms set id == code on create) or any normalised
@@ -604,7 +717,10 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         }
         const uid = String(incoming[config.idField] || data.code || '');
         const record = await client.mdmsCreate(tenantId, config.schema!, uid, data);
-        return { data: normalizeMdmsRecord(record, config) };
+        return { data: config.leafServiceDefAdapter
+          ? (await mdmsGetList(client, config, tenantId)).find((r) => String(r.id) === uid)
+            ?? normalizeMdmsRecord(record, config)
+          : normalizeMdmsRecord(record, config) };
       }
       if (config.type === 'hrms') {
         const data = params.data as Record<string, unknown>;
@@ -722,7 +838,9 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         // any of these fields makes the _update payload fail with
         // INVALID_REQUEST_ADDITIONALPROPERTIES* (closes
         // egovernments/CCRS#472 — Department update).
-        const incoming = params.data as Record<string, unknown>;
+        const incoming = config.leafServiceDefAdapter
+          ? serviceDefToLeafWrite(params.data as Record<string, unknown>)
+          : (params.data as Record<string, unknown>);
         const sanitized: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(incoming)) {
           if (key === 'id') continue;
@@ -731,6 +849,11 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         }
         existing.data = { ...existing.data, ...sanitized };
         const updated = await client.mdmsUpdate(existing, true);
+        if (config.leafServiceDefAdapter) {
+          const all = await mdmsGetList(client, config, tenantId);
+          const found = all.find((r) => String(r.id) === String(params.id));
+          if (found) return { data: found };
+        }
         return { data: normalizeMdmsRecord(updated, config) };
       }
       if (config.type === 'hrms') {

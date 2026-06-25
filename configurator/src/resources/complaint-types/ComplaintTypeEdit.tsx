@@ -7,7 +7,9 @@ export function ComplaintTypeEdit() {
     <DigitEdit title="Edit Complaint Type">
       <FieldSection title="Details">
         <div className="space-y-4">
-          <DigitFormInput source="menuPath" label="Complaint Type (Menu Path)" validate={v.required} />
+          {/* Grouping key — parent node code in the ComplaintHierarchy tree
+              (replaces the old free-text menuPath). */}
+          <DigitFormInput source="parentCode" label="Parent (group code)" />
           <DigitFormSelect
             source="department"
             label="Department"

@@ -54,7 +54,7 @@ const columns: DigitColumn[] = [
     render: (record) => {
       const code = String(record.serviceCode ?? '');
       return code ? (
-        <EntityLink resource="complaint-types" id={code} />
+        <EntityLink resource="complaint-hierarchy" id={code} />
       ) : (
         <span className="text-muted-foreground">--</span>
       );

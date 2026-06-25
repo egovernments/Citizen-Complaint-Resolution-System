@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useHistory, useParams } from "react-router-dom/cjs/react-router-dom.min";
 import { HeaderComponent, Button, Card, Footer, ActionBar, SummaryCard, Tag, Timeline, Toast, NoResultsFound } from "@egovernments/digit-ui-components";
 import { Loader, DisplayPhotos, ImageViewer } from "@egovernments/digit-ui-react-components";
-import { convertEpochFormateToDate } from "../../utils";
+import { convertEpochFormateToDate, adaptComplaintHierarchyToServiceDefs } from "../../utils";
 import TimelineWrapper from "../../components/TimeLineWrapper";
 import PGRWorkflowModal from "../../components/PGRWorkflowModal";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
@@ -234,23 +234,27 @@ const PGRDetails = () => {
   const UpdateComplaintSession = Digit.Hooks.useSessionStorage("COMPLAINT_UPDATE", {});
   const [sessionFormData, setSessionFormData, clearSessionFormData] = UpdateComplaintSession;
 
-  // Load master data from MDMS
+  // Load master data from MDMS. Complaint types now live as leaf rows in the single
+  // RAINMAKER-PGR.ComplaintHierarchy adjacency list; we adapt them to the legacy
+  // ServiceDefs shape so the serviceCode->name / serviceCode->category lookups below
+  // keep working unchanged.
   const { isLoading: isMDMSLoading, data: serviceDefs } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
-    [{ name: "ServiceDefs" }],
+    [{ name: "ComplaintHierarchy" }],
     {
       cacheTime: Infinity,
-      select: (data) => data?.["RAINMAKER-PGR"]?.ServiceDefs,
+      select: (data) => adaptComplaintHierarchyToServiceDefs(data?.["RAINMAKER-PGR"]?.ComplaintHierarchy),
     },
-    { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
+    { schemaCode: "COMPLAINT_HIERARCHY_MASTER_DATA" }
   );
 
   function getServiceCategoryByCode(serviceCode, services) {
     if (!serviceCode || !Array.isArray(services)) return null;
     const match = services.find(item => item.serviceCode === serviceCode);
-    // Return category if available, fallback to menuPath for backward compatibility
-    return match?.category || match?.menuPath || null;
+    // Prefer the parent node's display name (menuPathName); fall back to legacy
+    // category/menuPath for backward compatibility.
+    return match?.category || match?.menuPathName || match?.menuPath || null;
   }
 
   function getServiceNameByCode(serviceCode, services) {

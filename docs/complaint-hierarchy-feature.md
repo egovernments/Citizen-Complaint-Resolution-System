@@ -1,20 +1,22 @@
 # Complaint Classification: 2‑level → configurable N‑level hierarchy
 
 **What changed, in one line:** PGR complaint types used to be a fixed **2 levels**
-(Type → Sub‑type). They are now a **configurable N‑level hierarchy** (e.g. Authority →
-Main Category → Sector → Sub‑type) that each tenant **opts into** — with **zero backend
-changes** and **full backward compatibility** (a tenant with no hierarchy keeps the old
-flat flow, untouched).
+(Type → Sub‑type) implicit in `ServiceDefs.menuPath`. They are now a **configurable
+N‑level hierarchy** (e.g. Authority → Main Category → Sector → Sub‑type) held in **two
+MDMS masters**, and the leaf complaint types live **inside the hierarchy** itself. This is
+a **breaking, lockstep** change — `ServiceDefs` is removed, `pgr-services` reads the new
+master, and there is **no flat fallback**: every tenant must be migrated.
 
 | | Before (`develop`) | After (this change) |
 |---|---|---|
 | Levels | Fixed **2** | Configurable **N** (≥2) |
-| Where the tree lives | *implicit* in `ServiceDefs.menuPath` | *explicit* `ComplaintHierarchyDefinition` + `ClassificationNode` |
+| Where the tree lives | *implicit* in `ServiceDefs.menuPath` | *explicit* `ComplaintHierarchyDefinition` + `ComplaintHierarchy` |
+| Where the **leaf** lives | the `ServiceDefs` record | a `ComplaintHierarchy` **leaf row** (at the `isLeafServiceCode` level) |
 | Picker UI | 2 dropdowns | N cascading dropdowns |
-| Backend (`pgr-services`, DB) | — | **unchanged** |
-| Per‑tenant opt‑in | — | yes; flat **fallback** when not configured |
+| Backend (`pgr-services`, analytics MV) | — | **changed** — validates + sources SLA + builds the grain MV from `ComplaintHierarchy` |
+| Per‑tenant opt‑in | — | **no** — breaking; every tenant migrated before cutover; **no flat fallback** |
 
-> Related docs: [design](design/complaint-hierarchy-design.md) · [migration guide + runbook](migration/complaint-type-2level-to-Nlevel.md) · [pre‑flight dry‑run](migration/preflight-dryrun.cjs)
+> Related docs: [design](design/complaint-hierarchy-design.md) · [two‑master rework plan](design/complaint-hierarchy-2master-rework-plan.md) · [migration guide + runbook](migration/complaint-type-2level-to-Nlevel.md) · [pre‑flight dry‑run](migration/preflight-dryrun.cjs)
 
 ---
 
@@ -44,44 +46,56 @@ flowchart TD
 
 ## 2. After — the configurable N‑level model
 
-The tree becomes **explicit data** — three records instead of one implicit grouping:
+The tree becomes **explicit data** in **two** masters, and the leaf complaint types live **inside the tree** (not in a separate master):
 
 ```mermaid
 flowchart LR
   DEF["ComplaintHierarchyDefinition<br/>levels[] = the shape"] -. defines .-> NODE
-  NODE["ClassificationNode<br/>code · parentCode · levelCode · name"] -->|parentCode| NODE
-  SD["ServiceDefs (leaf)<br/>links via parentCode ?? sector ?? menuPath"] -->|→ node.code| NODE
+  NODE["ComplaintHierarchy<br/>ONE adjacency list: interior nodes AND leaves<br/>code · parentCode · levelCode · name"] -->|parentCode| NODE
 ```
 
-- **`ComplaintHierarchyDefinition`** declares *how many* levels and their order (the shape).
-- **`ClassificationNode`** holds the non‑leaf values as an adjacency list (each node points at its `parentCode`).
-- **`ServiceDefs`** is still the leaf; it links to its parent node via `parentCode ?? sector ?? menuPath`.
+- **`ComplaintHierarchyDefinition`** declares *how many* levels and their order (the shape). Exactly one level has `isLeafServiceCode: true`.
+- **`ComplaintHierarchy`** is a single adjacency list holding **every** node — interior level nodes **and** leaf complaint sub‑types — each pointing at its `parentCode`. Leaf rows (at the `isLeafServiceCode` level) additionally carry `department` / `departments[]` / `slaHours` / `keywords`. **A leaf row's `code` IS the `serviceCode` stored on a complaint.**
 
-**Concrete example — `ke.bomet` (3 levels):**
+> There is no `ServiceDefs` master and no separate node master anymore. A row is a **leaf**
+> iff it carries `department` or `slaHours` (interior nodes omit them).
+
+**Concrete example — `ke.bomet` (2 levels: CATEGORY → SUB_TYPE):**
 
 ```mermaid
 flowchart TD
-  C["Complaint — MAIN_CATEGORY"] --> S1["Commerce — SECTOR"]
-  C --> S2["Public Services — SECTOR"]
-  S1 --> L1["Unfair pricing — SUB_TYPE (serviceCode)"]
-  S2 --> L2["Garbage not collected — SUB_TYPE (serviceCode)"]
+  C["Garbage — CATEGORY (interior)"] --> L1["BurningOfGarbage — SUB_TYPE leaf<br/>code = serviceCode · department · slaHours · keywords"]
+  C --> L2["DamagedGarbageBin — SUB_TYPE leaf"]
+  S["StreetLights — CATEGORY (interior)"] --> L3["StreetLightNotWorking — SUB_TYPE leaf"]
 ```
 
 **Screens (new):** the pickers render **one dropdown per level** (cascading), and the details
-pages show **one row per level** (Main Category → Sector → Sub‑Type) instead of the flat pair.
+pages show **one row per level** (Category → … → Sub‑Type) instead of the flat pair. Grouping
+labels (the old `menuPathName`) are now derived from the leaf's parent node `name`.
 
 ---
 
-## 3. New & changed MDMS schemas
+## 3. The MDMS masters
 
-| Schema | New? | Key fields | Role |
+| Schema | Status | Key fields | Role |
 |---|---|---|---|
-| `RAINMAKER-PGR.ComplaintHierarchyDefinition` | **new** | `hierarchyType`, `active`, `levels[] {levelCode, order, parentLevel, isFreeText, isLeafServiceCode, label}` | the level shape (one per tenant) |
-| `RAINMAKER-PGR.ClassificationNode` | **new** | `hierarchyType`, `levelCode`, `code`, `parentCode`, `name`, `order`, `active`, `path` | the tree nodes (non‑leaf values) |
-| `RAINMAKER-PGR.ServiceDefs` | **updated (additive)** | + optional `hierarchyType / authorityType / category / sector / path / parentCode` | leaf; **required fields unchanged** → old records stay valid |
-| `RAINMAKER-PGR.HierarchySchema`, `…ComplaintTypeDepartments` | new (supporting) | — | optional metadata; not required for migration |
+| `RAINMAKER-PGR.ComplaintHierarchyDefinition` | **kept (unchanged)** | `hierarchyType`, `active`, `levels[] {levelCode, order, parentLevel, isFreeText, isLeafServiceCode, label}` | the level shape (one per tenant) |
+| `RAINMAKER-PGR.ComplaintHierarchy` | **the merged master** | `hierarchyType`, `levelCode`, `code`, `parentCode`, `name`, `order`, `active`, `path` — **plus leaf‑only** `department`, `departments[]`, `slaHours`, `keywords` | the whole tree: interior nodes AND leaf complaint types in one adjacency list |
+| ~~`RAINMAKER-PGR.ServiceDefs`~~ | **removed** | — | folded into `ComplaintHierarchy` leaf rows (`serviceCode → code`, verbatim) |
+| ~~`RAINMAKER-PGR.ClassificationNode`~~ | **removed** | — | renamed/merged into `ComplaintHierarchy` (interior rows) |
+| ~~`RAINMAKER-PGR.HierarchySchema`~~ | **removed** | — | per‑module window — dropped; derived from `levels[]` order |
+| ~~`RAINMAKER-PGR.ComplaintTypeDepartments`~~ | **removed** | — | multi‑dept folded inline into the leaf row's `departments[]` |
 
-> The only ServiceDefs change is **new optional fields**. Existing records validate unchanged — this is what makes the deploy safe.
+> **`menuPath` / `menuPathName` are gone from the masters.** They were UI‑only derived
+> values. The leaf→parent link is now the explicit `parentCode` field; the group label is the
+> parent node's `name`. Code that needs the legacy `menuPath`/`menuPathName` shape reconstructs
+> it at the data‑access layer (`menuPath = leaf.parentCode`, `menuPathName = parent node name`).
+
+**Leaf-only fields & detection.** `department`, `departments[]`, `slaHours`, `keywords` appear
+**only** on leaf rows; interior nodes omit them. The schema allows this mixed shape because those
+four are optional `properties` (not `required`) under `additionalProperties:false`. A row is a
+**leaf** iff `department` or `slaHours` is present — this is exactly the predicate pgr-services and
+the analytics MV use.
 
 ---
 
@@ -89,58 +103,65 @@ pages show **one row per level** (Main Category → Sector → Sub‑Type) inste
 
 | Area | Files | Nature |
 |---|---|---|
-| **MDMS schemas** | `RAINMAKER-PGR.json` + data‑handler config | additive (the table above) |
-| **Citizen / employee UI** | `digit-ui-esbuild/.../pgr` — cascade picker + create flows + **details breakdown** | cascade **with flat fallback** |
-| **Configurator** | hierarchy resources, Phase‑3 Excel setup, **one‑click migrate button** | additive admin tooling |
-| **Backend** (`pgr-services`, Java, DB, APIs) | — | **none** |
+| **MDMS schemas** | `schema/RAINMAKER-PGR.json` + data‑handler config + Helm `values.yaml` | **breaking** — rename `ClassificationNode`→`ComplaintHierarchy` + leaf fields; delete `ServiceDefs`/`HierarchySchema`/`ComplaintTypeDepartments` |
+| **Backend** (`pgr-services`) | `PGRConstants`, `MDMSUtils`, `ServiceRequestValidator`, `PGRService`, `NotificationService`, `DashboardQueryBuilder`, `PGRQueryBuilder`, `MigrationUtils`, `V20260608000000__create_v2_grain_mvs.sql` | **changed** — validate / SLA‑map / dept‑name / grain MV all read `ComplaintHierarchy` leaf rows |
+| **Citizen / employee UI** | `digit-ui-esbuild/.../pgr`, `frontend/micro-ui/web/.../pgr`, `digit-ui-v2` — cascade picker + create flows + details breakdown | repointed to `ComplaintHierarchy`; **no flat fallback** |
+| **Configurator** | hierarchy resources, Phase‑3 Excel setup, one‑click migrate button | rewritten to write leaf rows into `ComplaintHierarchy`; breaking/one‑way copy |
 
-`pgr-services` still validates `serviceCode` against `ServiceDefs` exactly as before — the new
-hierarchy masters are **read by the UI only**.
+`pgr-services` now validates `serviceCode` against **`ComplaintHierarchy` leaf rows** (JSONPath
+`$.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy[?(@.code=='X')]`, leaf‑only), sources the SLA map from
+their `slaHours`, and the V2‑grain materialized view builds from them
+(`WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND data->>'department' IS NOT NULL`,
+`service_group = parentCode`). This is **not** backend‑untouched.
 
 ---
 
-## 5. The screens — and why nothing breaks
+## 5. Rollout — why this is breaking (and how nothing-breaks-once-migrated)
 
-Every complaint surface checks one thing: *does this tenant have a `ComplaintHierarchyDefinition`?*
+This is a **BREAKING, mandatory, lockstep** change. There is **no per‑tenant opt‑in and no flat
+fallback**. Once `ServiceDefs` is removed and `pgr-services` reads `ComplaintHierarchy`, an
+un‑migrated tenant has a **hard outage**:
 
 ```mermaid
 flowchart TD
-  Q{Tenant has a hierarchy<br/>definition?} -->|Yes| C["Render N‑level cascade /<br/>per‑level detail rows"]
-  Q -->|No| F["Render legacy flat<br/>Type → Sub‑type (old logic)"]
+  Q{Tenant migrated to<br/>ComplaintHierarchy?} -->|Yes| C["Cascade picker + backend validates<br/>(serviceCode = leaf code)"]
+  Q -->|No| F["OUTAGE: picker shows CS_NO_COMPLAINT_HIERARCHY,<br/>pgr-services throws INVALID_SERVICECODE on every create"]
 ```
 
-| Screen | Gate | No hierarchy → behaviour |
-|---|---|---|
-| Citizen *File Complaint* | `hierarchyActive` | legacy flat `menuPath` grouping |
-| Employee *Create Complaint* | `hasHierarchy` | legacy flat Type → Sub‑type |
-| Citizen / Employee **details** | `buildComplaintPath()` returns `null` (also on any error) | legacy flat Type / Sub‑Type rows |
-| Configurator *File Complaint* / *Complaint Types* | n/a — flat `serviceCode` form | unchanged |
+| Surface | After cutover, un‑migrated tenant → |
+|---|---|
+| Citizen *File Complaint* | `CS_NO_COMPLAINT_HIERARCHY` — cannot file |
+| Employee *Create Complaint* | no options — cannot create |
+| pgr-services create/update | `INVALID_SERVICECODE` on every request |
+| Citizen / Employee **details** | path resolver returns null (no crash, but no breakdown) |
 
-**Why a tenant on the old build is safe after deploy:**
-1. New ServiceDefs fields are **optional** → existing records valid.
-2. No definition data → every screen falls back to **flat** (the gates above).
-3. **0 backend / 0 dependency changes** → runs on the existing runtime.
-4. The details resolver is wrapped in a guard → even malformed data falls back, never crashes.
+**Why it is safe once every tenant is migrated, in order:**
 
-So deploying the code is **inert** until a tenant is explicitly migrated.
+1. **Leaf `code` == old `serviceCode`, verbatim** → every already‑filed complaint still resolves; no complaint data is rewritten.
+2. **Lockstep release.** Masters migration (every tenant, city **and** state level) → pgr-services cutover + restart + V2‑MV → all frontend bundles + indexer/chatbot/MCP → only **then** delete the old masters.
+3. **Preflight gate.** The read‑only dry‑run asserts schemas installed, `(hierarchyType, code)` globally unique, every old serviceCode present as a leaf, and leaf fields carried — before any write.
+4. **Rollback is via snapshot, not a delete.** Because leaves were *moved* (not added alongside `ServiceDefs`), reverting means restoring the old masters from the mandatory MDMS snapshot, redeploying the old pgr-services images, and reverting the V2‑MV migration — **not** "delete the definition + nodes".
 
 ---
 
 ## 6. Migrating a tenant (2 → N)
 
-Migration is **additive and reversible** — it only *adds* the definition + nodes; it never
-rewrites `ServiceDefs`. The existing `menuPath` already encodes the tree, so a category node is
-created per `menuPath` (`code = menuPath`) and existing leaves link automatically.
+Migration **moves** the leaf data: each `ServiceDefs` record becomes a `ComplaintHierarchy` leaf
+row (`code = serviceCode` verbatim, plus `parentCode`, `department`/`departments[]`/`slaHours`/`keywords`),
+and each `ClassificationNode` interior row is copied 1:1. It is idempotent on `(hierarchyType, code)`
+but it is **not** additive and **not** reversible by deletion.
 
 | Path | How |
 |---|---|
-| **One click** | Configurator → *Manage → Complaint Hierarchies* → **Migrate from 2‑level** (auto‑hides once done) |
-| **Headless** | script in the [migration guide](migration/complaint-type-2level-to-Nlevel.md) §5 |
-| **Pre‑flight (gate)** | [`preflight-dryrun.cjs`](migration/preflight-dryrun.cjs) — read‑only, predicts the result |
-| **Rollback** | delete the tenant's `ComplaintHierarchyDefinition` + `ClassificationNode` → flat returns |
+| **One click** | Configurator → *Manage → Complaint Hierarchies* → **Migrate from 2‑level** (writes leaf rows into `ComplaintHierarchy`; reads the old masters as a read‑only source) |
+| **Headless** | masters‑migration script in the [migration guide](migration/complaint-type-2level-to-Nlevel.md) §5 |
+| **Pre‑flight (gate)** | [`preflight-dryrun.cjs`](migration/preflight-dryrun.cjs) — read‑only; asserts uniqueness + verbatim‑code preservation + backend‑validation readiness |
+| **Rollback** | restore `ServiceDefs`/`ClassificationNode` from the MDMS snapshot + redeploy old pgr-services images + revert the V2‑MV migration |
 
-Recommended order for production: **install schemas → deploy frontend (still flat) → pre‑flight →
-migrate per tenant → verify**. Filed complaints are never affected — their `serviceCode` never changes.
+Mandatory production order: **snapshot → install schemas → migrate every tenant (city + state) →
+pre‑flight green → deploy pgr-services (restart) + V2‑MV → deploy all frontends → only then delete
+old masters**. Filed complaints are never rewritten — correctness hinges on the verbatim leaf
+`code` = old `serviceCode`.
 
 ---
 
@@ -148,12 +169,12 @@ migrate per tenant → verify**. Filed complaints are never affected — their `
 
 ```mermaid
 flowchart LR
-  subgraph OLD["BEFORE · 2 levels (implicit)"]
-    O1["ServiceDefs.menuPath = Type"] --> O2["ServiceDefs.serviceCode = Sub‑type"]
+  subgraph OLD["BEFORE · 2 levels (implicit), ServiceDefs leaf"]
+    O1["ServiceDefs.menuPath = Type"] --> O2["ServiceDefs.serviceCode = Sub‑type leaf"]
   end
-  subgraph NEW["AFTER · N levels (explicit, opt‑in)"]
-    N1["ComplaintHierarchyDefinition (levels)"] --> N2["ClassificationNode tree"]
-    N2 --> N3["ServiceDefs (leaf serviceCode)"]
+  subgraph NEW["AFTER · N levels (explicit), leaf folded into the tree"]
+    N1["ComplaintHierarchyDefinition (levels)"] --> N2["ComplaintHierarchy: interior nodes"]
+    N2 -->|parentCode| N3["ComplaintHierarchy: leaf rows<br/>code = serviceCode"]
   end
-  OLD ==>|"additive migration<br/>(no data rewrite)"| NEW
+  OLD ==>|"BREAKING migration<br/>(serviceCode → leaf code, verbatim; lockstep)"| NEW
 ```

@@ -164,12 +164,15 @@ public class ServiceRequestValidatorTest {
     }
 
     private static Object buildMdmsData(String serviceCode) {
-        Map<String, Object> serviceDef = new HashMap<>();
-        serviceDef.put("serviceCode", serviceCode);
-        serviceDef.put("department", "ROADS");
+        // Leaf row in the merged ComplaintHierarchy master: code == serviceCode, carries department.
+        Map<String, Object> leaf = new HashMap<>();
+        leaf.put("code", serviceCode);
+        leaf.put("levelCode", "SUB_TYPE");
+        leaf.put("name", serviceCode);
+        leaf.put("department", "ROADS");
 
         Map<String, Object> rainmaker = new HashMap<>();
-        rainmaker.put("ServiceDefs", Collections.singletonList(serviceDef));
+        rainmaker.put("ComplaintHierarchy", Collections.singletonList(leaf));
 
         Map<String, Object> mdmsRes = new HashMap<>();
         mdmsRes.put("RAINMAKER-PGR", rainmaker);

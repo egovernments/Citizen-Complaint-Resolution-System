@@ -1,0 +1,152 @@
+{
+  "code": "DJ",
+  "name": "Djibouti",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "DJ-OB",
+      "parent_code": "DJ",
+      "name": "Obock",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-316841441",
+          "parent_code": "DJ-OB",
+          "name": "Obock",
+          "type": "city",
+          "population": "8500",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DJ-TA",
+      "parent_code": "DJ",
+      "name": "Tadjourah",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-316808022",
+          "parent_code": "DJ-TA",
+          "name": "Tadjoura",
+          "type": "city",
+          "population": "25000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316835311",
+          "parent_code": "DJ-TA",
+          "name": "Dorra درة",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316837942",
+          "parent_code": "DJ-TA",
+          "name": "Balho بالهو",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DJ-DI",
+      "parent_code": "DJ",
+      "name": "Dikhil",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-316809239",
+          "parent_code": "DJ-DI",
+          "name": "Dikhil",
+          "type": "city",
+          "population": "35000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-316829724",
+          "parent_code": "DJ-DI",
+          "name": "Yoboki",
+          "type": "city",
+          "population": "20644",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DJ-AS",
+      "parent_code": "DJ",
+      "name": "Ali Sabieh",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-316805035",
+          "parent_code": "DJ-AS",
+          "name": "Ali Sabieh",
+          "type": "city",
+          "population": "71230",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-832062911",
+          "parent_code": "DJ-AS",
+          "name": "Holl-Holl",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7577142263",
+          "parent_code": "DJ-AS",
+          "name": "Ali Addé علي عدي",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DJ-DJ",
+      "parent_code": "DJ",
+      "name": "Djibouti",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565085",
+          "parent_code": "DJ-DJ",
+          "name": "Djibouti",
+          "type": "city",
+          "population": "475332",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3605170673",
+          "parent_code": "DJ-DJ",
+          "name": "Balbala بلبالا",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "DJ-AR",
+      "parent_code": "DJ",
+      "name": "Arta",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-838704777",
+          "parent_code": "DJ-AR",
+          "name": "Artà",
+          "type": "city",
+          "population": "10275",
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

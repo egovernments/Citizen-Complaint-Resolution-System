@@ -307,7 +307,10 @@ jobs:
           fi
           echo "Using serviceCode: $CI_SERVICE_CODE"
 
-          # Run the complaints demo collection through Kong gateway
+          # Run the complaints demo collection through Kong gateway.
+          # --verbose dumps response bodies on failure — needed to diagnose
+          # the 400s on Assign/Resolve, which neither workflow service nor
+          # pgr-services emit a meaningful ERROR log for at INFO level.
           npx newman@latest run postman/complaints-demo.postman_collection.json \
             --env-var "url=http://localhost:18000" \
             --env-var "username=CI-ADMIN" \
@@ -316,7 +319,8 @@ jobs:
             --env-var "stateTenant=pg" \
             --env-var "userType=EMPLOYEE" \
             --env-var "authorization=Basic ZWdvdi11c2VyLWNsaWVudDo=" \
-            --env-var "serviceCode=${CI_SERVICE_CODE}"
+            --env-var "serviceCode=${CI_SERVICE_CODE}" \
+            --verbose
 
       - name: Run cross-root bootstrap test
         run: |

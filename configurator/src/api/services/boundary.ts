@@ -1,6 +1,6 @@
 // Boundary Service
 import { apiClient } from '../client';
-import { ENDPOINTS } from '../config';
+import { ENDPOINTS, BOUNDARY_SEARCH_LIMIT } from '../config';
 import type { Boundary, BoundaryHierarchy, BoundaryLevel } from '../types';
 
 export const boundaryService = {
@@ -110,7 +110,10 @@ export const boundaryService = {
       if (!tb.boundary) continue;
       const items = Array.isArray(tb.boundary) ? tb.boundary : [tb.boundary];
       for (const root of items) {
-        this.flattenBoundaries(root, boundaries, seen, tb.hierarchyType);
+        // Prefer the wrapper's hierarchyType; fall back to the caller's
+        // options.hierarchyType because the API often returns null in the
+        // wrapper even when the filter was supplied.
+        this.flattenBoundaries(root, boundaries, seen, tb.hierarchyType ?? options?.hierarchyType);
       }
     }
 
@@ -198,13 +201,68 @@ export const boundaryService = {
     }
   },
 
+  // Fetch geometry for a set of boundary codes. /boundary/_search binds its
+  // criteria from QUERY params only (tenantId + codes), returns rows of
+  // {code, geometry}. Chunked so the codes csv keeps the query string sane.
+  // Used by the management overview map to draw real outlines for an entire
+  // tenant (mirrors the digit-ui useTenantBoundaries two-step fetch).
+  async getGeometriesByCodes(
+    tenantId: string,
+    codes: string[],
+  ): Promise<Record<string, { type: string; coordinates: unknown }>> {
+    const CHUNK = 40;
+    const byCode: Record<string, { type: string; coordinates: unknown }> = {};
+    for (let i = 0; i < codes.length; i += CHUNK) {
+      const chunk = codes.slice(i, i + CHUNK);
+      const qs = `tenantId=${encodeURIComponent(tenantId)}&codes=${chunk
+        .map(encodeURIComponent)
+        .join(',')}&limit=100`;
+      try {
+        const response = await apiClient.post(`${ENDPOINTS.BOUNDARY_SEARCH}?${qs}`, {
+          RequestInfo: apiClient.buildRequestInfo(),
+        });
+        for (const row of (response.Boundary as { code: string; geometry?: { type: string; coordinates: unknown } }[] | undefined) ?? []) {
+          if (row?.code && row.geometry) byCode[row.code] = row.geometry;
+        }
+      } catch {
+        // best effort — a failed chunk just means those boundaries are absent
+        // from the overview; the rest still render.
+      }
+    }
+    return byCode;
+  },
+
+  // Fetch ALL boundary entities for a tenant in one shot. /boundary/_search
+  // with only tenantId (no codes) returns every entity with its geometry — the
+  // same call the MCP's boundary_entity_search makes. Used by the Management
+  // overview map so it renders whatever has real geometry, independent of the
+  // (sometimes inconsistent) relationship tree.
+  //
+  // `limit` defaults to BOUNDARY_SEARCH_LIMIT (see config.ts). boundary-service
+  // defaults to ~50 results and caps a single page at ~300, so this returns at
+  // most that cap; a tenant with more boundaries would need offset pagination.
+  async getAllBoundaryEntities(
+    tenantId: string,
+    limit = BOUNDARY_SEARCH_LIMIT,
+  ): Promise<Array<{ code: string; geometry?: { type: string; coordinates: unknown }; boundaryType?: string }>> {
+    const qs = `tenantId=${encodeURIComponent(tenantId)}&limit=${limit}`;
+    try {
+      const response = await apiClient.post(`${ENDPOINTS.BOUNDARY_SEARCH}?${qs}`, {
+        RequestInfo: apiClient.buildRequestInfo(),
+      });
+      return (response.Boundary as Array<{ code: string; geometry?: { type: string; coordinates: unknown }; boundaryType?: string }> | undefined) ?? [];
+    } catch {
+      return [];
+    }
+  },
+
   async boundaryEntityExists(tenantId: string, code: string): Promise<boolean> {
     try {
       const response = await apiClient.post(
         `${ENDPOINTS.BOUNDARY_SEARCH}?tenantId=${encodeURIComponent(tenantId)}&codes=${encodeURIComponent(code)}`,
         { RequestInfo: apiClient.buildRequestInfo() },
       );
-      return (response.Boundary?.length ?? 0) > 0;
+      return ((response.Boundary as unknown[] | undefined)?.length ?? 0) > 0;
     } catch {
       return false;
     }
@@ -261,7 +319,7 @@ export const boundaryService = {
         `${ENDPOINTS.BOUNDARY_RELATIONSHIP_SEARCH}?${qs.toString()}`,
         { RequestInfo: apiClient.buildRequestInfo() },
       );
-      return (response.TenantBoundary?.length ?? 0) > 0;
+      return ((response.TenantBoundary as unknown[] | undefined)?.length ?? 0) > 0;
     } catch {
       return false;
     }
@@ -292,7 +350,7 @@ export const boundaryService = {
           const response = await apiClient.post(`${ENDPOINTS.BOUNDARY_SEARCH}?${qs}`, {
             RequestInfo: apiClient.buildRequestInfo(),
           });
-          for (const b of response.Boundary ?? []) {
+          for (const b of (response.Boundary as { code: string }[] | undefined) ?? []) {
             if (expected.has(b.code)) seen.add(b.code);
           }
         } catch {

@@ -6,10 +6,14 @@
 // down to the leaf sub-type, or `null` when the tenant has no usable hierarchy
 // (the caller then falls back to the legacy flat rows).
 //
-// Linking mirrors the citizen/employee pickers exactly: a leaf ServiceDef links
-// to its parent node via `parentCode ?? sector ?? menuPath`, and nodes chain up
-// via `parentCode`. Level labels prefer the localized `<HIERARCHYTYPE>_<LEVELCODE>`
-// key, then the definition's `label`, then a prettified levelCode.
+// Source of truth: the single RAINMAKER-PGR.ComplaintHierarchy adjacency list
+// (interior nodes + leaf complaint types). The leaf is the row whose
+// `code === serviceCode`; every row (leaf or interior) chains to its parent via
+// `parentCode` through one byCode map. Level labels prefer the localized
+// `<HIERARCHYTYPE>_<LEVELCODE>` key, then the definition's `label`, then a
+// prettified levelCode.
+
+import { complaintLabel } from "./complaintLabel";
 
 const prettify = (code) =>
   String(code || "")
@@ -27,22 +31,28 @@ export function buildComplaintPath(args = {}) {
   }
 }
 
-function resolveComplaintPath({ serviceCode, def, nodes, serviceDefs, t } = {}) {
+function resolveComplaintPath({ serviceCode, def, nodes, t } = {}) {
   if (!serviceCode || !def || !Array.isArray(def.levels) || def.levels.length === 0) return null;
   const tr = typeof t === "function" ? t : (k) => k;
   const levels = [...def.levels].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const leaf = (serviceDefs || []).find((s) => s.serviceCode === serviceCode) || null;
 
-  // Walk the node chain from the leaf's immediate parent up to the root.
+  // `nodes` is the full ComplaintHierarchy adjacency list (interior + leaf). The
+  // complaint's serviceCode is the code of the deepest node the user actually
+  // selected — usually a leaf, but it may be an INTERIOR node when that branch
+  // had no deeper level (e.g. 3 levels declared but this SECTOR has no SUB_TYPE).
   const byCode = new Map((nodes || []).map((n) => [n.code, n]));
-  const chain = [];
-  if (leaf) {
-    const link = leaf.parentCode ?? leaf.sector ?? leaf.menuPath;
-    let cur = link ? byCode.get(link) : null;
+  const self = byCode.get(serviceCode) || null;
+  if (!self) return null; // not in the tree (flat tenant) -> caller keeps legacy rows
+
+  // Walk from the selected node INCLUSIVE up to the root via parentCode, so the
+  // chain holds the chosen node at its own level plus every ancestor.
+  const byLevel = new Map();
+  {
+    let cur = self;
     const guard = new Set();
     while (cur && !guard.has(cur.code)) {
       guard.add(cur.code);
-      chain.push(cur);
+      byLevel.set(cur.levelCode, cur);
       cur = cur.parentCode ? byCode.get(cur.parentCode) : null;
     }
   }
@@ -55,19 +65,26 @@ function resolveComplaintPath({ serviceCode, def, nodes, serviceDefs, t } = {}) 
     return prettify(lvl.levelCode);
   };
 
-  const rows = levels.map((lvl) => {
-    if (lvl.isLeafServiceCode) {
-      const key = `SERVICEDEFS.${String(serviceCode).toUpperCase()}`;
-      const v = tr(key);
-      return { levelCode: lvl.levelCode, label: labelFor(lvl), value: v && v !== key ? v : leaf?.name || serviceCode };
-    }
-    const node = chain.find((n) => n.levelCode === lvl.levelCode);
-    return { levelCode: lvl.levelCode, label: labelFor(lvl), value: node ? node.name || node.code : null };
-  });
+  // Emit one row per level from the top down to the selected node. Levels DEEPER
+  // than the selected node (never reached on this branch) are omitted entirely,
+  // so a SECTOR-coded complaint shows "Category › Sector" — not a blank/duplicated
+  // sub-type slot.
+  const rows = [];
+  for (const lvl of levels) {
+    const node = byLevel.get(lvl.levelCode);
+    if (!node) continue;
+    // Label = key-based (COMPLAINT_HIERARCHY.<code>) like every other service,
+    // falling back to the node's own name when the key isn't seeded.
+    const value = complaintLabel(tr, node.code, node.name);
+    rows.push({ levelCode: lvl.levelCode, label: labelFor(lvl), value });
+  }
 
-  // If no non-leaf level resolved to a node, the leaf isn't actually in the tree
-  // (flat tenant) — signal "no hierarchy" so the caller keeps the legacy rows.
-  const resolvedAnyNode = rows.some((r, i) => !levels[i].isLeafServiceCode && r.value);
-  if (!resolvedAnyNode) return null;
+  // A lone leaf with no resolved ancestors means the tenant isn't really using
+  // the hierarchy — fall back to the legacy flat rows.
+  if (rows.length === 0) return null;
+  if (rows.length === 1) {
+    const only = levels.find((l) => l.levelCode === rows[0].levelCode);
+    if (only && only.isLeafServiceCode) return null;
+  }
   return rows;
 }

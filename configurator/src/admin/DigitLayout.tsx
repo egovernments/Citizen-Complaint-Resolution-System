@@ -26,7 +26,6 @@ import {
   History,
   FileCode,
   Workflow,
-  Palette,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -51,8 +50,7 @@ const navGroups = [
     labelKey: 'app.nav.complaint_management',
     items: [
       { id: 'complaint-hierarchies', nameKey: 'app.nav.complaint_hierarchies', path: '/manage/complaint-hierarchies', icon: GitBranch },
-      { id: 'classification-nodes', nameKey: 'app.nav.classification_nodes', path: '/manage/classification-nodes', icon: GitBranch },
-      { id: 'complaint-types', nameKey: 'app.nav.complaint_types', path: '/manage/complaint-types', icon: AlertTriangle },
+      { id: 'complaint-hierarchy', nameKey: 'app.nav.complaint_types', path: '/manage/complaint-hierarchy', icon: AlertTriangle },
       { id: 'complaints', nameKey: 'app.nav.complaints', path: '/manage/complaints', icon: MessageSquare },
       { id: 'localization', nameKey: 'app.nav.localization', path: '/manage/localization', icon: Globe },
     ],

@@ -168,35 +168,30 @@ const ComplaintDetailsPage = () => {
   // Complaint classification hierarchy (configurable N levels). Absent on
   // un-migrated tenants -> buildComplaintPath returns null and the legacy flat
   // Type/Sub-Type rows from `details` are shown unchanged.
+  // Single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes +
+  // leaf complaint types). buildComplaintPath finds the leaf (code===serviceCode)
+  // and walks parentCode up through these same rows.
   const { data: hier } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
-    [{ name: "ComplaintHierarchyDefinition" }, { name: "ClassificationNode" }],
+    [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
     {
       cacheTime: Infinity,
       select: (raw) => {
         const defs = (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter((d) => d?.active !== false);
-        const allNodes = raw?.["RAINMAKER-PGR"]?.ClassificationNode || [];
-        const def = defs.find((d) => allNodes.some((n) => n?.hierarchyType === d?.hierarchyType)) || defs[0] || null;
-        const nodes = def ? allNodes.filter((n) => n?.hierarchyType === def.hierarchyType) : [];
+        const allRows = raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [];
+        const def = defs.find((d) => allRows.some((n) => n?.hierarchyType === d?.hierarchyType)) || defs[0] || null;
+        const nodes = def ? allRows.filter((n) => n?.hierarchyType === def.hierarchyType) : [];
         return { def, nodes };
       },
     },
     { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
-  );
-  const { data: serviceDefs } = Digit.Hooks.useCustomMDMS(
-    tenantId,
-    "RAINMAKER-PGR",
-    [{ name: "ServiceDefs" }],
-    { cacheTime: Infinity, select: (raw) => raw?.["RAINMAKER-PGR"]?.ServiceDefs },
-    { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
   );
 
   const classification = buildComplaintPath({
     serviceCode: complaintDetails?.service?.serviceCode,
     def: hier?.def,
     nodes: hier?.nodes,
-    serviceDefs,
     t,
   });
 

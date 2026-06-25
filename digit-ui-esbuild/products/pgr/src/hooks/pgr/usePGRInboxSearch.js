@@ -86,7 +86,14 @@ const usePGRInboxSearch = (reqCriteria) => {
       statusMap = states
         .filter((s) => s.state)
         .map((s) => ({
-          statusid: s.uuid,
+          // WorkflowStatusFilter uses `statusid` as each checkbox's value, and
+          // PGRInboxConfig.preProcess feeds the checked keys straight into the
+          // pgr-services `applicationStatus` filter. pgr-services matches that
+          // against the state CODE (e.g. PENDINGFORASSIGNMENT), not the workflow
+          // state UUID — so emitting `s.uuid` here made every status selection
+          // return zero rows and the inbox list vanished (issue #432). Use the
+          // state code as the identifier so a selection actually filters.
+          statusid: s.state,
           state: s.state,
           businessservice: "PGR",
         }));
@@ -94,13 +101,33 @@ const usePGRInboxSearch = (reqCriteria) => {
       console.error("PGR inbox: failed to fetch workflow states", e);
     }
 
+    // Per-complaint-type SLA budget (hours) from MDMS ServiceDefs — the inbox filter
+    // caches these in SessionStorage on mount. Used to show "SLA days remaining" per
+    // type, matching the server-side sortBy=sla ordering (issue #432).
+    const serviceDefs = Digit.SessionStorage.get("serviceDefs") || [];
+    const slaHoursByCode = {};
+    if (Array.isArray(serviceDefs)) {
+      serviceDefs.forEach((d) => {
+        if (d?.serviceCode != null && d?.slaHours != null) slaHoursByCode[d.serviceCode] = Number(d.slaHours);
+      });
+    }
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
     return {
       items: wrappers.map((sw) => {
         const pi = wfMap[sw.service?.serviceRequestId] || {};
-        const slaDays =
-          pi.businesssServiceSla != null
-            ? Math.round(pi.businesssServiceSla / (24 * 60 * 60 * 1000))
-            : null;
+        // SLA days remaining = per-type SLA budget (ServiceDefs.slaHours) − elapsed
+        // since creation. Falls back to the workflow's uniform businesssServiceSla
+        // when slaHours isn't available (serviceDefs not yet cached, or a type with
+        // no slaHours) so the column never goes blank.
+        const slaHours = slaHoursByCode[sw.service?.serviceCode];
+        const createdTime = sw.service?.auditDetails?.createdTime;
+        let slaDays = null;
+        if (slaHours != null && createdTime != null) {
+          slaDays = Math.round((slaHours * 60 * 60 * 1000 - (Date.now() - createdTime)) / DAY_MS);
+        } else if (pi.businesssServiceSla != null) {
+          slaDays = Math.round(pi.businesssServiceSla / DAY_MS);
+        }
         return {
           businessObject: { service: sw.service, serviceSla: slaDays },
           ProcessInstance: pi,

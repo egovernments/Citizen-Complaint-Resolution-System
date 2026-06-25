@@ -1252,7 +1252,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-registry.preview.egov.theflywheel.in/pgr-services-dev:latest}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-3d1b7d4}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1532,7 +1532,7 @@ services:
     # below pulls a public, pinned build from ghcr.io — no VPC access or
     # insecure-registries trust required. Override MCP_IMAGE to use a
     # different registry/tag.
-    image: ${MCP_IMAGE:-ghcr.io/subhashini-egov/digit-mcp:2026-06-10}
+    image: ${MCP_IMAGE:-ghcr.io/subhashini-egov/digit-mcp:2026-06-11}
     container_name: digit-mcp
     restart: unless-stopped
     depends_on:
@@ -1620,7 +1620,7 @@ services:
     volumes:
       - ./jupyter/dataloader/templates:/home/jovyan/work/templates
       - ./jupyter/dataloader:/home/jovyan/work/dataloader
-      - ./jupyter/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
+      - ./jupyter/dataloader/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
     networks:
       - egov-network
 
@@ -2154,7 +2154,17 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 60s
+      # `start-dev --import-realm` re-runs the Quarkus augmentation + realm
+      # import on EVERY container start, so cold-start to "Listening on 8180"
+      # is ~120s (measured ~118s on bomet under a full-stack converge). At the
+      # old 60s the container flipped to `unhealthy` mid-startup, and the
+      # converge's `up -d` (services depend_on keycloak: service_healthy) aborted
+      # "dependency failed to start" — which on Linux ends the whole playbook,
+      # silently skipping every later task (configurator build, bootstrap, …).
+      # Keep start_period comfortably above real startup so the container stays
+      # `starting` (not `unhealthy`) until it's actually up. retries×interval
+      # (150s) still catches a genuinely dead keycloak after the grace window.
+      start_period: 180s
     networks:
       - egov-network
 

@@ -166,7 +166,11 @@ def create_boundary(loader, tenant):
 
 
 def lookup_service_def(base_url, state_tenant):
-    """Find a ServiceDef and return (serviceCode, department)."""
+    """Find a leaf complaint type and return (serviceCode, department).
+
+    Reads the merged RAINMAKER-PGR.ComplaintHierarchy master and keeps only LEAF rows
+    (those carrying a 'department'); a leaf row's 'code' IS the serviceCode.
+    """
     headers = {"Content-Type": "application/json"}
     resp = requests.post(
         f"{base_url}/mdms-v2/v1/_search",
@@ -174,7 +178,7 @@ def lookup_service_def(base_url, state_tenant):
             "MdmsCriteria": {
                 "tenantId": state_tenant,
                 "moduleDetails": [
-                    {"moduleName": "RAINMAKER-PGR", "masterDetails": [{"name": "ServiceDefs"}]}
+                    {"moduleName": "RAINMAKER-PGR", "masterDetails": [{"name": "ComplaintHierarchy"}]}
                 ],
             },
             "RequestInfo": {"apiId": "Rainmaker"},
@@ -184,11 +188,14 @@ def lookup_service_def(base_url, state_tenant):
     )
     if not resp.ok:
         return None, None
-    defs = resp.json().get("MdmsRes", {}).get("RAINMAKER-PGR", {}).get("ServiceDefs", [])
+    rows = resp.json().get("MdmsRes", {}).get("RAINMAKER-PGR", {}).get("ComplaintHierarchy", [])
+    # Leaf rows carry a department (interior CATEGORY nodes do not).
+    defs = [r for r in rows if r.get("department")]
     if not defs:
         return None, None
     svc = defs[0]
-    return svc.get("serviceCode"), svc.get("department")
+    # For a ComplaintHierarchy leaf, the 'code' IS the serviceCode stored on a complaint.
+    return svc.get("code"), svc.get("department")
 
 
 def ensure_department_for_tenant(loader, dept_code, city_tenant):
@@ -267,11 +274,11 @@ def main():
         print("FATAL: boundary creation failed")
         return 1
 
-    # Step 4: Look up ServiceDef from bootstrapped data
-    print(f"\n[4/6] Look up ServiceDef on '{BOOT_ROOT}'")
+    # Step 4: Look up a leaf complaint type from bootstrapped data
+    print(f"\n[4/6] Look up complaint type on '{BOOT_ROOT}'")
     service_code, dept_code = lookup_service_def(BASE_URL, BOOT_ROOT)
     if not service_code or not dept_code:
-        print("FATAL: No ServiceDefs found on bootstrapped root")
+        print("FATAL: No leaf complaint types found in RAINMAKER-PGR.ComplaintHierarchy on bootstrapped root")
         return 1
     print(f"   Using: {service_code} -> dept {dept_code}")
     ensure_department_for_tenant(loader, dept_code, BOOT_TENANT)

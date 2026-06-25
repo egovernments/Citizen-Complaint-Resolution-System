@@ -1,0 +1,1776 @@
+{
+  "code": "SS",
+  "name": "South Sudan",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "SS-EC",
+      "parent_code": "SS",
+      "name": "Central Equatoria",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-97922073",
+          "parent_code": "SS-EC",
+          "name": "Juba",
+          "type": "city",
+          "population": "372410",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-204367085",
+          "parent_code": "SS-EC",
+          "name": "Kajo Keji",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-205467269",
+          "parent_code": "SS-EC",
+          "name": "Lainya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-205496460",
+          "parent_code": "SS-EC",
+          "name": "Mongalla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-205496879",
+          "parent_code": "SS-EC",
+          "name": "Terekeka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-228735754",
+          "parent_code": "SS-EC",
+          "name": "Yei",
+          "type": "city",
+          "population": "260000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-231017352",
+          "parent_code": "SS-EC",
+          "name": "Tali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-239152146",
+          "parent_code": "SS-EC",
+          "name": "Tindalo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-240489900",
+          "parent_code": "SS-EC",
+          "name": "Rokon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-408758685",
+          "parent_code": "SS-EC",
+          "name": "Morobo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1157841250",
+          "parent_code": "SS-EC",
+          "name": "Bazi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2222535628",
+          "parent_code": "SS-EC",
+          "name": "Kaya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4032813613",
+          "parent_code": "SS-EC",
+          "name": "Mogiri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4985225198",
+          "parent_code": "SS-EC",
+          "name": "Wonduruba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4985225199",
+          "parent_code": "SS-EC",
+          "name": "Bereka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4985225200",
+          "parent_code": "SS-EC",
+          "name": "Tore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SS-LK",
+      "parent_code": "SS",
+      "name": "Lakes",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-208188702",
+          "parent_code": "SS-LK",
+          "name": "Minkamman",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-208347861",
+          "parent_code": "SS-LK",
+          "name": "Yirol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-210186424",
+          "parent_code": "SS-LK",
+          "name": "Shambe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2630620779",
+          "parent_code": "SS-LK",
+          "name": "Nyang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3257850000",
+          "parent_code": "SS-LK",
+          "name": "Wulu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3275722461",
+          "parent_code": "SS-LK",
+          "name": "Rumbek",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3974571069",
+          "parent_code": "SS-LK",
+          "name": "Galthok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9051746796",
+          "parent_code": "SS-LK",
+          "name": "Aduel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9051787336",
+          "parent_code": "SS-LK",
+          "name": "Cueibet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9051834381",
+          "parent_code": "SS-LK",
+          "name": "Maper",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12055628616",
+          "parent_code": "SS-LK",
+          "name": "Agangrial",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SS-JG",
+      "parent_code": "SS",
+      "name": "Jonglei",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-227880231",
+          "parent_code": "SS-JG",
+          "name": "Akobo",
+          "type": "city",
+          "population": "1000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-227880249",
+          "parent_code": "SS-JG",
+          "name": "Wa̱a̱t",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-237257414",
+          "parent_code": "SS-JG",
+          "name": "Bor",
+          "type": "city",
+          "population": "315351",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-238717535",
+          "parent_code": "SS-JG",
+          "name": "Ayod",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-238717573",
+          "parent_code": "SS-JG",
+          "name": "Duk Padiet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243451506",
+          "parent_code": "SS-JG",
+          "name": "Paguir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2146809997",
+          "parent_code": "SS-JG",
+          "name": "New Fangak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2513118810",
+          "parent_code": "SS-JG",
+          "name": "Old Fangak",
+          "type": "city",
+          "population": "55515",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2589942705",
+          "parent_code": "SS-JG",
+          "name": "Canal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2605781684",
+          "parent_code": "SS-JG",
+          "name": "Pariak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2619597926",
+          "parent_code": "SS-JG",
+          "name": "Pulturuk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2625797026",
+          "parent_code": "SS-JG",
+          "name": "Bwong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2630663084",
+          "parent_code": "SS-JG",
+          "name": "Panipandiar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2805708518",
+          "parent_code": "SS-JG",
+          "name": "Lankien",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2805744836",
+          "parent_code": "SS-JG",
+          "name": "Barriak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2953823844",
+          "parent_code": "SS-JG",
+          "name": "Gadiang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3368480591",
+          "parent_code": "SS-JG",
+          "name": "Riang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3368491995",
+          "parent_code": "SS-JG",
+          "name": "Weenyal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3368597754",
+          "parent_code": "SS-JG",
+          "name": "Motot",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3377513891",
+          "parent_code": "SS-JG",
+          "name": "Yuai",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3377738680",
+          "parent_code": "SS-JG",
+          "name": "Walgak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3377744694",
+          "parent_code": "SS-JG",
+          "name": "Pulchol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3433407068",
+          "parent_code": "SS-JG",
+          "name": "Mabior",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3974559451",
+          "parent_code": "SS-JG",
+          "name": "Poktap",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4044282652",
+          "parent_code": "SS-JG",
+          "name": "Pajut",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4045316134",
+          "parent_code": "SS-JG",
+          "name": "Wernyol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4045337491",
+          "parent_code": "SS-JG",
+          "name": "Duk Payuel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4047419041",
+          "parent_code": "SS-JG",
+          "name": "Adiang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4047419111",
+          "parent_code": "SS-JG",
+          "name": "Atar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4049769746",
+          "parent_code": "SS-JG",
+          "name": "Padak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4049845245",
+          "parent_code": "SS-JG",
+          "name": "Werngueny",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4049866965",
+          "parent_code": "SS-JG",
+          "name": "Anyidi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SS-EE",
+      "parent_code": "SS",
+      "name": "Eastern Equatoria",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-205418847",
+          "parent_code": "SS-EE",
+          "name": "Kapoeta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-205498533",
+          "parent_code": "SS-EE",
+          "name": "Moli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-205503577",
+          "parent_code": "SS-EE",
+          "name": "Torit",
+          "type": "city",
+          "population": "17957",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-206810433",
+          "parent_code": "SS-EE",
+          "name": "Magwi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-216504434",
+          "parent_code": "SS-EE",
+          "name": "Lafon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-240475577",
+          "parent_code": "SS-EE",
+          "name": "Ikotos",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-241785452",
+          "parent_code": "SS-EE",
+          "name": "Cuhudum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243186194",
+          "parent_code": "SS-EE",
+          "name": "Lobira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243204823",
+          "parent_code": "SS-EE",
+          "name": "Kimotong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1815607674",
+          "parent_code": "SS-EE",
+          "name": "Narus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1815729601",
+          "parent_code": "SS-EE",
+          "name": "Hiyala (Pronounced He-ya-la)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1825937452",
+          "parent_code": "SS-EE",
+          "name": "Pajok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2090585037",
+          "parent_code": "SS-EE",
+          "name": "Ngauro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2093500289",
+          "parent_code": "SS-EE",
+          "name": "HILAL (CAMP-15)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2096234512",
+          "parent_code": "SS-EE",
+          "name": "Nimule",
+          "type": "city",
+          "population": "45000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3305750864",
+          "parent_code": "SS-EE",
+          "name": "Riwoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9218920542",
+          "parent_code": "SS-EE",
+          "name": "Owiny Kibul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SS-EW",
+      "parent_code": "SS",
+      "name": "Western Equatoria",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-205495747",
+          "parent_code": "SS-EW",
+          "name": "Mundri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-217893617",
+          "parent_code": "SS-EW",
+          "name": "Maridi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-217939859",
+          "parent_code": "SS-EW",
+          "name": "Mvolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-228776238",
+          "parent_code": "SS-EW",
+          "name": "Jambo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-241501075",
+          "parent_code": "SS-EW",
+          "name": "Tambura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-241889949",
+          "parent_code": "SS-EW",
+          "name": "Nzara",
+          "type": "city",
+          "population": "81075",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-435516605",
+          "parent_code": "SS-EW",
+          "name": "Ezo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-435669247",
+          "parent_code": "SS-EW",
+          "name": "Yambio",
+          "type": "city",
+          "population": "41997",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-8656529902",
+          "parent_code": "SS-EW",
+          "name": "Ibba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9053733383",
+          "parent_code": "SS-EW",
+          "name": "Kediba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9053753882",
+          "parent_code": "SS-EW",
+          "name": "Nagero",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SS-BW",
+      "parent_code": "SS",
+      "name": "Western Bahr el Ghazal State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-237163366",
+          "parent_code": "SS-BW",
+          "name": "Raja",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-237193709",
+          "parent_code": "SS-BW",
+          "name": "Wau",
+          "type": "city",
+          "population": "136179",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-239218524",
+          "parent_code": "SS-BW",
+          "name": "Kuajiena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-241490527",
+          "parent_code": "SS-BW",
+          "name": "Bisellia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574155905",
+          "parent_code": "SS-BW",
+          "name": "Umm Higar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574158593",
+          "parent_code": "SS-BW",
+          "name": "Kafia Kingi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2600706369",
+          "parent_code": "SS-BW",
+          "name": "Kosho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9051744084",
+          "parent_code": "SS-BW",
+          "name": "Nyin Akok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9051759899",
+          "parent_code": "SS-BW",
+          "name": "Bagari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13282790380",
+          "parent_code": "SS-BW",
+          "name": "منجم أغبش",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13282790381",
+          "parent_code": "SS-BW",
+          "name": "Hofrat En Nahas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SS-NU",
+      "parent_code": "SS",
+      "name": "Upper Nile",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-210414793",
+          "parent_code": "SS-NU",
+          "name": "Malakal",
+          "type": "city",
+          "population": "147450",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-210421241",
+          "parent_code": "SS-NU",
+          "name": "Kodok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-240434360",
+          "parent_code": "SS-NU",
+          "name": "Melut",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243415643",
+          "parent_code": "SS-NU",
+          "name": "Maiwut",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243425912",
+          "parent_code": "SS-NU",
+          "name": "Nasir",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1364310270",
+          "parent_code": "SS-NU",
+          "name": "Abukadara",
+          "type": "city",
+          "population": "27000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2146406951",
+          "parent_code": "SS-NU",
+          "name": "Tonga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2151753466",
+          "parent_code": "SS-NU",
+          "name": "Kaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2597789517",
+          "parent_code": "SS-NU",
+          "name": "New Palouch",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2615938033",
+          "parent_code": "SS-NU",
+          "name": "Paloich",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2616000652",
+          "parent_code": "SS-NU",
+          "name": "Jalhak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2616003624",
+          "parent_code": "SS-NU",
+          "name": "Renk",
+          "type": "city",
+          "population": "176020",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2616019425",
+          "parent_code": "SS-NU",
+          "name": "Mathiaŋ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2616039123",
+          "parent_code": "SS-NU",
+          "name": "Pagak (South Sudan)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2625788699",
+          "parent_code": "SS-NU",
+          "name": "Adong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2625788999",
+          "parent_code": "SS-NU",
+          "name": "Baliet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2631072434",
+          "parent_code": "SS-NU",
+          "name": "Dɔmɛ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2655992285",
+          "parent_code": "SS-NU",
+          "name": "Bienythiang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2670903267",
+          "parent_code": "SS-NU",
+          "name": "Mandɛ̈ŋ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2670904255",
+          "parent_code": "SS-NU",
+          "name": "Ulaŋ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3166209471",
+          "parent_code": "SS-NU",
+          "name": "Ki̱ec Kun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3205687780",
+          "parent_code": "SS-NU",
+          "name": "Madiŋ",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3990702540",
+          "parent_code": "SS-NU",
+          "name": "El Seriha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3990814388",
+          "parent_code": "SS-NU",
+          "name": "Wadakona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4000127057",
+          "parent_code": "SS-NU",
+          "name": "Geigar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4000242068",
+          "parent_code": "SS-NU",
+          "name": "Girbanat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4007306519",
+          "parent_code": "SS-NU",
+          "name": "Torakit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4007321937",
+          "parent_code": "SS-NU",
+          "name": "Mulbok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4007321951",
+          "parent_code": "SS-NU",
+          "name": "Turaybah",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4021857868",
+          "parent_code": "SS-NU",
+          "name": "Wau",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4076314640",
+          "parent_code": "SS-NU",
+          "name": "Ban Jallo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7369154349",
+          "parent_code": "SS-NU",
+          "name": "المقينص",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8986229925",
+          "parent_code": "SS-NU",
+          "name": "Bunj",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12084415423",
+          "parent_code": "SS-NU",
+          "name": "dhuɔrɛdiŋ",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12109703441",
+          "parent_code": "SS-NU",
+          "name": "Diŋkar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SS-UY",
+      "parent_code": "SS",
+      "name": "Unity",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-210314672",
+          "parent_code": "SS-UY",
+          "name": "Mayiandi̱t",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-210325994",
+          "parent_code": "SS-UY",
+          "name": "Leer",
+          "type": "city",
+          "population": "10486",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-210331520",
+          "parent_code": "SS-UY",
+          "name": "Dok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-210338561",
+          "parent_code": "SS-UY",
+          "name": "Rubkona Market",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243451821",
+          "parent_code": "SS-UY",
+          "name": "Mayɔm",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2588755678",
+          "parent_code": "SS-UY",
+          "name": "Ko̱c",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2588755897",
+          "parent_code": "SS-UY",
+          "name": "Mir Mir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2590118220",
+          "parent_code": "SS-UY",
+          "name": "Waŋkɛy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2591120622",
+          "parent_code": "SS-UY",
+          "name": "Nhialdiu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2593389690",
+          "parent_code": "SS-UY",
+          "name": "Rier Market",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2605576344",
+          "parent_code": "SS-UY",
+          "name": "Mankien",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2613802518",
+          "parent_code": "SS-UY",
+          "name": "Bentiu",
+          "type": "city",
+          "population": "6500",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3045967354",
+          "parent_code": "SS-UY",
+          "name": "Rupkuai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3315897327",
+          "parent_code": "SS-UY",
+          "name": "Nimni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3431844587",
+          "parent_code": "SS-UY",
+          "name": "Bauw",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9322194641",
+          "parent_code": "SS-UY",
+          "name": "Gui̱t",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12389097037",
+          "parent_code": "SS-UY",
+          "name": "Ruath-Nyibol",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SS-BN",
+      "parent_code": "SS",
+      "name": "Northern Bahr el Ghazal",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-234617041",
+          "parent_code": "SS-BN",
+          "name": "Nyamliell",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-234617069",
+          "parent_code": "SS-BN",
+          "name": "Aweil",
+          "type": "city",
+          "population": "40054",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2599264234",
+          "parent_code": "SS-BN",
+          "name": "Akuem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2599402904",
+          "parent_code": "SS-BN",
+          "name": "Gok Machar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2606026306",
+          "parent_code": "SS-BN",
+          "name": "Aroyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2620823995",
+          "parent_code": "SS-BN",
+          "name": "Malek Alel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4599613196",
+          "parent_code": "SS-BN",
+          "name": "Wanyjok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4762755086",
+          "parent_code": "SS-BN",
+          "name": "Riang Aketh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4762767649",
+          "parent_code": "SS-BN",
+          "name": "Knich",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4762790025",
+          "parent_code": "SS-BN",
+          "name": "Mabior",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SS-WR",
+      "parent_code": "SS",
+      "name": "Warrap",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-83037194",
+          "parent_code": "SS-WR",
+          "name": "Gogrial",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-239256953",
+          "parent_code": "SS-WR",
+          "name": "Warrap",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-241883142",
+          "parent_code": "SS-WR",
+          "name": "Tonj",
+          "type": "city",
+          "population": "17340",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243228365",
+          "parent_code": "SS-WR",
+          "name": "Alek",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243414699",
+          "parent_code": "SS-WR",
+          "name": "Thiet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243440245",
+          "parent_code": "SS-WR",
+          "name": "Akak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2146403255",
+          "parent_code": "SS-WR",
+          "name": "Agok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2401267182",
+          "parent_code": "SS-WR",
+          "name": "Turalei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2597775779",
+          "parent_code": "SS-WR",
+          "name": "Kuajok",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-9051903348",
+          "parent_code": "SS-WR",
+          "name": "Liet-Nhom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9051941553",
+          "parent_code": "SS-WR",
+          "name": "Romich",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "SD-GK",
+      "parent_code": "SS",
+      "name": "West Kordufan",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-210348785",
+          "parent_code": "SD-GK",
+          "name": "Heglig",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-238610118",
+          "parent_code": "SD-GK",
+          "name": "Abyei",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-321502878",
+          "parent_code": "SD-GK",
+          "name": "Babanusah",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-321503273",
+          "parent_code": "SD-GK",
+          "name": "Muglad",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2090839794",
+          "parent_code": "SD-GK",
+          "name": "Meriam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2269613906",
+          "parent_code": "SD-GK",
+          "name": "Al Lagowa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2373597402",
+          "parent_code": "SD-GK",
+          "name": "En Nahud",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2373597639",
+          "parent_code": "SD-GK",
+          "name": "Wad Banda",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2589949845",
+          "parent_code": "SD-GK",
+          "name": "Al-Dubub",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2590105444",
+          "parent_code": "SD-GK",
+          "name": "As Sumayh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3182058113",
+          "parent_code": "SD-GK",
+          "name": "Keilak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5692251414",
+          "parent_code": "SD-GK",
+          "name": "Ghubaysh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5838095352",
+          "parent_code": "SD-GK",
+          "name": "Al-Fula",
+          "type": "city",
+          "population": "8721",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-5929910137",
+          "parent_code": "SD-GK",
+          "name": "Al Taboun",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6477684549",
+          "parent_code": "SD-GK",
+          "name": "السنوط",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6477685875",
+          "parent_code": "SD-GK",
+          "name": "Al Arak",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730401014",
+          "parent_code": "SD-GK",
+          "name": "Khuwayy",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425080",
+          "parent_code": "SD-GK",
+          "name": "Abu Zabad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425125",
+          "parent_code": "SD-GK",
+          "name": "`Iyal Bakhit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425137",
+          "parent_code": "SD-GK",
+          "name": "Dam Gamad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425160",
+          "parent_code": "SD-GK",
+          "name": "Dardog",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425213",
+          "parent_code": "SD-GK",
+          "name": "Foga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7730425222",
+          "parent_code": "SD-GK",
+          "name": "Abu Kabisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12729181313",
+          "parent_code": "SD-GK",
+          "name": "Al-Qantour",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12729520237",
+          "parent_code": "SD-GK",
+          "name": "Al Khuwairat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12882225579",
+          "parent_code": "SD-GK",
+          "name": "Al-Kharsana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12896429885",
+          "parent_code": "SD-GK",
+          "name": "Al-Sitteeb",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-13550425",
+      "parent_code": "SS",
+      "name": "Greater Pibor Administrative Area",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-225058040",
+          "parent_code": "ST-13550425",
+          "name": "Boma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-241778447",
+          "parent_code": "ST-13550425",
+          "name": "Pochalla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-241778448",
+          "parent_code": "ST-13550425",
+          "name": "Pibor",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-241786826",
+          "parent_code": "ST-13550425",
+          "name": "Kassangor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243415089",
+          "parent_code": "ST-13550425",
+          "name": "Likuangole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2290290063",
+          "parent_code": "ST-13550425",
+          "name": "Gumuruk",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-13550743",
+      "parent_code": "SS",
+      "name": "Ruweng Administrative Area",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2597737889",
+          "parent_code": "ST-13550743",
+          "name": "Abiemnhom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3705053563",
+          "parent_code": "ST-13550743",
+          "name": "Yida",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3849971357",
+          "parent_code": "ST-13550743",
+          "name": "Pariang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11276421057",
+          "parent_code": "ST-13550743",
+          "name": "Jau",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

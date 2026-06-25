@@ -220,4 +220,51 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
   return complaint;
 };
 
+// ---------------------------------------------------------------------------
+// ComplaintHierarchy -> legacy ServiceDefs adapter
+// ---------------------------------------------------------------------------
+// The legacy RAINMAKER-PGR.ServiceDefs master is gone. Service definitions now
+// derive from the single RAINMAKER-PGR.ComplaintHierarchy adjacency list, which
+// holds BOTH interior classification nodes AND leaf complaint types. A leaf row
+// additionally carries department/departments/slaHours/keywords; interior nodes
+// omit them. A leaf row's `code` IS the serviceCode stored on a complaint.
+//
+// These helpers keep the rest of the PGR UI unchanged by mapping leaf rows back
+// onto the legacy ServiceDefs field names. `menuPath`/`menuPathName` are no
+// longer master fields — they are derived from the tree (group = parentCode,
+// group label = parent node's name).
+
+// A row is a LEAF complaint type iff it carries a department or slaHours.
+export const isComplaintHierarchyLeaf = (row) =>
+  row != null && (row.department != null || row.slaHours != null);
+
+// Map ComplaintHierarchy rows (full tree) -> legacy ServiceDefs[] (leaves only).
+export const mapComplaintHierarchyToServiceDefs = (rows = []) => {
+  const all = Array.isArray(rows) ? rows : [];
+  const nameByCode = {};
+  all.forEach((n) => {
+    if (n?.code != null) nameByCode[n.code] = n.name;
+  });
+  return all
+    .filter((row) => isComplaintHierarchyLeaf(row) && row.active !== false)
+    .map((row) => ({
+      serviceCode: row.code,
+      name: row.name,
+      department: row.department,
+      departments: row.departments,
+      slaHours: row.slaHours,
+      keywords: row.keywords,
+      order: row.order,
+      active: row.active,
+      parentCode: row.parentCode,
+      menuPath: row.parentCode,
+      menuPathName: row.parentCode != null ? nameByCode[row.parentCode] : undefined,
+    }));
+};
+
+// `select` helper for useCustomMDMS([{ name: "ComplaintHierarchy" }]) calls that
+// previously read RAINMAKER-PGR.ServiceDefs. Returns the adapted ServiceDefs[].
+export const selectServiceDefsFromComplaintHierarchy = (raw) =>
+  mapComplaintHierarchyToServiceDefs(raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy);
+
 export default {};

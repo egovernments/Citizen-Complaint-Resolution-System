@@ -1,0 +1,320 @@
+{
+  "code": "GM",
+  "name": "The Gambia",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "GM-B",
+      "parent_code": "GM",
+      "name": "Banjul",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249167555",
+          "parent_code": "GM-B",
+          "name": "Banjul",
+          "type": "city",
+          "population": "31356",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-3774959",
+      "parent_code": "GM",
+      "name": "Kanifing Municipal Council",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-495132694",
+          "parent_code": "ST-3774959",
+          "name": "Serrekunda",
+          "type": "city",
+          "population": "380000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2189917788",
+          "parent_code": "ST-3774959",
+          "name": "Kanifing",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GM-M",
+      "parent_code": "GM",
+      "name": "Central River Division",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1224809649",
+          "parent_code": "GM-M",
+          "name": "Bansang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1848292179",
+          "parent_code": "GM-M",
+          "name": "Janjanbureh",
+          "type": "city",
+          "population": "3998",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2487593828",
+          "parent_code": "GM-M",
+          "name": "Kudang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2487616275",
+          "parent_code": "GM-M",
+          "name": "Kuntaur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2487617261",
+          "parent_code": "GM-M",
+          "name": "Wassu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2562957722",
+          "parent_code": "GM-M",
+          "name": "Brikama Ba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GM-U",
+      "parent_code": "GM",
+      "name": "Upper River Division",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1848292178",
+          "parent_code": "GM-U",
+          "name": "Fatoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2115560890",
+          "parent_code": "GM-U",
+          "name": "Nyamanari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2609154078",
+          "parent_code": "GM-U",
+          "name": "Garowol",
+          "type": "city",
+          "population": "8272",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2611642740",
+          "parent_code": "GM-U",
+          "name": "Badja Kunda",
+          "type": "city",
+          "population": "3938",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2612325231",
+          "parent_code": "GM-U",
+          "name": "Basse Santa Su",
+          "type": "city",
+          "population": "11859",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GM-L",
+      "parent_code": "GM",
+      "name": "Lower River Division",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-3871387436",
+          "parent_code": "GM-L",
+          "name": "Soma",
+          "type": "city",
+          "population": "11050",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GM-N",
+      "parent_code": "GM",
+      "name": "North Bank Division",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249169367",
+          "parent_code": "GM-N",
+          "name": "Farafenni",
+          "type": "city",
+          "population": "19512",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2617758506",
+          "parent_code": "GM-N",
+          "name": "Fass",
+          "type": "city",
+          "population": "3020",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4116438238",
+          "parent_code": "GM-N",
+          "name": "Ndungu Kebbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11017761232",
+          "parent_code": "GM-N",
+          "name": "Barra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "GM-W",
+      "parent_code": "GM",
+      "name": "West Coast Division",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-249167597",
+          "parent_code": "GM-W",
+          "name": "Brikama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1580793350",
+          "parent_code": "GM-W",
+          "name": "Gunjur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1607155521",
+          "parent_code": "GM-W",
+          "name": "Yundum",
+          "type": "city",
+          "population": "13021",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1612632716",
+          "parent_code": "GM-W",
+          "name": "Old Yundum",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2367205839",
+          "parent_code": "GM-W",
+          "name": "Mandina Ba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2616106113",
+          "parent_code": "GM-W",
+          "name": "Sukuta",
+          "type": "city",
+          "population": "31674",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2616149102",
+          "parent_code": "GM-W",
+          "name": "Wellingara",
+          "type": "city",
+          "population": "16116",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2616155056",
+          "parent_code": "GM-W",
+          "name": "Abuko",
+          "type": "city",
+          "population": "8089",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6257816376",
+          "parent_code": "GM-W",
+          "name": "Lamin",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6257820513",
+          "parent_code": "GM-W",
+          "name": "Banjulinding",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6395850702",
+          "parent_code": "GM-W",
+          "name": "Kartong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12922112381",
+          "parent_code": "GM-W",
+          "name": "Busumbala",
+          "type": "city",
+          "population": "11189",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13719467263",
+          "parent_code": "GM-W",
+          "name": "Djalabango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

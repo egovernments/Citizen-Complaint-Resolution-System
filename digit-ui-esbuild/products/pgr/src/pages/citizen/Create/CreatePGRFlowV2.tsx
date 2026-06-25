@@ -20,6 +20,7 @@
 
 import * as React from "react";
 import { useTranslation } from "react-i18next";
+import { complaintLabel } from "../../../utils/complaintLabel";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -307,13 +308,13 @@ interface StepBodyProps {
 
 /**
  * Generic, configurable N-level cascading picker driven entirely by a
- * ComplaintHierarchyDefinition + ClassificationNodes. Renders one dependent
- * dropdown per level (the count is data, not code — boundary-service style).
- * Non-leaf options come from ClassificationNode (filtered by levelCode +
- * parentCode); the single leaf level's options come from ServiceDefs linked to
- * the parent (by parentCode/sector, falling back to menuPath). Selecting the
- * leaf hands the chosen ServiceDef up so the existing payload/validation logic
- * is reused unchanged.
+ * ComplaintHierarchyDefinition + the single ComplaintHierarchy adjacency list.
+ * Renders one dependent dropdown per level (the count is data, not code —
+ * boundary-service style). Non-leaf options come from the interior nodes
+ * (filtered by levelCode + parentCode); the single leaf level's options come
+ * from the leaf rows linked to the parent strictly by parentCode. Selecting the
+ * leaf hands the chosen ServiceDef-shaped row up so the existing payload/
+ * validation logic is reused unchanged.
  */
 function ComplaintHierarchyPicker({
   def,
@@ -341,24 +342,50 @@ function ComplaintHierarchyPicker({
   const labelFor = (lvl: HierarchyLevel) =>
     tr(t, (def.hierarchyType + "_" + lvl.levelCode).toUpperCase(), lvl.label || lvl.levelCode);
 
-  const optionsForLevel = (i: number): { value: string; label: string }[] => {
+  // Options for level `i` computed against an explicit selection array. Needed
+  // because handleChange must know the children of a just-picked node BEFORE
+  // React commits the new `sel` state (setSel is async).
+  const optionsForLevelWith = (
+    selArr: (string | null)[],
+    i: number
+  ): { value: string; label: string }[] => {
     const lvl = levels[i];
-    const parentCode = i === 0 ? null : sel[i - 1];
+    const parentCode = i === 0 ? null : selArr[i - 1];
     if (i > 0 && !parentCode) return [];
     if (lvl.isLeafServiceCode) {
+      // Leaf rows link to their parent node strictly via parentCode (single
+      // adjacency list); no separate sector/menuPath master anymore.
       return (serviceDefs || [])
-        .filter((s) => {
-          const link = s.parentCode ?? s.sector ?? s.menuPath;
-          return parentCode ? link === parentCode : true;
-        })
+        .filter((s) => (parentCode ? s.parentCode === parentCode : true))
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-        .map((s) => ({ value: s.serviceCode, label: s.name ? t(s.name) : s.serviceCode }));
+        .map((s) => ({ value: s.serviceCode, label: complaintLabel(t, s.serviceCode, s.name) }));
     }
     return (nodes || [])
       .filter((n) => n.levelCode === lvl.levelCode && n.active !== false)
       .filter((n) => (i === 0 ? !n.parentCode : n.parentCode === parentCode))
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-      .map((n) => ({ value: n.code, label: n.name || n.code }));
+      .map((n) => ({ value: n.code, label: complaintLabel(t, n.code, n.name) }));
+  };
+
+  const optionsForLevel = (i: number) => optionsForLevelWith(sel, i);
+
+  // Build a ServiceDef-shaped value from an interior node so a branch that
+  // bottoms out before the declared leaf level (e.g. 3 levels declared, but
+  // this SECTOR has no SUB_TYPE) can still be submitted: the deepest node the
+  // user actually picked becomes the complaint's serviceCode. It is a real
+  // ComplaintHierarchy row, so pgr-services accepts it (no INVALID_SERVICECODE).
+  const interiorAsServiceDef = (i: number, code: string): ServiceDef | null => {
+    const node = (nodes || []).find(
+      (n) => n.levelCode === levels[i].levelCode && n.code === code
+    );
+    if (!node) return null;
+    return {
+      serviceCode: node.code,
+      menuPath: node.parentCode ?? node.code,
+      name: node.name || node.code,
+      parentCode: node.parentCode ?? undefined,
+      order: node.order,
+    };
   };
 
   const handleChange = (i: number, value: string) => {
@@ -366,19 +393,48 @@ function ComplaintHierarchyPicker({
     next[i] = value || null;
     for (let j = i + 1; j < next.length; j++) next[j] = null;
     setSel(next);
+    if (!value) {
+      onLeafChange(null);
+      return;
+    }
     if (levels[i].isLeafServiceCode) {
       onLeafChange((serviceDefs || []).find((s) => s.serviceCode === value) || null);
-    } else {
-      onLeafChange(null);
+      return;
     }
+    // Non-leaf selection: if a deeper level still has options, keep drilling
+    // (clear any pending value). Otherwise this node is terminal — submit with
+    // it as the serviceCode instead of trapping the user on an empty dropdown.
+    const hasDeeper =
+      i + 1 < levels.length && optionsForLevelWith(next, i + 1).length > 0;
+    onLeafChange(hasDeeper ? null : interiorAsServiceDef(i, value));
   };
+
+  // The deepest level the user has actually selected, and whether that node is
+  // terminal (no children at the next level). Deeper levels are then hidden so
+  // the user isn't blocked by an empty, mandatory dropdown.
+  const deepestSelected = sel.reduce<number>((acc, v, idx) => (v != null ? idx : acc), -1);
+  const terminalAt =
+    deepestSelected >= 0 &&
+    (deepestSelected + 1 >= levels.length ||
+      optionsForLevelWith(sel, deepestSelected + 1).length === 0)
+      ? deepestSelected
+      : -1;
 
   return (
     <div className="space-y-5">
       {levels.map((lvl, i) => {
+        // Once the chosen branch terminates early, drop the deeper levels that
+        // have nothing to offer (e.g. SUB_TYPE under a SECTOR that has none).
+        if (terminalAt >= 0 && i > terminalAt) return null;
         const disabled = i > 0 && !sel[i - 1];
+        const opts = optionsForLevel(i);
         return (
-          <Field key={lvl.levelCode} label={labelFor(lvl)} required htmlFor={`lvl-${i}`}>
+          <Field
+            key={lvl.levelCode}
+            label={labelFor(lvl)}
+            required={opts.length > 0}
+            htmlFor={`lvl-${i}`}
+          >
             <Select
               id={`lvl-${i}`}
               value={sel[i] ?? undefined}
@@ -389,7 +445,7 @@ function ComplaintHierarchyPicker({
                   ? tr(t, "CS_COMPLAINT_PICK_PARENT_FIRST", "Select the level above first")
                   : tr(t, "CS_COMPLAINT_PICK_ONE", "Select…")
               }
-              options={optionsForLevel(i)}
+              options={opts}
             />
           </Field>
         );
@@ -416,7 +472,9 @@ function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBod
       })
       .map((s) => ({
         ...s,
-        menuPathName: t("SERVICEDEFS." + s.menuPath.toUpperCase()),
+        // Group label = key-based (COMPLAINT_HIERARCHY.<parentCode>) with the
+        // parent node name as fallback.
+        menuPathName: complaintLabel(t, s.menuPath, s.menuPathName),
       }));
   }, [serviceDefs, t]);
 
@@ -478,7 +536,7 @@ function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBod
               placeholder={tr(t, "CS_COMPLAINT_PICK_SUBTYPE", "Select a subtype")}
               options={subTypes.map((s) => ({
                 value: s.serviceCode,
-                label: s.name ? t(s.name) : s.serviceCode,
+                label: complaintLabel(t, s.serviceCode, s.name),
               }))}
             />
           </Field>
@@ -565,11 +623,12 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
 
   // Pincode is read-only if it came from the map (Nominatim). If the
   // map didn't return one, postalCode is empty / undefined and the
-  // user gets a normal editable field.
+  // user gets a normal editable field. Manual input must NOT feed back
+  // into this flag: gating on data.postalCode disabled the field after
+  // the first typed character.
   const pincodeFromMap = data?.GeoLocationsPoint?.pincode;
   const pincodeKnown =
-    !!(pincodeFromMap != null && String(pincodeFromMap).length > 0) ||
-    !!(data.postalCode && data.postalCode.length > 0);
+    !!(pincodeFromMap != null && String(pincodeFromMap).length > 0);
 
   return (
     <StepShell
@@ -705,46 +764,45 @@ const CreatePGRFlowV2: React.FC = () => {
     Digit.ULBService.getCurrentTenantId();
   const tenants: any = Digit.Hooks.pgr.useTenants();
 
-  const { data: serviceDefs, isLoading: isMDMSLoading } = Digit.Hooks.useCustomMDMS(
+  // The single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes
+  // + leaf complaint types) is the only complaint-type master now. We derive:
+  //   - serviceDefs: leaf rows mapped to the legacy shape (serviceCode=code,
+  //     menuPath=parentCode) so the flat fallback picker keeps working verbatim;
+  //   - hierData.nodes: the full row set the N-level cascade picker walks.
+  // Absent definition => the flat menuPath (=parentCode) picker is used.
+  const { data: hierAll, isLoading: isMDMSLoading } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
-    [{ name: "ServiceDefs" }],
-    {
-      cacheTime: Infinity,
-      select: (raw: any) => raw?.["RAINMAKER-PGR"]?.ServiceDefs,
-    },
-    { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
-  );
-
-  // Configurable complaint hierarchy for this tenant. If no definition exists
-  // the citizen flow falls back to the legacy flat menuPath picker verbatim.
-  const { data: hierData } = Digit.Hooks.useCustomMDMS(
-    tenantId,
-    "RAINMAKER-PGR",
-    [{ name: "ComplaintHierarchyDefinition" }, { name: "ClassificationNode" }],
+    [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
     {
       cacheTime: Infinity,
       select: (raw: any) => {
         const allDefs = (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter(
           (d: any) => d?.active !== false
         );
-        const allNodes = raw?.["RAINMAKER-PGR"]?.ClassificationNode || [];
-        // Prefer a definition that actually HAS classification nodes — guards
-        // against a stray/empty definition (e.g. a half-built test hierarchy)
-        // being picked first and rendering levels with "No options". Then scope
-        // nodes to the chosen hierarchyType so other hierarchies don't leak in.
+        const allRows = raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [];
+        // Prefer a definition that actually HAS rows — guards against a
+        // stray/empty definition being picked first. Scope rows to its type.
         const def =
-          allDefs.find((d: any) => allNodes.some((n: any) => n?.hierarchyType === d?.hierarchyType)) ||
+          allDefs.find((d: any) => allRows.some((n: any) => n?.hierarchyType === d?.hierarchyType)) ||
           allDefs[0] ||
           null;
-        const nodes = def
-          ? allNodes.filter((n: any) => n?.hierarchyType === def.hierarchyType)
-          : [];
-        return { def, nodes };
+        const rows = def
+          ? allRows.filter((n: any) => n?.hierarchyType === def.hierarchyType)
+          : allRows;
+        const isLeaf = (n: any) => n?.department != null || n?.slaHours != null;
+        const nodes = (rows || []).filter((n: any) => !isLeaf(n));
+        const serviceDefs = (rows || [])
+          .filter((n: any) => isLeaf(n) && n.active !== false)
+          .map((n: any) => ({ ...n, serviceCode: n.code, menuPath: n.parentCode }));
+        return { def, nodes, serviceDefs };
       },
     },
     { schemaCode: "PGR_COMPLAINT_HIERARCHY" }
   );
+
+  const serviceDefs = hierAll?.serviceDefs;
+  const hierData = hierAll ? { def: hierAll.def, nodes: hierAll.nodes } : undefined;
 
   const { mutate: createMutation } = Digit.Hooks.pgr.useCreateComplaint(tenantId);
 
@@ -791,7 +849,8 @@ const CreatePGRFlowV2: React.FC = () => {
   }, [stepIndex, formData, serviceDefs]);
 
   function pincodeAllowlistOk(): boolean {
-    const wardResolved = !!formData?.GeoLocationsPoint?.ward?.code;
+    const wardResolved =
+      !!formData?.GeoLocationsPoint?.ward?.code || !!formData?.SelectedBoundary?.code;
     if (wardResolved) return true; // ward routing supersedes pincode allowlist (CCRS#469)
     if (!formData.postalCode || String(formData.postalCode).length === 0) return true;
     const norm = (v: unknown) => String(v ?? "").trim().replace(/^0+/, "") || "0";

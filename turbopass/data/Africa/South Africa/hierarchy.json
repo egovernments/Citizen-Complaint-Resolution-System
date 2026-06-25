@@ -1,0 +1,6128 @@
+{
+  "code": "ZA",
+  "name": "South Africa",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "ZA-WC",
+      "parent_code": "ZA",
+      "name": "Western Cape",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-21489671",
+          "parent_code": "ZA-WC",
+          "name": "Stellenbosch",
+          "type": "city",
+          "population": "60000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-25928781",
+          "parent_code": "ZA-WC",
+          "name": "Plettenberg Bay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-25928788",
+          "parent_code": "ZA-WC",
+          "name": "George",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-25928791",
+          "parent_code": "ZA-WC",
+          "name": "Heidelberg",
+          "type": "city",
+          "population": "8259",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-25928793",
+          "parent_code": "ZA-WC",
+          "name": "Riviersonderend",
+          "type": "city",
+          "population": "5245",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-25928794",
+          "parent_code": "ZA-WC",
+          "name": "Botrivier",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-25928795",
+          "parent_code": "ZA-WC",
+          "name": "Caledon",
+          "type": "city",
+          "population": "13020",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-26924620",
+          "parent_code": "ZA-WC",
+          "name": "Laingsburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-26925608",
+          "parent_code": "ZA-WC",
+          "name": "Beaufort West",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-29162331",
+          "parent_code": "ZA-WC",
+          "name": "Hermanus",
+          "type": "city",
+          "population": "32769",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-29162384",
+          "parent_code": "ZA-WC",
+          "name": "Stanford",
+          "type": "city",
+          "population": "4797",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-29162497",
+          "parent_code": "ZA-WC",
+          "name": "Gansbaai",
+          "type": "city",
+          "population": "11598",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-29385915",
+          "parent_code": "ZA-WC",
+          "name": "Strand",
+          "type": "city",
+          "population": "75000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-29386679",
+          "parent_code": "ZA-WC",
+          "name": "Betty's Bay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-29386718",
+          "parent_code": "ZA-WC",
+          "name": "Kleinmond",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-30225142",
+          "parent_code": "ZA-WC",
+          "name": "Saldanha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-30670037",
+          "parent_code": "ZA-WC",
+          "name": "Paarl",
+          "type": "city",
+          "population": "112045",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-30670038",
+          "parent_code": "ZA-WC",
+          "name": "Worcester",
+          "type": "city",
+          "population": "97098",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-32533237",
+          "parent_code": "ZA-WC",
+          "name": "Bredasdorp",
+          "type": "city",
+          "population": "15524",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-32675806",
+          "parent_code": "ZA-WC",
+          "name": "Cape Town",
+          "type": "city",
+          "population": "3740026",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-33698800",
+          "parent_code": "ZA-WC",
+          "name": "Malmesbury",
+          "type": "city",
+          "population": "35897",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-50485644",
+          "parent_code": "ZA-WC",
+          "name": "Swellendam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-54670174",
+          "parent_code": "ZA-WC",
+          "name": "Uniondale",
+          "type": "city",
+          "population": "4525",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-55337040",
+          "parent_code": "ZA-WC",
+          "name": "Moorreesburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-64499629",
+          "parent_code": "ZA-WC",
+          "name": "Robertson",
+          "type": "city",
+          "population": "27715",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-64517989",
+          "parent_code": "ZA-WC",
+          "name": "Ashton",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-70412286",
+          "parent_code": "ZA-WC",
+          "name": "Calitzdorp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-70441862",
+          "parent_code": "ZA-WC",
+          "name": "Ladismith",
+          "type": "city",
+          "population": "7127",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-71194563",
+          "parent_code": "ZA-WC",
+          "name": "Montagu",
+          "type": "city",
+          "population": "15176",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-80834963",
+          "parent_code": "ZA-WC",
+          "name": "Murraysburg",
+          "type": "city",
+          "population": "5069",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-220456263",
+          "parent_code": "ZA-WC",
+          "name": "Somerset West",
+          "type": "city",
+          "population": "80000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-235539324",
+          "parent_code": "ZA-WC",
+          "name": "Villiersdorp",
+          "type": "city",
+          "population": "10004",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-235539362",
+          "parent_code": "ZA-WC",
+          "name": "Franschhoek",
+          "type": "city",
+          "population": "17556",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-235893930",
+          "parent_code": "ZA-WC",
+          "name": "Velddrif",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-240304843",
+          "parent_code": "ZA-WC",
+          "name": "Vredenburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-240366960",
+          "parent_code": "ZA-WC",
+          "name": "Tulbagh",
+          "type": "city",
+          "population": "8969",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-240372382",
+          "parent_code": "ZA-WC",
+          "name": "Ceres",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243095728",
+          "parent_code": "ZA-WC",
+          "name": "Citrusdal",
+          "type": "city",
+          "population": "7177",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243179622",
+          "parent_code": "ZA-WC",
+          "name": "Atlantis",
+          "type": "city",
+          "population": "55000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243186987",
+          "parent_code": "ZA-WC",
+          "name": "Stilbaai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243197104",
+          "parent_code": "ZA-WC",
+          "name": "Darling",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243200508",
+          "parent_code": "ZA-WC",
+          "name": "Wellington",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243200985",
+          "parent_code": "ZA-WC",
+          "name": "Hopefield",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243210244",
+          "parent_code": "ZA-WC",
+          "name": "Yzerfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243287592",
+          "parent_code": "ZA-WC",
+          "name": "Grabouw",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243649338",
+          "parent_code": "ZA-WC",
+          "name": "Langebaan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-252200946",
+          "parent_code": "ZA-WC",
+          "name": "Milnerton",
+          "type": "city",
+          "population": "80000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-254352976",
+          "parent_code": "ZA-WC",
+          "name": "Simon's Town",
+          "type": "city",
+          "population": "7000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719047",
+          "parent_code": "ZA-WC",
+          "name": "Albertinia",
+          "type": "city",
+          "population": "6372",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719212",
+          "parent_code": "ZA-WC",
+          "name": "Bella Vista",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719349",
+          "parent_code": "ZA-WC",
+          "name": "Blue Downs",
+          "type": "city",
+          "population": "150000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719397",
+          "parent_code": "ZA-WC",
+          "name": "Botha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719496",
+          "parent_code": "ZA-WC",
+          "name": "Buffeljagsrivier",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719693",
+          "parent_code": "ZA-WC",
+          "name": "Clanwilliam",
+          "type": "city",
+          "population": "7674",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719795",
+          "parent_code": "ZA-WC",
+          "name": "De Doorns",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719796",
+          "parent_code": "ZA-WC",
+          "name": "De Hoek",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719799",
+          "parent_code": "ZA-WC",
+          "name": "De Rust",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719954",
+          "parent_code": "ZA-WC",
+          "name": "Durbanville",
+          "type": "city",
+          "population": "40000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719961",
+          "parent_code": "ZA-WC",
+          "name": "Dwarskersbos",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719962",
+          "parent_code": "ZA-WC",
+          "name": "Dysselsdorp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719974",
+          "parent_code": "ZA-WC",
+          "name": "Eersterivier",
+          "type": "city",
+          "population": "30000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720004",
+          "parent_code": "ZA-WC",
+          "name": "Elands Bay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720050",
+          "parent_code": "ZA-WC",
+          "name": "Elsiesriver",
+          "type": "city",
+          "population": "85000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720378",
+          "parent_code": "ZA-WC",
+          "name": "Genadendal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720439",
+          "parent_code": "ZA-WC",
+          "name": "Goudini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720442",
+          "parent_code": "ZA-WC",
+          "name": "Graafwater",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720451",
+          "parent_code": "ZA-WC",
+          "name": "Greyton",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720515",
+          "parent_code": "ZA-WC",
+          "name": "Herbertsdale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720518",
+          "parent_code": "ZA-WC",
+          "name": "Hermon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720634",
+          "parent_code": "ZA-WC",
+          "name": "Hout Bay",
+          "type": "city",
+          "population": "17900",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720720",
+          "parent_code": "ZA-WC",
+          "name": "Jongensfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720786",
+          "parent_code": "ZA-WC",
+          "name": "Keurboomstrand",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720812",
+          "parent_code": "ZA-WC",
+          "name": "Khayelitsha",
+          "type": "city",
+          "population": "330000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720833",
+          "parent_code": "ZA-WC",
+          "name": "Klawer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720866",
+          "parent_code": "ZA-WC",
+          "name": "Kraaifontein",
+          "type": "city",
+          "population": "60000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720890",
+          "parent_code": "ZA-WC",
+          "name": "Kuils River",
+          "type": "city",
+          "population": "45000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720937",
+          "parent_code": "ZA-WC",
+          "name": "Lambert's Bay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721280",
+          "parent_code": "ZA-WC",
+          "name": "Matjiesfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721297",
+          "parent_code": "ZA-WC",
+          "name": "McGregor",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721316",
+          "parent_code": "ZA-WC",
+          "name": "Melkbosstrand",
+          "type": "city",
+          "population": "11586",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721317",
+          "parent_code": "ZA-WC",
+          "name": "Melkhoutfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721323",
+          "parent_code": "ZA-WC",
+          "name": "Merweville",
+          "type": "city",
+          "population": "1592",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721397",
+          "parent_code": "ZA-WC",
+          "name": "Mitchells Plain",
+          "type": "city",
+          "population": "400000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721558",
+          "parent_code": "ZA-WC",
+          "name": "Napier",
+          "type": "city",
+          "population": "4214",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721563",
+          "parent_code": "ZA-WC",
+          "name": "Nduli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721826",
+          "parent_code": "ZA-WC",
+          "name": "Op die Berg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721862",
+          "parent_code": "ZA-WC",
+          "name": "Oudekraalfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721892",
+          "parent_code": "ZA-WC",
+          "name": "Parow",
+          "type": "city",
+          "population": "80000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721897",
+          "parent_code": "ZA-WC",
+          "name": "Paternoster",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721933",
+          "parent_code": "ZA-WC",
+          "name": "Piketberg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721947",
+          "parent_code": "ZA-WC",
+          "name": "Porterville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721997",
+          "parent_code": "ZA-WC",
+          "name": "Rawsonville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721999",
+          "parent_code": "ZA-WC",
+          "name": "Redelinghuys",
+          "type": "city",
+          "population": "574",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722025",
+          "parent_code": "ZA-WC",
+          "name": "Riversdale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722155",
+          "parent_code": "ZA-WC",
+          "name": "Sedgefield",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722282",
+          "parent_code": "ZA-WC",
+          "name": "Tierkloof",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722293",
+          "parent_code": "ZA-WC",
+          "name": "Touws River",
+          "type": "city",
+          "population": "8126",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722400",
+          "parent_code": "ZA-WC",
+          "name": "Vanrhynsdorp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722426",
+          "parent_code": "ZA-WC",
+          "name": "Volmoed",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722433",
+          "parent_code": "ZA-WC",
+          "name": "Vredendal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722525",
+          "parent_code": "ZA-WC",
+          "name": "Witsand",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1490089707",
+          "parent_code": "ZA-WC",
+          "name": "Knysna",
+          "type": "city",
+          "population": "51078",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2504777790",
+          "parent_code": "ZA-WC",
+          "name": "Mossel Bay",
+          "type": "city",
+          "population": "60000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2801993722",
+          "parent_code": "ZA-WC",
+          "name": "Prince Albert",
+          "type": "city",
+          "population": "7054",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4527753956",
+          "parent_code": "ZA-WC",
+          "name": "Villa Rosa",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-4982803055",
+          "parent_code": "ZA-WC",
+          "name": "Oudtshoorn",
+          "type": "city",
+          "population": "61507",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7231942923",
+          "parent_code": "ZA-WC",
+          "name": "Cederberg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11445984694",
+          "parent_code": "ZA-WC",
+          "name": "Struisbaai",
+          "type": "city",
+          "population": "3877",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZA-NC",
+      "parent_code": "ZA",
+      "name": "Northern Cape",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-26929294",
+          "parent_code": "ZA-NC",
+          "name": "Colesberg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-26963499",
+          "parent_code": "ZA-NC",
+          "name": "Richmond",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-33364951",
+          "parent_code": "ZA-NC",
+          "name": "Upington",
+          "type": "city",
+          "population": "74834",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-33364953",
+          "parent_code": "ZA-NC",
+          "name": "Springbok",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-34981652",
+          "parent_code": "ZA-NC",
+          "name": "Noupoort",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-53672920",
+          "parent_code": "ZA-NC",
+          "name": "Victoria West",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-59600497",
+          "parent_code": "ZA-NC",
+          "name": "De Aar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-59612914",
+          "parent_code": "ZA-NC",
+          "name": "Prieska",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-59953561",
+          "parent_code": "ZA-NC",
+          "name": "Jan Kempdorp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-207728823",
+          "parent_code": "ZA-NC",
+          "name": "Calvinia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-248179271",
+          "parent_code": "ZA-NC",
+          "name": "Sutherland",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262694532",
+          "parent_code": "ZA-NC",
+          "name": "Aggeneys",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262694912",
+          "parent_code": "ZA-NC",
+          "name": "Augrabies",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706844",
+          "parent_code": "ZA-NC",
+          "name": "Groblershoop",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262713547",
+          "parent_code": "ZA-NC",
+          "name": "Nieuwoudtville",
+          "type": "city",
+          "population": "2093",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262714837",
+          "parent_code": "ZA-NC",
+          "name": "Pofadder",
+          "type": "city",
+          "population": "3287",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262715004",
+          "parent_code": "ZA-NC",
+          "name": "Postmasburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719133",
+          "parent_code": "ZA-NC",
+          "name": "Barkly West",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719151",
+          "parent_code": "ZA-NC",
+          "name": "Beeshoek",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719438",
+          "parent_code": "ZA-NC",
+          "name": "Brandvlei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719484",
+          "parent_code": "ZA-NC",
+          "name": "Britstown",
+          "type": "city",
+          "population": "5145",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719586",
+          "parent_code": "ZA-NC",
+          "name": "Carnarvon",
+          "type": "city",
+          "population": "6612",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719940",
+          "parent_code": "ZA-NC",
+          "name": "Douglas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720194",
+          "parent_code": "ZA-NC",
+          "name": "Fraserburg",
+          "type": "city",
+          "population": "3029",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720458",
+          "parent_code": "ZA-NC",
+          "name": "Grootdrink",
+          "type": "city",
+          "population": "2645",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720472",
+          "parent_code": "ZA-NC",
+          "name": "Hanover",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720498",
+          "parent_code": "ZA-NC",
+          "name": "Hartswater",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720608",
+          "parent_code": "ZA-NC",
+          "name": "Hopetown",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720773",
+          "parent_code": "ZA-NC",
+          "name": "Kathu",
+          "type": "city",
+          "population": "11510",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720780",
+          "parent_code": "ZA-NC",
+          "name": "Kenhardt",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720891",
+          "parent_code": "ZA-NC",
+          "name": "Kurland",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721009",
+          "parent_code": "ZA-NC",
+          "name": "Loeriesfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721044",
+          "parent_code": "ZA-NC",
+          "name": "Loxton",
+          "type": "city",
+          "population": "1053",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721516",
+          "parent_code": "ZA-NC",
+          "name": "Mothibistad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721644",
+          "parent_code": "ZA-NC",
+          "name": "Niekerkshoop",
+          "type": "city",
+          "population": "1830",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721839",
+          "parent_code": "ZA-NC",
+          "name": "Orania",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721924",
+          "parent_code": "ZA-NC",
+          "name": "Philipstown",
+          "type": "city",
+          "population": "3365",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722224",
+          "parent_code": "ZA-NC",
+          "name": "Strydenburg",
+          "type": "city",
+          "population": "2987",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722275",
+          "parent_code": "ZA-NC",
+          "name": "Thembinkosi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722346",
+          "parent_code": "ZA-NC",
+          "name": "Van Wyksvlei",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722428",
+          "parent_code": "ZA-NC",
+          "name": "Vosburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722448",
+          "parent_code": "ZA-NC",
+          "name": "Warrenton",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722510",
+          "parent_code": "ZA-NC",
+          "name": "Williston",
+          "type": "city",
+          "population": "3368",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262726123",
+          "parent_code": "ZA-NC",
+          "name": "Daniëlskuil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-708858400",
+          "parent_code": "ZA-NC",
+          "name": "Griekwastad",
+          "type": "city",
+          "population": "6428",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1388286647",
+          "parent_code": "ZA-NC",
+          "name": "Lime Acres",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2266513637",
+          "parent_code": "ZA-NC",
+          "name": "Petrusville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3691546096",
+          "parent_code": "ZA-NC",
+          "name": "Kimberley",
+          "type": "city",
+          "population": "225160",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3966425227",
+          "parent_code": "ZA-NC",
+          "name": "Ga-Motlhware",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4187193844",
+          "parent_code": "ZA-NC",
+          "name": "Dinopeng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10177439759",
+          "parent_code": "ZA-NC",
+          "name": "Marydale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11274550076",
+          "parent_code": "ZA-NC",
+          "name": "Kuruman",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13253621288",
+          "parent_code": "ZA-NC",
+          "name": "Lepelsfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZA-EC",
+      "parent_code": "ZA",
+      "name": "Eastern Cape",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-25470100",
+          "parent_code": "ZA-EC",
+          "name": "Gqeberha",
+          "type": "city",
+          "population": "1050000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-25919858",
+          "parent_code": "ZA-EC",
+          "name": "Nxuba",
+          "type": "city",
+          "population": "8626",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-25919859",
+          "parent_code": "ZA-EC",
+          "name": "Cookhouse",
+          "type": "city",
+          "population": "5707",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-25919861",
+          "parent_code": "ZA-EC",
+          "name": "Despatch",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-25928779",
+          "parent_code": "ZA-EC",
+          "name": "Jeffreys Bay",
+          "type": "city",
+          "population": "27107",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-30211383",
+          "parent_code": "ZA-EC",
+          "name": "KuGompo City",
+          "type": "city",
+          "population": "267007",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-30211701",
+          "parent_code": "ZA-EC",
+          "name": "Graaff-Reinet",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-30229877",
+          "parent_code": "ZA-EC",
+          "name": "Makhanda",
+          "type": "city",
+          "population": "67264",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-30230028",
+          "parent_code": "ZA-EC",
+          "name": "Port Alfred",
+          "type": "city",
+          "population": "25859",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-30276747",
+          "parent_code": "ZA-EC",
+          "name": "Motherwell",
+          "type": "city",
+          "population": "140000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-32524045",
+          "parent_code": "ZA-EC",
+          "name": "Alexandria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-34984001",
+          "parent_code": "ZA-EC",
+          "name": "Middelburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-36231454",
+          "parent_code": "ZA-EC",
+          "name": "Burgersdorp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-36231589",
+          "parent_code": "ZA-EC",
+          "name": "Aliwal North",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-46837481",
+          "parent_code": "ZA-EC",
+          "name": "Xamdeboo",
+          "type": "city",
+          "population": "7162",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-46838156",
+          "parent_code": "ZA-EC",
+          "name": "Willowmore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-46899414",
+          "parent_code": "ZA-EC",
+          "name": "Qonce",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-53982530",
+          "parent_code": "ZA-EC",
+          "name": "Gcuwa (Butterworth)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-54337441",
+          "parent_code": "ZA-EC",
+          "name": "Dutywa",
+          "type": "city",
+          "population": "11076",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-59866631",
+          "parent_code": "ZA-EC",
+          "name": "Komani",
+          "type": "city",
+          "population": "68872",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-60205098",
+          "parent_code": "ZA-EC",
+          "name": "Humansdorp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-146350696",
+          "parent_code": "ZA-EC",
+          "name": "KwaMaqoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-146351376",
+          "parent_code": "ZA-EC",
+          "name": "Seymour",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-164758404",
+          "parent_code": "ZA-EC",
+          "name": "Kirkwood",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-206388012",
+          "parent_code": "ZA-EC",
+          "name": "Stutterheim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-207089401",
+          "parent_code": "ZA-EC",
+          "name": "Tarkastad",
+          "type": "city",
+          "population": "1604",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-207672402",
+          "parent_code": "ZA-EC",
+          "name": "Port St Johns",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-243836053",
+          "parent_code": "ZA-EC",
+          "name": "Tabankulu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262694506",
+          "parent_code": "ZA-EC",
+          "name": "Adelaide",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262694693",
+          "parent_code": "ZA-EC",
+          "name": "Alice",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262694951",
+          "parent_code": "ZA-EC",
+          "name": "Ekhephini (Barkly East)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262694965",
+          "parent_code": "ZA-EC",
+          "name": "Bedford",
+          "type": "city",
+          "population": "8770",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262695129",
+          "parent_code": "ZA-EC",
+          "name": "Ntabozuko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262695213",
+          "parent_code": "ZA-EC",
+          "name": "Bizana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262704532",
+          "parent_code": "ZA-EC",
+          "name": "Cala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262704622",
+          "parent_code": "ZA-EC",
+          "name": "Cedarville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262705093",
+          "parent_code": "ZA-EC",
+          "name": "Dimbaza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262705867",
+          "parent_code": "ZA-EC",
+          "name": "Ngcobo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706265",
+          "parent_code": "ZA-EC",
+          "name": "Flagstaff",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706710",
+          "parent_code": "ZA-EC",
+          "name": "Gonubie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262707593",
+          "parent_code": "ZA-EC",
+          "name": "Klipplaat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262708430",
+          "parent_code": "ZA-EC",
+          "name": "Cacadu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262708822",
+          "parent_code": "ZA-EC",
+          "name": "Lusikisiki",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262708907",
+          "parent_code": "ZA-EC",
+          "name": "Nqanqarhu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262712621",
+          "parent_code": "ZA-EC",
+          "name": "eMaXesibeni (Mount Ayliff)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262712624",
+          "parent_code": "ZA-EC",
+          "name": "Tlokoeng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262712625",
+          "parent_code": "ZA-EC",
+          "name": "KwaBhaca (Mount Frere)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262713361",
+          "parent_code": "ZA-EC",
+          "name": "Ngqeleni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262715019",
+          "parent_code": "ZA-EC",
+          "name": "Potsdam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262716138",
+          "parent_code": "ZA-EC",
+          "name": "KwaNojoli",
+          "type": "city",
+          "population": "18825",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262717589",
+          "parent_code": "ZA-EC",
+          "name": "Steytlerville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718030",
+          "parent_code": "ZA-EC",
+          "name": "Tsolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718084",
+          "parent_code": "ZA-EC",
+          "name": "Ugie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718741",
+          "parent_code": "ZA-EC",
+          "name": "Whittlesea",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718803",
+          "parent_code": "ZA-EC",
+          "name": "Willowvale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719073",
+          "parent_code": "ZA-EC",
+          "name": "Alicedale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719295",
+          "parent_code": "ZA-EC",
+          "name": "Bholani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719313",
+          "parent_code": "ZA-EC",
+          "name": "Bhisho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719375",
+          "parent_code": "ZA-EC",
+          "name": "Bushman's River Mouth",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719732",
+          "parent_code": "ZA-EC",
+          "name": "Cuba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719936",
+          "parent_code": "ZA-EC",
+          "name": "Dordrecht",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719997",
+          "parent_code": "ZA-EC",
+          "name": "eKuphumleni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720003",
+          "parent_code": "ZA-EC",
+          "name": "Ekuphumleni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720037",
+          "parent_code": "ZA-EC",
+          "name": "Khowa (Elliot)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720463",
+          "parent_code": "ZA-EC",
+          "name": "Gwaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720640",
+          "parent_code": "ZA-EC",
+          "name": "iBhayi",
+          "type": "city",
+          "population": "235000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720664",
+          "parent_code": "ZA-EC",
+          "name": "Indwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720682",
+          "parent_code": "ZA-EC",
+          "name": "James Calata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720713",
+          "parent_code": "ZA-EC",
+          "name": "Jansenville",
+          "type": "city",
+          "population": "5612",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720739",
+          "parent_code": "ZA-EC",
+          "name": "Joubertina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720783",
+          "parent_code": "ZA-EC",
+          "name": "Kenton-on-Sea",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720839",
+          "parent_code": "ZA-EC",
+          "name": "Kleinpoort",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720858",
+          "parent_code": "ZA-EC",
+          "name": "Komga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721267",
+          "parent_code": "ZA-EC",
+          "name": "Marshstrand",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721278",
+          "parent_code": "ZA-EC",
+          "name": "Matatiele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721302",
+          "parent_code": "ZA-EC",
+          "name": "Mdantsane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721465",
+          "parent_code": "ZA-EC",
+          "name": "Molteno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721549",
+          "parent_code": "ZA-EC",
+          "name": "Msobomvu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721649",
+          "parent_code": "ZA-EC",
+          "name": "Kwa Noheleni",
+          "type": "city",
+          "population": "1540",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721673",
+          "parent_code": "ZA-EC",
+          "name": "Nofeliti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721685",
+          "parent_code": "ZA-EC",
+          "name": "Addo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721898",
+          "parent_code": "ZA-EC",
+          "name": "Paterson",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721900",
+          "parent_code": "ZA-EC",
+          "name": "Pearston",
+          "type": "city",
+          "population": "4516",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721917",
+          "parent_code": "ZA-EC",
+          "name": "Phakamisa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722184",
+          "parent_code": "ZA-EC",
+          "name": "Siyanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722213",
+          "parent_code": "ZA-EC",
+          "name": "Sterkstroom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722280",
+          "parent_code": "ZA-EC",
+          "name": "Thubalethu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722291",
+          "parent_code": "ZA-EC",
+          "name": "Tolofiyeni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722333",
+          "parent_code": "ZA-EC",
+          "name": "Mthatha",
+          "type": "city",
+          "population": "210783",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-262722436",
+          "parent_code": "ZA-EC",
+          "name": "Vully Valley",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722534",
+          "parent_code": "ZA-EC",
+          "name": "Wolwefontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722547",
+          "parent_code": "ZA-EC",
+          "name": "Zidenge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722549",
+          "parent_code": "ZA-EC",
+          "name": "Zindenge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722562",
+          "parent_code": "ZA-EC",
+          "name": "Zizamele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722570",
+          "parent_code": "ZA-EC",
+          "name": "Zwelitsha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-946025154",
+          "parent_code": "ZA-EC",
+          "name": "Kariega",
+          "type": "city",
+          "population": "103639",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-980261525",
+          "parent_code": "ZA-EC",
+          "name": "Bethelsdorp",
+          "type": "city",
+          "population": "130000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1220024608",
+          "parent_code": "ZA-EC",
+          "name": "Lady Grey",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1642061012",
+          "parent_code": "ZA-EC",
+          "name": "Mbonisweni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1642061294",
+          "parent_code": "ZA-EC",
+          "name": "Marakaneng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1642061469",
+          "parent_code": "ZA-EC",
+          "name": "Cowville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1642061776",
+          "parent_code": "ZA-EC",
+          "name": "Zava",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1642062269",
+          "parent_code": "ZA-EC",
+          "name": "Naledi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1642851273",
+          "parent_code": "ZA-EC",
+          "name": "Ntsimekweni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2282707579",
+          "parent_code": "ZA-EC",
+          "name": "Maluti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9413925209",
+          "parent_code": "ZA-EC",
+          "name": "KwaNobuhle",
+          "type": "city",
+          "population": "107474",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11933510169",
+          "parent_code": "ZA-EC",
+          "name": "Rhodes",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZA-FS",
+      "parent_code": "ZA",
+      "name": "Free State",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-26938845",
+          "parent_code": "ZA-FS",
+          "name": "Bloemfontein",
+          "type": "city",
+          "population": "370000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-26941822",
+          "parent_code": "ZA-FS",
+          "name": "Trompsburg",
+          "type": "city",
+          "population": "5338",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-30670036",
+          "parent_code": "ZA-FS",
+          "name": "Botshabelo",
+          "type": "city",
+          "population": "181712",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-35774037",
+          "parent_code": "ZA-FS",
+          "name": "Kroonstad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-41547339",
+          "parent_code": "ZA-FS",
+          "name": "Rouxville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-42204183",
+          "parent_code": "ZA-FS",
+          "name": "Smithfield",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-48555419",
+          "parent_code": "ZA-FS",
+          "name": "Reddersburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-56510772",
+          "parent_code": "ZA-FS",
+          "name": "Ladybrand",
+          "type": "city",
+          "population": "4200",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-59842467",
+          "parent_code": "ZA-FS",
+          "name": "Bethlehem",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-59842580",
+          "parent_code": "ZA-FS",
+          "name": "Senekal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-59842736",
+          "parent_code": "ZA-FS",
+          "name": "Winburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-60058799",
+          "parent_code": "ZA-FS",
+          "name": "Parys",
+          "type": "city",
+          "population": "8071",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-66135953",
+          "parent_code": "ZA-FS",
+          "name": "Virginia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-175479893",
+          "parent_code": "ZA-FS",
+          "name": "Ventersburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-247744191",
+          "parent_code": "ZA-FS",
+          "name": "Clarens",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-250832348",
+          "parent_code": "ZA-FS",
+          "name": "Paul Roux",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-257714494",
+          "parent_code": "ZA-FS",
+          "name": "Odendaalsrus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-257947668",
+          "parent_code": "ZA-FS",
+          "name": "Heilbron",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262695413",
+          "parent_code": "ZA-FS",
+          "name": "Boshof",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262704412",
+          "parent_code": "ZA-FS",
+          "name": "Bultfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262704699",
+          "parent_code": "ZA-FS",
+          "name": "Hlohlolwane (Clocolan)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262705018",
+          "parent_code": "ZA-FS",
+          "name": "Dealesville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262705309",
+          "parent_code": "ZA-FS",
+          "name": "Edenburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706098",
+          "parent_code": "ZA-FS",
+          "name": "Excelsior",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706239",
+          "parent_code": "ZA-FS",
+          "name": "Fauresmith",
+          "type": "city",
+          "population": "3628",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706290",
+          "parent_code": "ZA-FS",
+          "name": "Fouriesburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706988",
+          "parent_code": "ZA-FS",
+          "name": "Hertzogville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262707121",
+          "parent_code": "ZA-FS",
+          "name": "Hoopstad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262707262",
+          "parent_code": "ZA-FS",
+          "name": "Jagersfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262707748",
+          "parent_code": "ZA-FS",
+          "name": "Koffiefontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262709492",
+          "parent_code": "ZA-FS",
+          "name": "Marquard",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262710129",
+          "parent_code": "ZA-FS",
+          "name": "Middeldeel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262714543",
+          "parent_code": "ZA-FS",
+          "name": "Paradys",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718529",
+          "parent_code": "ZA-FS",
+          "name": "Vrede",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718551",
+          "parent_code": "ZA-FS",
+          "name": "Warden",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718951",
+          "parent_code": "ZA-FS",
+          "name": "Zastron",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719075",
+          "parent_code": "ZA-FS",
+          "name": "Allanridge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719127",
+          "parent_code": "ZA-FS",
+          "name": "Balkfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719287",
+          "parent_code": "ZA-FS",
+          "name": "Bethulie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719402",
+          "parent_code": "ZA-FS",
+          "name": "Bothaville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719437",
+          "parent_code": "ZA-FS",
+          "name": "Winnie Mandela (Brandfort)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719480",
+          "parent_code": "ZA-FS",
+          "name": "Manyatseng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719486",
+          "parent_code": "ZA-FS",
+          "name": "Bronville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719502",
+          "parent_code": "ZA-FS",
+          "name": "Bultfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719504",
+          "parent_code": "ZA-FS",
+          "name": "Selosesha 5",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719507",
+          "parent_code": "ZA-FS",
+          "name": "Selosesha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719720",
+          "parent_code": "ZA-FS",
+          "name": "Cornelia",
+          "type": "city",
+          "population": "2964",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719804",
+          "parent_code": "ZA-FS",
+          "name": "Deneysville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719971",
+          "parent_code": "ZA-FS",
+          "name": "Edenville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720130",
+          "parent_code": "ZA-FS",
+          "name": "Ficksburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720495",
+          "parent_code": "ZA-FS",
+          "name": "Harmony",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720601",
+          "parent_code": "ZA-FS",
+          "name": "Hobhouse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720680",
+          "parent_code": "ZA-FS",
+          "name": "Jacobsdal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720804",
+          "parent_code": "ZA-FS",
+          "name": "Kgotsong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720830",
+          "parent_code": "ZA-FS",
+          "name": "Kitty",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720892",
+          "parent_code": "ZA-FS",
+          "name": "Kutlwanong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721007",
+          "parent_code": "ZA-FS",
+          "name": "Lindley",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721048",
+          "parent_code": "ZA-FS",
+          "name": "Luckhoff",
+          "type": "city",
+          "population": "3699",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721319",
+          "parent_code": "ZA-FS",
+          "name": "Meloding",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721322",
+          "parent_code": "ZA-FS",
+          "name": "Merriespruit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721324",
+          "parent_code": "ZA-FS",
+          "name": "Meyerhof",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721461",
+          "parent_code": "ZA-FS",
+          "name": "Mokwena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721475",
+          "parent_code": "ZA-FS",
+          "name": "Monyekeng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721500",
+          "parent_code": "ZA-FS",
+          "name": "Thaba Nchu 19",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721534",
+          "parent_code": "ZA-FS",
+          "name": "Motlatla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721634",
+          "parent_code": "ZA-FS",
+          "name": "Ngwathe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721913",
+          "parent_code": "ZA-FS",
+          "name": "Petrus Steyn",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721914",
+          "parent_code": "ZA-FS",
+          "name": "Petsana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721918",
+          "parent_code": "ZA-FS",
+          "name": "Phathakahle",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721923",
+          "parent_code": "ZA-FS",
+          "name": "Philippolis",
+          "type": "city",
+          "population": "3648",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721993",
+          "parent_code": "ZA-FS",
+          "name": "Thaba Nchu 16",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721994",
+          "parent_code": "ZA-FS",
+          "name": "Thaba Nchu 21",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722003",
+          "parent_code": "ZA-FS",
+          "name": "Reitz",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722018",
+          "parent_code": "ZA-FS",
+          "name": "Riebeeckstad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722082",
+          "parent_code": "ZA-FS",
+          "name": "Saaiplaas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722138",
+          "parent_code": "ZA-FS",
+          "name": "Sasolburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722160",
+          "parent_code": "ZA-FS",
+          "name": "Selosesha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722202",
+          "parent_code": "ZA-FS",
+          "name": "Springfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722215",
+          "parent_code": "ZA-FS",
+          "name": "Steynsrus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722277",
+          "parent_code": "ZA-FS",
+          "name": "Theunissen",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722317",
+          "parent_code": "ZA-FS",
+          "name": "Tweeling",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722318",
+          "parent_code": "ZA-FS",
+          "name": "Tweespruit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722407",
+          "parent_code": "ZA-FS",
+          "name": "Gariep Dam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722410",
+          "parent_code": "ZA-FS",
+          "name": "Vierfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722411",
+          "parent_code": "ZA-FS",
+          "name": "Viljoenskroon",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722412",
+          "parent_code": "ZA-FS",
+          "name": "Villiers",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722429",
+          "parent_code": "ZA-FS",
+          "name": "Vredefort",
+          "type": "city",
+          "population": "14619",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722460",
+          "parent_code": "ZA-FS",
+          "name": "Wepener",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722463",
+          "parent_code": "ZA-FS",
+          "name": "Wesselsbron",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-765368132",
+          "parent_code": "ZA-FS",
+          "name": "Hennenman",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1362768243",
+          "parent_code": "ZA-FS",
+          "name": "Phuthaditjhaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1375502863",
+          "parent_code": "ZA-FS",
+          "name": "Selosesha-IA",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1375502866",
+          "parent_code": "ZA-FS",
+          "name": "Thaba Nchu",
+          "type": "city",
+          "population": "70118",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1376552252",
+          "parent_code": "ZA-FS",
+          "name": "Thaba Nchu 6",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1376552267",
+          "parent_code": "ZA-FS",
+          "name": "Thaba Nchu 22",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1376552272",
+          "parent_code": "ZA-FS",
+          "name": "Thaba Nchu 10",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1573773208",
+          "parent_code": "ZA-FS",
+          "name": "Dewetsdorp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1573785753",
+          "parent_code": "ZA-FS",
+          "name": "Smithfield",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1575088615",
+          "parent_code": "ZA-FS",
+          "name": "Matlakeng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1575110382",
+          "parent_code": "ZA-FS",
+          "name": "Dipelaneng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1586552060",
+          "parent_code": "ZA-FS",
+          "name": "Meqheleng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1623394964",
+          "parent_code": "ZA-FS",
+          "name": "Borwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2269464860",
+          "parent_code": "ZA-FS",
+          "name": "Welkom",
+          "type": "city",
+          "population": "64130",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ZA-GP",
+      "parent_code": "ZA",
+      "name": "Gauteng",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-25503669",
+          "parent_code": "ZA-GP",
+          "name": "Pretoria",
+          "type": "city",
+          "population": "741651",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-26417322",
+          "parent_code": "ZA-GP",
+          "name": "Roodepoort",
+          "type": "city",
+          "population": "325000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-26453407",
+          "parent_code": "ZA-GP",
+          "name": "Germiston",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-26458742",
+          "parent_code": "ZA-GP",
+          "name": "Boksburg",
+          "type": "city",
+          "population": "260000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-27565050",
+          "parent_code": "ZA-GP",
+          "name": "Soweto",
+          "type": "city",
+          "population": "1270000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-35960525",
+          "parent_code": "ZA-GP",
+          "name": "Vereeniging",
+          "type": "city",
+          "population": "100000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-60032632",
+          "parent_code": "ZA-GP",
+          "name": "Carletonville",
+          "type": "city",
+          "population": "23000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-60034262",
+          "parent_code": "ZA-GP",
+          "name": "Krugersdorp",
+          "type": "city",
+          "population": "275000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-60954374",
+          "parent_code": "ZA-GP",
+          "name": "Rayton",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-60954378",
+          "parent_code": "ZA-GP",
+          "name": "Cullinan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-69230776",
+          "parent_code": "ZA-GP",
+          "name": "Bronkhorstspruit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-261833893",
+          "parent_code": "ZA-GP",
+          "name": "Johannesburg",
+          "type": "city",
+          "population": "4434827",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-262710082",
+          "parent_code": "ZA-GP",
+          "name": "Meyerton",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719046",
+          "parent_code": "ZA-GP",
+          "name": "Akasia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719055",
+          "parent_code": "ZA-GP",
+          "name": "Alberton",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719247",
+          "parent_code": "ZA-GP",
+          "name": "Benoni",
+          "type": "city",
+          "population": "158777",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719421",
+          "parent_code": "ZA-GP",
+          "name": "Brakpan",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719636",
+          "parent_code": "ZA-GP",
+          "name": "Centurion",
+          "type": "city",
+          "population": "236580",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720116",
+          "parent_code": "ZA-GP",
+          "name": "Evaton",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720333",
+          "parent_code": "ZA-GP",
+          "name": "Ga-Rankuwa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720504",
+          "parent_code": "ZA-GP",
+          "name": "Heidelberg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720604",
+          "parent_code": "ZA-GP",
+          "name": "Homer",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720778",
+          "parent_code": "ZA-GP",
+          "name": "Kempton Park",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720959",
+          "parent_code": "ZA-GP",
+          "name": "Lenasia",
+          "type": "city",
+          "population": "89714",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721378",
+          "parent_code": "ZA-GP",
+          "name": "Midrand",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721654",
+          "parent_code": "ZA-GP",
+          "name": "Nigel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721987",
+          "parent_code": "ZA-GP",
+          "name": "Randburg",
+          "type": "city",
+          "population": "335000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-262721988",
+          "parent_code": "ZA-GP",
+          "name": "Randfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722052",
+          "parent_code": "ZA-GP",
+          "name": "Rosebank",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722154",
+          "parent_code": "ZA-GP",
+          "name": "Sebokeng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722203",
+          "parent_code": "ZA-GP",
+          "name": "Springs",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722256",
+          "parent_code": "ZA-GP",
+          "name": "Thembisa",
+          "type": "city",
+          "population": "463109",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722353",
+          "parent_code": "ZA-GP",
+          "name": "Vanderbijlpark",
+          "type": "city",
+          "population": "95840",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-293345628",
+          "parent_code": "ZA-GP",
+          "name": "Magaliesburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-355620362",
+          "parent_code": "ZA-GP",
+          "name": "Mogale City",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1371695063",
+          "parent_code": "ZA-GP",
+          "name": "Tshepisong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1391989353",
+          "parent_code": "ZA-GP",
+          "name": "Johandeo AH",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2921549204",
+          "parent_code": "ZA-GP",
+          "name": "Irene",
+          "type": "city",
+          "population": "2427",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3701335976",
+          "parent_code": "ZA-GP",
+          "name": "Ennerdale",
+          "type": "city",
+          "population": "77815",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5283928101",
+          "parent_code": "ZA-GP",
+          "name": "Sandton",
+          "type": "city",
+          "population": "222415",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7477297437",
+          "parent_code": "ZA-GP",
+          "name": "Mamelodi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7865349422",
+          "parent_code": "ZA-GP",
+          "name": "Diepsloot",
+          "type": "city",
+          "population": "138329",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12173793246",
+          "parent_code": "ZA-GP",
+          "name": "Randburg",
+          "type": "city",
+          "population": "335000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-12896140495",
+          "parent_code": "ZA-GP",
+          "name": "De Deur",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZA-KZN",
+      "parent_code": "ZA",
+      "name": "KwaZulu-Natal",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27564996",
+          "parent_code": "ZA-KZN",
+          "name": "Durban",
+          "type": "city",
+          "population": "3442361",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-30211844",
+          "parent_code": "ZA-KZN",
+          "name": "Pietermaritzburg",
+          "type": "city",
+          "population": "618536",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-30225789",
+          "parent_code": "ZA-KZN",
+          "name": "Richards Bay",
+          "type": "city",
+          "population": "57387",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-30670039",
+          "parent_code": "ZA-KZN",
+          "name": "Newcastle",
+          "type": "city",
+          "population": "363236",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-51745922",
+          "parent_code": "ZA-KZN",
+          "name": "Ladysmith",
+          "type": "city",
+          "population": "64855",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-54354355",
+          "parent_code": "ZA-KZN",
+          "name": "Kokstad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-60034814",
+          "parent_code": "ZA-KZN",
+          "name": "Eshowe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-62650354",
+          "parent_code": "ZA-KZN",
+          "name": "Ballito",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-94784097",
+          "parent_code": "ZA-KZN",
+          "name": "Bergville",
+          "type": "city",
+          "population": "4890",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-94823679",
+          "parent_code": "ZA-KZN",
+          "name": "Nqutu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-94825540",
+          "parent_code": "ZA-KZN",
+          "name": "Dundee",
+          "type": "city",
+          "population": "34924",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-94845554",
+          "parent_code": "ZA-KZN",
+          "name": "Glencoe",
+          "type": "city",
+          "population": "17548",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-94849758",
+          "parent_code": "ZA-KZN",
+          "name": "Madadeni",
+          "type": "city",
+          "population": "119497",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-94850165",
+          "parent_code": "ZA-KZN",
+          "name": "Osizweni",
+          "type": "city",
+          "population": "77845",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-95771891",
+          "parent_code": "ZA-KZN",
+          "name": "Greytown",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-95831525",
+          "parent_code": "ZA-KZN",
+          "name": "Estcourt",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-259452927",
+          "parent_code": "ZA-KZN",
+          "name": "Vryheid",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262704819",
+          "parent_code": "ZA-KZN",
+          "name": "Dannhauser",
+          "type": "city",
+          "population": "5389",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706959",
+          "parent_code": "ZA-KZN",
+          "name": "Harding",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262707033",
+          "parent_code": "ZA-KZN",
+          "name": "Hluhluwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262707198",
+          "parent_code": "ZA-KZN",
+          "name": "Ingwavuma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262707322",
+          "parent_code": "ZA-KZN",
+          "name": "Jozini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262708808",
+          "parent_code": "ZA-KZN",
+          "name": "Louwsburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262710046",
+          "parent_code": "ZA-KZN",
+          "name": "Melmoth",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262710336",
+          "parent_code": "ZA-KZN",
+          "name": "Mooirivier",
+          "type": "city",
+          "population": "17779",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262712717",
+          "parent_code": "ZA-KZN",
+          "name": "Mtubatuba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262713651",
+          "parent_code": "ZA-KZN",
+          "name": "Nkandla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262714560",
+          "parent_code": "ZA-KZN",
+          "name": "Paulpietersburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262714935",
+          "parent_code": "ZA-KZN",
+          "name": "Pongola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262715298",
+          "parent_code": "ZA-KZN",
+          "name": "Richmond",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262715988",
+          "parent_code": "ZA-KZN",
+          "name": "Shaka's Rock",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262715989",
+          "parent_code": "ZA-KZN",
+          "name": "Chakaskraal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718115",
+          "parent_code": "ZA-KZN",
+          "name": "Umhlali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718142",
+          "parent_code": "ZA-KZN",
+          "name": "Umzimkulu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718151",
+          "parent_code": "ZA-KZN",
+          "name": "Underberg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719128",
+          "parent_code": "ZA-KZN",
+          "name": "Bambanandi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719665",
+          "parent_code": "ZA-KZN",
+          "name": "Chatsworth",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719694",
+          "parent_code": "ZA-KZN",
+          "name": "Clermont",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719953",
+          "parent_code": "ZA-KZN",
+          "name": "Durban North",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719970",
+          "parent_code": "ZA-KZN",
+          "name": "Edendale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720063",
+          "parent_code": "ZA-KZN",
+          "name": "eMondlo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720064",
+          "parent_code": "ZA-KZN",
+          "name": "Empangeni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720169",
+          "parent_code": "ZA-KZN",
+          "name": "Forest Hills",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720414",
+          "parent_code": "ZA-KZN",
+          "name": "Glenmore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720415",
+          "parent_code": "ZA-KZN",
+          "name": "Glenmore Beach",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720593",
+          "parent_code": "ZA-KZN",
+          "name": "Hillcrest",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720635",
+          "parent_code": "ZA-KZN",
+          "name": "Howick",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720662",
+          "parent_code": "ZA-KZN",
+          "name": "Inanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720848",
+          "parent_code": "ZA-KZN",
+          "name": "Kloof",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720899",
+          "parent_code": "ZA-KZN",
+          "name": "KwaMakhutha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720900",
+          "parent_code": "ZA-KZN",
+          "name": "KwaMashu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720953",
+          "parent_code": "ZA-KZN",
+          "name": "Leisure Bay",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720954",
+          "parent_code": "ZA-KZN",
+          "name": "Leisure Crest",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721255",
+          "parent_code": "ZA-KZN",
+          "name": "Margate",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721547",
+          "parent_code": "ZA-KZN",
+          "name": "Mpumalanga",
+          "type": "city",
+          "population": "193058",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721624",
+          "parent_code": "ZA-KZN",
+          "name": "Ngagane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721927",
+          "parent_code": "ZA-KZN",
+          "name": "Phoenix",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721935",
+          "parent_code": "ZA-KZN",
+          "name": "Pinetown",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721945",
+          "parent_code": "ZA-KZN",
+          "name": "Port Edward",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721946",
+          "parent_code": "ZA-KZN",
+          "name": "Port Shepstone",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721948",
+          "parent_code": "ZA-KZN",
+          "name": "Portobello",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721973",
+          "parent_code": "ZA-KZN",
+          "name": "Queensburgh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722148",
+          "parent_code": "ZA-KZN",
+          "name": "Scottburgh",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722208",
+          "parent_code": "ZA-KZN",
+          "name": "Stanger / KwaDukuza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722292",
+          "parent_code": "ZA-KZN",
+          "name": "oThongathi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722327",
+          "parent_code": "ZA-KZN",
+          "name": "Ulundi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722329",
+          "parent_code": "ZA-KZN",
+          "name": "Umbogintwini",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722330",
+          "parent_code": "ZA-KZN",
+          "name": "Umhlanga Rocks",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722331",
+          "parent_code": "ZA-KZN",
+          "name": "Umkomaas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722332",
+          "parent_code": "ZA-KZN",
+          "name": "Umlazi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722406",
+          "parent_code": "ZA-KZN",
+          "name": "Verulam",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-730521206",
+          "parent_code": "ZA-KZN",
+          "name": "Salt Rock",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-744986123",
+          "parent_code": "ZA-KZN",
+          "name": "Shaka's Head",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1347289251",
+          "parent_code": "ZA-KZN",
+          "name": "Imbangi",
+          "type": "city",
+          "population": "678",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2061615008",
+          "parent_code": "ZA-KZN",
+          "name": "Manguzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4351417652",
+          "parent_code": "ZA-KZN",
+          "name": "Ezakheni",
+          "type": "city",
+          "population": "70809",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7139016549",
+          "parent_code": "ZA-KZN",
+          "name": "Rietvlei",
+          "type": "city",
+          "population": "2509",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7477355936",
+          "parent_code": "ZA-KZN",
+          "name": "Umlazi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9325189773",
+          "parent_code": "ZA-KZN",
+          "name": "Melmoth",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12905581187",
+          "parent_code": "ZA-KZN",
+          "name": "Nongoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12907518898",
+          "parent_code": "ZA-KZN",
+          "name": "Ixopo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZA-NW",
+      "parent_code": "ZA",
+      "name": "North West",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-25779128",
+          "parent_code": "ZA-NW",
+          "name": "Brits",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-30391973",
+          "parent_code": "ZA-NW",
+          "name": "Rustenburg",
+          "type": "city",
+          "population": "549575",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-33442455",
+          "parent_code": "ZA-NW",
+          "name": "Vryburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-59953738",
+          "parent_code": "ZA-NW",
+          "name": "Mahikeng",
+          "type": "city",
+          "population": "15117",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-59965613",
+          "parent_code": "ZA-NW",
+          "name": "Klerksdorp",
+          "type": "city",
+          "population": "186515",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-60059926",
+          "parent_code": "ZA-NW",
+          "name": "Orkney",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-60079617",
+          "parent_code": "ZA-NW",
+          "name": "Bloemhof",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262704667",
+          "parent_code": "ZA-NW",
+          "name": "Christiana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706556",
+          "parent_code": "ZA-NW",
+          "name": "Ganyesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262709246",
+          "parent_code": "ZA-NW",
+          "name": "Makwassie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262716047",
+          "parent_code": "ZA-NW",
+          "name": "Silwerkrans",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262717556",
+          "parent_code": "ZA-NW",
+          "name": "Stella",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718233",
+          "parent_code": "ZA-NW",
+          "name": "Ventersdorp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718853",
+          "parent_code": "ZA-NW",
+          "name": "Wolmaransstad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718954",
+          "parent_code": "ZA-NW",
+          "name": "Zeerust",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719130",
+          "parent_code": "ZA-NW",
+          "name": "Bapong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719270",
+          "parent_code": "ZA-NW",
+          "name": "Berseba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719276",
+          "parent_code": "ZA-NW",
+          "name": "Bethanie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719640",
+          "parent_code": "ZA-NW",
+          "name": "Chaneng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719715",
+          "parent_code": "ZA-NW",
+          "name": "Coligny",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719740",
+          "parent_code": "ZA-NW",
+          "name": "Damonsville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719801",
+          "parent_code": "ZA-NW",
+          "name": "Delareyville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719874",
+          "parent_code": "ZA-NW",
+          "name": "Diepkuil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720010",
+          "parent_code": "ZA-NW",
+          "name": "Elandsrand",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720210",
+          "parent_code": "ZA-NW",
+          "name": "Ga-Luka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720296",
+          "parent_code": "ZA-NW",
+          "name": "Ga-Mogajane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720464",
+          "parent_code": "ZA-NW",
+          "name": "Haartbeesfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720496",
+          "parent_code": "ZA-NW",
+          "name": "Hartbeesfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720641",
+          "parent_code": "ZA-NW",
+          "name": "Ifafi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720714",
+          "parent_code": "ZA-NW",
+          "name": "Jericho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720757",
+          "parent_code": "ZA-NW",
+          "name": "Kagiso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720844",
+          "parent_code": "ZA-NW",
+          "name": "Klipgat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720864",
+          "parent_code": "ZA-NW",
+          "name": "Kosmos",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720865",
+          "parent_code": "ZA-NW",
+          "name": "Koster",
+          "type": "city",
+          "population": "19499",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720949",
+          "parent_code": "ZA-NW",
+          "name": "Lebotlwane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720950",
+          "parent_code": "ZA-NW",
+          "name": "Ledig",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720951",
+          "parent_code": "ZA-NW",
+          "name": "Leeudoringstad",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720957",
+          "parent_code": "ZA-NW",
+          "name": "Lekubu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720958",
+          "parent_code": "ZA-NW",
+          "name": "Lekwadi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720997",
+          "parent_code": "ZA-NW",
+          "name": "Lesung",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720998",
+          "parent_code": "ZA-NW",
+          "name": "Letlhabile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720999",
+          "parent_code": "ZA-NW",
+          "name": "Letlhabile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721003",
+          "parent_code": "ZA-NW",
+          "name": "Lichtenburg",
+          "type": "city",
+          "population": "26338",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721013",
+          "parent_code": "ZA-NW",
+          "name": "Longaneng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721076",
+          "parent_code": "ZA-NW",
+          "name": "Madidi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721078",
+          "parent_code": "ZA-NW",
+          "name": "Madikwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721083",
+          "parent_code": "ZA-NW",
+          "name": "Magogong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721111",
+          "parent_code": "ZA-NW",
+          "name": "SofaSonke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721114",
+          "parent_code": "ZA-NW",
+          "name": "Makgori",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721120",
+          "parent_code": "ZA-NW",
+          "name": "Makolokwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721226",
+          "parent_code": "ZA-NW",
+          "name": "Manokwane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721250",
+          "parent_code": "ZA-NW",
+          "name": "Mapetla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721256",
+          "parent_code": "ZA-NW",
+          "name": "Marikana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721282",
+          "parent_code": "ZA-NW",
+          "name": "Matolong",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721294",
+          "parent_code": "ZA-NW",
+          "name": "Mboloko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721314",
+          "parent_code": "ZA-NW",
+          "name": "Meerhof",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721318",
+          "parent_code": "ZA-NW",
+          "name": "Melodie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721326",
+          "parent_code": "ZA-NW",
+          "name": "Mhole",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721401",
+          "parent_code": "ZA-NW",
+          "name": "Mmantserre",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721413",
+          "parent_code": "ZA-NW",
+          "name": "Modderspruit",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721414",
+          "parent_code": "ZA-NW",
+          "name": "Modikwe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721456",
+          "parent_code": "ZA-NW",
+          "name": "Mogwase",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721458",
+          "parent_code": "ZA-NW",
+          "name": "Moiletswane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721462",
+          "parent_code": "ZA-NW",
+          "name": "Molelema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721467",
+          "parent_code": "ZA-NW",
+          "name": "Monnakato",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721477",
+          "parent_code": "ZA-NW",
+          "name": "Mooinooi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721486",
+          "parent_code": "ZA-NW",
+          "name": "Moretele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721501",
+          "parent_code": "ZA-NW",
+          "name": "Morokweng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721522",
+          "parent_code": "ZA-NW",
+          "name": "Mothutlung",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721540",
+          "parent_code": "ZA-NW",
+          "name": "Motsheko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721919",
+          "parent_code": "ZA-NW",
+          "name": "Phatsima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721928",
+          "parent_code": "ZA-NW",
+          "name": "Phokeng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721929",
+          "parent_code": "ZA-NW",
+          "name": "Pholoholo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721949",
+          "parent_code": "ZA-NW",
+          "name": "Potchefstroom",
+          "type": "city",
+          "population": "43448",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-262721991",
+          "parent_code": "ZA-NW",
+          "name": "Rasimone",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722004",
+          "parent_code": "ZA-NW",
+          "name": "Reivilo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722022",
+          "parent_code": "ZA-NW",
+          "name": "Rietgat",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722129",
+          "parent_code": "ZA-NW",
+          "name": "Sandfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722134",
+          "parent_code": "ZA-NW",
+          "name": "Sannieshof",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722145",
+          "parent_code": "ZA-NW",
+          "name": "Schoemansville",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722147",
+          "parent_code": "ZA-NW",
+          "name": "Schweizer-Reneke",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722157",
+          "parent_code": "ZA-NW",
+          "name": "Segwaelane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722161",
+          "parent_code": "ZA-NW",
+          "name": "Serosecha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722248",
+          "parent_code": "ZA-NW",
+          "name": "Swartruggens",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722285",
+          "parent_code": "ZA-NW",
+          "name": "Tlaseng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722288",
+          "parent_code": "ZA-NW",
+          "name": "Tlhowe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722298",
+          "parent_code": "ZA-NW",
+          "name": "Tsitsing",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1371605788",
+          "parent_code": "ZA-NW",
+          "name": "Stilfontein",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1371616875",
+          "parent_code": "ZA-NW",
+          "name": "Khuma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3213490561",
+          "parent_code": "ZA-NW",
+          "name": "Sun City",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3404477872",
+          "parent_code": "ZA-NW",
+          "name": "Madibogo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3639596447",
+          "parent_code": "ZA-NW",
+          "name": "Dwarsberg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4755954334",
+          "parent_code": "ZA-NW",
+          "name": "Pudimoe",
+          "type": "city",
+          "population": "3078",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7786874913",
+          "parent_code": "ZA-NW",
+          "name": "Broederstroom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8853146244",
+          "parent_code": "ZA-NW",
+          "name": "Mopyane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8853146245",
+          "parent_code": "ZA-NW",
+          "name": "Kraalhoek",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZA-LP",
+      "parent_code": "ZA",
+      "name": "Limpopo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-30391852",
+          "parent_code": "ZA-LP",
+          "name": "Louis Trichardt",
+          "type": "city",
+          "population": "25360",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-48912418",
+          "parent_code": "ZA-LP",
+          "name": "Musina",
+          "type": "city",
+          "population": "42678",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-52132483",
+          "parent_code": "ZA-LP",
+          "name": "Mokopane",
+          "type": "city",
+          "population": "30151",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-60119102",
+          "parent_code": "ZA-LP",
+          "name": "Mookgophong",
+          "type": "city",
+          "population": "24853",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-124482342",
+          "parent_code": "ZA-LP",
+          "name": "Phalaborwa",
+          "type": "city",
+          "population": "13108",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-124504036",
+          "parent_code": "ZA-LP",
+          "name": "Tzaneen",
+          "type": "city",
+          "population": "14571",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262695006",
+          "parent_code": "ZA-LP",
+          "name": "Bela-Bela",
+          "type": "city",
+          "population": "45001",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262704440",
+          "parent_code": "ZA-LP",
+          "name": "Burgersfort",
+          "type": "city",
+          "population": "6369",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262705051",
+          "parent_code": "ZA-LP",
+          "name": "Mogwadi",
+          "type": "city",
+          "population": "4045",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262705679",
+          "parent_code": "ZA-LP",
+          "name": "Elim",
+          "type": "city",
+          "population": "16538",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706843",
+          "parent_code": "ZA-LP",
+          "name": "Groblersdal",
+          "type": "city",
+          "population": "4329",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262707269",
+          "parent_code": "ZA-LP",
+          "name": "Mashadi",
+          "type": "city",
+          "population": "7000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262708498",
+          "parent_code": "ZA-LP",
+          "name": "Lebowakgomo",
+          "type": "city",
+          "population": "35087",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262708630",
+          "parent_code": "ZA-LP",
+          "name": "Lephalale",
+          "type": "city",
+          "population": "17639",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262713951",
+          "parent_code": "ZA-LP",
+          "name": "Northam",
+          "type": "city",
+          "population": "2381",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718181",
+          "parent_code": "ZA-LP",
+          "name": "Valdezia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719078",
+          "parent_code": "ZA-LP",
+          "name": "Alverton",
+          "type": "city",
+          "population": "2278",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719129",
+          "parent_code": "ZA-LP",
+          "name": "Bangalong",
+          "type": "city",
+          "population": "846",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719398",
+          "parent_code": "ZA-LP",
+          "name": "Bothashoek",
+          "type": "city",
+          "population": "2276",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719827",
+          "parent_code": "ZA-LP",
+          "name": "Derde Gelid",
+          "type": "city",
+          "population": "15669",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720206",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Kgoroshi",
+          "type": "city",
+          "population": "698",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720207",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Lepadima",
+          "type": "city",
+          "population": "1231",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720288",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Mamatlhola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720290",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Mmabasotho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720297",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Mohoai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720298",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Mokobodi",
+          "type": "city",
+          "population": "1103",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720303",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Motodi",
+          "type": "city",
+          "population": "4131",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720328",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Ramokadi-Kadi",
+          "type": "city",
+          "population": "2136",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720329",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Ramoshwane",
+          "type": "city",
+          "population": "3469",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720336",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Selolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720339",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Setshaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720385",
+          "parent_code": "ZA-LP",
+          "name": "Giyani",
+          "type": "city",
+          "population": "25954",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720602",
+          "parent_code": "ZA-LP",
+          "name": "Hoedspruit",
+          "type": "city",
+          "population": "3157",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720740",
+          "parent_code": "ZA-LP",
+          "name": "Juno",
+          "type": "city",
+          "population": "1301",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720896",
+          "parent_code": "ZA-LP",
+          "name": "Kwaggasvlakte",
+          "type": "city",
+          "population": "257",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720961",
+          "parent_code": "ZA-LP",
+          "name": "Leokaneng",
+          "type": "city",
+          "population": "1436",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721015",
+          "parent_code": "ZA-LP",
+          "name": "Lonsdale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721072",
+          "parent_code": "ZA-LP",
+          "name": "Mabotsha",
+          "type": "city",
+          "population": "4198",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721075",
+          "parent_code": "ZA-LP",
+          "name": "Madeira",
+          "type": "city",
+          "population": "3844",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721084",
+          "parent_code": "ZA-LP",
+          "name": "Mahubahuba",
+          "type": "city",
+          "population": "21377",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721113",
+          "parent_code": "ZA-LP",
+          "name": "Makgaung",
+          "type": "city",
+          "population": "4648",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721281",
+          "parent_code": "ZA-LP",
+          "name": "Matlala",
+          "type": "city",
+          "population": "2031",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721476",
+          "parent_code": "ZA-LP",
+          "name": "Monywaneng",
+          "type": "city",
+          "population": "1837",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721773",
+          "parent_code": "ZA-LP",
+          "name": "Modimolle",
+          "type": "city",
+          "population": "8671",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721798",
+          "parent_code": "ZA-LP",
+          "name": "Olympus",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721909",
+          "parent_code": "ZA-LP",
+          "name": "Penge",
+          "type": "city",
+          "population": "2819",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721979",
+          "parent_code": "ZA-LP",
+          "name": "Ramakgaphola",
+          "type": "city",
+          "population": "1525",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721980",
+          "parent_code": "ZA-LP",
+          "name": "Ramalapa",
+          "type": "city",
+          "population": "881",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722158",
+          "parent_code": "ZA-LP",
+          "name": "Sekgakgapeng",
+          "type": "city",
+          "population": "11979",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722164",
+          "parent_code": "ZA-LP",
+          "name": "Setumong",
+          "type": "city",
+          "population": "2551",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722253",
+          "parent_code": "ZA-LP",
+          "name": "Taung",
+          "type": "city",
+          "population": "2512",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722262",
+          "parent_code": "ZA-LP",
+          "name": "Thabazimbi",
+          "type": "city",
+          "population": "28847",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722281",
+          "parent_code": "ZA-LP",
+          "name": "Tibanefontein",
+          "type": "city",
+          "population": "1818",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722337",
+          "parent_code": "ZA-LP",
+          "name": "Vaalwater",
+          "type": "city",
+          "population": "3964",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-304577692",
+          "parent_code": "ZA-LP",
+          "name": "Polokwane",
+          "type": "city",
+          "population": "628999",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-912141678",
+          "parent_code": "ZA-LP",
+          "name": "Lulekani",
+          "type": "city",
+          "population": "14464",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-919623263",
+          "parent_code": "ZA-LP",
+          "name": "Mogalatsana",
+          "type": "city",
+          "population": "850",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-919664668",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Masemola",
+          "type": "city",
+          "population": "115457",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1455780768",
+          "parent_code": "ZA-LP",
+          "name": "Groblersbrug",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2144877648",
+          "parent_code": "ZA-LP",
+          "name": "Malamulele",
+          "type": "city",
+          "population": "13070",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2756257471",
+          "parent_code": "ZA-LP",
+          "name": "Steelpoort",
+          "type": "city",
+          "population": "1105",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2756435172",
+          "parent_code": "ZA-LP",
+          "name": "Letsitele",
+          "type": "city",
+          "population": "406",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4448471935",
+          "parent_code": "ZA-LP",
+          "name": "Manyii",
+          "type": "city",
+          "population": "1594",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4564369375",
+          "parent_code": "ZA-LP",
+          "name": "Thohoyandou",
+          "type": "city",
+          "population": "69453",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5662836400",
+          "parent_code": "ZA-LP",
+          "name": "Burgerregt",
+          "type": "city",
+          "population": "1641",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5674145345",
+          "parent_code": "ZA-LP",
+          "name": "Mankweng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5674148976",
+          "parent_code": "ZA-LP",
+          "name": "Moria",
+          "type": "city",
+          "population": "2887",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5674154589",
+          "parent_code": "ZA-LP",
+          "name": "Laaste Hoop",
+          "type": "city",
+          "population": "6670",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5674165642",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Molepo",
+          "type": "city",
+          "population": "4048",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5674175241",
+          "parent_code": "ZA-LP",
+          "name": "Chuenespoort",
+          "type": "city",
+          "population": "1271",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6944295890",
+          "parent_code": "ZA-LP",
+          "name": "Rankin's Pass",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8070652497",
+          "parent_code": "ZA-LP",
+          "name": "Senwabarwana",
+          "type": "city",
+          "population": "5529",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8730581571",
+          "parent_code": "ZA-LP",
+          "name": "Mbhokota Village",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8730626592",
+          "parent_code": "ZA-LP",
+          "name": "Xigalo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8730638683",
+          "parent_code": "ZA-LP",
+          "name": "Jimmy Jones, South Africa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8730641744",
+          "parent_code": "ZA-LP",
+          "name": "Dinga, South Africa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8730652705",
+          "parent_code": "ZA-LP",
+          "name": "Malamulele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8900989006",
+          "parent_code": "ZA-LP",
+          "name": "Bokisi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8901029563",
+          "parent_code": "ZA-LP",
+          "name": "Bungeni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8901036680",
+          "parent_code": "ZA-LP",
+          "name": "Chavani",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8901041621",
+          "parent_code": "ZA-LP",
+          "name": "Mashamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8901045174",
+          "parent_code": "ZA-LP",
+          "name": "Riverplaats",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8953470181",
+          "parent_code": "ZA-LP",
+          "name": "Ga-Mantlhodi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12269729758",
+          "parent_code": "ZA-LP",
+          "name": "Leeupoort Vakansiedorp",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ZA-MP",
+      "parent_code": "ZA",
+      "name": "Mpumalanga",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-28385455",
+          "parent_code": "ZA-MP",
+          "name": "Delmas",
+          "type": "city",
+          "population": "7399",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-28385456",
+          "parent_code": "ZA-MP",
+          "name": "Secunda",
+          "type": "city",
+          "population": "40198",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-30211883",
+          "parent_code": "ZA-MP",
+          "name": "Mbombela (Nelspruit)",
+          "type": "city",
+          "population": "110159",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-30324159",
+          "parent_code": "ZA-MP",
+          "name": "eMalahleni",
+          "type": "city",
+          "population": "108673",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-33358796",
+          "parent_code": "ZA-MP",
+          "name": "Middelburg",
+          "type": "city",
+          "population": "87348",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-51828236",
+          "parent_code": "ZA-MP",
+          "name": "Ermelo",
+          "type": "city",
+          "population": "83865",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-56004503",
+          "parent_code": "ZA-MP",
+          "name": "Piet Retief",
+          "type": "city",
+          "population": "57428",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-59649286",
+          "parent_code": "ZA-MP",
+          "name": "eLukwatini",
+          "type": "city",
+          "population": "13149",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-59649319",
+          "parent_code": "ZA-MP",
+          "name": "Msauli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-59731951",
+          "parent_code": "ZA-MP",
+          "name": "Bethal",
+          "type": "city",
+          "population": "60779",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-60656192",
+          "parent_code": "ZA-MP",
+          "name": "Carolina",
+          "type": "city",
+          "population": "16846",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-228674366",
+          "parent_code": "ZA-MP",
+          "name": "Amsterdam",
+          "type": "city",
+          "population": "6769",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-244310579",
+          "parent_code": "ZA-MP",
+          "name": "Mkhuhlu",
+          "type": "city",
+          "population": "35864",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-244310590",
+          "parent_code": "ZA-MP",
+          "name": "Hazyview",
+          "type": "city",
+          "population": "4236",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-252437561",
+          "parent_code": "ZA-MP",
+          "name": "eMakhazeni (Belfast)",
+          "type": "city",
+          "population": "4466",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262694484",
+          "parent_code": "ZA-MP",
+          "name": "Acornhoek",
+          "type": "city",
+          "population": "33529",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262694821",
+          "parent_code": "ZA-MP",
+          "name": "Amersfoort",
+          "type": "city",
+          "population": "12335",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262694926",
+          "parent_code": "ZA-MP",
+          "name": "Badplaas",
+          "type": "city",
+          "population": "582",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262694939",
+          "parent_code": "ZA-MP",
+          "name": "Balfour",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262695407",
+          "parent_code": "ZA-MP",
+          "name": "Bushbuckridge",
+          "type": "city",
+          "population": "2109",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706062",
+          "parent_code": "ZA-MP",
+          "name": "Evander",
+          "type": "city",
+          "population": "10166",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706785",
+          "parent_code": "ZA-MP",
+          "name": "Graskop",
+          "type": "city",
+          "population": "3996",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706839",
+          "parent_code": "ZA-MP",
+          "name": "Greylingstad",
+          "type": "city",
+          "population": "839",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262706982",
+          "parent_code": "ZA-MP",
+          "name": "Hendrina",
+          "type": "city",
+          "population": "2359",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262707272",
+          "parent_code": "ZA-MP",
+          "name": "Jeppe's Reef",
+          "type": "city",
+          "population": "12589",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262707788",
+          "parent_code": "ZA-MP",
+          "name": "Komatipoort",
+          "type": "city",
+          "population": "4683",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262707854",
+          "parent_code": "ZA-MP",
+          "name": "Kriel",
+          "type": "city",
+          "population": "15237",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262708865",
+          "parent_code": "ZA-MP",
+          "name": "Lydenburg",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262708897",
+          "parent_code": "ZA-MP",
+          "name": "Machadodorp",
+          "type": "city",
+          "population": "8835",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262709269",
+          "parent_code": "ZA-MP",
+          "name": "Malalane",
+          "type": "city",
+          "population": "3486",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262715714",
+          "parent_code": "ZA-MP",
+          "name": "Sabie",
+          "type": "city",
+          "population": "9148",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262716108",
+          "parent_code": "ZA-MP",
+          "name": "Siyabuswa",
+          "type": "city",
+          "population": "36882",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262717510",
+          "parent_code": "ZA-MP",
+          "name": "Standerton",
+          "type": "city",
+          "population": "43966",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718464",
+          "parent_code": "ZA-MP",
+          "name": "Volksrust",
+          "type": "city",
+          "population": "8046",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718545",
+          "parent_code": "ZA-MP",
+          "name": "Wakkerstroom",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718560",
+          "parent_code": "ZA-MP",
+          "name": "Waterval Boven",
+          "type": "city",
+          "population": "6178",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262718825",
+          "parent_code": "ZA-MP",
+          "name": "White River",
+          "type": "city",
+          "population": "16639",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719102",
+          "parent_code": "ZA-MP",
+          "name": "Apara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719132",
+          "parent_code": "ZA-MP",
+          "name": "Barberton",
+          "type": "city",
+          "population": "11997",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719377",
+          "parent_code": "ZA-MP",
+          "name": "Boiketlo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719833",
+          "parent_code": "ZA-MP",
+          "name": "Didimala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719923",
+          "parent_code": "ZA-MP",
+          "name": "Dipping",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719979",
+          "parent_code": "ZA-MP",
+          "name": "eGobhoza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262719983",
+          "parent_code": "ZA-MP",
+          "name": "eHlau-Hlau",
+          "type": "city",
+          "population": "9590",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720058",
+          "parent_code": "ZA-MP",
+          "name": "eMankayana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720059",
+          "parent_code": "ZA-MP",
+          "name": "eMbonisweni",
+          "type": "city",
+          "population": "899",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720060",
+          "parent_code": "ZA-MP",
+          "name": "eMdlankhomo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720062",
+          "parent_code": "ZA-MP",
+          "name": "eMjindini",
+          "type": "city",
+          "population": "33241",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720198",
+          "parent_code": "ZA-MP",
+          "name": "Ga-Boelang",
+          "type": "city",
+          "population": "3696",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720299",
+          "parent_code": "ZA-MP",
+          "name": "Ga-Monlala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720715",
+          "parent_code": "ZA-MP",
+          "name": "Jerusalem",
+          "type": "city",
+          "population": "8813",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720765",
+          "parent_code": "ZA-MP",
+          "name": "KaMaqhekeza",
+          "type": "city",
+          "population": "21192",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720767",
+          "parent_code": "ZA-MP",
+          "name": "Kamsogwaba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720768",
+          "parent_code": "ZA-MP",
+          "name": "Kanana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720769",
+          "parent_code": "ZA-MP",
+          "name": "Kanyamazane",
+          "type": "city",
+          "population": "34593",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262720818",
+          "parent_code": "ZA-MP",
+          "name": "Khutsong",
+          "type": "city",
+          "population": "62458",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721085",
+          "parent_code": "ZA-MP",
+          "name": "Mahudua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721128",
+          "parent_code": "ZA-MP",
+          "name": "Moremela Village",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721269",
+          "parent_code": "ZA-MP",
+          "name": "Mashelebeng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721289",
+          "parent_code": "ZA-MP",
+          "name": "Matsulu",
+          "type": "city",
+          "population": "47306",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721308",
+          "parent_code": "ZA-MP",
+          "name": "Mdladla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721459",
+          "parent_code": "ZA-MP",
+          "name": "Mokhololine",
+          "type": "city",
+          "population": "1569",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721463",
+          "parent_code": "ZA-MP",
+          "name": "Moloro",
+          "type": "city",
+          "population": "2053",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721502",
+          "parent_code": "ZA-MP",
+          "name": "Morolaneng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721503",
+          "parent_code": "ZA-MP",
+          "name": "Morolaneng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721528",
+          "parent_code": "ZA-MP",
+          "name": "Motlamogale",
+          "type": "city",
+          "population": "4702",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262721639",
+          "parent_code": "ZA-MP",
+          "name": "Ngwetsintshage",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722092",
+          "parent_code": "ZA-MP",
+          "name": "Salubindza",
+          "type": "city",
+          "population": "4698",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722177",
+          "parent_code": "ZA-MP",
+          "name": "Mount Anderson",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722295",
+          "parent_code": "ZA-MP",
+          "name": "Tshabalala",
+          "type": "city",
+          "population": "15022",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722297",
+          "parent_code": "ZA-MP",
+          "name": "Tshirelang",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-262722299",
+          "parent_code": "ZA-MP",
+          "name": "Tswafeng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-421329496",
+          "parent_code": "ZA-MP",
+          "name": "Kamagugu",
+          "type": "city",
+          "population": "4513",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1514480593",
+          "parent_code": "ZA-MP",
+          "name": "KwaMhlanga",
+          "type": "city",
+          "population": "18604",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1541319680",
+          "parent_code": "ZA-MP",
+          "name": "Likweti Bushveld Farm Estate",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-2539247200",
+          "parent_code": "ZA-MP",
+          "name": "Tonga",
+          "type": "city",
+          "population": "17333",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2539247202",
+          "parent_code": "ZA-MP",
+          "name": "Naas",
+          "type": "city",
+          "population": "2637",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4402951174",
+          "parent_code": "ZA-MP",
+          "name": "Daggakraal",
+          "type": "city",
+          "population": "17378",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4570853182",
+          "parent_code": "ZA-MP",
+          "name": "Verena",
+          "type": "city",
+          "population": "20793",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10007148710",
+          "parent_code": "ZA-MP",
+          "name": "Kamhlushwa",
+          "type": "city",
+          "population": "21832",
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

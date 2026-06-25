@@ -129,12 +129,12 @@ export default function Phase3Page() {
 
         // Also write departments at the state-level tenant — pgr-services
         // validates assignee department against common-masters.Department at mz.
-        const stateTenant = state.tenant;
-        if (stateTenant && stateTenant !== targetTenant) {
-          await mdmsService.createDepartments(stateTenant, deptPayload).catch(e =>
-            console.warn('departments at state-level failed (non-fatal):', e)
-          );
-        }
+        // const stateTenant = targetTenant.includes('.')? targetTenant.split('.')[0]: targetTenant;
+        // if (stateTenant && stateTenant !== targetTenant) {
+        //   await mdmsService.createDepartments(stateTenant, deptPayload).catch(e =>
+        //     console.warn('departments at state-level failed (non-fatal):', e)
+        //   );
+        // }
 
         // Create localizations for departments
         await localizationService.uploadDepartmentLocalizations(
