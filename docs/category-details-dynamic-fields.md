@@ -38,9 +38,6 @@ email) are stored directly in the DIGIT user tables. Evidence attachments reuse 
 ALTER TABLE eg_pgr_service_v2
     ADD COLUMN IF NOT EXISTS extended_attributes JSONB;
 
-ALTER TABLE eg_pgr_service_v2
-    ADD COLUMN IF NOT EXISTS complaint_template_type varchar;
-
 CREATE INDEX IF NOT EXISTS idx_pgr_svc_extended_attrs_gin
     ON eg_pgr_service_v2 USING GIN (extended_attributes);
 ```
@@ -51,7 +48,7 @@ CREATE INDEX IF NOT EXISTS idx_pgr_svc_extended_attrs_gin
 |--------|------|---------|
 | `additionalDetails` | JSONB | System metadata (department, escalation). **Existing — unchanged.** |
 | `extended_attributes` | JSONB | Citizen-supplied dynamic fields + PII flags + confidentiality. **New.** |
-| `complaint_template_type` | varchar | The type of complaint template — IGE, IGSAE. **New.** |
+
 
 ---
 
