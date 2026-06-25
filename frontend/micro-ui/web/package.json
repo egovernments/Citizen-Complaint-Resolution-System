@@ -23,6 +23,7 @@
     "@egovernments/digit-ui-svg-components": "1.0.21",
     "apexcharts": "3.45.2",
     "jsonpath": "^1.1.1",
+    "leaflet": "1.7.1",
     "react": "17.0.2",
     "react-apexcharts": "1.4.1",
     "react-dom": "17.0.2",
@@ -85,6 +86,8 @@
   },
   "scripts": {
     "build:dashboard-css": "tailwindcss -c src/dashboard/tailwind.config.js -i src/dashboard/styles/input.css -o src/dashboard/styles/dashboard.css",
+    "prestart": "npm run build:dashboard-css",
+    "prebuild": "npm run build:dashboard-css",
     "start": "react-scripts start",
     "build": "GENERATE_SOURCEMAP=false SKIP_PREFLIGHT_CHECK=true react-scripts build",
     "build:prepare": "./build.sh",

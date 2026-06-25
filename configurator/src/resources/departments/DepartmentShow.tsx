@@ -21,7 +21,7 @@ export function DepartmentShow() {
 
           <FieldSection title="Related">
             <ReverseReferenceList
-              resource="complaint-types"
+              resource="complaint-hierarchy"
               target="department"
               id={String(rec.code ?? rec.id)}
               label="Complaint Types"

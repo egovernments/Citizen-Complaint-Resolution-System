@@ -108,18 +108,18 @@ Test relies on at least one active Department existing on the deployment — ass
 });
 
 test.describe('01-configurator-mdms: ComplaintType schema sanity', () => {
-  test('ServiceDefs schema declares keywords / order / menuPath (so ComplaintTypeCreate defaults are safe)', {
+  test('ComplaintHierarchy schema declares keywords / order / parentCode (so ComplaintTypeCreate defaults are safe)', {
     annotation: {
       type: 'description',
-      description: `Schema-drift guard for the ComplaintType (RAINMAKER-PGR.ServiceDefs) MDMS schema. The configurator's ComplaintTypeCreate form sends keywords, order, and menuPath as defaults; if the schema drops any of those properties, creates would start failing. Test queries the schema definition and asserts all three property names appear.
+      description: `Schema-drift guard for the ComplaintType (RAINMAKER-PGR.ComplaintHierarchy) MDMS schema. The legacy RAINMAKER-PGR.ServiceDefs master is gone; complaint types are now LEAF rows of the single ComplaintHierarchy adjacency list. The configurator's ComplaintTypeCreate form sends keywords, order, and parentCode (the grouping key that replaced menuPath) as defaults; if the schema drops any of those properties, creates would start failing. Test queries the schema definition and asserts all three property names appear.
 
 Steps:
 1. Log in as the test employee.
-2. POST /mdms-v2/schema/v1/_search with codes: ['RAINMAKER-PGR.ServiceDefs'] at root tenant 'ke'.
+2. POST /mdms-v2/schema/v1/_search with codes: ['RAINMAKER-PGR.ComplaintHierarchy'] at root tenant 'ke'.
 3. Read SchemaDefinitions[0].definition.properties; capture its keys.
-4. For each of ['keywords', 'order', 'menuPath'], assert the keys array contains it.
+4. For each of ['keywords', 'order', 'parentCode'], assert the keys array contains it.
 
-Note menuPath specifically — the schema rejects 'menuPathName' but accepts 'menuPath'. If a future PR confuses the two, this test catches it.`,
+Note parentCode specifically — it replaced the legacy menuPath grouping key (menuPath/menuPathName are gone from the masters). If a future PR reintroduces menuPath, this guard still passes for parentCode, which is what the tree-derived grouping relies on.`,
     },
     tag: ['@area:configurator-manage', '@area:mdms-schema', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
     // Verified post-explorer: the schema does include all three. This
@@ -130,11 +130,11 @@ Note menuPath specifically — the schema rejects 'menuPathName' but accepts 'me
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         RequestInfo: { authToken: auth.token, apiId: 'Rainmaker' },
-        SchemaDefCriteria: { tenantId: ROOT_TENANT, codes: ['RAINMAKER-PGR.ServiceDefs'] },
+        SchemaDefCriteria: { tenantId: ROOT_TENANT, codes: ['RAINMAKER-PGR.ComplaintHierarchy'] },
       }),
     }).then(r => r.json());
     const props = Object.keys(r.SchemaDefinitions?.[0]?.definition?.properties ?? {});
-    for (const f of ['keywords', 'order', 'menuPath']) expect(props).toContain(f);
+    for (const f of ['keywords', 'order', 'parentCode']) expect(props).toContain(f);
   });
 });
 

@@ -635,6 +635,107 @@
       when:
         - build_digit_ui | default(false)
 
+    # ---- Keycloak readiness BEFORE the dependent compose-up (converge-abort fix) ----
+    # The compose-up below waits on keycloak: service_healthy, but the keycloak DB
+    # secret is otherwise written to .env only AFTER it (the OpenBao block further
+    # down). So the first compose-up runs keycloak with the compose-default
+    # password, recreates keycloak/keycloak-postgres when .env later changes,
+    # keycloak races its DB / fails the healthcheck inside compose's dependency
+    # wait, and the whole play ABORTS — silently skipping every post-compose-up
+    # task (configurator build, overpass, etc.). Bring up OpenBao +
+    # keycloak-postgres, unseal, write the keycloak secrets to .env, and align the
+    # DB-user password HERE so the compose-up finds keycloak able to start healthy
+    # and the play runs to completion. All gated on enable_keycloak; idempotent.
+    - name: "Keycloak prep — bring up OpenBao + keycloak-postgres first"
+      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d openbao keycloak-postgres
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+      when: enable_keycloak | default(false)
+
+    - name: "Keycloak prep — wait for OpenBao to bind 18200"
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 18200
+        timeout: 120
+      when: enable_keycloak | default(false)
+
+    - name: "Keycloak prep — load OpenBao init state"
+      ansible.builtin.slurp:
+        src: "{{ digit_dir }}/.openbao/init.json"
+      register: kcprep_init
+      no_log: true
+      when: enable_keycloak | default(false)
+
+    - name: "Keycloak prep — parse OpenBao init state"
+      ansible.builtin.set_fact:
+        kcprep_unseal_key: "{{ (kcprep_init.content | b64decode | from_json).keys_base64[0] }}"
+        kcprep_root_token: "{{ (kcprep_init.content | b64decode | from_json).root_token }}"
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_init.content is defined
+
+    - name: "Keycloak prep — read OpenBao seal status"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/seal-status
+        status_code: [200]
+      register: kcprep_seal
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_root_token is defined
+
+    - name: "Keycloak prep — unseal OpenBao if sealed"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/unseal
+        method: POST
+        body_format: json
+        body:
+          key: "{{ kcprep_unseal_key }}"
+        status_code: [200]
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_seal.json.sealed | default(false)
+
+    - name: "Keycloak prep — read secrets from OpenBao"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        headers:
+          X-Vault-Token: "{{ kcprep_root_token }}"
+        status_code: [200]
+      register: kcprep_secrets
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_root_token is defined
+
+    - name: "Keycloak prep — write KEYCLOAK SECRETS into .env BEFORE compose-up"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        block: |
+          KC_ADMIN_PASSWORD={{ kcprep_secrets.json.data.data.keycloak_admin_password | default('') }}
+          KC_DB_PASSWORD={{ kcprep_secrets.json.data.data.keycloak_db_password | default('') }}
+          TOKEN_EXCHANGE_SYSTEM_PASSWORD={{ kcprep_secrets.json.data.data.token_exchange_system_password | default('eGov@123') }}
+        marker: "# {mark} KEYCLOAK SECRETS"
+        create: false
+        mode: '0600'
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_secrets.json is defined
+
+    - name: "Keycloak prep — align keycloak DB-user password to OpenBao value"
+      ansible.builtin.shell: >-
+        docker exec keycloak-postgres psql -U keycloak -d keycloak -c
+        "ALTER USER keycloak WITH PASSWORD '{{ kcprep_secrets.json.data.data.keycloak_db_password }}';"
+      no_log: true
+      changed_when: true
+      failed_when: false
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_secrets.json.data.data.keycloak_db_password | default('') | length > 0
+
     - name: Pull all images from VPC registry
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
       args:
@@ -1305,6 +1406,12 @@
         "{{ configurator_repo | default(playbook_dir ~ '/../../configurator') }}"
         "{{ configurator_repo_url | default('-') }}"
         "{{ configurator_ref | default('') }}"
+      # When the box self-hosts Overpass, bake the same-origin endpoint into the
+      # build so Phase 2's boundary fetch hits the on-box container (nginx
+      # /overpass/) instead of the public, rate-limited overpass-api.de. Empty
+      # otherwise → the code default (public Overpass) applies.
+      environment:
+        VITE_OVERPASS_URL: "{{ '/overpass/api/interpreter' if (enable_overpass | default(false)) else '' }}"
       register: configurator_build_run
       changed_when: true
       when:
@@ -1393,6 +1500,68 @@
       register: turbopass_sweep
       changed_when: turbopass_sweep.stdout | length > 0
       when: not (enable_turbopass | default(false))
+
+    # ---- Self-hosted Overpass (opt-in: enable_overpass) ----
+    # The configurator's Phase 2 boundary-polygon fetch hits Overpass. The
+    # public overpass-api.de is rate-limited / 504-prone; a box can self-host
+    # it as a standalone `bomet-overpass` container (loopback only) fed a
+    # boundary-filtered OSM extract, with nginx proxying /overpass/ → it (same
+    # gate). The configurator build above bakes VITE_OVERPASS_URL=/overpass/...
+    # when this flag is on. The extract is operator-prepared (country choice +
+    # size are deployment-specific) — see overpass/README.md + prepare-extract.sh;
+    # the playbook only runs the container against {{ overpass_planet_file }}.
+    - name: "Overpass — ensure data dir on target"
+      ansible.builtin.file:
+        path: "{{ overpass_data_dir | default('/opt/overpass/data') }}"
+        state: directory
+        mode: '0755'
+      when: enable_overpass | default(false)
+
+    - name: "Overpass — check prepared extract exists"
+      ansible.builtin.stat:
+        path: "{{ overpass_planet_file | default('/opt/overpass/data/boundaries.osm.bz2') }}"
+      register: overpass_extract
+      when: enable_overpass | default(false)
+
+    - name: "Overpass — warn if extract missing (container not started)"
+      ansible.builtin.debug:
+        msg: >-
+          enable_overpass is true but {{ overpass_planet_file | default('/opt/overpass/data/boundaries.osm.bz2') }}
+          is missing. Prepare it with overpass/prepare-extract.sh (geofabrik pbf
+          → osmium boundary-filter → .osm.bz2), then re-run. Skipping container.
+      when:
+        - enable_overpass | default(false)
+        - not (overpass_extract.stat.exists | default(false))
+
+    # (re)create the Overpass container. OVERPASS_RULES_LOAD=10 builds the
+    # area[] index the configurator's `area["name"=...]` query needs; META=no
+    # keeps the DB lean. init mode imports on first run; the DB volume persists.
+    - name: "Overpass — (re)create the bomet-overpass container"
+      ansible.builtin.shell: |
+        docker rm -f bomet-overpass >/dev/null 2>&1 || true
+        docker run -d --name bomet-overpass --restart unless-stopped \
+          -e OVERPASS_META=no -e OVERPASS_MODE=init -e OVERPASS_RULES_LOAD=10 \
+          -e OVERPASS_PLANET_URL=file:///data/{{ (overpass_planet_file | default('/opt/overpass/data/boundaries.osm.bz2')) | basename }} \
+          -p 127.0.0.1:{{ overpass_port | default(12346) }}:80 \
+          -v {{ overpass_data_dir | default('/opt/overpass/data') }}:/data \
+          -v {{ overpass_db_dir | default('/opt/overpass/db') }}:/db \
+          wiktorn/overpass-api
+      register: overpass_run
+      changed_when: true
+      when:
+        - enable_overpass | default(false)
+        - overpass_extract.stat.exists | default(false)
+
+    # Flag flipped true → false: sweep the standalone container (not compose-managed).
+    - name: "Overpass — sweep container when flag is OFF"
+      ansible.builtin.shell: |
+        if docker ps -a --filter name=^bomet-overpass$ --format '{{ "{{" }}.Names{{ "}}" }}' | grep -q '^bomet-overpass$'; then
+          docker rm -f bomet-overpass >/dev/null
+          echo "swept bomet-overpass"
+        fi
+      register: overpass_sweep
+      changed_when: overpass_sweep.stdout | length > 0
+      when: not (enable_overpass | default(false))
 
     # ---- digit-integration-tests dashboards (opt-in: enable_integration_tests) ----
     # Builds the react-admin catalog dashboard from the VENDORED in-tree source

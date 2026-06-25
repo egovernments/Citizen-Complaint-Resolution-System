@@ -2273,7 +2273,17 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 60s
+      # `start-dev --import-realm` re-runs the Quarkus augmentation + realm
+      # import on EVERY container start, so cold-start to "Listening on 8180"
+      # is ~120s (measured ~118s on bomet under a full-stack converge). At the
+      # old 60s the container flipped to `unhealthy` mid-startup, and the
+      # converge's `up -d` (services depend_on keycloak: service_healthy) aborted
+      # "dependency failed to start" — which on Linux ends the whole playbook,
+      # silently skipping every later task (configurator build, bootstrap, …).
+      # Keep start_period comfortably above real startup so the container stays
+      # `starting` (not `unhealthy`) until it's actually up. retries×interval
+      # (150s) still catches a genuinely dead keycloak after the grace window.
+      start_period: 180s
     networks:
       - egov-network
 

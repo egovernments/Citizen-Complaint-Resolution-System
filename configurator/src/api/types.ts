@@ -143,14 +143,24 @@ export interface Designation {
   tenantId?: string;
 }
 
-// Complaint Type / Service Definition
+// Complaint Type — a LEAF row of the 2-master ComplaintHierarchy. Its `code`
+// (== serviceCode stored on a complaint) lives in serviceCode; grouping derives
+// from parentCode (the leaf's immediate parent node), not the gone `menuPath`.
 export interface ComplaintType {
   serviceCode: string;
   name: string;
   keywords: string;
+  /** Primary owning department (kept for back-compat with single-dept callers). */
   department: string;
+  /** Multi-department ownership when the leaf is shared across departments. */
+  departments?: string[];
   slaHours: number;
-  menuPath?: string;
+  /** The leaf's level code in the hierarchy definition (descriptionField). */
+  levelCode?: string;
+  /** Immediate parent node code — the grouping key (replaces menuPath). */
+  parentCode?: string;
+  /** Dotted ancestor path down to this leaf, e.g. "AUTH.CAT.SECTOR.LEAF". */
+  path?: string;
   active: boolean;
   order?: number;
 }
@@ -444,6 +454,8 @@ export interface ValidationWarning {
   field: string;
   value?: string;
   message: string;
+  /** Optional machine-readable warning code (e.g. 'DUP', 'NO_DEPT'). */
+  code?: string;
 }
 
 // ============================================

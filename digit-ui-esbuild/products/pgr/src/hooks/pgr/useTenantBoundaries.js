@@ -1,5 +1,11 @@
 import { useState, useEffect } from "react";
-import keNairobiWardsFallback from "../../assets/boundaries/ke_nairobi_wards.json";
+
+// No hardcoded boundary data. When a tenant has no usable geometry (or
+// MAP_TENANT is unset), the map shows NO ward overlay rather than inventing
+// another tenant's wards — drawing a stale set would mis-resolve pins to
+// boundaries nowhere near the complaint. Boundaries come only from the live
+// boundary-service for the configured MAP_TENANT.
+const EMPTY_BOUNDARIES = { type: "FeatureCollection", features: [] };
 
 // boundary-service historically returns a unit-square placeholder polygon
 // for boundaries created without real geometry (XLSX onboarding with no
@@ -68,8 +74,8 @@ const useTenantBoundaries = () => {
     let cancelled = false;
     const MAP_TENANT = window?.globalConfigs?.getConfig?.("MAP_TENANT") || process.env.REACT_APP_MAP_TENANT;
     if (!MAP_TENANT) {
-      console.log("No MAP_TENANT configured, falling back to static Nairobi wards.");
-      setTenantBoundaries(keNairobiWardsFallback);
+      console.log("No MAP_TENANT configured — no ward overlay.");
+      setTenantBoundaries(EMPTY_BOUNDARIES);
       return undefined;
     }
     const HIERARCHY_TYPE = window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
@@ -138,14 +144,13 @@ const useTenantBoundaries = () => {
         if (features.length > 0) {
           setTenantBoundaries({ type: "FeatureCollection", features });
         } else {
-          // Empty tree OR all leaves placeholder → the tenant has no
-          // usable geometry; the static fallback at least keeps the
-          // Nairobi reference deployment working.
-          setTenantBoundaries(keNairobiWardsFallback);
+          // Empty tree OR all leaves placeholder → the tenant has no usable
+          // geometry. Show no overlay (NOT another tenant's static wards).
+          setTenantBoundaries(EMPTY_BOUNDARIES);
         }
       } catch (e) {
         console.error("Failed to fetch tenant boundaries:", e);
-        if (!cancelled) setTenantBoundaries(keNairobiWardsFallback);
+        if (!cancelled) setTenantBoundaries(EMPTY_BOUNDARIES);
       }
     };
     fetchBoundaries();

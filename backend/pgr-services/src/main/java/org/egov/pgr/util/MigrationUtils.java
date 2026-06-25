@@ -126,8 +126,14 @@ public class MigrationUtils {
         }
 
         for(Map<String, Object> map : res){
-            Long SLA = TimeUnit.HOURS.toMillis((Integer)map.get(MDMS_DATA_SLA_KEYWORD));
-            serviceCodeToSLA.put((String)map.get(MDMS_DATA_SERVICE_CODE_KEYWORD), SLA);
+            Object slaRaw = map.get(MDMS_DATA_SLA_KEYWORD);
+            Object codeRaw = map.get(MDMS_DATA_SERVICE_CODE_KEYWORD);
+            // Interior ComplaintHierarchy nodes carry no slaHours — only leaf rows do. Skip
+            // non-leaf rows so we don't NPE unboxing a null slaHours.
+            if (!(slaRaw instanceof Number) || codeRaw == null)
+                continue;
+            Long SLA = TimeUnit.HOURS.toMillis(((Number) slaRaw).longValue());
+            serviceCodeToSLA.put((String) codeRaw, SLA);
         }
 
         return serviceCodeToSLA;

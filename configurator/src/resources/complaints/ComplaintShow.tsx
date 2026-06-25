@@ -113,7 +113,7 @@ export function ComplaintShow() {
             <FieldSection title="Details">
               <FieldRow label="Type">
                 {rec.serviceCode ? (
-                  <EntityLink resource="complaint-types" id={String(rec.serviceCode)} />
+                  <EntityLink resource="complaint-hierarchy" id={String(rec.serviceCode)} />
                 ) : (
                   '--'
                 )}
