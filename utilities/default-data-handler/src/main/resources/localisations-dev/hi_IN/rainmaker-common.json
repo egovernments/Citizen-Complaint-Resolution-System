@@ -8958,6 +8958,30 @@
         "locale": "hi_IN"
     },
     {
+        "code": "MOBILE_VALIDATION_DIGITS",
+        "message": "अंक",
+        "module": "rainmaker-common",
+        "locale": "hi_IN"
+    },
+    {
+        "code": "MOBILE_VALIDATION_AT_LEAST",
+        "message": "कम से कम",
+        "module": "rainmaker-common",
+        "locale": "hi_IN"
+    },
+    {
+        "code": "MOBILE_VALIDATION_STARTING_WITH",
+        "message": "से शुरू होकर",
+        "module": "rainmaker-common",
+        "locale": "hi_IN"
+    },
+    {
+        "code": "MOBILE_VALIDATION_OR",
+        "message": "या",
+        "module": "rainmaker-common",
+        "locale": "hi_IN"
+    },
+    {
         "code": "ERR_INVALID_TRADE_LICENSE_NO",
         "message": "अमान्य व्यापार लाइसेंस नंबर",
         "module": "rainmaker-common",

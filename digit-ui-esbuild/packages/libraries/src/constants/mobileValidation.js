@@ -126,14 +126,7 @@ export function buildMobileErrorMessage(pattern, t) {
   if (startDigits && startDigits.length > 0) {
     const unique = [...new Set(startDigits)];
     const sw = tr("MOBILE_VALIDATION_STARTING_WITH", "starting with");
-    const or = tr("MOBILE_VALIDATION_OR",            "or");
-    if (unique.length === 1) {
-      startPart = `, ${sw} ${unique[0]}`;
-    } else if (unique.length === 2) {
-      startPart = `, ${sw} ${unique[0]} ${or} ${unique[1]}`;
-    } else {
-      startPart = `, ${sw} ${unique.slice(0, -1).join(", ")}, ${or} ${unique[unique.length - 1]}`;
-    }
+    startPart = `, ${sw} ${unique.join(", ")}`;
   }
 
   return `${base} (${lenPart}${startPart})`;
