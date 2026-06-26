@@ -1,6 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
+const LOCAL_STACK = process.env.LOCAL_STACK === '1';
+const EXCLUDE_LOCAL_ONLY = LOCAL_STACK ? undefined : /@local-only/;
 
 export default defineConfig({
   // Specs live under tests/<persona>/ (citizen, employee, admin) plus
@@ -16,6 +18,7 @@ export default defineConfig({
     '**/*.spec.ts',
     'fixtures/auth.setup.ts',
     'fixtures/lifecycle.setup.ts',
+    'fixtures/api.setup.ts',
   ],
   timeout: 120_000,
   expect: { timeout: 15_000 },
@@ -57,7 +60,34 @@ export default defineConfig({
       },
       dependencies: ['setup', 'lifecycle-setup'],
       // Don't try to run setup itself as part of the chromium project.
-      testIgnore: /tests\/fixtures\/(auth|lifecycle)\.setup\.ts$/,
+      testIgnore: /tests\/fixtures\/(auth|lifecycle|api)\.setup\.ts$/,
+    },
+    {
+      // Token-injection auth — writes auth-api.json storage state.
+      // Used by smoke + api projects which do not exercise the UI login form.
+      name: 'api-setup',
+      testMatch: /tests\/fixtures\/api\.setup\.ts$/,
+    },
+    {
+      name: 'smoke',
+      testDir: 'tests/smoke',
+      testMatch: /.*\.spec\.ts$/,
+      dependencies: ['api-setup'],
+      grepInvert: EXCLUDE_LOCAL_ONLY,
+      timeout: 30_000,
+      use: {
+        storageState: 'auth-api.json',
+      },
+    },
+    {
+      name: 'api',
+      testDir: 'tests/api',
+      testMatch: /.*\.spec\.ts$/,
+      dependencies: ['api-setup'],
+      grepInvert: EXCLUDE_LOCAL_ONLY,
+      use: {
+        storageState: 'auth-api.json',
+      },
     },
   ],
 });
