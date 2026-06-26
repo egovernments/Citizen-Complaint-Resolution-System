@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ComplaintRelatedToMap",
+  "title": "Complaint Related-To Map",
+  "description": "Lookup master mapping complaint-category codes to tenant identifiers and display metadata.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["code", "name", "active", "tenantCode", "shortName", "tenantId", "displayOrder"],
+    "additionalProperties": false,
+    "properties": {
+      "code":         { "type": "string", "description": "Unique category code, e.g. IGE" },
+      "name":         { "type": "string", "description": "Full display name" },
+      "active":       { "type": "boolean" },
+      "tenantCode":   { "type": "string", "description": "Sub-tenant code, e.g. mz.ige" },
+      "shortName":    { "type": "string", "description": "Abbreviated label for UI chips" },
+      "tenantId":     { "type": "string", "description": "State-level tenant, e.g. mz" },
+      "displayOrder": { "type": "integer", "minimum": 1 }
+    }
+  }
+}

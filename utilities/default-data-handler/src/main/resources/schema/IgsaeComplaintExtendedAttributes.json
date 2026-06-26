@@ -2,31 +2,22 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "IgsaeComplaintExtendedAttributes",
   "title": "IGSAE Complaint Extended Attributes",
-  "description": "Validates the extendedAttributes JSONB stored for IGSAE template-type complaints.",
+  "description": "Validates the flat extendedAttributes JSONB for IGSAE complaints. x-security lists the fields digit-config-service must encrypt/decrypt via egov-enc-service.",
   "type": "object",
-  "required": ["categoryType", "fields"],
+  "required": ["caseRelatedTo", "entityName", "dateOfFact", "entityAddress"],
+  "x-security": ["dateOfFact", "entityName", "entityAddress", "witnessName", "witnessAddress", "witnessNote"],
+  "additionalProperties": false,
   "properties": {
     "isConfidential": { "type": "boolean", "default": false },
-    "categoryType":   { "type": "string", "const": "IGSAE" },
+    "caseRelatedTo":  { "type": "string", "const": "IGSAE" },
     "schemaVersion":  { "type": "string" },
-    "encryptedFields": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
-    "fields": {
-      "type": "object",
-      "required": ["entityName", "dateOfFact", "entityAddress"],
-      "properties": {
-        "caseRelatedTo":   { "type": "string", "maxLength": 500 },
-        "dateOfFact":      { "type": "string", "format": "date" },
-        "entityName":      { "type": "string", "maxLength": 300 },
-        "entityAddress":   { "type": "string", "maxLength": 1000 },
-        "witnessName":     { "type": "string", "maxLength": 200 },
-        "witnessAddress":  { "type": "string", "maxLength": 1000 },
-        "witnessNote":     { "type": "string", "maxLength": 1000 }
-      },
-      "additionalProperties": false
-    }
-  },
-  "additionalProperties": false
+    "hierarchyLevel1": { "type": "string", "maxLength": 100 },
+    "hierarchyLevel2": { "type": "string", "maxLength": 100 },
+    "dateOfFact":     { "type": "string", "format": "date" },
+    "entityName":     { "type": "string", "maxLength": 300 },
+    "entityAddress":  { "type": "string", "maxLength": 1000 },
+    "witnessName":    { "type": "string", "maxLength": 200 },
+    "witnessAddress": { "type": "string", "maxLength": 1000 },
+    "witnessNote":    { "type": "string", "maxLength": 1000 }
+  }
 }
