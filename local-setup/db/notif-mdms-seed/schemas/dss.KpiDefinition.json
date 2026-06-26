@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "KpiDefinition",
+  "type": "object",
+  "required": ["id", "version", "status", "viz"],
+  "properties": {
+    "id": { "type": "string", "description": "Stable snake_case key matching the BATCH_QUERIES key, e.g. cl_open_weekly" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "status": { "type": "string", "enum": ["draft", "published", "archived"] },
+    "query": { "type": ["object", "null"], "description": "The analytics DSL body verbatim from BATCH_QUERIES; null for compose-only defs" },
+    "viz": {
+      "type": "object",
+      "required": ["kind", "format", "valueKey", "accent", "group", "titleKey"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["scalar", "bar", "rankedList", "line", "map", "dow"] },
+        "format": { "type": "string", "enum": ["integer", "percentInteger", "percentOneDecimal", "percentNoDecimal", "decimalOne", "decimalTwo", "hoursDays", "hoursDecimal", "ordinal", "signedInteger"] },
+        "valueKey": { "type": "string" },
+        "accent": { "type": "string", "enum": ["teal", "amber", "green", "slate", "red", "blue", "orange"] },
+        "group": { "type": "string" },
+        "titleKey": { "type": "string", "description": "Localization key" },
+        "dimensionKey": { "type": "string" },
+        "measureKeys": { "type": "array", "items": { "type": "string" } },
+        "variants": { "type": "array", "items": { "type": "object", "required": ["id", "labelKey"], "properties": { "id": {"type":"string"}, "labelKey": {"type":"string"}, "default": {"type":"boolean"} } } },
+        "compose": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "object", "required": ["type", "sourceKpiIds"], "properties": {
+              "type": { "type": "string", "enum": ["openRateComplement", "netBacklogDaily", "dailyAvgFromWeekly", "hourlyAvgFromDaily"] },
+              "sourceKpiIds": { "type": "array", "items": {"type":"string"} },
+              "elapsedFromAsOf": { "type": "boolean" }
+            }}
+          ]
+        },
+        "pii": {
+          "oneOf": [
+            { "type": "boolean", "enum": [false] },
+            { "type": "object", "required": ["dimension"], "properties": { "dimension": {"type":"string"} } }
+          ]
+        }
+      }
+    },
+    "params": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "default", "allowed"],
+        "properties": {
+          "name": {"type":"string"},
+          "default": {"type":"string"},
+          "allowed": {"type":"array","items":{"type":"string"}}
+        }
+      }
+    },
+    "rbac": {
+      "type": "object",
+      "properties": {
+        "visibleTo": { "type": "array", "items": {"type":"string"}, "description": "Role codes that can see this KPI; empty = all authenticated roles. Officer-PII KPIs must list specific roles here." }
+      }
+    }
+  }
+}
