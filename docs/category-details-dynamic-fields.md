@@ -56,7 +56,7 @@ CREATE INDEX IF NOT EXISTS idx_pgr_svc_extended_attrs_gin
 
 | Field | UI Label | Type | Storage | Notes |
 |-------|----------|------|---------|-------|
-| `caseRelatedTo` | Case Related To | string | `extendedAttributes.fields` | Free text |
+| `caseRelatedTo` | Case Related To | string | `extendedAttributes.fields` | Use a master code RAINMAKER-PGR.ComplaintRelatedToMap |
 | `isConfidential` | Keep details confidential | boolean | `extendedAttributes.isConfidential` | Default `false` |
 | `dateOfFact` | Date of Fact | date | `extendedAttributes.fields` | ISO-8601 `YYYY-MM-DD` |
 | `entityName` | Entity Name | string | `extendedAttributes.fields` | Organisation or person involved |
