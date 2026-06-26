@@ -3,16 +3,25 @@ package org.egov.pgr.analytics;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.common.contract.request.Role;
+import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.AnalyticsCatalog.Grain;
+import org.egov.pgr.analytics.model.KpiDefinition;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Orchestrates the dynamic analytics query: resolve server-side RBAC scope, plan each query
  * against the catalog, execute parameterized SQL, and shape the response (single or batch dict).
+ *
+ * The batch-query arm supports a kpiId-by-reference shorthand: when a query node contains
+ * {@code "kpiId": "<id>"} instead of an inline grammar, the KPI's query is loaded from MDMS
+ * via {@link KpiCatalogService}. Callers not authorized for the KPI receive a per-entry
+ * {@code kpi_forbidden} error with {@code partial: true}; the rest of the batch continues normally.
  */
 @Service
 @Slf4j
@@ -21,15 +30,19 @@ public class AnalyticsService {
     private final AnalyticsPlanner planner;
     private final AnalyticsCatalog catalog;
     private final JdbcTemplate jdbc;
+    private final KpiCatalogService kpiCatalogService;
 
     @Autowired
-    public AnalyticsService(AnalyticsPlanner planner, AnalyticsCatalog catalog, JdbcTemplate jdbc){
+    public AnalyticsService(AnalyticsPlanner planner, AnalyticsCatalog catalog, JdbcTemplate jdbc,
+                            KpiCatalogService kpiCatalogService){
         this.planner = planner; this.catalog = catalog; this.jdbc = jdbc;
+        this.kpiCatalogService = kpiCatalogService;
     }
 
     public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, String tenantId, int stateLevelLen){
         if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
         AnalyticsScope scope = AnalyticsScope.resolve(requestInfo, tenantId, stateLevelLen);
+        Set<String> callerRoles = extractRoles(requestInfo);
 
         Map<String,Object> out = new LinkedHashMap<>();
         out.put("asOf", asOf());
@@ -42,17 +55,54 @@ public class AnalyticsService {
             Iterator<Map.Entry<String,JsonNode>> it = body.get("queries").fields();
             while (it.hasNext()) {
                 Map.Entry<String,JsonNode> e = it.next();
-                try { results.put(e.getKey(), runOne(e.getValue(), scope)); }
-                catch (Exception ex) { partial = true; results.put(e.getKey(), err(ex)); }
+                String name = e.getKey();
+                JsonNode queryNode = e.getValue();
+                try {
+                    JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
+                    if (actualQueryNode == null) {
+                        partial = true;
+                        results.put(name, Map.of("error", "kpi_forbidden",
+                                "message", "KPI not found or not authorized for role set"));
+                        continue;
+                    }
+                    results.put(name, runOne(actualQueryNode, scope));
+                } catch (Exception ex) {
+                    partial = true;
+                    results.put(name, err(ex));
+                }
             }
             out.put("results", results);
             out.put("partial", partial);
         } else if (body.has("query")) {
-            out.putAll(runOne(body.get("query"), scope));
+            JsonNode queryNode = body.get("query");
+            JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
+            if (actualQueryNode == null)
+                throw new IllegalArgumentException("kpi_forbidden: KPI not found or not authorized");
+            out.putAll(runOne(actualQueryNode, scope));
         } else {
             throw new IllegalArgumentException("invalid_param: body must contain 'query' or 'queries'");
         }
         return out;
+    }
+
+    /**
+     * If the query node has a {@code "kpiId"} field, resolve it to the KPI's stored query
+     * and check authorization. Returns null if forbidden. Returns queryNode unchanged when
+     * there is no {@code "kpiId"} field (inline query path is unchanged).
+     */
+    private JsonNode resolveKpiRef(JsonNode queryNode, String tenantId, Set<String> callerRoles) {
+        if (!queryNode.has("kpiId")) return queryNode;
+
+        String kpiId = queryNode.get("kpiId").asText();
+        Optional<KpiDefinition> def = kpiCatalogService.getDef(kpiId, tenantId);
+        if (def.isEmpty() || !def.get().isPublished() || !def.get().isVisibleTo(callerRoles)) {
+            log.debug("kpiId '{}' not found or not authorized (roles={})", kpiId, callerRoles);
+            return null;
+        }
+        JsonNode storedQuery = def.get().getQuery();
+        if (storedQuery == null || storedQuery.isNull())
+            throw new IllegalArgumentException("invalid_kpi: KPI '" + kpiId + "' has no query defined");
+        return storedQuery;
     }
 
     private Map<String,Object> runOne(JsonNode q, AnalyticsScope scope){
@@ -121,5 +171,16 @@ public class AnalyticsService {
         String code = msg.contains(":") ? msg.substring(0, msg.indexOf(':')) : "query_failed";
         m.put("error", code); m.put("message", msg);
         return m;
+    }
+
+    /** Extract role codes from RequestInfo.userInfo.roles — mirrors AnalyticsScope role extraction. */
+    private Set<String> extractRoles(RequestInfo requestInfo) {
+        if (requestInfo == null) return Collections.emptySet();
+        User u = requestInfo.getUserInfo();
+        if (u == null || u.getRoles() == null) return Collections.emptySet();
+        return u.getRoles().stream()
+                .filter(r -> r != null && r.getCode() != null)
+                .map(Role::getCode)
+                .collect(Collectors.toSet());
     }
 }
