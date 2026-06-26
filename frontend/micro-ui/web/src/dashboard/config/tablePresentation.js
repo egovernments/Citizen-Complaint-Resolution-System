@@ -69,6 +69,36 @@ export function breachSeverity(value, config) {
   return Math.min(1, (v - breach) / span);
 }
 
+/**
+ * Map watch/breach thresholds to 0–1 severity for unified slaOverrun cell styling.
+ */
+export function metricCellSeverity(value, config) {
+  if (!Number.isFinite(value) || !config) return null;
+  const tone = evaluateMetricTone(value, config);
+  if (!tone || tone === "good") return null;
+
+  if (tone === "breach") {
+    const breachSev = breachSeverity(value, config);
+    return breachSev != null ? Math.min(1, 0.45 + breachSev * 0.55) : 0.55;
+  }
+
+  const { higherIsBetter, watch, breach } = config;
+  let v = value;
+  if (watch <= 1 && breach <= 1 && v > 1 && v <= 100) {
+    v = v / 100;
+  }
+
+  if (higherIsBetter) {
+    const span = watch - breach || 1;
+    const depth = Math.min(1, Math.max(0, (watch - v) / span));
+    return 0.25 + depth * 0.2;
+  }
+
+  const span = breach - watch || 1;
+  const depth = Math.min(1, Math.max(0, (v - watch) / span));
+  return 0.25 + depth * 0.2;
+}
+
 export const TABLE_THRESHOLDS = {
   "cl-table-workflow-stages": {
     column: "avgDwellMs",

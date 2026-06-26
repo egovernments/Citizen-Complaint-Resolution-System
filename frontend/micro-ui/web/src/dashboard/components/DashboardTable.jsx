@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   DATA_TABLE_STYLES,
   getDataTableTdClass,
   getDataTableThClass,
 } from "../config/visualizationStyles";
 import { buildRedSeverityStyle } from "../config/tablePresentation";
+import useTableSort from "../hooks/useTableSort";
+import TableSortHeader from "./TableSortHeader";
 
 const TrendCell = ({ value }) => {
   const { muted, trendUp, trendDown } = DATA_TABLE_STYLES;
@@ -127,6 +129,8 @@ function renderStatusTags(row, styles) {
 const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
   const styles = DATA_TABLE_STYLES;
   const safeRows = rows ?? [];
+  const { sortState, handleSort, sortRows } = useTableSort(columns);
+  const sortedRows = useMemo(() => sortRows(safeRows), [safeRows, sortRows]);
 
   return (
     <table className={styles.table}>
@@ -143,20 +147,20 @@ const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
         <tr>
           {columns.map((col) => (
             <th key={col.id} className={getDataTableThClass(col.align)}>
-              {col.label}
+              <TableSortHeader column={col} sortState={sortState} onSort={handleSort} />
             </th>
           ))}
         </tr>
       </thead>
       <tbody>
-        {safeRows.length === 0 ? (
+        {sortedRows.length === 0 ? (
           <tr>
             <td colSpan={columns.length} className={styles.empty}>
               {emptyMessage}
             </td>
           </tr>
         ) : (
-          safeRows.map((row, rowIndex) => (
+          sortedRows.map((row, rowIndex) => (
           <tr
             key={row.id ?? rowIndex}
             className={row.highlight ? styles.rowHighlight : undefined}
