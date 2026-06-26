@@ -1,5 +1,7 @@
 import React, { useCallback, useMemo, useRef } from "react";
 import GridLayout, { WidthProvider } from "react-grid-layout";
+import useBreakpoint from "../hooks/useBreakpoint";
+import { adaptLayoutForBreakpoint } from "../utils/responsiveLayout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import {
@@ -39,6 +41,7 @@ import LineChart from "./LineChart";
 import PieChart from "./PieChart";
 import ResizeGrip from "./ResizeGrip";
 import CardUpdatedStamp from "./CardUpdatedStamp";
+import SubtleScroll from "./SubtleScroll";
 
 const GridLayoutWithWidth = WidthProvider(GridLayout);
 
@@ -149,6 +152,8 @@ const DashboardGrid = ({
   chartData = {},
   loading = false,
 }) => {
+  const breakpoint = useBreakpoint();
+  const isDesktopLayout = breakpoint === "lg";
   const gridWrapRef = useRef(null);
   const externalDropLockRef = useRef(false);
   const activeDragWidgetId = draggingWidgetIdRef?.current ?? draggingWidgetId;
@@ -172,15 +177,25 @@ const DashboardGrid = ({
     []
   );
 
+  const displayLayout = useMemo(
+    () => adaptLayoutForBreakpoint(layout, breakpoint),
+    [layout, breakpoint]
+  );
+
   const gridLayout = useMemo(
     () =>
-      layout.map((item) => ({
-        ...item,
-        ...getSizeConstraints(item.i),
-        resizeHandles: getResizeHandles(item.i),
-        className: gridItemClassName(item.i),
-      })),
-    [layout]
+      displayLayout.map((item) => {
+        const constraints = getSizeConstraints(item.i);
+        return {
+          ...item,
+          ...constraints,
+          minW: isDesktopLayout ? constraints.minW : 2,
+          resizeHandles: getResizeHandles(item.i),
+          className: gridItemClassName(item.i),
+          static: !isDesktopLayout,
+        };
+      }),
+    [displayLayout, isDesktopLayout]
   );
 
   const renderKpi = (metricId, onRemove) => {
@@ -535,7 +550,9 @@ const DashboardGrid = ({
   return (
     <div
       ref={gridWrapRef}
-      className={isExternalDrag ? "dashboard-external-drag" : undefined}
+      className={`dashboard-grid-wrap tw-min-w-0 tw-w-full tw-max-w-full${
+        isExternalDrag ? " dashboard-external-drag" : ""
+      }`}
       onDragOver={handleWrapDragOver}
       onDrop={handleWrapDrop}
     >
@@ -553,13 +570,14 @@ const DashboardGrid = ({
           draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-gauge-target-marker, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
           compactType={null}
           allowOverlap
-          isResizable
-          isDroppable
+          isResizable={isDesktopLayout}
+          isDraggable={isDesktopLayout}
+          isDroppable={isDesktopLayout}
           droppingItem={droppingItem}
           onDrop={handleDrop}
           onDropDragOver={handleDropDragOver}
         >
-          {layout.map((item) => {
+          {displayLayout.map((item) => {
             const isKpi = isKpiWidget(item.i);
             const meta = WIDGETS[item.i];
             const vizType = meta?.type;
@@ -612,9 +630,9 @@ const DashboardGrid = ({
                       className={getWidgetBodyClassName(vizType, { isTable })}
                     >
                       {isTable ? (
-                        <div className={getWidgetScrollClassName()}>
+                        <SubtleScroll className={getWidgetScrollClassName()}>
                           {renderWidget(item.i)}
-                        </div>
+                        </SubtleScroll>
                       ) : (
                         renderWidget(item.i)
                       )}

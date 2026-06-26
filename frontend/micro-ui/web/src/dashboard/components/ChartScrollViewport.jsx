@@ -1,4 +1,6 @@
 import React from "react";
+import useSubtleScrollbar from "../hooks/useSubtleScrollbar";
+import { mergeRefs } from "../utils/mergeRefs";
 import { SHARED_CHROME } from "../config/visualizationStyles";
 
 const ChartScrollViewport = ({
@@ -9,6 +11,7 @@ const ChartScrollViewport = ({
   scrollAxis = "xy",
   children,
 }) => {
+  const subtleScrollRef = useSubtleScrollbar(isScrollable);
   const { width, height } = chartSize;
   const verticalOnly = scrollAxis === "y";
   const horizontalOnly = scrollAxis === "x";
@@ -21,9 +24,9 @@ const ChartScrollViewport = ({
 
   return (
     <div
-      ref={viewportRef}
+      ref={mergeRefs(subtleScrollRef, viewportRef)}
       className={`${SHARED_CHROME.chartScrollViewport}${
-        isScrollable ? ` ${SHARED_CHROME.chartScrollViewportActive}` : ""
+        isScrollable ? ` ${SHARED_CHROME.chartScrollViewportActive} dashboard-subtle-scroll` : ""
       }${verticalOnly ? ` ${SHARED_CHROME.chartScrollViewportVertical}` : ""}${
         horizontalOnly ? ` ${SHARED_CHROME.chartScrollViewportHorizontal}` : ""
       }`}

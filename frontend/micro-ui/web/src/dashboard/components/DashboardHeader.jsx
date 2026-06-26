@@ -32,6 +32,14 @@ const SearchIcon = () => (
   </svg>
 );
 
+const MenuIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <line x1="3" y1="12" x2="21" y2="12" />
+    <line x1="3" y1="18" x2="21" y2="18" />
+  </svg>
+);
+
 const ExportIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
@@ -41,6 +49,8 @@ const ExportIcon = () => (
 );
 
 const DashboardHeader = ({
+  showMenuButton = false,
+  onMenuToggle,
   visibleLayoutIds,
   onAddWidget,
   onResetLayout,
@@ -66,13 +76,25 @@ const DashboardHeader = ({
 
   return (
     <header className="dashboard-header tw-flex-shrink-0 tw-bg-background">
-      <div className="dashboard-header-top tw-flex tw-h-12 tw-shrink-0 tw-items-center tw-justify-between tw-gap-4 tw-border-b tw-border-border tw-bg-surface tw-px-4 lg:tw-px-6">
-        <div className="tw-min-w-0">
+      <div className="dashboard-header-top tw-flex tw-min-h-12 tw-shrink-0 tw-items-center tw-justify-between tw-gap-3 tw-border-b tw-border-border tw-bg-surface tw-px-3 sm:tw-gap-4 sm:tw-px-4 lg:tw-px-6">
+        <div className="tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-2 sm:tw-gap-3">
+          {showMenuButton ? (
+            <button
+              type="button"
+              className="dashboard-header-menu-btn"
+              onClick={onMenuToggle}
+              aria-label="Open navigation"
+            >
+              <MenuIcon />
+            </button>
+          ) : null}
+          <div className="tw-min-w-0 tw-flex-1">
           <div className="tw-flex tw-flex-wrap tw-items-baseline tw-gap-x-3 tw-gap-y-0.5">
             <h1 className="tw-text-[15px] tw-font-semibold tw-leading-tight tw-text-foreground">
               {title}
             </h1>
-            <p className="tw-text-[11px] tw-text-muted-foreground">{subtitle}</p>
+            <p className="dashboard-header-subtitle tw-text-[11px] tw-text-muted-foreground">{subtitle}</p>
+          </div>
           </div>
         </div>
 
@@ -132,6 +154,20 @@ const DashboardHeader = ({
             <span>Export</span>
           </button>
         </div>
+      </div>
+      <div className="dashboard-header-mobile-search">
+        <label className="dashboard-header-search dashboard-header-search--mobile">
+          <span className="dashboard-header-search-icon" aria-hidden>
+            <SearchIcon />
+          </span>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => onSearchQueryChange(e.target.value)}
+            placeholder="Search complaints, wards, citizens."
+            className="dashboard-header-search-input"
+          />
+        </label>
       </div>
     </header>
   );

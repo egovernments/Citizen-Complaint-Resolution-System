@@ -5,12 +5,17 @@ const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", href: "/digit-ui/employee/dashboard", active: true },
 ];
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen = true, onNavigate }) => {
   const stateLabel = useMemo(() => getStateLabel(), []);
   const productLabel = useMemo(() => getProductLabel(), []);
 
   return (
-    <aside className="tw-flex tw-h-full tw-w-60 tw-flex-shrink-0 tw-flex-col tw-bg-chrome tw-text-chrome-foreground">
+    <aside
+      className={`dashboard-sidebar tw-flex tw-h-full tw-w-60 tw-flex-shrink-0 tw-flex-col tw-bg-chrome tw-text-chrome-foreground${
+        isOpen ? " dashboard-sidebar--open" : ""
+      }`}
+      aria-hidden={!isOpen ? true : undefined}
+    >
       <div className="tw-border-b tw-border-[color-mix(in_srgb,var(--chrome-foreground)_15%,transparent)] tw-px-5 tw-py-5">
         <p className="tw-text-xs tw-font-medium tw-uppercase tw-tracking-wider tw-text-chrome-muted">
           {stateLabel}
@@ -24,6 +29,7 @@ const Sidebar = () => {
           <a
             key={item.id}
             href={item.href}
+            onClick={onNavigate}
             className={`tw-block tw-rounded-md tw-px-3 tw-py-2 tw-text-sm tw-font-medium ${
               item.active
                 ? "tw-bg-primary tw-text-primary-foreground"

@@ -290,7 +290,7 @@
   }
 
   .dashboard-header-controls {
-    @apply tw-flex tw-items-center tw-gap-2;
+    @apply tw-flex tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-2;
   }
 
   .dashboard-header-search {
@@ -486,8 +486,19 @@
     color: var(--muted-foreground, #6b6860);
   }
 
+  .dashboard-header-top {
+    min-width: 0;
+  }
+
+  .dashboard-filters-bar {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .dashboard-filters-card {
     @apply tw-flex tw-items-center tw-rounded tw-border tw-border-border tw-bg-surface tw-px-3 tw-py-2;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .dashboard-filters-row {
@@ -569,6 +580,245 @@
     opacity: 0.4;
     cursor: default;
     pointer-events: none;
+  }
+
+  /* ── Responsive layout ─────────────────────────────────────────────── */
+
+  .dashboard-main {
+    overflow-x: clip;
+  }
+
+  .dashboard-grid-wrap {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  .dashboard-grid-wrap .react-grid-layout {
+    width: 100% !important;
+    min-width: 0;
+  }
+
+  .dashboard-header-mobile-search {
+    display: none;
+  }
+
+  .dashboard-sidebar-backdrop {
+    display: none;
+  }
+
+  .dashboard-header-menu-btn {
+    @apply tw-inline-flex tw-h-8 tw-w-8 tw-shrink-0 tw-items-center tw-justify-center tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-text-foreground;
+  }
+
+  .dashboard-header-menu-btn:hover {
+    @apply tw-bg-muted;
+  }
+
+  @media (max-width: 1023px) {
+    .dashboard-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 50;
+      height: 100dvh;
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
+      box-shadow: none;
+    }
+
+    .dashboard-sidebar--open {
+      transform: translateX(0);
+      box-shadow: 4px 0 24px rgb(0 0 0 / 0.15);
+    }
+
+    .dashboard-sidebar-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: rgb(0 0 0 / 0.4);
+      cursor: pointer;
+    }
+
+    .layout .react-grid-item > .react-resizable-handle,
+    .dashboard-resize-grip {
+      display: none !important;
+    }
+
+    .layout .react-grid-item {
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .dashboard-kpi-value {
+      font-size: clamp(18px, 4.5vw, 26px);
+    }
+
+    .dashboard-kpi-sparkline-value-row {
+      flex-wrap: wrap;
+      row-gap: 0.125rem;
+    }
+
+    .dashboard-drag-handle-title,
+    .dashboard-drag-handle-subtitle {
+      overflow: visible;
+      text-overflow: unset;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .dashboard-kpi-card--metric .dashboard-kpi-title,
+    .dashboard-kpi-card--delta .dashboard-kpi-title,
+    .dashboard-kpi-card--sparkline .dashboard-kpi-title,
+    .dashboard-kpi-card--metric .dashboard-kpi-context,
+    .dashboard-kpi-card--delta .dashboard-kpi-context {
+      -webkit-line-clamp: unset;
+      display: block;
+      overflow: visible;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .dashboard-kpi-list-item .tw-truncate,
+    .dashboard-kpi-card .tw-truncate {
+      overflow: visible;
+      text-overflow: unset;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .dashboard-card-updated {
+      position: static;
+      display: block;
+      margin-top: 0.25rem;
+      margin-right: 0;
+      text-align: right;
+      padding-right: 0.25rem;
+    }
+
+    .dashboard-widget-surface {
+      min-height: 100%;
+      height: auto;
+    }
+
+    .dashboard-kpi-widget {
+      min-height: 100%;
+      height: auto;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .dashboard-header-top {
+      flex-wrap: wrap;
+      align-items: flex-start;
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
+    }
+
+    .dashboard-header-controls {
+      justify-content: flex-end;
+      width: 100%;
+    }
+
+    .dashboard-header-subtitle {
+      width: 100%;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .dashboard-header-controls .dashboard-header-export span {
+      display: none;
+    }
+
+    .dashboard-header-controls .dashboard-header-btn {
+      @apply tw-px-2;
+    }
+
+    .dashboard-header-mobile-search {
+      display: block;
+      border-bottom: 1px solid var(--border);
+      background-color: var(--surface);
+      padding: 0.5rem 0.75rem;
+    }
+
+    .dashboard-header-search--mobile {
+      display: flex !important;
+      width: 100%;
+    }
+
+    .dashboard-header-search--mobile .dashboard-header-search-input {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .dashboard-filters-card {
+      align-items: stretch;
+      @apply tw-px-2.5 tw-py-2.5;
+    }
+
+    .dashboard-filters-row {
+      flex-direction: column;
+      align-items: stretch;
+      width: 100%;
+    }
+
+    .dashboard-filters-date-range {
+      width: 100%;
+      flex-wrap: wrap;
+    }
+
+    .dashboard-filter-inline-date-wrap {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .dashboard-filter-inline-date {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .dashboard-filter-inline-select-wrap {
+      width: 100%;
+    }
+
+    .dashboard-filter-inline-select {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .dashboard-filters-clear-inline {
+      align-self: flex-start;
+    }
+
+    .dashboard-add-kpi-panel {
+      max-width: calc(100vw - 1.5rem);
+    }
+
+    .dashboard-kpi-card {
+      padding: 0.75rem;
+    }
+  }
+
+  @media (min-width: 640px) and (max-width: 1023px) {
+    .dashboard-header-search-input {
+      @apply tw-w-44;
+      max-width: 100%;
+    }
+
+    .dashboard-filters-row {
+      row-gap: 0.5rem;
+    }
+
+    .dashboard-header-subtitle {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
   }
 
   .dashboard-widget-surface {
@@ -706,7 +956,7 @@
   }
 
   .dashboard-table-scroll {
-    @apply tw-min-h-0 tw-flex-1 tw-w-full tw-overflow-auto;
+    @apply tw-min-h-0 tw-flex-1 tw-w-full tw-max-w-full tw-overflow-auto;
     max-height: 100%;
     font-family: inherit;
     font-size: 12px;
@@ -1658,17 +1908,50 @@
   }
 }
 
-/* Scroll works; scrollbar thumbs/tracks are hidden across the dashboard. */
+/* Scrollbars hidden globally except on chart/table scroll regions. */
 .dashboard-root,
 .dashboard-root * {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
-.dashboard-root *::-webkit-scrollbar {
+.dashboard-root *:not(.dashboard-subtle-scroll)::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
+}
+
+.dashboard-root .dashboard-subtle-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.dashboard-root .dashboard-subtle-scroll.dashboard-subtle-scroll--active {
+  scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent) transparent;
+}
+
+.dashboard-root .dashboard-subtle-scroll::-webkit-scrollbar {
+  display: block;
+  width: 5px;
+  height: 5px;
+}
+
+.dashboard-root .dashboard-subtle-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dashboard-root .dashboard-subtle-scroll::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  transition: background-color 0.3s ease;
+}
+
+.dashboard-root .dashboard-subtle-scroll.dashboard-subtle-scroll--active::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+}
+
+.dashboard-root .dashboard-subtle-scroll.dashboard-subtle-scroll--active::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--foreground) 32%, transparent);
 }
 
 /* Beat global digit-ui Roboto rules on bare form/table elements */
