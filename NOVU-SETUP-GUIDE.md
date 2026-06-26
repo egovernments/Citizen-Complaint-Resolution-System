@@ -12,10 +12,14 @@ The notification system works through the following flow:
 4. **novu-bridge** triggers the appropriate Novu workflow via Novu API
 5. **Novu** processes the workflow and sends notifications through configured providers (Twilio WhatsApp)
 
-**Important:** Workflows are NOT registered directly in Novu. The novu-bridge acts as the integration layer that:
-- Maps DIGIT events to Novu workflows
+**Two-Part Setup Required:**
+1. **In Novu Dashboard**: Create the actual workflows with trigger IDs (complaints-workflow-apply, complaints-workflow-assign, etc.)
+2. **In DIGIT Config**: Configure TemplateBinding to map DIGIT events to these Novu workflow trigger IDs
+
+The novu-bridge acts as the integration layer that:
+- Maps DIGIT events (COMPLAINTS.WORKFLOW.APPLY) to Novu workflow triggers (complaints-workflow-apply)
 - Reads template configurations from config-service
-- Triggers Novu workflows with the correct parameters
+- Triggers the pre-created Novu workflows with the correct parameters
 
 ## Prerequisites
 
@@ -55,7 +59,53 @@ TENANT_ID=be.bomet
 2. Get Account SID and Auth Token from dashboard
 3. Set up WhatsApp sender number (format: `whatsapp:+91XXXXXXXXXX`)
 
-### Step 2: Configure Environment Variables
+### Step 2: Create Workflows in Novu Dashboard
+
+You must create the workflows in Novu before configuring DIGIT. Login to Novu Dashboard and create the following workflows:
+
+#### 2.1 Create "complaints-workflow-apply" Workflow
+1. Go to Novu Dashboard → **Workflows**
+2. Click **"Create Workflow"**
+3. Set Workflow Name: `complaints-workflow-apply`
+4. Set Trigger Identifier: `complaints-workflow-apply`
+5. Add **Chat** step (for WhatsApp)
+6. Select **Twilio** as provider
+7. Configure the message template with variables:
+   ```
+   Your complaint {{complaintNo}} for {{serviceName}} has been submitted on {{submittedDate}}.
+   ```
+8. Save and **Activate** the workflow
+
+#### 2.2 Create "complaints-workflow-assign" Workflow  
+1. Create new workflow with Trigger ID: `complaints-workflow-assign`
+2. Add Chat step with Twilio provider
+3. Configure message template:
+   ```
+   Complaint {{complaintNo}} for {{serviceName}} has been assigned to {{assigneeName}} ({{assigneeDesignation}}) from {{departmentName}} department.
+   ```
+4. Save and Activate
+
+#### 2.3 Create "complaints-workflow-resolve" Workflow
+1. Create new workflow with Trigger ID: `complaints-workflow-resolve`
+2. Add Chat step with Twilio provider  
+3. Configure message template:
+   ```
+   Your complaint {{complaintNo}} for {{serviceName}} submitted on {{submittedDate}} has been resolved by {{assigneeName}}.
+   ```
+4. Save and Activate
+
+#### 2.4 Create "complaints-workflow-reject" Workflow
+1. Create new workflow with Trigger ID: `complaints-workflow-reject`
+2. Add Chat step with Twilio provider
+3. Configure message template:
+   ```
+   Your complaint {{complaintNo}} for {{serviceName}} submitted on {{submittedDate}} has been rejected. Reason: {{comment}}
+   ```
+4. Save and Activate
+
+**Important:** The Trigger IDs must match exactly with the `templateId` values in the TemplateBinding configuration.
+
+### Step 3: Configure Environment Variables
 
 Create `.env` file or export these variables:
 ```bash

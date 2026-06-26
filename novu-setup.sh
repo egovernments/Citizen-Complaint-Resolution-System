@@ -288,10 +288,26 @@ echo -e "  Restarting novu-bridge..."
 docker restart novu-bridge >/dev/null 2>&1 && echo -e "  ${GREEN}✓ novu-bridge restarted${NC}" || echo -e "  ${YELLOW}! Could not restart novu-bridge${NC}"
 
 # ============================================
-# STEP 7: Verify Setup
+# STEP 7: Check Novu Workflows
 # ============================================
 echo ""
-echo -e "${YELLOW}Step 7: Verifying Setup...${NC}"
+echo -e "${YELLOW}Step 7: Checking Novu Workflows...${NC}"
+
+echo -e "  Checking if workflows exist in Novu..."
+WORKFLOW_CHECK=$(curl -s "$NOVU_API_URL/v1/workflows" \
+  -H "Authorization: ApiKey $NOVU_API_KEY" \
+  -H "Content-Type: application/json")
+
+echo "$WORKFLOW_CHECK" | grep -q "complaints-workflow-apply" && echo -e "  ${GREEN}✓ complaints-workflow-apply found${NC}" || echo -e "  ${RED}✗ complaints-workflow-apply NOT FOUND - Create in Novu Dashboard${NC}"
+echo "$WORKFLOW_CHECK" | grep -q "complaints-workflow-assign" && echo -e "  ${GREEN}✓ complaints-workflow-assign found${NC}" || echo -e "  ${RED}✗ complaints-workflow-assign NOT FOUND - Create in Novu Dashboard${NC}"
+echo "$WORKFLOW_CHECK" | grep -q "complaints-workflow-resolve" && echo -e "  ${GREEN}✓ complaints-workflow-resolve found${NC}" || echo -e "  ${RED}✗ complaints-workflow-resolve NOT FOUND - Create in Novu Dashboard${NC}"
+echo "$WORKFLOW_CHECK" | grep -q "complaints-workflow-reject" && echo -e "  ${GREEN}✓ complaints-workflow-reject found${NC}" || echo -e "  ${RED}✗ complaints-workflow-reject NOT FOUND - Create in Novu Dashboard${NC}"
+
+# ============================================
+# STEP 8: Verify Setup
+# ============================================
+echo ""
+echo -e "${YELLOW}Step 8: Verifying Config Service Setup...${NC}"
 
 # Check if configs are loaded
 echo -e "  Checking TemplateBinding..."
