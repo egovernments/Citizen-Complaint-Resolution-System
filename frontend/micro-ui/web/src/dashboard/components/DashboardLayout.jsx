@@ -41,7 +41,7 @@ const DashboardLayout = ({
       className="dashboard-root tw-flex tw-h-screen tw-overflow-hidden tw-bg-background tw-font-sans tw-text-foreground"
       style={brandStyle}
     >
-      <Sidebar />
+      <Sidebar onSignOut={onSignOut} />
       <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
         <DashboardHeader
           visibleLayoutIds={visibleLayoutIds}
@@ -57,10 +57,8 @@ const DashboardLayout = ({
           kpiCardData={kpiCardData}
           allowedWidgetIds={allowedWidgetIds}
           scopedRole={scopedRole}
-          username={username}
           officerAccess={officerAccess}
           visibleKpiCount={visibleKpiCount}
-          onSignOut={onSignOut}
         />
         <main className="tw-flex-1 tw-overflow-auto tw-bg-background tw-p-4 lg:tw-p-6">
           <DashboardFilters

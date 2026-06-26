@@ -54,10 +54,8 @@ const DashboardHeader = ({
   kpiCardData,
   allowedWidgetIds,
   scopedRole,
-  username,
   officerAccess,
   visibleKpiCount,
-  onSignOut,
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
   const addKpiRef = useRef(null);
@@ -172,27 +170,6 @@ const DashboardHeader = ({
             <ExportIcon />
             <span>Export</span>
           </button>
-
-          {onSignOut ? (
-            <div className="tw-flex tw-items-center tw-gap-2 tw-border-l tw-border-border tw-pl-2">
-              {username ? (
-                <span
-                  className="tw-hidden tw-text-[11px] tw-text-muted-foreground md:tw-inline"
-                  title="Signed-in employee"
-                >
-                  {username}
-                </span>
-              ) : null}
-              <button
-                type="button"
-                onClick={onSignOut}
-                className="dashboard-header-btn"
-                title="Sign out"
-              >
-                Sign out
-              </button>
-            </div>
-          ) : null}
         </div>
       </div>
     </header>

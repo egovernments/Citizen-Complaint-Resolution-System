@@ -25,7 +25,7 @@ function getSignedInLabel() {
   }
 }
 
-const Sidebar = () => {
+const Sidebar = ({ onSignOut }) => {
   const stateLabel = useMemo(() => getStateLabel(), []);
   const productLabel = useMemo(() => getProductLabel(), []);
   const signedInLabel = useMemo(() => getSignedInLabel(), []);
@@ -56,8 +56,23 @@ const Sidebar = () => {
         ))}
       </nav>
       <div className="tw-flex-1" />
-      <div className="tw-border-t tw-border-[color-mix(in_srgb,var(--chrome-foreground)_15%,transparent)] tw-p-4 tw-text-xs tw-text-chrome-muted">
-        {signedInLabel || "Not signed in"}
+      <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-border-[color-mix(in_srgb,var(--chrome-foreground)_15%,transparent)] tw-p-4 tw-text-xs tw-text-chrome-muted">
+        <span className="tw-min-w-0 tw-truncate" title={signedInLabel || undefined}>
+          {signedInLabel || "Not signed in"}
+        </span>
+        {onSignOut ? (
+          <button
+            type="button"
+            onClick={onSignOut}
+            title="Sign out"
+            className="tw-flex-shrink-0 tw-rounded-md tw-px-2 tw-py-1 tw-text-[11px] tw-font-medium tw-text-chrome-foreground hover:tw-bg-[color-mix(in_srgb,var(--chrome-foreground)_12%,transparent)]"
+            style={{
+              border: "1px solid color-mix(in srgb, var(--chrome-foreground) 25%, transparent)",
+            }}
+          >
+            Sign out
+          </button>
+        ) : null}
       </div>
     </aside>
   );

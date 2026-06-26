@@ -1,5 +1,10 @@
-import React, { useState } from "react";
-import { getTenantId } from "../config/dashboardConfig";
+import React, { useMemo, useState } from "react";
+import {
+  getTenantId,
+  getProductLabel,
+  getStateLabel,
+  getBrandTheme,
+} from "../config/dashboardConfig";
 
 /**
  * Self-contained employee login for the standalone dashboard build.
@@ -11,7 +16,11 @@ import { getTenantId } from "../config/dashboardConfig";
  * returned userInfo (with the significant role first, so the scoping indicator is
  * legible), and hands control back to AdminDashboard.
  *
- * The two quick-fill buttons are demo conveniences only — they pre-fill the form,
+ * Rendered inside `.dashboard-root` so it inherits the dashboard's theme tokens;
+ * colour-bearing elements use the theme CSS variables via inline styles so the
+ * look matches the dashboard regardless of which Tailwind utilities were emitted.
+ *
+ * The quick-fill buttons are demo conveniences only — they pre-fill the form,
  * they do not bypass authentication.
  */
 
@@ -53,6 +62,16 @@ export function clearDashboardSession() {
   );
 }
 
+const inputStyle = {
+  borderRadius: "0.375rem",
+  border: "1px solid var(--border)",
+  background: "var(--surface)",
+  color: "var(--foreground)",
+  padding: "0.5rem 0.75rem",
+  fontSize: "13px",
+  outline: "none",
+};
+
 const DashboardLogin = ({ onLogin }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -60,6 +79,16 @@ const DashboardLogin = ({ onLogin }) => {
   const [error, setError] = useState(null);
 
   const tenantId = getTenantId();
+  const productLabel = useMemo(() => getProductLabel(), []);
+  const stateLabel = useMemo(() => getStateLabel(), []);
+  const brandStyle = useMemo(() => {
+    const theme = getBrandTheme();
+    return {
+      "--brand-teal": theme.teal,
+      "--brand-dark": theme.dark,
+      "--brand-slate": theme.slate,
+    };
+  }, []);
 
   async function signIn(e) {
     if (e) e.preventDefault();
@@ -113,93 +142,182 @@ const DashboardLogin = ({ onLogin }) => {
 
   return (
     <div
-      className="tw-bg-background"
+      className="dashboard-root tw-font-sans"
       style={{
+        ...brandStyle,
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         padding: "1rem",
+        background: "var(--background)",
+        color: "var(--foreground)",
       }}
     >
       <div
-        className="tw-rounded-lg tw-border tw-border-border tw-bg-surface tw-p-6 tw-shadow-sm"
-        style={{ width: "100%", maxWidth: "24rem" }}
+        style={{
+          width: "100%",
+          maxWidth: "380px",
+          borderRadius: "0.75rem",
+          overflow: "hidden",
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
+          boxShadow: "0 10px 30px -12px rgba(0,0,0,0.25)",
+        }}
       >
-        <div className="tw-mb-5 tw-text-center">
-          <h1 className="tw-text-[18px] tw-font-semibold tw-text-foreground">
-            Complaint Resolution
+        {/* Branded header band — mirrors the sidebar chrome */}
+        <div
+          style={{
+            background: "var(--chrome)",
+            color: "var(--chrome-foreground)",
+            padding: "1.25rem 1.5rem",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: "10px",
+              fontWeight: 600,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "var(--chrome-muted)",
+            }}
+          >
+            {stateLabel}
+          </p>
+          <h1 style={{ margin: "0.25rem 0 0", fontSize: "20px", fontWeight: 700, lineHeight: 1.2 }}>
+            {productLabel}
           </h1>
-          <p className="tw-mt-1 tw-text-[12px] tw-text-muted-foreground">
+          <p style={{ margin: "0.25rem 0 0", fontSize: "12px", color: "var(--chrome-muted)" }}>
             Sign in to the operations dashboard
           </p>
         </div>
 
-        <form onSubmit={signIn} className="tw-flex tw-flex-col tw-gap-3">
-          <label className="tw-flex tw-flex-col tw-gap-1">
-            <span className="tw-text-[11px] tw-font-medium tw-uppercase tw-tracking-wide tw-text-muted-foreground">
-              Username
-            </span>
-            <input
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="tw-rounded-md tw-border tw-border-border tw-bg-background tw-px-3 tw-py-2 tw-text-[13px] tw-text-foreground focus:tw-border-primary focus:tw-outline-none"
-              placeholder="e.g. DEMO_SUPERVISOR"
-            />
-          </label>
-
-          <label className="tw-flex tw-flex-col tw-gap-1">
-            <span className="tw-text-[11px] tw-font-medium tw-uppercase tw-tracking-wide tw-text-muted-foreground">
-              Password
-            </span>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="tw-rounded-md tw-border tw-border-border tw-bg-background tw-px-3 tw-py-2 tw-text-[13px] tw-text-foreground focus:tw-border-primary focus:tw-outline-none"
-              placeholder="••••••••"
-            />
-          </label>
-
-          {error ? (
-            <div className="tw-rounded-md tw-border tw-border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] tw-bg-status-breach-bg tw-px-3 tw-py-2 tw-text-[12px] tw-text-destructive">
-              {error}
-            </div>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="tw-mt-1 tw-rounded-md tw-bg-primary tw-px-3 tw-py-2 tw-text-[13px] tw-font-medium tw-text-primary-foreground hover:tw-opacity-90 disabled:tw-opacity-60"
-          >
-            {submitting ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
-
-        <div className="tw-mt-5 tw-border-t tw-border-border tw-pt-4">
-          <p className="tw-mb-2 tw-text-center tw-text-[10px] tw-uppercase tw-tracking-wide tw-text-muted-foreground">
-            Demo logins (tenant {tenantId})
-          </p>
-          <div className="tw-flex tw-gap-2">
-            {DEMO_USERS.map((u) => (
-              <button
-                key={u.username}
-                type="button"
-                onClick={() => {
-                  setUsername(u.username);
-                  setPassword("eGov@123");
-                  setError(null);
+        <div style={{ padding: "1.5rem" }}>
+          <form onSubmit={signIn} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                  color: "var(--muted-foreground)",
                 }}
-                className="tw-flex tw-flex-1 tw-flex-col tw-items-start tw-gap-0.5 tw-rounded-md tw-border tw-border-border tw-bg-surface-2 tw-px-3 tw-py-2 tw-text-left hover:tw-border-primary"
-                title={`Fill ${u.username}`}
               >
-                <span className="tw-text-[12px] tw-font-medium tw-text-foreground">{u.label}</span>
-                <span className="tw-text-[10px] tw-text-muted-foreground">{u.hint}</span>
-              </button>
-            ))}
+                Username
+              </span>
+              <input
+                type="text"
+                autoComplete="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                style={inputStyle}
+                placeholder="e.g. DEMO_SUPERVISOR"
+              />
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                  color: "var(--muted-foreground)",
+                }}
+              >
+                Password
+              </span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={inputStyle}
+                placeholder="••••••••"
+              />
+            </label>
+
+            {error ? (
+              <div
+                style={{
+                  borderRadius: "0.375rem",
+                  border: "1px solid color-mix(in srgb, var(--destructive) 30%, transparent)",
+                  background: "var(--status-breach-bg)",
+                  color: "var(--destructive)",
+                  padding: "0.5rem 0.75rem",
+                  fontSize: "12px",
+                }}
+              >
+                {error}
+              </div>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{
+                marginTop: "0.25rem",
+                borderRadius: "0.375rem",
+                border: "none",
+                background: "var(--primary)",
+                color: "var(--primary-foreground)",
+                padding: "0.625rem 0.75rem",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: submitting ? "default" : "pointer",
+                opacity: submitting ? 0.6 : 1,
+              }}
+            >
+              {submitting ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+
+          <div style={{ marginTop: "1.25rem", borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+            <p
+              style={{
+                margin: "0 0 0.5rem",
+                textAlign: "center",
+                fontSize: "10px",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: "var(--muted-foreground)",
+              }}
+            >
+              Demo logins (tenant {tenantId})
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              {DEMO_USERS.map((u) => (
+                <button
+                  key={u.username}
+                  type="button"
+                  onClick={() => {
+                    setUsername(u.username);
+                    setPassword("eGov@123");
+                    setError(null);
+                  }}
+                  title={`Fill ${u.username}`}
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    gap: "0.125rem",
+                    borderRadius: "0.375rem",
+                    border: "1px solid var(--border)",
+                    background: "var(--surface-2)",
+                    color: "var(--foreground)",
+                    padding: "0.5rem 0.75rem",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span style={{ fontSize: "12px", fontWeight: 600 }}>{u.label}</span>
+                  <span style={{ fontSize: "10px", color: "var(--muted-foreground)" }}>{u.hint}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
