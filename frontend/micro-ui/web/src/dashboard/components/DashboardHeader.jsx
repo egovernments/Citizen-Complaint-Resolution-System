@@ -54,6 +54,10 @@ const DashboardHeader = ({
   kpiCardData,
   allowedWidgetIds,
   scopedRole,
+  username,
+  officerAccess,
+  visibleKpiCount,
+  onSignOut,
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
   const addKpiRef = useRef(null);
@@ -85,6 +89,28 @@ const DashboardHeader = ({
                   aria-hidden
                 />
                 Scoped to: {scopedRole}
+              </span>
+            ) : null}
+            {scopedRole && officerAccess != null ? (
+              <span
+                title={
+                  officerAccess
+                    ? "Your role can see officer-level (per-employee) KPIs"
+                    : "Officer-level (per-employee) KPIs are hidden from your role"
+                }
+                className={
+                  "tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-medium " +
+                  (officerAccess
+                    ? "tw-bg-status-resolved-bg tw-text-status-resolved"
+                    : "tw-bg-status-breach-bg tw-text-destructive")
+                }
+              >
+                {officerAccess ? "Officer KPIs: visible" : "Officer KPIs: hidden"}
+              </span>
+            ) : null}
+            {scopedRole && visibleKpiCount != null ? (
+              <span className="tw-text-[10px] tw-text-muted-foreground">
+                {visibleKpiCount} KPIs available to your role
               </span>
             ) : null}
           </div>
@@ -146,6 +172,27 @@ const DashboardHeader = ({
             <ExportIcon />
             <span>Export</span>
           </button>
+
+          {onSignOut ? (
+            <div className="tw-flex tw-items-center tw-gap-2 tw-border-l tw-border-border tw-pl-2">
+              {username ? (
+                <span
+                  className="tw-hidden tw-text-[11px] tw-text-muted-foreground md:tw-inline"
+                  title="Signed-in employee"
+                >
+                  {username}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={onSignOut}
+                className="dashboard-header-btn"
+                title="Sign out"
+              >
+                Sign out
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </header>

@@ -1,21 +1,18 @@
 import { useMemo } from "react";
 import { useCatalog } from "./useCatalog";
 import { getTenantId } from "../config/dashboardConfig";
-import { buildAllowedWidgetIds } from "../config/catalogGating";
+import { buildAllowedWidgetIds, OFFICER_PII_QUERY_KEYS } from "../config/catalogGating";
 import { KPI_METRICS, CHART_WIDGETS } from "../config/supervisorMetrics";
 
-/** Read the logged-in employee's primary role for the scoping indicator. */
-function getPrimaryRole() {
+/** Read the logged-in employee's identity for the scoping indicator. */
+function getEmployeeInfo() {
   try {
     const fromSession = window.Digit?.SessionStorage?.get("User")?.info;
-    const sessionRole = fromSession?.roles?.[0]?.code || fromSession?.roles?.[0]?.name;
-    if (sessionRole) return sessionRole;
-
+    if (fromSession?.roles) return fromSession;
     const raw = localStorage.getItem("Employee.user-info");
     if (raw) {
       const parsed = JSON.parse(raw);
-      const user = parsed?.roles ? parsed : parsed?.userInfo || parsed;
-      return user?.roles?.[0]?.code || user?.roles?.[0]?.name || user?.type || null;
+      return parsed?.roles ? parsed : parsed?.userInfo || parsed;
     }
   } catch {
     /* ignore */
@@ -23,28 +20,35 @@ function getPrimaryRole() {
   return null;
 }
 
+/** The role that actually drives scoping — the first non-EMPLOYEE role. */
+function getSignificantRole(userInfo) {
+  const roles = userInfo?.roles || [];
+  const meaningful = roles.find((r) => r.code && r.code !== "EMPLOYEE");
+  return meaningful?.code || roles[0]?.code || roles[0]?.name || userInfo?.type || null;
+}
+
+function getUsername(userInfo) {
+  return userInfo?.userName || userInfo?.name || null;
+}
+
 /**
  * Bridges the backend catalog (useCatalog) to the dashboard's local widget
  * registry. Computes the set of widget/metric IDs allowed for the logged-in
  * user's roles and exposes helpers for filtering the grid + the "add KPI"
- * picker.
+ * picker, plus a legible scoping summary for the header.
  *
  * Graceful fallback: when the catalog is unavailable, errors, or returns an
  * empty allowed set (e.g. backend not deployed), gating is INACTIVE — the
  * dashboard renders all local KPIs exactly as before. Gating only turns on when
  * the catalog successfully returns a non-empty set of tiles.
- *
- * Returns:
- * - gatingActive: boolean
- * - allowedWidgetIds: Set<string> | null   (null when inactive)
- * - allowedKpiIds: Set<string> | null      (raw catalog kpiIds, null when inactive)
- * - roleLabel: string | null               (primary role, for the demo badge)
- * - loading: boolean
  */
 export function useCatalogGating() {
   const tenantId = useMemo(() => getTenantId(), []);
   const { loading, kpis, error } = useCatalog(tenantId);
-  const roleLabel = useMemo(() => getPrimaryRole(), []);
+
+  const userInfo = useMemo(() => getEmployeeInfo(), []);
+  const roleLabel = useMemo(() => getSignificantRole(userInfo), [userInfo]);
+  const username = useMemo(() => getUsername(userInfo), [userInfo]);
 
   const allowedKpiIds = useMemo(() => {
     const ids = kpis ? Object.keys(kpis) : [];
@@ -65,11 +69,24 @@ export function useCatalogGating() {
     [allowedKpiIds]
   );
 
+  // Does this role retain access to any officer-level (PII) KPI? Drives the
+  // green/amber scope pill in the header.
+  const officerAccess = useMemo(() => {
+    if (!allowedKpiIds) return null;
+    for (const k of OFFICER_PII_QUERY_KEYS) {
+      if (allowedKpiIds.has(k)) return true;
+    }
+    return false;
+  }, [allowedKpiIds]);
+
   return {
     loading,
     gatingActive: allowedWidgetIds != null,
     allowedWidgetIds,
     allowedKpiIds,
+    visibleKpiCount: allowedKpiIds ? allowedKpiIds.size : null,
+    officerAccess,
     roleLabel,
+    username,
   };
 }

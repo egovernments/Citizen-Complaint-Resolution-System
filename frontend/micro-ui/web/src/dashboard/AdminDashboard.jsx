@@ -10,8 +10,37 @@ import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useCatalogGating } from "./hooks/useCatalogGating";
 import { downloadDashboardExport } from "./utils/exportDashboard";
 import { countMatchingWidgets } from "./utils/dashboardSearch";
+import DashboardLogin, {
+  hasDashboardSession,
+  clearDashboardSession,
+} from "./components/DashboardLogin";
 
+/**
+ * Auth gate for the standalone dashboard. Renders the login screen until there
+ * is an Employee session in localStorage, then mounts the dashboard. Keeping the
+ * data/catalog hooks inside AdminDashboardInner ensures they only run (and fetch
+ * with a valid token) once authenticated.
+ */
 const AdminDashboard = () => {
+  const [authed, setAuthed] = useState(() => hasDashboardSession());
+  // Remount the inner dashboard on each login so hooks re-read the new token.
+  const [sessionKey, setSessionKey] = useState(0);
+
+  const handleLogin = useCallback(() => {
+    setSessionKey((k) => k + 1);
+    setAuthed(true);
+  }, []);
+
+  const handleSignOut = useCallback(() => {
+    clearDashboardSession();
+    setAuthed(false);
+  }, []);
+
+  if (!authed) return <DashboardLogin onLogin={handleLogin} />;
+  return <AdminDashboardInner key={sessionKey} onSignOut={handleSignOut} />;
+};
+
+const AdminDashboardInner = ({ onSignOut }) => {
   const { filters, setFilter, clearFilters, applyFilterOptions, resolveSubMetricId } =
     useDashboardFilters();
   const {
@@ -55,7 +84,14 @@ const AdminDashboard = () => {
   // set, hide widgets/metric cards the logged-in user's roles may not see
   // (e.g. officer-PII KPIs for a GRO). When the catalog is unavailable/empty,
   // gating is inactive and the full local config renders (graceful fallback).
-  const { gatingActive, allowedWidgetIds, roleLabel } = useCatalogGating();
+  const {
+    gatingActive,
+    allowedWidgetIds,
+    roleLabel,
+    username,
+    officerAccess,
+    visibleKpiCount,
+  } = useCatalogGating();
 
   // Gate the rendered grid: drop any laid-out widget that isn't in the allowed
   // set. Falls back to the unfiltered layout when gating is inactive.
@@ -137,6 +173,10 @@ const AdminDashboard = () => {
       kpiCardData={kpiCardData}
       allowedWidgetIds={gatingActive ? allowedWidgetIds : null}
       scopedRole={gatingActive ? roleLabel : null}
+      username={username}
+      officerAccess={gatingActive ? officerAccess : null}
+      visibleKpiCount={gatingActive ? visibleKpiCount : null}
+      onSignOut={onSignOut}
     >
       {error && (
         <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between tw-rounded-md tw-border tw-border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] tw-bg-status-breach-bg tw-px-4 tw-py-3 tw-text-sm tw-text-destructive">

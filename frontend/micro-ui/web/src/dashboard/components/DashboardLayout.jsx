@@ -22,6 +22,10 @@ const DashboardLayout = ({
   kpiCardData,
   allowedWidgetIds,
   scopedRole,
+  username,
+  officerAccess,
+  visibleKpiCount,
+  onSignOut,
 }) => {
   const brandStyle = useMemo(() => {
     const theme = getBrandTheme();
@@ -53,6 +57,10 @@ const DashboardLayout = ({
           kpiCardData={kpiCardData}
           allowedWidgetIds={allowedWidgetIds}
           scopedRole={scopedRole}
+          username={username}
+          officerAccess={officerAccess}
+          visibleKpiCount={visibleKpiCount}
+          onSignOut={onSignOut}
         />
         <main className="tw-flex-1 tw-overflow-auto tw-bg-background tw-p-4 lg:tw-p-6">
           <DashboardFilters
