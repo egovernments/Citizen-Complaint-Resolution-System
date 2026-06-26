@@ -130,6 +130,13 @@ public class PGRQueryBuilder {
             addToPreparedStatement(preparedStmtList, userIds);
         }
 
+        Set<String> serviceRequestIds = criteria.getServiceRequestIds();
+        if (!CollectionUtils.isEmpty(serviceRequestIds)) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ser.serviceRequestId IN (").append(createQuery(serviceRequestIds)).append(")");
+            addToPreparedStatement(preparedStmtList, serviceRequestIds);
+        }
+
 
         Set<String> localities = criteria.getLocality();
         if(!CollectionUtils.isEmpty(localities)){

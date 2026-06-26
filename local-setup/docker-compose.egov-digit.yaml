@@ -599,7 +599,10 @@ services:
     # `registry.preview.egov.theflywheel.in` is a read-only HTTPS proxy
     # in front of the egov-ci VPC registry — public cert, no
     # insecure-registries trust required, pullable from anywhere.
-    image: registry.preview.egov.theflywheel.in/egovio/egov-user:1044-preview
+    # Override EGOV_USER_IMAGE in host_vars if the preview registry is
+    # unreachable; egovio/egov-user:master-e22c7c5 is the last Docker Hub
+    # tag before the 1044 fix was added (lacks tenant-aware encryption).
+    image: ${EGOV_USER_IMAGE:-registry.preview.egov.theflywheel.in/egovio/egov-user:1044-preview}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1252,7 +1255,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-registry.preview.egov.theflywheel.in/pgr-services-dev:latest}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-3d1b7d4}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1620,7 +1623,7 @@ services:
     volumes:
       - ./jupyter/dataloader/templates:/home/jovyan/work/templates
       - ./jupyter/dataloader:/home/jovyan/work/dataloader
-      - ./jupyter/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
+      - ./jupyter/dataloader/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
     networks:
       - egov-network
 
