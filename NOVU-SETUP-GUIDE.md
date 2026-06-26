@@ -24,8 +24,17 @@ TENANT_ID=be.bomet
 
 #### Novu API Key
 1. Access Novu Dashboard at `http://localhost:14002`
-2. Navigate to Settings → API Keys
-3. Copy the API key for your environment
+2. If not already logged in, create an account or login
+3. Once logged in, click on the **Settings** icon (gear icon) in the left sidebar
+4. Navigate to **API Keys** section
+5. You'll see your environments listed (Development/Production)
+6. Click on the **Copy** button next to the API key for your environment
+7. Save this API key securely - you'll need it for the NOVU_API_KEY variable
+
+**Note:** If you don't see an API key:
+- Click on **"Generate API Key"** button
+- Give it a descriptive name (e.g., "DIGIT Integration")
+- Copy the generated key immediately (it won't be shown again)
 
 #### Twilio Credentials
 1. Log into Twilio Console
