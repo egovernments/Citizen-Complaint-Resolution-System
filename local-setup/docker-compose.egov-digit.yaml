@@ -2008,7 +2008,7 @@ services:
       # `channel` field. Our seed data uses lowercase `sms` / `whatsapp`
       # — keep this lowercase too. Override per-tenant in host_vars.
       # (Default whatsapp: live deploys use it; SMS is paused pending A2P.)
-      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-whatsapp}
+      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-WHATSAPP}
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
       # NOTE: the preference check calls
       # `digit-user-preferences-service/user-preference/v1/_check`,
