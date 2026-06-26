@@ -3,6 +3,20 @@
 ## Overview
 This documentation covers the complete setup of Novu notification system for DIGIT platform, specifically configured for Bomet County's Citizen Complaint Resolution System.
 
+## Architecture Overview
+
+The notification system works through the following flow:
+1. **DIGIT Services** (like PGR) publish events to Kafka topics when workflow actions occur
+2. **novu-bridge** service listens to these Kafka events
+3. **novu-bridge** reads the TemplateBinding configuration from config-service to map events to Novu workflows
+4. **novu-bridge** triggers the appropriate Novu workflow via Novu API
+5. **Novu** processes the workflow and sends notifications through configured providers (Twilio WhatsApp)
+
+**Important:** Workflows are NOT registered directly in Novu. The novu-bridge acts as the integration layer that:
+- Maps DIGIT events to Novu workflows
+- Reads template configurations from config-service
+- Triggers Novu workflows with the correct parameters
+
 ## Prerequisites
 
 ### Required Services
@@ -247,6 +261,37 @@ docker logs -f novu-bridge
 
 # Check last 50 lines
 docker logs novu-bridge --tail 50
+```
+
+## novu-bridge Endpoints
+
+The novu-bridge service exposes endpoints for workflow management:
+
+### Trigger Workflow Manually
+```bash
+POST http://localhost:8085/novu/workflow/trigger
+Content-Type: application/json
+
+{
+  "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+  "tenantId": "be.bomet",
+  "locale": "en_IN",
+  "channel": "WHATSAPP",
+  "recipient": {
+    "mobileNumber": "+254XXXXXXXXX",
+    "name": "John Doe"
+  },
+  "payload": {
+    "complaintNo": "PGR/2024/000001",
+    "serviceName": "Streetlight",
+    "submittedDate": "2024-01-15"
+  }
+}
+```
+
+### Health Check
+```bash
+GET http://localhost:8085/health
 ```
 
 ## Verification Steps
