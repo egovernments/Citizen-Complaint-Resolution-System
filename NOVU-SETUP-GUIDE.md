@@ -5,21 +5,75 @@ This documentation covers the complete setup of Novu notification system for DIG
 
 ## Architecture Overview
 
-The notification system works through the following flow:
-1. **DIGIT Services** (like PGR) publish events to Kafka topics when workflow actions occur
-2. **novu-bridge** service listens to these Kafka events
-3. **novu-bridge** reads the TemplateBinding configuration from config-service to map events to Novu workflows
-4. **novu-bridge** triggers the appropriate Novu workflow via Novu API
-5. **Novu** processes the workflow and sends notifications through configured providers (Twilio WhatsApp)
+### Complete Workflow Sync and Execution Flow
 
-**Two-Part Setup Required:**
-1. **In Novu Dashboard**: Create the actual workflows with trigger IDs (complaints-workflow-apply, complaints-workflow-assign, etc.)
-2. **In DIGIT Config**: Configure TemplateBinding to map DIGIT events to these Novu workflow trigger IDs
+#### 1. Workflow Definition & Sync Process
 
-The novu-bridge acts as the integration layer that:
-- Maps DIGIT events (COMPLAINTS.WORKFLOW.APPLY) to Novu workflow triggers (complaints-workflow-apply)
-- Reads template configurations from config-service
-- Triggers the pre-created Novu workflows with the correct parameters
+**novu-bridge startup sequence:**
+```
+1. novu-bridge container starts with Novu Framework
+2. Loads workflow definitions from code (@novu/framework)
+3. Calls Novu Sync API with NOVU_SECRET_KEY
+4. Novu creates/updates workflows in its database
+5. Bridge endpoint becomes available for callback
+```
+
+**Configuration in novu-bridge:**
+```javascript
+// novu-bridge environment variables
+NOVU_API_KEY=<your-api-key>        // For triggering workflows
+NOVU_SECRET_KEY=<your-secret-key>  // For syncing workflows
+NOVU_API_URL=http://novu:3000
+BRIDGE_ENDPOINT=http://novu-bridge:4000/api/novu
+
+// Framework initialization
+import { serve } from '@novu/framework/express';
+import { ALL_WORKFLOWS } from './workflows.js';
+
+// Sync happens here - uploads workflows to Novu
+app.use('/api/novu', serve({ 
+  workflows: ALL_WORKFLOWS,
+  secretKey: process.env.NOVU_SECRET_KEY
+}));
+```
+
+#### 2. Runtime Event Flow
+
+```mermaid
+DIGIT Service → Kafka Event → novu-bridge → Novu API → Bridge Callback → Provider
+```
+
+**Detailed steps:**
+1. **PGR Service** publishes `COMPLAINTS.WORKFLOW.APPLY` to Kafka
+2. **novu-bridge** consumes event, reads TemplateBinding from config-service
+3. **novu-bridge** calls Novu: `POST /v1/events/trigger`
+   ```json
+   {
+     "name": "complaints-workflow-apply",
+     "to": { "subscriberId": "user-123" },
+     "payload": { "complaintNo": "PGR-001", ... }
+   }
+   ```
+4. **Novu** executes workflow, calls back to bridge: `POST /api/novu`
+5. **Bridge** renders message body using payload data
+6. **Novu** sends via Twilio WhatsApp
+
+#### 3. Key Components
+
+**Novu Framework Workflows** (in novu-bridge):
+- Define workflow structure and steps
+- Auto-sync on bridge startup
+- Handle message rendering
+
+**TemplateBinding** (in config-service):
+- Maps DIGIT events to Novu workflow IDs
+- Contains Twilio content SIDs
+- Defines required variables
+
+**Bridge Endpoint**:
+- Receives callback from Novu
+- Renders dynamic message content
+- Returns formatted message to Novu
 
 ## Prerequisites
 
@@ -59,51 +113,107 @@ TENANT_ID=be.bomet
 2. Get Account SID and Auth Token from dashboard
 3. Set up WhatsApp sender number (format: `whatsapp:+91XXXXXXXXXX`)
 
-### Step 2: Create Workflows in Novu Dashboard
+### Step 2: Configure novu-bridge for Workflow Sync
 
-You must create the workflows in Novu before configuring DIGIT. Login to Novu Dashboard and create the following workflows:
+#### Required Environment Variables for novu-bridge
 
-#### 2.1 Create "complaints-workflow-apply" Workflow
-1. Go to Novu Dashboard → **Workflows**
-2. Click **"Create Workflow"**
-3. Set Workflow Name: `complaints-workflow-apply`
-4. Set Trigger Identifier: `complaints-workflow-apply`
-5. Add **Chat** step (for WhatsApp)
-6. Select **Twilio** as provider
-7. Configure the message template with variables:
-   ```
-   Your complaint {{complaintNo}} for {{serviceName}} has been submitted on {{submittedDate}}.
-   ```
-8. Save and **Activate** the workflow
+Add these to your docker-compose or .env file:
 
-#### 2.2 Create "complaints-workflow-assign" Workflow  
-1. Create new workflow with Trigger ID: `complaints-workflow-assign`
-2. Add Chat step with Twilio provider
-3. Configure message template:
-   ```
-   Complaint {{complaintNo}} for {{serviceName}} has been assigned to {{assigneeName}} ({{assigneeDesignation}}) from {{departmentName}} department.
-   ```
-4. Save and Activate
+```yaml
+novu-bridge:
+  environment:
+    # Novu API credentials
+    NOVU_API_KEY: "your-api-key"      # From Novu Dashboard
+    NOVU_SECRET_KEY: "your-secret"    # From Novu Dashboard (Settings → API Keys)
+    NOVU_API_URL: "http://novu:3000"  # Novu service URL
+    
+    # Bridge configuration
+    BRIDGE_ENDPOINT: "http://novu-bridge:4000/api/novu"
+    PORT: 4000
+    
+    # Kafka configuration
+    KAFKA_BROKERS: "kafka:9092"
+    KAFKA_TOPIC: "complaints.domain.events"
+    
+    # Config service
+    CONFIG_SERVICE_URL: "http://digit-config-service:8080"
+```
 
-#### 2.3 Create "complaints-workflow-resolve" Workflow
-1. Create new workflow with Trigger ID: `complaints-workflow-resolve`
-2. Add Chat step with Twilio provider  
-3. Configure message template:
-   ```
-   Your complaint {{complaintNo}} for {{serviceName}} submitted on {{submittedDate}} has been resolved by {{assigneeName}}.
-   ```
-4. Save and Activate
+#### How Workflow Sync Works
 
-#### 2.4 Create "complaints-workflow-reject" Workflow
-1. Create new workflow with Trigger ID: `complaints-workflow-reject`
-2. Add Chat step with Twilio provider
-3. Configure message template:
+1. **On novu-bridge startup:**
+   ```javascript
+   // novu-bridge automatically calls this on startup
+   POST https://novu-api/v1/bridge/sync
+   Headers: { 
+     'Authorization': 'ApiKey ${NOVU_SECRET_KEY}',
+     'Novu-Framework-Secret': '${NOVU_SECRET_KEY}'
+   }
+   Body: {
+     bridgeUrl: 'http://novu-bridge:4000/api/novu',
+     workflows: [...] // All workflow definitions
+   }
    ```
-   Your complaint {{complaintNo}} for {{serviceName}} submitted on {{submittedDate}} has been rejected. Reason: {{comment}}
-   ```
-4. Save and Activate
 
-**Important:** The Trigger IDs must match exactly with the `templateId` values in the TemplateBinding configuration.
+2. **Novu processes the sync:**
+   - Creates new workflows if they don't exist
+   - Updates existing workflows with new definitions
+   - Stores bridge URL for callbacks
+   - Returns sync status
+
+3. **Verification:**
+   ```bash
+   # Check if workflows are synced
+   curl http://localhost:14002/v1/workflows \
+     -H "Authorization: ApiKey YOUR_API_KEY"
+   
+   # Should see workflows like:
+   # - complaints-workflow-apply
+   # - complaints-workflow-assign
+   # - complaints-workflow-resolve
+   # - complaints-workflow-reject
+   ```
+
+#### Workflow Code Structure in novu-bridge
+
+```javascript
+// /app/workflows.js
+import { workflow } from '@novu/framework';
+
+// Define workflow with WhatsApp/SMS steps
+export const complaintsApply = workflow(
+  'complaints-workflow-apply',  // Workflow ID (must match TemplateBinding)
+  async ({ step, payload }) => {
+    // SMS step
+    await step.sms('send-sms', async () => ({
+      body: renderSmsTemplate(payload)
+    }));
+    
+    // WhatsApp step (if configured)
+    await step.chat('send-whatsapp', async () => ({
+      body: renderWhatsAppTemplate(payload)
+    }));
+  },
+  {
+    name: 'COMPLAINTS WORKFLOW APPLY',
+    payloadSchema: { type: 'object' }
+  }
+);
+
+// Export all workflows for sync
+export const ALL_WORKFLOWS = [
+  complaintsApply,
+  complaintsAssign,
+  complaintsResolve,
+  complaintsReject
+];
+```
+
+**Important Notes:**
+- NOVU_SECRET_KEY is different from NOVU_API_KEY
+- Workflows sync automatically on bridge startup
+- Bridge must be accessible by Novu for callbacks
+- Workflow IDs in code must match TemplateBinding templateIds
 
 ### Step 3: Configure Environment Variables
 
