@@ -12,9 +12,7 @@
  * runs on deployed environments via grepInvert: EXCLUDE_LOCAL_ONLY.
  */
 import { test, expect } from '@playwright/test';
-import { KC_REALM, KC_CLIENT_ID } from '../utils/env';
-
-const BASE_URL = process.env.BASE_URL || 'https://keycloak-sandbox.live.digit.org';
+import { KC_REALM, KC_CLIENT_ID, BASE_URL } from '../utils/env';
 
 // Helper: get KC admin token
 async function getAdminToken(): Promise<string> {
