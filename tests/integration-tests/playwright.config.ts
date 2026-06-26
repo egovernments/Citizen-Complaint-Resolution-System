@@ -61,6 +61,7 @@ export default defineConfig({
       dependencies: ['setup', 'lifecycle-setup'],
       // Don't try to run setup itself as part of the chromium project.
       testIgnore: /tests\/fixtures\/(auth|lifecycle|api)\.setup\.ts$/,
+      grepInvert: EXCLUDE_LOCAL_ONLY,
     },
     {
       // Token-injection auth — writes auth-api.json storage state.
