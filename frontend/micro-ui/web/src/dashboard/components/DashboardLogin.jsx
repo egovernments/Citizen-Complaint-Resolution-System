@@ -112,8 +112,20 @@ const DashboardLogin = ({ onLogin }) => {
   }
 
   return (
-    <div className="tw-flex tw-min-h-screen tw-items-center tw-justify-center tw-bg-background tw-px-4">
-      <div className="tw-w-full tw-max-w-sm tw-rounded-lg tw-border tw-border-border tw-bg-surface tw-p-6 tw-shadow-sm">
+    <div
+      className="tw-bg-background"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "1rem",
+      }}
+    >
+      <div
+        className="tw-rounded-lg tw-border tw-border-border tw-bg-surface tw-p-6 tw-shadow-sm"
+        style={{ width: "100%", maxWidth: "24rem" }}
+      >
         <div className="tw-mb-5 tw-text-center">
           <h1 className="tw-text-[18px] tw-font-semibold tw-text-foreground">
             Complaint Resolution

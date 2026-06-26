@@ -5,9 +5,30 @@ const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", href: "/digit-ui/employee/dashboard", active: true },
 ];
 
+/** Signed-in employee's username + significant (non-EMPLOYEE) role, for the footer. */
+function getSignedInLabel() {
+  try {
+    const raw = window.localStorage?.getItem("Employee.user-info");
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    const info = u?.roles ? u : u?.userInfo || u;
+    const roles = info?.roles || [];
+    const role =
+      roles.find((r) => r.code && r.code !== "EMPLOYEE")?.code ||
+      roles[0]?.code ||
+      info?.type;
+    const name = info?.userName || info?.name;
+    if (name && role) return `${name} · ${role}`;
+    return role || name || null;
+  } catch {
+    return null;
+  }
+}
+
 const Sidebar = () => {
   const stateLabel = useMemo(() => getStateLabel(), []);
   const productLabel = useMemo(() => getProductLabel(), []);
+  const signedInLabel = useMemo(() => getSignedInLabel(), []);
 
   return (
     <aside className="tw-flex tw-h-full tw-w-60 tw-flex-shrink-0 tw-flex-col tw-bg-chrome tw-text-chrome-foreground">
@@ -36,7 +57,7 @@ const Sidebar = () => {
       </nav>
       <div className="tw-flex-1" />
       <div className="tw-border-t tw-border-[color-mix(in_srgb,var(--chrome-foreground)_15%,transparent)] tw-p-4 tw-text-xs tw-text-chrome-muted">
-        Supervisor
+        {signedInLabel || "Not signed in"}
       </div>
     </aside>
   );

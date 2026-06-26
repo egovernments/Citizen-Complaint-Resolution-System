@@ -26,14 +26,16 @@ const AdminDashboard = () => {
   // Remount the inner dashboard on each login so hooks re-read the new token.
   const [sessionKey, setSessionKey] = useState(0);
 
+  // Full reload on login/logout so every store (header, sidebar, Digit session)
+  // re-reads the fresh identity — a client-side remount alone leaves stale
+  // session-derived labels behind when switching users.
   const handleLogin = useCallback(() => {
-    setSessionKey((k) => k + 1);
-    setAuthed(true);
+    window.location.reload();
   }, []);
 
   const handleSignOut = useCallback(() => {
     clearDashboardSession();
-    setAuthed(false);
+    window.location.reload();
   }, []);
 
   if (!authed) return <DashboardLogin onLogin={handleLogin} />;

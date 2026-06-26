@@ -7,13 +7,15 @@ import { KPI_METRICS, CHART_WIDGETS } from "../config/supervisorMetrics";
 /** Read the logged-in employee's identity for the scoping indicator. */
 function getEmployeeInfo() {
   try {
-    const fromSession = window.Digit?.SessionStorage?.get("User")?.info;
-    if (fromSession?.roles) return fromSession;
+    // localStorage is the authoritative source the dashboard login writes; prefer
+    // it over Digit.SessionStorage, which can be stale across a user switch.
     const raw = localStorage.getItem("Employee.user-info");
     if (raw) {
       const parsed = JSON.parse(raw);
       return parsed?.roles ? parsed : parsed?.userInfo || parsed;
     }
+    const fromSession = window.Digit?.SessionStorage?.get("User")?.info;
+    if (fromSession?.roles) return fromSession;
   } catch {
     /* ignore */
   }
