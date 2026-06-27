@@ -15,11 +15,148 @@
  *   - Step 5 description is required.
  *   - Step 6 photo dropzone is optional; SUBMIT is the final button.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { BASE_URL, generateCitizenPhone } from '../utils/env';
 
 test.describe('Citizen file-complaint wizard', () => {
+  // ── Raw-key localization scan ─────────────────────────────────────────────
+  //
+  // Visible text that looks like a raw localization key: uppercase letter/digit
+  // run with at least one `.`/`_` separator. Matches BOUNDARY.OROMIA,
+  // ADMIN_KE_NAIROBI, SERVICEDEFS.DRAINS, CS_COMMON_COMPLAINT_SUBMITTED.
+  // Does NOT match real display names ("Oromia", "Nairobi County", "Bomet")
+  // or dashed identifiers (PGR-2026-06-13-004235).
+  //
+  // Regex is preserved verbatim from
+  //   local-setup/tests/e2e/specs/citizen/complaint-submit.spec.ts
+  const RAW_KEY_RE = /\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\b/g;
+  const rawKeysIn = (text: string) =>
+    [...new Set(text.match(RAW_KEY_RE) || [])];
+
+  const assertNoRawKeys = async (page: Page, stepLabel: string) => {
+    const text = await page.locator('body').textContent() ?? '';
+    const keys = rawKeysIn(text);
+    expect(
+      keys,
+      `Step "${stepLabel}" shows raw localization keys: ${keys.slice(0, 10).join(', ')}`,
+    ).toHaveLength(0);
+  };
+
+  /**
+   * Walk all 6 wizard steps through SUBMIT and wait for the response page.
+   *
+   * @param page            Playwright Page from the test fixture.
+   * @param options.onAfterStep      Optional async callback fired after each named
+   *                                 interaction point (receives a human-readable step label).
+   * @param options.assertPincodeToast  When true, asserts that no "pincode not serviceable"
+   *                                    toast appears after step 2 (happy-path check).
+   */
+  async function walkWizard(
+    page: Page,
+    options: {
+      onAfterStep?: (label: string) => Promise<void>;
+      assertPincodeToast?: boolean;
+    } = {},
+  ): Promise<void> {
+    const { onAfterStep, assertPincodeToast = false } = options;
+
+    // Modern digit-ui renders dropdowns as <button role="combobox"> (shadcn
+    // style); older builds used `input.digit-dropdown-employee-select-wrap--elipses`.
+    // Match both so the test survives on either build.
+    const dropdowns = page.locator(
+      'button[role="combobox"], input.digit-dropdown-employee-select-wrap--elipses',
+    );
+    // Modern wizard uses <button role="combobox">; older builds used a
+    // wrapped <input>. Match both for cross-build compatibility.
+    const cascadeDropdowns = page.locator(
+      'button[role="combobox"], input[class*="select-wrap--elipses"]',
+    );
+
+    const clickNext = async () => {
+      const btn = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
+      await btn.waitFor({ state: 'visible', timeout: 10_000 });
+      await btn.scrollIntoViewIfNeeded();
+      await btn.click();
+      await page.waitForTimeout(2500);
+    };
+
+    // ── Step 1: Complaint Details (Type + Subtype) ──────────────────
+    await dropdowns.first().waitFor({ state: 'visible', timeout: 15_000 });
+    await onAfterStep?.('Step 1 – initial render');
+
+    await dropdowns.first().click();
+    await page.waitForTimeout(800);
+    await page.locator('[role="option"], .digit-dropdown-item').first().click();
+    await page.waitForTimeout(1500);
+    await onAfterStep?.('Step 1 – after Type selection');
+
+    // Subtype is the 2nd dropdown — required-* appears after Type pick
+    await dropdowns.nth(1).click();
+    await page.waitForTimeout(800);
+    await page.locator('[role="option"], .digit-dropdown-item').first().click();
+    await page.waitForTimeout(1000);
+    await onAfterStep?.('Step 1 – after Subtype selection');
+
+    await clickNext();
+
+    // ── Step 2: Pin Complaint Location — DON'T touch the map ────────
+    await page.waitForTimeout(2500);
+    await onAfterStep?.('Step 2 – Pin Location');
+    await clickNext();
+
+    if (assertPincodeToast) {
+      // No "Pincode not serviceable" toast (CCRS#469 fix verified)
+      const pincodeToast = page.locator(
+        'text=/pincode.*not serv|CS_COMMON_PINCODE_NOT_SERVICABLE/i',
+      );
+      await expect(pincodeToast).toHaveCount(0);
+    }
+
+    // ── Step 3: Location Details — pick County → SubCounty → Ward ──
+    // The modern wizard collapses the old separate "location cascade"
+    // (was Step 4) into Step 3: the County dropdown appears immediately;
+    // SubCounty and Ward appear progressively as parents get picked.
+    await page.waitForTimeout(2000);
+    await onAfterStep?.('Step 3 – Location Details initial render');
+
+    for (let i = 0; i < 3; i++) {
+      const dd = cascadeDropdowns.nth(i);
+      // Wait briefly — the cascade child may not have rendered yet.
+      const visible = await dd.isVisible({ timeout: 5000 }).catch(() => false);
+      if (!visible) break;
+      // Skip if this dropdown already has a selection.
+      const hasValue = await dd.evaluate(
+        (el) => !(el as HTMLElement).innerText.match(/^Select /i),
+      ).catch(() => false);
+      if (hasValue) continue;
+      await dd.click();
+      await page.waitForTimeout(800);
+      await page.locator('[role="option"], .digit-dropdown-item').first().click();
+      await page.waitForTimeout(1500);
+      await onAfterStep?.(`Step 3 – after cascade dropdown ${i} selection`);
+    }
+    await clickNext();
+
+    // ── Step 5: Additional Details (Description required) ──────────
+    const description = page.locator('textarea').first();
+    await description.waitFor({ state: 'visible', timeout: 10_000 });
+    await onAfterStep?.('Step 5 – Description');
+    await description.fill(
+      `PW citizen wizard test ${Date.now()} — auto-filed, please ignore`,
+    );
+    await clickNext();
+
+    // ── Step 6: Upload Photos (skip) → SUBMIT ───────────────────────
+    await page.waitForTimeout(2000);
+    await onAfterStep?.('Step 6 – Upload Photos');
+
+    const submitBtn = page.locator('button:visible').filter({ hasText: /^SUBMIT$/ }).first();
+    await submitBtn.waitFor({ state: 'visible', timeout: 10_000 });
+    await submitBtn.click();
+    await page.waitForTimeout(8000);
+  }
+
   test('walks 6 steps + submits + lands on /pgr/response with NCCG-PGR ID', {
     annotation: {
       type: 'description',
@@ -50,86 +187,7 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     );
     await page.waitForTimeout(5000);
 
-    // Modern digit-ui renders dropdowns as <button role="combobox"> (shadcn
-    // style); older builds used `input.digit-dropdown-employee-select-wrap--elipses`.
-    // Match both so the test survives on either build.
-    const dropdowns = page.locator(
-      'button[role="combobox"], input.digit-dropdown-employee-select-wrap--elipses',
-    );
-    // Modern wizard uses <button role="combobox">; older builds used a
-    // wrapped <input>. Match both for cross-build compatibility.
-    const cascadeDropdowns = page.locator(
-      'button[role="combobox"], input[class*="select-wrap--elipses"]',
-    );
-
-    const clickNext = async () => {
-      const btn = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
-      await btn.waitFor({ state: 'visible', timeout: 10_000 });
-      await btn.scrollIntoViewIfNeeded();
-      await btn.click();
-      await page.waitForTimeout(2500);
-    };
-
-    // ── Step 1: Complaint Details (Type + Subtype) ──────────────────
-    await dropdowns.first().waitFor({ state: 'visible', timeout: 15_000 });
-    await dropdowns.first().click();
-    await page.waitForTimeout(800);
-    await page.locator('[role="option"], .digit-dropdown-item').first().click();
-    await page.waitForTimeout(1500);
-
-    // Subtype is the 2nd dropdown — required-* appears after Type pick
-    await dropdowns.nth(1).click();
-    await page.waitForTimeout(800);
-    await page.locator('[role="option"], .digit-dropdown-item').first().click();
-    await page.waitForTimeout(1000);
-    await clickNext();
-
-    // ── Step 2: Pin Complaint Location — DON'T touch the map ────────
-    await page.waitForTimeout(2500);
-    await clickNext();
-
-    // No "Pincode not serviceable" toast (CCRS#469 fix verified)
-    const pincodeToast = page.locator(
-      'text=/pincode.*not serv|CS_COMMON_PINCODE_NOT_SERVICABLE/i',
-    );
-    await expect(pincodeToast).toHaveCount(0);
-
-    // ── Step 3: Location Details — pick County → SubCounty → Ward ──
-    // The modern wizard collapses the old separate "location cascade"
-    // (was Step 4) into Step 3: the County dropdown appears immediately;
-    // SubCounty and Ward appear progressively as parents get picked.
-    await page.waitForTimeout(2000);
-    for (let i = 0; i < 3; i++) {
-      const dd = cascadeDropdowns.nth(i);
-      // Wait briefly — the cascade child may not have rendered yet.
-      const visible = await dd.isVisible({ timeout: 5000 }).catch(() => false);
-      if (!visible) break;
-      // Skip if this dropdown already has a selection.
-      const hasValue = await dd.evaluate(
-        (el) => !(el as HTMLElement).innerText.match(/^Select /i),
-      ).catch(() => false);
-      if (hasValue) continue;
-      await dd.click();
-      await page.waitForTimeout(800);
-      await page.locator('[role="option"], .digit-dropdown-item').first().click();
-      await page.waitForTimeout(1500);
-    }
-    await clickNext();
-
-    // ── Step 5: Additional Details (Description required) ──────────
-    const description = page.locator('textarea').first();
-    await description.waitFor({ state: 'visible', timeout: 10_000 });
-    await description.fill(
-      `PW citizen wizard test ${Date.now()} — auto-filed, please ignore`,
-    );
-    await clickNext();
-
-    // ── Step 6: Upload Photos (skip) → SUBMIT ───────────────────────
-    await page.waitForTimeout(2000);
-    const submitBtn = page.locator('button:visible').filter({ hasText: /^SUBMIT$/ }).first();
-    await submitBtn.waitFor({ state: 'visible', timeout: 10_000 });
-    await submitBtn.click();
-    await page.waitForTimeout(8000);
+    await walkWizard(page, { assertPincodeToast: true });
 
     // ── Confirmation page contract ─────────────────────────────────
     await expect(page).toHaveURL(/\/citizen\/pgr\/response/);
@@ -141,20 +199,6 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     // Smoke: no error fallback rendered
     await expect(body).not.toContainText('Something went wrong');
   });
-
-  // ── Raw-key localization scan ─────────────────────────────────────────────
-  //
-  // Visible text that looks like a raw localization key: uppercase letter/digit
-  // run with at least one `.`/`_` separator. Matches BOUNDARY.OROMIA,
-  // ADMIN_KE_NAIROBI, SERVICEDEFS.DRAINS, CS_COMMON_COMPLAINT_SUBMITTED.
-  // Does NOT match real display names ("Oromia", "Nairobi County", "Bomet")
-  // or dashed identifiers (PGR-2026-06-13-004235).
-  //
-  // Regex is preserved verbatim from
-  //   local-setup/tests/e2e/specs/citizen/complaint-submit.spec.ts
-  const RAW_KEY_RE = /\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\b/g;
-  const rawKeysIn = (text: string) =>
-    [...new Set(text.match(RAW_KEY_RE) || [])];
 
   test('no raw localization keys visible at any wizard step', {
     annotation: {
@@ -175,93 +219,12 @@ The regex /\\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\\b/g is preserved verbatim from t
     );
     await page.waitForTimeout(5000);
 
-    const assertNoRawKeys = async (stepLabel: string) => {
-      const text = await page.locator('body').textContent() ?? '';
-      const keys = rawKeysIn(text);
-      expect(
-        keys,
-        `Step "${stepLabel}" shows raw localization keys: ${keys.slice(0, 10).join(', ')}`,
-      ).toHaveLength(0);
-    };
-
-    const dropdowns = page.locator(
-      'button[role="combobox"], input.digit-dropdown-employee-select-wrap--elipses',
-    );
-    const cascadeDropdowns = page.locator(
-      'button[role="combobox"], input[class*="select-wrap--elipses"]',
-    );
-
-    const clickNext = async () => {
-      const btn = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
-      await btn.waitFor({ state: 'visible', timeout: 10_000 });
-      await btn.scrollIntoViewIfNeeded();
-      await btn.click();
-      await page.waitForTimeout(2500);
-    };
-
-    // ── Step 1: Complaint Details (Type + Subtype) ─────────────────────────
-    await dropdowns.first().waitFor({ state: 'visible', timeout: 15_000 });
-    await assertNoRawKeys('Step 1 – initial render');
-
-    await dropdowns.first().click();
-    await page.waitForTimeout(800);
-    await page.locator('[role="option"], .digit-dropdown-item').first().click();
-    await page.waitForTimeout(1500);
-    await assertNoRawKeys('Step 1 – after Type selection');
-
-    await dropdowns.nth(1).click();
-    await page.waitForTimeout(800);
-    await page.locator('[role="option"], .digit-dropdown-item').first().click();
-    await page.waitForTimeout(1000);
-    await assertNoRawKeys('Step 1 – after Subtype selection');
-
-    await clickNext();
-
-    // ── Step 2: Pin Complaint Location ────────────────────────────────────
-    await page.waitForTimeout(2500);
-    await assertNoRawKeys('Step 2 – Pin Location');
-    await clickNext();
-
-    // ── Step 3: Location Details (boundary cascade) ────────────────────────
-    await page.waitForTimeout(2000);
-    await assertNoRawKeys('Step 3 – Location Details initial render');
-
-    for (let i = 0; i < 3; i++) {
-      const dd = cascadeDropdowns.nth(i);
-      const visible = await dd.isVisible({ timeout: 5000 }).catch(() => false);
-      if (!visible) break;
-      const hasValue = await dd.evaluate(
-        (el) => !(el as HTMLElement).innerText.match(/^Select /i),
-      ).catch(() => false);
-      if (hasValue) continue;
-      await dd.click();
-      await page.waitForTimeout(800);
-      await page.locator('[role="option"], .digit-dropdown-item').first().click();
-      await page.waitForTimeout(1500);
-      await assertNoRawKeys(`Step 3 – after cascade dropdown ${i} selection`);
-    }
-    await clickNext();
-
-    // ── Step 5: Additional Details (Description) ──────────────────────────
-    const description = page.locator('textarea').first();
-    await description.waitFor({ state: 'visible', timeout: 10_000 });
-    await assertNoRawKeys('Step 5 – Description');
-    await description.fill(
-      `PW raw-key scan test ${Date.now()} — auto-filed, please ignore`,
-    );
-    await clickNext();
-
-    // ── Step 6: Upload Photos (skip) → SUBMIT ─────────────────────────────
-    await page.waitForTimeout(2000);
-    await assertNoRawKeys('Step 6 – Upload Photos');
-
-    const submitBtn = page.locator('button:visible').filter({ hasText: /^SUBMIT$/ }).first();
-    await submitBtn.waitFor({ state: 'visible', timeout: 10_000 });
-    await submitBtn.click();
-    await page.waitForTimeout(8000);
+    await walkWizard(page, {
+      onAfterStep: (label) => assertNoRawKeys(page, label),
+    });
 
     // ── Confirmation page ─────────────────────────────────────────────────
     await expect(page).toHaveURL(/\/citizen\/pgr\/response/);
-    await assertNoRawKeys('Confirmation page');
+    await assertNoRawKeys(page, 'Confirmation page');
   });
 });
