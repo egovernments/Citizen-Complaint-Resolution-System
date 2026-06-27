@@ -10,7 +10,10 @@
     "test:citizen": "playwright test tests/citizen",
     "test:employee": "playwright test tests/employee",
     "test:admin": "playwright test tests/admin",
-    "test:lifecycle": "playwright test tests/lifecycle"
+    "test:lifecycle": "playwright test tests/lifecycle",
+    "test:smoke": "playwright test --project=smoke",
+    "test:api": "playwright test --project=api",
+    "test:smoke-api": "playwright test --project=smoke --project=api"
   },
   "repository": {
     "type": "git",
