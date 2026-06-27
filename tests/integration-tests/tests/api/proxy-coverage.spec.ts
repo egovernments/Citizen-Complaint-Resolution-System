@@ -21,7 +21,9 @@ interface ApiCall {
 }
 
 test.describe('API Proxy Coverage', () => {
-  test('all employee flow APIs return valid responses through proxy', async ({ page }) => {
+  test('all employee flow APIs return valid responses through proxy', {
+    tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
+  }, async ({ page }) => {
     test.slow(); // This test navigates through multiple pages
 
     const apiCalls: ApiCall[] = [];
@@ -122,7 +124,9 @@ test.describe('API Proxy Coverage', () => {
     }
   });
 
-  test('all API calls carry JWT through proxy (no 401s after login)', async ({ page }) => {
+  test('all API calls carry JWT through proxy (no 401s after login)', {
+    tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
+  }, async ({ page }) => {
     const unauthorizedCalls: string[] = [];
 
     page.on('response', (resp) => {
@@ -164,7 +168,9 @@ test.describe('API Proxy Coverage', () => {
     expect(unauthorizedCalls).toEqual([]);
   });
 
-  test('MDMS, localization, and access APIs work with JWT auth', async ({ page }) => {
+  test('MDMS, localization, and access APIs work with JWT auth', {
+    tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
+  }, async ({ page }) => {
     // Navigate to the domain first so fetch calls are same-origin
     await page.goto(`${BASE_URL}/digit-ui/employee/user/login`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
 
@@ -271,7 +277,9 @@ test.describe('API Proxy Coverage', () => {
     }
   });
 
-  test('KC OIDC endpoints are accessible (not blocked by proxy)', async ({ page }) => {
+  test('KC OIDC endpoints are accessible (not blocked by proxy)', {
+    tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
+  }, async ({ page }) => {
     await page.goto(`${BASE_URL}/digit-ui/citizen`, { waitUntil: 'domcontentloaded', timeout: 15_000 });
 
     // These endpoints go directly to Keycloak (not through proxy)
@@ -290,7 +298,9 @@ test.describe('API Proxy Coverage', () => {
     }
   });
 
-  test('citizen flow APIs work without authentication', async ({ page }) => {
+  test('citizen flow APIs work without authentication', {
+    tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
+  }, async ({ page }) => {
     // Citizen language/login page should load MDMS and localization without JWT
     await page.goto(`${BASE_URL}/digit-ui/citizen`, {
       waitUntil: 'networkidle',
@@ -322,7 +332,9 @@ test.describe('API Proxy Coverage', () => {
 });
 
 test.describe('Domain Configuration', () => {
-  test('KC client has deployment domain in redirect URIs', async ({ page }) => {
+  test('KC client has deployment domain in redirect URIs', {
+    tag: ['@area:keycloak', '@layer:api'],
+  }, async ({ page }) => {
     const deploymentDomain = new URL(BASE_URL).origin;
 
     // Check OIDC discovery to get the client registration info
@@ -360,7 +372,9 @@ test.describe('Domain Configuration', () => {
     ).not.toBe(400);
   });
 
-  test('KC CORS allows deployment domain', async ({ page }) => {
+  test('KC CORS allows deployment domain', {
+    tag: ['@area:keycloak', '@layer:api'],
+  }, async ({ page }) => {
     await page.goto(`${BASE_URL}/digit-ui/citizen`, {
       waitUntil: 'domcontentloaded',
       timeout: 15_000,

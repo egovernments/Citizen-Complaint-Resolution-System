@@ -20,7 +20,7 @@
  * Ported from: local-setup/tests/e2e/specs/citizen/proxy.spec.ts
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, TENANT, KC_REALM, KC_CLIENT_ID } from '../utils/env';
+import { BASE_URL, TENANT, ROOT_TENANT, KC_REALM, KC_CLIENT_ID } from '../utils/env';
 import { getMobileValidationRule, generateValidMobile } from '../utils/mdms-mobile';
 
 const KC_INTERNAL = 'http://localhost:18180';
@@ -131,7 +131,7 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
     });
 
     const result = await page.evaluate(
-      async ({ baseUrl, token }) => {
+      async ({ baseUrl, token, rootTenant }) => {
         const resp = await fetch(`${baseUrl}/mdms-v2/v1/_search`, {
           method: 'POST',
           headers: {
@@ -141,7 +141,7 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
           body: JSON.stringify({
             RequestInfo: { apiId: 'Rainmaker' },
             MdmsCriteria: {
-              tenantId: 'pg',
+              tenantId: rootTenant,
               moduleDetails: [{ moduleName: 'tenant', masterDetails: [{ name: 'tenants' }] }],
             },
           }),
@@ -149,7 +149,7 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
         const body = await resp.text();
         return { status: resp.status, body: body.substring(0, 500) };
       },
-      { baseUrl: BASE_URL, token: citizenJwt },
+      { baseUrl: BASE_URL, token: citizenJwt, rootTenant: ROOT_TENANT },
     );
 
     expect(
@@ -169,7 +169,7 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
     });
 
     const result = await page.evaluate(
-      async ({ baseUrl, token }) => {
+      async ({ baseUrl, token, rootTenant }) => {
         const resp = await fetch(`${baseUrl}/localization/messages/v1/_search`, {
           method: 'POST',
           headers: {
@@ -178,14 +178,14 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
           },
           body: JSON.stringify({
             RequestInfo: { apiId: 'Rainmaker' },
-            tenantId: 'pg',
+            tenantId: rootTenant,
             locale: 'en_IN',
             module: 'rainmaker-common',
           }),
         });
         return { status: resp.status };
       },
-      { baseUrl: BASE_URL, token: citizenJwt },
+      { baseUrl: BASE_URL, token: citizenJwt, rootTenant: ROOT_TENANT },
     );
 
     expect(result.status).toBeLessThan(500);
@@ -235,7 +235,7 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
     });
 
     const result = await page.evaluate(
-      async ({ baseUrl, token, citizenPhone }) => {
+      async ({ baseUrl, token, citizenPhone, tenant }) => {
         const resp = await fetch(`${baseUrl}/pgr-services/v2/request/_create`, {
           method: 'POST',
           headers: {
@@ -245,18 +245,18 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
           body: JSON.stringify({
             RequestInfo: { apiId: 'Rainmaker' },
             service: {
-              tenantId: 'pg.citya',
+              tenantId: tenant,
               serviceCode: 'StreetLightNotWorking',
               description: 'E2E citizen proxy test complaint',
               source: 'web',
               address: {
-                city: 'pg.citya',
+                city: tenant,
                 locality: { code: 'LOCALITY1', name: 'Test Locality' },
               },
               citizen: {
                 name: 'E2E Test Citizen',
                 mobileNumber: citizenPhone,
-                tenantId: 'pg.citya',
+                tenantId: tenant,
               },
             },
             workflow: { action: 'APPLY' },
@@ -265,7 +265,7 @@ test.describe('New Citizen Proxy Flow (simulates Google SSO)', () => {
         const body = await resp.text();
         return { status: resp.status, body: body.substring(0, 500) };
       },
-      { baseUrl: BASE_URL, token: citizenJwt, citizenPhone },
+      { baseUrl: BASE_URL, token: citizenJwt, citizenPhone, tenant: TENANT },
     );
 
     // 200 = complaint created, 400 = missing data (acceptable)
