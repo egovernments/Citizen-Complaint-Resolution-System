@@ -77,7 +77,19 @@ test.describe('Citizen landing dispatch', () => {
   // landing — not session leftovers from earlier tests.
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('smoke: lands on a usable citizen page', async ({ page }) => {
+  test('smoke: lands on a usable citizen page', {
+    annotation: {
+      type: 'description',
+      description: `Smoke check that the citizen landing page loads without fatal errors, regardless of deployment mode (language-selection, home, or login). Catches crashes in the dispatch logic.
+
+Steps:
+1. Navigate to /digit-ui/citizen with clean storage.
+2. Wait up to 15s for one of: language-selection page, home page, or login page.
+3. Assert that mode is not 'unknown' (i.e., the page loaded).
+
+Pairs with language-selection, auto-skip-home, and auto-skip-login tests that validate specific dispatch branches.`,
+    },
+    tag: ['@area:pgr', '@kind:smoke', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     const landing = new CitizenLandingPage(page);
     await landing.goto();
     const mode = await landing.detectLanding();
@@ -85,7 +97,21 @@ test.describe('Citizen landing dispatch', () => {
     expect(mode).not.toBe('unknown');
   });
 
-  test('language-selection: shows Choose Language and Continue navigates onward', async ({ page }) => {
+  test('language-selection: shows Choose Language and Continue navigates onward', {
+    annotation: {
+      type: 'description',
+      description: `Validates the language-selection dispatch branch — shown when tenant is not pre-resolved by globalConfigs AND stateInfo.languages.length > 1. Asserts the heading + button render and language selection advances to the next step (login, city select, or home).
+
+Steps:
+1. Navigate to /digit-ui/citizen with clean storage.
+2. Detect dispatch mode; skip if not 'language-selection'.
+3. Assert 'Choose Language' heading or Continue button is visible.
+4. Assert body contains 'ENGLISH' (the default language).
+5. Click Continue; assert URL changes to /citizen/login, /citizen/select-city, /citizen/home, or /user/login.
+
+Skips on deployments with single language or pre-resolved tenant — safe to run anywhere.`,
+    },
+    tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     const landing = new CitizenLandingPage(page);
     await landing.goto();
     const mode = await landing.detectLanding();
@@ -102,7 +128,20 @@ test.describe('Citizen landing dispatch', () => {
     await page.waitForURL(/\/(citizen\/(login|select-city|home)|user\/login)/, { timeout: 15_000 });
   });
 
-  test('auto-skip-home: All Services menu renders', async ({ page }) => {
+  test('auto-skip-home: All Services menu renders', {
+    annotation: {
+      type: 'description',
+      description: `Validates the auto-skip-home dispatch branch — shown when tenantId is pre-resolved by globalConfigs. Asserts the All Services page renders with the File a Complaint action available.
+
+Steps:
+1. Navigate to /digit-ui/citizen with clean storage.
+2. Detect dispatch mode; skip if not 'home'.
+3. Assert 'All Services' marker is visible.
+4. Assert 'File a Complaint' (or localized equivalent) is visible.
+
+Skips on deployments without a pre-configured tenant default — safe to run anywhere.`,
+    },
+    tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     const landing = new CitizenLandingPage(page);
     await landing.goto();
     const mode = await landing.detectLanding();
@@ -115,7 +154,19 @@ test.describe('Citizen landing dispatch', () => {
     await expect(page.getByText(/File a Complaint|HOME_FILE_COMPLAINT|RAINMAKER-PGR/i).first()).toBeVisible();
   });
 
-  test('auto-skip-login: single-language tenant lands on login', async ({ page }) => {
+  test('auto-skip-login: single-language tenant lands on login', {
+    annotation: {
+      type: 'description',
+      description: `Validates the auto-skip-login dispatch branch — shown when stateInfo.languages.length === 1 AND no home tenant is pre-resolved by globalConfigs. Asserts the login page renders with the mobile number input visible.
+
+Steps:
+1. Navigate to /digit-ui/citizen with clean storage.
+2. Detect dispatch mode; skip if not 'login'.
+3. Assert mobile number input is visible.
+
+Skips on deployments with multiple languages or a pre-configured tenant default — safe to run anywhere.`,
+    },
+    tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     const landing = new CitizenLandingPage(page);
     await landing.goto();
     const mode = await landing.detectLanding();
