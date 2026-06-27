@@ -141,4 +141,127 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     // Smoke: no error fallback rendered
     await expect(body).not.toContainText('Something went wrong');
   });
+
+  // ── Raw-key localization scan ─────────────────────────────────────────────
+  //
+  // Visible text that looks like a raw localization key: uppercase letter/digit
+  // run with at least one `.`/`_` separator. Matches BOUNDARY.OROMIA,
+  // ADMIN_KE_NAIROBI, SERVICEDEFS.DRAINS, CS_COMMON_COMPLAINT_SUBMITTED.
+  // Does NOT match real display names ("Oromia", "Nairobi County", "Bomet")
+  // or dashed identifiers (PGR-2026-06-13-004235).
+  //
+  // Regex is preserved verbatim from
+  //   local-setup/tests/e2e/specs/citizen/complaint-submit.spec.ts
+  const RAW_KEY_RE = /\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\b/g;
+  const rawKeysIn = (text: string) =>
+    [...new Set(text.match(RAW_KEY_RE) || [])];
+
+  test('no raw localization keys visible at any wizard step', {
+    annotation: {
+      type: 'description',
+      description: `Walks the citizen file-complaint wizard step-by-step and after each step scans the page body text for raw localization keys (e.g. SERVICEDEFS.DRAINS, BOUNDARY.OROMIA, CS_COMMON_*). Fails immediately with the offending key(s) if any are visible to the citizen at that step.
+
+The regex /\\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\\b/g is preserved verbatim from the legacy complaint-submit.spec.ts regression.`,
+    },
+    tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'],
+  }, async ({ page }) => {
+    test.setTimeout(180_000);
+    const phone = generateCitizenPhone();
+    await citizenOtpLogin(page, phone);
+
+    await page.goto(
+      `${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
+      { waitUntil: 'domcontentloaded', timeout: 30_000 },
+    );
+    await page.waitForTimeout(5000);
+
+    const assertNoRawKeys = async (stepLabel: string) => {
+      const text = await page.locator('body').textContent() ?? '';
+      const keys = rawKeysIn(text);
+      expect(
+        keys,
+        `Step "${stepLabel}" shows raw localization keys: ${keys.slice(0, 10).join(', ')}`,
+      ).toHaveLength(0);
+    };
+
+    const dropdowns = page.locator(
+      'button[role="combobox"], input.digit-dropdown-employee-select-wrap--elipses',
+    );
+    const cascadeDropdowns = page.locator(
+      'button[role="combobox"], input[class*="select-wrap--elipses"]',
+    );
+
+    const clickNext = async () => {
+      const btn = page.locator('button:visible').filter({ hasText: /^NEXT$/ }).first();
+      await btn.waitFor({ state: 'visible', timeout: 10_000 });
+      await btn.scrollIntoViewIfNeeded();
+      await btn.click();
+      await page.waitForTimeout(2500);
+    };
+
+    // ── Step 1: Complaint Details (Type + Subtype) ─────────────────────────
+    await dropdowns.first().waitFor({ state: 'visible', timeout: 15_000 });
+    await assertNoRawKeys('Step 1 – initial render');
+
+    await dropdowns.first().click();
+    await page.waitForTimeout(800);
+    await page.locator('[role="option"], .digit-dropdown-item').first().click();
+    await page.waitForTimeout(1500);
+    await assertNoRawKeys('Step 1 – after Type selection');
+
+    await dropdowns.nth(1).click();
+    await page.waitForTimeout(800);
+    await page.locator('[role="option"], .digit-dropdown-item').first().click();
+    await page.waitForTimeout(1000);
+    await assertNoRawKeys('Step 1 – after Subtype selection');
+
+    await clickNext();
+
+    // ── Step 2: Pin Complaint Location ────────────────────────────────────
+    await page.waitForTimeout(2500);
+    await assertNoRawKeys('Step 2 – Pin Location');
+    await clickNext();
+
+    // ── Step 3: Location Details (boundary cascade) ────────────────────────
+    await page.waitForTimeout(2000);
+    await assertNoRawKeys('Step 3 – Location Details initial render');
+
+    for (let i = 0; i < 3; i++) {
+      const dd = cascadeDropdowns.nth(i);
+      const visible = await dd.isVisible({ timeout: 5000 }).catch(() => false);
+      if (!visible) break;
+      const hasValue = await dd.evaluate(
+        (el) => !(el as HTMLElement).innerText.match(/^Select /i),
+      ).catch(() => false);
+      if (hasValue) continue;
+      await dd.click();
+      await page.waitForTimeout(800);
+      await page.locator('[role="option"], .digit-dropdown-item').first().click();
+      await page.waitForTimeout(1500);
+      await assertNoRawKeys(`Step 3 – after cascade dropdown ${i} selection`);
+    }
+    await clickNext();
+
+    // ── Step 5: Additional Details (Description) ──────────────────────────
+    const description = page.locator('textarea').first();
+    await description.waitFor({ state: 'visible', timeout: 10_000 });
+    await assertNoRawKeys('Step 5 – Description');
+    await description.fill(
+      `PW raw-key scan test ${Date.now()} — auto-filed, please ignore`,
+    );
+    await clickNext();
+
+    // ── Step 6: Upload Photos (skip) → SUBMIT ─────────────────────────────
+    await page.waitForTimeout(2000);
+    await assertNoRawKeys('Step 6 – Upload Photos');
+
+    const submitBtn = page.locator('button:visible').filter({ hasText: /^SUBMIT$/ }).first();
+    await submitBtn.waitFor({ state: 'visible', timeout: 10_000 });
+    await submitBtn.click();
+    await page.waitForTimeout(8000);
+
+    // ── Confirmation page ─────────────────────────────────────────────────
+    await expect(page).toHaveURL(/\/citizen\/pgr\/response/);
+    await assertNoRawKeys('Confirmation page');
+  });
 });
