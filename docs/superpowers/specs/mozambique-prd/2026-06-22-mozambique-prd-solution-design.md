@@ -200,6 +200,7 @@ The **`CMS_SUPERVISOR` functional role** carries different concrete permissions 
 | `COMPLAINTS_VIEWER` | permission | Atomic READ grant on the Complaints entity |
 | `COMPLAINTS_EDITOR` | permission | Atomic UPDATE grant on the Complaints entity (covers workflow actions: refer, assign, resolve, reject, requestInfo) |
 | `COMPLAINTS_CREATOR` | permission | Atomic CREATE grant on the Complaints entity (file a new case) |
+| `CONFIDENTIAL_COMPLAINT_VIEWER` | permission | Grants access to unmasked PII and confidential `extendedAttributes` on complaints (see §7.7). Grant to `PGR_ADMIN`, `GRIEVANCE_OFFICER`; do not grant to `CITIZEN`. |
 
 `EMPLOYEE` and `CITIZEN` are existing DIGIT base roles — re-used, not re-registered.
 
@@ -233,7 +234,7 @@ State-level fallback (via `MultiStateInstanceUtil`): MDMS lookups at `mz.ige` an
 
 ### **4.2 Routing across sub-tenants**
 
-The citizen never picks the institution. The "Complaint related to" dropdown (BRD §5.1.D \+ Appendix B Section I) maps the citizen's natural-language choice to a `templateType` via the `RAINMAKER-PGR.ComplaintRelatedToMap` MDMS master. Selecting `templateType=IGE` writes the complaint into the `mz.ige` sub-tenant; `IGSAE` into `mz.igsae`. Complaint types and subtypes are fetched from the sub-tenant based on the same param.
+The citizen never picks the institution. The "Complaint related to" dropdown (BRD §5.1.D \+ Appendix B Section I) maps the citizen's natural-language choice to a `caseRelatedTo` code via the `RAINMAKER-PGR.ComplaintRelatedToMap` MDMS master. Selecting `caseRelatedTo=IGE` writes the complaint into the `mz.ige` sub-tenant; `IGSAE` into `mz.igsae`. The matching `ComplaintTemplateType` entry (keyed by `caseRelatedTo`) provides the JSON Schema reference, allowed document types, and viewer roles for that submission. Complaint types and subtypes are fetched from the sub-tenant based on the same param.
 
 ### **4.3 Data partitioning**
 
@@ -433,7 +434,8 @@ graph TB
 | **egov-config-service** | Existing — schema bump | TemplateBinding extended for `audience`, `workflowState`, `body` (issue \#905) |
 | **egov-mdms-service** | Existing — new masters seeded | Stores ComplaintHierarchy, ComplaintTemplateType, ComplaintRelatedToMap |
 | **egov-localization** | Existing — pt\_MZ translations added | UI strings; SMS templates migrate OUT of localization into config-service |
-| **egov-enc-service** | Existing — used | PII encryption (witnesses field) |
+| **egov-enc-service** | Existing — used via digit-config-service | PII encryption of `x-security` fields; called by `digit-config-service`, not by PGR directly |
+| **digit-config-service** | Existing — used for enc/dec intermediation | Reads `x-security` array from the JSON Schema (resolved by `schemaRef`), encrypts/decrypts the listed fields via egov-enc-service; PGR calls `POST /config/v1/_encrypt` and `_decrypt` |
 | **filestore-service** | Existing — used | Evidence \+ photographs storage |
 | **egov-idgen** | Existing — config change | PRD-YYYY-NNNNNNN format string registered per tenant |
 | **novu-bridge** | Existing — modified | Per-stakeholder fan-out; criteria extended with audience \+ workflowState (issue \#905) |
@@ -475,29 +477,35 @@ Service (existing PGR entity)
 
 ├── audit (existing)
 
-└── extended\_attributes JSONB                        ← NEW
+└── extended\_attributes JSONB                        ← NEW (flat key-value; no nested `fields` object)
 
-    ├── templateType (IGE | IGSAE)
+    ├── caseRelatedTo (IGE | IGSAE — discriminator; also indexed via B-tree)
 
-    ├── prefersConfidentiality
-
-    ├── consents\[\] (truthfulness \+ data-processing)
-
-    ├── encryptedFields\[\]
+    ├── isConfidential (boolean, default false — drives all-or-nothing masking)
 
     ├── schemaVersion
 
-    └── fields {category, subcategory1, subcategory2, …template-specific…}
+    ├── hierarchyLevel1, hierarchyLevel2 (ancestor path snapshot)
+
+    └── …template-specific fields flat at top level…
+        (e.g. instituteName, witnessName for IGE;
+         entityName, entityAddress, dateOfFact for IGSAE)
+
+    Note: encryptedFields[] is NOT stored. digit-config-service reads the
+    x-security array from the JSON Schema (schemaRef) at runtime to know
+    which fields to encrypt/decrypt — no per-row tracking needed.
 
 ComplaintTemplateType (MDMS — default scope mz, overridable per sub-tenant)
 
-├── IGE
+├── IGE  { caseRelatedTo, schemaRef→"IgeComplaintExtendedAttributes",
+│          allowedDocumentTypes["EVIDENCE"], allowedViewerRoles["CONFIDENTIAL_COMPLAINT_VIEWER"] }
 
-│   └── definition (JSON Schema for IGE extendedAttributes)
+└── IGSAE { caseRelatedTo, schemaRef→"IgsaeComplaintExtendedAttributes",
+             allowedDocumentTypes["EVIDENCE"], allowedViewerRoles["CONFIDENTIAL_COMPLAINT_VIEWER"] }
 
-└── IGSAE
-
-    └── definition (JSON Schema for IGSAE extendedAttributes)
+JSON Schemas (draft-07 with x-security extension listing fields for egov-enc-service):
+  utilities/default-data-handler/src/main/resources/schema/IgeComplaintExtendedAttributes.json
+  utilities/default-data-handler/src/main/resources/schema/IgsaeComplaintExtendedAttributes.json
 
 ComplaintHierarchy (MDMS — default scope mz.ige \+ mz.igsae separately, overridable)
 
@@ -533,9 +541,11 @@ Signed Audit Service (external DIGIT platform service — pgr-services is a prod
 
 | Object | Action | Purpose |
 | :---- | :---- | :---- |
-| `eg_pgr_service_v2.extended_attributes` JSONB | ADD | Template-specific dynamic fields |
-| `eg_pgr_service_v2.complaint_template_type` varchar(16) | ADD | Denormalized templateType (IGE/IGSAE) for indexed filter |
-| GIN index on `extended_attributes` | CREATE | Fast containment queries (MOZ\_013) |
+| `eg_pgr_service_v2.extended_attributes` JSONB | ADD | Citizen-supplied dynamic fields — flat key-value (no nested `fields` object) |
+| B-tree expression index on `(extended_attributes->>'caseRelatedTo')` | CREATE | Targeted index for search predicates on `caseRelatedTo` |
+| B-tree expression index on `(extended_attributes->>'isConfidential')` | CREATE | Targeted index for search predicates on `isConfidential` |
+
+**No `complaint_template_type` varchar column** — `caseRelatedTo` is stored flat inside the JSONB and indexed via the B-tree expression index above. A full GIN on the entire JSONB column is not added; it would be unnecessarily broad for the two fields actually used in predicates.
 
 **No new DB tables.** Audit goes to the Signed Audit Service (external). PRD numbering reuses the existing `serviceRequestId` column populated by `egov-idgen` — no schema change or sequence table needed.
 
@@ -651,9 +661,17 @@ Ancestor path (`category`, `subcategory1`, `subcategory2`) is denormalised onto 
 
 Three layers:
 
-1. **At-rest encryption** (MOZ\_014): the `witnesses` field in `extended_attributes` is encrypted via `egov-enc-service` before persist; decrypted on read.  
-2. **Response-time masking** (MOZ\_015): `prefersConfidentiality=true` on the row gates whether PII is returned in plain text to a calling role.  
-3. **Confidentiality scope** (ADR-008 — OPEN): BRD §5.1 Business Rules say "not visible to any IGE/IGSAE employee." Strict interpretation precludes the Case Manager from acting on the case. Resolution pending.
+1. **At-rest encryption** (MOZ\_014): fields listed in the JSON Schema's top-level `x-security` array are encrypted before persist and decrypted on read. Encryption is intermediated by `digit-config-service` (which reads `x-security` from the schema and calls `egov-enc-service`) — PGR does not iterate per-field flags. IGE encrypts: `instituteName`, `witnessName`, `witnessAddress`, `witnessNote`. IGSAE encrypts: `dateOfFact`, `entityName`, `entityAddress`, `witnessName`, `witnessAddress`, `witnessNote`.
+
+2. **Response-time masking** (MOZ\_015): masking is **all-or-nothing**, driven by `isConfidential` (replaces `prefersConfidentiality`) plus whether the caller has a role in `ComplaintTemplateType.allowedViewerRoles`. When `isConfidential=true` and the caller lacks `CONFIDENTIAL_COMPLAINT_VIEWER`, decryption is skipped entirely and every attribute is returned as `****`. No per-field `maskable` flag is needed.
+
+   | `isConfidential` | Caller has `CONFIDENTIAL_COMPLAINT_VIEWER` | Result |
+   |---|---|---|
+   | `false` | any | Decrypt; return all plain |
+   | `true` | yes | Decrypt; return all plain |
+   | `true` | no | Skip decryption; all attributes → `****` |
+
+3. **Confidentiality scope** (ADR-007 — OPEN): BRD §5.1 Business Rules say "not visible to any IGE/IGSAE employee." Strict interpretation precludes the Case Manager from acting on the case. Resolution pending. Default is Interpretation B: the named `CONFIDENTIAL_COMPLAINT_VIEWER` role grants access; granted to `PGR_ADMIN` and `GRIEVANCE_OFFICER`; never to `CITIZEN`.
 
 Audit log entries are written every time PII is decrypted for response under a non-citizen role.
 
@@ -807,19 +825,19 @@ Each ADR follows: **Context · Decision · Alternatives · Consequences**. Detai
 
 **Context.** BRD §5.1 Business Rules states: *"If the citizen selects confidentiality, their personal data will not be visible to any IGE or IGSAE employee."* — read literally, the assigned Case Manager cannot see the citizen's mobile to call them, the witness's name, or the entity address.
 
-**Decision.** **OPEN.** Two interpretations, each with different design consequences:
+**Decision.** **OPEN — defaulting to Interpretation B.** Two interpretations, each with different design consequences:
 
-**Interpretation A — strict literal.** No employee role can see confidential PII. The `CONFIDENTIAL_COMPLAINT_VIEWER` role is dropped (or repurposed for legal/judicial out-of-band access). Investigation must happen blind to PII or via system-mediated communication. Consequence: case work is significantly impeded; the feature becomes a "filed but un-actionable" state for confidential complaints.
+**Interpretation A — strict literal.** No employee role can see confidential PII. Investigation must happen blind to PII or via system-mediated communication. Consequence: case work is significantly impeded.
 
-**Interpretation B — operational nuance.** Confidential complaints hide PII in lists, dashboards, and aggregate views — but the **assigned Case Manager** sees PII for the **single case** they're working on, with PII access audit-logged for every view. Consequence: workable for investigation; preserves the privacy intent for incidental viewers.
+**Interpretation B — operational nuance (current default).** Confidential complaints hide PII in lists and dashboards, but the holder of the `CONFIDENTIAL_COMPLAINT_VIEWER` role (granted to `PGR_ADMIN`, `GRIEVANCE_OFFICER`) sees plain text for the case they're working on, with every PII access audit-logged. Masking is **all-or-nothing**: when `isConfidential=true` and the caller lacks `CONFIDENTIAL_COMPLAINT_VIEWER`, every `extendedAttributes` value is returned as `****` and decryption is skipped. No per-field `maskable` flag; the `x-security` schema extension only governs at-rest encryption, not visibility.
 
-**Pending.** BRD-author confirmation. Default to Interpretation B in the design; tighten to A if the author confirms strict reading.
+**Pending.** BRD-author confirmation. Tighten to Interpretation A if the author confirms strict reading, in which case `CONFIDENTIAL_COMPLAINT_VIEWER` is removed.
 
 **Consequences (either way).**
 
 - All PII access events MUST be emitted to the Signed Audit Service with `eventType=PII_DECRYPT`.  
-- The masking layer (MOZ\_015) gates on `prefersConfidentiality` \+ role \+ (per interpretation B) assignment status.  
-- An "I am the assigned Case Manager" check in the masker is required under interpretation B.
+- The masking layer (MOZ\_015) gates on `isConfidential` (replaces `prefersConfidentiality`) \+ `allowedViewerRoles` from `ComplaintTemplateType`.  
+- Under Interpretation B: no per-complaint assignment check in the masker — the named role is the gate.
 
 ---
 
@@ -994,7 +1012,7 @@ Detailed file-level diffs live in the per-capability specs. This appendix points
 | `Workflow.BusinessService` | none | NEW: `mz` instance with 7-state lifecycle |
 | `Workflow.BusinessServiceExtension` | NEW schema | NEW: `mz` data with audience routing per transition |
 | `TemplateBinding` (config-service) | EXTEND: `audience`, `workflowState`, `body` | NEW: 7 SMS templates × 2 locales for `mz` |
-| `RAINMAKER-PGR.ComplaintTemplateType` | NEW schema | NEW: 2 entries (IGE, IGSAE) |
+| `RAINMAKER-PGR.ComplaintTemplateType` | NEW schema — fields: `caseRelatedTo`, `schemaRef`, `allowedDocumentTypes`, `allowedViewerRoles` (no per-field definition inline; field contract lives in the JSON Schema referenced by `schemaRef`) | NEW: 2 entries (IGE, IGSAE) |
 | `RAINMAKER-PGR.ComplaintHierarchy` (MOZ\_008) | EXTEND: `departments[]`, `primaryDepartment` on leaf | NEW: data per Appendix A for `mz.ige` \+ `mz.igsae` |
 | `RAINMAKER-PGR.ComplaintRelatedToMap` | NEW small schema | NEW: dispatcher data for `mz` |
 | `RAINMAKER-PGR.LanguageStrategy` | NEW schema (reconciliation row 13\) | NEW: `mz` entry with pt\_MZ fallback |
