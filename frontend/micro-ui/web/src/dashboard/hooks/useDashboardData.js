@@ -167,6 +167,7 @@ export function useDashboardData(filters) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [asOf, setAsOf] = useState(null);
+  const [scope, setScope] = useState(null);
 
   const fetchData = useCallback(async () => {
     if (!hasAuth()) {
@@ -174,6 +175,7 @@ export function useDashboardData(filters) {
       setAnalyticsResults(null);
       setChartData(EMPTY_CHART_DATA);
       setAsOf(null);
+      setScope(null);
       setError(LOGIN_MESSAGE);
       setLoading(false);
       return;
@@ -196,6 +198,11 @@ export function useDashboardData(filters) {
       setChartData(buildChartData(results, filters));
       setFilterOptions(parseFilterOptions(results));
       setAsOf(extractAsOf(results));
+      // Top-level row-scope object the analytics backend echoes back, e.g.
+      // { tenantId, level, departments?: [...], boundaryPrefix? }. Present and
+      // populated only when the logged-in employee is department/jurisdiction
+      // scoped; undefined on older backends. Surfaced for the header chip.
+      setScope(response?.scope ?? null);
     } catch (err) {
       let message =
         err?.payload?.Errors?.[0]?.message ||
@@ -223,6 +230,7 @@ export function useDashboardData(filters) {
       setChartData(EMPTY_CHART_DATA);
       setFilterOptions(DEFAULT_FILTER_OPTIONS);
       setAsOf(null);
+      setScope(null);
     } finally {
       setLoading(false);
     }
@@ -240,6 +248,7 @@ export function useDashboardData(filters) {
     loading,
     error,
     asOf,
+    scope,
     refetch: fetchData,
   };
 }

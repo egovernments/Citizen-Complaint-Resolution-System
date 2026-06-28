@@ -52,6 +52,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
     filterOptions,
     loading,
     error,
+    scope,
     refetch,
   } = useDashboardData(filters);
 
@@ -178,6 +179,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
       username={username}
       officerAccess={gatingActive ? officerAccess : null}
       visibleKpiCount={gatingActive ? visibleKpiCount : null}
+      scope={scope}
       onSignOut={onSignOut}
     >
       {error && (
