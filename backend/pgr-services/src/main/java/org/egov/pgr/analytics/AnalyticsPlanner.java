@@ -10,6 +10,7 @@ import java.time.temporal.IsoFields;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Translates one validated JSON query node into parameterized SQL against a single grain.
@@ -247,6 +248,14 @@ public class AnalyticsPlanner {
         if (scope.boundaryPrefix != null && g.boundaryColumn != null) {
             conj.add(g.boundaryColumn + " LIKE ?");
             params.add(scope.boundaryPrefix.replace("\\","\\\\").replace("%","\\%").replace("_","\\_") + "%");
+        }
+        // department scope: restrict to the union of the principal's HRMS assignment departments.
+        // NULL department_code rows won't match an IN list → correctly excluded. Grains without a
+        // department axis (events/daily: departmentColumn == null) skip this gracefully.
+        if (scope.departmentCodes != null && !scope.departmentCodes.isEmpty() && g.departmentColumn != null) {
+            String placeholders = scope.departmentCodes.stream().map(x -> "?").collect(Collectors.joining(", "));
+            conj.add(g.departmentColumn + " IN (" + placeholders + ")");
+            params.addAll(scope.departmentCodes);
         }
     }
 

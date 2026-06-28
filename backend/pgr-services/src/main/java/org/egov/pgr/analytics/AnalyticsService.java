@@ -31,17 +31,18 @@ public class AnalyticsService {
     private final AnalyticsCatalog catalog;
     private final JdbcTemplate jdbc;
     private final KpiCatalogService kpiCatalogService;
+    private final PrincipalScopeResolver scopeResolver;
 
     @Autowired
     public AnalyticsService(AnalyticsPlanner planner, AnalyticsCatalog catalog, JdbcTemplate jdbc,
-                            KpiCatalogService kpiCatalogService){
+                            KpiCatalogService kpiCatalogService, PrincipalScopeResolver scopeResolver){
         this.planner = planner; this.catalog = catalog; this.jdbc = jdbc;
-        this.kpiCatalogService = kpiCatalogService;
+        this.kpiCatalogService = kpiCatalogService; this.scopeResolver = scopeResolver;
     }
 
     public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, String tenantId, int stateLevelLen){
         if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
-        AnalyticsScope scope = AnalyticsScope.resolve(requestInfo, tenantId, stateLevelLen);
+        AnalyticsScope scope = scopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
         Set<String> callerRoles = extractRoles(requestInfo);
 
         Map<String,Object> out = new LinkedHashMap<>();
@@ -162,6 +163,7 @@ public class AnalyticsService {
         m.put("level", s.tenantStateLevel ? "state" : "city");
         if (s.citizenUuid != null) m.put("restrictedTo", "own-records");
         if (s.boundaryPrefix != null) m.put("boundaryPrefix", s.boundaryPrefix);
+        if (s.departmentCodes != null && !s.departmentCodes.isEmpty()) m.put("departments", s.departmentCodes);
         return m;
     }
 
