@@ -22,7 +22,6 @@ import { VIZ_TYPE } from "./visualizationStyles";
 import {
   SLA_STACKED_SERIES,
   STATUS_STACKED_SERIES,
-  RESOLUTION_DWELL_STACKED_SERIES,
   OPEN_COMPLAINT_WORKFLOW_SERIES,
   OPEN_COMPLAINT_WORKFLOW_STAGE_KEYS,
 } from "./stackedBarPresentation";
@@ -849,13 +848,6 @@ export const BATCH_QUERIES = {
     ],
     sort: [{ by: "avg_dwell", dir: "desc" }],
     limit: 8,
-  },
-  ev_chart_resolution_dwell_subtype: {
-    grain: "events",
-    dimensions: ["service_code", "status"],
-    filters: { is_current_state: false },
-    measures: [{ name: "avg_dwell", agg: "avg", column: "dwell_ms" }],
-    limit: 200,
   },
   // Employee performance
   ep_open_by_officer: officerTopCount({ is_open: true }),
@@ -2005,13 +1997,6 @@ export function buildBatchQueries(dashboardFilters) {
   if (queries.ev_table_stage_dwell) {
     queries.ev_table_stage_dwell = normalizeStageDwellQuery(
       queries.ev_table_stage_dwell,
-      apiFilters
-    );
-  }
-
-  if (queries.ev_chart_resolution_dwell_subtype) {
-    queries.ev_chart_resolution_dwell_subtype = normalizeStageDwellQuery(
-      queries.ev_chart_resolution_dwell_subtype,
       apiFilters
     );
   }
@@ -3523,16 +3508,6 @@ export function parseComplaintsOverTimeChart(results, dashboardFilters) {
   };
 }
 
-function msToStackedHours(ms) {
-  const hours = Number(ms) / 3600000;
-  if (!Number.isFinite(hours) || hours <= 0) return 0;
-  return Math.round(hours * 10) / 10;
-}
-
-const RESOLUTION_DWELL_STATUS_KEYS = new Set(
-  RESOLUTION_DWELL_STACKED_SERIES.map((def) => def.key)
-);
-
 function rankPivotStackedCategories(entries, { sortBy = "total", sortBySegment } = {}) {
   const ranked = [...entries]
     .filter((entry) => entry.total > 0)
@@ -3607,20 +3582,6 @@ function parsePivotStackedChart(
     })),
     colors: segmentDefs.map((def) => def.color),
   };
-}
-
-export function parseResolutionDwellStackedChart(result, { maxCategories = 5 } = {}) {
-  return parsePivotStackedChart(result, {
-    categoryKey: "service_code",
-    segmentKey: "status",
-    segmentDefs: RESOLUTION_DWELL_STACKED_SERIES,
-    categoryLabel: formatDimensionLabel,
-    maxCategories,
-    measureKey: "avg_dwell",
-    valueTransform: msToStackedHours,
-    aggregate: "set",
-    segmentFilter: (status) => RESOLUTION_DWELL_STATUS_KEYS.has(status),
-  });
 }
 
 const OFFICER_OPEN_SLA_BUCKETS = new Set(["within", "approaching", "breached"]);

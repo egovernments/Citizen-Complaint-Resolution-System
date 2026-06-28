@@ -27,28 +27,27 @@ export const WORKFLOW_STAGE_COLUMNS = [
 ];
 
 export const EMPLOYEE_PERFORMANCE_COLUMNS = [
-  { id: "officerName", label: "Name", align: "left", type: "text", width: "14%" },
-  { id: "role", label: "Role", align: "left", type: "text", width: "10%" },
-  { id: "dept", label: "Dept", align: "left", type: "text", width: "12%" },
-  { id: "statusTags", label: "Status", align: "left", type: "tags", width: "14%" },
-  { id: "assigned", label: "Assigned", align: "left", type: "integer", width: "8%" },
-  { id: "open", label: "Open", align: "left", type: "integer", width: "7%", thresholdKey: "open" },
-  { id: "resolved", label: "Resolved", align: "left", type: "integer", width: "8%" },
+  { id: "officerName", label: "Name", align: "left", type: "text", width: "16%" },
+  { id: "role", label: "Role", align: "left", type: "text", width: "12%" },
+  { id: "dept", label: "Dept", align: "left", type: "text", width: "14%" },
+  { id: "assigned", label: "Assigned", align: "left", type: "integer", width: "9%" },
+  { id: "open", label: "Open", align: "left", type: "integer", width: "8%", thresholdKey: "open" },
+  { id: "resolved", label: "Resolved", align: "left", type: "integer", width: "9%" },
   {
     id: "reopenRate",
     label: "Reopen rate",
     align: "left",
     type: "percent",
-    width: "9%",
+    width: "10%",
     thresholdKey: "reopenRate",
   },
-  { id: "avgCsat", label: "CSAT", align: "left", type: "rating", width: "7%", thresholdKey: "avgCsat" },
+  { id: "avgCsat", label: "CSAT", align: "left", type: "rating", width: "8%", thresholdKey: "avgCsat" },
   {
     id: "escalationRate",
     label: "Escalation rate",
     align: "left",
     type: "percent",
-    width: "11%",
+    width: "14%",
     thresholdKey: "escalationRate",
   },
 ];

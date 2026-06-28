@@ -53,7 +53,7 @@ export const APPROVED_WIDGET_IDS = new Set([
   "cl-chart-complaints-by-type",
   "cl-chart-departments",
   "cl-chart-officer-sla",
-  "cl-chart-open-by-type",
+  "cl-chart-resolution-subtype",
   "cl-map-geography-choropleth",
   "cl-chart-department-resolution-rate",
   "cl-chart-open-by-channel",

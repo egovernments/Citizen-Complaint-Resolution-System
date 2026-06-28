@@ -93,7 +93,8 @@ export function widgetMatchesSearch(widgetId, query, { kpiCardData = {}, chartDa
     return true;
   }
   if (
-    widgetId === "cl-chart-open-by-type" &&
+    (widgetId === "cl-chart-open-by-type" ||
+      widgetId === "cl-chart-resolution-subtype") &&
     (chartData.openByTypeStacked?.categories || []).some((label) => includesQuery(label, q))
   ) {
     return true;

@@ -21,7 +21,6 @@ import {
   parseOpenComplaintsByAgeHistogram,
   parseOfficerSlaStackedChart,
   parseResolutionByTypeTable,
-  parseResolutionDwellStackedChart,
   parseStatusWeekStackedChart,
   parseTrendingComplaintsTable,
   parseWorkflowStageTable,
@@ -54,7 +53,6 @@ const EMPTY_CHART_DATA = {
   openByChannel: [],
   complaintsByAge: [],
   officerSlaStacked: { categories: [], series: [], colors: [] },
-  resolutionDwellStacked: { categories: [], series: [], colors: [] },
   trendingComplaints: [],
   resolutionByType: [],
   locality: [],
@@ -100,9 +98,6 @@ function buildChartData(results, dashboardFilters) {
     openByChannel: parseOpenComplaintsByChannelPieChart(results?.cl_chart_open_by_channel),
     complaintsByAge: parseOpenComplaintsByAgeHistogram(results?.cl_chart_open_by_age),
     officerSlaStacked: parseOfficerSlaStackedChart(results?.cl_chart_officer_sla),
-    resolutionDwellStacked: parseResolutionDwellStackedChart(
-      results?.ev_chart_resolution_dwell_subtype
-    ),
     complaintsOverTime: parseComplaintsOverTimeChart(results, dashboardFilters),
     trendingComplaints: parseTrendingComplaintsTable(
       categoryResult,

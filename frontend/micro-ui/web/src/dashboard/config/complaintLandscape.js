@@ -332,12 +332,13 @@ export const LANDSCAPE_CHARTS = [
     ],
   },
   {
-    id: "cl-chart-open-by-type",
+    id: "cl-chart-resolution-subtype",
     type: "stacked-bar",
     stackOrientation: "vertical",
-    metric: "Open complaints by complaint types",
-    subMetric: "Subtypes with the most open complaints",
-    outputFormat: "Workflow stage breakdown per subtype",
+    metric: "Open Complaints by Workflow Stage",
+    subMetric:
+      "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in.",
+    outputFormat: "Vertical stacked bar — workflow stage counts per subtype",
     queryKey: "cl_chart_open_by_type_stage",
   },
   {
@@ -355,15 +356,6 @@ export const LANDSCAPE_CHARTS = [
     subMetric: "Open complaints by days since filed",
     outputFormat: "Count per bucket: 0–3d, 3–7d, 7–14d, 14d+",
     queryKey: "cl_chart_open_by_age",
-  },
-  {
-    id: "cl-chart-resolution-subtype",
-    type: "stacked-bar",
-    stackOrientation: "vertical",
-    metric: "Resolution time by sub-type",
-    subMetric: "Top 5 complaint subtypes by average hours to resolve",
-    outputFormat: "Stacked bar: stage dwell hours by sub-type",
-    queryKey: "ev_chart_resolution_dwell_subtype",
   },
   {
     id: "cl-table-complaint-type-details",

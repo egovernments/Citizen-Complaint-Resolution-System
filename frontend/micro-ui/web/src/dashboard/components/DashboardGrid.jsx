@@ -296,14 +296,12 @@ const DashboardGrid = ({
       "cl-chart-officer-sla": chartData.officerSlaStacked,
       "cl-chart-open-by-type": chartData.openByTypeStacked,
       "cl-chart-complaints-by-type": chartData.complaintsByTypeStacked,
-      "cl-chart-resolution-subtype": chartData.resolutionDwellStacked,
+      "cl-chart-resolution-subtype": chartData.openByTypeStacked,
     };
     const dataset = datasetByWidget[widgetId];
 
     const { categories = [], series = [], colors = [] } = dataset || {};
     if (!dataset) return null;
-    const valueFormat =
-      widgetId === "cl-chart-resolution-subtype" ? "hours" : undefined;
     const hasData =
       categories.length > 0 &&
       series.some((entry) => entry.data?.some((value) => Number(value) > 0));
@@ -320,7 +318,6 @@ const DashboardGrid = ({
         colors={colors}
         horizontal={horizontal}
         scrollKey={widgetId}
-        valueFormat={valueFormat}
       />
     );
   };
