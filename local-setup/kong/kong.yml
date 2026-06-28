@@ -61,7 +61,11 @@ plugins:
         local ri = body["RequestInfo"]
         if not ri or type(ri) ~= "table" then return end
         local token = ri["authToken"]
-        if not token or type(token) ~= "string" or token == "" then return end
+        if not token or type(token) ~= "string" or token == "" then
+          -- no token: NEVER trust body userInfo (close the no-token spoof) — strip it.
+          if ri["userInfo"] ~= nil then ri["userInfo"] = nil; body["RequestInfo"] = ri; kong.service.request.set_raw_body(cjson.encode(body)) end
+          return
+        end
         -- Part A: never trust client-supplied userInfo; always resolve from the token.
         local httpc = http.new()
         httpc:set_timeout(5000)
