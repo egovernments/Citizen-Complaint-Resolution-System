@@ -134,4 +134,7 @@ charts/*.tgz
 *.swo
 *.bak
 *.tmp
-*.orig
+
+# ─── Operator Local Testing ──────────────────────────────────────────────────
+local-testing/
+.agent/
