@@ -62,22 +62,21 @@ plugins:
         if not ri or type(ri) ~= "table" then return end
         local token = ri["authToken"]
         if not token or type(token) ~= "string" or token == "" then return end
-        if ri["userInfo"] and type(ri["userInfo"]) == "table" then
-          local ui = ri["userInfo"]
-          if ui["uuid"] or ui["id"] or ui["userName"] then return end
-        end
+        -- Part A: never trust client-supplied userInfo; always resolve from the token.
         local httpc = http.new()
         httpc:set_timeout(5000)
         local res, err = httpc:request_uri("http://egov-user-proxy:8107/user/_details?access_token=" .. token, {
           method = "POST",
           headers = { ["Content-Type"] = "application/json" },
         })
-        if not res then kong.log.err("auth-enrichment: ", err); return end
-        if res.status ~= 200 then kong.log.err("auth-enrichment: status ", res.status); return end
-        local ok2, user = pcall(cjson.decode, res.body)
-        if not ok2 or type(user) ~= "table" then return end
-        if not user["uuid"] and not user["userName"] then return end
-        ri["userInfo"] = user
+        local resolved = nil
+        if res and res.status == 200 then
+          local ok2, user = pcall(cjson.decode, res.body)
+          if ok2 and type(user) == "table" and (user["uuid"] or user["userName"]) then resolved = user end
+        else
+          kong.log.err("auth-enrichment failed; stripping client userInfo")
+        end
+        ri["userInfo"] = resolved
         body["RequestInfo"] = ri
         kong.service.request.set_raw_body(cjson.encode(body))
 services:
