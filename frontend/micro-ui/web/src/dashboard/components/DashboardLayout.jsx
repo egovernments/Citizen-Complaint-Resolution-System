@@ -25,6 +25,7 @@ const DashboardLayout = ({
   username,
   officerAccess,
   visibleKpiCount,
+  scope,
   onSignOut,
 }) => {
   const brandStyle = useMemo(() => {
@@ -59,6 +60,7 @@ const DashboardLayout = ({
           scopedRole={scopedRole}
           officerAccess={officerAccess}
           visibleKpiCount={visibleKpiCount}
+          scope={scope}
         />
         <main className="tw-flex-1 tw-overflow-auto tw-bg-background tw-p-4 lg:tw-p-6">
           <DashboardFilters
