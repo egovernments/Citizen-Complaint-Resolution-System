@@ -34,15 +34,17 @@ public class AnalyticsCatalog {
         public final String tenantColumn;
         public final String boundaryColumn;             // RBAC subtree scope (LIKE prefix)
         public final String citizenColumn;              // citizen self-scope
+        public final String departmentColumn;           // RBAC department scope (IN list); null => grain has no dept axis
         public final String defaultTimeRole;
 
         Grain(String name, String table, Map<String,String> timeRoles, Set<String> epochMsColumns,
               Set<String> groupable, Set<String> filterable, Set<String> measurable, Set<String> distinctable,
-              String tenantColumn, String boundaryColumn, String citizenColumn, String defaultTimeRole) {
+              String tenantColumn, String boundaryColumn, String citizenColumn, String departmentColumn,
+              String defaultTimeRole) {
             this.name = name; this.table = table; this.timeRoles = timeRoles; this.epochMsColumns = epochMsColumns;
             this.groupable = groupable; this.filterable = filterable; this.measurable = measurable;
             this.distinctable = distinctable; this.tenantColumn = tenantColumn; this.boundaryColumn = boundaryColumn;
-            this.citizenColumn = citizenColumn; this.defaultTimeRole = defaultTimeRole;
+            this.citizenColumn = citizenColumn; this.departmentColumn = departmentColumn; this.defaultTimeRole = defaultTimeRole;
         }
         public boolean isEpochMs(String col){ return epochMsColumns.contains(col); }
     }
@@ -75,7 +77,7 @@ public class AnalyticsCatalog {
                   "mdms_sla_hours","sla_target_ms"),
             // distinct-countable
             setOf("account_id","current_assignee_uuid","service_code","ward_code","zone_code","service_request_id"),
-            "tenant_id","boundary_path","account_id","filed_at"));
+            "tenant_id","boundary_path","account_id","department_code","filed_at"));
 
         // ---------------- complaint_events ----------------
         grains.put("events", new Grain("events", "complaint_events",
@@ -93,7 +95,7 @@ public class AnalyticsCatalog {
             setOf("dwell_ms","state_sla_ms","business_sla_ms","comment_length","seq_delta","complaint_age_at_event_ms",
                   "event_rating","assignee_count"),
             setOf("service_request_id","assignee_uuid","actor_uuid","account_id"),
-            "tenant_id","boundary_path","account_id","event_at"));
+            "tenant_id","boundary_path","account_id",null,"event_at"));   // events grain has no department_code
 
         // ---------------- complaint_open_state_daily ----------------
         grains.put("daily", new Grain("daily", "complaint_open_state_daily",
@@ -105,7 +107,7 @@ public class AnalyticsCatalog {
                   "is_open","sla_breached"),
             setOf(),
             setOf("service_request_id","current_assignee_uuid","ward_code"),
-            "tenant_id","boundary_path",null,"snapshot_date"));
+            "tenant_id","boundary_path",null,null,"snapshot_date"));   // daily grain has no department_code
     }
 
     public Grain grain(String name){ return grains.get(name); }
