@@ -27,6 +27,30 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AnalyticsService {
 
+    /**
+     * Officer-identity (PII) dimension columns across the analytics grains
+     * ({@link AnalyticsCatalog}). Projecting any of these as a raw DIMENSION returns
+     * real officer/citizen UUIDs row-by-row. A {@code count_distinct} MEASURE over them
+     * is aggregate-only and is NOT gated here.
+     *
+     * Source columns (per grain):
+     *   facts  -> current_assignee_uuid, account_id
+     *   events -> assignee_uuid, actor_uuid, account_id
+     *   daily  -> current_assignee_uuid
+     */
+    static final Set<String> PII_DIMENSIONS = Set.of(
+            "current_assignee_uuid", "assignee_uuid", "actor_uuid", "account_id");
+
+    /**
+     * Roles allowed to project officer-PII dimensions on an INLINE analytics query.
+     * Mirrors the officer-PII KPI defs' {@code rbac.visibleTo}
+     * (KpiDefinition.json: {@code ["PGR_SUPERVISOR","PGR_ADMIN","SUPERUSER"]}) plus the
+     * platform admin roles. The kpiId-by-reference path already enforces {@code visibleTo}
+     * via {@link KpiDefinition#isVisibleTo}; this constant gates only the inline path.
+     */
+    static final Set<String> OFFICER_PII_ROLES = Set.of(
+            "PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER", "MDMS_ADMIN", "HRMS_ADMIN");
+
     private final AnalyticsPlanner planner;
     private final AnalyticsCatalog catalog;
     private final JdbcTemplate jdbc;
@@ -69,6 +93,15 @@ public class AnalyticsService {
                                 "message", "KPI not found or not authorized for role set"));
                         continue;
                     }
+                    // INLINE-only PII gate: the kpiId path already enforced visibleTo above; an inline
+                    // body (no kpiId) bypasses that, so block inline projection of officer-PII dimensions
+                    // unless the caller holds an officer-PII-authorized role.
+                    if (!queryNode.has("kpiId") && projectsForbiddenPii(actualQueryNode, callerRoles)) {
+                        partial = true;
+                        results.put(name, Map.of("error", "pii_forbidden",
+                                "message", "inline query projects officer-PII dimension(s); role not authorized"));
+                        continue;
+                    }
                     results.put(name, runOne(actualQueryNode, scope));
                 } catch (Exception ex) {
                     partial = true;
@@ -82,6 +115,8 @@ public class AnalyticsService {
             JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
             if (actualQueryNode == null)
                 throw new IllegalArgumentException("kpi_forbidden: KPI not found or not authorized");
+            if (!queryNode.has("kpiId") && projectsForbiddenPii(actualQueryNode, callerRoles))
+                throw new IllegalArgumentException("pii_forbidden: inline query projects officer-PII dimension(s); role not authorized");
             out.putAll(runOne(actualQueryNode, scope));
         } else {
             throw new IllegalArgumentException("invalid_param: body must contain 'query' or 'queries'");
@@ -113,6 +148,26 @@ public class AnalyticsService {
         if (storedQuery == null || storedQuery.isNull())
             throw new IllegalArgumentException("invalid_kpi: KPI '" + kpiId + "' has no query defined");
         return queryComposer.mergeParams(storedQuery, queryNode.get("params"));
+    }
+
+    /**
+     * Inline-query PII gate. Returns true when {@code queryNode} projects (in its
+     * {@code dimensions} array) at least one officer-PII column ({@link #PII_DIMENSIONS})
+     * AND the caller holds none of the {@link #OFFICER_PII_ROLES}. Only DIMENSION projection
+     * is gated; aggregate measures ({@code count_distinct} over a PII column) are not, since
+     * they never expose individual UUIDs. Caller is responsible for invoking this only on the
+     * INLINE path (no {@code kpiId}); the kpiId path enforces {@code visibleTo} separately.
+     */
+    boolean projectsForbiddenPii(JsonNode queryNode, Set<String> callerRoles) {
+        if (queryNode == null || !queryNode.has("dimensions") || !queryNode.get("dimensions").isArray())
+            return false;
+        boolean projectsPii = false;
+        for (JsonNode d : queryNode.get("dimensions")) {
+            if (d != null && d.isTextual() && PII_DIMENSIONS.contains(d.asText())) { projectsPii = true; break; }
+        }
+        if (!projectsPii) return false;
+        // authorized iff the caller holds any officer-PII role
+        return callerRoles == null || callerRoles.stream().noneMatch(OFFICER_PII_ROLES::contains);
     }
 
     private Map<String,Object> runOne(JsonNode q, AnalyticsScope scope){
