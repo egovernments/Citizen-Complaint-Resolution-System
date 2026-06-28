@@ -32,12 +32,15 @@ public class AnalyticsService {
     private final JdbcTemplate jdbc;
     private final KpiCatalogService kpiCatalogService;
     private final PrincipalScopeResolver scopeResolver;
+    private final KpiQueryComposer queryComposer;
 
     @Autowired
     public AnalyticsService(AnalyticsPlanner planner, AnalyticsCatalog catalog, JdbcTemplate jdbc,
-                            KpiCatalogService kpiCatalogService, PrincipalScopeResolver scopeResolver){
+                            KpiCatalogService kpiCatalogService, PrincipalScopeResolver scopeResolver,
+                            KpiQueryComposer queryComposer){
         this.planner = planner; this.catalog = catalog; this.jdbc = jdbc;
         this.kpiCatalogService = kpiCatalogService; this.scopeResolver = scopeResolver;
+        this.queryComposer = queryComposer;
     }
 
     public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, String tenantId, int stateLevelLen){
@@ -90,6 +93,12 @@ public class AnalyticsService {
      * If the query node has a {@code "kpiId"} field, resolve it to the KPI's stored query
      * and check authorization. Returns null if forbidden. Returns queryNode unchanged when
      * there is no {@code "kpiId"} field (inline query path is unchanged).
+     *
+     * <p>When the request node carries a {@code "params"} object (the dashboard's global filters —
+     * window / date range / ward / serviceCode), those are merged onto the def's base query via
+     * {@link KpiQueryComposer} so the kpiId-by-reference path honours the global filters. The merge
+     * produces only narrowing filters; the server-injected RBAC row-scope ({@code applyScope}) is
+     * still layered on top by the planner and is never widened here.
      */
     private JsonNode resolveKpiRef(JsonNode queryNode, String tenantId, Set<String> callerRoles) {
         if (!queryNode.has("kpiId")) return queryNode;
@@ -103,7 +112,7 @@ public class AnalyticsService {
         JsonNode storedQuery = def.get().getQuery();
         if (storedQuery == null || storedQuery.isNull())
             throw new IllegalArgumentException("invalid_kpi: KPI '" + kpiId + "' has no query defined");
-        return storedQuery;
+        return queryComposer.mergeParams(storedQuery, queryNode.get("params"));
     }
 
     private Map<String,Object> runOne(JsonNode q, AnalyticsScope scope){
