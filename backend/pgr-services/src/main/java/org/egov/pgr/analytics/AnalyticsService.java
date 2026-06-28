@@ -44,12 +44,14 @@ public class AnalyticsService {
     /**
      * Roles allowed to project officer-PII dimensions on an INLINE analytics query.
      * Mirrors the officer-PII KPI defs' {@code rbac.visibleTo}
-     * (KpiDefinition.json: {@code ["PGR_SUPERVISOR","PGR_ADMIN","SUPERUSER"]}) plus the
-     * platform admin roles. The kpiId-by-reference path already enforces {@code visibleTo}
-     * via {@link KpiDefinition#isVisibleTo}; this constant gates only the inline path.
+     * (KpiDefinition.json uses {@code ["PGR_SUPERVISOR","PGR_ADMIN","SUPERUSER"]}; bomet's
+     * live ke seed uses {@code SUPERVISOR}) plus the platform admin roles. Include BOTH
+     * supervisor codes so a legit supervisor is never wrongly denied across tenants. The
+     * kpiId-by-reference path already enforces {@code visibleTo} via
+     * {@link KpiDefinition#isVisibleTo}; this constant gates only the inline path.
      */
     static final Set<String> OFFICER_PII_ROLES = Set.of(
-            "PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER", "MDMS_ADMIN", "HRMS_ADMIN");
+            "SUPERVISOR", "PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER", "MDMS_ADMIN", "HRMS_ADMIN");
 
     private final AnalyticsPlanner planner;
     private final AnalyticsCatalog catalog;
