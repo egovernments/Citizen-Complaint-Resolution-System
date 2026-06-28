@@ -252,6 +252,34 @@
   transition: none;
 }
 
+.dashboard-external-drag .layout .react-grid-placeholder,
+  .dashboard-grid-dragging .layout .react-grid-placeholder {
+  opacity: 1 !important;
+  z-index: 1 !important;
+  border-radius: 4px;
+  border: 1px dashed color-mix(in srgb, var(--chart-1, #2563eb) 35%, transparent) !important;
+  background: color-mix(in srgb, var(--chart-1, #2563eb) 5%, transparent) !important;
+}
+
+.dashboard-external-drag .\!layout .react-grid-placeholder,
+  .dashboard-grid-dragging .\!layout .react-grid-placeholder {
+  opacity: 1 !important;
+  z-index: 1 !important;
+  border-radius: 4px !important;
+  border: 1px dashed color-mix(in srgb, var(--chart-1, #2563eb) 35%, transparent) !important;
+  background: color-mix(in srgb, var(--chart-1, #2563eb) 5%, transparent) !important;
+}
+
+.dashboard-grid-dragging .react-grid-placeholder,
+  .dashboard-external-drag .react-grid-placeholder {
+  transition: none;
+}
+
+.dashboard-grid-dragging .react-grid-item.react-draggable-dragging,
+  .dashboard-external-drag .react-grid-item.react-draggable-dragging {
+  z-index: 10 !important;
+}
+
 .dashboard-widget-remove-btn{
   position: absolute;
   right: 0.25rem;

@@ -40,6 +40,7 @@ const AdminDashboard = () => {
   }, [filterOptions, applyFilterOptions]);
   const {
     layout,
+    gridSyncKey,
     onDragStop,
     onResizeStop,
     onLayoutChange,
@@ -153,6 +154,7 @@ const AdminDashboard = () => {
           ) : null}
           <DashboardGrid
             layout={layout}
+            gridSyncKey={gridSyncKey}
             onDragStop={onDragStop}
             onResizeStop={onResizeStop}
             onLayoutChange={onLayoutChange}

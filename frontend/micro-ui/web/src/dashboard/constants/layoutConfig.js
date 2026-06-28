@@ -334,13 +334,22 @@ export function computeNextKpiPosition(layout, widgetId) {
     return findFirstOpenPosition(layout, w, h);
   }
 
-  const maxY = Math.max(...kpiItems.map((item) => item.y + item.h));
-  const bottomRow = kpiItems.filter((item) => item.y + item.h === maxY);
-  const nextX = bottomRow.reduce((max, item) => Math.max(max, item.x + item.w), 0);
-  const rowY = bottomRow[0].y;
+  const sorted = [...kpiItems].sort((a, b) => a.y - b.y || a.x - b.x);
+  const lastRowY = sorted[sorted.length - 1].y;
+  const sameRow = kpiItems.filter((item) => item.y === lastRowY);
+  const nextX = sameRow.reduce((max, item) => Math.max(max, item.x + item.w), 0);
 
-  if (nextX + w <= GRID_COLS && !collidesAt(nextX, rowY, w, h, layout)) {
-    return { x: nextX, y: rowY };
+  if (nextX + w <= GRID_COLS && !collidesAt(nextX, lastRowY, w, h, layout)) {
+    return { x: nextX, y: lastRowY };
+  }
+
+  const kpiBandBottom = Math.max(...kpiItems.map((item) => item.y + item.h));
+  for (let y = kpiBandBottom; y <= kpiBandBottom + 24; y += 1) {
+    for (let x = 0; x <= GRID_COLS - w; x += 1) {
+      if (!collidesAt(x, y, w, h, layout)) {
+        return { x, y };
+      }
+    }
   }
 
   return findFirstOpenPosition(layout, w, h);

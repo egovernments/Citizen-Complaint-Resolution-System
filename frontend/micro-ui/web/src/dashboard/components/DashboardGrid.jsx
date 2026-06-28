@@ -1,7 +1,8 @@
-import React, { useCallback, useMemo, useRef } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import GridLayout, { WidthProvider } from "react-grid-layout";
 import useBreakpoint from "../hooks/useBreakpoint";
 import { adaptLayoutForBreakpoint } from "../utils/responsiveLayout";
+import { findDragHoverTarget } from "../hooks/useDashboardLayout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import {
@@ -100,6 +101,7 @@ const WidgetHeader = ({
 
 // Per-card "last updated" caption — absolute bottom-right on every card.
 const GRID_MARGIN = [16, 16];
+
 function isScrollableTableWidget(widgetId) {
   return (
     isTableWidget(widgetId) ||
@@ -138,6 +140,7 @@ function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, widgetI
 
 const DashboardGrid = ({
   layout,
+  gridSyncKey = 0,
   onDragStop,
   onResizeStop,
   onLayoutChange,
@@ -156,6 +159,12 @@ const DashboardGrid = ({
   const isDesktopLayout = breakpoint === "lg";
   const gridWrapRef = useRef(null);
   const externalDropLockRef = useRef(false);
+  const postDropWidgetRef = useRef(null);
+  const userDragWidgetRef = useRef(null);
+  const dragSwapTargetRef = useRef(null);
+  const dragOriginLayoutRef = useRef(null);
+  const lastHoverTargetRef = useRef(null);
+  const [isGridDragging, setIsGridDragging] = useState(false);
   const activeDragWidgetId = draggingWidgetIdRef?.current ?? draggingWidgetId;
   const isExternalDrag = Boolean(activeDragWidgetId);
   const droppingItem = useMemo(
@@ -463,7 +472,9 @@ const DashboardGrid = ({
       }
       if (!dropPosition) return;
 
+
       externalDropLockRef.current = true;
+      postDropWidgetRef.current = activeId;
       requestAnimationFrame(() => {
         onDropWidget(activeId, dropPosition);
         onExternalDragEnd?.();
@@ -517,11 +528,58 @@ const DashboardGrid = ({
     return getDropPreviewSize(activeId);
   }, [draggingWidgetId, draggingWidgetIdRef, layout]);
 
+  const handleDragStart = useCallback((_, __, newItem) => {
+    const widgetId = newItem?.i;
+    setIsGridDragging(true);
+    dragOriginLayoutRef.current = gridLayout.map(({ i, x, y, w, h }) => ({ i, x, y, w, h }));
+    lastHoverTargetRef.current = null;
+    dragSwapTargetRef.current = null;
+    if (widgetId && postDropWidgetRef.current === widgetId) {
+      return;
+    }
+    if (postDropWidgetRef.current && widgetId && postDropWidgetRef.current !== widgetId) {
+      postDropWidgetRef.current = null;
+    }
+    userDragWidgetRef.current = widgetId ?? null;
+  }, [gridLayout]);
+
+  const handleDrag = useCallback((currentLayout, _oldItem, newItem) => {
+    if (!newItem?.i) return;
+    const staticLayout = dragOriginLayoutRef.current ?? currentLayout;
+    const target = findDragHoverTarget(staticLayout, newItem, newItem.i);
+    if (target) {
+      lastHoverTargetRef.current = target.i;
+      dragSwapTargetRef.current = target.i;
+    } else {
+      lastHoverTargetRef.current = null;
+      dragSwapTargetRef.current = null;
+    }
+  }, []);
+
   const handleDragStop = useCallback(
     (nextLayout, oldItem, newItem) => {
       if (isExternalDrag) return;
+      const widgetId = newItem?.i;
+      if (widgetId && postDropWidgetRef.current === widgetId) {
+        userDragWidgetRef.current = null;
+        dragSwapTargetRef.current = null;
+        dragOriginLayoutRef.current = null;
+        lastHoverTargetRef.current = null;
+        setIsGridDragging(false);
+        return;
+      }
+      if (userDragWidgetRef.current === widgetId) {
+        postDropWidgetRef.current = null;
+      }
+      userDragWidgetRef.current = null;
+      setIsGridDragging(false);
       const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
-      onDragStop(withoutPlaceholder, oldItem, newItem);
+      const hoverTargetId = lastHoverTargetRef.current ?? dragSwapTargetRef.current;
+      const originLayout = dragOriginLayoutRef.current;
+      dragSwapTargetRef.current = null;
+      dragOriginLayoutRef.current = null;
+      lastHoverTargetRef.current = null;
+      onDragStop(withoutPlaceholder, oldItem, newItem, hoverTargetId, originLayout);
     },
     [isExternalDrag, onDragStop]
   );
@@ -549,24 +607,27 @@ const DashboardGrid = ({
       ref={gridWrapRef}
       className={`dashboard-grid-wrap tw-min-w-0 tw-w-full tw-max-w-full${
         isExternalDrag ? " dashboard-external-drag" : ""
-      }`}
+      }${isGridDragging ? " dashboard-grid-dragging" : ""}`}
       onDragOver={handleWrapDragOver}
       onDrop={handleWrapDrop}
     >
       <GridLayoutWithWidth
+          key={gridSyncKey}
           className="layout"
           layout={gridLayout}
           cols={GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}
           margin={GRID_MARGIN}
           containerPadding={[0, 0]}
+          onDragStart={handleDragStart}
+          onDrag={handleDrag}
           onDragStop={handleDragStop}
           onResizeStop={handleResizeStop}
           onLayoutChange={handleLayoutChange}
           draggableHandle=".dashboard-widget-surface"
           draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-gauge-target-marker, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
           compactType={null}
-          allowOverlap
+          allowOverlap={false}
           isResizable={isDesktopLayout}
           isDraggable={isDesktopLayout}
           isDroppable={isDesktopLayout}
