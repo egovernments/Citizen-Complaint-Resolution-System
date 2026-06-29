@@ -17,7 +17,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL, generateCitizenPhone } from '../utils/env';
+import { BASE_URL, PGR_ID_PREFIX } from '../utils/env';
 
 test.describe('Citizen file-complaint wizard', () => {
   // ── Raw-key localization scan ─────────────────────────────────────────────
@@ -91,12 +91,17 @@ test.describe('Citizen file-complaint wizard', () => {
     await page.waitForTimeout(1500);
     await onAfterStep?.('Step 1 – after Type selection');
 
-    // Subtype is the 2nd dropdown — required-* appears after Type pick
-    await dropdowns.nth(1).click();
-    await page.waitForTimeout(800);
-    await page.locator('[role="option"], .digit-dropdown-item').first().click();
-    await page.waitForTimeout(1000);
-    await onAfterStep?.('Step 1 – after Subtype selection');
+    // Subtype is the 2nd dropdown — appears after Type pick on some deployments.
+    // On Ethiopia the wizard has only ONE complaint-type dropdown (no subtype),
+    // so we check visibility before trying to interact.
+    const subtypeVisible = await dropdowns.nth(1).isVisible({ timeout: 3000 }).catch(() => false);
+    if (subtypeVisible) {
+      await dropdowns.nth(1).click();
+      await page.waitForTimeout(800);
+      await page.locator('[role="option"], .digit-dropdown-item').first().click();
+      await page.waitForTimeout(1000);
+      await onAfterStep?.('Step 1 – after Subtype selection');
+    }
 
     await clickNext();
 
@@ -157,13 +162,13 @@ test.describe('Citizen file-complaint wizard', () => {
     await page.waitForTimeout(8000);
   }
 
-  test('walks 6 steps + submits + lands on /pgr/response with NCCG-PGR ID', {
+  test('walks 6 steps + submits + lands on /pgr/response with PGR ID', {
     annotation: {
       type: 'description',
-      description: `Citizen happy-path: a logged-in citizen files a complaint by walking all six steps of the file-complaint wizard, clicks Submit, and lands on the confirmation page with a Nairobi-County-Government PGR identifier.
+      description: `Citizen happy-path: a logged-in citizen files a complaint by walking all six steps of the file-complaint wizard, clicks Submit, and lands on the confirmation page with a PGR identifier.
 
 Steps:
-1. OTP-login as a fresh citizen phone number.
+1. OTP-login as the provisioned citizen (readProvisionedCitizen / citizen-fixture.json).
 2. Open /digit-ui/citizen/pgr/create-complaint/complaint-type.
 3. Step 1 (Complaint Details): pick Type and Subtype from the dropdowns, click Next.
 4. Step 2 (Pin Location): accept the default pin — do NOT touch the map (CCRS#469 keeps the test stable).
@@ -171,15 +176,17 @@ Steps:
 6. Step 4 (Complaint's Location): pick County → Sub-County → Ward (cascade gates each level — CCRS#477).
 7. Step 5 (Description): fill the required description, click Next.
 8. Step 6 (Photo): skip the optional dropzone, click SUBMIT.
-9. Assert the URL flips to /pgr/response and a complaint id matching ^NCCG-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+$ is rendered.
+9. Assert the URL flips to /pgr/response and a complaint id matching ^<PGR_ID_PREFIX>-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+$ is rendered.
+   PGR_ID_PREFIX defaults to "NCCG" (Nairobi); set PGR_ID_PREFIX=PG for Ethiopia.
 
-Test timeout is 180s — six steps plus DOM settles plus the final POST regularly exceeds 90s on Nairobi.`,
+Test timeout is 180s — six steps plus DOM settles plus the final POST regularly exceeds 90s.`,
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'],
   }, async ({ page }) => {
     test.setTimeout(180_000);
-    const phone = generateCitizenPhone();
-    await citizenOtpLogin(page, phone);
+    // Use the provisioned citizen (citizen-fixture.json) so login succeeds on
+    // every deployment without registering a fresh phone each run.
+    await citizenOtpLogin(page);
 
     await page.goto(
       `${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`,
@@ -193,7 +200,8 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     await expect(page).toHaveURL(/\/citizen\/pgr\/response/);
     const body = page.locator('body');
     await expect(body).toContainText('Complaint Submitted');
-    await expect(body).toContainText(/NCCG-PGR-\d{4}-\d{2}-\d{2}-\d+/);
+    // PGR_ID_PREFIX is deployment-specific: "NCCG" on Nairobi, "PG" on Ethiopia.
+    await expect(body).toContainText(new RegExp(`${PGR_ID_PREFIX}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+`));
     await expect(body).toContainText(/Go back to home page/i);
 
     // Smoke: no error fallback rendered
@@ -210,8 +218,8 @@ The regex /\\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\\b/g is preserved verbatim from t
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'],
   }, async ({ page }) => {
     test.setTimeout(180_000);
-    const phone = generateCitizenPhone();
-    await citizenOtpLogin(page, phone);
+    // Use the provisioned citizen so login succeeds on every deployment.
+    await citizenOtpLogin(page);
 
     await page.goto(
       `${BASE_URL}/digit-ui/citizen/pgr/create-complaint/complaint-type`,

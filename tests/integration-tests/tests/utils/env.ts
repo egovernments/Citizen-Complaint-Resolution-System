@@ -87,6 +87,14 @@ export function decodeJwtPayload(jwt: string): Record<string, any> {
   return JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
 }
 
+/**
+ * PGR complaint-ID prefix for the deployment. The digit-ui SPA renders this
+ * on the confirmation page. Nairobi uses "NCCG"; Ethiopia uses "PG".
+ * Override via PGR_ID_PREFIX env var when running against any other tenant.
+ * The regex used in assertions is: `<prefix>-PGR-\d{4}-\d{2}-\d{2}-\d+`.
+ */
+export const PGR_ID_PREFIX = process.env.PGR_ID_PREFIX || 'NCCG';
+
 /** Generate a unique citizen phone number valid for the deployment's mobile validation */
 export function generateCitizenPhone(): string {
   // Prefix + remaining digits from timestamp to ensure uniqueness
