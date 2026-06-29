@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * install-schemas.cjs — register the N-level ComplaintHierarchy MDMS schemas.
+ * install-schemas.cjs — register RAINMAKER-PGR MDMS schemas (the N-level
+ * ComplaintHierarchy[Definition] plus ComplaintRelatedToMap / ComplaintTemplateType
+ * and any other RAINMAKER-PGR.* schema present in the file).
  *
  * PREREQUISITE for migrate.cjs and the configurator "Migrate" button: both
  * WRITE into RAINMAKER-PGR.ComplaintHierarchy[Definition] but neither creates
@@ -13,13 +15,15 @@
  * writes data). Idempotent: schemas that already exist are skipped.
  *
  * Usage:
- *   BASE_URL=http://localhost:18000 TENANT=ke.ige node docs/migration/install-schemas.cjs
+ *   BASE_URL=http://localhost:18000 TENANT=mz.igsae node docs/migration/install-schemas.cjs
  * Auth (pick one):
  *   OAUTH_USER/OAUTH_PASS  (default ADMIN / eGov@123, login at STATE_TENANT)
  *   TOKEN=<authToken>      (skip login)
  * Optional:
  *   STATE_TENANT  state root (default = first segment before '.' of TENANT)
  *   SCHEMA_FILE   override path to the schema json
+ *   SCHEMA_CODES  comma-separated schema codes to narrow the set
+ *                 (default: all RAINMAKER-PGR.* schemas in the file)
  */
 const http = require('http');
 const https = require('https');
@@ -40,7 +44,7 @@ const SCHEMA_FILE = process.env.SCHEMA_FILE || path.join(
 );
 
 if (!BASE || !TENANT) {
-  console.error('ERROR: set BASE_URL and TENANT.\n  e.g. BASE_URL=http://localhost:18000 TENANT=ke.ige node docs/migration/install-schemas.cjs');
+  console.error('ERROR: set BASE_URL and TENANT.\n  e.g. BASE_URL=http://localhost:18000 TENANT=mz.igsae node docs/migration/install-schemas.cjs');
   process.exit(2);
 }
 
@@ -88,8 +92,17 @@ async function login() {
   try { all = JSON.parse(fs.readFileSync(SCHEMA_FILE, 'utf8')); }
   catch (e) { console.error('ERROR: cannot read schema file ' + SCHEMA_FILE + '\n  ' + e); process.exit(2); }
 
-  const want = all.filter((x) => String(x.code || '').startsWith('RAINMAKER-PGR.ComplaintHierarchy'));
-  if (!want.length) { console.error('ERROR: no ComplaintHierarchy schemas in ' + SCHEMA_FILE); process.exit(2); }
+  // Register ALL RAINMAKER-PGR.* schemas in the file (ComplaintHierarchy[Definition],
+  // ComplaintRelatedToMap, ComplaintTemplateType, UIConstants, EscalationConfig, …).
+  // Idempotent — already-present schemas return 409 and are skipped. Narrow with
+  // SCHEMA_CODES=<code,code> when you only want a subset.
+  const only = (process.env.SCHEMA_CODES || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const want = all.filter((x) => {
+    const code = String(x.code || '');
+    if (!code.startsWith('RAINMAKER-PGR.')) return false;
+    return only.length ? only.includes(code) : true;
+  });
+  if (!want.length) { console.error('ERROR: no matching RAINMAKER-PGR schemas in ' + SCHEMA_FILE); process.exit(2); }
 
   const targets = Array.from(new Set([TENANT, STATE].filter(Boolean)));
   console.log('Registering ' + want.map((s) => s.code).join(', ') + '\n  at: ' + targets.join(', ') + '\n');

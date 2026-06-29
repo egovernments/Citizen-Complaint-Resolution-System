@@ -120,7 +120,64 @@ interface FormData {
   SelectedBoundary?: BoundaryNode | null;
   description?: string;
   ComplaintImagesPoint?: string[]; // fileStoreIds
+  // Authority dispatcher + dynamic "additional details" (Mozambique IGE/IGSAE).
+  // Populated only when RAINMAKER-PGR.ComplaintRelatedToMap is seeded; absent
+  // otherwise so the legacy flow is byte-identical.
+  relatedTo?: string;
+  templateType?: string;
+  resolvedTenantId?: string;
+  dynamicFields?: Record<string, unknown>;
+  consents?: string[];
+  prefersConfidentiality?: boolean;
 }
+
+// RAINMAKER-PGR.ComplaintRelatedToMap — the citizen-facing dispatcher. Maps a
+// natural-language option → templateType + the sub-tenant the complaint is filed
+// under. State-level master.
+interface RelatedToOption {
+  relatedTo: string;
+  templateType: string;
+  tenantId: string;
+  order?: number;
+  active?: boolean;
+}
+
+// RAINMAKER-PGR.ComplaintTemplateType.fields[] — the dynamic detail fields,
+// keyed by templateType. State-level master.
+interface TemplateField {
+  fieldKey: string;
+  label: string;
+  dataType?: string; // string | textarea | date | number | boolean
+  mandatory?: boolean;
+  maxLength?: number;
+  order?: number;
+  // Confidentiality classification — needs BACKEND enforcement (encryption /
+  // masking). FE+MDMS-only build excludes flagged fields (fail-closed).
+  pii?: boolean;
+  maskable?: boolean;
+  encrypted?: boolean;
+}
+
+function isProtectedField(f: TemplateField): boolean {
+  return f.pii === true || f.encrypted === true || f.maskable === true;
+}
+
+// Complaint-level declarations confirmed before submit (BRD).
+const REQUIRED_CONSENTS: ReadonlyArray<{ code: string; label: string }> = [
+  { code: "TRUTHFULNESS", label: "I declare that the information provided is true and accurate." },
+  { code: "DATA_PROCESSING", label: "I consent to my data being processed to handle this complaint." },
+];
+
+// Consistent checkbox styling: fixed-size box with a theme-accent (centered native
+// tick), nudged to align with the first line of the label text.
+const CHECKBOX_STYLE: React.CSSProperties = {
+  width: "1rem",
+  height: "1rem",
+  marginTop: "0.15rem",
+  flexShrink: 0,
+  accentColor: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
+  cursor: "pointer",
+};
 
 interface StepShellProps {
   title: string;
@@ -128,19 +185,15 @@ interface StepShellProps {
   children: React.ReactNode;
 }
 
+// Consolidated 3-step wizard (was 6 screens). Each step groups what used to be
+// separate screens so the citizen reaches Submit in far fewer taps:
+//   complaint — "what is it about?" (related-to dispatcher) + the complaint type
+//   where     — map pin + ward (auto-cascaded from the pin) + landmark/postal
+//   details   — description + dynamic category fields + photos + consents → submit
 const STEPS = [
-  { id: "type", title: "Complaint" },
-  { id: "map", title: "Pin location" },
-  // Combined location step — replaces the previous separate
-  // "address" (landmark + pincode) and "ward" (County / Sub-County /
-  // Ward dropdowns) steps. Ward + pincode are auto-filled from the
-  // map pin via the existing GeoLocations.resolveWard +
-  // BoundaryComponent auto-cascade pipeline; the user only ever
-  // types the optional landmark unless the auto-fill misses (in
-  // which case the missing dropdown becomes interactive).
-  { id: "location", title: "Location" },
+  { id: "complaint", title: "Complaint" },
+  { id: "where", title: "Location" },
   { id: "details", title: "Details" },
-  { id: "photos", title: "Photos" },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -182,7 +235,20 @@ function getEffectiveServiceCode(
 function mapFormDataToRequest(formData: FormData, tenantId: string, user: any) {
   const timestamp = Date.now();
   const userInfo = user;
-  const additionalDetail = {};
+  // extendedAttributes (templateType, prefersConfidentiality, consents, fields)
+  // ride inside the EXISTING additionalDetail — there is no top-level
+  // service.extendedAttributes column in this build (that is the backend phase).
+  // Added only when an authority/templateType was resolved (legacy flow unchanged).
+  const additionalDetail: Record<string, unknown> = {};
+  if (formData?.templateType) {
+    additionalDetail.extendedAttributes = {
+      templateType: formData.templateType,
+      prefersConfidentiality: !!formData.prefersConfidentiality,
+      consents: formData.consents || [],
+      schemaVersion: "1.0",
+      fields: { ...(formData.dynamicFields || {}) },
+    };
+  }
   const geoLocation = formData?.GeoLocationsPoint || { lat: null, lng: null };
   return {
     service: {
@@ -260,14 +326,8 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
   }
 }
 
-// Mandatory fields per step (zero-indexed).
-const MANDATORY_BY_STEP: ReadonlyArray<ReadonlyArray<keyof FormData>> = [
-  ["SelectComplaintType"], // 0 — type (sub-type is conditionally required, see stepIsValid)
-  ["GeoLocationsPoint"], // 1 — map pin: lat/lng required; auto-seeded on first load so the user just confirms
-  ["SelectedBoundary"], // 2 — combined location step: ward must be selected (map auto-fills it; manual fallback if auto-fill missed)
-  ["description"], // 3 — description
-  [], // 4 — photos (optional)
-];
+// (Per-step mandatory map removed — step validation is keyed by step id in
+// stepIsValid now that steps are consolidated.)
 
 // ---------------------------------------------------------------------------
 // Sub-step bodies
@@ -304,6 +364,18 @@ interface StepBodyProps {
   hierarchyDef?: ComplaintHierarchyDef | null;
   nodes?: ClassificationNode[];
   t: (key: string) => string;
+  // Authority dispatcher + dynamic-detail props (present only in the
+  // ComplaintRelatedToMap-seeded flow).
+  relatedToOptions?: RelatedToOption[];
+  templateFields?: TemplateField[];
+  suppressedCount?: number;
+  // The authority-resolved tenant — scopes the boundary cascade (and anything
+  // else tenant-specific) to the picked institution, not the login tenant.
+  resolvedTenant?: string;
+  // Inline loading flags for the consolidated "complaint" step (so we render a
+  // small spinner in-place instead of blanking the whole screen).
+  catalogueLoading?: boolean;
+  dispatcherLoading?: boolean;
 }
 
 /**
@@ -454,6 +526,43 @@ function ComplaintHierarchyPicker({
   );
 }
 
+// ── Authority / "Complaint related to" — dispatcher step ──────────────────
+// Renders only when RAINMAKER-PGR.ComplaintRelatedToMap is seeded. The pick
+// resolves a templateType + the sub-tenant the complaint is filed under (the
+// catalogue is then fetched at that tenant; tenant code is never shown).
+function RelatedToStepBody({ data, patch, relatedToOptions, t }: StepBodyProps) {
+  const options = relatedToOptions || [];
+  return (
+    <StepShell title={tr(t, "CS_COMPLAINT_RELATED_TO", "What is your complaint about?")}>
+      <Field
+        label={tr(t, "CS_COMPLAINT_RELATED_TO_FIELD", "Complaint related to")}
+        required
+        htmlFor="related-to"
+      >
+        <Select
+          id="related-to"
+          value={data.relatedTo}
+          onValueChange={(value: string) => {
+            const o = options.find((x) => x.relatedTo === value);
+            if (!o) return;
+            patch({
+              relatedTo: o.relatedTo,
+              templateType: o.templateType,
+              resolvedTenantId: o.tenantId,
+              // Authority drives the catalogue + fields — reset downstream.
+              SelectComplaintType: null,
+              SelectSubComplaintType: null,
+              dynamicFields: {},
+            });
+          }}
+          placeholder={tr(t, "CS_COMPLAINT_PICK_ONE", "Select…")}
+          options={options.map((o) => ({ value: o.relatedTo, label: o.relatedTo }))}
+        />
+      </Field>
+    </StepShell>
+  );
+}
+
 function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBodyProps) {
   const hierarchyActive = !!(
     hierarchyDef &&
@@ -548,47 +657,62 @@ function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBod
   );
 }
 
-function Step1Map({ data, patch, t }: StepBodyProps) {
-  // Reuse the existing GeoLocations component — it owns the leaflet map +
-  // Nominatim integration. We just pass through formData and a setter.
-  const GeoLocations = Digit?.ComponentRegistryService?.getComponent("GeoLocations");
-  if (!GeoLocations) {
-    return (
-      <StepShell title={t("CS_ADDCOMPLAINT_SELECT_GEOLOCATION_HEADER")}>
-        <p className="text-sm text-destructive">Map component not registered.</p>
-      </StepShell>
-    );
-  }
+// ── Section header (title + subtitle) for the unified "Where" card ──
+const TipBulbIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 18h6" />
+    <path d="M10 22h4" />
+    <path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z" />
+  </svg>
+);
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <StepShell
-      title={t("CS_ADDCOMPLAINT_SELECT_GEOLOCATION_HEADER")}
-      description={tr(
-        t,
-        "CS_PIN_LOCATION_HINT",
-        "Drop a pin on the exact spot — we'll use it to route your complaint to the right ward."
-      )}
-    >
-      <GeoLocations
-        t={t}
-        config={{
-          key: "GeoLocationsPoint",
-          populators: { name: "GeoLocationsPoint" },
-          withoutLabel: true,
-        }}
-        formData={data}
-        onSelect={(_key: string, value: GeoPoint) => {
-          patch({
-            GeoLocationsPoint: value,
-            // Mirror the pincode onto postalCode so the address step / submit
-            // validation see the latest pin's pincode (matches FormExplorer.useEffect).
-            postalCode:
-              value?.pincode != null && String(value.pincode).length > 0
-                ? String(value.pincode)
-                : data.postalCode,
-          });
-        }}
+    <div className="mb-4">
+      <h3 style={{ fontSize: "1.05rem", fontWeight: 600, margin: 0, color: PRIMARY }}>{title}</h3>
+      {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+    </div>
+  );
+}
+
+function Step1Map({ data, patch, t }: StepBodyProps) {
+  // Reuse the existing GeoLocations component (leaflet + Nominatim). Rendered
+  // BARE (no card) — it sits in the left pane of the unified "Where" card.
+  const GeoLocations = Digit?.ComponentRegistryService?.getComponent("GeoLocations");
+  return (
+    <div>
+      <SectionHeader
+        title={tr(t, "CS_PIN_LOCATION_TITLE", "Pin the complaint location")}
+        subtitle={tr(t, "CS_PIN_LOCATION_HINT", "Click and hold on the map to drop the pin on the exact spot.")}
       />
-    </StepShell>
+      {GeoLocations ? (
+        <GeoLocations
+          t={t}
+          config={{
+            key: "GeoLocationsPoint",
+            populators: { name: "GeoLocationsPoint" },
+            withoutLabel: true,
+            // Map height tuned to balance the Location-details pane once the mz
+            // boundary cascade is expanded (Província → Distrito → Município +
+            // postal + landmark + tip ≈ this tall). Citizen flow only; the shared
+            // component otherwise fills calc(100vh-400px).
+            mapHeight: "520px",
+          }}
+          formData={data}
+          onSelect={(_key: string, value: GeoPoint) => {
+            patch({
+              GeoLocationsPoint: value,
+              // Mirror the pin's pincode onto postalCode (matches FormExplorer).
+              postalCode:
+                value?.pincode != null && String(value.pincode).length > 0
+                  ? String(value.pincode)
+                  : data.postalCode,
+            });
+          }}
+        />
+      ) : (
+        <p className="text-sm text-destructive">Map component not registered.</p>
+      )}
+    </div>
   );
 }
 
@@ -610,7 +734,7 @@ function Step1Map({ data, patch, t }: StepBodyProps) {
  * pincode missing from Nominatim) the affected control becomes
  * interactive so the user can fill the gap manually.
  */
-function Step2Location({ data, patch, t }: StepBodyProps) {
+function Step2Location({ data, patch, resolvedTenant, t }: StepBodyProps) {
   const PGRBoundaryComponent = Digit?.ComponentRegistryService?.getComponent("PGRBoundaryComponent");
 
   // The map's resolveWard writes ward.{code, name} into
@@ -631,24 +755,20 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
     !!(pincodeFromMap != null && String(pincodeFromMap).length > 0);
 
   return (
-    <StepShell
-      title={t("CS_COMPLAINT_LOCATION_DETAILS") || "Confirm location"}
-      description={tr(
-        t,
-        "CS_LOCATION_CONFIRM_HINT",
-        "We picked these from your map pin. Add a landmark if it helps the team find the spot."
-      )}
-    >
+    <div>
+      <SectionHeader
+        title={tr(t, "CS_LOCATION_DETAILS_TITLE", "Location details")}
+        subtitle={tr(t, "CS_LOCATION_CONFIRM_HINT", "Add details so our team can quickly find the exact spot.")}
+      />
       <div className="space-y-5">
         {PGRBoundaryComponent ? (
           <PGRBoundaryComponent
             t={t}
             userType="citizen"
-            config={{ key: "SelectedBoundary", populators: { name: "SelectedBoundary" }, label: "" }}
+            config={{ key: "SelectedBoundary", populators: { name: "SelectedBoundary" }, label: "", tenantId: resolvedTenant }}
             formData={data}
-            // Ask the cascade to render its dropdowns as disabled
-            // wherever it has an auto-filled value. Levels left empty
-            // (auto-fill miss) stay interactive so the user can pick.
+            // Disable cascade levels that auto-filled; empty (auto-fill miss)
+            // levels stay interactive so the user can pick manually.
             readOnly={wardFromMap}
             onSelect={(_key: string, value: BoundaryNode) => {
               patch({ SelectedBoundary: value });
@@ -671,21 +791,53 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
           />
         </Field>
 
-        <Field label={t("CS_COMPLAINT_LANDMARK__DETAILS")} htmlFor="landmark">
+        <Field
+          label={tr(t, "CS_COMPLAINT_LANDMARK__DETAILS", "Landmark") + " " + tr(t, "CS_OPTIONAL_SUFFIX", "(Optional)")}
+          htmlFor="landmark"
+        >
           <Input
             id="landmark"
-            placeholder={tr(t, "CS_LANDMARK_PLACEHOLDER", "e.g. Near Jamia Mosque")}
+            placeholder={tr(t, "CS_LANDMARK_PLACEHOLDER", "e.g. Near Jamia Mosque, Next to Central Market")}
             maxLength={64}
             value={data.landmark ?? ""}
             onChange={(e) => patch({ landmark: e.target.value })}
           />
         </Field>
+
+        {/* Tip callout — encourages a landmark for faster routing. */}
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            alignItems: "flex-start",
+            background: "#edf6ef",
+            border: "1px solid #cfe6d6",
+            borderRadius: "0.5rem",
+            padding: "0.75rem 1rem",
+          }}
+        >
+          <span style={{ color: PRIMARY, flexShrink: 0, marginTop: "1px", display: "inline-flex" }}>{TipBulbIcon}</span>
+          <div className="text-sm">
+            <div className="font-medium" style={{ color: PRIMARY }}>{tr(t, "CS_LOCATION_TIP_TITLE", "Tip")}</div>
+            <div className="text-muted-foreground">
+              {tr(t, "CS_LOCATION_TIP_BODY", "A landmark helps our team find the exact spot faster.")}
+            </div>
+          </div>
+        </div>
       </div>
-    </StepShell>
+    </div>
   );
 }
 
-function Step3Description({ data, patch, t }: StepBodyProps) {
+function Step3Description({ data, patch, templateFields, suppressedCount, t }: StepBodyProps) {
+  const fields = templateFields || [];
+  const dyn = data.dynamicFields || {};
+  const consents = data.consents || [];
+  const extended = !!data.templateType; // dispatcher flow active
+  const setDyn = (key: string, value: unknown) => patch({ dynamicFields: { ...dyn, [key]: value } });
+  const toggleConsent = (code: string, on: boolean) =>
+    patch({ consents: on ? [...consents, code] : consents.filter((c) => c !== code) });
+
   return (
     <StepShell
       title={t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS")}
@@ -695,26 +847,86 @@ function Step3Description({ data, patch, t }: StepBodyProps) {
         "What happened? When did it start? Add as much detail as helps."
       )}
     >
-      <Field
-        label={t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION")}
-        required
-        htmlFor="complaint-description"
-      >
-        <Textarea
-          id="complaint-description"
-          placeholder={tr(
-            t,
-            "CS_DESCRIBE_THE_ISSUE_PLACEHOLDER",
-            "Describe the issue in your own words…"
-          )}
-          maxLength={1000}
-          value={data.description ?? ""}
-          onChange={(e) => patch({ description: e.target.value })}
-        />
-        <div className="mt-1 text-xs text-muted-foreground text-right">
-          {(data.description ?? "").length} / 1000
-        </div>
-      </Field>
+      <div className="space-y-5">
+        <Field
+          label={t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION")}
+          required
+          htmlFor="complaint-description"
+        >
+          <Textarea
+            id="complaint-description"
+            placeholder={tr(t, "CS_DESCRIBE_THE_ISSUE_PLACEHOLDER", "Describe the issue in your own words…")}
+            maxLength={1000}
+            value={data.description ?? ""}
+            onChange={(e) => patch({ description: e.target.value })}
+          />
+          <div className="mt-1 text-xs text-muted-foreground text-right">
+            {(data.description ?? "").length} / 1000
+          </div>
+        </Field>
+
+        {/* Dynamic fields from RAINMAKER-PGR.ComplaintTemplateType[templateType]. */}
+        {fields.map((f) => {
+          const val = (dyn[f.fieldKey] as string) ?? "";
+          return (
+            <Field key={f.fieldKey} label={f.label} required={!!f.mandatory} htmlFor={`xf-${f.fieldKey}`}>
+              {f.dataType === "textarea" ? (
+                <Textarea
+                  id={`xf-${f.fieldKey}`}
+                  maxLength={f.maxLength}
+                  value={val}
+                  onChange={(e) => setDyn(f.fieldKey, e.target.value)}
+                />
+              ) : (
+                <Input
+                  id={`xf-${f.fieldKey}`}
+                  type={f.dataType === "date" ? "date" : f.dataType === "number" ? "number" : "text"}
+                  maxLength={f.dataType === "date" || f.dataType === "number" ? undefined : f.maxLength}
+                  value={val}
+                  onChange={(e) => setDyn(f.fieldKey, e.target.value)}
+                />
+              )}
+            </Field>
+          );
+        })}
+
+        {suppressedCount ? (
+          <p className="text-xs text-muted-foreground">
+            {suppressedCount} sensitive field{suppressedCount === 1 ? "" : "s"} (personal/encrypted) are not collected
+            here — they require secure handling planned for a later phase.
+          </p>
+        ) : null}
+
+        {extended ? (
+          <div className="space-y-2">
+            {REQUIRED_CONSENTS.map((c) => (
+              <label key={c.code} className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  style={CHECKBOX_STYLE}
+                  checked={consents.includes(c.code)}
+                  onChange={(e) => toggleConsent(c.code, e.target.checked)}
+                />
+                <span>{c.label}</span>
+              </label>
+            ))}
+            <label className="flex items-start gap-2 text-sm pt-2 border-t border-border">
+              <input
+                type="checkbox"
+                style={CHECKBOX_STYLE}
+                checked={!!data.prefersConfidentiality}
+                onChange={(e) => patch({ prefersConfidentiality: e.target.checked })}
+              />
+              <span>
+                Mark this complaint as sensitive.{" "}
+                <span className="text-muted-foreground">
+                  This flags it for staff awareness; it does not yet hide or restrict who can view it.
+                </span>
+              </span>
+            </label>
+          </div>
+        ) : null}
+      </div>
     </StepShell>
   );
 }
@@ -750,6 +962,151 @@ function Step4Images({ data, patch, t }: StepBodyProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Composite steps (3-step wizard) — each groups the sub-bodies above so the
+// citizen completes the flow in 3 screens instead of 6. The sub-bodies keep
+// their own logic untouched; we just render them together.
+// ---------------------------------------------------------------------------
+
+const PRIMARY = "var(--color-primary-1, var(--color-primary-main, #c84c0e))";
+
+function InlineSpinner() {
+  return (
+    <Card className="p-6">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "2rem 0" }}>
+        <span
+          aria-label="Loading"
+          style={{
+            display: "inline-block",
+            height: "1.75rem",
+            width: "1.75rem",
+            border: "3px solid currentColor",
+            borderTopColor: "transparent",
+            borderRadius: "9999px",
+            color: PRIMARY,
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+      </div>
+    </Card>
+  );
+}
+
+// Step 1 — "Your complaint": the related-to dispatcher (when seeded) followed,
+// progressively, by the complaint-type picker for the resolved sub-tenant. The
+// type section appears only once an authority is chosen, and shows an inline
+// spinner while that tenant's catalogue loads (no full-page blank).
+function StepComplaint(props: StepBodyProps) {
+  const { data, relatedToOptions, catalogueLoading, dispatcherLoading } = props;
+  const hasDispatcher = (relatedToOptions?.length ?? 0) > 0;
+  if (dispatcherLoading) return <InlineSpinner />;
+  const showType = !hasDispatcher || !!data.relatedTo;
+  return (
+    <div className="space-y-5">
+      {hasDispatcher ? <RelatedToStepBody {...props} /> : null}
+      {showType ? (catalogueLoading ? <InlineSpinner /> : <Step0Type {...props} />) : null}
+    </div>
+  );
+}
+
+// Step 2 — "Where": ONE unified card with the map (left, larger) and Location
+// details (right). flex-wrap stacks them on mobile (no Tailwind md: needed).
+// align-items:flex-start keeps the form pinned top-right beside the capped map.
+function StepWhere(props: StepBodyProps) {
+  return (
+    <Card className="p-6">
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem", alignItems: "flex-start" }}>
+        <div style={{ flex: "3 1 420px", minWidth: 0 }}>
+          <Step1Map {...props} />
+        </div>
+        <div style={{ flex: "2 1 300px", minWidth: 0 }}>
+          <Step2Location {...props} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// Step 3 — "Details": description + dynamic category fields + consents + photos.
+function StepDetails(props: StepBodyProps) {
+  return (
+    <div className="space-y-5">
+      <Step3Description {...props} />
+      <Step4Images {...props} />
+    </div>
+  );
+}
+
+// Lightweight 3-segment progress indicator (numbered, current highlighted).
+function WizardProgress({
+  steps,
+  current,
+  t,
+}: {
+  steps: ReadonlyArray<{ id: string; title: string }>;
+  current: number;
+  t: (k: string) => string;
+}) {
+  return (
+    <div className="flex items-center gap-2" style={{ marginTop: "0.75rem" }}>
+      {steps.map((s, i) => {
+        const done = i < current;
+        const active = i === current;
+        const filled = done || active;
+        return (
+          <React.Fragment key={s.id}>
+            <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+              <span
+                aria-current={active ? "step" : undefined}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "1.5rem",
+                  width: "1.5rem",
+                  borderRadius: "9999px",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  flexShrink: 0,
+                  color: filled ? "#fff" : "var(--color-text-secondary, #64748b)",
+                  background: filled ? PRIMARY : "transparent",
+                  border: filled
+                    ? "1px solid " + PRIMARY
+                    : "1px solid var(--color-border, #cbd5e1)",
+                }}
+              >
+                {done ? "✓" : i + 1}
+              </span>
+              <span
+                className="text-sm"
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontWeight: active ? 600 : 400,
+                  color: active ? PRIMARY : "var(--color-text-secondary, #64748b)",
+                }}
+              >
+                {tr(t, "CS_CREATE_STEP_" + s.id.toUpperCase(), s.title)}
+              </span>
+            </div>
+            {i < steps.length - 1 ? (
+              <div
+                style={{
+                  flex: "1 1 auto",
+                  height: "1px",
+                  minWidth: "0.75rem",
+                  background: "var(--color-border, #cbd5e1)",
+                }}
+              />
+            ) : null}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Orchestrator
 // ---------------------------------------------------------------------------
 
@@ -759,10 +1116,41 @@ const CreatePGRFlowV2: React.FC = () => {
   const dispatch = useDispatch();
   const client = useQueryClient();
 
-  const tenantId =
+  const baseTenant =
     Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
     Digit.ULBService.getCurrentTenantId();
+  const stateTenant =
+    Digit.ULBService.getStateId() ||
+    (baseTenant ? String(baseTenant).split(".")[0] : baseTenant);
   const tenants: any = Digit.Hooks.pgr.useTenants();
+
+  const [stepIndex, setStepIndex] = React.useState(0);
+  const [formData, setFormData] = React.useState<FormData>({});
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Authority dispatcher (RAINMAKER-PGR.ComplaintRelatedToMap @ state tenant).
+  // Empty (the default for any tenant that hasn't seeded it) => the legacy flow:
+  // no authority step, catalogue fetched at the base tenant, no extendedAttributes.
+  const { data: relatedToOptions, isLoading: isDispatcherLoading } = Digit.Hooks.useCustomMDMS(
+    stateTenant,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintRelatedToMap" }],
+    {
+      cacheTime: Infinity,
+      select: (raw: any) =>
+        ((raw?.["RAINMAKER-PGR"]?.ComplaintRelatedToMap || []) as RelatedToOption[])
+          .filter((o) => o?.active !== false && !!o?.relatedTo && !!o?.tenantId && !!o?.templateType)
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    },
+    { schemaCode: "PGR_COMPLAINT_RELATED_TO_MAP", tenantId: stateTenant }
+  );
+  const hasDispatcher = Array.isArray(relatedToOptions) && relatedToOptions.length > 0;
+
+  // Catalogue tenant: the authority-resolved sub-tenant once picked, else the
+  // base tenant (legacy). Changing it re-fetches the hierarchy at that tenant.
+  const resolvedTenant = formData.resolvedTenantId || baseTenant;
+  const templateType = formData.templateType;
 
   // The single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes
   // + leaf complaint types) is the only complaint-type master now. We derive:
@@ -770,8 +1158,8 @@ const CreatePGRFlowV2: React.FC = () => {
   //     menuPath=parentCode) so the flat fallback picker keeps working verbatim;
   //   - hierData.nodes: the full row set the N-level cascade picker walks.
   // Absent definition => the flat menuPath (=parentCode) picker is used.
-  const { data: hierAll, isLoading: isMDMSLoading } = Digit.Hooks.useCustomMDMS(
-    tenantId,
+  const { data: hierAll, isLoading: isMDMSLoading, isFetching: isMDMSFetching } = Digit.Hooks.useCustomMDMS(
+    resolvedTenant,
     "RAINMAKER-PGR",
     [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
     {
@@ -798,25 +1186,75 @@ const CreatePGRFlowV2: React.FC = () => {
         return { def, nodes, serviceDefs };
       },
     },
-    { schemaCode: "PGR_COMPLAINT_HIERARCHY" }
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY", tenantId: resolvedTenant }
   );
 
   const serviceDefs = hierAll?.serviceDefs;
   const hierData = hierAll ? { def: hierAll.def, nodes: hierAll.nodes } : undefined;
 
-  const { mutate: createMutation } = Digit.Hooks.pgr.useCreateComplaint(tenantId);
+  // Which tenant the currently-held catalogue was fetched for. The shared MDMS
+  // hook forces keepPreviousData, so on an authority switch isLoading stays
+  // false and `serviceDefs` briefly holds the PREVIOUS tenant's rows. Comparing
+  // the resolved tenant to the last-settled one (updated only when a fetch
+  // completes) is frame-accurate — the "complaint" step shows the inline
+  // spinner the instant the tenant changes, never the stale options — and does
+  // NOT trigger on same-tenant background refetches (which would reset the picker).
+  // Track (in STATE, not a ref) the tenant the catalogue last SETTLED for. State
+  // is required so that when the new tenant's fetch completes the component
+  // re-renders and the spinner gives way to the picker — a ref update wouldn't
+  // trigger a render, so the spinner would stick (and now that staleTime is a
+  // day for caching, there's no background refetch to mask it). setState to the
+  // same value is a no-op render, so no loop / no flicker on background refetch.
+  const [catalogueLoadedFor, setCatalogueLoadedFor] = React.useState<string | undefined>(undefined);
+  React.useEffect(() => {
+    if (!isMDMSFetching) setCatalogueLoadedFor(resolvedTenant);
+  }, [isMDMSFetching, resolvedTenant]);
+  const catalogueStale = catalogueLoadedFor !== resolvedTenant;
 
-  const [stepIndex, setStepIndex] = React.useState(0);
-  const [formData, setFormData] = React.useState<FormData>({});
-  const [submitting, setSubmitting] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  // Dynamic "additional details" fields (RAINMAKER-PGR.ComplaintTemplateType @
+  // state tenant), keyed by the resolved templateType. FAIL-CLOSED: fields
+  // flagged pii/encrypted/maskable are excluded (no FE encryption/masking yet).
+  const { data: templatesAll } = Digit.Hooks.useCustomMDMS(
+    stateTenant,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintTemplateType" }],
+    {
+      cacheTime: Infinity,
+      select: (raw: any) =>
+        (raw?.["RAINMAKER-PGR"]?.ComplaintTemplateType || []) as Array<{
+          templateType: string;
+          active?: boolean;
+          fields?: TemplateField[];
+        }>,
+    },
+    { schemaCode: "PGR_COMPLAINT_TEMPLATE_TYPE", tenantId: stateTenant }
+  );
+  // Resolve to the picked templateType's visible fields here (not in select) so
+  // it recomputes when templateType changes without re-fetching.
+  const { templateFields, suppressedCount } = React.useMemo(() => {
+    const entry = (templatesAll || []).find(
+      (x: any) => x?.active !== false && x?.templateType === templateType
+    );
+    const allFields: TemplateField[] = (entry?.fields || [])
+      .slice()
+      .sort((a: TemplateField, b: TemplateField) => (a.order ?? 0) - (b.order ?? 0));
+    const visible = allFields.filter((f) => !isProtectedField(f));
+    return { templateFields: visible, suppressedCount: allFields.length - visible.length };
+  }, [templatesAll, templateType]);
+
+  const { mutate: createMutation } = Digit.Hooks.pgr.useCreateComplaint(resolvedTenant);
 
   const patch = React.useCallback((partial: Partial<FormData>) => {
     setFormData((prev) => ({ ...prev, ...partial }));
     if (error) setError(null);
   }, [error]);
 
-  const isLast = stepIndex === STEPS.length - 1;
+  // Consolidated 3-step wizard. The related-to dispatcher is no longer its own
+  // step — it folds into step "complaint" (rendered above the type picker), so
+  // the step list is constant regardless of whether the dispatcher is seeded.
+  const steps = STEPS;
+  const curId = steps[stepIndex]?.id;
+  const isLast = stepIndex === steps.length - 1;
 
   // Mirror map-derived pincode onto postalCode (matches FormExplorer's effect).
   React.useEffect(() => {
@@ -828,25 +1266,42 @@ const CreatePGRFlowV2: React.FC = () => {
   }, [formData?.GeoLocationsPoint?.pincode, formData.postalCode]);
 
   const stepIsValid = React.useMemo(() => {
-    const required = MANDATORY_BY_STEP[stepIndex] || [];
-    if (!required.every((field) => isFieldValid(formData, field))) return false;
-    // Sub-type is conditionally mandatory: if the chosen complaint type has
-    // any sub-services in the same menuPath, the user MUST pick one before
-    // continuing. Mirrors the legacy FormExplorer (which surfaced the
-    // dropdown only when sub-types existed and required a selection); the
-    // baseline MANDATORY_BY_STEP can't express this since the requirement
-    // depends on serviceDefs, not on a fixed field list.
-    if (stepIndex === 0) {
-      const mainPath = formData.SelectComplaintType?.menuPath;
-      const subTypeOptions = (Array.isArray(serviceDefs) ? serviceDefs : []).filter(
-        (s: ServiceDef) => s.menuPath === mainPath
-      );
-      if (subTypeOptions.length > 1 && !formData.SelectSubComplaintType) {
-        return false;
+    switch (curId) {
+      case "complaint": {
+        // Dispatcher (if seeded) must be answered, then a leaf complaint type.
+        if (hasDispatcher && !formData.relatedTo) return false;
+        if (!isFieldValid(formData, "SelectComplaintType")) return false;
+        // Sub-type is conditionally mandatory: if the chosen type has sub-services
+        // in the same menuPath, one must be picked (mirrors legacy FormExplorer).
+        const mainPath = formData.SelectComplaintType?.menuPath;
+        const subTypeOptions = (Array.isArray(serviceDefs) ? serviceDefs : []).filter(
+          (s: ServiceDef) => s.menuPath === mainPath
+        );
+        if (subTypeOptions.length > 1 && !formData.SelectSubComplaintType) return false;
+        return true;
       }
+      case "where":
+        // Map pin + a leaf ward (auto-cascaded from the pin; manual fallback).
+        return (
+          isFieldValid(formData, "GeoLocationsPoint") &&
+          isFieldValid(formData, "SelectedBoundary")
+        );
+      case "details": {
+        if (!isFieldValid(formData, "description")) return false;
+        // Mandatory dynamic fields (dispatcher flow).
+        for (const f of templateFields) {
+          if (f.mandatory && !String((formData.dynamicFields || {})[f.fieldKey] ?? "").trim()) return false;
+        }
+        // Both consents are required once an authority/template is in play.
+        if (formData.templateType && REQUIRED_CONSENTS.some((c) => !(formData.consents || []).includes(c.code))) {
+          return false;
+        }
+        return true;
+      }
+      default:
+        return true;
     }
-    return true;
-  }, [stepIndex, formData, serviceDefs]);
+  }, [curId, formData, serviceDefs, templateFields, hasDispatcher]);
 
   function pincodeAllowlistOk(): boolean {
     const wardResolved =
@@ -878,7 +1333,7 @@ const CreatePGRFlowV2: React.FC = () => {
       }
       setSubmitting(true);
       const user = Digit.UserService.getUser();
-      const payload = mapFormDataToRequest(formData, tenantId, user?.info ?? user);
+      const payload = mapFormDataToRequest(formData, resolvedTenant, user?.info ?? user);
       createMutation(payload, {
         onError: () => {
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
@@ -905,41 +1360,9 @@ const CreatePGRFlowV2: React.FC = () => {
     setStepIndex((i) => i - 1);
   }
 
-  if (isMDMSLoading) {
-    // Spinner is parked dead-centre of the form column. ScreenContainer is
-    // a flex column filling the wrapper; we make the spinner row a flex
-    // child that grows (`flex: 1`) and centres its inline-block spinner
-    // both axes — so loading state covers the same available area the
-    // form occupies (between topbar and page-footer), no off-axis drift.
-    return (
-      <ScreenContainer>
-        <div
-          style={{
-            flex: "1 1 auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: 0,
-          }}
-        >
-          <span
-            aria-label="Loading"
-            style={{
-              display: "inline-block",
-              height: "2rem",
-              width: "2rem",
-              border: "3px solid currentColor",
-              borderTopColor: "transparent",
-              borderRadius: "9999px",
-              color:
-                "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
-              animation: "spin 0.8s linear infinite",
-            }}
-          />
-        </div>
-      </ScreenContainer>
-    );
-  }
+  // NOTE: catalogue/dispatcher loading is handled INLINE inside the "complaint"
+  // step (StepComplaint) now — we no longer blank the whole screen, so picking
+  // an authority doesn't flash a full-page spinner mid-step.
 
   const stepProps: StepBodyProps = {
     data: formData,
@@ -948,6 +1371,12 @@ const CreatePGRFlowV2: React.FC = () => {
     hierarchyDef: hierData?.def ?? null,
     nodes: hierData?.nodes ?? [],
     t,
+    relatedToOptions: Array.isArray(relatedToOptions) ? relatedToOptions : [],
+    templateFields,
+    suppressedCount,
+    resolvedTenant,
+    catalogueLoading: isMDMSLoading || catalogueStale,
+    dispatcherLoading: isDispatcherLoading,
   };
 
   return (
@@ -956,6 +1385,7 @@ const CreatePGRFlowV2: React.FC = () => {
         <ScreenHeader
           title={tr(t, "CS_COMMON_FILE_A_COMPLAINT", "File a Complaint")}
         />
+        <WizardProgress steps={steps} current={stepIndex} t={t} />
       </div>
       {/* Step body — sits between the header and the FormFooter and
           flows at content height. The earlier body-only-scroll
@@ -977,11 +1407,9 @@ const CreatePGRFlowV2: React.FC = () => {
           padding: "1rem 1.25rem",
         }}
       >
-        {stepIndex === 0 && <Step0Type {...stepProps} />}
-        {stepIndex === 1 && <Step1Map {...stepProps} />}
-        {stepIndex === 2 && <Step2Location {...stepProps} />}
-        {stepIndex === 3 && <Step3Description {...stepProps} />}
-        {stepIndex === 4 && <Step4Images {...stepProps} />}
+        {curId === "complaint" && <StepComplaint {...stepProps} />}
+        {curId === "where" && <StepWhere {...stepProps} />}
+        {curId === "details" && <StepDetails {...stepProps} />}
         {error ? (
           <div
             role="alert"

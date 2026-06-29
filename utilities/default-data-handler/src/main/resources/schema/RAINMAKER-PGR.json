@@ -230,5 +230,120 @@
       "x-ref-schema": [],
       "additionalProperties": false
     }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.ComplaintRelatedToMap",
+    "description": "Citizen-facing dispatcher master. Maps a natural-language 'Complaint related to' option to a templateType (e.g. IGE | IGSAE) and the sub-tenant the complaint is filed under. The citizen never sees tenant codes; the UI resolves tenantId from the selected row. State-level master, shared across sub-tenants. Consumed by digit-ui-v2 useComplaintRelatedToMap.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Complaint Related To Map",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "relatedTo",
+        "templateType",
+        "tenantId"
+      ],
+      "x-unique": [
+        "relatedTo"
+      ],
+      "properties": {
+        "relatedTo": {
+          "type": "string",
+          "description": "Citizen-facing label shown in the 'Complaint related to' step, e.g. 'A public entity (ministry, council, municipality)'."
+        },
+        "templateType": {
+          "type": "string",
+          "description": "Discriminator (e.g. IGE | IGSAE). Joins to RAINMAKER-PGR.ComplaintTemplateType.templateType and drives the dynamic field set."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "Resolved sub-tenant the complaint is filed under (e.g. mz.ige, mz.igsae). Never shown to the citizen."
+        },
+        "order": {
+          "type": "number"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.ComplaintTemplateType",
+    "description": "Per-templateType dynamic 'Additional details' fields for the complaint form, keyed by templateType (e.g. IGE | IGSAE). Each field has label/dataType/mandatory/maxLength/order (honoured by the FE). pii/maskable/encrypted classify confidentiality but need backend enforcement; the FE+MDMS build excludes flagged fields. schemaRef names the server-side validator. State-level; overridable per sub-tenant.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Complaint Template Type",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "templateType",
+        "fields"
+      ],
+      "x-unique": [
+        "templateType"
+      ],
+      "properties": {
+        "templateType": {
+          "type": "string",
+          "description": "Discriminator (e.g. IGE | IGSAE). Joins to RAINMAKER-PGR.ComplaintRelatedToMap.templateType."
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "schemaRef": {
+          "type": "string",
+          "description": "Name of the JSON Schema validator for extended_attributes (e.g. IgeComplaintExtendedAttributes). Server-side use; ignored by the frontend."
+        },
+        "fields": {
+          "type": "array",
+          "description": "Ordered dynamic fields rendered after the standard description/landmark inputs.",
+          "items": {
+            "type": "object",
+            "required": [
+              "fieldKey",
+              "label",
+              "dataType"
+            ],
+            "properties": {
+              "fieldKey": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "dataType": {
+                "type": "string",
+                "description": "string | textarea | date | number | boolean"
+              },
+              "mandatory": {
+                "type": "boolean"
+              },
+              "maxLength": {
+                "type": "number"
+              },
+              "order": {
+                "type": "number"
+              },
+              "pii": {
+                "type": "boolean"
+              },
+              "maskable": {
+                "type": "boolean"
+              },
+              "encrypted": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
   }
 ]

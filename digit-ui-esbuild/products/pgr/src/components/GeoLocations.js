@@ -371,9 +371,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
 
   return (
     <div style={{ marginBottom: "24px" }}>
-      <CardLabel>{t("CS_ADDCOMPLAINT_SELECT_GEOLOCATION_TEXT")}</CardLabel>
+      {!config?.withoutLabel && <CardLabel>{t("CS_ADDCOMPLAINT_SELECT_GEOLOCATION_TEXT")}</CardLabel>}
 
-      <div style={{ position: "relative", height: "calc(100vh - 400px)", minHeight: "390px", width: "100%" }}>
+      <div style={{ position: "relative", height: config?.mapHeight || "calc(100vh - 400px)", minHeight: config?.mapHeight || "390px", width: "100%" }}>
 
         {/* Map Container - Responsible for the curved look */}
         <div style={{

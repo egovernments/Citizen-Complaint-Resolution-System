@@ -33,11 +33,14 @@ const useCustomMDMS = (tenantId, moduleName, masterDetails = [], config = {}, md
     return useCustomAPIHook({
       url: Urls.MDMS_V2,
       params: {},
-      changeQueryName: `mdms-v2-dropdowns${mdmsv2?.schemaCode}`,
+      changeQueryName: `mdms-v2-dropdowns${mdmsv2?.schemaCode}${mdmsv2?.tenantId ? "-" + mdmsv2.tenantId : ""}`,
       body: {
         MdmsCriteria: {
-          // tenantId, //changing here to send user's tenantId always whether stateId or city
-          tenantId: Digit.ULBService.getCurrentTenantId(),
+          // Opt-in per-tenant fetch: callers that pass mdmsv2.tenantId (e.g. the
+          // citizen authority→tenant flow) fetch at THAT tenant and get a
+          // tenant-scoped cache key. Everyone else keeps the prior behaviour of
+          // always using the logged-in tenant — unchanged.
+          tenantId: mdmsv2?.tenantId || Digit.ULBService.getCurrentTenantId(),
           moduleDetails: [
             {
               moduleName: moduleName,
@@ -57,6 +60,10 @@ const useCustomMDMS = (tenantId, moduleName, masterDetails = [], config = {}, md
           return response;
         },
       },
+      // Persist MDMS v2 master data in IndexedDB for 1 day so dropdown catalogues
+      // (ComplaintRelatedToMap, ComplaintHierarchy, ComplaintTemplateType, …) don't
+      // re-fetch on every navigation. Key is tenant-scoped (changeQueryName + body).
+      options: { idbTtlSecs: 86400 },
     });
   }
   return useQuery([tenantId, moduleName, masterDetails], () => MdmsService.getMultipleTypesWithFilter(tenantId, moduleName, masterDetails), config);
