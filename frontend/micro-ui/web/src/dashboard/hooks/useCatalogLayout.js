@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   GRID_COLS,
   UNIFORM_CHART_SIZE_CONSTRAINTS,
@@ -6,7 +6,7 @@ import {
   FULL_WIDTH_TABLE_GRID,
   findFirstOpenPosition,
 } from "../constants/layoutConfig";
-import { compactVertically, swapOnDrop } from "../utils/gridGeometry";
+import { compactVertically } from "../utils/gridGeometry";
 
 /**
  * useCatalogLayout — the catalog-world layout hook (kpiId-keyed).
@@ -154,41 +154,38 @@ export function useCatalogLayout(kpis, packLayout) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed]);
 
-  const commit = useCallback((next) => {
-    const compacted = compactVertically(next);
-    setLayout(compacted);
-    persist(compacted);
+  // Debounced persistence — onLayoutChange fires on every drag/resize tick.
+  const persistTimerRef = useRef(null);
+  const persistDebounced = useCallback((lay) => {
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => persist(lay), 300);
   }, []);
 
+  /**
+   * The single source of layout truth during interaction. With compactType=
+   * "vertical" (set on the grid), react-grid-layout owns collision + compaction:
+   * dragging a tile pushes the others and the layout RGL emits here is already the
+   * flowed, non-overlapping result. We accept it verbatim — re-merging only the
+   * per-item min/max constraints RGL strips — and feed it straight back as the
+   * controlled prop. Because the prop we return equals RGL's internal state,
+   * getDerivedStateFromProps never has a stale copy to discard, so there is no
+   * snap-back (this replaces the old swapOnDrop + compactVertically + rAF/moved
+   * machinery that fought RGL's controlled-sync model).
+   */
   const onLayoutChange = useCallback(
     (next) => {
-      // RGL fires layoutChange with stripped items (no constraints); re-merge the
-      // per-item min/max from the current state so resize bounds survive.
-      setLayout((prev) =>
-        next.map((item) => {
+      setLayout((prev) => {
+        const merged = next.map((item) => {
           const existing = prev.find((p) => p.i === item.i);
-          return existing ? { ...existing, x: item.x, y: item.y, w: item.w, h: item.h } : item;
-        })
-      );
+          return existing
+            ? { ...existing, x: item.x, y: item.y, w: item.w, h: item.h }
+            : item;
+        });
+        persistDebounced(merged);
+        return merged;
+      });
     },
-    []
-  );
-
-  const onDragStop = useCallback(
-    (next, oldItem, newItem) => {
-      // Swap-on-collision (mirrors the legacy grid): if the dragged tile lands on
-      // another, swap their slots, else accept the new positions.
-      const swapped = swapOnDrop(next, newItem.i, oldItem);
-      commit(swapped);
-    },
-    [commit]
-  );
-
-  const onResizeStop = useCallback(
-    (next) => {
-      commit(next);
-    },
-    [commit]
+    [persistDebounced]
   );
 
   const removeWidgetFromLayout = useCallback(
@@ -231,9 +228,7 @@ export function useCatalogLayout(kpis, packLayout) {
 
   return {
     layout,
-    onDragStop,
-    onResizeStop,
-    onLayoutChange,
+    onLayoutChange, // RGL (compactType="vertical") drives drag/resize natively
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,

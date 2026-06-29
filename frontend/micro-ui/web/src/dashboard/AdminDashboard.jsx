@@ -302,8 +302,6 @@ const AdminDashboardInner = ({ onSignOut }) => {
 
   const {
     layout,
-    onDragStop,
-    onResizeStop,
     onLayoutChange,
     resetLayout,
     removeWidgetFromLayout,
@@ -505,14 +503,11 @@ const AdminDashboardInner = ({ onSignOut }) => {
           rowHeight={KPI_ROW_HEIGHT}
           margin={GRID_MARGIN}
           containerPadding={[0, 0]}
-          compactType={null}
-          allowOverlap
+          compactType="vertical"
           isDraggable
           isResizable
           draggableHandle=".dashboard-widget-surface"
           draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
-          onDragStop={onDragStop}
-          onResizeStop={onResizeStop}
           onLayoutChange={onLayoutChange}
         >
           {layout.map((item) => {
