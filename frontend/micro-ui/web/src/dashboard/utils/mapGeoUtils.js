@@ -1,5 +1,5 @@
 import L from "leaflet";
-import { formatDimensionLabel } from "../config/kpiQueries";
+import { formatDimensionLabel } from "../config/labelFormat";
 import { getWowChangeFillStyle } from "../config/geographyMapPresentation";
 
 const TEAL_SCALE = ["#ccfbf1", "#5eead4", "#14b8a6", "#0d9488", "#115e59"];

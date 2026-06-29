@@ -5,17 +5,33 @@ const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", href: "/digit-ui/employee/dashboard", active: true },
 ];
 
-const Sidebar = ({ isOpen = true, onNavigate }) => {
+/** Signed-in employee's username + significant (non-EMPLOYEE) role, for the footer. */
+function getSignedInLabel() {
+  try {
+    const raw = window.localStorage?.getItem("Employee.user-info");
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    const info = u?.roles ? u : u?.userInfo || u;
+    const roles = info?.roles || [];
+    const role =
+      roles.find((r) => r.code && r.code !== "EMPLOYEE")?.code ||
+      roles[0]?.code ||
+      info?.type;
+    const name = info?.userName || info?.name;
+    if (name && role) return `${name} · ${role}`;
+    return role || name || null;
+  } catch {
+    return null;
+  }
+}
+
+const Sidebar = ({ onSignOut }) => {
   const stateLabel = useMemo(() => getStateLabel(), []);
   const productLabel = useMemo(() => getProductLabel(), []);
+  const signedInLabel = useMemo(() => getSignedInLabel(), []);
 
   return (
-    <aside
-      className={`dashboard-sidebar tw-flex tw-h-full tw-w-60 tw-flex-shrink-0 tw-flex-col tw-bg-chrome tw-text-chrome-foreground${
-        isOpen ? " dashboard-sidebar--open" : ""
-      }`}
-      aria-hidden={!isOpen ? true : undefined}
-    >
+    <aside className="tw-flex tw-h-full tw-w-60 tw-flex-shrink-0 tw-flex-col tw-bg-chrome tw-text-chrome-foreground">
       <div className="tw-border-b tw-border-[color-mix(in_srgb,var(--chrome-foreground)_15%,transparent)] tw-px-5 tw-py-5">
         <p className="tw-text-xs tw-font-medium tw-uppercase tw-tracking-wider tw-text-chrome-muted">
           {stateLabel}
@@ -29,7 +45,6 @@ const Sidebar = ({ isOpen = true, onNavigate }) => {
           <a
             key={item.id}
             href={item.href}
-            onClick={onNavigate}
             className={`tw-block tw-rounded-md tw-px-3 tw-py-2 tw-text-sm tw-font-medium ${
               item.active
                 ? "tw-bg-primary tw-text-primary-foreground"
@@ -41,8 +56,29 @@ const Sidebar = ({ isOpen = true, onNavigate }) => {
         ))}
       </nav>
       <div className="tw-flex-1" />
-      <div className="tw-border-t tw-border-[color-mix(in_srgb,var(--chrome-foreground)_15%,transparent)] tw-p-4 tw-text-xs tw-text-chrome-muted">
-        Supervisor
+      <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-border-[color-mix(in_srgb,var(--chrome-foreground)_15%,transparent)] tw-p-4 tw-text-xs tw-text-chrome-muted">
+        <span className="tw-min-w-0 tw-truncate" title={signedInLabel || undefined}>
+          {signedInLabel || "Not signed in"}
+        </span>
+        {onSignOut ? (
+          <button
+            type="button"
+            onClick={onSignOut}
+            title="Sign out"
+            className="tw-flex-shrink-0 tw-rounded-md tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-medium tw-text-chrome-foreground hover:tw-bg-[color-mix(in_srgb,var(--chrome-foreground)_22%,transparent)]"
+            style={{
+              // Explicit subtle fill: without it the browser's default light
+              // buttonface shows through, making the light label unreadable on the
+              // dark sidebar.
+              backgroundColor:
+                "color-mix(in srgb, var(--chrome-foreground) 12%, transparent)",
+              border:
+                "1px solid color-mix(in srgb, var(--chrome-foreground) 35%, transparent)",
+            }}
+          >
+            Sign out
+          </button>
+        ) : null}
       </div>
     </aside>
   );

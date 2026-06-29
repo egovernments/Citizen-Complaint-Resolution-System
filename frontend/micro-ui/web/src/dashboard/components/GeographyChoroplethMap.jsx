@@ -10,7 +10,7 @@ import {
   getResolvedShareFillStyle,
 } from "../config/geographyMapPresentation";
 import { buildMapHoverTooltipHtml, buildComplaintPinTooltipHtml } from "../config/mapHoverPresentation";
-import { formatDimensionLabel } from "../config/kpiQueries";
+import { formatDimensionLabel } from "../config/labelFormat";
 import { fetchBoundariesByCodes, fetchBoundaryRelationshipsByCodes } from "../services/boundaryService";
 import { useMapResize } from "../hooks/useMapResize";
 import {

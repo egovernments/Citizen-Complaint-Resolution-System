@@ -3,7 +3,6 @@ import {
   buildDefaultFilters,
   sanitizeFilters,
 } from "./globalFilterGroups";
-import { KPI_METRICS } from "./supervisorMetrics";
 
 const TIME_WINDOW_METRIC_IDS = [];
 
@@ -20,8 +19,7 @@ function migrateTimeWindowFromLegacy() {
   const legacy = loadLegacySubMetricSelection();
   for (const metricId of TIME_WINDOW_METRIC_IDS) {
     const subId = legacy[metricId];
-    const metric = KPI_METRICS.find((m) => m.id === metricId);
-    if (subId && metric?.subMetrics.some((sub) => sub.id === subId)) {
+    if (subId) {
       return subId;
     }
   }

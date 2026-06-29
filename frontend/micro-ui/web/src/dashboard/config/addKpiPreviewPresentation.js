@@ -3,7 +3,6 @@
  */
 
 import { getKpiDisplayConfig, getKpiDisplayTitle } from "./kpiDisplay";
-import { getSubMetricDef } from "./supervisorMetrics";
 
 function formatPreviewTarget(metricId) {
   const threshold = getKpiDisplayConfig(metricId).threshold;
@@ -21,8 +20,7 @@ function formatPreviewTarget(metricId) {
 
 function resolvePreviewDescription(item) {
   if (item.itemType === "kpi") {
-    const sub = getSubMetricDef(item, item.defaultSubMetricId);
-    return sub?.label || item.metric;
+    return item.metric;
   }
   return item.subMetric || item.outputFormat || null;
 }

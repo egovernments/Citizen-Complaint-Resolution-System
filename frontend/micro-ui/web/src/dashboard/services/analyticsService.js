@@ -87,3 +87,29 @@ export function runBatchQueries(queries) {
     queries,
   });
 }
+
+/**
+ * POST /v2/analytics/packs — schema bootstrap (no data).
+ * Returns { tiles, defaultLayout, asOf } with full viz schema per tile.
+ * Never includes query bodies or rbac ceilings.
+ */
+export function fetchPack(tenantId) {
+  return postAnalytics("/packs", { tenantId });
+}
+
+/**
+ * POST /v2/analytics/catalog/_search — full role-filtered catalog for the picker.
+ * Returns { tiles, total } — same tile shape as /packs but no defaultLayout.
+ */
+export function fetchCatalog(tenantId) {
+  return postAnalytics("/catalog/_search", { tenantId, filters: { status: "published" } });
+}
+
+/**
+ * POST /v2/analytics/_query — data, by kpiId reference (not inline).
+ * refs: { [tileKey]: { kpiId, params } }
+ * Returns { results: { [tileKey]: { columns, rows, asOf, scope } }, partial, errors }
+ */
+export function runKpiBatch(refs, tenantId) {
+  return postAnalytics("/_query", { tenantId, queries: refs });
+}

@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { getBrandTheme } from "../config/dashboardConfig";
-import useBreakpoint from "../hooks/useBreakpoint";
 import DashboardHeader from "./DashboardHeader";
 import DashboardFilters from "./DashboardFilters";
 import Sidebar from "./Sidebar";
@@ -8,6 +7,7 @@ import Sidebar from "./Sidebar";
 const DashboardLayout = ({
   children,
   visibleLayoutIds,
+  catalogItems,
   onAddWidget,
   onResetLayout,
   onDragWidgetStart,
@@ -21,9 +21,14 @@ const DashboardLayout = ({
   filterOptions,
   filterOptionsLoading,
   kpiCardData,
+  allowedWidgetIds,
+  scopedRole,
+  username,
+  officerAccess,
+  visibleKpiCount,
+  scope,
+  onSignOut,
 }) => {
-  const breakpoint = useBreakpoint();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const brandStyle = useMemo(() => {
     const theme = getBrandTheme();
     return {
@@ -33,40 +38,16 @@ const DashboardLayout = ({
     };
   }, []);
 
-  useEffect(() => {
-    if (breakpoint === "lg") {
-      setSidebarOpen(false);
-    }
-  }, [breakpoint]);
-
-  const handleSidebarClose = useCallback(() => setSidebarOpen(false), []);
-  const handleSidebarToggle = useCallback(
-    () => setSidebarOpen((open) => !open),
-    []
-  );
-
   return (
     <div
-      className="dashboard-root tw-flex tw-h-[100dvh] tw-min-h-screen tw-overflow-hidden tw-bg-background tw-font-sans tw-text-foreground"
+      className="dashboard-root tw-flex tw-h-screen tw-overflow-hidden tw-bg-background tw-font-sans tw-text-foreground"
       style={brandStyle}
     >
-      {sidebarOpen && breakpoint !== "lg" ? (
-        <button
-          type="button"
-          className="dashboard-sidebar-backdrop"
-          aria-label="Close navigation"
-          onClick={handleSidebarClose}
-        />
-      ) : null}
-      <Sidebar
-        isOpen={breakpoint === "lg" || sidebarOpen}
-        onNavigate={handleSidebarClose}
-      />
+      <Sidebar onSignOut={onSignOut} />
       <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
         <DashboardHeader
-          showMenuButton={breakpoint !== "lg"}
-          onMenuToggle={handleSidebarToggle}
           visibleLayoutIds={visibleLayoutIds}
+          catalogItems={catalogItems}
           onAddWidget={onAddWidget}
           onResetLayout={onResetLayout}
           onDragWidgetStart={onDragWidgetStart}
@@ -77,8 +58,13 @@ const DashboardLayout = ({
           filters={filters}
           filterOptions={filterOptions}
           kpiCardData={kpiCardData}
+          allowedWidgetIds={allowedWidgetIds}
+          scopedRole={scopedRole}
+          officerAccess={officerAccess}
+          visibleKpiCount={visibleKpiCount}
+          scope={scope}
         />
-        <main className="dashboard-main tw-min-w-0 tw-flex-1 tw-overflow-x-hidden tw-overflow-y-auto tw-bg-background tw-p-3 sm:tw-p-4 lg:tw-p-6">
+        <main className="tw-flex-1 tw-overflow-auto tw-bg-background tw-p-4 lg:tw-p-6">
           <DashboardFilters
             filters={filters}
             onFilterChange={onFilterChange}

@@ -1,4 +1,4 @@
-import { formatDimensionLabel } from "./kpiQueries";
+import { formatDimensionLabel } from "./labelFormat";
 
 function escapeHtml(value) {
   return String(value ?? "")
