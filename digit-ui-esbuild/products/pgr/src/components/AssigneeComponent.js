@@ -64,9 +64,14 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
   // Update assignees when employee data changes
   useEffect(() => {
     if (employeeData?.Employees?.length > 0) {
-      const filtered = employeeData.Employees.filter(
-        e => e?.assignments?.[0]?.department === department && e?.user?.uuid
-      );
+      // Screening officer (allDepartments): NO department filter — list every
+      // department's assignable employees (transformData groups them by
+      // department). Every other actor stays scoped to the single primary dept.
+      const filtered = employeeData.Employees.filter((e) => {
+        const d = e?.assignments?.[0]?.department;
+        if (!d || !e?.user?.uuid) return false;
+        return allDepartments ? true : d === department;
+      });
       setAssignees(transformData(filtered));
     }
   }, [employeeData]);
