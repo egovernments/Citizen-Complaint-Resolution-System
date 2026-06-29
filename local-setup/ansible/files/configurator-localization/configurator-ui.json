@@ -846,6 +846,30 @@
     "locale": "en_IN"
   },
   {
+    "code": "app.fields.from_state",
+    "message": "From State",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.to_state",
+    "message": "To State",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.audience",
+    "message": "Audience",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.channel",
+    "message": "Channel",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
     "code": "app.dashboard.date.3months",
     "message": "3 Months",
     "module": "configurator-ui",
@@ -1694,6 +1718,30 @@
   {
     "code": "app.resources.notification_template",
     "message": "PGR अधिसूचना टेम्पलेट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.from_state",
+    "message": "स्रोत स्थिति",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.to_state",
+    "message": "लक्ष्य स्थिति",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.audience",
+    "message": "दर्शक",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.channel",
+    "message": "चैनल",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
@@ -2550,6 +2598,30 @@
     "locale": "fr_FR"
   },
   {
+    "code": "app.fields.from_state",
+    "message": "État source",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.to_state",
+    "message": "État cible",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.audience",
+    "message": "Public",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.channel",
+    "message": "Canal",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
     "code": "app.dashboard.date.3months",
     "message": "3 mois",
     "module": "configurator-ui",
@@ -3398,6 +3470,30 @@
   {
     "code": "app.resources.notification_template",
     "message": "Modelos de notificação PGR",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.from_state",
+    "message": "Estado de origem",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.to_state",
+    "message": "Estado de destino",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.audience",
+    "message": "Público",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.channel",
+    "message": "Canal",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
