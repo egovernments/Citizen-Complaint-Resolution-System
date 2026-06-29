@@ -491,10 +491,11 @@
         compose_profiles: >-
           {{
             ([]
-              + (['search']        if enable_search_stack | default(false) else [])
-              + (['mcp']           if enable_mcp          | default(false) else [])
-              + (['notifications'] if enable_novu         | default(false) else [])
-              + (['keycloak']      if enable_keycloak     | default(false) else [])
+              + (['search']        if enable_search_stack  | default(false) else [])
+              + (['mcp']           if enable_mcp           | default(false) else [])
+              + (['notifications'] if enable_novu          | default(false) else [])
+              + (['keycloak']      if enable_keycloak      | default(false) else [])
+              + (['otp']           if enable_otp_services  | default(false) else [])
             ) | join(',')
           }}
 

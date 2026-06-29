@@ -10,8 +10,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MobileValidationConfig {
-    private String prefix;
-    private String pattern;
-    private Integer minLength;
-    private Integer maxLength;
+    private String countryCode;
+    private String mobileNumberRegex;
 }
