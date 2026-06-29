@@ -2175,10 +2175,6 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": {
-          "name": "last_7d",
-          "timeRole": "filed_at"
-        },
         "dimensions": [
           "ward_code"
         ],
