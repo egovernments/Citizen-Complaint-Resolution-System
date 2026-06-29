@@ -15,7 +15,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL, generateCitizenPhone } from '../utils/env';
+import { BASE_URL } from '../utils/env';
 
 test.describe('Citizen aux surfaces — issue #12 regression guards', () => {
   test('FAQ page does not render the error fallback', {
@@ -32,8 +32,7 @@ No test.fail() masking — by design, a red here is the visible signal CCRS#12 i
     },
     tag: ['@area:pgr', '@ccrs:12', '@kind:edge-case', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(60_000);
-    const phone = generateCitizenPhone();
-    await citizenOtpLogin(page, phone);
+    await citizenOtpLogin(page);
 
     await page.goto(`${BASE_URL}/digit-ui/citizen/pgr-faq`, {
       waitUntil: 'domcontentloaded',
@@ -61,8 +60,7 @@ Pairs with the FAQ test — both pages are listed in CCRS#12 as the broken aux s
     },
     tag: ['@area:pgr', '@ccrs:12', '@kind:edge-case', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(60_000);
-    const phone = generateCitizenPhone();
-    await citizenOtpLogin(page, phone);
+    await citizenOtpLogin(page);
 
     await page.goto(`${BASE_URL}/digit-ui/citizen/pgr-how-it-works`, {
       waitUntil: 'domcontentloaded',
@@ -93,8 +91,7 @@ Loose assertion intentionally — the spec doesn't care HOW HELPLINE responds, j
     },
     tag: ['@area:pgr', '@ccrs:12', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(60_000);
-    const phone = generateCitizenPhone();
-    await citizenOtpLogin(page, phone);
+    await citizenOtpLogin(page);
     await page.waitForTimeout(3000);
 
     const helpline = page.locator('text=HELPLINE').first();
