@@ -75,8 +75,15 @@ export function KpiTile({ def, result, results, error, vizOverride, loading = fa
   if (isCardKind(kind)) return content;
 
   const { asOf, scope } = result;
+  // Mirror the reference DashboardGrid chart body (SHARED_CHROME.defaultBody):
+  // the chart components measure their own viewport (height:100%; flex:1), so the
+  // wrapper MUST establish a definite height. Without these fill classes the
+  // wrapper collapses to content height and the chart renders at 0px (blank).
   return (
-    <div className={`kpi-tile kpi-tile--${kind}`} data-accent={viz.accent}>
+    <div
+      className={`kpi-tile kpi-tile--${kind} tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden`}
+      data-accent={viz.accent}
+    >
       {content}
       {asOf ? <span className="kpi-tile__asof">as of {formatAsOf(asOf)}</span> : null}
       {scope && scope.boundaryPrefixes ? (
