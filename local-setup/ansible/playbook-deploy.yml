@@ -178,6 +178,19 @@
       changed_when: false
       ignore_errors: yes
 
+    # ==================== Seed boundary hierarchy for state tenant ====================
+    - name: Seed boundary hierarchy for pg state tenant
+      shell: |
+        docker exec docker-postgres psql -U egov -d egov -c "
+        INSERT INTO boundary_hierarchy (id, tenantid, hierarchytype, boundaryhierarchy, createdtime, createdby, lastmodifiedtime, lastmodifiedby)
+        VALUES (
+          gen_random_uuid()::text, 'pg', 'ADMIN',
+          '[{\"active\":true,\"boundaryType\":\"County\",\"parentBoundaryType\":null},{\"active\":true,\"boundaryType\":\"SubCounty\",\"parentBoundaryType\":\"County\"},{\"active\":true,\"boundaryType\":\"Ward\",\"parentBoundaryType\":\"SubCounty\"}]',
+          extract(epoch from now())::bigint*1000, 'system',
+          extract(epoch from now())::bigint*1000, 'system'
+        ) ON CONFLICT DO NOTHING;"
+      changed_when: false
+
     # ==================================================================
     # CI TESTS — Stage A: XLSX-Driven DataLoader E2E
     # ==================================================================

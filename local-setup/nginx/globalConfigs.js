@@ -14,6 +14,11 @@ var globalConfigs = (function () {
   var mdmsContext = "mdms-v2";
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
+  var hierarchyType = "ADMIN";
+  var boundaryType = "Ward";
+  var pgrBoundaryHighestLevel = "County";
+  var pgrBoundaryLowestLevel = "Ward";
+  var coreMobileConfigs = {"mobilePrefix": "+91", "mobileNumberPattern": "^[6-9][0-9]{9}$", "mobileNumberLength": 10, "mobileNumberAllowedStartingCharacters": ["6","7","8","9"], "mobileNumberErrorMessage": "CORE_COMMON_MOBILE_ERROR"};
 
   // Runtime locale fallback for local setup: force default language unless user explicitly changes it.
   try {
@@ -22,7 +27,6 @@ var globalConfigs = (function () {
       try { return JSON.parse(value); } catch (e) { return value; }
     };
 
-    // Normalize tenant-id keys so DIGIT startup can bind tenant context correctly.
     var employeeTenant = window.localStorage.getItem("Employee.tenant-id");
     if (!employeeTenant) {
       var employeeInfo = parseMaybeJSON(window.localStorage.getItem("Employee.user-info"));
@@ -46,7 +50,17 @@ var globalConfigs = (function () {
   } catch (e) {}
 
   var getConfig = function (key) {
-    if (key === "STATE_LEVEL_TENANT_ID") {
+    if (key === "HIERARCHY_TYPE") {
+      return hierarchyType;
+    } else if (key === "BOUNDARY_TYPE") {
+      return boundaryType;
+    } else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") {
+      return pgrBoundaryHighestLevel;
+    } else if (key === "PGR_BOUNDARY_LOWEST_LEVEL") {
+      return pgrBoundaryLowestLevel;
+    } else if (key === "CORE_MOBILE_CONFIGS") {
+      return coreMobileConfigs;
+    } else if (key === "STATE_LEVEL_TENANT_ID") {
       return stateTenantId;
     } else if (key === "GMAPS_API_KEY") {
       return gmaps_api_key;

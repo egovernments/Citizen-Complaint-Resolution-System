@@ -757,7 +757,7 @@ services:
     - egov-network
 
   boundary-service:
-    image: registry.preview.egov.theflywheel.in/egovio/boundary-service:v2.9.2-delete
+    image: egovio/boundary-service:v2.9.2-4a60f20
     container_name: boundary-service
     depends_on:
       pgbouncer:
