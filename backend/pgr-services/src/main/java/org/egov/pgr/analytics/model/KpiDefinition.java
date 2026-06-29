@@ -97,7 +97,20 @@ public class KpiDefinition {
     public boolean isPublished() { return "published".equals(status); }
 
     public boolean isVisibleTo(Set<String> callerRoles) {
-        if (rbac == null || rbac.getVisibleTo() == null || rbac.getVisibleTo().isEmpty()) return true;
-        return rbac.getVisibleTo().stream().anyMatch(callerRoles::contains);
+        java.util.List<String> vt = (rbac == null) ? null : rbac.getVisibleTo();
+        boolean isPublic = callerRoles != null && callerRoles.contains("PUBLIC");
+        if (isPublic) {
+            // Public-floor caller (unauthenticated): NOT covered by the "empty visibleTo => all"
+            // rule. It may see a tile ONLY if that tile explicitly opts into the PUBLIC audience.
+            return vt != null && vt.contains("PUBLIC");
+        }
+        // Authenticated caller: "PUBLIC" is an ADDITIVE audience marker, not a role ceiling — strip
+        // it before evaluating the role ceiling, so tagging a tile PUBLIC never narrows who (among
+        // authenticated roles) can see it. An empty remaining ceiling = visible to all authed roles.
+        if (vt == null) return true;
+        java.util.List<String> roleCeiling = vt.stream()
+                .filter(role -> !"PUBLIC".equals(role)).collect(java.util.stream.Collectors.toList());
+        if (roleCeiling.isEmpty()) return true;
+        return roleCeiling.stream().anyMatch(callerRoles::contains);
     }
 }

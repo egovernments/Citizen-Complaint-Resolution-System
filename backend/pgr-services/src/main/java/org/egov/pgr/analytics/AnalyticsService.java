@@ -53,6 +53,15 @@ public class AnalyticsService {
     static final Set<String> OFFICER_PII_ROLES = Set.of(
             "SUPERVISOR", "PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER", "MDMS_ADMIN", "HRMS_ADMIN");
 
+    /**
+     * Synthetic role for an unauthenticated / no-role caller (the "public floor", 70-view-management
+     * §"Public (no login)"). An anonymous request degrades to THIS rather than to unrestricted-admin:
+     * it may see only KPIs whose {@code rbac.visibleTo} explicitly lists {@code PUBLIC} (curated,
+     * aggregate-only, no PII), and may NOT run inline (non-kpiId) queries. Tenant-aggregate scope is
+     * still applied. This is the deliberate "degrade-to-public-floor", not a blanket lock-out.
+     */
+    static final String PUBLIC_ROLE = "PUBLIC";
+
     private final AnalyticsPlanner planner;
     private final AnalyticsCatalog catalog;
     private final JdbcTemplate jdbc;
@@ -73,6 +82,7 @@ public class AnalyticsService {
         if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
         AnalyticsScope scope = scopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
         Set<String> callerRoles = extractRoles(requestInfo);
+        boolean publicFloor = isPublicFloor(callerRoles);
 
         Map<String,Object> out = new LinkedHashMap<>();
         out.put("asOf", asOf());
@@ -88,6 +98,14 @@ public class AnalyticsService {
                 String name = e.getKey();
                 JsonNode queryNode = e.getValue();
                 try {
+                    // Public floor: only published PUBLIC-eligible KPIs, by reference. No inline (an
+                    // inline body bypasses the catalog's PUBLIC opt-in + publish-time PII check).
+                    if (publicFloor && !queryNode.has("kpiId")) {
+                        partial = true;
+                        results.put(name, Map.of("error", "kpi_forbidden",
+                                "message", "public access is limited to published PUBLIC KPIs"));
+                        continue;
+                    }
                     // D1a: backend-composed defs (query:null + viz.compose) resolve recursively here.
                     Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles);
                     if (composed != null) { results.put(name, composed); continue; }
@@ -118,6 +136,8 @@ public class AnalyticsService {
             out.put("partial", partial);
         } else if (body.has("query")) {
             JsonNode queryNode = body.get("query");
+            if (publicFloor && !queryNode.has("kpiId"))
+                throw new IllegalArgumentException("kpi_forbidden: public access is limited to published PUBLIC KPIs");
             Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles);
             if (composed != null) { out.putAll(composed); return out; }
             JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
@@ -426,14 +446,25 @@ public class AnalyticsService {
         return m;
     }
 
-    /** Extract role codes from RequestInfo.userInfo.roles — mirrors AnalyticsScope role extraction. */
+    /**
+     * Extract role codes from RequestInfo.userInfo.roles — mirrors AnalyticsScope role extraction.
+     * An anonymous caller (no userInfo, or userInfo with no roles) degrades to the {@link #PUBLIC_ROLE}
+     * floor — NOT to an empty set (which {@link KpiDefinition#isVisibleTo} would have read as "no
+     * ceiling => visible", the old fail-open that let anonymous read every visibleTo:[] tile).
+     */
     private Set<String> extractRoles(RequestInfo requestInfo) {
-        if (requestInfo == null) return Collections.emptySet();
+        if (requestInfo == null) return Set.of(PUBLIC_ROLE);
         User u = requestInfo.getUserInfo();
-        if (u == null || u.getRoles() == null) return Collections.emptySet();
-        return u.getRoles().stream()
+        if (u == null || u.getRoles() == null) return Set.of(PUBLIC_ROLE);
+        Set<String> roles = u.getRoles().stream()
                 .filter(r -> r != null && r.getCode() != null)
                 .map(Role::getCode)
                 .collect(Collectors.toSet());
+        return roles.isEmpty() ? Set.of(PUBLIC_ROLE) : roles;
+    }
+
+    /** True when this is the unauthenticated public-floor caller (only PUBLIC-eligible KPIs, no inline). */
+    private boolean isPublicFloor(Set<String> callerRoles) {
+        return callerRoles != null && callerRoles.size() == 1 && callerRoles.contains(PUBLIC_ROLE);
     }
 }

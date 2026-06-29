@@ -187,7 +187,9 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "PUBLIC"
+        ]
       }
     }
   },
@@ -297,7 +299,9 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "PUBLIC"
+        ]
       }
     }
   },
@@ -365,7 +369,9 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "PUBLIC"
+        ]
       }
     }
   },
@@ -636,7 +642,9 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "PUBLIC"
+        ]
       }
     }
   },
@@ -698,7 +706,9 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "PUBLIC"
+        ]
       }
     }
   },
@@ -1634,7 +1644,9 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "PUBLIC"
+        ]
       }
     }
   },
@@ -1705,7 +1717,7 @@
       "query": {
         "grain": "facts",
         "window": {
-          "name": "wtd",
+          "name": "last_30d",
           "timeRole": "filed_at"
         },
         "dimensions": [
@@ -1762,7 +1774,9 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "PUBLIC"
+        ]
       }
     }
   },
@@ -2223,7 +2237,9 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "PUBLIC"
+        ]
       }
     }
   },
@@ -3075,7 +3091,9 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "PUBLIC"
+        ]
       }
     }
   },
@@ -4878,7 +4896,9 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "PUBLIC"
+        ]
       }
     }
   },
