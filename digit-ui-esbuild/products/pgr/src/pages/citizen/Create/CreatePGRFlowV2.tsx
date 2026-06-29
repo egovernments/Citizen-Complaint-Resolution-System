@@ -5,8 +5,8 @@
 // + FormComposerV2 stack. The same 6-step shape is preserved so:
 //   - the data shape submitted to /pgr/v1/_create is byte-identical
 //   - the boundary, geolocation, and image-upload behaviour stays in the
-//     existing components (PGRBoundaryComponent, GeoLocations, SelectImages),
-//     just rendered inside v2 chrome
+//     existing components (PGRBoundaryComponent, GeoLocations) + the V2
+//     PgrFileUpload, just rendered inside v2 chrome
 //   - server-side, redux, and post-submit response page see no change
 //
 // What changes vs FormExplorer:
@@ -107,7 +107,7 @@ interface BoundaryNode {
 interface GeoPoint {
   lat?: number | null;
   lng?: number | null;
-  ward?: { code?: string } | null;
+  ward?: { code?: string; name?: string } | null;
   pincode?: string | number | null;
 }
 
@@ -182,6 +182,7 @@ const CHECKBOX_STYLE: React.CSSProperties = {
 interface StepShellProps {
   title: string;
   description?: string;
+  collapsible?: boolean;
   children: React.ReactNode;
 }
 
@@ -191,9 +192,9 @@ interface StepShellProps {
 //   where     — map pin + ward (auto-cascaded from the pin) + landmark/postal
 //   details   — description + dynamic category fields + photos + consents → submit
 const STEPS = [
-  { id: "complaint", title: "Complaint" },
-  { id: "where", title: "Location" },
-  { id: "details", title: "Details" },
+  { id: "complaint", title: "Complaint", sub: "Tell us about the issue" },
+  { id: "where", title: "Location", sub: "Where did it happen?" },
+  { id: "details", title: "Details", sub: "Additional information" },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -333,26 +334,36 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
 // Sub-step bodies
 // ---------------------------------------------------------------------------
 
-function StepShell({ title, description, children }: StepShellProps) {
+function StepShell({ title, description, collapsible, children }: StepShellProps) {
+  const [open, setOpen] = React.useState(true);
+  const showBody = !collapsible || open;
   return (
     <Card className="p-6">
-      <div className="mb-5">
-        <h2
-          className="text-lg font-semibold"
-          // Theme-driven heading color — picks up the tenant's primary brand
-          // hue (kenya-green on naipepea, orange on default) via the same
-          // var chain the legacy headings use.
-          style={{
-            color: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
-          }}
-        >
-          {title}
-        </h2>
-        {description ? (
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      <div className="flex items-start" style={{ justifyContent: "space-between", gap: "1rem", marginBottom: showBody ? "1.25rem" : 0 }}>
+        <div style={{ minWidth: 0 }}>
+          {/* Theme-driven heading color (PRIMARY var) — same chain the legacy headings use. */}
+          <h2 className="text-lg font-semibold" style={{ margin: 0, color: PRIMARY }}>
+            {title}
+          </h2>
+          {description ? (
+            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="text-sm"
+            style={{
+              color: PRIMARY, background: "none", border: "none", cursor: "pointer",
+              whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "0.25rem", flexShrink: 0,
+            }}
+          >
+            {open ? "Collapse" : "Expand"}<span aria-hidden>{open ? "▲" : "▼"}</span>
+          </button>
         ) : null}
       </div>
-      {children}
+      {showBody ? children : null}
     </Card>
   );
 }
@@ -558,6 +569,11 @@ function RelatedToStepBody({ data, patch, relatedToOptions, t }: StepBodyProps) 
           placeholder={tr(t, "CS_COMPLAINT_PICK_ONE", "Select…")}
           options={options.map((o) => ({ value: o.relatedTo, label: o.relatedTo }))}
         />
+        {data.relatedTo ? (
+          <FieldHelp ok>{data.relatedTo}</FieldHelp>
+        ) : (
+          <FieldHelp>{tr(t, "CS_RELATED_TO_HELP", "Choose the organization or entity responsible for the issue.")}</FieldHelp>
+        )}
       </Field>
     </StepShell>
   );
@@ -596,7 +612,7 @@ function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBod
   }, [data.SelectComplaintType?.menuPath, serviceDefs]);
 
   return (
-    <StepShell title={t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}>
+    <StepShell title={t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")} collapsible>
       <div className="space-y-5">
         {hierarchyActive ? (
           <ComplaintHierarchyPicker
@@ -652,6 +668,7 @@ function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBod
         ) : null}
           </>
         )}
+        <TipBox body={tr(t, "CS_COMPLAINT_TYPE_TIP", "Choose the most relevant option that best describes your issue.")} />
       </div>
     </StepShell>
   );
@@ -931,30 +948,280 @@ function Step3Description({ data, patch, templateFields, suppressedCount, t }: S
   );
 }
 
-function Step4Images({ data, patch, t }: StepBodyProps) {
-  // Reuse SelectImages — the registered component knows how to call the
-  // upload API and write fileStoreIds back. We pass formData + setter the
-  // same way it expects from FormStep.
-  const SelectImages = Digit?.ComponentRegistryService?.getComponent("SelectImages");
-  if (!SelectImages) {
-    return (
-      <StepShell title={t("CS_ADDCOMPLAINT_UPLOAD_PHOTO")}>
-        <p className="text-sm text-destructive">Image-upload component not registered.</p>
-      </StepShell>
-    );
-  }
+// ── Step-4 uploader (build-v2). Self-contained: replaces the legacy
+// SelectImages → FormStep → ImageUploadHandler chain that couldn't render the
+// mockup's filled state. Reuses the SAME upload service the legacy handler used
+//   Digit.UploadServices.Filestorage("property-upload", file, tenantId)
+// and emits the SAME output the submit contract expects — a string[] of
+// fileStoreIds via onSelect → patch({ComplaintImagesPoint}) — which
+// mapFormDataToRequest turns into workflow.verificationDocuments. No new deps.
+const PGR_MAX_FILES = 5; // max files the citizen can attach
+const PGR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB — same per-file size as the legacy uploader
+
+type PgrUploadItem = { id: string; url: string; name: string; size: number };
+
+function pgrFmtSize(bytes: number): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+const PgrCheckIcon = (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+const PgrCloudIcon = (
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M16 16l-4-4-4 4" />
+    <path d="M12 12v9" />
+    <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+  </svg>
+);
+const PgrXIcon = (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+function PgrFileUpload({
+  t,
+  tenantId,
+  value,
+  onSelect,
+  fieldKey,
+}: {
+  t: (k: string) => string;
+  tenantId: string;
+  value: string[];
+  onSelect: (key: string, ids: string[]) => void;
+  fieldKey: string;
+}) {
+  const [items, setItems] = React.useState<PgrUploadItem[]>([]);
+  const [busy, setBusy] = React.useState(false);
+  const [dragOver, setDragOver] = React.useState(false);
+  const [error, setError] = React.useState<string>("");
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Rebuild previews for ids that arrive from outside (e.g. the citizen steps
+  // back into Step 4). Best-effort — the ids are valid for submit regardless.
+  React.useEffect(() => {
+    const have = new Set(items.map((i) => i.id));
+    const missing = (value || []).filter((id) => !have.has(id));
+    if (missing.length === 0) {
+      if (items.some((i) => !(value || []).includes(i.id))) {
+        setItems((prev) => prev.filter((i) => (value || []).includes(i.id)));
+      }
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await Digit.UploadServices.Filefetch(missing, tenantId);
+        if (cancelled) return;
+        const d = res?.data || {};
+        const byId: Record<string, string> = {};
+        (Array.isArray(d.fileStoreIds) ? d.fileStoreIds : []).forEach((o: any) => {
+          if (o && o.id) byId[o.id] = o.url;
+        });
+        const rebuilt: PgrUploadItem[] = missing.map((id) => {
+          const raw = byId[id] != null ? byId[id] : (typeof d[id] === "string" ? d[id] : "");
+          const url = typeof raw === "string" ? raw.split(",").pop() || "" : "";
+          return { id, url, name: tr(t, "CS_UPLOADED_FILE", "Attachment"), size: 0 };
+        });
+        setItems((prev) => [...prev, ...rebuilt]);
+      } catch {
+        /* preview rebuild is best-effort; ids still submit */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, tenantId]);
+
+  const emit = (next: PgrUploadItem[]) => {
+    setItems(next);
+    onSelect(fieldKey, next.map((i) => i.id));
+  };
+
+  const uploadFiles = React.useCallback(
+    async (files: File[]) => {
+      setError("");
+      const room = PGR_MAX_FILES - items.length;
+      if (room <= 0) {
+        setError(tr(t, "CS_UPLOAD_MAX_FILES", "You can upload up to 5 files."));
+        return;
+      }
+      const accepted: File[] = [];
+      for (const f of files.slice(0, room)) {
+        if (f.size > PGR_MAX_BYTES) {
+          setError(tr(t, "CS_FILE_TOO_LARGE", "File is too large (max 2 MB)."));
+          continue;
+        }
+        accepted.push(f);
+      }
+      if (accepted.length === 0) return;
+      setBusy(true);
+      const uploaded: PgrUploadItem[] = [];
+      for (const file of accepted) {
+        try {
+          // SAME service the legacy handler used (module "property-upload").
+          const response = await Digit.UploadServices.Filestorage("property-upload", file, tenantId);
+          const id = response?.data?.files?.[0]?.fileStoreId;
+          if (id) {
+            uploaded.push({
+              id,
+              url: file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+              name: file.name,
+              size: file.size,
+            });
+          }
+        } catch (err: any) {
+          const apiMessage =
+            err?.response?.data?.Errors?.[0]?.message ||
+            err?.response?.data?.message ||
+            err?.message;
+          setError(apiMessage || tr(t, "CS_FILE_UPLOAD_FAILED", "File upload failed."));
+        }
+      }
+      setBusy(false);
+      if (uploaded.length) emit([...items, ...uploaded]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, tenantId, t]
+  );
+
+  const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length) uploadFiles(files);
+    if (inputRef.current) inputRef.current.value = ""; // allow re-picking same file
+  };
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length) uploadFiles(files);
+  };
+  const removeAt = (id: string) => {
+    const gone = items.find((i) => i.id === id);
+    if (gone?.url?.startsWith("blob:")) URL.revokeObjectURL(gone.url);
+    emit(items.filter((i) => i.id !== id));
+  };
+  const openPicker = () => inputRef.current?.click();
+  const atMax = items.length >= PGR_MAX_FILES;
+
+  // The cloud + drag-drop + Choose-files affordance — shared by the empty
+  // state and the inline "add more" cell of the filled state.
+  const renderCue = (variant: string) => (
+    <div
+      className={"pgr-upload-zone " + variant + (dragOver ? " is-dragover" : "")}
+      role="button"
+      tabIndex={0}
+      onClick={openPicker}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openPicker();
+        }
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={onDrop}
+    >
+      <span className="pgr-upload-cloud">{PgrCloudIcon}</span>
+      <div className="pgr-upload-dnd">{tr(t, "CS_UPLOAD_DND", "Drag and drop files here or")}</div>
+      <span className="pgr-upload-choose">
+        {busy ? tr(t, "CS_UPLOADING", "Uploading…") : tr(t, "CS_UPLOAD_CHOOSE", "Choose files")}
+      </span>
+      <p className="pgr-upload-hint">
+        {tr(t, "CS_UPLOAD_HINT", "JPG, PNG up to 2 MB each. You can upload up to 5 files.")}
+      </p>
+    </div>
+  );
+
   return (
-    <StepShell title={t("CS_ADDCOMPLAINT_UPLOAD_PHOTO")}>
-      <SelectImages
+    <div className="pgr-upload">
+      {error ? (
+        <div className="pgr-upload-error" role="alert">
+          {error}
+        </div>
+      ) : null}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={onInputChange}
+        style={{ display: "none" }}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      {items.length === 0 ? (
+        renderCue("pgr-upload-zone--empty")
+      ) : (
+        <div className="pgr-upload-row">
+          {items.map((it) => (
+            <div className="pgr-card" key={it.id}>
+              <div className="pgr-card-img">
+                <span className="pgr-badge">{PgrCheckIcon}</span>
+                <button
+                  type="button"
+                  className="pgr-del"
+                  aria-label={tr(t, "CS_REMOVE", "Remove")}
+                  onClick={() => removeAt(it.id)}
+                >
+                  {PgrXIcon}
+                </button>
+                {it.url ? (
+                  <img src={it.url} alt={it.name} />
+                ) : (
+                  <div className="pgr-card-doc">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <path d="M14 2v6h6" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+              <div className="pgr-card-name" title={it.name}>
+                {it.name}
+              </div>
+              <div className="pgr-card-meta">
+                {it.size ? <span>{pgrFmtSize(it.size)}</span> : null}
+                <span className="pgr-card-ok">{PgrCheckIcon}</span>
+              </div>
+            </div>
+          ))}
+          {!atMax ? renderCue("pgr-upload-zone--cell") : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Step4Images({ data, patch, t }: StepBodyProps) {
+  // Same tenant the complaint submits under (resolved from the authority pick),
+  // falling back to the citizen's home city / current ULB — so uploads land on
+  // the tenant whose filestore the submit will reference.
+  const tenantId =
+    (data as any)?.resolvedTenantId ||
+    Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
+    Digit.ULBService.getCurrentTenantId();
+  return (
+    <StepShell title={tr(t, "CS_ADDCOMPLAINT_UPLOAD_PHOTO", "Upload photos / attachments") + " " + tr(t, "CS_OPTIONAL_SUFFIX", "(Optional)")}>
+      <PgrFileUpload
         t={t}
-        formData={data}
+        tenantId={tenantId}
+        fieldKey="ComplaintImagesPoint"
+        value={Array.isArray(data.ComplaintImagesPoint) ? data.ComplaintImagesPoint : []}
         onSelect={(_key: string, value: string[]) => {
           patch({ ComplaintImagesPoint: value });
-        }}
-        config={{
-          key: "ComplaintImagesPoint",
-          populators: { name: "ComplaintImagesPoint" },
-          label: "CS_ADDCOMPLAINT_UPLOAD_PHOTO_TEXT",
         }}
       />
     </StepShell>
@@ -968,6 +1235,135 @@ function Step4Images({ data, patch, t }: StepBodyProps) {
 // ---------------------------------------------------------------------------
 
 const PRIMARY = "var(--color-primary-1, var(--color-primary-main, #c84c0e))";
+
+// Subtle theme-tinted surfaces for banners/tips (the accent itself stays PRIMARY).
+const HINT_BG = "var(--color-primary-1-bg, #edf6ef)";
+const HINT_BORDER = "var(--color-primary-2-bg, #cfe6d6)";
+
+// Responsive tweaks that DON'T rely on Tailwind md: utilities (the vendored CSS may
+// lack them). Injected once by the orchestrator — keeps the stepper mobile-safe.
+const WIZARD_CSS = `
+.pgr-step-sub { display:block; }
+@media (max-width: 640px) {
+  .pgr-step-sub { display:none; }
+  .pgr-step-title { font-size:0.8rem; }
+}
+/* ---- Step 4 uploader (build-v2, PgrFileUpload). All scoped to .pgr-upload so
+   no other upload flow is affected. ---- */
+.pgr-upload { width: 100%; }
+.pgr-upload-error {
+  margin-bottom: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+  background: #fdecea; border: 1px solid #f5c2bc; color: #b3261e;
+  font-size: 0.8rem; text-align: center;
+}
+/* cloud + drag-drop + Choose-files affordance (shared by both states) */
+.pgr-upload-zone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.4rem; padding: 1.5rem 1rem; text-align: center; cursor: pointer;
+  border: 1px dashed var(--color-border, #cbd5e1); border-radius: 0.75rem;
+  background: var(--color-surface-secondary, #f8fafc);
+  transition: border-color .15s ease, background .15s ease;
+}
+.pgr-upload-zone--empty { padding: 2rem 1rem; }
+.pgr-upload-zone--cell { border-radius: 0.5rem; padding: 1rem; }
+.pgr-upload-zone:hover, .pgr-upload-zone:focus-visible, .pgr-upload-zone.is-dragover {
+  outline: none;
+  border-color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+  background: var(--color-primary-1-bg, #eef6ef);
+}
+.pgr-upload-cloud { color: var(--color-text-secondary, #94a3b8); display: inline-flex; }
+.pgr-upload-dnd { font-size: 0.85rem; color: var(--color-text-secondary, #64748b); }
+.pgr-upload-choose {
+  display: inline-block; border: 1px solid var(--color-border, #cbd5e1); border-radius: 0.375rem;
+  padding: 0.4rem 0.9rem; background: #fff; font-weight: 600; font-size: 0.85rem;
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+}
+.pgr-upload-hint { margin: 0.25rem 0 0; font-size: 0.72rem; color: var(--color-text-secondary, #94a3b8); }
+/* filled state: thumbnail cards + inline cue */
+/* Uniform grid — every cell (each card AND the Choose-files box) is one equal
+   column, so they're all the same width instead of small-cards + a big box. */
+.pgr-upload-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 0.75rem; align-items: stretch; }
+.pgr-card {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--color-border, #e2e8f0); border-radius: 0.5rem;
+  padding: 0.5rem; background: #fff;
+}
+/* The image flex-fills the card; the grid stretches every cell to the tallest
+   in the row (the Choose-files box), so cards & box share one height with no
+   empty gap AND the box never overflows. No aspect-ratio (flaky in old webviews). */
+.pgr-card-img {
+  position: relative; flex: 1 1 auto; min-height: 4.5rem; border-radius: 0.375rem; overflow: hidden;
+  background: var(--color-surface-secondary, #f1f5f9);
+}
+.pgr-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pgr-card-doc { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--color-text-secondary, #64748b); }
+.pgr-badge {
+  position: absolute; top: 6px; left: 6px; width: 20px; height: 20px; border-radius: 9999px;
+  background: var(--color-primary-1, var(--color-primary-main, #c84c0e)); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.pgr-del {
+  position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border: none; border-radius: 9999px;
+  background: #fff; color: #475569; font-size: 15px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.pgr-del:hover { background: #b3261e; color: #fff; }
+.pgr-card-name {
+  font-size: 0.78rem; font-weight: 600; margin-top: 0.35rem; color: var(--color-text, #1f2937);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pgr-card-meta { display: flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--color-text-secondary, #64748b); }
+.pgr-card-ok { color: var(--color-primary-1, var(--color-primary-main, #c84c0e)); display: inline-flex; }
+@media (max-width: 480px) {
+  .pgr-upload-row { grid-template-columns: repeat(2, 1fr); }
+}
+`;
+
+// Contextual hint banner shown at the top of each step (themed, green-tinted).
+function HintBanner({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start", background: HINT_BG, border: "1px solid " + HINT_BORDER, borderRadius: "0.5rem", padding: "0.85rem 1rem" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.75rem", height: "1.75rem", borderRadius: "9999px", background: "var(--color-primary-2-bg, #dcecdf)", color: PRIMARY, flexShrink: 0 }}>{TipBulbIcon}</span>
+      <div style={{ minWidth: 0 }}>
+        <div className="text-sm font-semibold" style={{ color: PRIMARY }}>{title}</div>
+        {subtitle ? <div className="text-sm text-muted-foreground" style={{ marginTop: "0.1rem" }}>{subtitle}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+// Reusable green tip callout.
+function TipBox({ title, body }: { title?: string; body: string }) {
+  return (
+    <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", background: HINT_BG, border: "1px solid " + HINT_BORDER, borderRadius: "0.5rem", padding: "0.75rem 1rem" }}>
+      <span style={{ color: PRIMARY, flexShrink: 0, marginTop: "1px", display: "inline-flex" }}>{TipBulbIcon}</span>
+      <div className="text-sm">
+        {title ? <div className="font-medium" style={{ color: PRIMARY }}>{title}</div> : null}
+        <div className="text-muted-foreground">{body}</div>
+      </div>
+    </div>
+  );
+}
+
+// Small helper / confirmation line under a field (ⓘ hint, or ✓ when satisfied).
+function FieldHelp({ children, ok }: { children: React.ReactNode; ok?: boolean }) {
+  return (
+    <div className="mt-1 text-xs" style={{ display: "flex", gap: "0.35rem", alignItems: "flex-start", color: ok ? PRIMARY : "var(--color-text-secondary, #64748b)" }}>
+      <span aria-hidden style={{ flexShrink: 0 }}>{ok ? "✓" : "ⓘ"}</span>
+      <span style={{ minWidth: 0 }}>{children}</span>
+    </div>
+  );
+}
+
+// Muted dashed placeholder shown before a category is chosen.
+function EmptyStateCard({ title, body }: { title: string; body: string }) {
+  return (
+    <div style={{ border: "1px dashed var(--color-border, #cbd5e1)", borderRadius: "0.75rem", padding: "1.5rem", background: "var(--color-surface-secondary, #f8fafc)" }}>
+      <div className="text-sm font-medium">{title}</div>
+      <div className="text-sm text-muted-foreground" style={{ marginTop: "0.15rem" }}>{body}</div>
+    </div>
+  );
+}
 
 function InlineSpinner() {
   return (
@@ -996,14 +1392,29 @@ function InlineSpinner() {
 // type section appears only once an authority is chosen, and shows an inline
 // spinner while that tenant's catalogue loads (no full-page blank).
 function StepComplaint(props: StepBodyProps) {
-  const { data, relatedToOptions, catalogueLoading, dispatcherLoading } = props;
+  const { data, relatedToOptions, catalogueLoading, dispatcherLoading, t } = props;
   const hasDispatcher = (relatedToOptions?.length ?? 0) > 0;
   if (dispatcherLoading) return <InlineSpinner />;
   const showType = !hasDispatcher || !!data.relatedTo;
   return (
     <div className="space-y-5">
+      <HintBanner
+        title={showType
+          ? tr(t, "CS_HINT_TYPE_TITLE", "Great! Now select the type of complaint.")
+          : tr(t, "CS_HINT_RELATED_TITLE", "Start by selecting what your complaint is about.")}
+        subtitle={showType
+          ? tr(t, "CS_HINT_TYPE_SUB", "This helps us route your complaint to the right team.")
+          : tr(t, "CS_HINT_RELATED_SUB", "Based on your selection, relevant options will appear automatically.")}
+      />
       {hasDispatcher ? <RelatedToStepBody {...props} /> : null}
-      {showType ? (catalogueLoading ? <InlineSpinner /> : <Step0Type {...props} />) : null}
+      {showType ? (
+        catalogueLoading ? <InlineSpinner /> : <Step0Type {...props} />
+      ) : (
+        <EmptyStateCard
+          title={tr(t, "CS_EMPTY_TITLE", "More details will appear here")}
+          body={tr(t, "CS_EMPTY_BODY", "Once you select a category above, complaint type, sub type and other relevant options will be shown.")}
+        />
+      )}
     </div>
   );
 }
@@ -1013,16 +1424,22 @@ function StepComplaint(props: StepBodyProps) {
 // align-items:flex-start keeps the form pinned top-right beside the capped map.
 function StepWhere(props: StepBodyProps) {
   return (
-    <Card className="p-6">
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem", alignItems: "flex-start" }}>
-        <div style={{ flex: "3 1 420px", minWidth: 0 }}>
-          <Step1Map {...props} />
+    <div className="space-y-5">
+      <HintBanner
+        title={tr(props.t, "CS_HINT_LOC_TITLE", "Pin the exact location")}
+        subtitle={tr(props.t, "CS_HINT_LOC_SUB", "Drop a pin on the map or search for the location where the issue occurred.")}
+      />
+      <Card className="p-6">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "1.5rem", alignItems: "flex-start" }}>
+          <div style={{ flex: "3 1 420px", minWidth: 0 }}>
+            <Step1Map {...props} />
+          </div>
+          <div style={{ flex: "2 1 300px", minWidth: 0 }}>
+            <Step2Location {...props} />
+          </div>
         </div>
-        <div style={{ flex: "2 1 300px", minWidth: 0 }}>
-          <Step2Location {...props} />
-        </div>
-      </div>
-    </Card>
+      </Card>
+    </div>
   );
 }
 
@@ -1030,6 +1447,10 @@ function StepWhere(props: StepBodyProps) {
 function StepDetails(props: StepBodyProps) {
   return (
     <div className="space-y-5">
+      <HintBanner
+        title={tr(props.t, "CS_HINT_DETAILS_TITLE", "Tell us more about the issue")}
+        subtitle={tr(props.t, "CS_HINT_DETAILS_SUB", "Add as much detail as possible to help us take the right action.")}
+      />
       <Step3Description {...props} />
       <Step4Images {...props} />
     </div>
@@ -1042,12 +1463,12 @@ function WizardProgress({
   current,
   t,
 }: {
-  steps: ReadonlyArray<{ id: string; title: string }>;
+  steps: ReadonlyArray<{ id: string; title: string; sub?: string }>;
   current: number;
   t: (k: string) => string;
 }) {
   return (
-    <div className="flex items-center gap-2" style={{ marginTop: "0.75rem" }}>
+    <div className="flex items-center" style={{ justifyContent: "space-between", gap: "0.5rem", marginTop: "0.85rem" }}>
       {steps.map((s, i) => {
         const done = i < current;
         const active = i === current;
@@ -1064,41 +1485,43 @@ function WizardProgress({
                   height: "1.5rem",
                   width: "1.5rem",
                   borderRadius: "9999px",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
                   flexShrink: 0,
                   color: filled ? "#fff" : "var(--color-text-secondary, #64748b)",
                   background: filled ? PRIMARY : "transparent",
                   border: filled
                     ? "1px solid " + PRIMARY
                     : "1px solid var(--color-border, #cbd5e1)",
+                  // Active-step indicator: a secondary-colour ring around the circle.
+                  boxShadow: active ? "0 0 0 2px var(--color-secondary, rgba(16,124,16,0.30))" : "none",
                 }}
               >
                 {done ? "✓" : i + 1}
               </span>
-              <span
-                className="text-sm"
-                style={{
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  fontWeight: active ? 600 : 400,
-                  color: active ? PRIMARY : "var(--color-text-secondary, #64748b)",
-                }}
-              >
-                {tr(t, "CS_CREATE_STEP_" + s.id.toUpperCase(), s.title)}
-              </span>
+              <div style={{ minWidth: 0 }}>
+                <div
+                  className="pgr-step-title text-sm"
+                  style={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    fontWeight: active ? 600 : 500,
+                    color: active ? PRIMARY : "var(--color-text-secondary, #64748b)",
+                  }}
+                >
+                  {tr(t, "CS_CREATE_STEP_" + s.id.toUpperCase(), s.title)}
+                </div>
+                {s.sub ? (
+                  <div
+                    className="pgr-step-sub text-xs text-muted-foreground"
+                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >
+                    {tr(t, "CS_CREATE_STEP_" + s.id.toUpperCase() + "_SUB", s.sub)}
+                  </div>
+                ) : null}
+              </div>
             </div>
-            {i < steps.length - 1 ? (
-              <div
-                style={{
-                  flex: "1 1 auto",
-                  height: "1px",
-                  minWidth: "0.75rem",
-                  background: "var(--color-border, #cbd5e1)",
-                }}
-              />
-            ) : null}
           </React.Fragment>
         );
       })}
@@ -1385,6 +1808,10 @@ const CreatePGRFlowV2: React.FC = () => {
         <ScreenHeader
           title={tr(t, "CS_COMMON_FILE_A_COMPLAINT", "File a Complaint")}
         />
+        <p className="text-sm text-muted-foreground">
+          {tr(t, "CS_FILE_COMPLAINT_SUBTITLE", "Provide details about your complaint")}
+        </p>
+        <style>{WIZARD_CSS}</style>
         <WizardProgress steps={steps} current={stepIndex} t={t} />
       </div>
       {/* Step body — sits between the header and the FormFooter and
@@ -1421,7 +1848,7 @@ const CreatePGRFlowV2: React.FC = () => {
       </div>
       <FormFooter>
         <Button variant="outline" onClick={handleBack} type="button">
-          {stepIndex === 0 ? tr(t, "CS_COMMON_CANCEL", "Cancel") : t("BACK")}
+          {stepIndex === 0 ? tr(t, "CS_COMMON_CANCEL", "Cancel") : "← " + t("BACK")}
         </Button>
         <Button
           variant="primary"
@@ -1430,7 +1857,7 @@ const CreatePGRFlowV2: React.FC = () => {
           disabled={!stepIsValid}
           type="button"
         >
-          {isLast ? t("SUBMIT") : t("NEXT")}
+          {isLast ? tr(t, "CS_SUBMIT_COMPLAINT", "Submit Complaint") : t("NEXT") + " →"}
         </Button>
       </FormFooter>
     </ScreenContainer>
