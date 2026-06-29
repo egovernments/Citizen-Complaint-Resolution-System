@@ -13,7 +13,8 @@
  */
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL, generateCitizenPhone } from '../utils/env';
+import { BASE_URL } from '../utils/env';
+import { readProvisionedCitizen } from '../utils/citizen-provision';
 
 const EXPECTED_LABELS = ['Name', 'Gender', 'Email'];
 
@@ -66,8 +67,14 @@ If a future build legitimately adds a field, update this spec AND citizen-flows.
     page,
   }) => {
     test.setTimeout(120_000);
-    const phone = generateCitizenPhone();
-    await citizenOtpLogin(page, phone);
+    const provisioned = readProvisionedCitizen();
+    if (!provisioned) {
+      throw new Error(
+        'citizen-fixture.json is missing — run the citizen-setup project first ' +
+          '(npx playwright test --project=citizen-setup).',
+      );
+    }
+    await citizenOtpLogin(page, provisioned.mobile);
 
     await page.goto(`${BASE_URL}/digit-ui/citizen/user/profile`, {
       waitUntil: 'domcontentloaded',
@@ -87,6 +94,7 @@ If a future build legitimately adds a field, update this spec AND citizen-flows.
       .evaluateAll((els) =>
         els.map((el) => ({
           name: (el as HTMLInputElement).name,
+          id: (el as HTMLInputElement).id,
           type: (el as HTMLInputElement).type,
         })),
       );
@@ -98,9 +106,15 @@ If a future build legitimately adds a field, update this spec AND citizen-flows.
         `expected label "${label}" to render in profile body text`,
       ).toBe(true);
     }
+    // The Ethiopia digit-ui build identifies profile inputs by `id` rather
+    // than `name` (e.g. id="profile-name", id="profile-email"). Accept either
+    // convention so the spec stays portable across deployment builds.
     const inputNames = inputs.map((i) => i.name).filter(Boolean);
-    expect(inputNames, 'profile must render a "name" input').toContain('name');
-    expect(inputNames, 'profile must render an "email" input').toContain('email');
+    const inputIds = inputs.map((i) => i.id).filter(Boolean);
+    const hasNameField = inputNames.includes('name') || inputIds.some((id) => /name/i.test(id));
+    const hasEmailField = inputNames.includes('email') || inputIds.some((id) => /email/i.test(id));
+    expect(hasNameField, 'profile must render a "name" input').toBe(true);
+    expect(hasEmailField, 'profile must render an "email" input').toBe(true);
 
     // ── Save button visible ───────────────────────────────────────
     await expect(page.getByRole('button', { name: /^Save$/i })).toBeVisible({ timeout: 5_000 });
@@ -121,11 +135,16 @@ If a future build legitimately adds a field, update this spec AND citizen-flows.
       'citizen profile must not expose any password input',
     ).toBe(false);
 
+    // Check forbidden inputs by both name and id (Ethiopia build uses id, not name).
     for (const inputName of FORBIDDEN_INPUT_NAMES) {
       expect(
         inputNames,
         `profile must not expose input[name="${inputName}"]`,
       ).not.toContain(inputName);
+      expect(
+        inputIds.some((id) => id.toLowerCase().includes(inputName.toLowerCase())),
+        `profile must not expose input[id*="${inputName}"]`,
+      ).toBe(false);
     }
   });
 });
