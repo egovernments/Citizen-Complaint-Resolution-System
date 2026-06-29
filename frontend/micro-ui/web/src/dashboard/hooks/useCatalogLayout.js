@@ -6,7 +6,7 @@ import {
   FULL_WIDTH_TABLE_GRID,
   findFirstOpenPosition,
 } from "../constants/layoutConfig";
-import { compactVertically, swapOnDrop } from "./useDashboardLayout";
+import { compactVertically, swapOnDrop } from "../utils/gridGeometry";
 
 /**
  * useCatalogLayout — the catalog-world layout hook (kpiId-keyed).
