@@ -58,6 +58,7 @@ public class AnalyticsCatalog {
             setOf("created_at","resolved_at","last_transition_at","first_assigned_at","facts_built_at"),
             // groupable
             setOf("service_code","application_status","source","ward_code","zone_code","boundary_path",
+                  "service_request_id",   // D1b: natural row id for the at-risk table (already distinctable)
                   "service_group","department_code","aging_bucket","sla_status_bucket","current_assignee_uuid",
                   "is_open","is_resolved","is_reopened","was_rejected","sla_breached","current_state_sla_breached",
                   "has_rating","is_negative_rating","is_first_time_complainant","has_geo_pin","filed_on_behalf",
@@ -68,7 +69,10 @@ public class AnalyticsCatalog {
                   "department_code","aging_bucket","sla_status_bucket","is_open","is_resolved","is_reopened",
                   "was_rejected","sla_breached","current_state_sla_breached","has_rating","is_negative_rating",
                   "is_first_time_complainant","has_geo_pin","created_month","created_year","created_quarter",
-                  "created_is_weekend","created_at","resolved_at","rating","current_state_seq"),
+                  "created_is_weekend","created_at","resolved_at","rating","current_state_seq",
+                  // D1c: non-PII integer assignment counters — filterable so first-assignment rate can be
+                  // expressed against real facts columns (replaces the nonexistent has_been_assigned/is_reassigned).
+                  "assignment_count","distinct_assignee_count"),
             // measurable (numeric)
             setOf("resolution_ms","time_to_assign_ms","open_age_ms","current_state_age_ms","first_escalation_ms",
                   "max_dwell_ms","assigned_dwell_ms","unassigned_dwell_ms","transition_count","assignment_count",
@@ -91,7 +95,9 @@ public class AnalyticsCatalog {
             setOf("status","previous_status","action","escalation_source","ward_code","zone_code","service_code",
                   "source","occurred_month","occurred_is_weekend","occurred_is_business_hr","is_assignment",
                   "is_escalation","is_reopen","is_backward_transition","status_is_terminal","status_is_open",
-                  "has_comment","has_multiple_assignees","actor_is_system","is_current_state","entered_at","status_seq"),
+                  "has_comment","has_multiple_assignees","actor_is_system","is_current_state","entered_at",
+                  "complaint_created_at",   // D2: real epoch-ms col on complaint_events; lets the global date range / compare:prior actually narrow events-grain tiles
+                  "status_seq"),
             setOf("dwell_ms","state_sla_ms","business_sla_ms","comment_length","seq_delta","complaint_age_at_event_ms",
                   "event_rating","assignee_count"),
             setOf("service_request_id","assignee_uuid","actor_uuid","account_id"),
