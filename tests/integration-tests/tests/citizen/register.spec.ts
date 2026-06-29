@@ -11,7 +11,8 @@
  * This one covers the path through /register/name specifically.
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, FIXED_OTP, generateCitizenPhone } from '../utils/env';
+import { BASE_URL, FIXED_OTP, ROOT_TENANT, generateCitizenPhone } from '../utils/env';
+import { getMobileValidationRule, generateValidMobile } from '../utils/mdms-mobile';
 
 test.describe('Citizen registration (auto-register on unknown number)', () => {
   test('fresh phone → OTP → name+email → /all-services', {
@@ -35,7 +36,15 @@ Tolerant of post-OTP path differences (some configs go straight to /all-services
     },
     tag: ['@area:auth', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
-    const phone = generateCitizenPhone();
+    // Generate a mobile that satisfies the deployment's MDMS validation rule.
+    // getMobileValidationRule tries ROOT_TENANT; if the returned rule is the
+    // generic 10-digit fallback (pattern ^\d{10}$), it means MDMS has no
+    // entry for this tenant — fall back to generateCitizenPhone() which uses
+    // CITIZEN_PHONE_PREFIX (default "7") and produces a 9-digit number that
+    // empirically matches Ethiopia's ^[17][0-9]{8}$ server-side rule.
+    const rule = await getMobileValidationRule(ROOT_TENANT).catch(() => null);
+    const isFallbackRule = !rule || rule.pattern === '^\\d{10}$';
+    const phone = isFallbackRule ? generateCitizenPhone() : generateValidMobile(rule);
 
     await page.goto(`${BASE_URL}/digit-ui/citizen/login`, {
       waitUntil: 'domcontentloaded',
@@ -65,7 +74,8 @@ Tolerant of post-OTP path differences (some configs go straight to /all-services
       await page.waitForTimeout(80);
     }
     await page.waitForTimeout(800);
-    await page.locator('button:visible').filter({ hasText: /^Next$/i }).first().click();
+    // Ethiopia digit-ui v2 labels this button "Continue"; older revisions used "Next".
+    await page.locator('button:visible').filter({ hasText: /^(Continue|Next)$/i }).first().click();
     await page.waitForTimeout(5000);
 
     // We may be on /register/name OR on /select-location OR landed already.
