@@ -29,14 +29,28 @@ import java.util.Set;
  * {@link #resolveEmployeeScope}) with a policy evaluation that produces the same ScopeSpec. One
  * method. No rewrite.
  *
- * Fail-OPEN by design for this demo: an admin, an employee with no HRMS assignment, or any
- * resolution failure yields {@code departmentCodes = null} (unrestricted) — preserving today's
- * behavior for admins/supervisors. Only an employee with a concrete HRMS department assignment
- * gets row-scoped. Pure citizens keep their existing self-scope.
+ * Fail-CLOSED for constrained principals (S3): an employee whose department scope cannot be
+ * resolved — empty userName, no HRMS record, no active assignment, or an HRMS error — is denied
+ * (a sentinel department that matches nothing) UNLESS they hold a {@link #TENANT_WIDE_ROLES}
+ * role (admin/supervisor tier), which are legitimately tenant-wide and stay unrestricted. This
+ * closes the prior fail-OPEN hole where an officer with a failed/missing HRMS lookup silently saw
+ * every department. Under correct config (officers carry an HRMS department) this is a no-op for
+ * them — they resolve to their real department. Pure citizens keep their existing self-scope.
  */
 @Component
 @Slf4j
 public class PrincipalScopeResolver {
+
+    /**
+     * Roles that are legitimately tenant-wide and may be unrestricted with no HRMS department
+     * (admins/supervisors). Every other employee role MUST resolve a department or be denied.
+     */
+    private static final Set<String> TENANT_WIDE_ROLES = Set.of(
+            "PGR_ADMIN", "SUPERUSER", "MDMS_ADMIN", "HRMS_ADMIN", "STADMIN",
+            "SUPERVISOR", "PGR_SUPERVISOR");
+
+    /** Sentinel department for a denied principal — matches no real row (fail-closed). */
+    private static final String DENY_ALL_DEPARTMENT = "__scope_denied__";
 
     private final PGRConfiguration config;
     private final RestTemplate restTemplate;
@@ -78,20 +92,19 @@ public class PrincipalScopeResolver {
 
     /**
      * Employee derivation. THIS is the body a policy-engine cutover would replace. Returns a
-     * ScopeSpec with departmentCodes (and best-effort boundaryPrefix). On any failure or empty
-     * assignment set, returns an unrestricted (tenant-only) spec — fail-open for the demo.
+     * ScopeSpec with departmentCodes (and best-effort boundaryPrefix). When a department cannot be
+     * resolved, returns a fail-CLOSED spec (deny-all) for constrained roles, or unrestricted for
+     * tenant-wide (admin/supervisor) roles — see {@link #unresolvedScope}.
      */
     private AnalyticsScope resolveEmployeeScope(RequestInfo requestInfo, User u, String tenantId, boolean stateLevel) {
         try {
             String userName = u.getUserName();
             if (userName == null || userName.isEmpty())
-                return new AnalyticsScope(tenantId, stateLevel, null, null, null);
+                return unresolvedScope(u, tenantId, stateLevel, "empty userName");
 
             JsonNode employees = searchHrmsByCode(requestInfo, tenantId, userName);
-            if (employees == null || !employees.isArray() || employees.size() == 0) {
-                log.debug("no HRMS employee for userName '{}' @ {} — unrestricted (fail-open)", userName, tenantId);
-                return new AnalyticsScope(tenantId, stateLevel, null, null, null);
-            }
+            if (employees == null || !employees.isArray() || employees.size() == 0)
+                return unresolvedScope(u, tenantId, stateLevel, "no HRMS employee for '" + userName + "'");
 
             // first matching employee record
             JsonNode emp = employees.get(0);
@@ -124,15 +137,40 @@ public class PrincipalScopeResolver {
             //     if (b != null && !b.isEmpty()) boundaryPrefix = b;
             // }
 
-            List<String> deptList = departments.isEmpty() ? null : new ArrayList<>(departments);
+            if (departments.isEmpty())
+                return unresolvedScope(u, tenantId, stateLevel, "no active HRMS department assignment");
+
+            List<String> deptList = new ArrayList<>(departments);
             log.info("PrincipalScopeResolver: userName='{}' departments={} boundaryPrefix={}",
                     userName, deptList, boundaryPrefix);
             return new AnalyticsScope(tenantId, stateLevel, null, boundaryPrefix, deptList);
         } catch (Exception ex) {
-            log.warn("HRMS scope resolution failed for '{}' — unrestricted (fail-open): {}",
-                    u.getUserName(), ex.toString());
+            log.warn("HRMS scope resolution failed for '{}': {}", u.getUserName(), ex.toString());
+            return unresolvedScope(u, tenantId, stateLevel, "HRMS error");
+        }
+    }
+
+    /**
+     * Scope for an employee whose department could not be resolved. Fail-CLOSED (deny-all sentinel)
+     * for constrained roles; unrestricted only for tenant-wide (admin/supervisor) roles.
+     */
+    private AnalyticsScope unresolvedScope(User u, String tenantId, boolean stateLevel, String reason) {
+        if (hasTenantWideRole(u)) {
+            log.debug("scope unresolved ({}) for tenant-wide role '{}' — unrestricted", reason, u.getUserName());
             return new AnalyticsScope(tenantId, stateLevel, null, null, null);
         }
+        log.info("scope unresolved ({}) for constrained principal '{}' — DENY (fail-closed)", reason, u.getUserName());
+        return new AnalyticsScope(tenantId, stateLevel, null, null, List.of(DENY_ALL_DEPARTMENT));
+    }
+
+    private boolean hasTenantWideRole(User u) {
+        List<Role> roles = u.getRoles();
+        if (roles == null) return false;
+        for (Role r : roles) {
+            String c = r.getCode() == null ? "" : r.getCode().toUpperCase();
+            if (TENANT_WIDE_ROLES.contains(c)) return true;
+        }
+        return false;
     }
 
     /**
