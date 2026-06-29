@@ -2726,6 +2726,57 @@ button[class*="toast-close"] svg,
 }
 
 /* ----------------------------------------------------------------------
+ * PGR Inbox v2 visibility tabs (My Complaints / All Complaints).
+ * Rendered by PGRInbox.js above the InboxSearchComposer. Active tab uses
+ * the v2 primary accent with an underline; the count badge is a pill.
+ * -------------------------------------------------------------------- */
+.v2-pgr-inbox .v2-pgr-inbox-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--color-divider, #d6d5d4);
+  margin: 0 0 1rem 0;
+}
+.v2-pgr-inbox .v2-pgr-inbox-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-secondary, #505a5f);
+  cursor: pointer;
+}
+.v2-pgr-inbox .v2-pgr-inbox-tab:hover {
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+}
+.v2-pgr-inbox .v2-pgr-inbox-tab.active {
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+  border-bottom-color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+}
+.v2-pgr-inbox .v2-pgr-inbox-tab .tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+  background: var(--color-surface-secondary, #eef1f2);
+  color: var(--color-text-secondary, #505a5f);
+}
+.v2-pgr-inbox .v2-pgr-inbox-tab.active .tab-count {
+  background: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+  color: #ffffff;
+}
+
+/* ----------------------------------------------------------------------
  * PGR Employee Complaint Details (`/employee/pgr/complaint-details/<id>`)
  * — wrap is `.v2-pgr-details`. Re-skin the SummaryCard sections so the
  * details page reads at the same v2 chrome as the inbox + create-

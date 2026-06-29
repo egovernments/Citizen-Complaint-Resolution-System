@@ -180,38 +180,17 @@ const PGRSearchInboxConfig = () => {
                     minReqFields: 0,
                     defaultValues: {
                         locality: null,
-                        assignedToMe: {
-                            "code": "ASSIGNED_TO_ALL",
-                            "name": "ASSIGNED_TO_ALL"
-                        },
                         status: null,
                         complaintType: null,
                         serviceCode:null,
 
                     },
+                    // The "Assigned to me / Assigned to all" radio that used to live
+                    // here has been promoted to the two inbox tabs (My Complaints /
+                    // All Complaints) rendered in PGRInbox.js. The active tab drives
+                    // the assignee scope via apiDetails.additionalDetails.assigneeScope
+                    // (read in PGRInboxConfig.preProcess), so the radio is gone.
                     fields: [
-                        {
-                            label: "",
-                            type: "radio",
-                            isMandatory: false,
-                            disable: false,
-                            populators: {
-                                name: "assignedToMe",
-                                options: [
-                                    { code: "ASSIGNED_TO_ME", name: "ASSIGNED_TO_ME" },
-                                    { code: "ASSIGNED_TO_ALL", name: "ASSIGNED_TO_ALL" },
-                                ],
-                                optionsKey: "name",
-                                styles: {
-                                    "gap": "1rem",
-                                    "flexDirection": "column"
-                                },
-                                innerStyles: {
-                                    "display": "flex"
-                                }
-                            },
-
-                        },
                         {
 
                             label: "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",

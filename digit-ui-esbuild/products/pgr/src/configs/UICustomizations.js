@@ -1571,7 +1571,10 @@ export const UICustomizations = {
     test: "yes",
   },
   PGRInboxConfig: {
-    preProcess: (data) => {
+    // `additionalDetails` is the 2nd arg InboxSearchComposer passes to
+    // preProcess (configs.additionalDetails). PGRInbox.js puts the active
+    // visibility tab there as { assigneeScope: "MY" | "ALL" }.
+    preProcess: (data, additionalDetails) => {
       const clonedData = _.cloneDeep(data);
       const searchForm = clonedData?.state?.searchForm || {};
       const filterForm = clonedData?.state?.filterForm || {};
@@ -1640,12 +1643,15 @@ export const UICustomizations = {
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
       params.applicationStatus = statuses.length > 0 ? statuses : OPEN_STATES;
 
-      // Filter: assigned to me
-      const assignedFilter = filterForm.assignedToMe;
-      if (assignedFilter?.code === "ASSIGNED_TO_ME") {
+      // Visibility scope from the active inbox tab (My / All). The old
+      // "Assigned to me" radio is gone — the My Complaints tab now drives this.
+      // assignee is a single uuid string (pgr-services RequestSearchCriteria.assignee
+      // is a String; it resolves the uuid -> assigned service-request-ids via
+      // the workflow engine, see PR #942). "All Complaints" sends no assignee.
+      if (additionalDetails?.assigneeScope === "MY") {
         const userInfo = Digit.UserService.getUser()?.info;
         if (userInfo?.uuid) {
-          params.assignee = [userInfo.uuid];
+          params.assignee = userInfo.uuid;
         }
       }
 

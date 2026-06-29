@@ -1,9 +1,27 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { InboxSearchComposer, HeaderComponent, Toast, Loader } from "@egovernments/digit-ui-components";
+import { Request } from "@egovernments/digit-ui-libraries";
 import { useTranslation } from "react-i18next";
 import _ from "lodash";
 import PGRSearchInboxConfig from "../../configs/PGRSearchInboxConfig";
 import { useLocation } from "react-router-dom";
+
+/**
+ * Inbox v2 visibility tabs. The active tab drives the assignee scope that
+ * PGRInboxConfig.preProcess reads off `configs.additionalDetails.assigneeScope`:
+ *   MY  -> params.assignee = <my uuid> (complaints currently assigned to me)
+ *   ALL -> no assignee filter (every complaint in the tenant)
+ * "My Complaints" is the default, matching the visibility PRD reference image.
+ */
+const INBOX_TABS = [
+  { key: "MY", labelKey: "PGR_INBOX_TAB_MY_COMPLAINTS", fallback: "My Complaints" },
+  { key: "ALL", labelKey: "PGR_INBOX_TAB_ALL_COMPLAINTS", fallback: "All Complaints" },
+];
+
+// Default open / actionable states the inbox shows when no status filter is
+// applied. Kept in sync with PGRInboxConfig.preProcess (UICustomizations.js) so
+// the tab count badges reflect the same rows the list shows.
+const INBOX_OPEN_STATES = ["PENDINGFORASSIGNMENT", "PENDINGFORREASSIGNMENT", "PENDINGATLME", "PENDINGATSUPERVISOR"];
 
 /**
  * PGRSearchInbox - Complaint Search Inbox Screen
@@ -41,6 +59,39 @@ const PGRSearchInbox = () => {
 
   // Used to detect route/location changes to trigger config reset
   const location = useLocation();
+
+  // Active visibility tab (My / All). Drives the assignee scope below.
+  const [activeTab, setActiveTab] = useState("MY");
+
+  // Per-tab count badges. Fetched via pgr-services _count: the My count is
+  // assignee-scoped to the current user (PR #942 + the count() parity fix),
+  // the All count is the unscoped tenant total. Both are constrained to the
+  // same default open states as the list, so the badges match what's shown.
+  const [tabCounts, setTabCounts] = useState({ MY: null, ALL: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    const countUrl = "/pgr-services/v2/request/_count";
+    const uuid = Digit.UserService.getUser()?.info?.uuid;
+    const baseParams = { tenantId, applicationStatus: INBOX_OPEN_STATES };
+    const fetchCounts = async () => {
+      try {
+        const requests = [
+          Request({ url: countUrl, method: "POST", auth: true, userService: true, useCache: false, params: { ...baseParams, ...(uuid ? { assignee: uuid } : {}) } }),
+          Request({ url: countUrl, method: "POST", auth: true, userService: true, useCache: false, params: baseParams }),
+        ];
+        const [myRes, allRes] = await Promise.all(requests);
+        if (!cancelled) setTabCounts({ MY: myRes?.count ?? 0, ALL: allRes?.count ?? 0 });
+      } catch (e) {
+        // Counts are a nicety on the tab labels — never block the inbox on them.
+        console.error("PGR inbox: tab count fetch failed", e);
+      }
+    };
+    fetchCounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId]);
 
   // Fetch mobile validation config from MDMS
   const { validationRules, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
@@ -161,14 +212,51 @@ const PGRSearchInbox = () => {
     return v === headingKey ? "Complaints" : v;
   })();
 
+  const tabLabel = (tab) => {
+    const v = t(tab.labelKey);
+    return v === tab.labelKey ? tab.fallback : v;
+  };
+
+  // Attach the active tab's scope so PGRInboxConfig.preProcess can read it as
+  // its 2nd arg (configs.additionalDetails). Re-derived per tab/config change.
+  const composerConfig = useMemo(
+    () => (updatedConfig ? { ...updatedConfig, additionalDetails: { ...(updatedConfig.additionalDetails || {}), assigneeScope: activeTab } } : updatedConfig),
+    [updatedConfig, activeTab]
+  );
+
   return (
     <div className="v2-pgr-inbox v2-scope">
       <header className="v2-employee-page-header">
         <h1>{heading}</h1>
       </header>
+
+      {/* Visibility tabs (Inbox v2). Switching tabs swaps the assignee scope and
+          remounts the composer (key={activeTab}) so the search/filter form resets,
+          per the visibility PRD ("if a filter was applied and the tab switched,
+          the filter should reset"). */}
+      <div className="v2-pgr-inbox-tabs" role="tablist">
+        {INBOX_TABS.map((tab) => {
+          const isActive = activeTab === tab.key;
+          const count = tabCounts[tab.key];
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={`v2-pgr-inbox-tab${isActive ? " active" : ""}`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              <span className="tab-label">{tabLabel(tab)}</span>
+              {count != null && <span className="tab-count">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Complaint search and filter interface */}
       <div className="digit-inbox-search-wrapper">
-        <InboxSearchComposer configs={updatedConfig} />
+        <InboxSearchComposer key={activeTab} configs={composerConfig} />
       </div>
     </div>
   );
