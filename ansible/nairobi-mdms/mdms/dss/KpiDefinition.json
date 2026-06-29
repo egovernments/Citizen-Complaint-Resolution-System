@@ -2747,7 +2747,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "rankedList",
+        "kind": "sla-risk-table",
         "format": "hoursDays",
         "valueKey": "open_age_ms",
         "accent": "red",

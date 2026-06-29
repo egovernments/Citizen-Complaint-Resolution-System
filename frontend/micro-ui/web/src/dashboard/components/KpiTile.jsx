@@ -11,6 +11,13 @@ import ComplaintsAtRiskTable from './ComplaintsAtRiskTable';
 import OpenComplaintsByGeographyWidget from './OpenComplaintsByGeographyWidget';
 import { evaluateCompose } from '../utils/composeKpi';
 import { getNumberTileDeltaClass } from '../config/kpiDisplay';
+import {
+  resolveSlaRiskPresentation,
+  computeBreachDurationMs,
+  formatBreachDurationCompact,
+  formatWorkflowStatusLabel,
+  normalizeWorkflowStatusKey,
+} from '../config/complaintsAtRiskPresentation';
 
 /**
  * Generic viz-kind-driven tile renderer (the dashboard RENDERING ENGINE).
@@ -740,9 +747,56 @@ function mapFormatToCellType(format) {
 // shape (id, typeLabel, ownerName, slaLabel, breachDurationLabel, ...).
 // ---------------------------------------------------------------------------
 
+/**
+ * Shape the generic at-risk grain rows into the ComplaintsAtRiskTable row
+ * contract. Ports config/kpiQueries.parseComplaintsAtRiskTable verbatim (it
+ * relies only on the pure presentation helpers, which survive the inversion),
+ * so the inverted engine renders the rich SLA-risk table at parity with the
+ * reference instead of a degraded ranked list.
+ */
+function adaptSlaRiskRows(ctx) {
+  const { viz, result } = ctx;
+  const limit = viz.limit || 50;
+  return (result.rows || [])
+    .map((row, index) => {
+      const complaintId = String(row.service_request_id ?? '').trim();
+      if (!complaintId || complaintId === 'null') return null;
+
+      const slaBucket = String(row.sla_status_bucket ?? '');
+      const { slaLabel, slaLevel } = resolveSlaRiskPresentation(slaBucket);
+      const breachDurationMs = computeBreachDurationMs(
+        row.open_age_ms,
+        row.sla_target_ms,
+        slaBucket
+      );
+      const applicationStatus = String(row.application_status ?? '');
+      const subtypeKey = String(row.service_code ?? '');
+      const typeKey = String(row.service_group ?? '');
+
+      return {
+        id: complaintId,
+        typeLabel: typeKey ? formatDimensionLabel(typeKey) : '—',
+        subtypeLabel: subtypeKey ? formatDimensionLabel(subtypeKey) : '—',
+        locality: row.ward_code ? formatDimensionLabel(String(row.ward_code)) : '—',
+        ownerName: formatOfficerLabel(row.current_assignee_uuid),
+        ownerRole: '—',
+        status: normalizeWorkflowStatusKey(applicationStatus),
+        statusLabel: formatWorkflowStatusLabel(applicationStatus),
+        slaLabel,
+        slaLevel,
+        breachDurationMs,
+        breachDurationLabel: formatBreachDurationCompact(breachDurationMs),
+        _rowKey: `risk-${index}-${complaintId}`,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => (right.breachDurationMs ?? -1) - (left.breachDurationMs ?? -1))
+    .slice(0, limit);
+}
+
 function renderSlaRiskTable(ctx) {
-  const { result, loading } = ctx;
-  const rows = result.rows || [];
+  const { loading } = ctx;
+  const rows = adaptSlaRiskRows(ctx);
   if (loading && !rows.length) return <Placeholder message="Loading…" />;
   return <ComplaintsAtRiskTable rows={rows} />;
 }
