@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL, generateCitizenPhone } from '../utils/env';
+import { BASE_URL } from '../utils/env';
 
 test('complaint type dropdown shows human-readable translated names', {
   annotation: {
@@ -20,8 +20,7 @@ Catches a regression where a tenant misses a locale fallback and the dropdown sh
   },
   tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
   test.setTimeout(90_000);
-  const phone = generateCitizenPhone();
-  await citizenOtpLogin(page, phone);
+  await citizenOtpLogin(page);
 
   // Navigate to the citizen complaint creation (FormExplorer)
   await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/create-complaint`, {
@@ -29,18 +28,35 @@ Catches a regression where a tenant misses a locale fallback and the dropdown sh
   });
   await page.waitForTimeout(8000);
 
-  // Find and click the complaint type dropdown
-  const dropdown = page.locator('input[class*="select-wrap--elipses"]').first();
-  await dropdown.waitFor({ state: 'visible', timeout: 15_000 });
-  await dropdown.click();
+  // Find and click the complaint type dropdown.
+  // digit-ui v2 renders the complaint-type field as a Radix-style combobox button
+  // (button[role="combobox"]#complaint-type) rather than the legacy
+  // input[class*="select-wrap--elipses"] used on older Kenya deployments.
+  // Both selectors are tried so the spec works across deployment versions.
+  const legacyDropdown = page.locator('input[class*="select-wrap--elipses"]').first();
+  const v2Combobox = page.locator('button[role="combobox"]#complaint-type');
+
+  const isLegacy = await legacyDropdown.isVisible({ timeout: 2000 }).catch(() => false);
+  if (isLegacy) {
+    await legacyDropdown.click();
+  } else {
+    await v2Combobox.waitFor({ state: 'visible', timeout: 15_000 });
+    await v2Combobox.click();
+  }
   await page.waitForTimeout(2000);
 
-  // Get the dropdown items text
+  // Get the dropdown items text.
+  // v2: ul[role="listbox"] li[role="option"] span.truncate
+  // v1: .option-des-container .main-option or .digit-dropdown-employee-select-wrap--item
   const items = await page.evaluate(() => {
-    const els = document.querySelectorAll(
+    const v2Options = document.querySelectorAll('ul[role="listbox"] li[role="option"] span.truncate');
+    if (v2Options.length > 0) {
+      return Array.from(v2Options).map(el => el.textContent?.trim() || '');
+    }
+    const v1Options = document.querySelectorAll(
       '.option-des-container .main-option, .digit-dropdown-employee-select-wrap--item'
     );
-    return Array.from(els).map(el => el.textContent?.trim() || '');
+    return Array.from(v1Options).map(el => el.textContent?.trim() || '');
   });
 
   console.log('Dropdown items:', items);
