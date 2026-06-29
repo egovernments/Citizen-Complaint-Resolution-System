@@ -8,14 +8,19 @@ import {
   isGeographyMapVolumeLayerId,
 } from "../config/geographyMapPresentation";
 import { buildMapHoverTooltipHtml, buildComplaintPinTooltipHtml } from "../config/mapHoverPresentation";
+import { formatDimensionLabel } from "../config/kpiQueries";
 import { fetchBoundariesByCodes, fetchBoundaryRelationshipsByCodes } from "../services/boundaryService";
 import { useMapResize } from "../hooks/useMapResize";
 import {
   breachShareToFillStyle,
+  boundsForGeoFeatures,
   buildMapDisplayLayers,
   fitMapToJoinedData,
+  getDrillTier,
   getDrillTierLabel,
+  getHierarchyGroupKey,
   getMapCenter,
+  getWardFeaturesInHierarchyGroup,
   getMapCityLabel,
   isWardDrillLevel,
   joinWardMapData,
@@ -23,7 +28,6 @@ import {
   MAP_DRILL_MAX_LEVEL,
   MAP_WARD_MIN_ZOOM,
   markerRadiusForZoom,
-  resolveComplaintPinPositions,
   countToFillStyle,
   wowPctToFillStyle,
 } from "../utils/mapGeoUtils";
@@ -40,12 +44,7 @@ const HOVER_TOOLTIP_OPTIONS = {
 };
 
 
-function getMemberFeatures(feature) {
-  if (feature?.memberFeatures?.length) return feature.memberFeatures;
-  return feature ? [feature] : [];
-}
-
-function resolveFeatureStyle(feature, layerMode, focusedCode, maxCount = 0) {
+function resolveFeatureStyle(feature, layerMode, focusedCode, maxCount = 0, zoom = 11) {
   const props = feature?.properties ?? {};
   const isFocused = focusedCode && props.code === focusedCode;
   const base = layerMode === "sla_breach"
@@ -56,10 +55,12 @@ function resolveFeatureStyle(feature, layerMode, focusedCode, maxCount = 0) {
         ? countToFillStyle(Number(props.count) || 0, maxCount)
         : wowPctToFillStyle(props.wowPct);
 
+  const weight = isFocused ? 2.5 : zoom < 11 ? 0.75 : zoom < 14 ? 1.1 : 1.5;
+
   return {
     fillColor: base.fillColor,
     color: isFocused ? "#111827" : base.strokeColor,
-    weight: isFocused ? 2.5 : 1.5,
+    weight,
     opacity: 1,
     fillOpacity: isFocused
       ? Math.min(base.fillOpacity + 0.08, 0.88)
@@ -141,12 +142,6 @@ const GeographyChoroplethMap = ({
 
   const geoLevel = focusedCode ? "Ward" : getDrillTierLabel(drillLevel);
 
-  const activeScopeCodes = useMemo(() => {
-    if (!drillTrail.length) return null;
-    const last = drillTrail[drillTrail.length - 1];
-    return last?.memberCodes?.length ? last.memberCodes : null;
-  }, [drillTrail]);
-
   const { resizeToken } = useMapResize(mapRef, frameRef);
 
   // ── boundary fetch ────────────────────────────────────────────────────────
@@ -197,15 +192,11 @@ const GeographyChoroplethMap = ({
 
   // Choropleth layers change only when drill level or underlying data changes.
   const displayLayers = useMemo(
-    () => buildMapDisplayLayers(joined, drillLevel, complaintPins, hierarchyIndex, activeScopeCodes),
-    [joined, drillLevel, complaintPins, hierarchyIndex, activeScopeCodes]
+    () => buildMapDisplayLayers(joined, drillLevel, complaintPins, hierarchyIndex, zoomLevel),
+    [joined, drillLevel, complaintPins, hierarchyIndex, zoomLevel]
   );
 
-  // Resolved pin positions (all pins) — recomputed only when source data changes.
-  const allResolvedPins = useMemo(
-    () => (complaintPins.length ? resolveComplaintPinPositions(complaintPins, joined) : []),
-    [complaintPins, joined]
-  );
+  const visibleComplaintPins = displayLayers.complaintPins ?? [];
 
   const legendItems = useMemo(() => getGeographyMapLegend(layerMode), [layerMode]);
   const legendTitle = getGeographyMapLegendTitle(layerMode);
@@ -233,40 +224,19 @@ const GeographyChoroplethMap = ({
   // Drill into a clicked polygon — zoom to fit that region and advance the detail level.
   // Zoom is purely geographic: we fit the clicked polygon's bounds, so a smaller
   // region naturally zooms in further. No hardcoded zoom numbers.
-  const handleDrillInto = useCallback(({ nextLevel, memberCodes, clickedFeature, label }) => {
+  const handleDrillInto = useCallback(({ nextLevel, memberFeatures, label }) => {
     const map = mapRef.current;
     if (!map) return;
 
     setDrillLevel(nextLevel);
-    setDrillTrail((prev) => [...prev, { label, memberCodes }]);
+    setDrillTrail((prev) => [...prev, { label }]);
     setFocusedCode(null);
 
-    try {
-      const bounds = L.geoJSON(clickedFeature).getBounds();
-      if (bounds?.isValid()) {
-        map.flyToBounds(bounds.pad(0.12), { maxZoom: MAP_COMPLAINT_PIN_MAX_ZOOM });
-        // #region agent log
-        fetch("http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4338a9" },
-          body: JSON.stringify({
-            sessionId: "4338a9",
-            runId: "post-fix",
-            hypothesisId: "zoom",
-            location: "GeographyChoroplethMap.jsx:handleDrillInto",
-            message: "drill flyToBounds",
-            data: {
-              nextLevel,
-              memberCodesLen: memberCodes?.length ?? 0,
-              zoomBefore: map.getZoom(),
-            },
-            timestamp: Date.now(),
-          }),
-        }).catch(() => {});
-        // #endregion
-        return;
-      }
-    } catch (_) { /* fall through */ }
+    const bounds = boundsForGeoFeatures(memberFeatures);
+    if (bounds?.isValid()) {
+      map.flyToBounds(bounds.pad(0.12), { maxZoom: MAP_COMPLAINT_PIN_MAX_ZOOM });
+      return;
+    }
 
     map.setZoom(Math.min(map.getZoom() + 2, MAP_COMPLAINT_PIN_MAX_ZOOM), { animate: true });
   }, []);
@@ -370,9 +340,11 @@ const GeographyChoroplethMap = ({
 
     if (!geoFeatures?.features?.length) return;
 
+    const allWardFeatures = joined.geoFeatures?.features ?? [];
+
     L.geoJSON(geoFeatures, {
       style: (feature) =>
-        resolveFeatureStyle(feature, layerMode, focusedCode, joined.maxCount),
+        resolveFeatureStyle(feature, layerMode, focusedCode, joined.maxCount, zoomLevel),
       onEachFeature: (feature, layer) => {
         layer.feature = feature;
         const code = feature?.properties?.code;
@@ -381,42 +353,62 @@ const GeographyChoroplethMap = ({
         const props = feature?.properties ?? {};
 
         layer.bindTooltip(
-          buildMapHoverTooltipHtml(props, { geoLevel }),
+          buildMapHoverTooltipHtml(props, { geoLevel: "Ward" }),
           HOVER_TOOLTIP_OPTIONS
         );
 
         layer.on("mouseover", () => {
-          const s = resolveFeatureStyle(feature, layerMode, focusedCode, joined.maxCount);
+          const s = resolveFeatureStyle(feature, layerMode, focusedCode, joined.maxCount, zoomLevel);
           layer.setStyle({ ...s, weight: 2.5, fillOpacity: Math.min(s.fillOpacity + 0.1, 0.75) });
           layer.bringToFront?.();
         });
 
         layer.on("mouseout", () => {
           layer.setStyle(
-            resolveFeatureStyle(feature, layerMode, focusedCode, joined.maxCount)
+            resolveFeatureStyle(feature, layerMode, focusedCode, joined.maxCount, zoomLevel)
           );
         });
 
         layer.on("click", () => {
-          const members = getMemberFeatures(feature);
-          const memberCodes = members.map((m) => m?.properties?.code).filter(Boolean);
-          if (!memberCodes.length) return;
+          if (!code) return;
 
           if (isWardDrillLevel(drillLevel)) {
-            handleWardFocus(memberCodes[0] ?? code, feature);
+            handleWardFocus(code, feature);
             return;
           }
 
+          const currentTier = getDrillTier(drillLevel);
+          const memberFeatures = getWardFeaturesInHierarchyGroup(
+            allWardFeatures,
+            code,
+            hierarchyIndex,
+            currentTier.id
+          );
+          const groupLabel =
+            memberFeatures.length > 1
+              ? formatDimensionLabel(getHierarchyGroupKey(code, hierarchyIndex, currentTier.id))
+              : props.label || formatDimensionLabel(code);
+
           handleDrillInto({
             nextLevel: Math.min(drillLevel + 1, MAP_DRILL_MAX_LEVEL),
-            memberCodes,
-            clickedFeature: feature,
-            label: props.label || props.code || "Area",
+            memberFeatures: memberFeatures.length ? memberFeatures : [feature],
+            label: groupLabel || props.label || "Area",
           });
         });
       },
     }).addTo(choroplethLayer);
-  }, [displayLayers, drillLevel, focusedCode, geoLevel, handleDrillInto, handleWardFocus, joined.maxCount, layerMode]);
+  }, [
+    displayLayers,
+    drillLevel,
+    focusedCode,
+    handleDrillInto,
+    handleWardFocus,
+    hierarchyIndex,
+    joined.geoFeatures?.features,
+    joined.maxCount,
+    layerMode,
+    zoomLevel,
+  ]);
 
   // ── update choropleth styles when focus or mode changes ──────────────────
   useEffect(() => {
@@ -424,10 +416,10 @@ const GeographyChoroplethMap = ({
       const feature = layer.feature;
       if (!feature) return;
       layer.setStyle(
-        resolveFeatureStyle(feature, layerMode, focusedCode, joined.maxCount)
+        resolveFeatureStyle(feature, layerMode, focusedCode, joined.maxCount, zoomLevel)
       );
     });
-  }, [focusedCode, joined.maxCount, layerMode]);
+  }, [focusedCode, joined.maxCount, layerMode, zoomLevel]);
 
   // ── draw complaint pins — always visible, resize on zoom ─────────────────
   useEffect(() => {
@@ -437,11 +429,11 @@ const GeographyChoroplethMap = ({
 
     pinLayer.clearLayers();
 
-    if (!allResolvedPins.length) return;
+    if (!visibleComplaintPins.length) return;
 
     const currentZoom = zoomLevel;
 
-    allResolvedPins.forEach((pin) => {
+    visibleComplaintPins.forEach((pin) => {
       if (pin.lat == null || pin.lng == null) return;
 
       const baseRadius = markerRadiusForZoom(currentZoom, false, { complaint: true });
@@ -481,46 +473,7 @@ const GeographyChoroplethMap = ({
     });
 
     pinLayer.bringToFront?.();
-
-    // #region agent log
-    try {
-      const added = pinLayer.getLayers().length;
-      const sample = allResolvedPins.find((p) => p.lat != null && p.lng != null);
-      let containerPt = null;
-      let inViewport = null;
-      if (sample) {
-        const cp = map.latLngToContainerPoint([sample.lat, sample.lng]);
-        const size = map.getSize();
-        containerPt = { x: Math.round(cp.x), y: Math.round(cp.y) };
-        inViewport = cp.x >= 0 && cp.y >= 0 && cp.x <= size.x && cp.y <= size.y;
-      }
-      const pane = map.getPane("complaintPins");
-      fetch("http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4338a9" },
-        body: JSON.stringify({
-          sessionId: "4338a9",
-          hypothesisId: "C",
-          location: "GeographyChoroplethMap.jsx:447",
-          message: "pin draw effect",
-          data: {
-            resolvedLen: allResolvedPins.length,
-            circlesAdded: added,
-            zoom: currentZoom,
-            radius: markerRadiusForZoom(currentZoom, false, { complaint: true }),
-            paneExists: Boolean(pane),
-            paneZIndex: pane?.style?.zIndex ?? null,
-            sampleLatLng: sample ? { lat: sample.lat, lng: sample.lng } : null,
-            containerPt,
-            inViewport,
-            mapSize: (() => { const s = map.getSize(); return { x: s.x, y: s.y }; })(),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-    } catch (_) { /* ignore */ }
-    // #endregion
-  }, [allResolvedPins, zoomLevel]);
+  }, [visibleComplaintPins, zoomLevel]);
 
   // ── initial fit ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -588,9 +541,11 @@ const GeographyChoroplethMap = ({
           </div>
           <div className="dashboard-map-zoom-badge tw-shrink-0 tw-rounded-sm tw-border tw-border-border tw-bg-muted/40 tw-px-2 tw-py-0.5 tw-text-[10px] tw-text-muted-foreground">
             {geoLevel}
-            {allResolvedPins.length
-              ? ` · ${allResolvedPins.length} complaint${allResolvedPins.length === 1 ? "" : "s"}`
-              : ""}
+            {visibleComplaintPins.length
+              ? ` · ${visibleComplaintPins.length} complaint${visibleComplaintPins.length === 1 ? "" : "s"}`
+              : complaintPins.length && zoomLevel < MAP_WARD_MIN_ZOOM
+                ? ` · zoom in for ${complaintPins.length} complaint${complaintPins.length === 1 ? "" : "s"}`
+                : ""}
           </div>
         </div>
 

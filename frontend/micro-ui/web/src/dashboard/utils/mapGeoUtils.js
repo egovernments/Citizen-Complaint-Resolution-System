@@ -549,35 +549,66 @@ function clusterGeoFeatures(features, tierId, hierarchyIndex = {}) {
   }));
 }
 
+/** Ward polygons that share the same hierarchy group key at a drill tier. */
+export function getWardFeaturesInHierarchyGroup(
+  allFeatures,
+  wardCode,
+  hierarchyIndex,
+  tierId
+) {
+  const features = allFeatures ?? [];
+  const code = String(wardCode ?? "").trim();
+  if (!code || !features.length) return [];
+
+  const groupKey = getHierarchyGroupKey(code, hierarchyIndex, tierId);
+  const members = features.filter(
+    (feature) =>
+      getHierarchyGroupKey(feature?.properties?.code, hierarchyIndex, tierId) === groupKey
+  );
+
+  if (members.length) return members;
+
+  const single = features.find((feature) => feature?.properties?.code === code);
+  return single ? [single] : [];
+}
+
+/** Leaflet bounds for one or more GeoJSON features (actual ward polygons). */
+export function boundsForGeoFeatures(features = []) {
+  if (!features.length) return null;
+
+  const group = L.featureGroup();
+  L.geoJSON({ type: "FeatureCollection", features }, {
+    onEachFeature: (_feature, layer) => {
+      group.addLayer(layer);
+    },
+  });
+
+  const bounds = group.getBounds();
+  return bounds?.isValid() ? bounds : null;
+}
+
 /**
- * Build choropleth + point layers for the current drill level.
- * ALL polygons are always visible — scope only affects the camera zoom target.
- * Complaint pins appear at ward level (drill level 3) for every ward in the dataset.
+ * Build choropleth + point layers.
+ * Always renders every ward polygon from boundary geometry — no hull clustering or scoping.
+ * Complaint pins appear once zoomed in or drilled to ward level.
  */
 export function buildMapDisplayLayers(
   joined,
   drillLevel,
   complaintPins = [],
-  hierarchyIndex = {},
-  scopeCodes = null
+  _hierarchyIndex = {},
+  zoomLevel = 11
 ) {
-  const tier = getDrillTier(drillLevel);
-  const { geoFeatures, markers } = joined ?? {};
-  let rawFeatures = geoFeatures?.features ?? [];
-  if (scopeCodes?.length) {
-    const scopeSet = new Set(scopeCodes);
-    rawFeatures = rawFeatures.filter((feature) => scopeSet.has(feature?.properties?.code));
-  }
-  const displayFeatures = clusterGeoFeatures(rawFeatures, tier.id, hierarchyIndex);
-
-  const showWardDetail = tier.id === "ward";
-  const visibleComplaintPins = showWardDetail && complaintPins.length
-    ? resolveComplaintPinPositions(complaintPins, joined)
-    : [];
+  const rawFeatures = joined?.geoFeatures?.features ?? [];
+  const showWardDetail = isWardDrillLevel(drillLevel) || zoomLevel >= MAP_WARD_MIN_ZOOM;
+  const visibleComplaintPins =
+    showWardDetail && complaintPins.length
+      ? resolveComplaintPinPositions(complaintPins, joined)
+      : [];
 
   return {
-    geoFeatures: { type: "FeatureCollection", features: displayFeatures },
-    pointMarkers: showWardDetail ? (markers ?? []) : [],
+    geoFeatures: { type: "FeatureCollection", features: rawFeatures },
+    pointMarkers: joined?.markers ?? [],
     complaintPins: visibleComplaintPins,
   };
 }
