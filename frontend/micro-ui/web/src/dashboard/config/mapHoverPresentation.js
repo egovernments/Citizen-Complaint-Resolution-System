@@ -1,4 +1,4 @@
-import { formatDimensionLabel } from "./kpiQueries";
+import { formatDimensionLabel } from "./labelFormat";
 
 function formatWowPct(wowPct) {
   if (!Number.isFinite(wowPct)) return "new spike";

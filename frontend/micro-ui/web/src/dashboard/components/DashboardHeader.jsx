@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { getProductLabel } from "../config/dashboardConfig";
 import { GEOGRAPHY_OPTIONS } from "../config/globalFilterGroups";
-import { formatDimensionLabel } from "../config/kpiQueries";
+import { formatDimensionLabel } from "../config/labelFormat";
 import AddKpiDropdown from "./AddKpiDropdown";
 
 /**
