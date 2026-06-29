@@ -275,9 +275,22 @@ const AdminDashboardInner = ({ onSignOut }) => {
     visibleLayoutIds,
   } = useCatalogLayout(kpis, pack?.layout);
 
+  const [searchQuery, setSearchQuery] = useState("");
+
   const tiles = useMemo(
     () => layout.map((item) => ({ kpiId: item.i })),
     [layout]
+  );
+
+  // Title-based tile search: dim tiles whose title doesn't match the query.
+  const matchesSearch = useCallback(
+    (kpiId) => {
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return true;
+      const title = (kpis[kpiId]?.viz?.title || kpiId).toLowerCase();
+      return title.includes(q);
+    },
+    [searchQuery, kpis]
   );
 
   // Add-KPI picker source: every role-visible catalog tile (already filtered
@@ -365,6 +378,35 @@ const AdminDashboardInner = ({ onSignOut }) => {
     );
   };
 
+  // CSV export of the laid-out tiles (title + scalar value, or row count for
+  // charts/tables). Reads straight from the catalog result map — no dependence on
+  // the old kpiCardData/chartData shapes.
+  const handleExport = useCallback(() => {
+    const csvEscape = (v) => {
+      const s = String(v ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = layout.map((item) => {
+      const def = kpis[item.i];
+      const assembled = assembleResult(item.i, def, batch.results);
+      const value =
+        assembled?.value != null
+          ? assembled.value
+          : assembled?.rows
+          ? `${assembled.rows.length} rows`
+          : "";
+      return [def?.viz?.title || item.i, item.i, value];
+    });
+    const csv = ["Title,KPI,Value", ...rows.map((r) => r.map(csvEscape).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "dashboard-export.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [layout, kpis, batch.results]);
+
   const showEmpty = !catalogLoading && pack && layout.length === 0;
 
   return (
@@ -375,9 +417,9 @@ const AdminDashboardInner = ({ onSignOut }) => {
       onResetLayout={resetLayout}
       onDragWidgetStart={() => {}}
       onDragWidgetEnd={() => {}}
-      searchQuery=""
-      onSearchQueryChange={() => {}}
-      onExport={() => {}}
+      searchQuery={searchQuery}
+      onSearchQueryChange={setSearchQuery}
+      onExport={handleExport}
       filters={filters}
       onFilterChange={setFilter}
       onClearFilters={clearFilters}
@@ -429,6 +471,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
         >
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
+            const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
             const removeBtn = (
               <WidgetRemoveButton
                 label={`Remove ${kpis[item.i]?.viz?.title || item.i}`}
@@ -443,7 +486,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
               return (
                 <div
                   key={item.i}
-                  className="dashboard-kpi-widget dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-flex-col"
+                  className={`dashboard-kpi-widget dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-flex-col${dimClass}`}
                 >
                   {removeBtn}
                   {renderTile(item.i)}
@@ -455,7 +498,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
             return (
               <section
                 key={item.i}
-                className="dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface"
+                className={`dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface${dimClass}`}
               >
                 {removeBtn}
                 <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
