@@ -1,15 +1,20 @@
 package org.egov.pgr.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.pgr.analytics.AnalyticsCatalog.Grain;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.TemporalAdjusters;
 
 /**
  * Param-merge for the kpiId-by-reference analytics path.
@@ -41,7 +46,22 @@ import java.time.format.DateTimeParseException;
  *       has a filterable {@code ward_code}. A client narrowing WITHIN the user's RBAC scope; it can
  *       never widen (row-scope is still injected on top by {@link AnalyticsPlanner#plan}).</li>
  *   <li>{@code serviceCode} — a complaint type; narrows to {@code service_code = ?} iff filterable.</li>
+ *   <li>{@code compare: "prior"} — instead of the selected/default range, apply the
+ *       <em>immediately-preceding equal-duration</em> range on the def's time column. Mirrors the FE
+ *       {@code priorPeriodCreatedAtFilter()} (~1586) / {@code priorPeriodEndDateIso()} (~1360) and the
+ *       no-range {@code priorWeekCreatedAtFilter()} (~1417) fallback. Collapses the ~30 FE
+ *       {@code *_prior} query keys into one def + {@code {compare:"prior"}}.</li>
+ *   <li>{@code series: "daily"} — turn a scalar tile into a daily time series: add the grain's daily
+ *       date dimension (+ ascending sort), apply the selected range, drop the base window, and cap
+ *       {@code limit} to {@code min(366, dayCount)}. Mirrors the FE {@code *_sparkline} keys
+ *       (base query carries the date dimension; {@code applyOverTimeChartQueries} ~1810 /
+ *       {@code countDaysInDateRange} ~1484 set the limit). Collapses the ~10 FE {@code *_sparkline}
+ *       keys into one def + {@code {series:"daily"}}.</li>
  * </ul>
+ *
+ * <p>{@code compare}/{@code series} compose with {@code window}/{@code dateFrom}/{@code dateTo}/
+ * {@code ward}/{@code serviceCode}: the window/range params resolve the <em>current</em> range first,
+ * then {@code compare:"prior"} shifts it back one equal period, and {@code series:"daily"} buckets it.
  *
  * <p>All injected predicates ride the planner's existing parameterized {@code filters} mechanism
  * (bound JDBC params, whitelisted against {@link AnalyticsCatalog}). Unknown / inapplicable params
@@ -51,6 +71,12 @@ import java.time.format.DateTimeParseException;
 @Component
 @Slf4j
 public class KpiQueryComposer {
+
+    /** Dashboard canonical zone (UTC+3), matching {@link AnalyticsPlanner}'s EAT for window math. */
+    private static final ZoneId EAT = ZoneId.of("Africa/Nairobi");
+    private static final long MS_PER_DAY = 86_400_000L;
+    /** Sparkline daily-series safety cap, matching the FE {@code Math.min(366, ...)}. */
+    private static final int MAX_SERIES_DAYS = 366;
 
     private final AnalyticsCatalog catalog;
 
@@ -74,16 +100,35 @@ public class KpiQueryComposer {
         ObjectNode next = (ObjectNode) baseQuery.deepCopy();
 
         boolean hasDateRange = params.hasNonNull("dateFrom") && params.hasNonNull("dateTo");
+        boolean prior  = "prior".equals(textOrNull(params, "compare"));
+        boolean series = "daily".equals(textOrNull(params, "series"));
+
+        // Resolve the selected/current range (epoch-ms, half-open) if one is set. compare/series both
+        // operate on these bounds; null means "no explicit range" (rolling window or whole-history).
+        Bounds bounds = hasDateRange
+                ? parseBounds(params.get("dateFrom").asText(), params.get("dateTo").asText())
+                : null;
 
         // ---- window override (skipped when an explicit range is supplied; range governs time) ----
-        if (!hasDateRange && params.hasNonNull("window")) {
+        // Also skipped for compare:"prior" with no range, where the prior-WEEK fallback governs time.
+        if (!hasDateRange && !prior && params.hasNonNull("window")) {
             String windowName = params.get("window").asText();
             if (!windowName.isEmpty()) applyWindowName(next, windowName);
         }
 
-        // ---- explicit date range -> gte/lt filter on the grain's time column ----
-        if (hasDateRange) {
-            applyDateRange(next, g, params.get("dateFrom").asText(), params.get("dateTo").asText());
+        if (prior) {
+            // ---- prior-period: shift the (selected | default-week) range back one equal duration ----
+            applyPrior(next, g, bounds);
+        } else if (bounds != null) {
+            // ---- explicit date range -> gte/lt filter on the grain's time column ----
+            applyDateRange(next, g, bounds);
+        }
+
+        // ---- daily series (sparkline): add the daily date dimension, sort, cap limit ----
+        // compare:"prior" yields a single scalar (the prior period's value), so it never co-exists with
+        // a series; if both are sent, prior wins and series is ignored (no FE widget asks for both).
+        if (series && !prior) {
+            applyDailySeries(next, g, bounds);
         }
 
         // ---- narrowing dimension filters (only if the grain supports the column) ----
@@ -116,41 +161,204 @@ public class KpiQueryComposer {
 
     // ---- date range ----
 
-    /**
-     * Mirror the FE's {@code applyDashboardFiltersToQuery}: choose the grain's time column, drop the
-     * base {@code window}, and add a {@code gte}/{@code lt} predicate. Bounds are inclusive of
-     * {@code dateFrom} and exclusive of the day after {@code dateTo} (half-open), matching
-     * {@code isoDateToStartMs}/{@code isoDateToEndExclusiveMs}.
-     */
-    private void applyDateRange(ObjectNode query, Grain g, String dateFrom, String dateTo) {
-        LocalDate from, toExclusive;
+    /** Half-open epoch-ms range [fromMs, toMs), with the inclusive ISO start/end dates retained. */
+    private static final class Bounds {
+        final LocalDate fromDate;       // inclusive
+        final LocalDate toExclusive;    // exclusive (day after dateTo)
+        final long fromMs;              // UTC-midnight epoch-ms of fromDate (FE isoDateToStartMs)
+        final long toMs;                // UTC-midnight epoch-ms of toExclusive (FE isoDateToEndExclusiveMs)
+        Bounds(LocalDate fromDate, LocalDate toExclusive) {
+            this.fromDate = fromDate; this.toExclusive = toExclusive;
+            this.fromMs = fromDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+            this.toMs   = toExclusive.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+        }
+        long durationMs() { return toMs - fromMs; }
+        /** FE countDaysInDateRange: max(1, ceil(duration / day)). */
+        int dayCount() { return (int) Math.max(1, (durationMs() + MS_PER_DAY - 1) / MS_PER_DAY); }
+    }
+
+    /** Parse the FE {@code dateFrom}/{@code dateTo} (ISO, inclusive) into half-open {@link Bounds}; null if unparseable. */
+    private Bounds parseBounds(String dateFrom, String dateTo) {
         try {
-            from = LocalDate.parse(dateFrom);
-            toExclusive = LocalDate.parse(dateTo).plusDays(1);
+            LocalDate from = LocalDate.parse(dateFrom);
+            LocalDate toExclusive = LocalDate.parse(dateTo).plusDays(1);
+            if (toExclusive.isBefore(from)) return null;   // nonsensical range
+            return new Bounds(from, toExclusive);
         } catch (DateTimeParseException ex) {
             log.debug("ignoring date range with unparseable bounds dateFrom='{}' dateTo='{}'", dateFrom, dateTo);
-            return;
+            return null;
         }
-        if (toExclusive.isBefore(from)) return;   // nonsensical range -> skip
+    }
 
+    /**
+     * Mirror the FE's {@code applyDashboardFiltersToQuery}: choose the grain's time column, drop the
+     * base {@code window}, and add a {@code gte}/{@code lt} predicate over {@code bounds}. Bounds are
+     * half-open, matching {@code isoDateToStartMs}/{@code isoDateToEndExclusiveMs}.
+     */
+    private void applyDateRange(ObjectNode query, Grain g, Bounds bounds) {
         String col = dateFilterColumn(query, g);
         if (col == null || !g.filterable.contains(col)) {
             log.debug("grain '{}' has no filterable time column for a date range; skipping", g.name);
             return;
         }
+        bindRange(query, col, bounds.fromDate, bounds.toExclusive, bounds.fromMs, bounds.toMs);
+        // Range fully governs the time axis -> remove the base window (parity with the FE).
+        query.remove("window");
+    }
 
+    /**
+     * Bind a half-open range to {@code col}: ISO date strings for the daily {@code snapshot_date}
+     * (FE {@code snapshotDateRangeFilter}), epoch-ms otherwise (FE {@code isoDate*Ms}).
+     */
+    private void bindRange(ObjectNode query, String col, LocalDate from, LocalDate toExclusive, long fromMs, long toMs) {
         ObjectNode bound = mergeableFilterObject(query, col);
         if ("snapshot_date".equals(col)) {
-            // daily grain: snapshot_date is a SQL date -> bind ISO date strings (FE snapshotDateRangeFilter).
             bound.put("gte", from.toString());
             bound.put("lt", toExclusive.toString());
         } else {
-            // facts/events: epoch-ms columns -> bind UTC-midnight epoch-ms bounds (FE isoDate*Ms).
-            bound.put("gte", from.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli());
-            bound.put("lt", toExclusive.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli());
+            bound.put("gte", fromMs);
+            bound.put("lt", toMs);
         }
-        // Range fully governs the time axis -> remove the base window (parity with the FE).
+    }
+
+    // ---- prior period ----
+
+    /**
+     * Apply the immediately-preceding equal-duration range on the def's time column.
+     *
+     * <p>With an explicit {@code bounds}: mirrors the FE {@code priorPeriodCreatedAtFilter}
+     * ({@code {gte: from-duration, lt: from}}, ~1586) for facts/events, and
+     * {@code priorPeriodEndDateIso} (the single day before the range start, ~1360) for the daily grain.
+     *
+     * <p>With no range: mirrors the FE no-{@code __dateRange} fallback (~1973) — the prior calendar
+     * week ({@code priorPeriodWeek}, last-Monday .. this-Monday), computed in EAT to match the
+     * planner's window zone.
+     */
+    private void applyPrior(ObjectNode query, Grain g, Bounds bounds) {
+        String col = dateFilterColumn(query, g);
+        if (col == null || !g.filterable.contains(col)) {
+            log.debug("grain '{}' has no filterable time column for compare:prior; skipping", g.name);
+            return;
+        }
+
+        if (bounds == null) {
+            // ---- default prior-WEEK fallback (FE priorWeekCreatedAtFilter ~1417) ----
+            if ("snapshot_date".equals(col)) {
+                // No FE analogue for a daily prior-week scalar; the day before this-Monday is the
+                // closest faithful "preceding snapshot". Bind the single prior day.
+                LocalDate thisMonday = eatThisMonday();
+                ObjectNode bound = mergeableFilterObject(query, col);
+                bound.put("eq", thisMonday.minusDays(1).toString());
+            } else {
+                long[] wk = priorWeekMs();
+                ObjectNode bound = mergeableFilterObject(query, col);
+                bound.put("gte", wk[0]);
+                bound.put("lt", wk[1]);
+            }
+            query.remove("window");
+            return;
+        }
+
+        ObjectNode bound = mergeableFilterObject(query, col);
+        if ("snapshot_date".equals(col)) {
+            // FE priorPeriodEndDateIso: a point snapshot on the day before the range start.
+            bound.put("eq", bounds.fromDate.minusDays(1).toString());
+        } else {
+            // FE priorPeriodCreatedAtFilter: equal-duration window ending at the range start.
+            bound.put("gte", bounds.fromMs - bounds.durationMs());
+            bound.put("lt",  bounds.fromMs);
+        }
         query.remove("window");
+    }
+
+    /** This calendar week's Monday 00:00 in EAT, mirroring the FE local-time Monday. */
+    private LocalDate eatThisMonday() {
+        return ZonedDateTime.now(EAT).toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+    }
+
+    /** Epoch-ms [lastMonday, thisMonday) in EAT — the FE priorWeekCreatedAtFilter equivalent. */
+    private long[] priorWeekMs() {
+        LocalDate thisMonday = eatThisMonday();
+        LocalDate lastMonday = thisMonday.minusDays(7);
+        long lo = lastMonday.atStartOfDay(EAT).toInstant().toEpochMilli();
+        long hi = thisMonday.atStartOfDay(EAT).toInstant().toEpochMilli();
+        return new long[]{ lo, hi };
+    }
+
+    // ---- daily series (sparkline) ----
+
+    /**
+     * Turn a scalar tile into a daily time series: add the grain's daily date dimension (+ ascending
+     * sort), apply {@code bounds} (if any), drop the base window, and cap {@code limit} to
+     * {@code min(366, dayCount)}.
+     *
+     * <p>Mirrors the FE {@code *_sparkline} defs, which carry the date dimension in the base query
+     * ({@code created_date} on facts, {@code occurred_date} on events, {@code snapshot_date} on daily)
+     * and whose limit is set to {@code Math.min(366, countDaysInDateRange(bounds))} (~1810/1854).
+     * The date dimension is a precomputed groupable column (not the planner timeBucket), exactly as
+     * the FE base sparkline queries express it.
+     */
+    private void applyDailySeries(ObjectNode query, Grain g, Bounds bounds) {
+        String dim = dailyDimension(g);
+        if (dim == null || !g.groupable.contains(dim)) {
+            log.debug("grain '{}' has no daily date dimension; skipping series:daily", g.name);
+            return;
+        }
+
+        // Add the date dimension if absent (idempotent — base sparkline-style defs may already carry it).
+        ArrayNode dims = query.has("dimensions") && query.get("dimensions").isArray()
+                ? (ArrayNode) query.get("dimensions")
+                : query.putArray("dimensions");
+        boolean present = false;
+        for (JsonNode d : dims) if (dim.equals(d.asText())) { present = true; break; }
+        if (!present) dims.add(dim);
+
+        // Ascending sort on the date dimension if no sort already references it.
+        ArrayNode sort = query.has("sort") && query.get("sort").isArray()
+                ? (ArrayNode) query.get("sort")
+                : query.putArray("sort");
+        boolean sorted = false;
+        for (JsonNode s : sort) if (dim.equals(s.path("by").asText(null))) { sorted = true; break; }
+        if (!sorted) {
+            ObjectNode s = sort.addObject();
+            s.put("by", dim);
+            s.put("dir", "asc");
+        }
+
+        // Apply the range over the daily dimension's OWN time axis, then drop the base window.
+        if (bounds != null) {
+            String col = seriesRangeColumn(query, g);
+            if (col != null && g.filterable.contains(col)) {
+                bindRange(query, col, bounds.fromDate, bounds.toExclusive, bounds.fromMs, bounds.toMs);
+                query.remove("window");
+            }
+            query.put("limit", Math.min(MAX_SERIES_DAYS, bounds.dayCount()));
+        } else {
+            // No range: keep the (rolling/whole-history) window already on the query; just cap the cap.
+            query.put("limit", MAX_SERIES_DAYS);
+        }
+    }
+
+    /**
+     * The time column a daily series ranges on. For the {@code events} grain this is {@code entered_at}
+     * — the event's own time, which the {@code occurred_date} dimension derives from — mirroring the FE
+     * {@code applyEnteredAtDateRangeToQuery} for the events sparkline (NOT the {@code complaint_created_at}
+     * the scalar global filter uses). For facts/daily it follows {@link #dateFilterColumn}, so a def can
+     * range on {@code resolved_at} by carrying {@code window.timeRole:"resolved_at"} (mirroring the FE
+     * {@code applyResolvedAtDateRangeToQuery} sparklines, e.g. {@code cl_resolved_on_time_rate_sparkline}).
+     */
+    private String seriesRangeColumn(JsonNode query, Grain g) {
+        if ("events".equals(g.name)) return "entered_at";
+        return dateFilterColumn(query, g);
+    }
+
+    /** The precomputed daily date dimension per grain: facts/events/daily mirror the FE sparkline defs. */
+    private String dailyDimension(Grain g) {
+        switch (g.name) {
+            case "events": return "occurred_date";
+            case "daily":  return "snapshot_date";
+            default:        return "created_date";   // facts
+        }
     }
 
     /**
@@ -193,6 +401,11 @@ public class KpiQueryComposer {
         JsonNode existing = filters.get(col);
         if (existing != null && existing.isObject()) return (ObjectNode) existing;
         return filters.putObject(col);
+    }
+
+    /** Read a string param, returning null when absent/null (so the switch on it is total). */
+    private String textOrNull(JsonNode params, String field) {
+        return params.hasNonNull(field) ? params.get(field).asText() : null;
     }
 
     /** Same grain-inference fallback the planner uses, so the composer targets the same grain. */
