@@ -21,8 +21,9 @@ email) are stored in DIGIT user tables. Evidence attachments reuse the existing
 | Evidence attachments | `eg_pgr_document_v2` — type code from `ComplaintTemplateType.allowedDocumentTypes` |
 | Validation | Backend loads JSON Schema by `schemaRef`; enforces type + mandatory rules |
 | Encryption at rest | `digit-config-service` reads `x-security.encrypted` from JSON Schema; calls `egov-enc-service` |
-| Masking / visibility | Driven **entirely** by `isConfidential` + `allowedViewerRoles` — no per-field `maskable` flag needed |
-| Confidentiality | `isConfidential=false` → all data visible to all callers. `isConfidential=true` + caller in `allowedViewerRoles` → decrypt and show. `isConfidential=true` + caller not in `allowedViewerRoles` → skip decryption, return all attributes as `****` |
+| Masking / visibility | Driven by `isConfidential` + `allowedViewerRoles` + **caller identity**. Applies to both `extendedAttributes` JSONB fields and the `citizen` PII object returned in search responses. |
+| Confidentiality | `isConfidential=false` → all data visible. `isConfidential=true` + caller in `allowedViewerRoles` → full plain text. `isConfidential=true` + caller is complaint creator → full plain text (self-access). `isConfidential=true` + none of the above → `extendedAttributes` all `****`, citizen PII all `****`. |
+| Citizen self-access | The citizen who created the complaint (`userInfo.uuid == service.accountId`) always receives their own user PII and decrypted `extendedAttributes` regardless of `isConfidential`. |
 
 Schema files (JSON Schema draft-07 with `x-security` extensions):
 
@@ -641,45 +642,85 @@ if (service.getExtendedAttributes() != null) {
 
 ### 8.8 `PGRService.search()` — Decrypt + Confidentiality Masking
 
-Masking logic is **all-or-nothing** and driven purely by `isConfidential` + `allowedViewerRoles`.
-Decryption is skipped entirely when the complaint is confidential and the caller lacks the viewer
-role — there is no point decrypting data that will immediately be replaced with `****`.
+Masking applies to two scopes simultaneously: the `extendedAttributes` JSONB fields and the
+`citizen` PII object (name, mobileNumber, emailId, addresses). The caller's visibility is
+determined by three principals in priority order:
+
+1. **Complaint creator (citizen self-access)** — `userInfo.uuid == service.accountId` → always sees full plain text, regardless of `isConfidential`.
+2. **Authorized officer** — caller has a role in `ComplaintTemplateType.allowedViewerRoles` (e.g. `CONFIDENTIAL_COMPLAINT_VIEWER`) → always sees full plain text.
+3. **Everyone else when `isConfidential=true`** — decryption is skipped; every `extendedAttributes` attribute and every PII field in `citizen` is returned as `****`.
 
 ```java
 for (ServiceWrapper wrapper : serviceWrappers) {
     Service svc = wrapper.getService();
     ExtendedAttributes ext = svc.getExtendedAttributes();
-    if (ext == null) continue;
 
     ComplaintTemplateTypeConfig cfg = mdmsUtils.fetchComplaintTemplateTypeConfig(
-        requestInfo, stateTenant, ext.getCaseRelatedTo());
+        requestInfo, stateTenant,
+        ext != null ? ext.getCaseRelatedTo() : null);
 
     List<String> callerRoles = getRoles(requestInfo);
+    String callerUuid = requestInfo.getUserInfo().getUuid();
 
-    boolean callerCanView = !ext.getIsConfidentialSafe()           // not confidential → everyone sees
-        || (cfg != null
-            && cfg.getAllowedViewerRoles() != null
-            && cfg.getAllowedViewerRoles().stream().anyMatch(callerRoles::contains));
+    boolean isCreator  = callerUuid != null && callerUuid.equals(svc.getAccountId());
+    boolean isViewer   = cfg != null && cfg.getAllowedViewerRoles() != null
+                         && cfg.getAllowedViewerRoles().stream().anyMatch(callerRoles::contains);
+    boolean confidential = ext != null && ext.getIsConfidentialSafe();
+
+    boolean callerCanView = !confidential || isCreator || isViewer;
 
     if (callerCanView) {
-        // Decrypt x-security.encrypted fields; return all data in plain text
-        svc.setExtendedAttributes(
-            encryptionDecryptionService.decrypt(ext, cfg != null ? cfg.getSchemaRef() : null));
+        // Decrypt x-security.encrypted fields; citizen PII returned as-is from User Service
+        if (ext != null)
+            svc.setExtendedAttributes(
+                encryptionDecryptionService.decrypt(ext, cfg != null ? cfg.getSchemaRef() : null));
     } else {
-        // isConfidential=true AND caller not in allowedViewerRoles:
-        // skip decryption, replace every attribute with ****
-        ext.getAttributes().replaceAll((k, v) -> "****");
+        // isConfidential=true AND not creator AND not authorized viewer:
+        // 1. Skip decryption; mask all extendedAttributes
+        if (ext != null)
+            ext.getAttributes().replaceAll((k, v) -> "****");
+        // 2. Mask citizen PII in the ServiceWrapper
+        maskCitizenPii(wrapper.getCitizen());
     }
 }
 ```
 
+**`maskCitizenPii()`** nulls or replaces every PII field on the `User` object:
+`name`, `mobileNumber`, `emailId`, `userName`, `addresses` → all set to `"****"` (or empty list for addresses).
+
 **Decision table:**
 
-| `isConfidential` | Caller has `CONFIDENTIAL_COMPLAINT_VIEWER` | Result |
-|-----------------|------------------------------------------|--------|
-| `false` | any | Decrypt encrypted fields; show all plain text |
-| `true` | yes | Decrypt encrypted fields; show all plain text |
-| `true` | no | No decryption; all attributes → `****` |
+| `isConfidential` | Caller is complaint creator | Caller has `CONFIDENTIAL_COMPLAINT_VIEWER` | `extendedAttributes` | Citizen PII |
+|-----------------|-----------------------------|--------------------------------------------|----------------------|-------------|
+| `false` | any | any | Decrypted, plain text | Plain text |
+| `true` | **yes** | any | Decrypted, plain text | Plain text (own data) |
+| `true` | no | **yes** | Decrypted, plain text | Plain text |
+| `true` | no | no | No decryption; all `****` | All `****` |
+
+### 8.11 User PII — User Service SecurityPolicy vs. PGR Complaint Masking
+
+The User Service already enforces field-level masking via `DataSecurity.SecurityPolicy` MDMS
+master (e.g. `mobileNumber`, `emailId` are `maskable` and returned as `****` unless the caller
+has the right role). PGR complaint masking is a **separate, complaint-scoped** concern:
+
+| Layer | What it masks | Trigger |
+|-------|--------------|---------|
+| User Service `SecurityPolicy` | `mobileNumber`, `emailId` based on caller role | Always, on every user search |
+| PGR complaint masking (this design) | All citizen PII + all `extendedAttributes` | Only when `isConfidential=true` on that specific complaint |
+
+Because these are independent, a complaint confidentiality masking pass happens **after** the
+User Service returns user data. When the complaint is confidential and the caller is not
+authorized, PGR replaces every citizen PII field in the response with `****` — independent of
+what the User Service already masked or decrypted.
+
+**Creator self-access in Inbox:** The citizen views their complaints through the inbox
+(`/inbox/v2/_search` → PGR search). Because `callerUuid == service.accountId`, the
+`callerCanView = true` path is taken, and the citizen always receives:
+- Their own decrypted `extendedAttributes` (witness data, institution name, etc.)
+- Their own plain-text citizen PII (name, phone, email, address)
+
+No special inbox endpoint or token is needed — the `accountId` check is enforced inside
+`PGRService.search()` on every call.
 
 ### 8.9 Row Mapper
 
@@ -747,10 +788,20 @@ POST /pgr-services/v2/request/_create?tenantId=mz.ige
 }
 ```
 
-### 9.3 Search Response — Confidential + No `CONFIDENTIAL_COMPLAINT_VIEWER` Role
+### 9.3 Search Response — Confidential + No `CONFIDENTIAL_COMPLAINT_VIEWER` Role (and not creator)
+
+Both `extendedAttributes` and `citizen` PII are masked. `isConfidential` and `caseRelatedTo`
+are control fields and remain visible so the UI can render the confidential banner.
 
 ```json
 {
+  "citizen": {
+    "name":         "****",
+    "mobileNumber": "****",
+    "emailId":      "****",
+    "userName":     "****",
+    "addresses":    []
+  },
   "extendedAttributes": {
     "caseRelatedTo":  "IGSAE",
     "isConfidential": true,
@@ -758,6 +809,28 @@ POST /pgr-services/v2/request/_create?tenantId=mz.ige
     "entityName":     "****",
     "entityAddress":  "****",
     "witnessName":    "****"
+  }
+}
+```
+
+### 9.4 Search Response — Confidential + Caller is Complaint Creator (Inbox)
+
+Creator always receives full plain text regardless of `isConfidential`.
+
+```json
+{
+  "citizen": {
+    "name":         "João Manuel",
+    "mobileNumber": "849999999",
+    "emailId":      "joao@example.com"
+  },
+  "extendedAttributes": {
+    "caseRelatedTo":  "IGSAE",
+    "isConfidential": true,
+    "dateOfFact":     "2026-03-15",
+    "entityName":     "Instituto Nacional XYZ",
+    "entityAddress":  "Av. Eduardo Mondlane, 100",
+    "witnessName":    "Maria da Silva"
   }
 }
 ```
@@ -843,16 +916,23 @@ sequenceDiagram
 
     PGR->>MDMS: Fetch ComplaintTemplateType (schemaRef, allowedViewerRoles)
 
-    alt isConfidential=true AND caller NOT in allowedViewerRoles
-        Note over PGR: Skip decryption entirely\nReplace ALL attributes with ****
-        PGR-->>UI: Fully masked extendedAttributes
-        UI-->>Caller: Confidential banner; all fields shown as ●●●●
-    else isConfidential=false OR caller has CONFIDENTIAL_COMPLAINT_VIEWER
+    alt isConfidential=false OR caller has CONFIDENTIAL_COMPLAINT_VIEWER
         PGR->>CFG: POST /config/v1/_decrypt { schemaRef, data }
         CFG->>ENC: Decrypt x-security.encrypted fields
         CFG-->>PGR: Plain text values
-        PGR-->>UI: All data in plain text
+        PGR-->>UI: All data + citizen PII in plain text
         UI-->>Caller: All fields visible
+    else isConfidential=true AND caller UUID == service.accountId (creator)
+        Note over PGR: Self-access: creator always sees own data
+        PGR->>CFG: POST /config/v1/_decrypt { schemaRef, data }
+        CFG->>ENC: Decrypt x-security.encrypted fields
+        CFG-->>PGR: Plain text values
+        PGR-->>UI: All data + citizen PII in plain text (own record)
+        UI-->>Caller: Full complaint visible in inbox
+    else isConfidential=true AND caller NOT in allowedViewerRoles AND not creator
+        Note over PGR: Skip decryption entirely\nReplace ALL extendedAttributes with ****\nMask all citizen PII fields as ****
+        PGR-->>UI: Fully masked extendedAttributes + masked citizen PII
+        UI-->>Caller: Confidential banner; all fields shown as ●●●●
     end
 ```
 
@@ -967,8 +1047,9 @@ Do **not** grant to: `CITIZEN`.
 - [ ] Unit: `EncryptionDecryptionService` / `DigitConfigClient` — encrypt/decrypt round-trip
 - [ ] Integration: create `IGE` → DB has cipher text for `witnessName`, `witnessAddress`
 - [ ] Integration: create `IGSAE` → DB has cipher text for `witnessName`, `witnessAddress`
-- [ ] Integration: `isConfidential=true` + no `CONFIDENTIAL_COMPLAINT_VIEWER` role → `****` in response
-- [ ] Integration: caller has `CONFIDENTIAL_COMPLAINT_VIEWER` → plain text
+- [ ] Integration: `isConfidential=true` + no `CONFIDENTIAL_COMPLAINT_VIEWER` role + not creator → `****` in `extendedAttributes` AND `****` in `citizen` PII fields
+- [ ] Integration: `isConfidential=true` + caller UUID matches `service.accountId` → full plain text (creator self-access via inbox)
+- [ ] Integration: caller has `CONFIDENTIAL_COMPLAINT_VIEWER` → plain text for both `extendedAttributes` and `citizen` PII
 - [ ] Integration: `eg_user.emailaddress` + `eg_user_address` updated after create
 - [ ] Integration: evidence files in `eg_pgr_document_v2` with `document_type = EVIDENCE`
 
@@ -1004,6 +1085,9 @@ Do **not** grant to: `CITIZEN`.
 | `maskable` per-field flag not needed | Masking is all-or-nothing based on `isConfidential` + `allowedViewerRoles`; every field gets masked equally when triggered — a per-field flag would add complexity with no practical benefit |
 | Decryption skipped when masking applies | When `isConfidential=true` and caller lacks the viewer role, calling dec-service and then immediately masking the result is wasteful; skip the round-trip entirely |
 | Model-level decrypt (no roles passed to digit-config-service) | digit-config-service only handles `encrypted` fields; the visibility decision (`isConfidential` + `allowedViewerRoles`) is a business rule owned by PGR, not by the config service |
+| Citizen self-access via `accountId` check (not a special endpoint) | The creator is identified by `userInfo.uuid == service.accountId` inside `PGRService.search()` — no separate inbox endpoint or special token is required. The inbox calls the standard `_search` API; PGR applies the self-access exception transparently. |
+| User PII masking at PGR layer (independent of User Service `SecurityPolicy`) | User Service SecurityPolicy masks fields globally based on role; PGR complaint masking is complaint-scoped — triggered only when `isConfidential=true` on a specific record. Both layers are active and independent; PGR applies its own `****` pass on top of whatever the User Service returned. |
+| Citizen PII masked to `****` (not omitted) | Returning `"****"` rather than omitting the field keeps the response shape stable; the UI can render a masked placeholder without special null-handling. |
 
 ---
 
