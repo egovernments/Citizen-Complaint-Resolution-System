@@ -118,14 +118,11 @@ public class PGRService {
         if(criteria.getMobileNumber()!=null && CollectionUtils.isEmpty(criteria.getUserIds()))
             return new ArrayList<>();
 
-        if (criteria.getAssignee() != null) {
-            String tenantId = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-            Set<String> serviceRequestIds = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
-            if (serviceRequestIds.isEmpty()) {
-                return new ArrayList<>();
-            }
-            criteria.setServiceRequestIds(serviceRequestIds);
-        }
+        // Resolve the assignee filter (uuid -> service request ids via workflow).
+        // Returns false when the assignee owns no complaints, so the search
+        // short-circuits to an empty list instead of falling through to "all".
+        if (!resolveAssigneeFilter(requestInfo, criteria))
+            return new ArrayList<>();
 
         criteria.setIsPlainSearch(false);
 
@@ -188,9 +185,35 @@ public class PGRService {
      * @return
      */
     public Integer count(RequestInfo requestInfo, RequestSearchCriteria criteria){
+        // Apply the same assignee resolution as search() so the count matches
+        // the assignee-scoped result set (e.g. the "My Complaints" tab badge).
+        // Without this the count ignored the assignee and returned the count of
+        // ALL complaints, because an unset serviceRequestIds adds no clause.
+        if (!resolveAssigneeFilter(requestInfo, criteria))
+            return 0;
         criteria.setIsPlainSearch(false);
         Integer count = repository.getCount(criteria);
         return count;
+    }
+
+    /**
+     * Resolves the assignee filter on the criteria. When an assignee uuid is
+     * present, it is translated (via the workflow engine) into the set of
+     * service request ids currently assigned to that user, which is then set on
+     * the criteria for the query builder to constrain on.
+     *
+     * @return true if the search/count should proceed; false if the assignee
+     *         owns no complaints (caller should short-circuit to an empty result)
+     */
+    private boolean resolveAssigneeFilter(RequestInfo requestInfo, RequestSearchCriteria criteria){
+        if (criteria.getAssignee() == null)
+            return true;
+        String tenantId = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+        Set<String> serviceRequestIds = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
+        if (CollectionUtils.isEmpty(serviceRequestIds))
+            return false;
+        criteria.setServiceRequestIds(serviceRequestIds);
+        return true;
     }
 
 
