@@ -2170,29 +2170,40 @@
         ],
         "measures": [
           {
-            "name": "total",
+            "name": "filed",
             "agg": "count"
-          }
-        ],
-        "sort": [
+          },
           {
-            "by": "total",
-            "dir": "desc"
+            "name": "open",
+            "agg": "count",
+            "filter": {
+              "is_open": true
+            }
+          },
+          {
+            "name": "resolved",
+            "agg": "count",
+            "filter": {
+              "is_resolved": true
+            }
           }
         ],
-        "limit": 200
+        "limit": 200,
+        "filters": {}
       },
       "supportsSeries": false,
       "viz": {
         "kind": "map",
         "format": "integer",
-        "valueKey": "total",
+        "valueKey": "filed",
         "accent": "teal",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
         "dimensionKey": "ward_code",
         "measureKeys": [
-          "total"
+          "filed",
+          "open",
+          "resolved"
         ],
         "compose": null,
         "pii": false,
@@ -2224,23 +2235,28 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": {
-          "is_open": true,
-          "sla_breached": true
-        },
+        "filters": {},
         "dimensions": [
           "ward_code"
         ],
         "measures": [
           {
-            "name": "total",
+            "name": "filed",
             "agg": "count"
-          }
-        ],
-        "sort": [
+          },
           {
-            "by": "total",
-            "dir": "desc"
+            "name": "open",
+            "agg": "count",
+            "filter": {
+              "is_open": true
+            }
+          },
+          {
+            "name": "resolved",
+            "agg": "count",
+            "filter": {
+              "is_resolved": true
+            }
           }
         ],
         "limit": 200
@@ -2249,13 +2265,15 @@
       "viz": {
         "kind": "map",
         "format": "integer",
-        "valueKey": "total",
+        "valueKey": "filed",
         "accent": "red",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_SLA_BREACH",
         "dimensionKey": "ward_code",
         "measureKeys": [
-          "total"
+          "filed",
+          "open",
+          "resolved"
         ],
         "compose": null,
         "pii": false,
@@ -2287,22 +2305,28 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": {
-          "is_open": true
-        },
+        "filters": {},
         "dimensions": [
           "ward_code"
         ],
         "measures": [
           {
-            "name": "total",
+            "name": "filed",
             "agg": "count"
-          }
-        ],
-        "sort": [
+          },
           {
-            "by": "total",
-            "dir": "desc"
+            "name": "open",
+            "agg": "count",
+            "filter": {
+              "is_open": true
+            }
+          },
+          {
+            "name": "resolved",
+            "agg": "count",
+            "filter": {
+              "is_resolved": true
+            }
           }
         ],
         "limit": 200
@@ -2311,13 +2335,15 @@
       "viz": {
         "kind": "map",
         "format": "integer",
-        "valueKey": "total",
+        "valueKey": "filed",
         "accent": "amber",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_OPEN",
         "dimensionKey": "ward_code",
         "measureKeys": [
-          "total"
+          "filed",
+          "open",
+          "resolved"
         ],
         "compose": null,
         "pii": false,
@@ -5447,7 +5473,8 @@
         "dimensions": [
           "service_request_id",
           "latitude",
-          "longitude"
+          "longitude",
+          "ward_code"
         ],
         "measures": [
           {

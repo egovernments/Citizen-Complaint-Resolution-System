@@ -237,6 +237,10 @@ function assembleResult(kpiId, def, results) {
       assembled.pins = pinRes.rows
         .map((r) => ({
           id: r.service_request_id,
+          serviceRequestId: r.service_request_id,
+          // Kajal's resolveComplaintPinPositions needs wardCode to place a pin
+          // (snaps/jitters around the ward centroid when the geo-pin is unusable).
+          wardCode: String(r.ward_code ?? ""),
           lat: Number(r.latitude),
           lng: Number(r.longitude),
         }))
@@ -497,7 +501,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
         </div>
       ) : (
         <GridLayoutWithWidth
-          className="layout"
+          className="dashboard-grid-layout layout"
           layout={gridLayout}
           cols={GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}

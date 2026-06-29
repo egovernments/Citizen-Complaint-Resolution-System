@@ -816,7 +816,9 @@ const GEO_MAP_LAYER_KEYS = ['created', 'open', 'resolved'];
 function adaptMapLayers(ctx) {
   const { viz, result } = ctx;
   const dimKey = viz.dimensionKey || 'ward_code';
-  const measure = viz.measureKey || 'total';
+  // The map tile's query returns filed/open/resolved per ward. Her map colours the
+  // Created layer by `count`, and the Open/Resolved layers by `openPct`/`resolvedPct`
+  // (share of filed, 0–100). One ward series carries all three so any layer renders.
   const wards = (result.rows || [])
     .filter((row) => {
       const code = String(row[dimKey] ?? '').trim();
@@ -824,8 +826,17 @@ function adaptMapLayers(ctx) {
     })
     .map((row) => {
       const wardCode = String(row[dimKey]);
-      const count = Number(row[measure]) || 0;
-      return { wardCode, label: formatLabel(wardCode), count, total: count };
+      const filed = Number(row.filed) || 0;
+      const open = Number(row.open) || 0;
+      const resolved = Number(row.resolved) || 0;
+      return {
+        wardCode,
+        label: formatLabel(wardCode),
+        count: filed,
+        total: filed,
+        openPct: filed > 0 ? (open / filed) * 100 : 0,
+        resolvedPct: filed > 0 ? (resolved / filed) * 100 : 0,
+      };
     });
   const pins = result.pins || [];
   const layers = { wardDetails: {}, complaintPinsByLayer: {}, complaintPinsError: null };
