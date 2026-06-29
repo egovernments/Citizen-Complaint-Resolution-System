@@ -2307,6 +2307,69 @@
       when: state_root != 'pg'
 
     # ────────────────────────────────────────────────────────────────
+    # Configurator UI localization seed. The configurator's own chrome —
+    # nav, field labels, resource names, dashboard strings — for every
+    # supported locale lives in the `configurator-ui` localization module
+    # so it renders from the backend and is editable in the configurator's
+    # own Localization screen (no rebuild to change a label or add a
+    # language). Seed/refresh it from the committed bundle so the strings
+    # survive redeploys (which rewrite server-side state) and every new
+    # tenant gets all languages on day 1. Idempotent: _upsert overwrites
+    # by (tenant, locale, module, code).
+    # ────────────────────────────────────────────────────────────────
+    - name: "configurator-i18n — mint ADMIN token at state_root for localization upsert"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
+        method: POST
+        headers: >-
+          {{
+            {'Authorization': 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+             'Content-Type': 'application/x-www-form-urlencoded'}
+            | combine({'Host': domain} if not (tls_enabled | default(true)) else {})
+          }}
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          username: "{{ bootstrap_user | default('ADMIN') }}"
+          password: "{{ bootstrap_password | default('eGov@123') }}"
+          scope: read
+          tenantId: "{{ state_root }}"
+          userType: EMPLOYEE
+        status_code: [200]
+        timeout: 15
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      register: cfg_i18n_auth
+      retries: 6
+      delay: 10
+      until: cfg_i18n_auth.status == 200
+      no_log: true
+      when: state_root != 'pg'
+
+    - name: "configurator-i18n — upsert configurator-ui bundle (per locale)"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/localization/messages/v1/_upsert"
+        method: POST
+        headers: "{{ {'Content-Type': 'application/json'} | combine({'Host': domain} if not (tls_enabled | default(true)) else {}) }}"
+        body_format: json
+        body:
+          RequestInfo:
+            apiId: emp
+            ver: ".01"
+            action: create
+            authToken: "{{ cfg_i18n_auth.json.access_token }}"
+            userInfo: "{{ cfg_i18n_auth.json.UserRequest }}"
+          tenantId: "{{ state_root }}"
+          locale: "{{ item }}"
+          messages: "{{ configurator_i18n_bundle | selectattr('locale', 'equalto', item) | list }}"
+        status_code: [200, 201]
+        timeout: 60
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      vars:
+        configurator_i18n_bundle: "{{ lookup('file', playbook_dir ~ '/files/configurator-localization/configurator-ui.json') | from_json }}"
+      loop: "{{ configurator_i18n_bundle | map(attribute='locale') | unique | list }}"
+      when: state_root != 'pg'
+
+    # ────────────────────────────────────────────────────────────────
     # Novu Twilio bootstrap. Runs only when:
     #   1. enable_novu is true (the notifications profile is active)
     #   2. The operator has filled in novu_api_key + twilio_* in host_vars
