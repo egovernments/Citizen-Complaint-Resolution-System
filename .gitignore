@@ -135,3 +135,6 @@ charts/*.tgz
 *.bak
 *.tmp
 *.orig
+
+.agent/
+local-testing/
