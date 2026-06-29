@@ -25,6 +25,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { BASE_URL, FIXED_OTP, ROOT_TENANT, TENANT, DEFAULT_PASSWORD, generateCitizenPhone } from './env';
 import { getMobileValidationRule, generateValidMobile, type MobileRule } from './mdms-mobile';
+import { getPgrIdPrefix } from './pgr-idgen';
 
 export interface ProvisionedCitizen {
   mobile: string;
@@ -33,6 +34,8 @@ export interface ProvisionedCitizen {
   token: string;
   uuid: string;
   tenantId: string;
+  /** PGR service-request ID prefix discovered via egov-idgen. Deployment-specific. */
+  pgrIdPrefix: string;
 }
 
 const CITIZEN_FIXTURE_FILE = resolve('citizen-fixture.json');
@@ -215,6 +218,10 @@ export async function provisionFreshCitizen(opts?: { tenant?: string }): Promise
     throw new Error(`citizen token exchange returned no uuid: ${JSON.stringify(tokenJson).slice(0, 300)}`);
   }
 
+  // 5. Discover the deployment's PGR ID prefix via egov-idgen. Cached
+  //    on the returned identity so specs don't each ask separately.
+  const pgrIdPrefix = await getPgrIdPrefix();
+
   return {
     mobile,
     prefix: rule.prefix,
@@ -222,5 +229,6 @@ export async function provisionFreshCitizen(opts?: { tenant?: string }): Promise
     token: tokenJson.access_token,
     uuid,
     tenantId: ROOT_TENANT,
+    pgrIdPrefix,
   };
 }

@@ -17,7 +17,8 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL, PGR_ID_PREFIX } from '../utils/env';
+import { BASE_URL } from '../utils/env';
+import { readProvisionedCitizen } from '../utils/citizen-provision';
 
 test.describe('Citizen file-complaint wizard', () => {
   // ── Raw-key localization scan ─────────────────────────────────────────────
@@ -200,8 +201,12 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     await expect(page).toHaveURL(/\/citizen\/pgr\/response/);
     const body = page.locator('body');
     await expect(body).toContainText('Complaint Submitted');
-    // PGR_ID_PREFIX is deployment-specific: "NCCG" on Nairobi, "PG" on Ethiopia.
-    await expect(body).toContainText(new RegExp(`${PGR_ID_PREFIX}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+`));
+    // Deployment-specific complaint-ID prefix (NCCG on Nairobi, PG on
+    // Ethiopia + ke.etoebeta) is discovered by citizen.setup.ts via the
+    // egov-idgen pgr.servicerequestid format and persisted on the
+    // provisioned citizen.
+    const pgrIdPrefix = readProvisionedCitizen()?.pgrIdPrefix ?? 'NCCG';
+    await expect(body).toContainText(new RegExp(`${pgrIdPrefix}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+`));
     await expect(body).toContainText(/Go back to home page/i);
 
     // Smoke: no error fallback rendered

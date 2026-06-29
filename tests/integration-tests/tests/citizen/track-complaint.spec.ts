@@ -20,9 +20,9 @@ import {
   DEFAULT_PASSWORD,
   SERVICE_CODE,
   LOCALITY_CODE,
-  PGR_ID_PREFIX,
   generateCitizenPhone,
 } from '../utils/env';
+import { readProvisionedCitizen } from '../utils/citizen-provision';
 
 // Disable trace/video so the spec runs cleanly with --no-deps (the
 // .playwright-artifacts-0 dir is only created by the full setup DAG).
@@ -230,10 +230,12 @@ If the SPA ever redirects plural → singular (or 404s), this test catches the c
     await page.waitForTimeout(4000);
 
     const url = page.url();
-    // Use PGR_ID_PREFIX so the pattern matches any deployment (e.g. PG for
-    // Ethiopia, NCCG for naipepea) rather than a hardcoded tenant prefix.
+    // Deployment-specific complaint-ID prefix (NCCG on Nairobi, PG on
+    // Ethiopia + ke.etoebeta) is discovered by citizen.setup.ts via
+    // egov-idgen and persisted on the provisioned citizen.
+    const pgrIdPrefix = readProvisionedCitizen()?.pgrIdPrefix ?? 'NCCG';
     const detailUrlRe = new RegExp(
-      `/digit-ui/citizen/pgr/complaints/${PGR_ID_PREFIX}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+`,
+      `/digit-ui/citizen/pgr/complaints/${pgrIdPrefix}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+`,
     );
     expect(url, 'plural /complaints/:id URL should serve the detail page').toMatch(detailUrlRe);
     expect(url, 'should NOT have redirected to the Routes.js-exported singular form').not.toContain(
