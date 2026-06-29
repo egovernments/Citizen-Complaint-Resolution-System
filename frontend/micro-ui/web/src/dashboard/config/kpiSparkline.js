@@ -1,5 +1,11 @@
 /**
  * Sparkline KPI cards — API query wiring and viz type for live delta + trend tiles.
+ *
+ * Delta display (per supervisor CSV):
+ * - whole-number volume tiles → relative % change vs prior period (e.g. ▲ 12.5%)
+ * - percentage (1 dp) rate tiles → percentage-point change (e.g. ▲ 5.2 pp)
+ * - duration tiles → hrs/days change; oldest open → whole-day change (e.g. ▲ 3 d)
+ * - CSAT → rating-point change (e.g. ▲ 0.3)
  */
 
 import { VIZ_TYPE } from "./visualizationStyles";
@@ -27,7 +33,7 @@ export const SPARKLINE_KPI_IDS = new Set([
  *   sparklineMode?: "dateRange" | "recentDays",
  *   sparklineDateField?: string,
  *   recentDays?: number,
- *   deltaMode?: "percentPoint" | "duration" | "rating",
+ *   deltaMode?: "percentChange" | "percentPoint" | "duration" | "days" | "rating",
  *   currentCreatedCountKey?: string,
  *   currentResolvedCountKey?: string,
  *   priorCreatedCountKey?: string,
@@ -41,6 +47,7 @@ export const SPARKLINE_KPI_QUERIES = {
     currentQueryKey: "cl_new_created_count",
     priorQueryKey: "cl_new_created_prior",
     deltaLabel: "vs prior period",
+    deltaMode: "percentChange",
     sparklineMode: "dateRange",
   },
   "cl-metric-created-today": {
@@ -48,6 +55,7 @@ export const SPARKLINE_KPI_QUERIES = {
     currentQueryKey: "cl_created_today_count",
     priorQueryKey: "cl_created_yesterday_count",
     deltaLabel: "vs yesterday",
+    deltaMode: "percentChange",
     sparklineMode: "recentDays",
     recentDays: 7,
   },
@@ -60,6 +68,7 @@ export const SPARKLINE_KPI_QUERIES = {
     resolvedSparklineQueryKey: "cl_resolved_date_range_sparkline",
     resolvedCountQueryKey: "cl_resolved_date_range_count",
     deltaLabel: "vs prior period",
+    deltaMode: "percentChange",
     sparklineMode: "dateRange",
     sparklineDateField: "snapshot_date",
     derived: "openBacklogFromFlows",
@@ -69,6 +78,7 @@ export const SPARKLINE_KPI_QUERIES = {
     currentQueryKey: "cl_resolved_date_range_count",
     priorQueryKey: "cl_resolved_date_range_prior",
     deltaLabel: "vs prior period",
+    deltaMode: "percentChange",
     sparklineMode: "dateRange",
     sparklineDateField: "occurred_date",
   },
@@ -90,9 +100,9 @@ export const SPARKLINE_KPI_QUERIES = {
     sparklineQueryKey: "cl_resolved_on_time_rate_sparkline",
     currentQueryKey: "cl_resolved_on_time_rate_count",
     priorQueryKey: "cl_resolved_on_time_rate_prior",
-    currentCreatedCountKey: "cl_resolved_date_range_count",
+    currentCreatedCountKey: "cl_resolution_cohort_resolved_count",
     currentResolvedCountKey: "cl_resolved_on_time_compliant_count",
-    priorCreatedCountKey: "cl_resolved_date_range_prior",
+    priorCreatedCountKey: "cl_resolution_cohort_resolved_prior",
     priorResolvedCountKey: "cl_resolved_on_time_compliant_prior",
     deltaLabel: "vs prior period",
     deltaMode: "percentPoint",
@@ -105,6 +115,7 @@ export const SPARKLINE_KPI_QUERIES = {
     currentQueryKey: "rs_sla_compliance_week",
     priorQueryKey: "rs_sla_compliance_prior_week",
     deltaLabel: "WoW",
+    deltaMode: "percentPoint",
     measureKey: "pct",
     sparklineMeasureKey: "pct",
   },
@@ -113,12 +124,14 @@ export const SPARKLINE_KPI_QUERIES = {
     currentQueryKey: "rs_breach_total",
     priorQueryKey: "rs_breach_prior_week",
     deltaLabel: "WoW",
+    deltaMode: "percentChange",
   },
   "ce-metric-reopen-rate": {
     sparklineQueryKey: "ce_reopen_sparkline_7d",
     currentQueryKey: "ce_reopen_7d",
     priorQueryKey: "ce_reopen_prior_week",
     deltaLabel: "WoW",
+    deltaMode: "percentPoint",
     measureKey: "pct",
     sparklineMeasureKey: "pct",
   },
@@ -127,6 +140,7 @@ export const SPARKLINE_KPI_QUERIES = {
     deltaLabel: "vs period start",
     derived: "oldestOpenAge",
     measureKey: "max_age_ms",
+    deltaMode: "days",
   },
   "cl-metric-avg-resolution-time": {
     currentQueryKey: "cl_avg_resolution_time",
@@ -138,9 +152,9 @@ export const SPARKLINE_KPI_QUERIES = {
   "cl-metric-reopen-rate": {
     currentQueryKey: "cl_reopen_rate_count",
     priorQueryKey: "cl_reopen_rate_prior",
-    currentCreatedCountKey: "cl_resolved_date_range_count",
+    currentCreatedCountKey: "cl_resolution_cohort_resolved_count",
     currentResolvedCountKey: "cl_reopen_rate_reopened_count",
-    priorCreatedCountKey: "cl_resolved_date_range_prior",
+    priorCreatedCountKey: "cl_resolution_cohort_resolved_prior",
     priorResolvedCountKey: "cl_reopen_rate_reopened_prior",
     deltaLabel: "vs prior period",
     deltaMode: "percentPoint",

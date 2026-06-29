@@ -1,6 +1,24 @@
-/** @typedef {'wow_change' | 'sla_breach'} GeographyMapLayerId */
+/** @typedef {'wow_change' | 'sla_breach' | 'created' | 'open' | 'resolved'} GeographyMapLayerId */
 
 export const GEOGRAPHY_MAP_LAYERS = [
+  {
+    id: "created",
+    label: "Created",
+    legendTitle: "Complaints created",
+    zoomLevelLabel: "Locality",
+  },
+  {
+    id: "open",
+    label: "Open",
+    legendTitle: "Open complaints",
+    zoomLevelLabel: "Ward",
+  },
+  {
+    id: "resolved",
+    label: "Resolved",
+    legendTitle: "Complaints resolved",
+    zoomLevelLabel: "Locality",
+  },
   {
     id: "wow_change",
     label: "WoW change",
@@ -21,6 +39,10 @@ export const GEOGRAPHY_MAP_LAYER_IDS = new Set(
 
 export function isGeographyMapLayerId(value) {
   return GEOGRAPHY_MAP_LAYER_IDS.has(value);
+}
+
+export function isGeographyMapVolumeLayerId(layerId) {
+  return layerId === "created" || layerId === "open" || layerId === "resolved";
 }
 
 export function getGeographyMapLayerMeta(layerId) {
@@ -47,8 +69,20 @@ export const SLA_BREACH_LEGEND = [
   { id: "very_high", label: "> 75%", fill: "#7f1d1d", stroke: "#450a0a" },
 ];
 
+/** Volume choropleth — low to high complaint count. */
+export const VOLUME_COUNT_LEGEND = [
+  { id: "none", label: "0", fill: "#ffffff", stroke: "#d1d5db", fillOpacity: 0.95 },
+  { id: "low", label: "Low", fill: "#ccfbf1", stroke: "#99f6e4", fillOpacity: 0.78 },
+  { id: "medium_low", label: "Medium-low", fill: "#5eead4", stroke: "#2dd4bf", fillOpacity: 0.76 },
+  { id: "medium", label: "Medium", fill: "#14b8a6", stroke: "#0d9488", fillOpacity: 0.74 },
+  { id: "high", label: "High", fill: "#0d9488", stroke: "#0f766e", fillOpacity: 0.76 },
+  { id: "very_high", label: "Very high", fill: "#115e59", stroke: "#134e4a", fillOpacity: 0.78 },
+];
+
 export function getGeographyMapLegend(layerId) {
-  return layerId === "sla_breach" ? SLA_BREACH_LEGEND : WOW_CHANGE_LEGEND;
+  if (layerId === "sla_breach") return SLA_BREACH_LEGEND;
+  if (isGeographyMapVolumeLayerId(layerId)) return VOLUME_COUNT_LEGEND;
+  return WOW_CHANGE_LEGEND;
 }
 
 export function getGeographyMapLegendTitle(layerId) {
@@ -58,9 +92,9 @@ export function getGeographyMapLegendTitle(layerId) {
 export function getGeographyMapLegendFooter(layerId) {
   const focusHint =
     layerId === "wow_change"
-      ? "Click a locality to focus · click again to clear"
-      : "Click a ward to focus · click again to clear";
-  return `${focusHint} · Zoom to level 10+ to see complaint pins (hover for details)`;
+      ? "Click a polygon to drill down"
+      : "Click a polygon to drill down";
+  return `${focusHint} · State → City → District → Ward · Reset to start over`;
 }
 
 export function getWowChangeBucket(wowPct) {

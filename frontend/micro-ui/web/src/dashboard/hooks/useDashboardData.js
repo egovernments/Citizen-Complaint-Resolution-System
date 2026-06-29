@@ -15,6 +15,7 @@ import {
   parseFilterOptions,
   parseGeographyMapLayers,
   parseComplaintMapPins,
+  getComplaintMapPinsError,
   parseLocalityTable,
   parseOpenComplaintsByTypeStackedChart,
   parseOpenComplaintsByChannelPieChart,
@@ -60,7 +61,7 @@ const EMPTY_CHART_DATA = {
   complaintTypeDetails: [],
   employeePerformance: [],
   complaintsAtRisk: [],
-  geographyMap: { wow_change: [], sla_breach: [], wardDetails: {}, complaintPins: [] },
+  geographyMap: { wow_change: [], sla_breach: [], created: [], open: [], resolved: [], wardDetails: {}, complaintPins: [], complaintPinsError: null },
   complaintsOverTime: null,
 };
 
@@ -137,14 +138,16 @@ function buildChartData(results, dashboardFilters) {
     ),
     complaintsAtRisk: parseComplaintsAtRiskTable(results?.cl_table_complaints_at_risk),
     geographyMap: {
-      ...parseGeographyMapLayers(
+      ...      parseGeographyMapLayers(
         results?.cl_map_ward_wow_current,
         results?.cl_map_ward_wow_prior,
         results?.cl_map_ward_sla_breach,
         results?.cl_map_ward_open,
-        results?.cl_map_ward_sla_buckets
+        results?.cl_map_ward_sla_buckets,
+        results?.cl_map_ward_resolved
       ),
       complaintPins: parseComplaintMapPins(results?.cl_map_complaint_pins),
+      complaintPinsError: getComplaintMapPinsError(results?.cl_map_complaint_pins),
     },
   };
 }

@@ -54,6 +54,14 @@ export function countToColor(count, maxCount) {
   return TEAL_SCALE[index];
 }
 
+export function countToFillStyle(count, maxCount) {
+  if (!maxCount || count <= 0) {
+    return { fillColor: "#ffffff", strokeColor: "#d1d5db", fillOpacity: 0.95 };
+  }
+  const fillColor = countToColor(count, maxCount);
+  return { fillColor, strokeColor: fillColor, fillOpacity: 0.74 };
+}
+
 export function computeWowPct(current, prior) {
   const cur = Number(current) || 0;
   const prev = Number(prior) || 0;
@@ -191,28 +199,67 @@ export function resolveJoinedMapBounds(joined) {
   return bounds?.isValid() ? bounds : null;
 }
 
-/** Zoom at which ward polygons stop merging into clusters. */
-export const MAP_WARD_UNCLUSTER_ZOOM = 12;
+/** Four click-drill levels: state → city → district → ward/zone. */
+export const MAP_DRILL_TIERS = [
+  { id: "state", label: "State", index: 0 },
+  { id: "city", label: "City", index: 1 },
+  { id: "district", label: "District", index: 2 },
+  { id: "ward", label: "Ward", index: 3 },
+];
 
-/** Zoom at which individual complaint location pins appear. */
-export const MAP_COMPLAINT_PIN_MIN_ZOOM = 10;
-
-/** Fit bounds padding when zooming to complaint pins. */
+export const MAP_DRILL_MAX_LEVEL = MAP_DRILL_TIERS.length - 1;
 export const MAP_COMPLAINT_PIN_MAX_ZOOM = 17;
+export const MAP_WARD_MIN_ZOOM = 14;
 
-/** Zoom tier shown in the toolbar badge. */
-export function getMapZoomTier(zoom) {
-  if (zoom >= MAP_COMPLAINT_PIN_MIN_ZOOM) return "complaint";
-  if (zoom >= MAP_WARD_UNCLUSTER_ZOOM) return "ward";
-  if (zoom >= 8) return "locality";
-  return "city";
+/** @deprecated Use MAP_WARD_MIN_ZOOM */
+export const MAP_WARD_UNCLUSTER_ZOOM = MAP_WARD_MIN_ZOOM;
+
+/** @deprecated Drill level is click-driven; kept for legacy imports. */
+export const MAP_COMPLAINT_PIN_MIN_ZOOM = MAP_WARD_MIN_ZOOM;
+
+export function getDrillTier(level) {
+  const idx = Math.min(Math.max(Number(level) || 0, 0), MAP_DRILL_MAX_LEVEL);
+  return MAP_DRILL_TIERS[idx];
 }
 
-/** Grid cell size (degrees) — larger cells at low zoom, none once wards are unclustered. */
-function getClusterCellSize(zoom) {
-  if (zoom >= MAP_WARD_UNCLUSTER_ZOOM) return null;
-  if (zoom >= 10) return 0.016;
-  return 0.048;
+export function getDrillTierLabel(level) {
+  return getDrillTier(level).label;
+}
+
+export function isWardDrillLevel(level) {
+  return getDrillTier(level).id === "ward";
+}
+
+function levelsUpFromLeafForTier(tier) {
+  return { state: 3, city: 2, district: 1, ward: 0 }[tier] ?? 0;
+}
+
+/** Group key from boundary ancestry — coarser tiers merge more wards. */
+export function getHierarchyGroupKey(code, hierarchyIndex, tier) {
+  const wardCode = String(code ?? "").trim();
+  if (!wardCode || tier === "ward") return wardCode;
+
+  const entry = hierarchyIndex?.[wardCode];
+  const levelsUp = levelsUpFromLeafForTier(tier);
+  if (!entry || levelsUp <= 0) return wardCode;
+
+  const chain = [...(entry.ancestors ?? []), wardCode];
+  const idx = Math.max(0, chain.length - 1 - levelsUp);
+  return chain[idx] || wardCode;
+}
+
+/** Grid cell size (degrees) when hierarchy metadata is unavailable. */
+function getClusterCellSizeForTier(tierId) {
+  if (tierId === "ward") return null;
+  if (tierId === "district") return 0.016;
+  if (tierId === "city") return 0.048;
+  return 0.14;
+}
+
+function filterFeaturesToScope(features, scopeCodes) {
+  if (!scopeCodes?.length) return features;
+  const scopeSet = new Set(scopeCodes);
+  return features.filter((feature) => scopeSet.has(feature?.properties?.code));
 }
 
 export function filterPinsInBounds(pins, bounds, { padRatio = 0.12 } = {}) {
@@ -239,18 +286,16 @@ function jitterAroundCentroid(centroid, seed, slot) {
   };
 }
 
-function isNearMapCenter(lat, lng) {
-  const [centerLat, centerLng] = getMapCenter();
-  return Math.abs(lat - centerLat) < 1.5 && Math.abs(lng - centerLng) < 1.5;
-}
-
+/** A pin has its own usable coordinates if both are finite and not the (0,0) null-island. */
 function hasUsableGeoPin(pin) {
-  if (pin?.lat == null || pin?.lng == null) return false;
-  if (Math.abs(pin.lat) < 0.0001 && Math.abs(pin.lng) < 0.0001) return false;
-  return isNearMapCenter(pin.lat, pin.lng);
+  const lat = Number(pin?.lat);
+  const lng = Number(pin?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  if (Math.abs(lat) < 0.0001 && Math.abs(lng) < 0.0001) return false;
+  return true;
 }
 
-/** Ward/locality centroids keyed by boundary code. */
+/** Ward/locality centroids keyed by boundary code (trimmed). */
 export function buildWardCentroidIndex(joined) {
   const index = {};
   const { geoFeatures, markers } = joined ?? {};
@@ -263,15 +308,19 @@ export function buildWardCentroidIndex(joined) {
 
   for (const marker of markers ?? []) {
     const code = String(marker.code ?? "").trim();
-    if (code) index[code] = { lat: marker.lat, lng: marker.lng };
+    if (code && marker.lat != null && marker.lng != null) {
+      index[code] = { lat: marker.lat, lng: marker.lng };
+    }
   }
 
   return index;
 }
 
 /**
- * Place each open complaint on the map using geo coordinates when valid,
- * otherwise ward centroid with a small jitter so stacked complaints separate.
+ * Place each complaint on the map:
+ *   1. Use its own latitude/longitude when valid.
+ *   2. Otherwise fall back to its ward centroid (with jitter so stacked pins separate).
+ * Pins that can't be placed by either method are dropped.
  */
 export function resolveComplaintPinPositions(pins = [], joined) {
   const wardCentroids = buildWardCentroidIndex(joined);
@@ -280,10 +329,10 @@ export function resolveComplaintPinPositions(pins = [], joined) {
   return pins
     .map((pin, index) => {
       if (hasUsableGeoPin(pin)) {
-        return { ...pin, lat: pin.lat, lng: pin.lng, approximate: false };
+        return { ...pin, lat: Number(pin.lat), lng: Number(pin.lng), approximate: false };
       }
 
-      const wardCode = pin.wardCode;
+      const wardCode = String(pin.wardCode ?? "").trim();
       if (!wardCode) return null;
 
       const centroid = wardCentroids[wardCode];
@@ -408,7 +457,7 @@ function aggregateClusterProperties(members) {
 
   const label =
     members.length > 1
-      ? `${members.length} localities`
+      ? `${members.length} areas`
       : members[0]?.properties?.label ?? "Area";
 
   return {
@@ -449,9 +498,35 @@ function clusterGeometryForMembers(members) {
   return { type: "Polygon", coordinates: [ring] };
 }
 
-function clusterGeoFeatures(features, zoom) {
-  const cellSize = getClusterCellSize(zoom);
-  if (!cellSize || features.length <= 1) {
+function hasUsefulHierarchy(hierarchyIndex = {}) {
+  return Object.values(hierarchyIndex).some((entry) => (entry?.ancestors ?? []).length > 0);
+}
+
+function clusterGeoFeatures(features, tierId, hierarchyIndex = {}) {
+  if (tierId === "ward" || features.length <= 1) {
+    return features;
+  }
+
+  const hasHierarchy = hasUsefulHierarchy(hierarchyIndex);
+  if (hasHierarchy) {
+    const buckets = new Map();
+    for (const feature of features) {
+      const code = feature?.properties?.code;
+      const key = getHierarchyGroupKey(code, hierarchyIndex, tierId);
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(feature);
+    }
+
+    return [...buckets.values()].map((members) => ({
+      type: "Feature",
+      properties: aggregateClusterProperties(members),
+      geometry: clusterGeometryForMembers(members),
+      memberFeatures: members,
+    }));
+  }
+
+  const cellSize = getClusterCellSizeForTier(tierId);
+  if (!cellSize) {
     return features;
   }
 
@@ -475,47 +550,90 @@ function clusterGeoFeatures(features, zoom) {
 }
 
 /**
- * Build choropleth + point layers for the current zoom.
- * Low zoom merges adjacent wards into cluster polygons; zooming in splits them apart.
- * At MAP_COMPLAINT_PIN_MIN_ZOOM+, individual complaint pins are included.
+ * Build choropleth + point layers for the current drill level.
+ * ALL polygons are always visible — scope only affects the camera zoom target.
+ * Complaint pins appear at ward level (drill level 3) for every ward in the dataset.
  */
-export function buildMapDisplayLayers(joined, zoom, complaintPins = []) {
+export function buildMapDisplayLayers(
+  joined,
+  drillLevel,
+  complaintPins = [],
+  hierarchyIndex = {},
+  scopeCodes = null
+) {
+  const tier = getDrillTier(drillLevel);
   const { geoFeatures, markers } = joined ?? {};
-  const rawFeatures = geoFeatures?.features ?? [];
-  const displayFeatures = clusterGeoFeatures(rawFeatures, zoom);
-
-  let visibleComplaintPins = [];
-  if (zoom >= MAP_COMPLAINT_PIN_MIN_ZOOM && complaintPins.length) {
-    visibleComplaintPins = resolveComplaintPinPositions(complaintPins, joined);
+  let rawFeatures = geoFeatures?.features ?? [];
+  if (scopeCodes?.length) {
+    const scopeSet = new Set(scopeCodes);
+    rawFeatures = rawFeatures.filter((feature) => scopeSet.has(feature?.properties?.code));
   }
+  const displayFeatures = clusterGeoFeatures(rawFeatures, tier.id, hierarchyIndex);
+
+  const showWardDetail = tier.id === "ward";
+  const visibleComplaintPins = showWardDetail && complaintPins.length
+    ? resolveComplaintPinPositions(complaintPins, joined)
+    : [];
 
   return {
     geoFeatures: { type: "FeatureCollection", features: displayFeatures },
-    pointMarkers: markers ?? [],
+    pointMarkers: showWardDetail ? (markers ?? []) : [],
     complaintPins: visibleComplaintPins,
   };
 }
 
-/** Ward centroid markers and complaint pins scale with zoom. */
+/** Ward centroid markers and complaint pins scale with map zoom. */
 export function markerRadiusForZoom(zoom, isFocused = false, { complaint = false } = {}) {
   if (complaint) {
     if (zoom >= 16) return isFocused ? 8 : 6;
-    if (zoom >= 13) return isFocused ? 7 : 5;
-    if (zoom >= MAP_COMPLAINT_PIN_MIN_ZOOM) return isFocused ? 6 : 4;
-    return 3;
+    if (zoom >= 14) return isFocused ? 7 : 5;
+    return isFocused ? 6 : 4;
   }
-  if (zoom <= 10) return isFocused ? 4 : 2;
-  if (zoom <= 12) return isFocused ? 5 : 3;
-  return isFocused ? 6 : 4;
+  if (zoom >= 14) return isFocused ? 6 : 4;
+  if (zoom >= 11) return isFocused ? 5 : 3;
+  return isFocused ? 4 : 2;
+}
+
+export function fitBoundsToGeoFeatures(
+  map,
+  features = [],
+  { padding = 0.12, animate = true, maxZoom = MAP_COMPLAINT_PIN_MAX_ZOOM } = {}
+) {
+  if (!map || !features.length) return null;
+
+  const group = L.featureGroup();
+  L.geoJSON({ type: "FeatureCollection", features }, {
+    onEachFeature: (_feature, layer) => {
+      group.addLayer(layer);
+    },
+  });
+
+  const bounds = group.getBounds();
+  if (!bounds?.isValid()) return null;
+
+  map.fitBounds(bounds.pad(padding), {
+    animate,
+    maxZoom,
+  });
+
+  return { center: map.getCenter(), zoom: map.getZoom() };
 }
 
 export function fitMapToJoinedData(
   map,
   joined,
-  { padding = 0.3, maxZoom, animate = false } = {}
+  { padding = 0.12, maxZoom, animate = false, scopeCodes = null } = {}
 ) {
   if (!map) return null;
-  const bounds = resolveJoinedMapBounds(joined);
+
+  let bounds = null;
+  if (scopeCodes?.length) {
+    const scoped = filterFeaturesToScope(joined?.geoFeatures?.features ?? [], scopeCodes);
+    bounds = fitBoundsToGeoFeatures(map, scoped, { padding, animate, maxZoom });
+    return bounds;
+  }
+
+  bounds = resolveJoinedMapBounds(joined);
   if (!bounds) {
     const center = getMapCenter();
     map.setView(center, 11, { animate });

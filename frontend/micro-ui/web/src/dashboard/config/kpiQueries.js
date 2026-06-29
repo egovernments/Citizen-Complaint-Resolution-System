@@ -568,6 +568,7 @@ export const BATCH_QUERIES = {
     measures: [{ name: "total", agg: "count" }],
     sort: [{ by: "total", dir: "desc" }],
     limit: 50,
+    respectDateRange: true,
   },
   cl_chart_open_by_age: {
     grain: "facts",
@@ -602,6 +603,15 @@ export const BATCH_QUERIES = {
   cl_map_ward_open: {
     grain: "facts",
     filters: { is_open: true },
+    dimensions: ["ward_code"],
+    measures: [{ name: "total", agg: "count" }],
+    sort: [{ by: "total", dir: "desc" }],
+    limit: 200,
+  },
+  cl_map_ward_resolved: {
+    grain: "facts",
+    window: { name: "wtd", timeRole: "resolved_at" },
+    filters: { is_resolved: true },
     dimensions: ["ward_code"],
     measures: [{ name: "total", agg: "count" }],
     sort: [{ by: "total", dir: "desc" }],
@@ -1627,6 +1637,24 @@ function applyMapWowQueries(queries, dashboardFilters, apiFilters, dateRangeBoun
   delete queries[priorKey].window;
 }
 
+function applyMapResolvedQuery(queries, dashboardFilters, apiFilters, dateRangeBounds) {
+  const base = BATCH_QUERIES.cl_map_ward_resolved;
+  if (!base || !queries.cl_map_ward_resolved) return;
+
+  const { __dateRange, ...dimensionFilters } = apiFilters || {};
+
+  if (dashboardFilters?.dateRangeActive && dateRangeBounds) {
+    queries.cl_map_ward_resolved = applyResolvedAtDateRangeToQuery(
+      { ...base },
+      dashboardFilters,
+      apiFilters
+    );
+    return;
+  }
+
+  queries.cl_map_ward_resolved = applyDashboardFiltersToQuery({ ...base }, dimensionFilters);
+}
+
 function applySelectedDateRangeToQuery(query, dashboardFilters, apiFilters) {
   const bounds = selectedDateRangeBounds(dashboardFilters, apiFilters);
   if (!bounds) return query;
@@ -1781,6 +1809,7 @@ function sanitizeLiveOpenSnapshotQueries(queries) {
   for (const [key, query] of Object.entries(queries)) {
     if (!query?.filters?.is_open) continue;
     if (query.grain === "daily") continue;
+    if (query.respectDateRange) continue;
     if (DATE_RANGE_KPI_QUERY_KEYS.has(key)) continue;
 
     const filters = { ...(query.filters || {}) };
@@ -1854,7 +1883,12 @@ export function buildBatchQueries(dashboardFilters) {
         key === "cl_first_assignment_assigned_prior" ||
         key === "cl_first_assignment_first_only_prior" ||
         key === "cl_sla_compliance_rate_prior" ||
-        key === "cl_sla_compliant_resolved_prior"
+        key === "cl_sla_compliant_resolved_prior" ||
+        key === "cl_avg_resolution_time_prior" ||
+        key === "cl_reopen_rate_prior" ||
+        key === "cl_reopen_rate_reopened_prior" ||
+        key === "cl_resolved_on_time_rate_prior" ||
+        key === "cl_resolved_on_time_compliant_prior"
       ) {
         const baseFilters = { ...(queries[key].filters || {}) };
         delete baseFilters.created_at;
@@ -1868,12 +1902,7 @@ export function buildBatchQueries(dashboardFilters) {
         delete queries[key].window;
       } else if (
         key === "cl_resolved_date_range_prior" ||
-        key === "cl_avg_resolution_time_prior" ||
-        key === "cl_reopen_rate_prior" ||
-        key === "cl_reopen_rate_reopened_prior" ||
-        key === "cl_csat_avg_prior" ||
-        key === "cl_resolved_on_time_rate_prior" ||
-        key === "cl_resolved_on_time_compliant_prior"
+        key === "cl_csat_avg_prior"
       ) {
         const baseFilters = { ...(queries[key].filters || {}) };
         delete baseFilters.resolved_at;
@@ -1900,44 +1929,39 @@ export function buildBatchQueries(dashboardFilters) {
       } else if (
         key === "cl_new_created_sparkline" ||
         key === "cl_open_complaints_sparkline" ||
-        key === "cl_resolution_rate_sparkline"
+        key === "cl_resolution_rate_sparkline" ||
+        key === "cl_resolved_on_time_rate_sparkline"
       ) {
         queries[key] = {
           ...applySelectedDateRangeToQuery(queries[key], dashboardFilters, apiFilters),
           limit: sparklineDayLimit,
         };
-      } else if (
-        key === "cl_resolved_date_range_sparkline" ||
-        key === "cl_resolved_on_time_rate_sparkline"
-      ) {
-        queries[key] =
-          key === "cl_resolved_date_range_sparkline"
-            ? {
-                ...applyEnteredAtDateRangeToQuery(
-                  queries[key],
-                  dashboardFilters,
-                  apiFilters
-                ),
-                limit: sparklineDayLimit,
-              }
-            : {
-                ...applyResolvedAtDateRangeToQuery(
-                  queries[key],
-                  dashboardFilters,
-                  apiFilters
-                ),
-                limit: sparklineDayLimit,
-              };
+      } else if (key === "cl_resolved_date_range_sparkline") {
+        queries[key] = {
+          ...applyEnteredAtDateRangeToQuery(
+            queries[key],
+            dashboardFilters,
+            apiFilters
+          ),
+          limit: sparklineDayLimit,
+        };
       } else if (
         key === "cl_resolved_date_range_count" ||
+        key === "cl_csat_avg"
+      ) {
+        queries[key] = applyResolvedAtDateRangeToQuery(
+          queries[key],
+          dashboardFilters,
+          apiFilters
+        );
+      } else if (
         key === "cl_avg_resolution_time" ||
         key === "cl_reopen_rate_count" ||
         key === "cl_reopen_rate_reopened_count" ||
-        key === "cl_csat_avg" ||
         key === "cl_resolved_on_time_rate_count" ||
         key === "cl_resolved_on_time_compliant_count"
       ) {
-        queries[key] = applyResolvedAtDateRangeToQuery(
+        queries[key] = applySelectedDateRangeToQuery(
           queries[key],
           dashboardFilters,
           apiFilters
@@ -2003,6 +2027,7 @@ export function buildBatchQueries(dashboardFilters) {
 
   applyTodayKpiQueries(queries, apiFilters);
   applyMapWowQueries(queries, dashboardFilters, apiFilters, dateRangeBounds);
+  applyMapResolvedQuery(queries, dashboardFilters, apiFilters, dateRangeBounds);
 
   return queries;
 }
@@ -2152,9 +2177,39 @@ function formatRatingDeltaDisplay(delta) {
   return `${arrow} ${Math.abs(delta).toFixed(1)}`;
 }
 
+function formatPercentPointDeltaDisplay(delta) {
+  if (delta == null || !Number.isFinite(delta)) return null;
+  if (delta === 0) return "▲ 0.0 pp";
+  const arrow = delta > 0 ? "▲" : "▼";
+  const rounded = Math.round(Math.abs(delta) * 10) / 10;
+  const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return `${arrow} ${formatted} pp`;
+}
+
+function formatDaysDeltaDisplay(deltaMs) {
+  if (deltaMs == null || !Number.isFinite(deltaMs)) return null;
+  const days = Math.round(deltaMs / MS_PER_DAY);
+  if (days === 0) return null;
+  const arrow = days > 0 ? "▲" : "▼";
+  return `${arrow} ${Math.abs(days)} d`;
+}
+
+function getEffectiveDeltaMode(config) {
+  if (config?.deltaMode) return config.deltaMode;
+  if (config?.derived === "oldestOpenAge") return "days";
+  const measureKey = config?.measureKey || "total";
+  if (measureKey === "pct") return "percentPoint";
+  if (measureKey === "avg_ms") return "duration";
+  if (measureKey === "avg") return "rating";
+  return "percentChange";
+}
+
 function formatSparklineKpiDeltaDisplay(delta, config) {
-  if (config?.deltaMode === "duration") return formatDurationDeltaDisplay(delta);
-  if (config?.deltaMode === "rating") return formatRatingDeltaDisplay(delta);
+  const mode = getEffectiveDeltaMode(config);
+  if (mode === "percentPoint") return formatPercentPointDeltaDisplay(delta);
+  if (mode === "duration") return formatDurationDeltaDisplay(delta);
+  if (mode === "days") return formatDaysDeltaDisplay(delta);
+  if (mode === "rating") return formatRatingDeltaDisplay(delta);
   return formatSparklineDeltaDisplay(delta);
 }
 
@@ -2288,7 +2343,7 @@ function readMetricRatio(results, queryKey, measureKey = "pct") {
   if (!result || result.error) return null;
   if (!Array.isArray(result.rows) || result.rows.length === 0) return null;
   const raw = result.rows[0][measureKey];
-  if (raw == null) return 0;
+  if (raw == null) return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
 }
@@ -2298,11 +2353,17 @@ function normalizeRatioPercent(value) {
   return value <= 1 ? value * 100 : value;
 }
 
+function hasRatioDenominator(results, denominatorKey) {
+  if (!denominatorKey) return true;
+  const count = readMetricCount(results, denominatorKey);
+  return count != null && count > 0;
+}
+
 function computeRatioFromCounts(results, resolvedKey, createdKey) {
   const resolved = readMetricCount(results, resolvedKey);
   const created = readMetricCount(results, createdKey);
   if (resolved == null || created == null) return null;
-  if (created === 0) return 0;
+  if (created === 0) return null;
   return resolved / created;
 }
 
@@ -2313,26 +2374,27 @@ function computePercentPointDelta(currentRatio, priorRatio) {
   return current - prior;
 }
 
-function readOldestOpenAgeDays(results, queryKey, measureKey = "max_age_ms") {
+function readOldestOpenAgeMs(results, queryKey, measureKey = "max_age_ms") {
   const ms = results?.[queryKey]?.rows?.[0]?.[measureKey];
   if (ms == null) return null;
-  const days = Math.floor(Number(ms) / MS_PER_DAY);
+  const n = Number(ms);
+  return Number.isFinite(n) ? n : null;
+}
+
+function readOldestOpenAgeDays(results, queryKey, measureKey = "max_age_ms") {
+  const ms = readOldestOpenAgeMs(results, queryKey, measureKey);
+  if (ms == null) return null;
+  const days = Math.floor(ms / MS_PER_DAY);
   return Number.isFinite(days) ? days : null;
 }
 
-function daysElapsedForOldestAgeDelta(dashboardFilters) {
+function priorOldestOpenAgeMs(currentAgeMs, dashboardFilters) {
+  if (currentAgeMs == null) return null;
   const bounds = getSelectedDateRangeBounds(dashboardFilters);
   if (bounds) {
-    const effectiveEndMs = Math.min(bounds.toMs, Date.now() + 1);
-    const durationMs = effectiveEndMs - bounds.fromMs;
-    return Math.max(1, Math.ceil(durationMs / MS_PER_DAY));
+    return Math.max(0, currentAgeMs - (Date.now() - bounds.fromMs));
   }
-  return 1;
-}
-
-function priorOldestOpenAgeDays(currentDays, dashboardFilters) {
-  if (currentDays == null) return null;
-  return Math.max(0, currentDays - daysElapsedForOldestAgeDelta(dashboardFilters));
+  return Math.max(0, currentAgeMs - MS_PER_DAY);
 }
 
 function oldestOpenAgeDeltaLabel(dashboardFilters) {
@@ -2341,8 +2403,13 @@ function oldestOpenAgeDeltaLabel(dashboardFilters) {
 
 function resolveSparklineDelta(config, results, current, prior) {
   const measureKey = config.measureKey || "total";
+  const deltaMode = getEffectiveDeltaMode(config);
 
-  if (config.deltaMode === "percentPoint" && measureKey === "pct") {
+  if (deltaMode === "percentPoint" && measureKey === "pct") {
+    if (config.priorCreatedCountKey && !hasRatioDenominator(results, config.priorCreatedCountKey)) {
+      return null;
+    }
+
     const currentRatio =
       (config.currentResolvedCountKey && config.currentCreatedCountKey
         ? computeRatioFromCounts(
@@ -2371,8 +2438,9 @@ function resolveSparklineDelta(config, results, current, prior) {
     return computePercentPointDelta(currentRatio, priorRatio);
   }
 
-  if (config.deltaMode === "duration" || config.deltaMode === "rating") {
+  if (deltaMode === "duration" || deltaMode === "rating" || deltaMode === "days") {
     if (current == null || prior == null) return null;
+    if (deltaMode === "days" && prior < MS_PER_DAY) return null;
     return current - prior;
   }
 
@@ -2495,8 +2563,13 @@ function buildSparklineKpiExtras(metricId, results, loading, dashboardFilters) {
     current = curTotal == null ? null : curTotal / daysElapsedThisWeek();
     prior = priorTotal == null ? null : priorTotal / 7;
   } else if (config.derived === "oldestOpenAge") {
-    current = readOldestOpenAgeDays(results, config.currentQueryKey, config.measureKey);
-    prior = priorOldestOpenAgeDays(current, dashboardFilters);
+    const currentMs = readOldestOpenAgeMs(
+      results,
+      config.currentQueryKey,
+      config.measureKey
+    );
+    current = currentMs;
+    prior = priorOldestOpenAgeMs(currentMs, dashboardFilters);
   } else {
     const measureKey = config.measureKey || "total";
     if (measureKey === "pct") {
@@ -2849,10 +2922,15 @@ export function parseGeographyMapLayers(
   wowPriorResult,
   slaBreachResult,
   openResult,
-  slaBucketsResult
+  slaBucketsResult,
+  resolvedResult
 ) {
+  const createdSeries = parseWardCountSeries(wowCurrentResult);
+  const openSeries = parseWardCountSeries(openResult);
+  const resolvedSeries = parseWardCountSeries(resolvedResult);
+
   const currentByWard = Object.fromEntries(
-    parseWardCountSeries(wowCurrentResult).map((row) => [row.wardCode, row.count])
+    createdSeries.map((row) => [row.wardCode, row.count])
   );
   const priorByWard = Object.fromEntries(
     parseWardCountSeries(wowPriorResult).map((row) => [row.wardCode, row.count])
@@ -2861,7 +2939,7 @@ export function parseGeographyMapLayers(
     parseWardCountSeries(slaBreachResult).map((row) => [row.wardCode, row.count])
   );
   const openByWard = Object.fromEntries(
-    parseWardCountSeries(openResult).map((row) => [row.wardCode, row.count])
+    openSeries.map((row) => [row.wardCode, row.count])
   );
   const slaBucketsByWard = parseWardSlaBuckets(slaBucketsResult);
   const wowCodes = new Set([...Object.keys(currentByWard), ...Object.keys(priorByWard)]);
@@ -2948,7 +3026,31 @@ export function parseGeographyMapLayers(
     };
   });
 
-  return { wow_change, sla_breach, wardDetails };
+  const created = createdSeries.map((row) => ({
+    wardCode: row.wardCode,
+    label: row.label,
+    count: row.count,
+  }));
+
+  const open = openSeries.map((row) => ({
+    wardCode: row.wardCode,
+    label: row.label,
+    count: row.count,
+  }));
+
+  const resolved = resolvedSeries.map((row) => ({
+    wardCode: row.wardCode,
+    label: row.label,
+    count: row.count,
+  }));
+
+  return { wow_change, sla_breach, created, open, resolved, wardDetails };
+}
+
+/** Surface analytics errors for the complaint-pin query (rows are absent on failure). */
+export function getComplaintMapPinsError(result) {
+  if (!result?.error) return null;
+  return result.message || result.error;
 }
 
 /** Open complaints for the map — one row per service_request_id. */
@@ -3449,7 +3551,7 @@ function buildComplaintsOverTimePeriod(
           return resolvedByDate;
         case "resolution_rate":
           return overTimeRatioPercentOneDecimal(
-            bucket.resolved,
+            resolvedByDate,
             bucket.created
           );
         case "sla_compliance":
