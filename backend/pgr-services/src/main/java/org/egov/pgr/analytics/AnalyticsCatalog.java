@@ -88,11 +88,13 @@ public class AnalyticsCatalog {
             mapOf("event_at","entered_at"),
             setOf("entered_at","exited_at","complaint_created_at"),
             setOf("status","previous_status","action","escalation_source","ward_code","zone_code","service_code",
+                  "department_code",   // S2: events now carries department_code (from MDMS ServiceDefs)
                   "source","occurred_month","occurred_week_start","occurred_date","occurred_dow","occurred_hour",
                   "occurred_is_weekend","occurred_is_business_hr","is_assignment","is_escalation","is_reopen",
                   "is_backward_transition","status_is_terminal","status_is_open","has_comment","has_multiple_assignees",
                   "actor_is_system","is_current_state","assignee_uuid","actor_uuid","status_seq","tenant_id"),
             setOf("status","previous_status","action","escalation_source","ward_code","zone_code","service_code",
+                  "department_code",   // S2
                   "source","occurred_month","occurred_is_weekend","occurred_is_business_hr","is_assignment",
                   "is_escalation","is_reopen","is_backward_transition","status_is_terminal","status_is_open",
                   "has_comment","has_multiple_assignees","actor_is_system","is_current_state","entered_at",
@@ -101,19 +103,21 @@ public class AnalyticsCatalog {
             setOf("dwell_ms","state_sla_ms","business_sla_ms","comment_length","seq_delta","complaint_age_at_event_ms",
                   "event_rating","assignee_count"),
             setOf("service_request_id","assignee_uuid","actor_uuid","account_id"),
-            "tenant_id","boundary_path","account_id",null,"event_at"));   // events grain has no department_code
+            "tenant_id","boundary_path","account_id","department_code","event_at"));   // S2: department row-scope axis
 
         // ---------------- complaint_open_state_daily ----------------
         grains.put("daily", new Grain("daily", "complaint_open_state_daily",
             mapOf("snapshot_date","snapshot_date"),
             setOf(),  // snapshot_date is a sql date, not epoch-ms
             setOf("snapshot_date","ward_code","zone_code","service_code","sla_status_bucket","aging_bucket",
+                  "department_code",   // S2: daily now carries department_code + account_id
                   "is_open","sla_breached","current_assignee_uuid","boundary_path","tenant_id"),
             setOf("snapshot_date","ward_code","zone_code","service_code","sla_status_bucket","aging_bucket",
+                  "department_code",   // S2
                   "is_open","sla_breached"),
             setOf(),
-            setOf("service_request_id","current_assignee_uuid","ward_code"),
-            "tenant_id","boundary_path",null,null,"snapshot_date"));   // daily grain has no department_code
+            setOf("service_request_id","current_assignee_uuid","ward_code","account_id"),
+            "tenant_id","boundary_path","account_id","department_code","snapshot_date"));   // S2: department + citizen row-scope axes
     }
 
     public Grain grain(String name){ return grains.get(name); }
