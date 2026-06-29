@@ -21,6 +21,8 @@
  * rather than re-provisioning. The user explicitly accepted that
  * provisioned citizens pollute the tenant (no afterAll cleanup).
  */
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { BASE_URL, FIXED_OTP, ROOT_TENANT, TENANT, DEFAULT_PASSWORD, generateCitizenPhone } from './env';
 import { getMobileValidationRule, generateValidMobile, type MobileRule } from './mdms-mobile';
 
@@ -32,6 +34,27 @@ export interface ProvisionedCitizen {
   uuid: string;
   tenantId: string;
 }
+
+const CITIZEN_FIXTURE_FILE = resolve('citizen-fixture.json');
+
+/**
+ * Read the citizen identity provisioned by tests/fixtures/citizen.setup.ts.
+ * Returns null if the fixture is missing (citizen-setup didn't run, or
+ * the spec is being executed in isolation outside the project DAG).
+ */
+export function readProvisionedCitizen(): ProvisionedCitizen | null {
+  if (!existsSync(CITIZEN_FIXTURE_FILE)) return null;
+  try {
+    const raw = readFileSync(CITIZEN_FIXTURE_FILE, 'utf8');
+    const parsed = JSON.parse(raw) as ProvisionedCitizen;
+    if (!parsed.mobile || !parsed.token) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export const CITIZEN_FIXTURE_PATH = CITIZEN_FIXTURE_FILE;
 
 /**
  * Resolve the mobile-validation rule for this deployment. Tries the
