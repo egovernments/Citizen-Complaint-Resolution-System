@@ -60,6 +60,22 @@ export interface DigitDatagridProps<RecordType extends RaRecord = RaRecord> {
  * Get a nested value from an object using dot notation.
  * e.g. getNestedValue({ a: { b: 'c' } }, 'a.b') => 'c'
  */
+/**
+ * Localization key for a column header, derived from its field source so list
+ * columns are translatable (e.g. `businessService` → `app.fields.business_service`).
+ * The generated English label is passed as the `_` fallback, so an un-seeded
+ * field still shows its humanized English header rather than the raw key.
+ */
+function fieldKey(source: string): string {
+  return (
+    'app.fields.' +
+    source
+      .replace(/\./g, '_')
+      .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+      .toLowerCase()
+  );
+}
+
 function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((acc, part) => {
     if (acc && typeof acc === 'object') {
@@ -175,7 +191,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
                     onClick={() => handleSort(col.source)}
                     className="flex items-center gap-1 font-medium text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    {translate(col.label, { _: col.label })}
+                    {translate(fieldKey(col.source), { _: col.label })}
                     {sort.field === col.source ? (
                       sort.order === 'ASC' ? (
                         <ArrowUp className="w-3.5 h-3.5" />
@@ -188,7 +204,7 @@ export function DigitDatagrid<RecordType extends RaRecord = RaRecord>({
                   </button>
                 ) : (
                   <span className="font-medium text-muted-foreground">
-                    {translate(col.label, { _: col.label })}
+                    {translate(fieldKey(col.source), { _: col.label })}
                   </span>
                 )}
               </TableHead>
