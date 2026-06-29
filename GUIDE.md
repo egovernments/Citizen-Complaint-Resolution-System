@@ -85,6 +85,18 @@ docker logs digit-pgr-services-1 --tail=50
 
 ---
 
+## Stop the Stack
+
+```bash
+# Stop all services (keeps data)
+cd /opt/digit && docker compose -f docker-compose.registry.yml down
+
+# Stop and wipe all data (clean slate)
+cd /opt/digit && docker compose -f docker-compose.registry.yml down --volumes
+```
+
+---
+
 ## Troubleshooting
 
 | Issue | Fix |
