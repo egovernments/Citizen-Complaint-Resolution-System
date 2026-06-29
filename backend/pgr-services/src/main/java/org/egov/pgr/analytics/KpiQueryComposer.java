@@ -113,9 +113,19 @@ public class KpiQueryComposer {
         if (hasDateRange && bounds == null)
             throw new IllegalArgumentException("invalid_param: dateFrom/dateTo is not a valid yyyy-MM-dd range");
 
+        // A "live open snapshot" is a point-in-time count of currently-open complaints
+        // (filters.is_open, non-daily grain, no base time window). The reference dashboard
+        // (sanitizeLiveOpenSnapshotQueries) leaves these UN-narrowed by the global date
+        // range/window — "Breached SLA (open)", "Open complaints", the open-state charts and
+        // at-risk table are NOW snapshots, not time-bounded cohorts. So the current/base query
+        // ignores window + dateFrom/dateTo. (compare:prior and series:daily still apply: the
+        // delta uses a prior-week comparison and the sparkline a rolling window, per reference.)
+        boolean liveOpenSnapshot = isLiveOpenSnapshot(next, g);
+
         // ---- window override (skipped when an explicit range is supplied; range governs time) ----
-        // Also skipped for compare:"prior" with no range, where the prior-WEEK fallback governs time.
-        if (!hasDateRange && !prior && params.hasNonNull("window")) {
+        // Also skipped for compare:"prior" with no range, where the prior-WEEK fallback governs time,
+        // and for live-open snapshots (point-in-time; no window axis).
+        if (!hasDateRange && !prior && !liveOpenSnapshot && params.hasNonNull("window")) {
             String windowName = params.get("window").asText();
             if (!windowName.isEmpty()) applyWindowName(next, windowName);
         }
@@ -123,7 +133,7 @@ public class KpiQueryComposer {
         if (prior) {
             // ---- prior-period: shift the (selected | default-week) range back one equal duration ----
             applyPrior(next, g, bounds);
-        } else if (bounds != null) {
+        } else if (bounds != null && !liveOpenSnapshot) {
             // ---- explicit date range -> gte/lt filter on the grain's time column ----
             applyDateRange(next, g, bounds);
         }
@@ -370,6 +380,24 @@ public class KpiQueryComposer {
      * events -> {@code complaint_created_at}; daily -> {@code snapshot_date};
      * facts with a {@code resolved_at} timeRole -> {@code resolved_at}; otherwise {@code created_at}.
      */
+    /**
+     * A live open-state snapshot: a count of currently-open complaints with no time window
+     * ({@code filters.is_open == true}, non-daily grain, no {@code window.timeRole}). These are
+     * point-in-time metrics (breached-open, open-now, open-state charts, at-risk) that the
+     * reference dashboard leaves un-narrowed by the global date range/window. The catalog-native
+     * signal is the absence of a base window: a date-bounded open metric (e.g. open-this-week)
+     * carries a window and is therefore NOT a live snapshot.
+     */
+    private boolean isLiveOpenSnapshot(JsonNode query, Grain g) {
+        if (g == null || "daily".equals(g.name)) return false;
+        JsonNode filters = query.get("filters");
+        boolean isOpen = filters != null && filters.path("is_open").asBoolean(false);
+        if (!isOpen) return false;
+        JsonNode window = query.get("window");
+        boolean hasTimeWindow = window != null && window.isObject() && window.hasNonNull("timeRole");
+        return !hasTimeWindow;
+    }
+
     private String dateFilterColumn(JsonNode query, Grain g) {
         if ("events".equals(g.name)) return "complaint_created_at";
         if ("daily".equals(g.name)) return "snapshot_date";
