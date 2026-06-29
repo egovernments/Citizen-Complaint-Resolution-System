@@ -114,6 +114,14 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const searchInputRef = useRef(null);
   const hasInitialized = useRef(false);
 
+  // Auto-dismiss toast after 5 s; also cleared by the manual close button.
+  // Fixes #883: previously the error toast had no close button and never timed out.
+  useEffect(() => {
+    if (!showToast) return;
+    const timer = setTimeout(() => setShowToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [showToast]);
+
   // Leaflet writes the stroke as an SVG DOM attribute, which doesn't resolve
   // CSS `var()`. Read the runtime accent at mount so the user-drawn polygon
   // tracks ThemeConfig.primary.accent instead of the legacy orange default.
@@ -692,6 +700,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
         <Toast
           error={showToast.key === "error"}
           label={showToast.label}
+          isDleteBtn={true}
           onClose={closeToast}
         />
       )}
