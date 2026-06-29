@@ -77,29 +77,47 @@ function defaultSizeForKpi(kpiId, kpis) {
   return { w: Math.max(c.minW, 6), h: Math.max(c.minH, 6) };
 }
 
-/** Seed layout from the pack, clamped to the constraints, kpiId-keyed. */
+function clampNum(v, min, max, fallback) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+/**
+ * Normalise a layout item to finite, in-bounds geometry. A malformed MDMS pack
+ * or stale localStorage entry can carry NaN / out-of-range w/h/x/y; RGL throws or
+ * produces impossible resize bounds on those, so clamp every field to the tile's
+ * viz.kind constraints and the grid width. Item must already carry `i` (kpiId).
+ */
+function normalizeItem(item, kpis) {
+  const c = sizeConstraintsForKpi(item.i, kpis);
+  const w = clampNum(item.w, c.minW, c.maxW, c.minW);
+  const h = clampNum(item.h, c.minH, c.maxH, c.minH);
+  const x = Math.min(clampNum(item.x, 0, GRID_COLS - 1, 0), GRID_COLS - w);
+  const y = clampNum(item.y, 0, Number.MAX_SAFE_INTEGER, 0);
+  return { i: item.i, x, y, w, h, ...c };
+}
+
+/** Seed layout from the pack, normalised, kpiId-keyed. */
 function buildSeedLayout(packLayout, kpis) {
   return (packLayout || [])
     .filter((item) => kpis[item.kpiId])
-    .map((item) => {
-      const c = sizeConstraintsForKpi(item.kpiId, kpis);
-      return {
-        i: item.kpiId,
-        x: item.x ?? 0,
-        y: item.y ?? 0,
-        w: item.w ?? c.minW,
-        h: item.h ?? c.minH,
-        ...c,
-      };
-    });
+    .map((item) =>
+      normalizeItem({ i: item.kpiId, x: item.x, y: item.y, w: item.w, h: item.h }, kpis)
+    );
 }
 
+/**
+ * Read the saved layout. Returns `null` ONLY when there is no stored layout (key
+ * absent / unparseable); an intentionally-empty array (user cleared every tile)
+ * is returned as `[]` so the seed does not re-add the removed tiles on reload.
+ */
 function readSaved() {
   try {
     const raw = window.localStorage?.getItem(STORAGE_KEY);
-    if (!raw) return null;
+    if (raw == null) return null;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length ? parsed : null;
+    return Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -118,17 +136,21 @@ export function useCatalogLayout(kpis, packLayout) {
 
   const [layout, setLayout] = useState([]);
 
-  // Seed once the catalog + pack resolve. Re-key a saved layout against the
-  // current catalog (drop tiles the role can no longer see) and re-apply the
-  // current size constraints so a viz.kind change can't leave a stale clamp.
+  // Seed once the catalog + pack resolve. Prefer a SAVED layout (the user's
+  // arrangement, including an intentional empty one) over the pack seed; drop
+  // tiles the role can no longer see and re-normalise geometry so a viz.kind
+  // change or a malformed entry can't leave a stale/invalid clamp. Only seeds
+  // from the pack when there is no saved layout at all (saved === null). A saved
+  // layout is taken as-is — newly-published pack tiles are added via the picker
+  // or a layout reset, not auto-injected.
   useEffect(() => {
     if (!seed.length) return;
     const saved = readSaved();
-    const source = saved || seed;
+    const source = saved !== null ? saved : seed;
     const reconciled = source
       .filter((item) => kpis[item.i])
-      .map((item) => ({ ...item, ...sizeConstraintsForKpi(item.i, kpis) }));
-    setLayout(reconciled.length ? reconciled : seed);
+      .map((item) => normalizeItem(item, kpis));
+    setLayout(reconciled);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed]);
 

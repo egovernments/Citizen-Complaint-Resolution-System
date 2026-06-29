@@ -213,7 +213,7 @@ function assembleResult(kpiId, def, results) {
   if (isSparklineKind(viz.kind)) {
     const seriesRes = results?.[`${kpiId}__series`];
     if (seriesRes?.rows?.length) {
-      assembled.sparkline = seriesToPoints(seriesRes.rows, viz, valueKey);
+      assembled.sparkline = seriesToPoints(seriesRes.rows, viz, valueKey, seriesRes.columns);
     }
   }
 
@@ -234,10 +234,19 @@ function scalarFromResult(result, valueKey) {
   return Number.isFinite(n) ? n : null;
 }
 
-function seriesToPoints(rows, viz, valueKey) {
-  const dateKey =
-    viz.dateKey ||
-    "created_date"; // facts grain daily dimension (events use occurred_date)
+/** The series date dimension is grain-specific (facts: created_date, events:
+ * occurred_date, daily: snapshot_date). Prefer viz.dateKey, else derive the
+ * *_date column from the result, else fall back to created_date. */
+function deriveDateKey(columns) {
+  for (const col of columns || []) {
+    const name = typeof col === "string" ? col : col?.name;
+    if (name && /_date$/.test(name)) return name;
+  }
+  return null;
+}
+
+function seriesToPoints(rows, viz, valueKey, columns) {
+  const dateKey = viz.dateKey || deriveDateKey(columns) || "created_date";
   const measureKey = viz.sparklineMeasureKey || valueKey || "total";
   return [...rows]
     .sort((a, b) =>
@@ -307,9 +316,17 @@ const AdminDashboardInner = ({ onSignOut }) => {
   );
 
   // Re-run the batch whenever the catalog resolves or the filters change.
+  // Include each tile's viz.kind: it drives buildRefs' __prior/__series companion
+  // refs, so a def flipping card<->chart (or gaining sparkline) must re-trigger the
+  // batch even when the id set and global params are unchanged.
   const refsKey = useMemo(
-    () => JSON.stringify({ ids: tiles.map((t) => t.kpiId), gp: globalParams(filters) }),
-    [tiles, filters]
+    () =>
+      JSON.stringify({
+        ids: tiles.map((t) => t.kpiId),
+        kinds: tiles.map((t) => kpis[t.kpiId]?.viz?.kind),
+        gp: globalParams(filters),
+      }),
+    [tiles, filters, kpis]
   );
 
   useEffect(() => {
