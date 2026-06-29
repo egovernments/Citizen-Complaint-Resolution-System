@@ -1,7 +1,8 @@
-import { useGetList } from 'ra-core';
+import { useGetList, useTranslate } from 'ra-core';
 import { DigitCard } from '@/components/digit/DigitCard';
 import { useNavigate } from 'react-router-dom';
-import { getDedicatedResources, getResourceLabel } from '@/providers/bridge';
+import { getDedicatedResources } from '@/providers/bridge';
+import { useResourceLabel } from '@/providers/useResourceLabel';
 import {
   Building2,
   MapPin,
@@ -36,7 +37,8 @@ function ResourceCard({ resource }: { resource: string }) {
   });
 
   const navigate = useNavigate();
-  const label = getResourceLabel(resource);
+  const resourceLabel = useResourceLabel();
+  const label = resourceLabel(resource);
   const Icon = ICONS[resource] ?? Briefcase;
 
   return (
@@ -62,6 +64,7 @@ function ResourceCard({ resource }: { resource: string }) {
 }
 
 export function DigitDashboard() {
+  const translate = useTranslate();
   const dedicatedMap = getDedicatedResources();
   const resources = Object.keys(dedicatedMap).filter(
     (r) => ICONS[r] // only show resources that have icons
@@ -70,7 +73,7 @@ export function DigitDashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-        DIGIT Management Studio
+        {translate('app.header.title')}
       </h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {resources.map((resource) => (
