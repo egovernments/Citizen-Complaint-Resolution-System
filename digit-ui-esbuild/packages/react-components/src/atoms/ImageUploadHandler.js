@@ -14,6 +14,14 @@ export const ImageUploadHandler = (props) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState("");
 
+  // Auto-dismiss file validation/upload error toast after 5 s; also dismissible via (×) button.
+  // Fixes #923: toast did not auto-dismiss and lacked close button.
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
   useEffect(() => {
     if (image) {
       uploadImage();
@@ -118,7 +126,7 @@ export const ImageUploadHandler = (props) => {
 
   return (
     <React.Fragment>
-      {error && <Toast error={true} label={error} onClose={() => setError(null)} />}
+      {error && <Toast error={true} label={error} isDleteBtn={true} onClose={() => setError(null)} />}
       <UploadImages onUpload={getImage} onDelete={deleteImage} thumbnails={uploadedImagesThumbs ? uploadedImagesThumbs.map((o) => o.image) : []} />
     </React.Fragment>
   );

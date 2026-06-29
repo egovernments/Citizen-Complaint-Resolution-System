@@ -1338,6 +1338,13 @@ button[class*="submit-bar"] *,
   fill: #ffffff !important;
   color: #ffffff !important;
 }
+.toast-success svg path[fill="none"],
+.digit-toast-success svg path[fill="none"],
+[class*="toast-error"] svg path[fill="none"],
+[class*="toast-warning"] svg path[fill="none"],
+[class*="toast-info"] svg path[fill="none"] {
+  fill: none !important;
+}
 /* Inner chips / boxes inside the toast (the source of the
  * outline mismatch) — make them transparent. */
 .toast-success > div,
