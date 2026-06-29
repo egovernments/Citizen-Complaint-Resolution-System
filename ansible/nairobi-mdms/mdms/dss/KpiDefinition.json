@@ -10,6 +10,7 @@
         "window": { "name": "last_1d", "timeRole": "filed_at" },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -37,6 +38,7 @@
         "window": { "name": "wtd", "timeRole": "filed_at" },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -64,6 +66,7 @@
         "window": { "name": "mtd", "timeRole": "filed_at" },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -90,6 +93,7 @@
         "grain": "facts",
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -116,6 +120,7 @@
         "grain": "facts",
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -149,6 +154,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -183,6 +189,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -210,6 +217,7 @@
         "filters": { "is_resolved": true, "has_rating": true },
         "measures": [{ "name": "avg", "agg": "avg", "column": "rating" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "decimalOne",
@@ -238,11 +246,12 @@
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "has_been_assigned": true, "is_reassigned": false } },
-            "denominator": { "agg": "count", "filter": { "has_been_assigned": true } }
+            "numerator": { "agg": "count", "filter": { "assignment_count": { "eq": 1 } } },
+            "denominator": { "agg": "count", "filter": { "assignment_count": { "gte": 1 } } }
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -276,6 +285,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -310,6 +320,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -337,6 +348,7 @@
         "filters": { "is_open": true },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -364,6 +376,7 @@
         "filters": { "is_resolved": true },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -391,6 +404,7 @@
         "filters": { "is_open": true },
         "measures": [{ "name": "max_age_ms", "agg": "max", "column": "open_age_ms" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "hoursDays",
@@ -418,6 +432,7 @@
         "filters": { "is_resolved": true },
         "measures": [{ "name": "avg_ms", "agg": "avg", "column": "resolution_ms" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "hoursDays",
@@ -451,6 +466,7 @@
           }
         ]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -484,6 +500,7 @@
           }
         ]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -518,6 +535,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -551,6 +569,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -584,6 +603,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -617,6 +637,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -650,6 +671,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -677,6 +699,7 @@
         "filters": { "is_open": true },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -705,6 +728,7 @@
         "filters": { "is_open": true },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -733,6 +757,7 @@
         "filters": { "is_open": true },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -761,6 +786,7 @@
         "filters": { "is_resolved": true },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -789,6 +815,7 @@
         "filters": { "is_resolved": true },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -817,6 +844,7 @@
         "filters": { "is_resolved": true },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -847,6 +875,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 5
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "bar",
         "format": "integer",
@@ -879,6 +908,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 8
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "bar",
         "format": "integer",
@@ -910,6 +940,7 @@
         "measures": [{ "name": "total", "agg": "count" }],
         "limit": 500
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "bar",
         "format": "integer",
@@ -944,6 +975,7 @@
         ],
         "limit": 500
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "bar",
         "format": "percentOneDecimal",
@@ -976,6 +1008,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 10
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "rankedList",
         "format": "integer",
@@ -1007,6 +1040,7 @@
         "measures": [{ "name": "total", "agg": "count" }],
         "sort": [{ "by": "created_dow", "dir": "asc" }]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "dow",
         "format": "integer",
@@ -1038,6 +1072,7 @@
         "measures": [{ "name": "total", "agg": "count" }],
         "limit": 120
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "bar",
         "format": "integer",
@@ -1069,6 +1104,7 @@
         "measures": [{ "name": "total", "agg": "count" }],
         "limit": 300
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "bar",
         "format": "integer",
@@ -1101,6 +1137,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 50
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "bar",
         "format": "integer",
@@ -1132,6 +1169,7 @@
         "measures": [{ "name": "total", "agg": "count" }],
         "limit": 10
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "bar",
         "format": "integer",
@@ -1164,6 +1202,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 200
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "map",
         "format": "integer",
@@ -1196,6 +1235,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 200
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "map",
         "format": "integer",
@@ -1228,6 +1268,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 200
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "map",
         "format": "integer",
@@ -1260,6 +1301,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 15
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "rankedList",
         "format": "integer",
@@ -1300,6 +1342,7 @@
         "sort": [{ "by": "ontime_pct", "dir": "desc" }],
         "limit": 15
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "rankedList",
         "format": "percentOneDecimal",
@@ -1351,6 +1394,7 @@
         "sort": [{ "by": "closure_pct", "dir": "desc" }],
         "limit": 15
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "rankedList",
         "format": "percentOneDecimal",
@@ -1390,6 +1434,7 @@
         "sort": [{ "by": "avg_resolution_ms", "dir": "desc" }],
         "limit": 30
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "rankedList",
         "format": "hoursDays",
@@ -1424,6 +1469,7 @@
         ],
         "limit": 50
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "rankedList",
         "format": "hoursDays",
@@ -1460,6 +1506,7 @@
         "sort": [{ "by": "avg_dwell", "dir": "desc" }],
         "limit": 8
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "rankedList",
         "format": "hoursDays",
@@ -1491,6 +1538,7 @@
         "measures": [{ "name": "avg_dwell", "agg": "avg", "column": "dwell_ms" }],
         "limit": 200
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "bar",
         "format": "hoursDays",
@@ -1523,6 +1571,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 1
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -1553,6 +1602,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 5
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "rankedList",
         "format": "integer",
@@ -1583,6 +1633,7 @@
         "filters": { "is_resolved": true },
         "measures": [{ "name": "avg_ms", "agg": "avg", "column": "resolution_ms" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "hoursDays",
@@ -1611,6 +1662,7 @@
         "filters": { "is_resolved": true },
         "measures": [{ "name": "median_ms", "agg": "percentile", "column": "resolution_ms", "p": 50 }]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "hoursDays",
@@ -1642,6 +1694,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 1
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -1673,6 +1726,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 5
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "rankedList",
         "format": "integer",
@@ -1706,6 +1760,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 5
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "rankedList",
         "format": "integer",
@@ -1743,6 +1798,7 @@
         "sort": [{ "by": "open", "dir": "desc" }, { "by": "assigned", "dir": "desc" }],
         "limit": 40
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "rankedList",
         "format": "integer",
@@ -1780,6 +1836,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -1815,6 +1872,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -1850,6 +1908,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentNoDecimal",
@@ -1877,6 +1936,7 @@
         "filters": { "is_open": true, "sla_breached": true },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -1905,6 +1965,7 @@
         "filters": { "is_resolved": true },
         "measures": [{ "name": "avg_ms", "agg": "avg", "column": "resolution_ms" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "hoursDays",
@@ -1933,6 +1994,7 @@
         "filters": { "is_resolved": true },
         "measures": [{ "name": "median_ms", "agg": "percentile", "column": "resolution_ms", "p": 50 }]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "hoursDays",
@@ -1966,6 +2028,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -1993,6 +2056,7 @@
         "window": { "name": "last_1d", "timeRole": "filed_at" },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -2021,6 +2085,7 @@
         "filters": { "is_resolved": true },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -2055,6 +2120,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentInteger",
@@ -2089,6 +2155,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentInteger",
@@ -2123,6 +2190,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentInteger",
@@ -2157,6 +2225,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentInteger",
@@ -2185,6 +2254,7 @@
         "filters": { "is_escalation": true },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -2220,6 +2290,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentInteger",
@@ -2255,6 +2326,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentInteger",
@@ -2282,6 +2354,7 @@
         "filters": { "is_open": true, "aging_bucket": { "in": [">7d", "7-14d", "14d+"] } },
         "measures": [{ "name": "total", "agg": "count" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -2312,6 +2385,7 @@
         "sort": [{ "by": "total", "dir": "desc" }],
         "limit": 1
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -2347,6 +2421,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentInteger",
@@ -2382,6 +2457,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentInteger",
@@ -2410,6 +2486,7 @@
         "filters": { "is_resolved": true, "has_rating": true },
         "measures": [{ "name": "avg", "agg": "avg", "column": "rating" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "decimalOne",
@@ -2445,6 +2522,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentInteger",
@@ -2480,6 +2558,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -2515,6 +2594,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -2543,6 +2623,7 @@
         "filters": { "is_first_time_complainant": false },
         "measures": [{ "name": "total", "agg": "count_distinct", "column": "account_id" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "integer",
@@ -2578,6 +2659,7 @@
           }
         ]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -2605,6 +2687,7 @@
         "window": { "name": "wtd", "timeRole": "filed_at" },
         "measures": [{ "name": "avg_ms", "agg": "avg", "column": "time_to_assign_ms" }]
       },
+      "supportsSeries": true,
       "viz": {
         "kind": "scalar",
         "format": "hoursDecimal",
@@ -2632,6 +2715,7 @@
         "window": { "name": "wtd", "timeRole": "filed_at" },
         "measures": [{ "name": "median_ms", "agg": "percentile", "column": "time_to_assign_ms", "p": 50 }]
       },
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "hoursDecimal",
@@ -2655,6 +2739,8 @@
       "version": "1.0.0",
       "status": "published",
       "query": null,
+      "composeOnly": true,
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "decimalOne",
@@ -2682,6 +2768,8 @@
       "version": "1.0.0",
       "status": "published",
       "query": null,
+      "composeOnly": true,
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "decimalOne",
@@ -2709,6 +2797,8 @@
       "version": "1.0.0",
       "status": "published",
       "query": null,
+      "composeOnly": true,
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "percentOneDecimal",
@@ -2736,6 +2826,8 @@
       "version": "1.0.0",
       "status": "published",
       "query": null,
+      "composeOnly": true,
+      "supportsSeries": false,
       "viz": {
         "kind": "scalar",
         "format": "signedInteger",

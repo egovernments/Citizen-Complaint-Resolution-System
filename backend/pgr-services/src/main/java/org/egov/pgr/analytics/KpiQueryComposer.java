@@ -105,9 +105,13 @@ public class KpiQueryComposer {
 
         // Resolve the selected/current range (epoch-ms, half-open) if one is set. compare/series both
         // operate on these bounds; null means "no explicit range" (rolling window or whole-history).
+        // C2: a present-but-unparseable dateFrom/dateTo must NOT silently fall back to the base/window
+        // query (that returned the wrong, un-narrowed scalar). Surface a per-entry invalid_param instead.
         Bounds bounds = hasDateRange
                 ? parseBounds(params.get("dateFrom").asText(), params.get("dateTo").asText())
                 : null;
+        if (hasDateRange && bounds == null)
+            throw new IllegalArgumentException("invalid_param: dateFrom/dateTo is not a valid yyyy-MM-dd range");
 
         // ---- window override (skipped when an explicit range is supplied; range governs time) ----
         // Also skipped for compare:"prior" with no range, where the prior-WEEK fallback governs time.

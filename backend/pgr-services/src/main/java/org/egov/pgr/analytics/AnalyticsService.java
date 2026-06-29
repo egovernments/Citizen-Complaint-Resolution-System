@@ -88,6 +88,10 @@ public class AnalyticsService {
                 String name = e.getKey();
                 JsonNode queryNode = e.getValue();
                 try {
+                    // D1a: backend-composed defs (query:null + viz.compose) resolve recursively here.
+                    Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles);
+                    if (composed != null) { results.put(name, composed); continue; }
+
                     JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
                     if (actualQueryNode == null) {
                         partial = true;
@@ -114,6 +118,8 @@ public class AnalyticsService {
             out.put("partial", partial);
         } else if (body.has("query")) {
             JsonNode queryNode = body.get("query");
+            Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles);
+            if (composed != null) { out.putAll(composed); return out; }
             JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
             if (actualQueryNode == null)
                 throw new IllegalArgumentException("kpi_forbidden: KPI not found or not authorized");
@@ -146,10 +152,189 @@ public class AnalyticsService {
             log.debug("kpiId '{}' not found or not authorized (roles={})", kpiId, callerRoles);
             return null;
         }
+        // C1: validate the request's window param against the def's params.allowed allow-list
+        // (the def is in scope here). An out-of-list window must be a per-entry invalid_param,
+        // not silently honoured by the composer/planner (which accept any well-formed window).
+        validateWindowParam(def.get(), queryNode.get("params"));
+
         JsonNode storedQuery = def.get().getQuery();
         if (storedQuery == null || storedQuery.isNull())
+            // D1a backend-composed defs are intercepted by maybeComposeResult before this point;
+            // a query:null def WITHOUT a valid compose op is a genuine misconfiguration.
             throw new IllegalArgumentException("invalid_kpi: KPI '" + kpiId + "' has no query defined");
         return queryComposer.mergeParams(storedQuery, queryNode.get("params"));
+    }
+
+    /**
+     * C1 — window allow-list enforcement. If the request {@code params} carries a {@code window}
+     * and the def declares a {@code window} param with a non-empty {@code allowed} list, the value
+     * must be in that list. Out-of-list (incl. arbitrary {@code last_Nd}) → {@code invalid_param}.
+     * No-op when the def declares no allow-list for {@code window} (open window).
+     */
+    private void validateWindowParam(KpiDefinition def, JsonNode reqParams) {
+        if (reqParams == null || !reqParams.hasNonNull("window")) return;
+        String requested = reqParams.get("window").asText();
+        if (requested.isEmpty()) return;
+        if (def.getParams() == null) return;
+        for (KpiDefinition.KpiParam p : def.getParams()) {
+            if (p != null && "window".equals(p.getName())) {
+                List<String> allowed = p.getAllowed();
+                if (allowed != null && !allowed.isEmpty() && !allowed.contains(requested))
+                    throw new IllegalArgumentException(
+                            "invalid_param: window '" + requested + "' is not allowed for KPI '" + def.getId()
+                                    + "'; allowed=" + allowed);
+                return;
+            }
+        }
+    }
+
+    /**
+     * D1a — BACKEND compose-resolver. When {@code queryNode} references (by {@code kpiId}) a def with
+     * {@code query:null} + a {@code viz.compose} op + {@code sourceKpiIds}, recursively resolve each
+     * source kpiId (re-applying the SAME request params, RBAC visibility and row-scope), run them, and
+     * compute the compose op into a scalar result shaped like every other scalar KPI
+     * ({@code rows:[{<valueKey>:v}], columns, rowCount, grain:"compose"}).
+     *
+     * <p>Returns {@code null} when this is NOT a backend-compose ref (caller proceeds normally). For a
+     * compose def that is not found / not visible, returns a {@code kpi_forbidden} result map (parity
+     * with the kpiId path). Ports the 4 ops from the FE {@code composeKpi.js}: {@code dailyAvgFromWeekly},
+     * {@code hourlyAvgFromDaily}, {@code openRateComplement}, {@code netBacklogDaily}.
+     */
+    private Map<String,Object> maybeComposeResult(JsonNode queryNode, AnalyticsScope scope,
+                                                  String tenantId, Set<String> callerRoles) {
+        if (queryNode == null || !queryNode.has("kpiId")) return null;
+        String kpiId = queryNode.get("kpiId").asText();
+        Optional<KpiDefinition> defOpt = kpiCatalogService.getDef(kpiId, tenantId);
+        if (defOpt.isEmpty() || !isComposeDef(defOpt.get())) return null;   // not a compose ref → normal path
+
+        KpiDefinition def = defOpt.get();
+        if (!def.isPublished() || !def.isVisibleTo(callerRoles))
+            return Map.of("error", "kpi_forbidden", "message", "KPI not found or not authorized for role set");
+
+        // C1: the compose def's window allow-list still applies to the request params.
+        validateWindowParam(def, queryNode.get("params"));
+
+        JsonNode compose = def.getViz().getCompose();
+        String type = compose.get("type").asText();
+        JsonNode params = queryNode.get("params");
+
+        // Resolve + run each source kpiId with the same params, RBAC and row-scope.
+        List<Map<String,Object>> sourceRows = new ArrayList<>();
+        for (JsonNode srcId : compose.get("sourceKpiIds")) {
+            JsonNode srcRef = synthRef(srcId.asText(), params);
+            JsonNode srcQuery = resolveKpiRef(srcRef, tenantId, callerRoles);
+            if (srcQuery == null)
+                throw new IllegalArgumentException("kpi_forbidden: compose source '" + srcId.asText() + "' not authorized");
+            Map<String,Object> r = runOne(srcQuery, scope);
+            sourceRows.add(firstRow(r));
+        }
+
+        Double value = computeCompose(type, compose, sourceRows);
+        String valueKey = def.getViz().getValueKey() != null ? def.getViz().getValueKey() : "value";
+        Map<String,Object> row = new LinkedHashMap<>();
+        row.put(valueKey, value);
+        Map<String,Object> out = new LinkedHashMap<>();
+        out.put("grain", "compose");
+        out.put("columns", List.of(valueKey));
+        out.put("rows", List.of(row));
+        out.put("rowCount", 1);
+        out.put("compose", type);
+        return out;
+    }
+
+    /** Build a synthetic {kpiId, params} ref node so a source kpiId resolves through the normal path. */
+    private JsonNode synthRef(String kpiId, JsonNode params) {
+        com.fasterxml.jackson.databind.node.ObjectNode n =
+                com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        n.put("kpiId", kpiId);
+        if (params != null && !params.isNull()) n.set("params", params);
+        return n;
+    }
+
+    /** First result row (or an empty map) from a runOne() result. */
+    @SuppressWarnings("unchecked")
+    private Map<String,Object> firstRow(Map<String,Object> r) {
+        Object rows = r == null ? null : r.get("rows");
+        if (rows instanceof List && !((List<?>) rows).isEmpty()) {
+            Object r0 = ((List<?>) rows).get(0);
+            if (r0 instanceof Map) return (Map<String,Object>) r0;
+        }
+        return Collections.emptyMap();
+    }
+
+    private Double num(Map<String,Object> row, String key) {
+        Object v = row == null ? null : row.get(key);
+        return (v instanceof Number) ? ((Number) v).doubleValue() : null;
+    }
+
+    /**
+     * Compute the compose op against the source rows. Faithful port of {@code composeKpi.js}:
+     * the *_Avg ops divide the source total by the elapsed days/hours since the start of the
+     * current week/day (in the dashboard EAT zone), measured from {@link #asOf()} (server clock
+     * authority, mirroring the FE's use of {@code results[..].asOf}).
+     */
+    private Double computeCompose(String type, JsonNode compose, List<Map<String,Object>> src) {
+        switch (type) {
+            case "openRateComplement": {
+                // pct is a 0..1 ratio (the planner's round(.. ,4)); complement -> percentage points.
+                Double pct = num(src.get(0), "pct");
+                if (pct == null) pct = num(src.get(0), "total");
+                return pct == null ? null : (1.0 - pct) * 100.0;
+            }
+            case "netBacklogDaily": {
+                double inflow  = orZero(num(src.get(0), "total"));
+                double outflow = src.size() > 1 ? orZero(num(src.get(1), "total")) : 0.0;
+                return inflow - outflow;
+            }
+            case "dailyAvgFromWeekly": {
+                double total = orZero(num(src.get(0), "total"));
+                if (!compose.path("elapsedFromAsOf").asBoolean(false)) return null;
+                long elapsed = elapsedDaysSinceStartOfWeek(asOf());
+                return elapsed > 0 ? total / elapsed : null;
+            }
+            case "hourlyAvgFromDaily": {
+                double total = orZero(num(src.get(0), "total"));
+                if (!compose.path("elapsedFromAsOf").asBoolean(false)) return null;
+                long elapsed = elapsedHoursSinceStartOfDay(asOf());
+                return elapsed > 0 ? total / elapsed : null;
+            }
+            default:
+                throw new IllegalArgumentException("invalid_kpi: unsupported compose op '" + type + "'");
+        }
+    }
+
+    private double orZero(Double d) { return d == null ? 0.0 : d; }
+
+    /** EAT zone for week/day-start, matching {@link AnalyticsPlanner}/{@link KpiQueryComposer}. */
+    private static final java.time.ZoneId EAT = java.time.ZoneId.of("Africa/Nairobi");
+
+    /** FE elapsedDaysSince(startOfWeek(asOf), asOf): max(1, floor((asOf-weekStart)/day)). startOfWeek = Sunday (JS getDay). */
+    private long elapsedDaysSinceStartOfWeek(long asOfMs) {
+        java.time.ZonedDateTime now = java.time.Instant.ofEpochMilli(asOfMs).atZone(EAT);
+        // FE startOfWeek: d.getDate() - d.getDay() => previous (or same) Sunday at local midnight.
+        java.time.ZonedDateTime weekStart = now.toLocalDate()
+                .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.SUNDAY))
+                .atStartOfDay(EAT);
+        long ms = asOfMs - weekStart.toInstant().toEpochMilli();
+        return Math.max(1, ms / 86_400_000L);
+    }
+
+    /** FE elapsedHoursSince(startOfDay(asOf), asOf): max(1, floor((asOf-dayStart)/hour)). */
+    private long elapsedHoursSinceStartOfDay(long asOfMs) {
+        java.time.ZonedDateTime now = java.time.Instant.ofEpochMilli(asOfMs).atZone(EAT);
+        long dayStart = now.toLocalDate().atStartOfDay(EAT).toInstant().toEpochMilli();
+        long ms = asOfMs - dayStart;
+        return Math.max(1, ms / 3_600_000L);
+    }
+
+    /** A def is backend-composed when it has no query, a viz.compose op, and source kpiIds (D1a). */
+    private boolean isComposeDef(KpiDefinition def) {
+        JsonNode compose = def.getViz() == null ? null : def.getViz().getCompose();
+        return (def.getQuery() == null || def.getQuery().isNull())
+                && compose != null && compose.isObject()
+                && compose.hasNonNull("type")
+                && compose.has("sourceKpiIds") && compose.get("sourceKpiIds").isArray()
+                && compose.get("sourceKpiIds").size() > 0;
     }
 
     /**
