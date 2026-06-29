@@ -810,7 +810,10 @@ function renderSlaRiskTable(ctx) {
 
 function adaptMapLayers(ctx) {
   const { viz, result } = ctx;
-  if (result.layers) return result.layers;
+  const complaintPins = result.pins || [];
+  // Preserve pins even when the BE supplies pre-shaped layers (don't let the
+  // early-return drop the companion pin source).
+  if (result.layers) return { ...result.layers, complaintPins: result.layers.complaintPins ?? complaintPins };
 
   const dimKey = viz.dimensionKey || 'ward_code';
   const measure = viz.measureKey || 'total';
@@ -824,7 +827,7 @@ function adaptMapLayers(ctx) {
       return { wardCode, label: formatLabel(wardCode), count: Number(row[measure]) || 0, total: Number(row[measure]) || 0 };
     });
   // Minimal single-layer fallback so the choropleth still renders.
-  return { [viz.layerId || 'wow_change']: wards, complaintPins: result.pins || [] };
+  return { [viz.layerId || 'wow_change']: wards, complaintPins };
 }
 
 function renderChoroplethMap(ctx) {

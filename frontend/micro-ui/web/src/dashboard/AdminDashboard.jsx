@@ -103,12 +103,20 @@ const CARD_KINDS = new Set([
   "sparkline-card",
 ]);
 const SPARKLINE_KINDS = new Set(["number-tile-sparkline", "sparkline-card"]);
+const MAP_KINDS = new Set(["map", "choropleth-map"]);
+
+// The internal pin source: map tiles fetch this alongside their ward aggregates
+// to overlay per-complaint pins (the FE map widget has the pin layer; this feeds it).
+const PIN_KPI_ID = "cl_map_complaint_pins";
 
 function isCardKind(kind) {
   return CARD_KINDS.has(kind);
 }
 function isSparklineKind(kind) {
   return SPARKLINE_KINDS.has(kind);
+}
+function isMapKind(kind) {
+  return MAP_KINDS.has(kind);
 }
 
 /**
@@ -162,6 +170,10 @@ function buildRefs(tiles, kpis, filters) {
     if (isSparklineKind(kind)) {
       refs[`${kpiId}__series`] = { kpiId, params: { ...gp, series: "daily" } };
     }
+    if (isMapKind(kind)) {
+      // Per-complaint pins (same filters/scope) overlaid on the ward choropleth.
+      refs[`${kpiId}__pins`] = { kpiId: PIN_KPI_ID, params: { ...gp } };
+    }
   }
   return refs;
 }
@@ -214,6 +226,21 @@ function assembleResult(kpiId, def, results) {
     const seriesRes = results?.[`${kpiId}__series`];
     if (seriesRes?.rows?.length) {
       assembled.sparkline = seriesToPoints(seriesRes.rows, viz, valueKey, seriesRes.columns);
+    }
+  }
+
+  // Map complaint pins: shape the companion pin source -> { lat, lng, id } for the
+  // map widget's pin layer (it drops 0,0 / out-of-area pins itself).
+  if (isMapKind(viz.kind)) {
+    const pinRes = results?.[`${kpiId}__pins`];
+    if (pinRes?.rows?.length) {
+      assembled.pins = pinRes.rows
+        .map((r) => ({
+          id: r.service_request_id,
+          lat: Number(r.latitude),
+          lng: Number(r.longitude),
+        }))
+        .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
     }
   }
 
@@ -306,12 +333,14 @@ const AdminDashboardInner = ({ onSignOut }) => {
   // server-side), shaped to the picker's { id, metric, type, itemType } contract.
   const catalogItems = useMemo(
     () =>
-      Object.values(kpis).map((def) => ({
-        id: def.kpiId,
-        metric: def.viz?.title || def.kpiId,
-        type: def.viz?.kind,
-        itemType: isCardKind(def.viz?.kind) ? "kpi" : "widget",
-      })),
+      Object.values(kpis)
+        .filter((def) => !def.viz?.internal) // hide internal companion sources (e.g. map pins)
+        .map((def) => ({
+          id: def.kpiId,
+          metric: def.viz?.title || def.kpiId,
+          type: def.viz?.kind,
+          itemType: isCardKind(def.viz?.kind) ? "kpi" : "widget",
+        })),
     [kpis]
   );
 

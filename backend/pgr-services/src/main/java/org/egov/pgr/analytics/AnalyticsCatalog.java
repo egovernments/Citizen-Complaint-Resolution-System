@@ -62,6 +62,7 @@ public class AnalyticsCatalog {
                   "service_group","department_code","aging_bucket","sla_status_bucket","current_assignee_uuid",
                   "is_open","is_resolved","is_reopened","was_rejected","sla_breached","current_state_sla_breached",
                   "has_rating","is_negative_rating","is_first_time_complainant","has_geo_pin","filed_on_behalf",
+                  "latitude","longitude",   // map pins: per-complaint coordinates (projectable for the pin KPI)
                   "current_state_seq","created_month","created_week_start","created_year","created_quarter",
                   "created_date","created_dow","created_is_weekend","created_is_business_hr","tenant_id"),
             // filterable (NOTE: UUID columns intentionally absent)

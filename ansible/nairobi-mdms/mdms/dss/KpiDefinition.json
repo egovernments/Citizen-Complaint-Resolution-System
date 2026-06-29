@@ -5431,5 +5431,65 @@
         "visibleTo": []
       }
     }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_map_complaint_pins",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": {
+          "is_open": true,
+          "has_geo_pin": true
+        },
+        "dimensions": [
+          "service_request_id",
+          "latitude",
+          "longitude"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "limit": 2000
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "table",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "slate",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_COMPLAINT_PINS",
+        "dimensionKey": "service_request_id",
+        "measureKeys": [
+          "total"
+        ],
+        "compose": null,
+        "pii": false,
+        "title": "Complaint locations",
+        "internal": true
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": []
+      }
+    }
   }
 ]
