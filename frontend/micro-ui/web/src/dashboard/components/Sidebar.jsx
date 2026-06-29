@@ -65,9 +65,15 @@ const Sidebar = ({ onSignOut }) => {
             type="button"
             onClick={onSignOut}
             title="Sign out"
-            className="tw-flex-shrink-0 tw-rounded-md tw-px-2 tw-py-1 tw-text-[11px] tw-font-medium tw-text-chrome-foreground hover:tw-bg-[color-mix(in_srgb,var(--chrome-foreground)_12%,transparent)]"
+            className="tw-flex-shrink-0 tw-rounded-md tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-medium tw-text-chrome-foreground hover:tw-bg-[color-mix(in_srgb,var(--chrome-foreground)_22%,transparent)]"
             style={{
-              border: "1px solid color-mix(in srgb, var(--chrome-foreground) 25%, transparent)",
+              // Explicit subtle fill: without it the browser's default light
+              // buttonface shows through, making the light label unreadable on the
+              // dark sidebar.
+              backgroundColor:
+                "color-mix(in srgb, var(--chrome-foreground) 12%, transparent)",
+              border:
+                "1px solid color-mix(in srgb, var(--chrome-foreground) 35%, transparent)",
             }}
           >
             Sign out

@@ -512,12 +512,26 @@ const AdminDashboardInner = ({ onSignOut }) => {
                 </div>
               );
             }
+            // Map + choropleth widgets render their own internal header; every
+            // other chart/table tile gets the standard widget header (the title
+            // the reference DashboardGrid drew above each chart body).
+            const kind = kpis[item.i]?.viz?.kind;
+            const selfHeaders = kind === "map" || kind === "choropleth-map";
             return (
               <section
                 key={item.i}
                 className={`dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface${dimClass}`}
               >
                 {removeBtn}
+                {!selfHeaders && (
+                  <header className="dashboard-drag-handle tw-min-w-0">
+                    <div className="tw-min-w-0 tw-flex-1">
+                      <h2 className="dashboard-drag-handle-title tw-truncate">
+                        {kpis[item.i]?.viz?.title || item.i}
+                      </h2>
+                    </div>
+                  </header>
+                )}
                 <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
                   {renderTile(item.i)}
                 </div>
