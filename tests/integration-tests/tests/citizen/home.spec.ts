@@ -94,8 +94,10 @@ If the brand assets ever land as real DOM text, extend this spec — leaving the
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(60_000);
-    const phone = generateCitizenPhone();
-    await citizenOtpLogin(page, phone);
+    // Use the suite-wide provisioned citizen — avoids per-run registration
+    // failures on deployments with strict mobile-number validation (e.g.
+    // Ethiopia ^[17][0-9]{8}$) and matches the pattern used in pgr-fixes.spec.ts.
+    await citizenOtpLogin(page);
 
     await page.goto(`${BASE_URL}/digit-ui/citizen/pgr-home`, {
       waitUntil: 'domcontentloaded',
@@ -107,9 +109,9 @@ If the brand assets ever land as real DOM text, extend this spec — leaving the
     await expect(body).not.toContainText('Something went wrong');
     // Note: "Nai Pepea" + "Report a grievance" + "Nairobi City County
     // Government" are rendered as background-image / CSS-content on the
-    // hero, not DOM text. Asserting on the actionable content + PGR badge
-    // instead. If the brand assets ever land as real DOM text, extend.
-    await expect(body).toContainText('PGR');
+    // hero, not DOM text. The "PGR" badge is also absent on digit-ui v2
+    // builds (Ethiopia) — asserting only on the actionable content which
+    // is stable across both v1 and v2 layouts.
     await expect(body).toContainText('Citizen Complaint Resolution System');
     await expect(body).toContainText('My Complaints');
     await expect(body).toContainText('File a Complaint');
