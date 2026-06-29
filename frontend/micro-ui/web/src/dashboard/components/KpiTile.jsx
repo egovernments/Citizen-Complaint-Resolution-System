@@ -10,6 +10,7 @@ import DashboardTable from './DashboardTable';
 import ComplaintsAtRiskTable from './ComplaintsAtRiskTable';
 import OpenComplaintsByGeographyWidget from './OpenComplaintsByGeographyWidget';
 import { evaluateCompose } from '../utils/composeKpi';
+import { getNumberTileDeltaClass } from '../config/kpiDisplay';
 
 /**
  * Generic viz-kind-driven tile renderer (the dashboard RENDERING ENGINE).
@@ -250,19 +251,76 @@ function deltaClassFor(delta) {
   return delta > 0 ? 'dashboard-delta-up' : 'dashboard-delta-down';
 }
 
+// ---------------------------------------------------------------------------
+// Threshold-driven status for number cards. Ports kpiDisplay.resolveThresholdStatus
+// so the catalog can carry the on-track / breaching bands per def via
+//   viz.threshold = { kind, higherIsBetter, onTrack, breaching }
+// and the KpiCard/KpiSparklineCard value (and sparkline) colour at parity with the
+// live AdminDashboard path. When no threshold is present we fall back to the
+// static viz.accent (legacy behaviour) so non-card tiles are unaffected.
+// ---------------------------------------------------------------------------
+
+const KPI_STATUS = { ON_TRACK: 'on_track', NORMAL: 'normal', BREACHING: 'breaching' };
+
+function thresholdStatus(threshold, value) {
+  if (!threshold || value == null || !Number.isFinite(Number(value))) return null;
+  // Percent metrics come back as a 0..1 ratio from the composer; the thresholds
+  // (e.g. onTrack: 70) are expressed in display units, so normalise to 0..100.
+  const n = threshold.kind === 'percent' ? normalizePct(value) : Number(value);
+  const { higherIsBetter, onTrack, breaching } = threshold;
+  if (higherIsBetter) {
+    if (n >= onTrack) return KPI_STATUS.ON_TRACK;
+    if (n <= breaching) return KPI_STATUS.BREACHING;
+    return KPI_STATUS.NORMAL;
+  }
+  if (n <= onTrack) return KPI_STATUS.ON_TRACK;
+  if (n >= breaching) return KPI_STATUS.BREACHING;
+  return KPI_STATUS.NORMAL;
+}
+
+/** 3-state threshold status when viz.threshold is set, else the static accent. */
+function resolveTileStatus(viz, value) {
+  return thresholdStatus(viz.threshold, value) ?? viz.accent;
+}
+
+/**
+ * Delta colour. With a threshold the live path colours the delta by status
+ * (resolveKpiDeltaClass -> getNumberTileDeltaClass), so we hand KpiCard the same
+ * status token and let it resolve the colour. Without a threshold we keep the
+ * directional up/down class so legacy delta tiles are unchanged.
+ */
+function resolveDeltaClass(viz, value, delta) {
+  const status = thresholdStatus(viz.threshold, value);
+  if (status) {
+    const unavailable = value == null || !Number.isFinite(Number(value));
+    return getNumberTileDeltaClass(status, { unavailable });
+  }
+  return deltaClassFor(delta);
+}
+
+/** Series stroke colour mirrors the live KpiSparklineCard status-derived colour. */
+function statusToSeriesColor(status) {
+  switch (status) {
+    case KPI_STATUS.ON_TRACK: return 'var(--status-resolved)';
+    case KPI_STATUS.BREACHING: return 'var(--status-breach)';
+    default: return null;
+  }
+}
+
 function renderNumberTileDelta(ctx) {
   const { viz, title, loading, onRemove } = ctx;
   const value = resolveScalar(ctx);
   const prior = resolvePrior(ctx);
   const delta = computeDelta(value, prior, viz.format);
+  const status = resolveTileStatus(viz, value);
   return (
     <KpiCard
       title={title}
       value={loading ? undefined : applyFormat(value, viz.format)}
       context={viz.contextLabel || viz.deltaLabel || ''}
-      status={viz.accent}
+      status={status}
       deltaDisplay={formatDeltaDisplay(delta, viz.format)}
-      deltaClass={deltaClassFor(delta)}
+      deltaClass={resolveDeltaClass(viz, value, delta)}
       loading={loading}
       onRemove={onRemove}
     />
@@ -298,14 +356,15 @@ function renderNumberTileSparkline(ctx) {
   const value = resolveScalar(ctx);
   const prior = resolvePrior(ctx);
   const delta = computeDelta(value, prior, viz.format);
+  const status = resolveTileStatus(viz, value);
   return (
     <KpiSparklineCard
       title={title}
       value={loading ? undefined : applyFormat(value, viz.format)}
-      status={viz.accent}
+      status={status}
       deltaDisplay={formatDeltaDisplay(delta, viz.format)}
-      deltaClass={deltaClassFor(delta)}
-      seriesColor={viz.seriesColor || 'var(--chart-1)'}
+      deltaClass={resolveDeltaClass(viz, value, delta)}
+      seriesColor={viz.seriesColor || statusToSeriesColor(status) || 'var(--chart-1)'}
       sparkline={resolveSparkline(ctx)}
       loading={loading}
       onRemove={onRemove}

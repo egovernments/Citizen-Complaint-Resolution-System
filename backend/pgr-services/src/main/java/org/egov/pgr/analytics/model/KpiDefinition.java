@@ -1,12 +1,17 @@
 package org.egov.pgr.analytics.model;
 
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Data;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Data
@@ -34,6 +39,24 @@ public class KpiDefinition {
         private List<KpiVariant> variants;
         private JsonNode compose;
         private JsonNode pii;
+
+        /**
+         * Overflow bucket for catalog-driven viz descriptor fields the FE render engine
+         * (KpiTile) understands but that aren't first-class on this POJO — e.g.
+         * {@code threshold}, {@code delta}, {@code dateKey}, {@code sparklineMeasureKey},
+         * {@code seriesColor}, {@code contextLabel}, {@code deltaLabel}, {@code colors},
+         * {@code stackSeries}, {@code columns}. These are passed through verbatim from the
+         * MDMS def to the {@code /packs} and {@code /catalog} responses so the dashboard
+         * stays purely catalog-driven (no per-field BE schema change for new viz options).
+         */
+        @JsonIgnore
+        private final Map<String, JsonNode> extra = new LinkedHashMap<>();
+
+        @JsonAnyGetter
+        public Map<String, JsonNode> getExtra() { return extra; }
+
+        @JsonAnySetter
+        public void putExtra(String key, JsonNode value) { extra.put(key, value); }
     }
 
     @Data

@@ -7,8 +7,16 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "last_1d", "timeRole": "filed_at" },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "window": {
+          "name": "last_1d",
+          "timeRole": "filed_at"
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -22,9 +30,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_1d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -35,8 +55,16 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -50,9 +78,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -63,8 +103,16 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "mtd", "timeRole": "filed_at" },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "window": {
+          "name": "mtd",
+          "timeRole": "filed_at"
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -78,9 +126,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "mtd", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "mtd",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -91,7 +151,12 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "measures": [{ "name": "total", "agg": "count" }]
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -105,9 +170,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -118,7 +195,12 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "measures": [{ "name": "total", "agg": "count" }]
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -132,9 +214,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_1d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -149,26 +243,56 @@
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_resolved": true } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-delta",
         "format": "percentOneDecimal",
         "valueKey": "pct",
         "accent": "green",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "threshold": {
+          "kind": "percent",
+          "higherIsBetter": true,
+          "onTrack": 70,
+          "breaching": 40
+        },
+        "delta": {
+          "mode": "percentPoint",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period"
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -179,31 +303,63 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_resolved": true },
+        "filters": {
+          "is_resolved": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_reopened": true } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_reopened": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-delta",
         "format": "percentOneDecimal",
         "valueKey": "pct",
         "accent": "amber",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "threshold": {
+          "kind": "percent",
+          "higherIsBetter": false,
+          "onTrack": 10,
+          "breaching": 25
+        },
+        "delta": {
+          "mode": "percentPoint",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period"
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -214,8 +370,17 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_resolved": true, "has_rating": true },
-        "measures": [{ "name": "avg", "agg": "avg", "column": "rating" }]
+        "filters": {
+          "is_resolved": true,
+          "has_rating": true
+        },
+        "measures": [
+          {
+            "name": "avg",
+            "agg": "avg",
+            "column": "rating"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -229,9 +394,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -246,8 +423,22 @@
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "assignment_count": { "eq": 1 } } },
-            "denominator": { "agg": "count", "filter": { "assignment_count": { "gte": 1 } } }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "assignment_count": {
+                  "eq": 1
+                }
+              }
+            },
+            "denominator": {
+              "agg": "count",
+              "filter": {
+                "assignment_count": {
+                  "gte": 1
+                }
+              }
+            }
           }
         ]
       },
@@ -263,9 +454,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -280,8 +483,16 @@
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_resolved": true, "sla_breached": false } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true,
+                "sla_breached": false
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -297,9 +508,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -310,13 +533,22 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_resolved": true },
+        "filters": {
+          "is_resolved": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "sla_breached": false } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "sla_breached": false
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -332,9 +564,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -345,8 +589,15 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "filters": {
+          "is_open": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -360,9 +611,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -373,24 +636,57 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_resolved": true },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "filters": {
+          "is_resolved": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-sparkline",
         "format": "integer",
         "valueKey": "total",
         "accent": "green",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "threshold": {
+          "kind": "count",
+          "higherIsBetter": true,
+          "onTrack": 10,
+          "breaching": 0
+        },
+        "delta": {
+          "mode": "percent",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period",
+        "dateKey": "created_date",
+        "sparklineMeasureKey": "total",
+        "seriesColor": null
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -401,8 +697,16 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
-        "measures": [{ "name": "max_age_ms", "agg": "max", "column": "open_age_ms" }]
+        "filters": {
+          "is_open": true
+        },
+        "measures": [
+          {
+            "name": "max_age_ms",
+            "agg": "max",
+            "column": "open_age_ms"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -416,9 +720,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -429,8 +745,16 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_resolved": true },
-        "measures": [{ "name": "avg_ms", "agg": "avg", "column": "resolution_ms" }]
+        "filters": {
+          "is_resolved": true
+        },
+        "measures": [
+          {
+            "name": "avg_ms",
+            "agg": "avg",
+            "column": "resolution_ms"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -444,9 +768,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -457,12 +793,17 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
         "measures": [
           {
             "name": "total",
             "agg": "count",
-            "filter": { "is_first_time_complainant": true }
+            "filter": {
+              "is_first_time_complainant": true
+            }
           }
         ]
       },
@@ -478,9 +819,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -491,12 +844,17 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
         "measures": [
           {
             "name": "total",
             "agg": "count",
-            "filter": { "is_first_time_complainant": false }
+            "filter": {
+              "is_first_time_complainant": false
+            }
           }
         ]
       },
@@ -512,9 +870,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -525,13 +895,23 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_first_time_complainant": false } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_first_time_complainant": false
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -547,9 +927,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -564,8 +956,22 @@
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "source": { "in": ["app", "mobile", "mobileapp", "mobile_app"] } } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "source": {
+                  "in": [
+                    "app",
+                    "mobile",
+                    "mobileapp",
+                    "mobile_app"
+                  ]
+                }
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -581,9 +987,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -598,8 +1016,20 @@
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "source": { "in": ["phone", "ivr"] } } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "source": {
+                  "in": [
+                    "phone",
+                    "ivr"
+                  ]
+                }
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -615,9 +1045,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -632,8 +1074,23 @@
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "source": { "in": ["walk_in", "walk-in", "walkin", "counter", "csc"] } } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "source": {
+                  "in": [
+                    "walk_in",
+                    "walk-in",
+                    "walkin",
+                    "counter",
+                    "csc"
+                  ]
+                }
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -649,9 +1106,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -666,8 +1135,21 @@
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "source": { "in": ["web", "online", "citizen"] } } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "source": {
+                  "in": [
+                    "web",
+                    "online",
+                    "citizen"
+                  ]
+                }
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -683,9 +1165,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -696,8 +1190,15 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "filters": {
+          "is_open": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -711,9 +1212,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_1d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -724,9 +1237,19 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "filters": { "is_open": true },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "filters": {
+          "is_open": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -740,9 +1263,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -753,9 +1288,19 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "mtd", "timeRole": "filed_at" },
-        "filters": { "is_open": true },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "window": {
+          "name": "mtd",
+          "timeRole": "filed_at"
+        },
+        "filters": {
+          "is_open": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -769,9 +1314,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "mtd", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "mtd",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -782,9 +1339,19 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "last_1d", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "window": {
+          "name": "last_1d",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -798,9 +1365,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_1d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -811,9 +1390,19 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -827,9 +1416,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -840,9 +1441,19 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "mtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "window": {
+          "name": "mtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -856,9 +1467,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "mtd", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "mtd",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -869,10 +1492,25 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "dimensions": ["service_code"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "dimensions": [
+          "service_code"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 5
       },
       "supportsSeries": false,
@@ -884,14 +1522,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_CATEGORIES",
         "dimensionKey": "service_code",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -902,10 +1554,25 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "dimensions": ["service_code"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "dimensions": [
+          "service_code"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 8
       },
       "supportsSeries": false,
@@ -917,14 +1584,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
         "dimensionKey": "service_code",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -935,9 +1616,20 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "dimensions": ["service_code", "department_code"],
-        "measures": [{ "name": "total", "agg": "count" }],
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "dimensions": [
+          "service_code",
+          "department_code"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
         "limit": 500
       },
       "supportsSeries": false,
@@ -949,14 +1641,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENTS_BY_TYPE",
         "dimensionKey": "department_code",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -967,11 +1673,26 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "dimensions": ["service_code", "department_code"],
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "dimensions": [
+          "service_code",
+          "department_code"
+        ],
         "measures": [
-          { "name": "filed", "agg": "count" },
-          { "name": "resolved", "agg": "count", "filter": { "is_resolved": true } }
+          {
+            "name": "filed",
+            "agg": "count"
+          },
+          {
+            "name": "resolved",
+            "agg": "count",
+            "filter": {
+              "is_resolved": true
+            }
+          }
         ],
         "limit": 500
       },
@@ -984,14 +1705,29 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
         "dimensionKey": "department_code",
-        "measureKeys": ["filed", "resolved"],
+        "measureKeys": [
+          "filed",
+          "resolved"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1002,10 +1738,25 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "dimensions": ["ward_code"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "dimensions": [
+          "ward_code"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 10
       },
       "supportsSeries": false,
@@ -1017,14 +1768,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_WARDS",
         "dimensionKey": "ward_code",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1035,10 +1800,25 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "dimensions": ["created_dow"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "created_dow", "dir": "asc" }]
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "dimensions": [
+          "created_dow"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "created_dow",
+            "dir": "asc"
+          }
+        ]
       },
       "supportsSeries": false,
       "viz": {
@@ -1049,14 +1829,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DOW",
         "dimensionKey": "created_dow",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1067,9 +1861,19 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
-        "dimensions": ["current_assignee_uuid", "sla_status_bucket"],
-        "measures": [{ "name": "total", "agg": "count" }],
+        "filters": {
+          "is_open": true
+        },
+        "dimensions": [
+          "current_assignee_uuid",
+          "sla_status_bucket"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
         "limit": 120
       },
       "supportsSeries": false,
@@ -1081,14 +1885,35 @@
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
         "dimensionKey": "current_assignee_uuid",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
-        "pii": { "dimension": "current_assignee_uuid" }
+        "pii": {
+          "dimension": "current_assignee_uuid"
+        }
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+      "rbac": {
+        "visibleTo": [
+          "PGR_SUPERVISOR",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "SUPERVISOR"
+        ]
+      }
     }
   },
   {
@@ -1099,9 +1924,19 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
-        "dimensions": ["service_code", "application_status"],
-        "measures": [{ "name": "total", "agg": "count" }],
+        "filters": {
+          "is_open": true
+        },
+        "dimensions": [
+          "service_code",
+          "application_status"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
         "limit": 300
       },
       "supportsSeries": false,
@@ -1113,14 +1948,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE",
         "dimensionKey": "service_code",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1131,10 +1980,24 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
-        "dimensions": ["source"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "filters": {
+          "is_open": true
+        },
+        "dimensions": [
+          "source"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 50
       },
       "supportsSeries": false,
@@ -1146,14 +2009,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL",
         "dimensionKey": "source",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1164,9 +2041,18 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
-        "dimensions": ["aging_bucket"],
-        "measures": [{ "name": "total", "agg": "count" }],
+        "filters": {
+          "is_open": true
+        },
+        "dimensions": [
+          "aging_bucket"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
         "limit": 10
       },
       "supportsSeries": false,
@@ -1178,14 +2064,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE",
         "dimensionKey": "aging_bucket",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1196,10 +2096,25 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "last_7d", "timeRole": "filed_at" },
-        "dimensions": ["ward_code"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "window": {
+          "name": "last_7d",
+          "timeRole": "filed_at"
+        },
+        "dimensions": [
+          "ward_code"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 200
       },
       "supportsSeries": false,
@@ -1211,14 +2126,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
         "dimensionKey": "ward_code",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1229,10 +2158,25 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true, "sla_breached": true },
-        "dimensions": ["ward_code"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "filters": {
+          "is_open": true,
+          "sla_breached": true
+        },
+        "dimensions": [
+          "ward_code"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 200
       },
       "supportsSeries": false,
@@ -1244,14 +2188,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_SLA_BREACH",
         "dimensionKey": "ward_code",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1262,10 +2220,24 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
-        "dimensions": ["ward_code"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "filters": {
+          "is_open": true
+        },
+        "dimensions": [
+          "ward_code"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 200
       },
       "supportsSeries": false,
@@ -1277,14 +2249,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_OPEN",
         "dimensionKey": "ward_code",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1295,10 +2281,24 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "dimensions": ["ward_code"],
-        "filters": { "is_open": true },
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "dimensions": [
+          "ward_code"
+        ],
+        "filters": {
+          "is_open": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 15
       },
       "supportsSeries": false,
@@ -1310,14 +2310,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_WARD_OPEN",
         "dimensionKey": "ward_code",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1328,18 +2342,37 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "dimensions": ["ward_code"],
-        "filters": { "is_resolved": true },
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "dimensions": [
+          "ward_code"
+        ],
+        "filters": {
+          "is_resolved": true
+        },
         "measures": [
           {
             "name": "ontime_pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "sla_breached": false } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "sla_breached": false
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ],
-        "sort": [{ "by": "ontime_pct", "dir": "desc" }],
+        "sort": [
+          {
+            "by": "ontime_pct",
+            "dir": "desc"
+          }
+        ],
         "limit": 15
       },
       "supportsSeries": false,
@@ -1351,14 +2384,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_WARD_ONTIME",
         "dimensionKey": "ward_code",
-        "measureKeys": ["ontime_pct"],
+        "measureKeys": [
+          "ontime_pct"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1369,29 +2416,59 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "dimensions": ["service_code"],
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "dimensions": [
+          "service_code"
+        ],
         "measures": [
           {
             "name": "closure_pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_resolved": true } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           },
           {
             "name": "ontime_pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_resolved": true, "sla_breached": false } },
-            "denominator": { "agg": "count", "filter": { "is_resolved": true } }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true,
+                "sla_breached": false
+              }
+            },
+            "denominator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              }
+            }
           },
           {
             "name": "avg_ttr_ms",
             "agg": "avg",
             "column": "resolution_ms",
-            "filter": { "is_resolved": true }
+            "filter": {
+              "is_resolved": true
+            }
           }
         ],
-        "sort": [{ "by": "closure_pct", "dir": "desc" }],
+        "sort": [
+          {
+            "by": "closure_pct",
+            "dir": "desc"
+          }
+        ],
         "limit": 15
       },
       "supportsSeries": false,
@@ -1403,14 +2480,30 @@
         "group": "resolution-sla",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_TABLE_RESOLUTION_BY_CATEGORY",
         "dimensionKey": "service_code",
-        "measureKeys": ["closure_pct", "ontime_pct", "avg_ttr_ms"],
+        "measureKeys": [
+          "closure_pct",
+          "ontime_pct",
+          "avg_ttr_ms"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1421,17 +2514,85 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "dimensions": ["service_code", "service_group"],
-        "measures": [
-          { "name": "avg_resolution_ms", "agg": "avg", "column": "resolution_ms", "filter": { "is_resolved": true } },
-          { "name": "ideal_sla_ms", "agg": "avg", "column": "sla_target_ms" },
-          { "name": "reopen_rate", "agg": "ratio", "numerator": { "agg": "count", "filter": { "is_reopened": true } }, "denominator": { "agg": "count", "filter": { "is_resolved": true } } },
-          { "name": "oldest_open_ms", "agg": "max", "column": "open_age_ms", "filter": { "is_open": true } },
-          { "name": "ontime_rate", "agg": "ratio", "numerator": { "agg": "count", "filter": { "is_resolved": true, "sla_breached": false } }, "denominator": { "agg": "count", "filter": { "is_resolved": true } } },
-          { "name": "avg_csat", "agg": "avg", "column": "rating", "filter": { "is_resolved": true, "has_rating": true } }
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "dimensions": [
+          "service_code",
+          "service_group"
         ],
-        "sort": [{ "by": "avg_resolution_ms", "dir": "desc" }],
+        "measures": [
+          {
+            "name": "avg_resolution_ms",
+            "agg": "avg",
+            "column": "resolution_ms",
+            "filter": {
+              "is_resolved": true
+            }
+          },
+          {
+            "name": "ideal_sla_ms",
+            "agg": "avg",
+            "column": "sla_target_ms"
+          },
+          {
+            "name": "reopen_rate",
+            "agg": "ratio",
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_reopened": true
+              }
+            },
+            "denominator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              }
+            }
+          },
+          {
+            "name": "oldest_open_ms",
+            "agg": "max",
+            "column": "open_age_ms",
+            "filter": {
+              "is_open": true
+            }
+          },
+          {
+            "name": "ontime_rate",
+            "agg": "ratio",
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true,
+                "sla_breached": false
+              }
+            },
+            "denominator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              }
+            }
+          },
+          {
+            "name": "avg_csat",
+            "agg": "avg",
+            "column": "rating",
+            "filter": {
+              "is_resolved": true,
+              "has_rating": true
+            }
+          }
+        ],
+        "sort": [
+          {
+            "by": "avg_resolution_ms",
+            "dir": "desc"
+          }
+        ],
         "limit": 30
       },
       "supportsSeries": false,
@@ -1443,14 +2604,33 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
         "dimensionKey": "service_code",
-        "measureKeys": ["avg_resolution_ms", "ideal_sla_ms", "reopen_rate", "oldest_open_ms", "ontime_rate", "avg_csat"],
+        "measureKeys": [
+          "avg_resolution_ms",
+          "ideal_sla_ms",
+          "reopen_rate",
+          "oldest_open_ms",
+          "ontime_rate",
+          "avg_csat"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1461,11 +2641,35 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true, "sla_status_bucket": { "in": ["approaching", "breached"] } },
-        "dimensions": ["service_request_id", "service_code", "service_group", "ward_code", "application_status", "sla_status_bucket", "current_assignee_uuid"],
+        "filters": {
+          "is_open": true,
+          "sla_status_bucket": {
+            "in": [
+              "approaching",
+              "breached"
+            ]
+          }
+        },
+        "dimensions": [
+          "service_request_id",
+          "service_code",
+          "service_group",
+          "ward_code",
+          "application_status",
+          "sla_status_bucket",
+          "current_assignee_uuid"
+        ],
         "measures": [
-          { "name": "open_age_ms", "agg": "max", "column": "open_age_ms" },
-          { "name": "sla_target_ms", "agg": "max", "column": "sla_target_ms" }
+          {
+            "name": "open_age_ms",
+            "agg": "max",
+            "column": "open_age_ms"
+          },
+          {
+            "name": "sla_target_ms",
+            "agg": "max",
+            "column": "sla_target_ms"
+          }
         ],
         "limit": 50
       },
@@ -1478,14 +2682,29 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK",
         "dimensionKey": "service_request_id",
-        "measureKeys": ["open_age_ms", "sla_target_ms"],
+        "measureKeys": [
+          "open_age_ms",
+          "sla_target_ms"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1496,14 +2715,35 @@
       "status": "published",
       "query": {
         "grain": "events",
-        "dimensions": ["status"],
-        "filters": { "is_current_state": false },
-        "measures": [
-          { "name": "avg_dwell", "agg": "avg", "column": "dwell_ms" },
-          { "name": "median_dwell", "agg": "percentile", "column": "dwell_ms", "p": 50 },
-          { "name": "samples", "agg": "count" }
+        "dimensions": [
+          "status"
         ],
-        "sort": [{ "by": "avg_dwell", "dir": "desc" }],
+        "filters": {
+          "is_current_state": false
+        },
+        "measures": [
+          {
+            "name": "avg_dwell",
+            "agg": "avg",
+            "column": "dwell_ms"
+          },
+          {
+            "name": "median_dwell",
+            "agg": "percentile",
+            "column": "dwell_ms",
+            "p": 50
+          },
+          {
+            "name": "samples",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "avg_dwell",
+            "dir": "desc"
+          }
+        ],
         "limit": 8
       },
       "supportsSeries": false,
@@ -1515,14 +2755,30 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EV_TABLE_STAGE_DWELL",
         "dimensionKey": "status",
-        "measureKeys": ["avg_dwell", "median_dwell", "samples"],
+        "measureKeys": [
+          "avg_dwell",
+          "median_dwell",
+          "samples"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1533,9 +2789,20 @@
       "status": "published",
       "query": {
         "grain": "events",
-        "dimensions": ["service_code", "status"],
-        "filters": { "is_current_state": false },
-        "measures": [{ "name": "avg_dwell", "agg": "avg", "column": "dwell_ms" }],
+        "dimensions": [
+          "service_code",
+          "status"
+        ],
+        "filters": {
+          "is_current_state": false
+        },
+        "measures": [
+          {
+            "name": "avg_dwell",
+            "agg": "avg",
+            "column": "dwell_ms"
+          }
+        ],
         "limit": 200
       },
       "supportsSeries": false,
@@ -1547,14 +2814,28 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EV_CHART_RESOLUTION_DWELL_SUBTYPE",
         "dimensionKey": "service_code",
-        "measureKeys": ["avg_dwell"],
+        "measureKeys": [
+          "avg_dwell"
+        ],
         "compose": null,
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1565,10 +2846,24 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
-        "dimensions": ["current_assignee_uuid"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "filters": {
+          "is_open": true
+        },
+        "dimensions": [
+          "current_assignee_uuid"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 1
       },
       "supportsSeries": false,
@@ -1580,12 +2875,31 @@
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_OPEN_BY_OFFICER",
         "compose": null,
-        "pii": { "dimension": "current_assignee_uuid" }
+        "pii": {
+          "dimension": "current_assignee_uuid"
+        }
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+      "rbac": {
+        "visibleTo": [
+          "PGR_SUPERVISOR",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "SUPERVISOR"
+        ]
+      }
     }
   },
   {
@@ -1596,10 +2910,24 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
-        "dimensions": ["current_assignee_uuid"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "filters": {
+          "is_open": true
+        },
+        "dimensions": [
+          "current_assignee_uuid"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 5
       },
       "supportsSeries": false,
@@ -1611,14 +2939,35 @@
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_OPEN_LIST",
         "dimensionKey": "current_assignee_uuid",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
-        "pii": { "dimension": "current_assignee_uuid" }
+        "pii": {
+          "dimension": "current_assignee_uuid"
+        }
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+      "rbac": {
+        "visibleTo": [
+          "PGR_SUPERVISOR",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "SUPERVISOR"
+        ]
+      }
     }
   },
   {
@@ -1629,9 +2978,20 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
-        "measures": [{ "name": "avg_ms", "agg": "avg", "column": "resolution_ms" }]
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
+        "measures": [
+          {
+            "name": "avg_ms",
+            "agg": "avg",
+            "column": "resolution_ms"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -1645,9 +3005,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1658,9 +3030,21 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
-        "measures": [{ "name": "median_ms", "agg": "percentile", "column": "resolution_ms", "p": 50 }]
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
+        "measures": [
+          {
+            "name": "median_ms",
+            "agg": "percentile",
+            "column": "resolution_ms",
+            "p": 50
+          }
+        ]
       },
       "supportsSeries": false,
       "viz": {
@@ -1674,9 +3058,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1687,11 +3083,28 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
-        "dimensions": ["current_assignee_uuid"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
+        "dimensions": [
+          "current_assignee_uuid"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 1
       },
       "supportsSeries": false,
@@ -1703,12 +3116,31 @@
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_CLOSED_BY_OFFICER",
         "compose": null,
-        "pii": { "dimension": "current_assignee_uuid" }
+        "pii": {
+          "dimension": "current_assignee_uuid"
+        }
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+      "rbac": {
+        "visibleTo": [
+          "PGR_SUPERVISOR",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "SUPERVISOR"
+        ]
+      }
     }
   },
   {
@@ -1719,11 +3151,28 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
-        "dimensions": ["current_assignee_uuid"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
+        "dimensions": [
+          "current_assignee_uuid"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 5
       },
       "supportsSeries": false,
@@ -1735,14 +3184,35 @@
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_CLOSED_LIST",
         "dimensionKey": "current_assignee_uuid",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
-        "pii": { "dimension": "current_assignee_uuid" }
+        "pii": {
+          "dimension": "current_assignee_uuid"
+        }
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+      "rbac": {
+        "visibleTo": [
+          "PGR_SUPERVISOR",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "SUPERVISOR"
+        ]
+      }
     }
   },
   {
@@ -1753,11 +3223,28 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
-        "dimensions": ["current_assignee_uuid"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
+        "dimensions": [
+          "current_assignee_uuid"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 5
       },
       "supportsSeries": false,
@@ -1769,14 +3256,35 @@
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_LEADERBOARD_CLOSED",
         "dimensionKey": "current_assignee_uuid",
-        "measureKeys": ["total"],
+        "measureKeys": [
+          "total"
+        ],
         "compose": null,
-        "pii": { "dimension": "current_assignee_uuid" }
+        "pii": {
+          "dimension": "current_assignee_uuid"
+        }
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+      "rbac": {
+        "visibleTo": [
+          "PGR_SUPERVISOR",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "SUPERVISOR"
+        ]
+      }
     }
   },
   {
@@ -1787,15 +3295,65 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "dimensions": ["current_assignee_uuid"],
-        "measures": [
-          { "name": "assigned", "agg": "count" },
-          { "name": "open", "agg": "count", "filter": { "is_open": true } },
-          { "name": "resolved", "agg": "count", "filter": { "is_resolved": true } },
-          { "name": "reopen_rate", "agg": "ratio", "numerator": { "agg": "count", "filter": { "is_reopened": true, "is_resolved": true } }, "denominator": { "agg": "count", "filter": { "is_resolved": true } } },
-          { "name": "avg_csat", "agg": "avg", "column": "rating", "filter": { "is_resolved": true, "has_rating": true } }
+        "dimensions": [
+          "current_assignee_uuid"
         ],
-        "sort": [{ "by": "open", "dir": "desc" }, { "by": "assigned", "dir": "desc" }],
+        "measures": [
+          {
+            "name": "assigned",
+            "agg": "count"
+          },
+          {
+            "name": "open",
+            "agg": "count",
+            "filter": {
+              "is_open": true
+            }
+          },
+          {
+            "name": "resolved",
+            "agg": "count",
+            "filter": {
+              "is_resolved": true
+            }
+          },
+          {
+            "name": "reopen_rate",
+            "agg": "ratio",
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_reopened": true,
+                "is_resolved": true
+              }
+            },
+            "denominator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              }
+            }
+          },
+          {
+            "name": "avg_csat",
+            "agg": "avg",
+            "column": "rating",
+            "filter": {
+              "is_resolved": true,
+              "has_rating": true
+            }
+          }
+        ],
+        "sort": [
+          {
+            "by": "open",
+            "dir": "desc"
+          },
+          {
+            "by": "assigned",
+            "dir": "desc"
+          }
+        ],
         "limit": 40
       },
       "supportsSeries": false,
@@ -1807,14 +3365,39 @@
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE",
         "dimensionKey": "current_assignee_uuid",
-        "measureKeys": ["assigned", "open", "resolved", "reopen_rate", "avg_csat"],
+        "measureKeys": [
+          "assigned",
+          "open",
+          "resolved",
+          "reopen_rate",
+          "avg_csat"
+        ],
         "compose": null,
-        "pii": { "dimension": "current_assignee_uuid" }
+        "pii": {
+          "dimension": "current_assignee_uuid"
+        }
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+      "rbac": {
+        "visibleTo": [
+          "PGR_SUPERVISOR",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "SUPERVISOR"
+        ]
+      }
     }
   },
   {
@@ -1825,14 +3408,26 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "last_7d", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
+        "window": {
+          "name": "last_7d",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_reopened": true } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_reopened": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -1848,9 +3443,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1861,14 +3468,26 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "last_30d", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
+        "window": {
+          "name": "last_30d",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_reopened": true } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_reopened": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -1884,9 +3503,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_30d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_30d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1897,14 +3528,26 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "sla_breached": false } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "sla_breached": false
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -1920,9 +3563,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1933,24 +3588,58 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true, "sla_breached": true },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "filters": {
+          "is_open": true,
+          "sla_breached": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-sparkline",
         "format": "integer",
         "valueKey": "total",
         "accent": "red",
         "group": "resolution-sla",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_BREACH_TOTAL",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "threshold": {
+          "kind": "count",
+          "higherIsBetter": false,
+          "onTrack": 5,
+          "breaching": 20
+        },
+        "delta": {
+          "mode": "percent",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period",
+        "dateKey": "created_date",
+        "sparklineMeasureKey": "total",
+        "seriesColor": null
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1961,9 +3650,20 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
-        "measures": [{ "name": "avg_ms", "agg": "avg", "column": "resolution_ms" }]
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
+        "measures": [
+          {
+            "name": "avg_ms",
+            "agg": "avg",
+            "column": "resolution_ms"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -1977,9 +3677,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -1990,9 +3702,21 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
-        "measures": [{ "name": "median_ms", "agg": "percentile", "column": "resolution_ms", "p": 50 }]
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
+        "measures": [
+          {
+            "name": "median_ms",
+            "agg": "percentile",
+            "column": "resolution_ms",
+            "p": 50
+          }
+        ]
       },
       "supportsSeries": false,
       "viz": {
@@ -2006,9 +3730,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2023,8 +3759,15 @@
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_resolved": true } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2040,9 +3783,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2053,8 +3808,16 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "last_1d", "timeRole": "filed_at" },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "window": {
+          "name": "last_1d",
+          "timeRole": "filed_at"
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -2068,9 +3831,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_1d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2081,9 +3856,19 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "last_1d", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "window": {
+          "name": "last_1d",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -2097,9 +3882,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_1d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2110,13 +3907,22 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
+        "filters": {
+          "is_open": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "sla_status_bucket": "within" } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "sla_status_bucket": "within"
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2132,9 +3938,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2145,13 +3963,22 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
+        "filters": {
+          "is_open": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "sla_status_bucket": "approaching" } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "sla_status_bucket": "approaching"
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2167,9 +3994,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2180,13 +4019,22 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
+        "filters": {
+          "is_open": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "sla_breached": true } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "sla_breached": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2202,9 +4050,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2215,13 +4075,28 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true },
+        "filters": {
+          "is_open": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "aging_bucket": { "in": [">7d", "7-14d", "14d+"] } } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "aging_bucket": {
+                  "in": [
+                    ">7d",
+                    "7-14d",
+                    "14d+"
+                  ]
+                }
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2237,9 +4112,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2250,9 +4137,19 @@
       "status": "published",
       "query": {
         "grain": "events",
-        "window": { "name": "last_1d", "timeRole": "event_at" },
-        "filters": { "is_escalation": true },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "window": {
+          "name": "last_1d",
+          "timeRole": "event_at"
+        },
+        "filters": {
+          "is_escalation": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -2266,9 +4163,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_1d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2279,14 +4188,26 @@
       "status": "published",
       "query": {
         "grain": "events",
-        "window": { "name": "last_1d", "timeRole": "event_at" },
-        "filters": { "is_escalation": true },
+        "window": {
+          "name": "last_1d",
+          "timeRole": "event_at"
+        },
+        "filters": {
+          "is_escalation": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "escalation_source": "auto" } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "escalation_source": "auto"
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2302,9 +4223,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_1d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2315,14 +4248,26 @@
       "status": "published",
       "query": {
         "grain": "events",
-        "window": { "name": "last_1d", "timeRole": "event_at" },
-        "filters": { "is_escalation": true },
+        "window": {
+          "name": "last_1d",
+          "timeRole": "event_at"
+        },
+        "filters": {
+          "is_escalation": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "escalation_source": "manual" } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "escalation_source": "manual"
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2338,9 +4283,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_1d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2351,8 +4308,22 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true, "aging_bucket": { "in": [">7d", "7-14d", "14d+"] } },
-        "measures": [{ "name": "total", "agg": "count" }]
+        "filters": {
+          "is_open": true,
+          "aging_bucket": {
+            "in": [
+              ">7d",
+              "7-14d",
+              "14d+"
+            ]
+          }
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -2366,9 +4337,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2379,10 +4362,31 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "filters": { "is_open": true, "aging_bucket": { "in": [">7d", "7-14d", "14d+"] } },
-        "dimensions": ["current_assignee_uuid"],
-        "measures": [{ "name": "total", "agg": "count" }],
-        "sort": [{ "by": "total", "dir": "desc" }],
+        "filters": {
+          "is_open": true,
+          "aging_bucket": {
+            "in": [
+              ">7d",
+              "7-14d",
+              "14d+"
+            ]
+          }
+        },
+        "dimensions": [
+          "current_assignee_uuid"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
         "limit": 1
       },
       "supportsSeries": false,
@@ -2394,12 +4398,31 @@
         "group": "escalations-risk",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_CRITICAL_BY_OFFICER",
         "compose": null,
-        "pii": { "dimension": "current_assignee_uuid" }
+        "pii": {
+          "dimension": "current_assignee_uuid"
+        }
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": ["PGR_SUPERVISOR", "PGR_ADMIN", "SUPERUSER"] }
+      "rbac": {
+        "visibleTo": [
+          "PGR_SUPERVISOR",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "SUPERVISOR"
+        ]
+      }
     }
   },
   {
@@ -2410,14 +4433,26 @@
       "status": "published",
       "query": {
         "grain": "events",
-        "window": { "name": "wtd", "timeRole": "event_at" },
-        "filters": { "is_escalation": true },
+        "window": {
+          "name": "wtd",
+          "timeRole": "event_at"
+        },
+        "filters": {
+          "is_escalation": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "escalation_source": "auto" } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "escalation_source": "auto"
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2433,9 +4468,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2446,14 +4493,26 @@
       "status": "published",
       "query": {
         "grain": "events",
-        "window": { "name": "wtd", "timeRole": "event_at" },
-        "filters": { "is_escalation": true },
+        "window": {
+          "name": "wtd",
+          "timeRole": "event_at"
+        },
+        "filters": {
+          "is_escalation": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "escalation_source": "manual" } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "escalation_source": "manual"
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2469,9 +4528,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2482,25 +4553,63 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true, "has_rating": true },
-        "measures": [{ "name": "avg", "agg": "avg", "column": "rating" }]
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true,
+          "has_rating": true
+        },
+        "measures": [
+          {
+            "name": "avg",
+            "agg": "avg",
+            "column": "rating"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-sparkline",
         "format": "decimalOne",
         "valueKey": "avg",
         "accent": "teal",
         "group": "citizen-experience",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_CSAT_AVG_WEEK",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "threshold": {
+          "kind": "rating",
+          "higherIsBetter": true,
+          "onTrack": 4,
+          "breaching": 3
+        },
+        "delta": {
+          "mode": "rating",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period",
+        "dateKey": "created_date",
+        "sparklineMeasureKey": "avg",
+        "seriesColor": null
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2511,14 +4620,26 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "has_rating": true } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "has_rating": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2534,9 +4655,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2547,14 +4680,26 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "last_7d", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
+        "window": {
+          "name": "last_7d",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_reopened": true } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_reopened": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2570,9 +4715,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2583,14 +4740,26 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "last_30d", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true },
+        "window": {
+          "name": "last_30d",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_reopened": true } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_reopened": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2606,9 +4775,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_30d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_30d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2619,9 +4800,20 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "last_30d", "timeRole": "filed_at" },
-        "filters": { "is_first_time_complainant": false },
-        "measures": [{ "name": "total", "agg": "count_distinct", "column": "account_id" }]
+        "window": {
+          "name": "last_30d",
+          "timeRole": "filed_at"
+        },
+        "filters": {
+          "is_first_time_complainant": false
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count_distinct",
+            "column": "account_id"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -2635,9 +4827,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_30d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_30d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2648,14 +4852,27 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "resolved_at" },
-        "filters": { "is_resolved": true, "has_rating": true },
+        "window": {
+          "name": "wtd",
+          "timeRole": "resolved_at"
+        },
+        "filters": {
+          "is_resolved": true,
+          "has_rating": true
+        },
         "measures": [
           {
             "name": "pct",
             "agg": "ratio",
-            "numerator": { "agg": "count", "filter": { "is_negative_rating": true } },
-            "denominator": { "agg": "count" }
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_negative_rating": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ]
       },
@@ -2671,9 +4888,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2684,8 +4913,17 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "measures": [{ "name": "avg_ms", "agg": "avg", "column": "time_to_assign_ms" }]
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "measures": [
+          {
+            "name": "avg_ms",
+            "agg": "avg",
+            "column": "time_to_assign_ms"
+          }
+        ]
       },
       "supportsSeries": true,
       "viz": {
@@ -2699,9 +4937,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2712,8 +4962,18 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": { "name": "wtd", "timeRole": "filed_at" },
-        "measures": [{ "name": "median_ms", "agg": "percentile", "column": "time_to_assign_ms", "p": 50 }]
+        "window": {
+          "name": "wtd",
+          "timeRole": "filed_at"
+        },
+        "measures": [
+          {
+            "name": "median_ms",
+            "agg": "percentile",
+            "column": "time_to_assign_ms",
+            "p": 50
+          }
+        ]
       },
       "supportsSeries": false,
       "viz": {
@@ -2727,9 +4987,21 @@
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2750,15 +5022,29 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REG_DAILY_AVG",
         "compose": {
           "type": "dailyAvgFromWeekly",
-          "sourceKpiIds": ["cl_reg_weekly"],
+          "sourceKpiIds": [
+            "cl_reg_weekly"
+          ],
           "elapsedFromAsOf": true
         },
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2779,15 +5065,29 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REG_HOURLY_AVG",
         "compose": {
           "type": "hourlyAvgFromDaily",
-          "sourceKpiIds": ["cl_reg_daily"],
+          "sourceKpiIds": [
+            "cl_reg_daily"
+          ],
           "elapsedFromAsOf": true
         },
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_1d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2808,15 +5108,29 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_OPEN_RATE",
         "compose": {
           "type": "openRateComplement",
-          "sourceKpiIds": ["rs_closure_rate"],
+          "sourceKpiIds": [
+            "rs_closure_rate"
+          ],
           "elapsedFromAsOf": false
         },
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_7d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   },
   {
@@ -2837,15 +5151,30 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_NET_BACKLOG_DAILY",
         "compose": {
           "type": "netBacklogDaily",
-          "sourceKpiIds": ["rs_inflow_daily", "rs_outflow_daily"],
+          "sourceKpiIds": [
+            "rs_inflow_daily",
+            "rs_outflow_daily"
+          ],
           "elapsedFromAsOf": false
         },
         "pii": false
       },
       "params": [
-        { "name": "window", "default": "last_1d", "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"] }
+        {
+          "name": "window",
+          "default": "last_1d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
       ],
-      "rbac": { "visibleTo": [] }
+      "rbac": {
+        "visibleTo": []
+      }
     }
   }
 ]
