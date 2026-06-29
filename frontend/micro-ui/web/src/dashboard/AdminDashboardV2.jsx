@@ -7,6 +7,7 @@ import "./styles/dashboard.css";
 import DashboardLayout from "./components/DashboardLayout";
 import KpiTile from "./components/KpiTile";
 import CardUpdatedStamp from "./components/CardUpdatedStamp";
+import ResizeGrip from "./components/ResizeGrip";
 import DashboardLogin, {
   hasDashboardSession,
   clearDashboardSession,
@@ -14,8 +15,41 @@ import DashboardLogin, {
 
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useCatalog } from "./hooks/useCatalog";
+import { useCatalogLayout } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
 import { GRID_COLS, KPI_ROW_HEIGHT } from "./constants/layoutConfig";
+
+const RemoveIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="tw-h-3.5 tw-w-3.5"
+    aria-hidden="true"
+  >
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </svg>
+);
+
+const WidgetRemoveButton = ({ label, onClick }) => (
+  <button
+    type="button"
+    title="Remove from dashboard"
+    onMouseDown={(e) => e.stopPropagation()}
+    onClick={onClick}
+    className="dashboard-widget-remove-btn"
+    aria-label={label}
+  >
+    <RemoveIcon />
+  </button>
+);
 
 /**
  * AdminDashboardV2 — a PARALLEL, pure-engine dashboard.
@@ -213,49 +247,6 @@ function seriesToPoints(rows, viz, valueKey) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Default layout                                                              */
-/* -------------------------------------------------------------------------- */
-
-/**
- * The reference supervisor-default pack (ansible/.../DashboardPack.json). Used
- * as the layout when the backend /packs endpoint returns an empty defaultLayout
- * (the local shim currently serves the full catalog with no layout). Falls back
- * further to an auto-flow grid for any tiles not pinned here.
- */
-const DEFAULT_PACK_LAYOUT = [
-  { kpiId: "cl_resolution_rate_count", x: 0, y: 0, w: 2, h: 2 },
-  { kpiId: "rs_breach_total", x: 2, y: 0, w: 2, h: 2 },
-  { kpiId: "cl_resolved_date_range_count", x: 4, y: 0, w: 2, h: 2 },
-  { kpiId: "cl_reopen_rate_count", x: 6, y: 0, w: 2, h: 2 },
-  { kpiId: "ce_csat_avg_week", x: 8, y: 0, w: 2, h: 2 },
-  { kpiId: "cl_chart_officer_sla", x: 0, y: 2, w: 8, h: 6 },
-  { kpiId: "ev_chart_resolution_dwell_subtype", x: 8, y: 2, w: 4, h: 6 },
-  { kpiId: "cl_map_ward_wow_current", x: 0, y: 8, w: 8, h: 6 },
-  { kpiId: "cl_chart_department_resolution_rate", x: 8, y: 8, w: 4, h: 6 },
-  { kpiId: "cl_chart_over_time_created_daily", x: 0, y: 14, w: 12, h: 6 },
-  { kpiId: "cl_table_complaints_at_risk", x: 0, y: 20, w: 12, h: 5 },
-];
-
-/**
- * Resolve the grid layout to render: the backend pack layout when present, else
- * the default pack layout intersected with the tiles the catalog actually
- * returned (so we never render a tile the role can't see).
- */
-function resolveLayout(pack, kpis) {
-  const packLayout = pack?.layout || [];
-  const source = packLayout.length ? packLayout : DEFAULT_PACK_LAYOUT;
-  const available = source.filter((item) => kpis[item.kpiId]);
-  return available.map((item) => ({
-    i: item.kpiId,
-    x: item.x ?? 0,
-    y: item.y ?? 0,
-    w: item.w ?? 2,
-    h: item.h ?? 2,
-    static: true, // V2 is a read-only parity render; no drag/resize yet.
-  }));
-}
-
-/* -------------------------------------------------------------------------- */
 /* Inner dashboard                                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -273,10 +264,16 @@ const AdminDashboardV2Inner = ({ onSignOut }) => {
   });
   const reqIdRef = useRef(0);
 
-  const layout = useMemo(
-    () => (pack ? resolveLayout(pack, kpis) : []),
-    [pack, kpis]
-  );
+  const {
+    layout,
+    onDragStop,
+    onResizeStop,
+    onLayoutChange,
+    resetLayout,
+    removeWidgetFromLayout,
+    addKpiToLayout,
+    visibleLayoutIds,
+  } = useCatalogLayout(kpis, pack?.layout);
 
   const tiles = useMemo(
     () => layout.map((item) => ({ kpiId: item.i })),
@@ -332,10 +329,9 @@ const AdminDashboardV2Inner = ({ onSignOut }) => {
     [batch.results]
   );
 
-  const gridLayout = useMemo(
-    () => layout.map((item) => ({ ...item, className: gridItemClassName(item.i) })),
-    [layout]
-  );
+  // RGL reads min/max W/H straight off each layout item (the hook bakes in the
+  // viz.kind-derived constraints), so the grid layout passes items through verbatim.
+  const gridLayout = useMemo(() => layout, [layout]);
 
   const renderTile = (kpiId) => {
     const def = kpis[kpiId];
@@ -360,9 +356,9 @@ const AdminDashboardV2Inner = ({ onSignOut }) => {
 
   return (
     <DashboardLayout
-      visibleLayoutIds={layout.map((i) => i.i)}
-      onAddWidget={() => {}}
-      onResetLayout={() => {}}
+      visibleLayoutIds={visibleLayoutIds}
+      onAddWidget={addKpiToLayout}
+      onResetLayout={resetLayout}
       onDragWidgetStart={() => {}}
       onDragWidgetEnd={() => {}}
       searchQuery=""
@@ -413,31 +409,50 @@ const AdminDashboardV2Inner = ({ onSignOut }) => {
           containerPadding={[0, 0]}
           compactType={null}
           allowOverlap
-          isDraggable={false}
-          isResizable={false}
+          isDraggable
+          isResizable
+          draggableHandle=".dashboard-widget-surface"
+          draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
+          onDragStop={onDragStop}
+          onResizeStop={onResizeStop}
+          onLayoutChange={onLayoutChange}
         >
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
+            const removeBtn = (
+              <WidgetRemoveButton
+                label={`Remove ${kpis[item.i]?.viz?.title || item.i}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  removeWidgetFromLayout(item.i);
+                }}
+              />
+            );
             if (isKpi) {
               return (
                 <div
                   key={item.i}
-                  className="dashboard-kpi-widget tw-group tw-relative tw-flex tw-h-full tw-flex-col"
+                  className="dashboard-kpi-widget dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-flex-col"
                 >
+                  {removeBtn}
                   {renderTile(item.i)}
                   <CardUpdatedStamp label={lastUpdatedLabel} />
+                  <ResizeGrip />
                 </div>
               );
             }
             return (
               <section
                 key={item.i}
-                className="tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface"
+                className="dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface"
               >
+                {removeBtn}
                 <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
                   {renderTile(item.i)}
                 </div>
                 <CardUpdatedStamp label={lastUpdatedLabel} />
+                <ResizeGrip />
               </section>
             );
           })}
@@ -446,10 +461,5 @@ const AdminDashboardV2Inner = ({ onSignOut }) => {
     </DashboardLayout>
   );
 };
-
-/** Match DashboardGrid's per-item wrapper classes for KPI vs chart tiles. */
-function gridItemClassName(kpiId) {
-  return undefined;
-}
 
 export default AdminDashboardV2;
