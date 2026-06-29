@@ -125,10 +125,13 @@ export function EmployeeBulkImport() {
     async function load() {
       setRefsLoading(true);
       try {
+        const hierarchies = await boundaryService.getHierarchies(tenantId).catch(() => []);
+        const hierarchyType = hierarchies[0]?.hierarchyType;
+
         const [depts, desigs, bounds, fetchedRoles, mobile] = await Promise.all([
           mdmsService.getDepartments(tenantId),
           mdmsService.getDesignations(tenantId),
-          boundaryService.searchBoundaries(tenantId),
+          boundaryService.searchBoundaries(tenantId, hierarchyType ? { hierarchyType } : undefined),
           mdmsService.getRoles(tenantId).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(tenantId).catch(() => null),
         ]);

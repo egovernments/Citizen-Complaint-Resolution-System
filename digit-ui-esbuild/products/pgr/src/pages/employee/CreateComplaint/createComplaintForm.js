@@ -81,8 +81,7 @@ const CreateComplaintForm = ({
     const set = new Set();
     employees.forEach((e) =>
       (e?.assignments || [])
-        .filter((a) => a?.is
-                Assignment !== false && a?.department)
+        .filter((a) => a?.isCurrentAssignment !== false && a?.department)
         .forEach((a) => set.add(a.department))
     );
     return [...set];

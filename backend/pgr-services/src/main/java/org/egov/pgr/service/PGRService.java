@@ -118,6 +118,15 @@ public class PGRService {
         if(criteria.getMobileNumber()!=null && CollectionUtils.isEmpty(criteria.getUserIds()))
             return new ArrayList<>();
 
+        if (criteria.getAssignee() != null) {
+            String tenantId = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+            Set<String> serviceRequestIds = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
+            if (serviceRequestIds.isEmpty()) {
+                return new ArrayList<>();
+            }
+            criteria.setServiceRequestIds(serviceRequestIds);
+        }
+
         criteria.setIsPlainSearch(false);
 
         List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria);

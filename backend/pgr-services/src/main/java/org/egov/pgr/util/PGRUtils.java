@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pgr.web.models.AuditDetails;
 import org.egov.pgr.web.models.Service;
@@ -18,9 +19,12 @@ public class PGRUtils {
 
     private MultiStateInstanceUtil multiStateInstanceUtil;
 
+    private ObjectMapper objectMapper;
+
     @Autowired
-    public PGRUtils(MultiStateInstanceUtil multiStateInstanceUtil) {
+    public PGRUtils(MultiStateInstanceUtil multiStateInstanceUtil, ObjectMapper objectMapper) {
         this.multiStateInstanceUtil = multiStateInstanceUtil;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -89,17 +93,28 @@ public class PGRUtils {
     }
     
     public Map<String, Object> extractAdditionalDetails(Object additionalDetail) {
-        Map<String, Object> result = new HashMap<>();
+        if (additionalDetail == null) {
+            return new HashMap<>();
+        }
 
         if (additionalDetail instanceof Map<?, ?> map) {
+            Map<String, Object> result = new HashMap<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 if (entry.getKey() instanceof String key) {
                     result.put(key, entry.getValue());
                 }
             }
+            return result;
         }
 
-        return result;
+        // Handle JsonNode (returned by PGRRowMapper from DB reads) and any other non-Map type.
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> converted = objectMapper.convertValue(additionalDetail, Map.class);
+            return converted != null ? new HashMap<>(converted) : new HashMap<>();
+        } catch (Exception e) {
+            return new HashMap<>();
+        }
     }
 
 }

@@ -92,10 +92,16 @@ export default function Phase4Page() {
       setLoadingRefs(true);
       setRefsError(null);
       try {
+        // Fetch hierarchy type first so boundaries come back with the correct
+        // hierarchyType populated — the boundary-relationships API returns
+        // hierarchyType=null in its wrapper unless explicitly filtered by it.
+        const hierarchies = await boundaryService.getHierarchies(targetTenant).catch(() => []);
+        const hierarchyType = hierarchies[0]?.hierarchyType;
+
         const [depts, desigs, bounds, fetchedRoles, fetchedMobileRules] = await Promise.all([
           mdmsService.getDepartments(targetTenant),
           mdmsService.getDesignations(targetTenant),
-          boundaryService.searchBoundaries(targetTenant),
+          boundaryService.searchBoundaries(targetTenant, hierarchyType ? { hierarchyType } : undefined),
           mdmsService.getRoles(targetTenant).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(targetTenant).catch(() => null),
         ]);

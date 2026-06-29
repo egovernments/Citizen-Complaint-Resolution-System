@@ -1371,7 +1371,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-registry.preview.egov.theflywheel.in/pgr-services-dev:latest}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-3d1b7d4}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1739,7 +1739,7 @@ services:
     volumes:
       - ./jupyter/dataloader/templates:/home/jovyan/work/templates
       - ./jupyter/dataloader:/home/jovyan/work/dataloader
-      - ./jupyter/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
+      - ./jupyter/dataloader/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
     networks:
       - egov-network
 

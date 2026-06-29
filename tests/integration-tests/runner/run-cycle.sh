@@ -51,8 +51,13 @@ rm -rf playwright-report test-results report.json
 
 # ---- run ---- (nice'd so the live DIGIT stack on this box keeps priority)
 phase "running"
+# --global-timeout fires BEFORE the shell `timeout` SIGKILL, so Playwright's json
+# reporter still flushes report.json (written at onEnd) with the partial results
+# gathered so far. A slow run then degrades to a partial dashboard update instead
+# of blanking it entirely (#907). Keep it comfortably under the shell timeout.
 timeout 90m nice -n 10 npx playwright test \
-  || echo "[run-cycle] playwright exited non-zero (some tests failed); continuing to catalog"
+  --global-timeout="${PW_GLOBAL_TIMEOUT_MS:-4800000}" \
+  || echo "[run-cycle] playwright exited non-zero (failures or global-timeout reached); continuing to catalog"
 
 # ---- catalog ----
 phase "catalog"
