@@ -981,8 +981,32 @@ function normalizeSeg(value) {
   return String(value ?? '').toUpperCase();
 }
 
+/**
+ * Title resolution for the inverted catalog. The MDMS def now carries a human
+ * `viz.title` (the single source of truth, sourced from the reference dashboard
+ * labels); prefer it. `titleKey` is retained on the def for a future i18n layer
+ * but is a raw key (RAINMAKER-PGR.DASHBOARD_KPI_*) so it is only ever used as a
+ * last-resort, prettified, fallback — never rendered verbatim.
+ */
 function resolveTitle(def) {
-  return def?.viz?.titleKey || def?.titleKey || def?.title || def?.name || '';
+  return (
+    def?.viz?.title ||
+    def?.title ||
+    def?.name ||
+    prettifyTitleKey(def?.viz?.titleKey || def?.titleKey) ||
+    ''
+  );
+}
+
+function prettifyTitleKey(key) {
+  if (!key) return '';
+  const tail = String(key).split('.').pop().replace(/^DASHBOARD_KPI_/, '');
+  if (!tail) return '';
+  return tail
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
 }
 
 function errorLabel(code) {

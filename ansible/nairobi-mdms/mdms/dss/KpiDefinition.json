@@ -27,7 +27,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REG_DAILY",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints created (today)"
       },
       "params": [
         {
@@ -75,7 +76,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REG_WEEKLY",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints created (this week)"
       },
       "params": [
         {
@@ -123,7 +125,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REG_MONTHLY",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints created (this month)"
       },
       "params": [
         {
@@ -167,7 +170,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "New complaints created"
       },
       "params": [
         {
@@ -211,7 +215,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints created today"
       },
       "params": [
         {
@@ -275,7 +280,8 @@
           "mode": "percentPoint",
           "compare": "prior"
         },
-        "deltaLabel": "vs prior period"
+        "deltaLabel": "vs prior period",
+        "title": "Resolution rate"
       },
       "params": [
         {
@@ -342,7 +348,8 @@
           "mode": "percentPoint",
           "compare": "prior"
         },
-        "deltaLabel": "vs prior period"
+        "deltaLabel": "vs prior period",
+        "title": "Reopen rate"
       },
       "params": [
         {
@@ -391,7 +398,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Citizen satisfaction"
       },
       "params": [
         {
@@ -451,7 +459,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "First-assignment rate"
       },
       "params": [
         {
@@ -505,7 +514,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "SLA compliance rate"
       },
       "params": [
         {
@@ -561,7 +571,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Resolved on time rate"
       },
       "params": [
         {
@@ -608,7 +619,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Open complaints"
       },
       "params": [
         {
@@ -669,7 +681,8 @@
         "deltaLabel": "vs prior period",
         "dateKey": "created_date",
         "sparklineMeasureKey": "total",
-        "seriesColor": null
+        "seriesColor": null,
+        "title": "Resolved complaints"
       },
       "params": [
         {
@@ -717,7 +730,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Oldest complaint"
       },
       "params": [
         {
@@ -765,7 +779,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Average resolution time"
       },
       "params": [
         {
@@ -816,7 +831,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_NEW_COMPLAINANTS",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "New complainants"
       },
       "params": [
         {
@@ -867,7 +883,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REPEAT_COMPLAINANTS",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Repeat complainants"
       },
       "params": [
         {
@@ -924,7 +941,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REPEAT_PCT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Repeat complainant rate"
       },
       "params": [
         {
@@ -984,7 +1002,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHANNEL_APP",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints via app"
       },
       "params": [
         {
@@ -1042,7 +1061,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHANNEL_PHONE",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints via phone"
       },
       "params": [
         {
@@ -1103,7 +1123,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHANNEL_WALKIN",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints via walk-in"
       },
       "params": [
         {
@@ -1162,7 +1183,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHANNEL_ONLINE",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints via online"
       },
       "params": [
         {
@@ -1209,7 +1231,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_DAILY",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Open complaints (today)"
       },
       "params": [
         {
@@ -1260,7 +1283,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_WEEKLY",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Open complaints (this week)"
       },
       "params": [
         {
@@ -1311,7 +1335,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_MONTHLY",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Open complaints (this month)"
       },
       "params": [
         {
@@ -1362,7 +1387,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RES_DAILY",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Resolved complaints (today)"
       },
       "params": [
         {
@@ -1413,7 +1439,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RES_WEEKLY",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Resolved complaints (this week)"
       },
       "params": [
         {
@@ -1464,7 +1491,8 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RES_MONTHLY",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Resolved complaints (this month)"
       },
       "params": [
         {
@@ -1526,7 +1554,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints by category"
       },
       "params": [
         {
@@ -1588,7 +1617,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints by type"
       },
       "params": [
         {
@@ -1645,7 +1675,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints by departments"
       },
       "params": [
         {
@@ -1714,7 +1745,8 @@
         "limit": 12,
         "labelFormat": "department",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Department-wise resolution rate"
       },
       "params": [
         {
@@ -1776,7 +1808,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints by ward"
       },
       "params": [
         {
@@ -1837,7 +1870,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints by day of week"
       },
       "params": [
         {
@@ -1896,9 +1930,21 @@
         ],
         "stackKey": "sla_status_bucket",
         "stackSeries": [
-          { "key": "within", "label": "On track", "color": "var(--chart-1)" },
-          { "key": "approaching", "label": "Nearing breach", "color": "var(--chart-2)" },
-          { "key": "breached", "label": "Breached", "color": "var(--status-breach)" }
+          {
+            "key": "within",
+            "label": "On track",
+            "color": "var(--chart-1)"
+          },
+          {
+            "key": "approaching",
+            "label": "Nearing breach",
+            "color": "var(--chart-2)"
+          },
+          {
+            "key": "breached",
+            "label": "Breached",
+            "color": "var(--status-breach)"
+          }
         ],
         "sortBySegment": "breached",
         "limit": 8,
@@ -1906,7 +1952,8 @@
         "compose": null,
         "pii": {
           "dimension": "current_assignee_uuid"
-        }
+        },
+        "title": "Employees with most open complaints"
       },
       "params": [
         {
@@ -1967,7 +2014,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Open complaints by complaint types"
       },
       "params": [
         {
@@ -2028,7 +2076,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints by channel"
       },
       "params": [
         {
@@ -2083,7 +2132,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints by age"
       },
       "params": [
         {
@@ -2145,7 +2195,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaint map (week-over-week)"
       },
       "params": [
         {
@@ -2207,7 +2258,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaint map (SLA breach)"
       },
       "params": [
         {
@@ -2268,7 +2320,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaint map (open)"
       },
       "params": [
         {
@@ -2329,7 +2382,8 @@
           "total"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Wards by open complaints"
       },
       "params": [
         {
@@ -2403,7 +2457,8 @@
           "ontime_pct"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Wards by on-time resolution"
       },
       "params": [
         {
@@ -2501,7 +2556,8 @@
           "avg_ttr_ms"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Resolution by category"
       },
       "params": [
         {
@@ -2628,7 +2684,8 @@
           "avg_csat"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaint type details"
       },
       "params": [
         {
@@ -2702,7 +2759,8 @@
           "sla_target_ms"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints at risk"
       },
       "params": [
         {
@@ -2776,7 +2834,8 @@
           "samples"
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Stage dwell time"
       },
       "params": [
         {
@@ -2839,15 +2898,32 @@
         ],
         "stackKey": "status",
         "stackSeries": [
-          { "key": "PENDINGFORASSIGNMENT", "label": "Pending assignment", "color": "var(--chart-1)" },
-          { "key": "PENDINGATLME", "label": "Assigned", "color": "var(--chart-2)" },
-          { "key": "PENDINGFORREASSIGNMENT", "label": "Pending reassignment", "color": "var(--chart-3)" },
-          { "key": "RESOLVED", "label": "Resolved", "color": "var(--status-resolved)" }
+          {
+            "key": "PENDINGFORASSIGNMENT",
+            "label": "Pending assignment",
+            "color": "var(--chart-1)"
+          },
+          {
+            "key": "PENDINGATLME",
+            "label": "Assigned",
+            "color": "var(--chart-2)"
+          },
+          {
+            "key": "PENDINGFORREASSIGNMENT",
+            "label": "Pending reassignment",
+            "color": "var(--chart-3)"
+          },
+          {
+            "key": "RESOLVED",
+            "label": "Resolved",
+            "color": "var(--status-resolved)"
+          }
         ],
         "limit": 5,
         "labelFormat": "dimension",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Resolution time by sub-type"
       },
       "params": [
         {
@@ -2926,13 +3002,38 @@
           "on_time"
         ],
         "seriesDefs": [
-          { "name": "Created", "measureKey": "created", "color": "var(--chart-1)", "yAxisGroup": "count" },
-          { "name": "Resolved", "measureKey": "resolved", "color": "var(--chart-2)", "yAxisGroup": "count" },
-          { "name": "Resolution rate", "numeratorKey": "resolved", "denominatorKey": "created", "color": "var(--chart-3)", "yAxisGroup": "percent", "dashArray": 5 },
-          { "name": "SLA compliance rate", "numeratorKey": "on_time", "denominatorKey": "created", "color": "var(--chart-4)", "yAxisGroup": "percent", "dashArray": 5 }
+          {
+            "name": "Created",
+            "measureKey": "created",
+            "color": "var(--chart-1)",
+            "yAxisGroup": "count"
+          },
+          {
+            "name": "Resolved",
+            "measureKey": "resolved",
+            "color": "var(--chart-2)",
+            "yAxisGroup": "count"
+          },
+          {
+            "name": "Resolution rate",
+            "numeratorKey": "resolved",
+            "denominatorKey": "created",
+            "color": "var(--chart-3)",
+            "yAxisGroup": "percent",
+            "dashArray": 5
+          },
+          {
+            "name": "SLA compliance rate",
+            "numeratorKey": "on_time",
+            "denominatorKey": "created",
+            "color": "var(--chart-4)",
+            "yAxisGroup": "percent",
+            "dashArray": 5
+          }
         ],
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Complaints over time"
       },
       "params": [
         {
@@ -2991,7 +3092,8 @@
         "compose": null,
         "pii": {
           "dimension": "current_assignee_uuid"
-        }
+        },
+        "title": "Open complaints by officer"
       },
       "params": [
         {
@@ -3059,7 +3161,8 @@
         "compose": null,
         "pii": {
           "dimension": "current_assignee_uuid"
-        }
+        },
+        "title": "Officers by open complaints"
       },
       "params": [
         {
@@ -3116,7 +3219,8 @@
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TTR_AVG",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Avg time to resolve"
       },
       "params": [
         {
@@ -3169,7 +3273,8 @@
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TTR_MEDIAN",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Median time to resolve"
       },
       "params": [
         {
@@ -3232,7 +3337,8 @@
         "compose": null,
         "pii": {
           "dimension": "current_assignee_uuid"
-        }
+        },
+        "title": "Closed complaints by officer"
       },
       "params": [
         {
@@ -3304,7 +3410,8 @@
         "compose": null,
         "pii": {
           "dimension": "current_assignee_uuid"
-        }
+        },
+        "title": "Officers by closed complaints"
       },
       "params": [
         {
@@ -3376,7 +3483,8 @@
         "compose": null,
         "pii": {
           "dimension": "current_assignee_uuid"
-        }
+        },
+        "title": "Top officers by closed complaints"
       },
       "params": [
         {
@@ -3489,7 +3597,8 @@
         "compose": null,
         "pii": {
           "dimension": "current_assignee_uuid"
-        }
+        },
+        "title": "Employee performance"
       },
       "params": [
         {
@@ -3554,7 +3663,8 @@
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_REOPEN_7D",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Reopen rate (7d)"
       },
       "params": [
         {
@@ -3614,7 +3724,8 @@
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_REOPEN_30D",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Reopen rate (30d)"
       },
       "params": [
         {
@@ -3674,7 +3785,8 @@
         "group": "resolution-sla",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_SLA_COMPLIANCE_WEEK",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "SLA compliance (this week)"
       },
       "params": [
         {
@@ -3736,7 +3848,8 @@
         "deltaLabel": "vs prior period",
         "dateKey": "created_date",
         "sparklineMeasureKey": "total",
-        "seriesColor": null
+        "seriesColor": null,
+        "title": "Breached SLA (open)"
       },
       "params": [
         {
@@ -3788,7 +3901,8 @@
         "group": "resolution-sla",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_ZONE_TTR_AVG",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Avg time to resolve (zone)"
       },
       "params": [
         {
@@ -3841,7 +3955,8 @@
         "group": "resolution-sla",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_ZONE_TTR_MEDIAN",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Median time to resolve (zone)"
       },
       "params": [
         {
@@ -3894,7 +4009,8 @@
         "group": "resolution-sla",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_CLOSURE_RATE",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Closure rate"
       },
       "params": [
         {
@@ -3942,7 +4058,8 @@
         "group": "resolution-sla",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_INFLOW_DAILY",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Inflow (daily)"
       },
       "params": [
         {
@@ -3993,7 +4110,8 @@
         "group": "resolution-sla",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_OUTFLOW_DAILY",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Outflow (daily)"
       },
       "params": [
         {
@@ -4049,7 +4167,8 @@
         "group": "escalations-risk",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_AGING_SAFE",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Safe (<50% elapsed)"
       },
       "params": [
         {
@@ -4105,7 +4224,8 @@
         "group": "escalations-risk",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_AGING_APPROACHING",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Approaching (50-100%)"
       },
       "params": [
         {
@@ -4161,7 +4281,8 @@
         "group": "escalations-risk",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_AGING_BREACHED",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Breached (>100%, ≤7d)"
       },
       "params": [
         {
@@ -4223,7 +4344,8 @@
         "group": "escalations-risk",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_AGING_CRITICAL",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Critical (breached >7d)"
       },
       "params": [
         {
@@ -4274,7 +4396,8 @@
         "group": "escalations-risk",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_OVERNIGHT_ESCALATIONS",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Overnight escalations"
       },
       "params": [
         {
@@ -4334,7 +4457,8 @@
         "group": "escalations-risk",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_OVERNIGHT_AUTO_PCT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Overnight auto-trigger rate"
       },
       "params": [
         {
@@ -4394,7 +4518,8 @@
         "group": "escalations-risk",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_OVERNIGHT_MANUAL_PCT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Overnight manual-flag rate"
       },
       "params": [
         {
@@ -4448,7 +4573,8 @@
         "group": "escalations-risk",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_CRITICAL_BREACH",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Critical breach count"
       },
       "params": [
         {
@@ -4514,7 +4640,8 @@
         "compose": null,
         "pii": {
           "dimension": "current_assignee_uuid"
-        }
+        },
+        "title": "Critical breaches by officer"
       },
       "params": [
         {
@@ -4579,7 +4706,8 @@
         "group": "escalations-risk",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_ESCALATION_AUTO_PCT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Auto-trigger escalation rate"
       },
       "params": [
         {
@@ -4639,7 +4767,8 @@
         "group": "escalations-risk",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_ER_ESCALATION_MANUAL_PCT",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Manual escalation rate"
       },
       "params": [
         {
@@ -4706,7 +4835,8 @@
         "deltaLabel": "vs prior period",
         "dateKey": "created_date",
         "sparklineMeasureKey": "avg",
-        "seriesColor": null
+        "seriesColor": null,
+        "title": "Citizen satisfaction (this week)"
       },
       "params": [
         {
@@ -4766,7 +4896,8 @@
         "group": "citizen-experience",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_RESPONSE_RATE",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Response rate"
       },
       "params": [
         {
@@ -4826,7 +4957,8 @@
         "group": "citizen-experience",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_REOPEN_7D",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Reopen rate (7d)"
       },
       "params": [
         {
@@ -4886,7 +5018,8 @@
         "group": "citizen-experience",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_REOPEN_30D",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Reopen rate (30d)"
       },
       "params": [
         {
@@ -4938,7 +5071,8 @@
         "group": "citizen-experience",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_REPEAT_COMPLAINANTS",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Repeat complainants"
       },
       "params": [
         {
@@ -4999,7 +5133,8 @@
         "group": "citizen-experience",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_NEGATIVE_RATE",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Negative feedback rate"
       },
       "params": [
         {
@@ -5048,7 +5183,8 @@
         "group": "citizen-experience",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_TFR_AVG",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Avg time to first response"
       },
       "params": [
         {
@@ -5098,7 +5234,8 @@
         "group": "citizen-experience",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_TFR_MEDIAN",
         "compose": null,
-        "pii": false
+        "pii": false,
+        "title": "Median time to first response"
       },
       "params": [
         {
@@ -5141,7 +5278,8 @@
           ],
           "elapsedFromAsOf": true
         },
-        "pii": false
+        "pii": false,
+        "title": "Average complaints per day"
       },
       "params": [
         {
@@ -5184,7 +5322,8 @@
           ],
           "elapsedFromAsOf": true
         },
-        "pii": false
+        "pii": false,
+        "title": "Average complaints per hour"
       },
       "params": [
         {
@@ -5227,7 +5366,8 @@
           ],
           "elapsedFromAsOf": false
         },
-        "pii": false
+        "pii": false,
+        "title": "Open rate"
       },
       "params": [
         {
@@ -5271,7 +5411,8 @@
           ],
           "elapsedFromAsOf": false
         },
-        "pii": false
+        "pii": false,
+        "title": "Net backlog (daily)"
       },
       "params": [
         {
