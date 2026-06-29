@@ -385,7 +385,7 @@ function adaptBarRows(ctx) {
   const isPercent = viz.format === 'percent' || viz.format === 'percentOneDecimal';
 
   let rows = (result.rows || []).map((row) => ({
-    label: formatLabel(row[dimKey]),
+    label: formatDimLabel(row[dimKey], viz),
     count: percentToChartScale(Number(row[measure.name]) || 0, isPercent),
   }));
 
@@ -426,12 +426,28 @@ function adaptHorizontalRows(ctx) {
   const valueKey = viz.measureKey || primaryMeasure(result, viz).name;
   const numeratorKey = viz.numeratorKey;   // e.g. resolved
   const denominatorKey = viz.denominatorKey; // e.g. created
-  let rows = (result.rows || []).map((row) => ({
-    label: formatLabel(row[dimKey]),
-    value: Number(row[valueKey]) || 0,
-    resolved: numeratorKey != null ? Number(row[numeratorKey]) : undefined,
-    created: denominatorKey != null ? Number(row[denominatorKey]) : undefined,
+  // Roll up to display grain when several source rows share a dimension value
+  // (e.g. service_code rows -> one department_code). Mirrors the reference
+  // parseDepartmentFlowRatioBarChart roll-up; numerator/denominator sum, then
+  // value is recomputed as the ratio.
+  const grouped = new Map();
+  for (const row of result.rows || []) {
+    const key = String(row[dimKey] ?? 'Unknown');
+    const bucket = grouped.get(key) || { num: 0, den: 0, val: 0 };
+    if (numeratorKey != null) bucket.num += Number(row[numeratorKey]) || 0;
+    if (denominatorKey != null) bucket.den += Number(row[denominatorKey]) || 0;
+    bucket.val += Number(row[valueKey]) || 0;
+    grouped.set(key, bucket);
+  }
+  const isRatio = numeratorKey != null && denominatorKey != null;
+  let rows = [...grouped.entries()].map(([key, b]) => ({
+    label: formatDimLabel(key, viz),
+    value: isRatio ? (b.den > 0 ? b.num / b.den : 0) : b.val,
+    resolved: numeratorKey != null ? b.num : undefined,
+    created: denominatorKey != null ? b.den : undefined,
   }));
+  // Drop zero-denominator categories (reference filters created<=0).
+  if (isRatio) rows = rows.filter((r) => (r.created || 0) > 0);
   if (viz.sort !== 'none') rows = rows.sort((a, b) => a.value - b.value);
   if (viz.limit) rows = rows.slice(0, viz.limit);
   return rows;
@@ -475,7 +491,7 @@ function adaptStacked(ctx) {
   // Single-series stacked (e.g. complaints-by-type "Filed").
   if (!stackKey || !stackSeries?.length) {
     let rows = (result.rows || []).map((row) => ({
-      label: formatLabel(row[dimKey]),
+      label: formatDimLabel(row[dimKey], viz),
       value: Number(row[measureKey]) || 0,
     }));
     if (viz.sort !== 'none') rows = rows.sort((a, b) => b.value - a.value);
@@ -517,7 +533,7 @@ function adaptStacked(ctx) {
   if (viz.limit) entries = entries.slice(0, viz.limit);
 
   return {
-    categories: entries.map((e) => formatLabel(e.key)),
+    categories: entries.map((e) => formatDimLabel(e.key, viz)),
     series: stackSeries.map((def) => ({
       name: def.label,
       data: entries.map((e) => e.segments[normalizeSeg(def.key)] ?? 0),
@@ -554,15 +570,48 @@ function adaptPie(ctx) {
   const dimKey = primaryDimensionKey(result, viz);
   const measure = primaryMeasure(result, viz);
   const colors = viz.colors || [];
+  // Optional source->channel rollup (parity with parseOpenComplaintsByChannelPieChart):
+  // when viz.channelMap is present, fold raw `source` rows into named channels
+  // with fixed colours/labels before slicing.
+  if (viz.channelMap?.length) {
+    return adaptChannelPie(result, dimKey, measure, viz);
+  }
   let rows = (result.rows || [])
     .map((row, i) => ({
-      label: formatLabel(row[dimKey]),
+      label: formatDimLabel(row[dimKey], viz),
       count: Number(row[measure.name]) || 0,
       color: colors[i],
     }))
     .filter((s) => s.count > 0);
   if (viz.sort !== 'none') rows = rows.sort((a, b) => b.count - a.count);
   return rows;
+}
+
+/** source -> channel rollup with verbatim COMPLAINT_CHANNELS labels/colours. */
+function adaptChannelPie(result, dimKey, measure, viz) {
+  const channels = viz.channelMap; // [{ id, label, color, sources:[...] }]
+  const sourceToChannel = new Map();
+  for (const ch of channels) {
+    for (const src of ch.sources || []) {
+      sourceToChannel.set(normalizeSourceKey(src), ch.id);
+    }
+  }
+  const totals = new Map(channels.map((c) => [c.id, 0]));
+  for (const row of result.rows || []) {
+    const count = Number(row[measure.name]) || 0;
+    if (count <= 0) continue;
+    const key = normalizeSourceKey(row[dimKey]);
+    const id = key ? (sourceToChannel.get(key) ?? 'other') : 'other';
+    if (totals.has(id)) totals.set(id, totals.get(id) + count);
+  }
+  return channels
+    .map((c) => ({ label: c.label, count: totals.get(c.id) ?? 0, color: c.color }))
+    .filter((s) => s.count > 0)
+    .sort((a, b) => (b.count - a.count) || a.label.localeCompare(b.label));
+}
+
+function normalizeSourceKey(source) {
+  return String(source ?? '').trim().toLowerCase().replace(/-/g, '_');
 }
 
 function renderPie(ctx) {
@@ -588,14 +637,41 @@ function adaptLine(ctx) {
   if (result.series && result.categories) {
     return { categories: result.categories, series: result.series };
   }
-  // Long-form -> single/multi series keyed off viz.seriesKeys.
   const dimKey = primaryDimensionKey(result, viz);
-  const measures = measureColumns(result, viz);
   const rows = [...(result.rows || [])].sort((a, b) =>
     String(a[dimKey] ?? '').localeCompare(String(b[dimKey] ?? ''))
   );
+  const categories = rows.map((r) => formatDimLabel(r[dimKey], viz));
+
+  // Descriptor-driven multi-series with per-series colour / dual y-axis grouping.
+  // Each seriesDef is either a direct measure ({ measureKey }) or a computed
+  // ratio percent ({ numeratorKey, denominatorKey }) — ports the reference
+  // COMPLAINTS_OVER_TIME_SERIES_DEFS (Created / Resolved counts + Resolution
+  // rate / SLA compliance percents on a second axis).
+  if (viz.seriesDefs?.length) {
+    return {
+      categories,
+      series: viz.seriesDefs.map((def) => ({
+        name: def.name,
+        color: def.color,
+        yAxisGroup: def.yAxisGroup,
+        dashArray: def.dashArray ?? 0,
+        data: rows.map((r) => {
+          if (def.numeratorKey != null && def.denominatorKey != null) {
+            const num = Number(r[def.numeratorKey]) || 0;
+            const den = Number(r[def.denominatorKey]) || 0;
+            return den > 0 ? Math.round((num / den) * 1000) / 10 : 0;
+          }
+          return Number(r[def.measureKey]) || 0;
+        }),
+      })),
+    };
+  }
+
+  // Long-form fallback -> single/multi series keyed off viz.measureKeys.
+  const measures = measureColumns(result, viz);
   return {
-    categories: rows.map((r) => formatLabel(r[dimKey])),
+    categories,
     series: measures.map((m) => ({
       name: m.label || m.name,
       data: rows.map((r) => Number(r[m.name]) || 0),
@@ -704,7 +780,7 @@ function adaptRanked(ctx) {
   const dimKey = primaryDimensionKey(result, viz);
   const measure = primaryMeasure(result, viz);
   let rows = (result.rows || []).map((row) => ({
-    label: formatLabel(row[dimKey]),
+    label: formatDimLabel(row[dimKey], viz),
     value: Number(row[measure.name]) || 0,
   }));
   if (viz.sort !== 'none') rows = rows.sort((a, b) => b.value - a.value);
@@ -823,6 +899,75 @@ function formatLabel(value) {
   const s = String(value ?? 'Unknown');
   if (!s || s === 'null' || s === 'undefined') return 'Unknown';
   return s;
+}
+
+/**
+ * Dimension-label formatter keyed off `viz.labelFormat`. Ports the reference
+ * client-side label shaping (kpiQueries.formatDimensionLabel /
+ * formatOfficerStackedLabel) into the engine so chart categories match the
+ * reference verbatim without per-tile code.
+ *   - "dimension": humanise CamelCase / snake_case / dotted codes
+ *   - "officer":   mask an assignee UUID -> "Officer …<last6>" / "Unassigned"
+ * No labelFormat => identity (formatLabel).
+ */
+function formatDimLabel(value, viz) {
+  switch (viz?.labelFormat) {
+    case 'dimension':  return formatDimensionLabel(value);
+    case 'department': return formatDepartmentLabel(value);
+    case 'officer':    return formatOfficerLabel(value);
+    case 'date-dow':   return formatDateDow(value);
+    default:           return formatLabel(value);
+  }
+}
+
+// Port of kpiQueries.formatOverTimeDailyLabel: epoch-ms / yyyy-MM-dd -> short weekday.
+function formatDateDow(value) {
+  const key = epochOrIsoToDateKey(value);
+  if (!key) return formatLabel(value);
+  const d = new Date(`${key}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return key;
+  return d.toLocaleDateString(undefined, { weekday: 'short' });
+}
+
+function epochOrIsoToDateKey(value) {
+  if (value == null || value === '') return '';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return new Date(value).toISOString().slice(0, 10);
+  }
+  const s = String(value).trim();
+  if (/^\d{13}$/.test(s)) return new Date(Number(s)).toISOString().slice(0, 10);
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : s;
+}
+
+// Port of complaintTypeDepartmentConfig.formatDepartmentLabel.
+function formatDepartmentLabel(code) {
+  const c = String(code ?? '').trim();
+  if (!c || c === 'Unknown' || c === 'Unmapped' || c === 'null' || c === 'undefined') return 'Unknown';
+  return c.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+// Port of kpiQueries.formatDimensionLabel (humanise service/ward/dept codes).
+function formatDimensionLabel(code) {
+  const humanized = String(code ?? '').replace(/([a-z])([A-Z])/g, '$1 $2');
+  const wardMatch = humanized.match(/ward[_\s-]?(\d+)/i);
+  if (wardMatch) return `Ward ${wardMatch[1]}`;
+  const dot = humanized.lastIndexOf('.');
+  if (dot >= 0) {
+    return humanized.slice(dot + 1).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  const parts = humanized.split('_').filter(Boolean);
+  if (parts.length > 2) return parts.slice(-2).join(' ').replace(/_/g, ' ');
+  const out = humanized.replace(/_/g, ' ');
+  return out || 'Unknown';
+}
+
+// Port of kpiQueries.formatOfficerStackedLabel.
+function formatOfficerLabel(uuid) {
+  const id = String(uuid ?? 'Unknown');
+  if (!id || id === 'null' || id === 'undefined') return 'Unassigned';
+  if (id.length <= 8) return id;
+  return `Officer …${id.slice(-6)}`;
 }
 
 function normalizeSeg(value) {

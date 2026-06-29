@@ -1678,7 +1678,6 @@
           "timeRole": "filed_at"
         },
         "dimensions": [
-          "service_code",
           "department_code"
         ],
         "measures": [
@@ -1698,17 +1697,22 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "bar",
+        "kind": "horizontal-bar",
         "format": "percentOneDecimal",
         "valueKey": "resolved",
         "accent": "green",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
         "dimensionKey": "department_code",
+        "numeratorKey": "resolved",
+        "denominatorKey": "filed",
         "measureKeys": [
           "filed",
           "resolved"
         ],
+        "breakEven": 1,
+        "limit": 12,
+        "labelFormat": "department",
         "compose": null,
         "pii": false
       },
@@ -1878,16 +1882,27 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "bar",
+        "kind": "stacked-bar",
+        "orientation": "horizontal",
         "format": "integer",
         "valueKey": "total",
         "accent": "amber",
         "group": "employee-performance",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
         "dimensionKey": "current_assignee_uuid",
+        "measureKey": "total",
         "measureKeys": [
           "total"
         ],
+        "stackKey": "sla_status_bucket",
+        "stackSeries": [
+          { "key": "within", "label": "On track", "color": "var(--chart-1)" },
+          { "key": "approaching", "label": "Nearing breach", "color": "var(--chart-2)" },
+          { "key": "breached", "label": "Breached", "color": "var(--status-breach)" }
+        ],
+        "sortBySegment": "breached",
+        "limit": 8,
+        "labelFormat": "officer",
         "compose": null,
         "pii": {
           "dimension": "current_assignee_uuid"
@@ -2807,15 +2822,114 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "bar",
+        "kind": "stacked-bar",
+        "orientation": "vertical",
         "format": "hoursDays",
+        "valueFormat": "hours",
+        "valueTransform": "msToHours",
+        "aggregate": "set",
         "valueKey": "avg_dwell",
+        "measureKey": "avg_dwell",
         "accent": "slate",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EV_CHART_RESOLUTION_DWELL_SUBTYPE",
         "dimensionKey": "service_code",
         "measureKeys": [
           "avg_dwell"
+        ],
+        "stackKey": "status",
+        "stackSeries": [
+          { "key": "PENDINGFORASSIGNMENT", "label": "Pending assignment", "color": "var(--chart-1)" },
+          { "key": "PENDINGATLME", "label": "Assigned", "color": "var(--chart-2)" },
+          { "key": "PENDINGFORREASSIGNMENT", "label": "Pending reassignment", "color": "var(--chart-3)" },
+          { "key": "RESOLVED", "label": "Resolved", "color": "var(--status-resolved)" }
+        ],
+        "limit": 5,
+        "labelFormat": "dimension",
+        "compose": null,
+        "pii": false
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": []
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_over_time_created_daily",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": {
+          "name": "last_7d",
+          "timeRole": "filed_at"
+        },
+        "dimensions": [
+          "created_date"
+        ],
+        "measures": [
+          {
+            "name": "created",
+            "agg": "count"
+          },
+          {
+            "name": "resolved",
+            "agg": "count",
+            "filter": {
+              "is_resolved": true
+            }
+          },
+          {
+            "name": "on_time",
+            "agg": "count",
+            "filter": {
+              "is_resolved": true,
+              "sla_breached": false
+            }
+          }
+        ],
+        "sort": [
+          {
+            "by": "created_date",
+            "dir": "asc"
+          }
+        ],
+        "limit": 366
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "line",
+        "format": "integer",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_CREATED_DAILY",
+        "dimensionKey": "created_date",
+        "labelFormat": "date-dow",
+        "measureKeys": [
+          "created",
+          "resolved",
+          "on_time"
+        ],
+        "seriesDefs": [
+          { "name": "Created", "measureKey": "created", "color": "var(--chart-1)", "yAxisGroup": "count" },
+          { "name": "Resolved", "measureKey": "resolved", "color": "var(--chart-2)", "yAxisGroup": "count" },
+          { "name": "Resolution rate", "numeratorKey": "resolved", "denominatorKey": "created", "color": "var(--chart-3)", "yAxisGroup": "percent", "dashArray": 5 },
+          { "name": "SLA compliance rate", "numeratorKey": "on_time", "denominatorKey": "created", "color": "var(--chart-4)", "yAxisGroup": "percent", "dashArray": 5 }
         ],
         "compose": null,
         "pii": false
