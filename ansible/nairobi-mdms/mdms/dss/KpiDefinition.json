@@ -2017,7 +2017,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "bar",
+        "kind": "stacked-bar",
         "format": "integer",
         "valueKey": "total",
         "accent": "amber",
@@ -2029,7 +2029,33 @@
         ],
         "compose": null,
         "pii": false,
-        "title": "Open complaints by complaint types"
+        "title": "Open complaints by complaint types",
+        "orientation": "vertical",
+        "measureKey": "total",
+        "stackKey": "application_status",
+        "stackSeries": [
+          {
+            "key": "PENDINGFORASSIGNMENT",
+            "label": "Pending assignment",
+            "color": "var(--chart-1)"
+          },
+          {
+            "key": "PENDINGATLME",
+            "label": "At LME",
+            "color": "var(--chart-2)"
+          },
+          {
+            "key": "PENDINGATSUPERVISOR",
+            "label": "At supervisor",
+            "color": "var(--chart-3)"
+          },
+          {
+            "key": "RESOLVED",
+            "label": "Resolved",
+            "color": "var(--status-resolved)"
+          }
+        ],
+        "limit": 8
       },
       "params": [
         {
@@ -2079,7 +2105,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "bar",
+        "kind": "pie",
         "format": "integer",
         "valueKey": "total",
         "accent": "teal",
@@ -2091,7 +2117,8 @@
         ],
         "compose": null,
         "pii": false,
-        "title": "Complaints by channel"
+        "title": "Complaints by channel",
+        "measureKey": "total"
       },
       "params": [
         {
@@ -2706,7 +2733,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "rankedList",
+        "kind": "data-table",
         "format": "hoursDays",
         "valueKey": "avg_resolution_ms",
         "accent": "teal",
@@ -2723,7 +2750,51 @@
         ],
         "compose": null,
         "pii": false,
-        "title": "Complaint type details"
+        "title": "Complaint type details",
+        "columns": [
+          {
+            "id": "service_code",
+            "label": "Complaint type",
+            "align": "left",
+            "type": "text"
+          },
+          {
+            "id": "avg_resolution_ms",
+            "label": "Avg resolution",
+            "align": "right",
+            "type": "hoursDays"
+          },
+          {
+            "id": "ideal_sla_ms",
+            "label": "SLA target",
+            "align": "right",
+            "type": "hoursDays"
+          },
+          {
+            "id": "ontime_rate",
+            "label": "On-time",
+            "align": "right",
+            "type": "percent"
+          },
+          {
+            "id": "reopen_rate",
+            "label": "Reopen",
+            "align": "right",
+            "type": "percent"
+          },
+          {
+            "id": "oldest_open_ms",
+            "label": "Oldest open",
+            "align": "right",
+            "type": "hoursDays"
+          },
+          {
+            "id": "avg_csat",
+            "label": "CSAT",
+            "align": "right",
+            "type": "rating"
+          }
+        ]
       },
       "params": [
         {
@@ -2859,7 +2930,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "rankedList",
+        "kind": "data-table",
         "format": "hoursDays",
         "valueKey": "avg_dwell",
         "accent": "slate",
@@ -2873,7 +2944,33 @@
         ],
         "compose": null,
         "pii": false,
-        "title": "Stage dwell time"
+        "title": "Stage dwell time",
+        "columns": [
+          {
+            "id": "status",
+            "label": "Stage",
+            "align": "left",
+            "type": "text"
+          },
+          {
+            "id": "avg_dwell",
+            "label": "Avg dwell",
+            "align": "right",
+            "type": "hoursDays"
+          },
+          {
+            "id": "median_dwell",
+            "label": "Median dwell",
+            "align": "right",
+            "type": "hoursDays"
+          },
+          {
+            "id": "samples",
+            "label": "Samples",
+            "align": "right",
+            "type": "integer"
+          }
+        ]
       },
       "params": [
         {
@@ -3620,7 +3717,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "rankedList",
+        "kind": "data-table",
         "format": "integer",
         "valueKey": "open",
         "accent": "amber",
@@ -3638,7 +3735,45 @@
         "pii": {
           "dimension": "current_assignee_uuid"
         },
-        "title": "Employee performance"
+        "title": "Employee performance",
+        "columns": [
+          {
+            "id": "current_assignee_uuid",
+            "label": "Officer",
+            "align": "left",
+            "type": "text"
+          },
+          {
+            "id": "assigned",
+            "label": "Assigned",
+            "align": "right",
+            "type": "integer"
+          },
+          {
+            "id": "open",
+            "label": "Open",
+            "align": "right",
+            "type": "integer"
+          },
+          {
+            "id": "resolved",
+            "label": "Resolved",
+            "align": "right",
+            "type": "integer"
+          },
+          {
+            "id": "reopen_rate",
+            "label": "Reopen",
+            "align": "right",
+            "type": "percent"
+          },
+          {
+            "id": "avg_csat",
+            "label": "CSAT",
+            "align": "right",
+            "type": "rating"
+          }
+        ]
       },
       "params": [
         {
