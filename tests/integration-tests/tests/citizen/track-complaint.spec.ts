@@ -20,8 +20,13 @@ import {
   DEFAULT_PASSWORD,
   SERVICE_CODE,
   LOCALITY_CODE,
+  PGR_ID_PREFIX,
   generateCitizenPhone,
 } from '../utils/env';
+
+// Disable trace/video so the spec runs cleanly with --no-deps (the
+// .playwright-artifacts-0 dir is only created by the full setup DAG).
+test.use({ trace: 'off', video: 'off' });
 
 const CITIZEN_PHONE = generateCitizenPhone();
 const CITIZEN_NAME = `PW Track ${Date.now()}`;
@@ -173,7 +178,8 @@ The Map widget + "Open in Maps" only render when geoLocation has non-zero coords
     const body = page.locator('body');
     await expect(body).toContainText('Complaint Summary');
     await expect(body).toContainText('Complaint Details');
-    await expect(body).toContainText('Complaint Timeline');
+    // Ethiopia renders "Activity timeline"; Kenya renders "Complaint Timeline".
+    await expect(body).toContainText(/Complaint Timeline|Activity timeline/i);
     await expect(body).toContainText(serviceRequestId);
     await expect(body).toContainText('Application Status');
 
@@ -194,7 +200,7 @@ The Map widget + "Open in Maps" only render when geoLocation has non-zero coords
 Steps:
 1. setTimeout 120s; citizenOtpLogin and visit /citizen/pgr/complaints (warm cache).
 2. Navigate directly to /digit-ui/citizen/pgr/complaints/{seeded id}; wait 4s.
-3. Assert page.url() matches /\\/digit-ui\\/citizen\\/pgr\\/complaints\\/NCCG-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+/.
+3. Assert page.url() matches /\\/digit-ui\\/citizen\\/pgr\\/complaints\\/<PGR_ID_PREFIX>-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+/ (prefix from env).
 4. Assert page.url() does NOT contain '/complaint/details/' (no auto-redirect to the singular form).
 5. Assert body contains "Complaint Summary".
 6. Assert body does NOT contain "Something went wrong".
@@ -224,9 +230,12 @@ If the SPA ever redirects plural → singular (or 404s), this test catches the c
     await page.waitForTimeout(4000);
 
     const url = page.url();
-    expect(url, 'plural /complaints/:id URL should serve the detail page').toMatch(
-      /\/digit-ui\/citizen\/pgr\/complaints\/NCCG-PGR-\d{4}-\d{2}-\d{2}-\d+/,
+    // Use PGR_ID_PREFIX so the pattern matches any deployment (e.g. PG for
+    // Ethiopia, NCCG for naipepea) rather than a hardcoded tenant prefix.
+    const detailUrlRe = new RegExp(
+      `/digit-ui/citizen/pgr/complaints/${PGR_ID_PREFIX}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+`,
     );
+    expect(url, 'plural /complaints/:id URL should serve the detail page').toMatch(detailUrlRe);
     expect(url, 'should NOT have redirected to the Routes.js-exported singular form').not.toContain(
       '/complaint/details/',
     );
