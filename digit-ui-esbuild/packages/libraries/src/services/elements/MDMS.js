@@ -3,6 +3,7 @@ import { ApiCacheService } from "../atoms/ApiCacheService";
 import Urls from "../atoms/urls";
 import { Request, ServiceRequest } from "../atoms/Utils/Request";
 import { PersistantStorage } from "../atoms/Utils/Storage";
+import idbCache from "../atoms/Utils/idbCache";
 
 // export const stringReplaceAll = (str = "", searcher = "", replaceWith = "") => {
 //   if (searcher == "") return str;
@@ -1547,14 +1548,17 @@ export const MdmsService = {
   },
   getDataByCriteria: async (tenantId, mdmsDetails, moduleCode) => {
     const key = `MDMS.${tenantId}.${moduleCode}.${mdmsDetails.type}.${JSON.stringify(mdmsDetails.details)}`;
-    const inStoreValue = PersistantStorage.get(key);
+    // Large MDMS payloads (incl. the multi-MB ComplaintHierarchy tree) cache in
+    // IndexedDB, not localStorage — this method is already async + every caller
+    // awaits it, so no sync-read path is affected. Fixes the QuotaExceededError.
+    const inStoreValue = await idbCache.get(key);
     if (inStoreValue) {
       return inStoreValue;
     }
     const { MdmsRes } = await MdmsService.call(tenantId, mdmsDetails.details);
     const responseValue = transformResponse(mdmsDetails.type, MdmsRes, moduleCode.toUpperCase(), tenantId);
     const cacheSetting = getCacheSetting(mdmsDetails.details.moduleDetails[0].moduleName);
-    PersistantStorage.set(key, responseValue, Digit.Utils.getMultiRootTenant() ? 0 : cacheSetting.cacheTimeInSecs);
+    await idbCache.set(key, responseValue, Digit.Utils.getMultiRootTenant() ? 0 : cacheSetting.cacheTimeInSecs);
     return responseValue;
   },
   getServiceDefs: (tenantId, moduleCode) => {
