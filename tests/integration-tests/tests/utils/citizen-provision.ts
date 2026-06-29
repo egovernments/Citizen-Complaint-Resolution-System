@@ -82,15 +82,25 @@ async function resolveMobileRule(tenant: string): Promise<MobileRule> {
  * source.
  */
 function extractRuleFromServerError(message: string): MobileRule | null {
-  const m = message.match(/matching\s+(\S+)/);
+  // Match any of the known DIGIT error wording variants:
+  //   "...matching ^[17][0-9]{8}$"                           (Ethiopia)
+  //   "must match the configured pattern: ^0?[17][0-9]{8}$"  (Bomet ke)
+  //   "expected ^... mobile number..."                       (other variants)
+  // The regex is captured as the first ^...$ shape in the message.
+  const m =
+    message.match(/matching\s+(\^[^"\s,]+)/) ||
+    message.match(/pattern[:\s]+(\^[^"\s,]+)/i) ||
+    message.match(/(\^[\d\[\]\?\(\)\|\.\\^$+*{}0-9a-zA-Z-]+\$)/);
   if (!m) return null;
   const pattern = m[1];
   // Try to infer length from the pattern (best-effort — works for the
-  // common `^[xy][0-9]{N}$` shape used across DIGIT tenants).
+  // common `^[xy][0-9]{N}$` shape; for `^0?[17][0-9]{N}$` allows 9 or 10).
   const lenMatch = pattern.match(/\{(\d+)\}/);
   const tailLen = lenMatch ? parseInt(lenMatch[1], 10) : 0;
   const inferred = tailLen + 1;
-  const startMatch = pattern.match(/^\^\[([0-9]+)\]/);
+  // Allowed starting digits: take from the FIRST [...] character class
+  // that appears in the pattern (after any optional zero prefix).
+  const startMatch = pattern.match(/\[([0-9]+)\]/);
   const starters = startMatch ? startMatch[1].split('') : undefined;
   return {
     pattern,
@@ -142,30 +152,33 @@ export async function provisionFreshCitizen(opts?: { tenant?: string }): Promise
     });
 
   let createResp = await attemptCreate(mobile);
+  let lastBody = createResp.ok ? '' : await createResp.text();
   if (!createResp.ok && createResp.status !== 409) {
-    const body = await createResp.text();
-    // Retry path 1: server surfaces the regex in its error message
-    // (egov-user does this on Ethiopia: "...matching ^[17][0-9]{8}$").
-    const errorMatch = /INVALID_MOBILE_(?:FORMAT|LENGTH).*?(?:matching\s+\S+)/i.exec(body);
+    // Retry path 1: server surfaces a regex in its error message.
+    // Variants seen: INVALID_MOBILE_FORMAT/LENGTH (Ethiopia),
+    // INVALID_MOBILE_NUMBER (Bomet ke — "must match the configured pattern: ^…$").
+    const errorMatch = /INVALID_MOBILE_(?:FORMAT|LENGTH|NUMBER).*?\^[^"\s,]+/i.exec(lastBody);
     if (errorMatch) {
       const discovered = extractRuleFromServerError(errorMatch[0]);
       if (discovered) {
         rule = discovered;
         mobile = generateValidMobile(discovered);
         createResp = await attemptCreate(mobile);
+        if (!createResp.ok) lastBody = await createResp.text();
       }
     }
     // Retry path 2: server returns a localized error key with no regex
     // (Bomet returns CORE_COMMON_MOBILE_ERROR). Fall back to the
-    // CITIZEN_PHONE_PREFIX heuristic — same generator lifecycle.setup
-    // uses, which is empirically accepted by user-service on tenants
-    // whose MDMS rule disagrees with their server-side regex.
-    if (!createResp.ok && createResp.status !== 409 && /CORE_COMMON_MOBILE_ERROR|INVALID_MOBILE/i.test(body)) {
+    // CITIZEN_PHONE_PREFIX heuristic — empirically accepted by
+    // user-service on tenants whose MDMS rule disagrees with their
+    // server-side regex.
+    if (!createResp.ok && createResp.status !== 409 && /CORE_COMMON_MOBILE_ERROR|INVALID_MOBILE/i.test(lastBody)) {
       mobile = generateCitizenPhone();
       createResp = await attemptCreate(mobile);
+      if (!createResp.ok) lastBody = await createResp.text();
     }
     if (!createResp.ok && createResp.status !== 409) {
-      throw new Error(`citizen _create failed (${createResp.status}): ${body.slice(0, 300)}`);
+      throw new Error(`citizen _create failed (${createResp.status}): ${lastBody.slice(0, 300)}`);
     }
   }
 

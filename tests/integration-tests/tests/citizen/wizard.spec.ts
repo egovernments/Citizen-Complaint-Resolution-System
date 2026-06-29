@@ -82,26 +82,64 @@ test.describe('Citizen file-complaint wizard', () => {
       await page.waitForTimeout(2500);
     };
 
-    // ── Step 1: Complaint Details (Type + Subtype) ──────────────────
+    // ── Step 1: Complaint Details (Type + optional Subtype hierarchy) ──────────
+    //
+    // Handles two distinct wizard shapes detected at runtime via DOM:
+    //
+    //   • Flat (Ethiopia): wizard renders a single "Complaint Type" combobox.
+    //     After picking one option the NEXT button enables — no further comboboxes
+    //     appear. The loop below runs exactly once and exits.
+    //
+    //   • Hierarchical (Bomet ke): MDMS has ComplaintHierarchyDefinition with
+    //     CATEGORY → SUB_TYPE levels. The wizard renders only the first combobox
+    //     ("Complaint Type / Select a complaint type") initially; after the user
+    //     picks a Category a second combobox (Sub-Type) slides in. Additional
+    //     nesting levels follow the same pattern. The loop picks the first
+    //     available option at each level until no new combobox appears.
+    //
+    // Safety limit of 8 levels covers every known deployment.
     await dropdowns.first().waitFor({ state: 'visible', timeout: 15_000 });
     await onAfterStep?.('Step 1 – initial render');
 
-    await dropdowns.first().click();
-    await page.waitForTimeout(800);
-    await page.locator('[role="option"], .digit-dropdown-item').first().click();
-    await page.waitForTimeout(1500);
-    await onAfterStep?.('Step 1 – after Type selection');
+    for (let level = 0; level < 8; level++) {
+      const combobox = dropdowns.nth(level);
+      const visible = await combobox.isVisible({ timeout: level === 0 ? 5000 : 3000 }).catch(() => false);
+      if (!visible) break;
 
-    // Subtype is the 2nd dropdown — appears after Type pick on some deployments.
-    // On Ethiopia the wizard has only ONE complaint-type dropdown (no subtype),
-    // so we check visibility before trying to interact.
-    const subtypeVisible = await dropdowns.nth(1).isVisible({ timeout: 3000 }).catch(() => false);
-    if (subtypeVisible) {
-      await dropdowns.nth(1).click();
-      await page.waitForTimeout(800);
-      await page.locator('[role="option"], .digit-dropdown-item').first().click();
-      await page.waitForTimeout(1000);
-      await onAfterStep?.('Step 1 – after Subtype selection');
+      // Skip comboboxes that already carry a real value (not a placeholder).
+      // `innerText` on a button combobox includes the placeholder span text.
+      const hasPlaceholder = await combobox.evaluate(
+        (el) => /^Select /i.test((el as HTMLElement).innerText.trim()),
+      ).catch(() => true);
+      if (!hasPlaceholder) {
+        // Already filled — move to the next level without interacting.
+        continue;
+      }
+
+      // The ke CRS complaint-type picker (y2 component) renders a
+      // <ul role="listbox"> populated from MDMS. On slow deployments the
+      // options array is empty at first render; the listbox appears but has
+      // no <li role="option"> children. Retry up to 3 times with increasing
+      // waits so the MDMS response can arrive before we give up.
+      let option = page.locator('[role="option"], .digit-dropdown-item').first();
+      let optionVisible = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await combobox.click();
+        // Wait longer on ke (MDMS can take 2-4 s); start shorter for
+        // Ethiopia which is typically faster.
+        const waitMs = 1000 + attempt * 2000;
+        await page.waitForTimeout(waitMs);
+        option = page.locator('[role="option"], .digit-dropdown-item').first();
+        optionVisible = await option.isVisible({ timeout: 5000 }).catch(() => false);
+        if (optionVisible) break;
+        // Close the empty dropdown before retrying — click again to toggle off.
+        await combobox.click();
+        await page.waitForTimeout(500 + attempt * 500);
+      }
+      if (!optionVisible) break;
+      await option.click();
+      await page.waitForTimeout(1500);
+      await onAfterStep?.(`Step 1 – after level-${level} selection`);
     }
 
     await clickNext();

@@ -20,6 +20,7 @@
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { getDigitToken } from '../utils/auth';
+import { pgrCreate, resolveServiceCode } from '../utils/launch-fixes/api';
 import {
   ADMIN_PASS,
   ADMIN_USER,
@@ -133,30 +134,20 @@ test.describe('Citizen rate-complaint UI', () => {
 
     // Citizen registers + files complaint
     const citizen = await registerCitizenAPI(CITIZEN_PHONE);
-    const createResp = await fetch(`${BASE_URL}/pgr-services/v2/request/_create`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${citizen.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker', authToken: citizen.token, userInfo: citizen.userInfo },
-        service: {
-          tenantId: TENANT,
-          serviceCode: SERVICE_CODE,
-          description: 'PW rate UI test — auto-resolved by spec',
-          source: 'web',
-          address: {
-            city: TENANT,
-            locality: { code: LOCALITY_CODE },
-            geoLocation: { latitude: 0, longitude: 0 },
-          },
-          citizen: { name: CITIZEN_NAME, mobileNumber: CITIZEN_PHONE },
-        },
-        workflow: { action: 'APPLY', verificationDocuments: [] },
-      }),
+    // Resolve a valid service code for this deployment (ke uses different codes
+    // than the default SERVICE_CODE which may only exist on Ethiopia).
+    const resolvedServiceCode = await resolveServiceCode(BASE_URL, citizen.token, TENANT, SERVICE_CODE);
+    const created = await pgrCreate({
+      baseUrl: BASE_URL,
+      auth: citizen,
+      tenantId: TENANT,
+      serviceCode: resolvedServiceCode,
+      localityCode: LOCALITY_CODE,
+      description: 'PW rate UI test — auto-resolved by spec',
+      citizenName: CITIZEN_NAME,
+      citizenPhone: CITIZEN_PHONE,
     });
-    const createData = (await createResp.json()) as {
-      ServiceWrappers: Array<{ service: { serviceRequestId: string } }>;
-    };
-    serviceRequestId = createData.ServiceWrappers[0].service.serviceRequestId;
+    serviceRequestId = created.serviceRequestId;
 
     // Admin assigns + resolves
     const admin = await getDigitToken({

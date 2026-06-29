@@ -118,3 +118,171 @@ export async function uploadFile(auth: EmployeeAuth, tenantId: string, fileName:
   });
   return { status: r.status, body: await r.json() };
 }
+
+// ── PGR _create helper — CRS-compatible across tenants ───────────────────────
+//
+// The legacy RAINMAKER-PGR schema (Ethiopia) and the new CRS schema (ke/Bomet)
+// both accept the same minimal payload EXCEPT for `verificationDocuments`:
+//   • Legacy (Ethiopia): accepts `verificationDocuments: []` in workflow (but
+//     omitting it also works fine).
+//   • CRS (ke/Bomet): `verificationDocuments: []` triggers JsonMappingException
+//     because the CRS Workflow model declares the field as a different type.
+//
+// Fix: omit `verificationDocuments` entirely — both deployments accept the
+// `workflow: { action: 'APPLY' }` shape without it.
+//
+// SERVICE_CODE: the caller supplies the code.  Use `resolveServiceCode` to
+// pick the first active code from MDMS when the configured SERVICE_CODE is
+// unknown on the target tenant.
+
+export interface CitizenAuthSimple {
+  token: string;
+  userInfo: Record<string, unknown>;
+}
+
+export interface PgrCreateParams {
+  baseUrl: string;
+  auth: CitizenAuthSimple;
+  tenantId: string;
+  serviceCode: string;
+  localityCode: string;
+  description: string;
+  citizenName: string;
+  citizenPhone: string;
+  /** Optional: override the workflow action (default: 'APPLY'). */
+  workflowAction?: string;
+  /** Optional: send extended_attributes in service body. Per user direction:
+   *  content must stay empty {}. Defaults to undefined (omitted). */
+  extendedAttributes?: Record<string, unknown>;
+}
+
+export interface PgrCreateResult {
+  serviceRequestId: string;
+  applicationStatus: string;
+  rawWrapper: Record<string, unknown>;
+}
+
+/**
+ * POST /pgr-services/v2/request/_create in a way that works on both:
+ *   - Legacy RAINMAKER-PGR deployments (Ethiopia).
+ *   - CRS-schema deployments (ke / Bomet).
+ *
+ * Key difference from the old inline calls: `verificationDocuments` is
+ * intentionally omitted from the workflow object. Sending `[]` causes a
+ * JsonMappingException on CRS deployments.
+ */
+export async function pgrCreate(params: PgrCreateParams): Promise<PgrCreateResult> {
+  const {
+    baseUrl,
+    auth,
+    tenantId,
+    serviceCode,
+    localityCode,
+    description,
+    citizenName,
+    citizenPhone,
+    workflowAction = 'APPLY',
+    extendedAttributes,
+  } = params;
+
+  const serviceBody: Record<string, unknown> = {
+    tenantId,
+    serviceCode,
+    description,
+    source: 'web',
+    address: {
+      city: tenantId,
+      locality: { code: localityCode },
+      geoLocation: { latitude: 0, longitude: 0 },
+    },
+    citizen: { name: citizenName, mobileNumber: citizenPhone },
+  };
+
+  // Per user direction: extended_attributes content stays empty {}.
+  // Only include the key if the caller explicitly passes it.
+  if (extendedAttributes !== undefined) {
+    serviceBody.extended_attributes = extendedAttributes;
+  }
+
+  const body: Record<string, unknown> = {
+    RequestInfo: {
+      apiId: 'Rainmaker',
+      authToken: auth.token,
+      userInfo: auth.userInfo,
+    },
+    service: serviceBody,
+    // CRS-compatible workflow: omit verificationDocuments entirely.
+    // Legacy deployments also accept this shape.
+    workflow: { action: workflowAction },
+  };
+
+  const r = await fetch(`${baseUrl}/pgr-services/v2/request/_create`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${auth.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = (await r.json()) as {
+    ServiceWrappers?: Array<{ service: { serviceRequestId: string; applicationStatus: string } }>;
+    Errors?: Array<{ code: string; message: string }>;
+  };
+
+  if (!r.ok || !data.ServiceWrappers?.length) {
+    const errMsg = data.Errors?.map((e) => `${e.code}: ${e.message}`).join('; ') ?? `HTTP ${r.status}`;
+    throw new Error(`pgrCreate failed: ${errMsg}`);
+  }
+
+  const svc = data.ServiceWrappers[0].service;
+  return {
+    serviceRequestId: svc.serviceRequestId,
+    applicationStatus: svc.applicationStatus,
+    rawWrapper: data.ServiceWrappers[0] as Record<string, unknown>,
+  };
+}
+
+/**
+ * Resolve a service code against the deployment's RAINMAKER-PGR.ServiceDefs
+ * MDMS schema. Returns `preferred` if it is active on `tenantId`; otherwise
+ * returns the first active code found.
+ *
+ * Useful when the env-configured SERVICE_CODE (e.g. `IllegalConstruction`)
+ * doesn't exist on the target tenant (e.g. ke/Bomet uses
+ * `GarbageMissedGarbageCollection`).
+ */
+export async function resolveServiceCode(
+  baseUrl: string,
+  authToken: string,
+  tenantId: string,
+  preferred: string,
+): Promise<string> {
+  try {
+    const r = await fetch(`${baseUrl}/mdms-v2/v2/_search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        RequestInfo: { authToken },
+        MdmsCriteria: { tenantId, schemaCode: 'RAINMAKER-PGR.ServiceDefs', limit: 50 },
+      }),
+    });
+    const data = (await r.json()) as {
+      mdms?: Array<{ uniqueIdentifier: string; isActive: boolean; data: { active: boolean; serviceCode: string } }>;
+    };
+    const records = data.mdms || [];
+
+    // Check if preferred code is active
+    const preferredRecord = records.find(
+      (rec) => rec.uniqueIdentifier === preferred && rec.isActive && rec.data?.active,
+    );
+    if (preferredRecord) return preferred;
+
+    // Fall back to first active record
+    const firstActive = records.find((rec) => rec.isActive && rec.data?.active);
+    if (firstActive) return firstActive.data.serviceCode || firstActive.uniqueIdentifier;
+  } catch {
+    // Network or parse failure — return preferred and let _create surface the error
+  }
+  return preferred;
+}

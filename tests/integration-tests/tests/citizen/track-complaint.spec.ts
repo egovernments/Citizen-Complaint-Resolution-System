@@ -12,6 +12,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
+import { pgrCreate, resolveServiceCode } from '../utils/launch-fixes/api';
 import {
   BASE_URL,
   TENANT,
@@ -89,29 +90,20 @@ async function registerCitizenAPI(phone: string): Promise<CitizenAuth> {
 }
 
 async function createComplaintAPI(auth: CitizenAuth): Promise<string> {
-  const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_create`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      RequestInfo: { apiId: 'Rainmaker', authToken: auth.token, userInfo: auth.userInfo },
-      service: {
-        tenantId: TENANT,
-        serviceCode: SERVICE_CODE,
-        description: `PW track-complaint test — auto-filed`,
-        source: 'web',
-        address: {
-          city: TENANT,
-          locality: { code: LOCALITY_CODE },
-          geoLocation: { latitude: 0, longitude: 0 },
-        },
-        citizen: { name: CITIZEN_NAME, mobileNumber: CITIZEN_PHONE },
-      },
-      workflow: { action: 'APPLY', verificationDocuments: [] },
-    }),
+  // Resolve a valid service code for this deployment (ke uses different codes
+  // than the default SERVICE_CODE which may only exist on Ethiopia).
+  const resolvedServiceCode = await resolveServiceCode(BASE_URL, auth.token, TENANT, SERVICE_CODE);
+  const created = await pgrCreate({
+    baseUrl: BASE_URL,
+    auth,
+    tenantId: TENANT,
+    serviceCode: resolvedServiceCode,
+    localityCode: LOCALITY_CODE,
+    description: 'PW track-complaint test — auto-filed',
+    citizenName: CITIZEN_NAME,
+    citizenPhone: CITIZEN_PHONE,
   });
-  expect(resp.ok, 'API _create should succeed').toBe(true);
-  const data = (await resp.json()) as { ServiceWrappers: Array<{ service: { serviceRequestId: string } }> };
-  return data.ServiceWrappers[0].service.serviceRequestId;
+  return created.serviceRequestId;
 }
 
 test.describe.serial('Citizen track-complaint', () => {
