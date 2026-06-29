@@ -8,6 +8,35 @@ import DashboardLayout from "./components/DashboardLayout";
 import KpiTile from "./components/KpiTile";
 import CardUpdatedStamp from "./components/CardUpdatedStamp";
 import ResizeGrip from "./components/ResizeGrip";
+import SubtleScroll from "./components/SubtleScroll";
+import {
+  VIZ_TYPE,
+  SHARED_CHROME,
+  buildWidgetHeaderClassName,
+  getWidgetBodyClassName,
+  getWidgetScrollClassName,
+} from "./config/visualizationStyles";
+
+// Map the catalog's viz.kind onto the reference dashboard's VIZ_TYPE so each widget
+// gets its type-specific header/body chrome (padding, insets, legend tuning) instead
+// of a generic flex body. Mirrors the OLD DashboardGrid presentation path.
+const KIND_TO_VIZTYPE = {
+  bar: VIZ_TYPE.BAR_CHART,
+  "bar-chart": VIZ_TYPE.BAR_CHART,
+  histogram: VIZ_TYPE.HISTOGRAM,
+  "horizontal-bar": VIZ_TYPE.HORIZONTAL_BAR,
+  "stacked-bar": VIZ_TYPE.STACKED_BAR,
+  line: VIZ_TYPE.LINE_CHART,
+  "line-chart": VIZ_TYPE.LINE_CHART,
+  pie: VIZ_TYPE.PIE_CHART,
+  "pie-chart": VIZ_TYPE.PIE_CHART,
+  "data-table": VIZ_TYPE.DATA_TABLE,
+  table: VIZ_TYPE.DATA_TABLE,
+  "sla-risk-table": VIZ_TYPE.SLA_RISK_TABLE,
+  map: VIZ_TYPE.MAP,
+  "choropleth-map": VIZ_TYPE.MAP,
+};
+const TABLE_KINDS = new Set(["data-table", "table", "sla-risk-table"]);
 import DashboardLogin, {
   hasDashboardSession,
   clearDashboardSession,
@@ -536,14 +565,17 @@ const AdminDashboardInner = ({ onSignOut }) => {
                   {removeBtn}
                   {renderTile(item.i)}
                   <CardUpdatedStamp label={lastUpdatedLabel} />
-                  <ResizeGrip />
                 </div>
               );
             }
-            // Map + choropleth widgets render their own internal header; every
-            // other chart/table tile gets the standard widget header (the title
-            // the reference DashboardGrid drew above each chart body).
-            const kind = kpis[item.i]?.viz?.kind;
+            // Map + choropleth widgets render their own internal header; every other
+            // chart/table tile gets the reference DashboardGrid chrome: a typed header
+            // (title + sub-line), the type-specific body insets, and a scroll wrapper
+            // for tables.
+            const viz = kpis[item.i]?.viz || {};
+            const kind = viz.kind;
+            const vizType = KIND_TO_VIZTYPE[kind] || kind;
+            const isTable = TABLE_KINDS.has(kind);
             const selfHeaders = kind === "map" || kind === "choropleth-map";
             return (
               <section
@@ -552,16 +584,31 @@ const AdminDashboardInner = ({ onSignOut }) => {
               >
                 {removeBtn}
                 {!selfHeaders && (
-                  <header className="dashboard-drag-handle tw-min-w-0">
+                  <header className={`${buildWidgetHeaderClassName(vizType)} tw-min-w-0`}>
                     <div className="tw-min-w-0 tw-flex-1">
-                      <h2 className="dashboard-drag-handle-title tw-truncate">
-                        {kpis[item.i]?.viz?.title || item.i}
+                      <h2 className={`${SHARED_CHROME.dragHandleTitle} tw-truncate`}>
+                        {viz.title || item.i}
                       </h2>
+                      {viz.subtitle && (
+                        <p className={SHARED_CHROME.dragHandleSubtitle}>{viz.subtitle}</p>
+                      )}
                     </div>
                   </header>
                 )}
-                <div className="tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
-                  {renderTile(item.i)}
+                <div
+                  className={
+                    selfHeaders
+                      ? "tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-hidden"
+                      : getWidgetBodyClassName(vizType, { isTable })
+                  }
+                >
+                  {isTable ? (
+                    <SubtleScroll className={getWidgetScrollClassName()}>
+                      {renderTile(item.i)}
+                    </SubtleScroll>
+                  ) : (
+                    renderTile(item.i)
+                  )}
                 </div>
                 <CardUpdatedStamp label={lastUpdatedLabel} />
                 <ResizeGrip />

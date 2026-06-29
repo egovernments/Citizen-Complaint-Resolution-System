@@ -18,7 +18,7 @@
         "rs_breach_total",
         "cl_resolved_date_range_count",
         "cl_reopen_rate_count",
-        "ce_csat_avg_week",
+        "cl_csat_avg",
         "cl_chart_officer_sla",
         "ev_chart_resolution_dwell_subtype",
         "cl_map_ward_wow_current",
@@ -56,7 +56,7 @@
           "h": 2
         },
         {
-          "kpiId": "ce_csat_avg_week",
+          "kpiId": "cl_csat_avg",
           "x": 8,
           "y": 0,
           "w": 2,

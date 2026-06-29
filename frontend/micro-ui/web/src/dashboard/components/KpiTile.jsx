@@ -92,10 +92,6 @@ export function KpiTile({ def, result, results, error, vizOverride, loading = fa
       data-accent={viz.accent}
     >
       {content}
-      {asOf ? <span className="kpi-tile__asof">as of {formatAsOf(asOf)}</span> : null}
-      {scope && scope.boundaryPrefixes ? (
-        <span className="kpi-tile__scope">{scope.boundaryPrefixes.join(', ')}</span>
-      ) : null}
     </div>
   );
 }
@@ -331,7 +327,7 @@ function renderNumberTileDelta(ctx) {
     <KpiCard
       title={title}
       value={loading ? undefined : applyFormat(value, viz.format)}
-      context={viz.contextLabel || viz.deltaLabel || ''}
+      context={viz.subtitle || viz.description || viz.contextLabel || ''}
       status={status}
       deltaDisplay={formatDeltaDisplay(delta, viz.format)}
       deltaClass={resolveDeltaClass(viz, value, delta)}

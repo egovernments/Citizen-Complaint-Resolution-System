@@ -353,7 +353,8 @@
           "compare": "prior"
         },
         "deltaLabel": "vs prior period",
-        "title": "Reopen rate"
+        "title": "Reopen rate",
+        "subtitle": "Reopened ÷ resolved"
       },
       "params": [
         {
@@ -405,7 +406,8 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG",
         "compose": null,
         "pii": false,
-        "title": "Citizen satisfaction"
+        "title": "Citizen satisfaction",
+        "subtitle": "Avg. rating on resolved complaints"
       },
       "params": [
         {
@@ -1632,7 +1634,8 @@
         "orientation": "horizontal",
         "measureKey": "total",
         "seriesLabel": "Filed",
-        "limit": 8
+        "limit": 8,
+        "subtitle": "Complaints filed, by type"
       },
       "params": [
         {
@@ -1760,7 +1763,8 @@
         "labelFormat": "department",
         "compose": null,
         "pii": false,
-        "title": "Department-wise resolution rate"
+        "title": "Department-wise resolution rate",
+        "subtitle": "Resolved ÷ filed per department"
       },
       "params": [
         {
@@ -1969,7 +1973,8 @@
         "pii": {
           "dimension": "current_assignee_uuid"
         },
-        "title": "Employees with most open complaints"
+        "title": "Employees with most open complaints",
+        "subtitle": "Open complaints by SLA state per officer"
       },
       "params": [
         {
@@ -2057,7 +2062,8 @@
             "color": "var(--status-resolved)"
           }
         ],
-        "limit": 8
+        "limit": 8,
+        "subtitle": "Subtypes with the most open complaints, broken down by workflow stage"
       },
       "params": [
         {
@@ -2120,7 +2126,8 @@
         "compose": null,
         "pii": false,
         "title": "Complaints by channel",
-        "measureKey": "total"
+        "measureKey": "total",
+        "subtitle": "Open complaints by intake channel"
       },
       "params": [
         {
@@ -2182,7 +2189,8 @@
           "1-3d",
           "3-7d",
           ">7d"
-        ]
+        ],
+        "subtitle": "Open complaints by age bucket"
       },
       "params": [
         {
@@ -2802,7 +2810,8 @@
             "align": "right",
             "type": "rating"
           }
-        ]
+        ],
+        "subtitle": "Resolution, SLA and reopen metrics per complaint type"
       },
       "params": [
         {
@@ -2877,7 +2886,8 @@
         ],
         "compose": null,
         "pii": false,
-        "title": "Complaints at risk"
+        "title": "Complaints at risk",
+        "subtitle": "Open complaints nearing or past SLA"
       },
       "params": [
         {
@@ -2978,7 +2988,8 @@
             "align": "right",
             "type": "integer"
           }
-        ]
+        ],
+        "subtitle": "Average and median time spent in each workflow stage"
       },
       "params": [
         {
@@ -3066,7 +3077,8 @@
         "labelFormat": "dimension",
         "compose": null,
         "pii": false,
-        "title": "Resolution time by sub-type"
+        "title": "Resolution time by sub-type",
+        "subtitle": "Time spent in each workflow stage, by sub-type"
       },
       "params": [
         {
@@ -3785,7 +3797,8 @@
             "type": "rating"
           }
         ],
-        "labelFormat": "officer"
+        "labelFormat": "officer",
+        "subtitle": "Workload and quality metrics per officer"
       },
       "params": [
         {
@@ -5024,7 +5037,8 @@
         "dateKey": "created_date",
         "sparklineMeasureKey": "avg",
         "seriesColor": null,
-        "title": "Citizen satisfaction (this week)"
+        "title": "Citizen satisfaction (this week)",
+        "subtitle": "Avg. rating on resolved complaints"
       },
       "params": [
         {
