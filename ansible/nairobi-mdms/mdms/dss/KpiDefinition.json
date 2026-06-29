@@ -1725,14 +1725,16 @@
         ],
         "measures": [
           {
-            "name": "filed",
-            "agg": "count"
-          },
-          {
-            "name": "resolved",
-            "agg": "count",
-            "filter": {
-              "is_resolved": true
+            "name": "rate",
+            "agg": "ratio",
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              }
+            },
+            "denominator": {
+              "agg": "count"
             }
           }
         ],
@@ -1740,20 +1742,16 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "horizontal-bar",
+        "kind": "bar",
         "format": "percentOneDecimal",
-        "valueKey": "resolved",
+        "valueKey": "rate",
         "accent": "green",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
         "dimensionKey": "department_code",
-        "numeratorKey": "resolved",
-        "denominatorKey": "filed",
         "measureKeys": [
-          "filed",
-          "resolved"
+          "rate"
         ],
-        "breakEven": 1,
         "limit": 12,
         "labelFormat": "department",
         "compose": null,
