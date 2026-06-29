@@ -14,9 +14,9 @@
  */
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import { BASE_URL, FIXED_OTP, generateCitizenPhone } from '../utils/env';
+import { BASE_URL } from '../utils/env';
+import { citizenOtpLogin } from '../utils/citizen-login';
 
-const CITIZEN_LOGIN_URL = '/digit-ui/citizen/login';
 const CITIZEN_HOME_URL = '/digit-ui/citizen/pgr-home';
 const COMPLAINT_TYPE_URL = '/digit-ui/citizen/pgr/complaint-type';
 
@@ -24,26 +24,8 @@ test.describe('citizen complaint — attachment lifecycle #555', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('upload preview renders, then detail page surfaces the same image', async ({ page }) => {
-    const mobile = generateCitizenPhone();
-
-    // ============ OTP login ============
-    await page.goto(`${BASE_URL}${CITIZEN_LOGIN_URL}?cb=${Date.now()}`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2_500);
-    await page
-      .locator('input[type="tel"], input[type="number"]')
-      .first()
-      .pressSequentially(mobile, { delay: 80 });
-    await page.getByRole('button', { name: /get otp|continue|next/i }).first().click();
-    await page.waitForTimeout(2_500);
-    const otpDigits = page.locator('input[autocomplete="one-time-code" i], input[maxlength="1"]');
-    if ((await otpDigits.count()) >= 6) {
-      for (let i = 0; i < 6; i++) await otpDigits.nth(i).fill(FIXED_OTP[i]);
-    } else {
-      await page.getByRole('textbox').first().fill(FIXED_OTP);
-    }
-    await page.getByRole('button', { name: /verify|login|submit|continue/i }).first().click();
-    await page.waitForURL(/\/digit-ui\/citizen(?!\/login)/, { timeout: 25_000 });
+    // ============ OTP login (uses suite-wide provisioned citizen) ============
+    await citizenOtpLogin(page);
     await page.waitForTimeout(3_000);
 
     // ============ Open new-complaint wizard ============
@@ -124,7 +106,7 @@ test.describe('citizen complaint — attachment lifecycle #555', () => {
     await page.waitForTimeout(3_500);
 
     const previewImgs = page.locator(
-      'img[src*="file-store"], img[src*="bometfeedbackhub"], img[src*="naipepea"], img[alt*="upload" i], img[alt*="thumbnail" i], img[alt*="issue" i]',
+      'img[src*="file-store"], img[src*="bometfeedbackhub"], img[src*="naipepea"], img[src*="digitlab.in"], img[alt*="upload" i], img[alt*="thumbnail" i], img[alt*="issue" i]',
     );
     expect(
       await previewImgs.count(),
@@ -181,7 +163,7 @@ test.describe('citizen complaint — attachment lifecycle #555', () => {
     await page.waitForTimeout(5_000);
 
     const detailImgs = page.locator(
-      'img[src*="file-store"], img[src*="bometfeedbackhub"], img[src*="naipepea"], img[alt*="thumbnail" i], img[alt*="attachment" i], img[alt*="issue" i]',
+      'img[src*="file-store"], img[src*="bometfeedbackhub"], img[src*="naipepea"], img[src*="digitlab.in"], img[alt*="thumbnail" i], img[alt*="attachment" i], img[alt*="issue" i]',
     );
     await expect(
       detailImgs.first(),
