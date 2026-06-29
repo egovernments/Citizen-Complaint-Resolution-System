@@ -276,11 +276,19 @@ export const ComplaintDetails = (props) => {
   const [assignResponse, setAssignResponse] = useState(null);
   const [loader, setLoader] = useState(false);
   const [rerender, setRerender] = useState(1);
+  const [validationToast, setValidationToast] = useState(null);
   const client = useQueryClient();
   function popupCall(option) {
     setDisplayMenu(false);
     setPopup(true);
   }
+
+  useEffect(() => {
+    if (validationToast) {
+      const timer = setTimeout(() => setValidationToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [validationToast]);
 
   useEffect(() => {
     (async () => {
@@ -351,8 +359,17 @@ export const ComplaintDetails = (props) => {
         setDisplayMenu(false);
         break;
       case "REOPEN":
-        setPopup(true);
-        setDisplayMenu(false);
+        const lastModifiedTime = complaintDetails?.service?.auditDetails?.lastModifiedTime;
+        const ComplainMaxIdleTime = 3600000; // 1 hour in ms
+        if (lastModifiedTime && (Date.now() - lastModifiedTime >= ComplainMaxIdleTime)) {
+          const msgKey = "CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE";
+          const fallback = "Complaint cannot be reopened after 1 hour of resolution/rejection";
+          setValidationToast(t(msgKey) === msgKey ? fallback : t(msgKey));
+          setDisplayMenu(false);
+        } else {
+          setPopup(true);
+          setDisplayMenu(false);
+        }
         break;
       default:
         setDisplayMenu(false);
@@ -534,6 +551,7 @@ export const ComplaintDetails = (props) => {
         />
       ) : null}
       {toast && <Toast label={t(assignResponse ? `CS_ACTION_${selectedAction}_TEXT` : "CS_ACTION_ASSIGN_FAILED")} onClose={closeToast} />}
+      {validationToast && <Toast error={true} isDleteBtn={true} label={validationToast} onClose={() => setValidationToast(null)} />}
       {!workflowDetails?.isLoading && workflowDetails?.data?.nextActions?.length > 0 && (
         <ActionBar>
           {displayMenu && workflowDetails?.data?.nextActions ? (

@@ -727,6 +727,20 @@ const PGRDetails = () => {
               label={t("ES_COMMON_TAKE_ACTION")}
               onOptionSelect={(selected) => {
                 console.log("*** Log ===> selected", selected);
+                if (selected.action === "REOPEN") {
+                  const lastModifiedTime = pgrData?.ServiceWrappers?.[0]?.service?.auditDetails?.lastModifiedTime;
+                  const ComplainMaxIdleTime = 3600000; // 1 hour in ms
+                  if (lastModifiedTime && (Date.now() - lastModifiedTime >= ComplainMaxIdleTime)) {
+                    const msgKey = "CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE";
+                    const fallback = "Complaint cannot be reopened after 1 hour of resolution/rejection";
+                    setToast({
+                      show: true,
+                      type: "error",
+                      label: t(msgKey) === msgKey ? fallback : t(msgKey),
+                    });
+                    return;
+                  }
+                }
                 setSelectedAction(selected);
                 setOpenModal(true);
               }}
