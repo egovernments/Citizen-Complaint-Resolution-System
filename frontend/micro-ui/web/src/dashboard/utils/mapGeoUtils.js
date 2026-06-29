@@ -1007,8 +1007,7 @@ export function buildMapDisplayLayers(
   joined,
   _drillLevel,
   complaintPins = [],
-  _hierarchyIndex = {},
-  _zoomLevel = 11
+  _hierarchyIndex = {}
 ) {
   const rawFeatures = joined?.geoFeatures?.features ?? [];
   const visibleComplaintPins = complaintPins.length

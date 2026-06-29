@@ -613,7 +613,7 @@ const DashboardGrid = ({
     >
       <GridLayoutWithWidth
           key={gridSyncKey}
-          className="layout"
+          className="dashboard-grid-layout"
           layout={gridLayout}
           cols={GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}

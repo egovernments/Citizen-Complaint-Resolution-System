@@ -122,8 +122,8 @@
     transition: none;
   }
 
-  .dashboard-external-drag .layout .react-grid-placeholder,
-  .dashboard-grid-dragging .layout .react-grid-placeholder {
+  .dashboard-external-drag .dashboard-grid-layout .react-grid-placeholder,
+  .dashboard-grid-dragging .dashboard-grid-layout .react-grid-placeholder {
     opacity: 1 !important;
     z-index: 1 !important;
     border-radius: 4px;
@@ -663,12 +663,12 @@
       cursor: pointer;
     }
 
-    .layout .react-grid-item > .react-resizable-handle,
+    .dashboard-grid-layout .react-grid-item > .react-resizable-handle,
     .dashboard-resize-grip {
       display: none !important;
     }
 
-    .layout .react-grid-item {
+    .dashboard-grid-layout .react-grid-item {
       overflow: auto;
       -webkit-overflow-scrolling: touch;
     }
@@ -896,15 +896,15 @@
     min-height: 1.75rem;
   }
 
-  .layout .react-grid-item.dashboard-grid-item-kpi {
+  .dashboard-grid-layout .react-grid-item.dashboard-grid-item-kpi {
     overflow: hidden;
   }
 
-  .layout .react-grid-item.dashboard-grid-item-chart-visible {
+  .dashboard-grid-layout .react-grid-item.dashboard-grid-item-chart-visible {
     overflow: visible;
   }
 
-  .layout .react-grid-item.dashboard-grid-item-chart-clipped {
+  .dashboard-grid-layout .react-grid-item.dashboard-grid-item-chart-clipped {
     overflow: hidden;
   }
 
@@ -1662,16 +1662,16 @@
     z-index: 1000;
   }
 
-  .layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle {
+  .dashboard-grid-layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle {
     z-index: 1200;
     pointer-events: auto;
   }
 
-  .layout .react-grid-item.dashboard-grid-item-map:hover > .react-resizable-handle {
+  .dashboard-grid-layout .react-grid-item.dashboard-grid-item-map:hover > .react-resizable-handle {
     opacity: 1;
   }
 
-  .layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-s {
+  .dashboard-grid-layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-s {
     bottom: 0;
     left: 0;
     width: 100%;
@@ -1679,7 +1679,7 @@
     cursor: s-resize;
   }
 
-  .layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-e {
+  .dashboard-grid-layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-e {
     top: 0;
     right: 0;
     width: 12px;
@@ -1825,23 +1825,23 @@
     cursor: default;
   }
 
-  .layout .react-grid-item > .react-resizable-handle::after {
+  .dashboard-grid-layout .react-grid-item > .react-resizable-handle::after {
     content: none;
     border: 0;
   }
 
-  .layout .react-grid-item > .react-resizable-handle {
+  .dashboard-grid-layout .react-grid-item > .react-resizable-handle {
     background: transparent;
     opacity: 0;
   }
 
-  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se,
-  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-e,
-  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-s {
+  .dashboard-grid-layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se,
+  .dashboard-grid-layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-e,
+  .dashboard-grid-layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-s {
     opacity: 1;
   }
 
-  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-se {
+  .dashboard-grid-layout .react-grid-item > .react-resizable-handle.react-resizable-handle-se {
     bottom: 0;
     right: 0;
     width: 18px;
@@ -1850,7 +1850,7 @@
     z-index: 3;
   }
 
-  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-e {
+  .dashboard-grid-layout .react-grid-item > .react-resizable-handle.react-resizable-handle-e {
     top: 50%;
     right: 0;
     width: 18px;
@@ -1860,7 +1860,7 @@
     z-index: 3;
   }
 
-  .layout .react-grid-item > .react-resizable-handle.react-resizable-handle-s {
+  .dashboard-grid-layout .react-grid-item > .react-resizable-handle.react-resizable-handle-s {
     bottom: 0;
     left: 0;
     width: 100%;
@@ -1869,7 +1869,7 @@
     z-index: 3;
   }
 
-  .layout .react-grid-placeholder {
+  .dashboard-grid-layout .react-grid-placeholder {
     background: transparent !important;
     opacity: 0 !important;
     border: 0 !important;

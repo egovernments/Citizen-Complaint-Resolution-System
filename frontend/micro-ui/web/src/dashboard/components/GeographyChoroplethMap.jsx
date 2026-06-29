@@ -165,8 +165,8 @@ const GeographyChoroplethMap = ({
   const layerByCodeRef = useRef({});
   const defaultViewRef = useRef({ center: getMapCenter(), zoom: 11 });
 
-  // Keep a ref that always holds the latest zoom so layer callbacks don't
-  // need zoomLevel as a dep (preventing full redraws on every scroll step).
+  // Synced on every map zoom/move; read from layer callbacks via ref so GeoJSON
+  // layers are not rebuilt on each scroll step.
   const zoomLevelRef = useRef(11);
 
   const [boundaries, setBoundaries] = useState([]);
@@ -260,10 +260,9 @@ const GeographyChoroplethMap = ({
     return null;
   }, [focusedWard, drillTrail]);
 
-  // Choropleth layers change only when drill level or underlying data changes.
   const displayLayers = useMemo(
-    () => buildMapDisplayLayers(joined, drillLevel, complaintPins, drillHierarchyIndex, zoomLevel),
-    [joined, drillLevel, complaintPins, drillHierarchyIndex, zoomLevel]
+    () => buildMapDisplayLayers(joined, drillLevel, complaintPins, drillHierarchyIndex),
+    [joined, drillLevel, complaintPins, drillHierarchyIndex]
   );
 
   const visibleComplaintPins = displayLayers.complaintPins ?? [];
@@ -460,7 +459,7 @@ const GeographyChoroplethMap = ({
     };
   }, []);
 
-  // ── draw choropleth (only when data / drill changes, NOT on zoom) ─────────
+  // ── draw choropleth (data / drill / mode; zoom styles updated separately below) ─
   useEffect(() => {
     const map = mapRef.current;
     const choroplethLayer = choroplethRef.current;
@@ -477,7 +476,7 @@ const GeographyChoroplethMap = ({
 
     L.geoJSON(geoFeatures, {
       style: (feature) =>
-        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel),
+        resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current),
       onEachFeature: (feature, layer) => {
         layer.feature = feature;
         const code = feature?.properties?.code;
@@ -491,14 +490,19 @@ const GeographyChoroplethMap = ({
         );
 
         layer.on("mouseover", () => {
-          const s = resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel);
+          const s = resolveFeatureStyle(
+            feature,
+            layerMode,
+            focusedCode,
+            zoomLevelRef.current
+          );
           layer.setStyle({ ...s, weight: 2.5, fillOpacity: Math.min(s.fillOpacity + 0.1, 0.75) });
           layer.bringToFront?.();
         });
 
         layer.on("mouseout", () => {
           layer.setStyle(
-            resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevel)
+            resolveFeatureStyle(feature, layerMode, focusedCode, zoomLevelRef.current)
           );
         });
 
@@ -554,10 +558,9 @@ const GeographyChoroplethMap = ({
     drillTrail,
     joined.geoFeatures?.features,
     layerMode,
-    zoomLevel,
   ]);
 
-  // ── update choropleth styles when focus or mode changes ──────────────────
+  // ── update choropleth border weights when zoom / focus / mode changes ─────
   useEffect(() => {
     Object.values(layerByCodeRef.current).forEach((layer) => {
       const feature = layer.feature;

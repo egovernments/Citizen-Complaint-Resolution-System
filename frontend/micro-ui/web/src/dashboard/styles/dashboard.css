@@ -252,20 +252,11 @@
   transition: none;
 }
 
-.dashboard-external-drag .layout .react-grid-placeholder,
-  .dashboard-grid-dragging .layout .react-grid-placeholder {
+.dashboard-external-drag .dashboard-grid-layout .react-grid-placeholder,
+  .dashboard-grid-dragging .dashboard-grid-layout .react-grid-placeholder {
   opacity: 1 !important;
   z-index: 1 !important;
   border-radius: 4px;
-  border: 1px dashed color-mix(in srgb, var(--chart-1, #2563eb) 35%, transparent) !important;
-  background: color-mix(in srgb, var(--chart-1, #2563eb) 5%, transparent) !important;
-}
-
-.dashboard-external-drag .\!layout .react-grid-placeholder,
-  .dashboard-grid-dragging .\!layout .react-grid-placeholder {
-  opacity: 1 !important;
-  z-index: 1 !important;
-  border-radius: 4px !important;
   border: 1px dashed color-mix(in srgb, var(--chart-1, #2563eb) 35%, transparent) !important;
   background: color-mix(in srgb, var(--chart-1, #2563eb) 5%, transparent) !important;
 }
@@ -1068,12 +1059,12 @@
     cursor: pointer;
   }
 
-  .layout .react-grid-item > .react-resizable-handle,
+  .dashboard-grid-layout .react-grid-item > .react-resizable-handle,
     .dashboard-resize-grip {
     display: none !important;
   }
 
-  .layout .react-grid-item {
+  .dashboard-grid-layout .react-grid-item {
     overflow: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -1134,100 +1125,6 @@
   .dashboard-kpi-widget {
     min-height: 100%;
     height: auto;
-  }
-
-   {
-    left: 0 !important;
-    top: 0 !important;
-    height: 100dvh !important;
-    transform: translateX(-100%) !important;
-    transition: transform 0.2s ease !important;
-    box-shadow: none !important;
-    transform: translateX(0) !important;
-    box-shadow: 4px 0 24px rgb(0 0 0 / 0.15) !important;
-    display: block !important;
-    position: fixed !important;
-    inset: 0 !important;
-    z-index: 40 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-    background: rgb(0 0 0 / 0.4) !important;
-    cursor: pointer !important;
-  }
-
-  .\!layout .react-grid-item > .react-resizable-handle {
-    display: none !important;
-  }
-
-  .\!layout .react-grid-item {
-    overflow: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-  }
-
-   {
-    font-size: clamp(18px, 4.5vw, 26px) !important;
-    flex-wrap: wrap !important;
-    row-gap: 0.125rem !important;
-    -webkit-line-clamp: unset !important;
-    overflow: visible !important;
-    text-overflow: unset !important;
-    white-space: normal !important;
-    overflow-wrap: anywhere !important;
-    word-break: break-word !important;
-    position: static !important;
-    margin-top: 0.25rem !important;
-    margin-right: 0 !important;
-    text-align: right !important;
-    padding-right: 0.25rem !important;
-    min-height: 100% !important;
-    height: auto !important;
-    left: 0 !important;
-    top: 0 !important;
-    height: 100dvh !important;
-    transform: translateX(-100%) !important;
-    transition: transform 0.2s ease !important;
-    box-shadow: none !important;
-    transform: translateX(0) !important;
-    box-shadow: 4px 0 24px rgb(0 0 0 / 0.15) !important;
-    display: block !important;
-    position: fixed !important;
-    inset: 0 !important;
-    z-index: 40 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-    background: rgb(0 0 0 / 0.4) !important;
-    cursor: pointer !important;
-  }
-
-  .\!layout .react-grid-item > .react-resizable-handle {
-    display: none !important;
-  }
-
-  .\!layout .react-grid-item {
-    overflow: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-  }
-
-   {
-    font-size: clamp(18px, 4.5vw, 26px) !important;
-    flex-wrap: wrap !important;
-    row-gap: 0.125rem !important;
-    -webkit-line-clamp: unset !important;
-    overflow: visible !important;
-    text-overflow: unset !important;
-    white-space: normal !important;
-    overflow-wrap: anywhere !important;
-    word-break: break-word !important;
-    position: static !important;
-    display: block !important;
-    margin-top: 0.25rem !important;
-    margin-right: 0 !important;
-    text-align: right !important;
-    padding-right: 0.25rem !important;
-    min-height: 100% !important;
-    height: auto !important;
   }
 }
 
@@ -1401,27 +1298,15 @@
   min-height: 1.75rem;
 }
 
-.\!layout .react-grid-item.dashboard-grid-item-kpi {
-  overflow: hidden !important;
-}
-
-.layout .react-grid-item.dashboard-grid-item-kpi {
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-kpi {
   overflow: hidden;
 }
 
-.\!layout .react-grid-item.dashboard-grid-item-chart-visible {
-  overflow: visible !important;
-}
-
-.layout .react-grid-item.dashboard-grid-item-chart-visible {
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-chart-visible {
   overflow: visible;
 }
 
-.\!layout .react-grid-item.dashboard-grid-item-chart-clipped {
-  overflow: hidden !important;
-}
-
-.layout .react-grid-item.dashboard-grid-item-chart-clipped {
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-chart-clipped {
   overflow: hidden;
 }
 
@@ -2397,33 +2282,16 @@
   z-index: 1000;
 }
 
-.\!layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle {
-  z-index: 1200 !important;
-  pointer-events: auto !important;
-}
-
-.layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle {
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle {
   z-index: 1200;
   pointer-events: auto;
 }
 
-.\!layout .react-grid-item.dashboard-grid-item-map:hover > .react-resizable-handle {
-  opacity: 1 !important;
-}
-
-.layout .react-grid-item.dashboard-grid-item-map:hover > .react-resizable-handle {
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-map:hover > .react-resizable-handle {
   opacity: 1;
 }
 
-.\!layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-s {
-  bottom: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 12px !important;
-  cursor: s-resize !important;
-}
-
-.layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-s {
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-s {
   bottom: 0;
   left: 0;
   width: 100%;
@@ -2431,16 +2299,7 @@
   cursor: s-resize;
 }
 
-.\!layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-e {
-  top: 0 !important;
-  right: 0 !important;
-  width: 12px !important;
-  height: 100% !important;
-  margin-top: 0 !important;
-  cursor: e-resize !important;
-}
-
-.layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-e {
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-e {
   top: 0;
   right: 0;
   width: 12px;
@@ -2617,54 +2476,23 @@
   cursor: default;
 }
 
-.\!layout .react-grid-item > .react-resizable-handle::after {
-  content: none !important;
-  border: 0 !important;
-}
-
-.layout .react-grid-item > .react-resizable-handle::after {
+.dashboard-grid-layout .react-grid-item > .react-resizable-handle::after {
   content: none;
   border: 0;
 }
 
-.\!layout .react-grid-item > .react-resizable-handle {
-  background: transparent !important;
-  opacity: 0 !important;
-}
-
-.layout .react-grid-item > .react-resizable-handle {
+.dashboard-grid-layout .react-grid-item > .react-resizable-handle {
   background: transparent;
   opacity: 0;
 }
 
-.\!layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se,
-  .\!layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-e,
-  .\!layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-s {
-  opacity: 1 !important;
-}
-
-.layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se,
-  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-e,
-  .layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-s {
+.dashboard-grid-layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se,
+  .dashboard-grid-layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-e,
+  .dashboard-grid-layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-s {
   opacity: 1;
 }
 
-.\!layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se,
-  .\!layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-e,
-  .\!layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-s {
-  opacity: 1 !important;
-}
-
-.\!layout .react-grid-item > .react-resizable-handle.react-resizable-handle-se {
-  bottom: 0 !important;
-  right: 0 !important;
-  width: 18px !important;
-  height: 18px !important;
-  cursor: se-resize !important;
-  z-index: 3 !important;
-}
-
-.layout .react-grid-item > .react-resizable-handle.react-resizable-handle-se {
+.dashboard-grid-layout .react-grid-item > .react-resizable-handle.react-resizable-handle-se {
   bottom: 0;
   right: 0;
   width: 18px;
@@ -2673,17 +2501,7 @@
   z-index: 3;
 }
 
-.\!layout .react-grid-item > .react-resizable-handle.react-resizable-handle-e {
-  top: 50% !important;
-  right: 0 !important;
-  width: 18px !important;
-  height: 18px !important;
-  margin-top: -9px !important;
-  cursor: e-resize !important;
-  z-index: 3 !important;
-}
-
-.layout .react-grid-item > .react-resizable-handle.react-resizable-handle-e {
+.dashboard-grid-layout .react-grid-item > .react-resizable-handle.react-resizable-handle-e {
   top: 50%;
   right: 0;
   width: 18px;
@@ -2693,16 +2511,7 @@
   z-index: 3;
 }
 
-.\!layout .react-grid-item > .react-resizable-handle.react-resizable-handle-s {
-  bottom: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 12px !important;
-  cursor: s-resize !important;
-  z-index: 3 !important;
-}
-
-.layout .react-grid-item > .react-resizable-handle.react-resizable-handle-s {
+.dashboard-grid-layout .react-grid-item > .react-resizable-handle.react-resizable-handle-s {
   bottom: 0;
   left: 0;
   width: 100%;
@@ -2711,13 +2520,7 @@
   z-index: 3;
 }
 
-.\!layout .react-grid-placeholder {
-  background: transparent !important;
-  opacity: 0 !important;
-  border: 0 !important;
-}
-
-.layout .react-grid-placeholder {
+.dashboard-grid-layout .react-grid-placeholder {
   background: transparent !important;
   opacity: 0 !important;
   border: 0 !important;

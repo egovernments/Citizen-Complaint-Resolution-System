@@ -33,7 +33,7 @@ export function useScrollableChartSize({
 
   const minChartWidth = useMemo(() => {
     if (!scrollKey || !containerNode) return 0;
-    const layoutElement = containerNode.closest(".layout");
+    const layoutElement = containerNode.closest(".dashboard-grid-layout");
     return resolveMinChartAreaPx(scrollKey, layoutElement) ?? 0;
   }, [scrollKey, containerNode]);
 
@@ -52,7 +52,7 @@ export function useScrollableChartSize({
   useEffect(() => {
     if (viewport.width <= 0 || viewport.height <= 0) return;
 
-    const layoutElement = containerNode?.closest(".layout");
+    const layoutElement = containerNode?.closest(".dashboard-grid-layout");
     const defaultArea = scrollKey
       ? resolveDefaultChartAreaPx(scrollKey, layoutElement)
       : null;
