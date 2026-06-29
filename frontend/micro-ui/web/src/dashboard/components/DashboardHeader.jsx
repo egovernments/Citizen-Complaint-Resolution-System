@@ -74,6 +74,7 @@ const ExportIcon = () => (
 
 const DashboardHeader = ({
   visibleLayoutIds,
+  catalogItems,
   onAddWidget,
   onResetLayout,
   onDragWidgetStart,
@@ -188,6 +189,7 @@ const DashboardHeader = ({
             </button>
             <AddKpiDropdown
               visibleLayoutIds={visibleLayoutIds}
+              catalogItems={catalogItems}
               onAddWidget={onAddWidget}
               onDragWidgetStart={onDragWidgetStart}
               onDragWidgetEnd={onDragWidgetEnd}

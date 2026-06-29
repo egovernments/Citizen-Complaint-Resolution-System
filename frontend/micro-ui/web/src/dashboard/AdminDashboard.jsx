@@ -280,6 +280,19 @@ const AdminDashboardInner = ({ onSignOut }) => {
     [layout]
   );
 
+  // Add-KPI picker source: every role-visible catalog tile (already filtered
+  // server-side), shaped to the picker's { id, metric, type, itemType } contract.
+  const catalogItems = useMemo(
+    () =>
+      Object.values(kpis).map((def) => ({
+        id: def.kpiId,
+        metric: def.viz?.title || def.kpiId,
+        type: def.viz?.kind,
+        itemType: isCardKind(def.viz?.kind) ? "kpi" : "widget",
+      })),
+    [kpis]
+  );
+
   // Re-run the batch whenever the catalog resolves or the filters change.
   const refsKey = useMemo(
     () => JSON.stringify({ ids: tiles.map((t) => t.kpiId), gp: globalParams(filters) }),
@@ -357,6 +370,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
   return (
     <DashboardLayout
       visibleLayoutIds={visibleLayoutIds}
+      catalogItems={catalogItems}
       onAddWidget={addKpiToLayout}
       onResetLayout={resetLayout}
       onDragWidgetStart={() => {}}

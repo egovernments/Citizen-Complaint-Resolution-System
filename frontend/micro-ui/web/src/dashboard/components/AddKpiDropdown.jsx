@@ -88,6 +88,7 @@ const AddKpiDropdown = ({
   containerRef,
   kpiCardData,
   allowedWidgetIds,
+  catalogItems,
 }) => {
   const panelRef = useRef(null);
   const [panelPosition, setPanelPosition] = useState(null);
@@ -95,6 +96,13 @@ const AddKpiDropdown = ({
   const [hoverRect, setHoverRect] = useState(null);
 
   const availableItems = useMemo(() => {
+    // Catalog-driven dashboard: offer every role-visible catalog tile not already
+    // on the grid (the catalog is already role-filtered server-side, so no extra
+    // allowedWidgetIds gate). Each item is { id:kpiId, metric:title, type:viz.kind,
+    // itemType }. Falls back to the legacy inventory when no catalog is supplied.
+    if (catalogItems) {
+      return catalogItems.filter((it) => !visibleLayoutIds.includes(it.id));
+    }
     // When role-gating is active, only offer widgets the catalog allows.
     const isAllowed = (id) => !allowedWidgetIds || allowedWidgetIds.has(id);
     const metrics = INVENTORY_KPI_METRICS.filter(
@@ -110,7 +118,7 @@ const AddKpiDropdown = ({
       itemType: "widget",
     }));
     return [...metrics, ...widgets];
-  }, [visibleLayoutIds, allowedWidgetIds]);
+  }, [visibleLayoutIds, allowedWidgetIds, catalogItems]);
 
   useLayoutEffect(() => {
     if (!open) {

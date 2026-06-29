@@ -7,6 +7,7 @@ import Sidebar from "./Sidebar";
 const DashboardLayout = ({
   children,
   visibleLayoutIds,
+  catalogItems,
   onAddWidget,
   onResetLayout,
   onDragWidgetStart,
@@ -46,6 +47,7 @@ const DashboardLayout = ({
       <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
         <DashboardHeader
           visibleLayoutIds={visibleLayoutIds}
+          catalogItems={catalogItems}
           onAddWidget={onAddWidget}
           onResetLayout={onResetLayout}
           onDragWidgetStart={onDragWidgetStart}
