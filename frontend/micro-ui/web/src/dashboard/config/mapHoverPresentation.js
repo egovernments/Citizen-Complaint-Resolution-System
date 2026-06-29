@@ -1,11 +1,5 @@
 import { formatDimensionLabel } from "./kpiQueries";
 
-function formatWowPct(wowPct) {
-  if (!Number.isFinite(wowPct)) return "new spike";
-  const rounded = Math.round(wowPct);
-  return `${rounded > 0 ? "+" : ""}${rounded}%`;
-}
-
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -18,36 +12,42 @@ function metricRow(label, value) {
   return `<div class="dashboard-map-hover-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
 }
 
-function slaPill(dotClass, count, label) {
-  return `<span class="dashboard-map-hover-pill"><span class="dashboard-map-hover-dot ${dotClass}"></span>${escapeHtml(count)} ${escapeHtml(label)}</span>`;
+function formatPct(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return `${Math.round(n)}%`;
 }
 
 /**
- * Rich hover card — WoW stats + SLA bucket counts (matches reference).
+ * Hover card for ward polygons — matches reference layout with layer highlight + totals.
  */
-export function buildMapHoverTooltipHtml(ward = {}, { geoLevel = "Locality" } = {}) {
+export function buildMapHoverTooltipHtml(ward = {}, { layerMode = "created", geoLevel = "District" } = {}) {
   const label = ward.label || ward.wardCode || "Area";
-  const current = ward.current ?? ward.count ?? 0;
-  const prior = ward.prior ?? 0;
-  const total = ward.total ?? current;
-  const breachSharePct = Math.round(ward.breachSharePct ?? 0);
-  const within = ward.slaWithin ?? 0;
-  const breaching = ward.slaApproaching ?? 0;
-  const breached = ward.slaBreached ?? ward.breached ?? 0;
+  const created = ward.created ?? ward.count ?? 0;
+  const open = ward.open ?? 0;
+  const resolved = ward.resolved ?? 0;
+  const openPct = ward.openPct ?? (created > 0 ? (open / created) * 100 : 0);
+  const resolvedPct = ward.resolvedPct ?? (created > 0 ? (resolved / created) * 100 : 0);
+
+  const rows = [];
+  if (layerMode === "open") {
+    rows.push(metricRow("% Open", formatPct(openPct)));
+  } else if (layerMode === "resolved") {
+    rows.push(metricRow("% Resolved", formatPct(resolvedPct)));
+  } else {
+    rows.push(metricRow("Created", created));
+  }
+
+  if (layerMode !== "created") {
+    rows.push(metricRow("Total created", created));
+    rows.push(metricRow("Open", open));
+    rows.push(metricRow("Resolved", resolved));
+  }
 
   return `
     <div class="dashboard-map-hover-card">
       <div class="dashboard-map-hover-title">${escapeHtml(label)} · ${escapeHtml(geoLevel)}</div>
-      ${metricRow("This week", current)}
-      ${metricRow("Last week", prior)}
-      ${metricRow("WoW", formatWowPct(ward.wowPct))}
-      ${metricRow("Total", total)}
-      <div class="dashboard-map-hover-row"><span>SLA breach share</span><strong>${breachSharePct}%</strong></div>
-      <div class="dashboard-map-hover-sla">
-        ${slaPill("dashboard-map-hover-dot--within", within, "within")}
-        ${slaPill("dashboard-map-hover-dot--breaching", breaching, "breaching")}
-        ${slaPill("dashboard-map-hover-dot--breached", breached, "breached")}
-      </div>
+      ${rows.join("")}
     </div>
   `;
 }

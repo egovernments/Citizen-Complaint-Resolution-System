@@ -16,10 +16,14 @@ const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
   const cityLabel = getMapCityLabel();
 
   const resolvedLayer = isGeographyMapLayerId(activeLayer) ? activeLayer : "created";
-  const wardCounts = useMemo(
-    () => layers?.[resolvedLayer] ?? [],
-    [layers, resolvedLayer]
-  );
+  const wardCounts = useMemo(() => {
+    const series = layers?.[resolvedLayer] ?? [];
+    const details = layers?.wardDetails ?? {};
+    return series.map((row) => ({
+      ...details[row.wardCode],
+      ...row,
+    }));
+  }, [layers, resolvedLayer]);
 
   if (loading && !wardCounts.length) {
     return (
@@ -38,7 +42,7 @@ const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
       </header>
       <GeographyChoroplethMap
         wardCounts={wardCounts}
-        complaintPins={layers?.complaintPins ?? []}
+        complaintPins={layers?.complaintPinsByLayer?.[resolvedLayer] ?? []}
         complaintPinsError={layers?.complaintPinsError ?? null}
         layerMode={resolvedLayer}
         onLayerModeChange={setActiveLayer}

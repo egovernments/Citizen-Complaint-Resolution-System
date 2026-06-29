@@ -2360,15 +2360,6 @@
   padding-bottom: 0.5rem;
 }
 
-.dashboard-map-path{
-  display: flex;
-  min-width: 0px;
-  flex: 1 1 0%;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
 .dashboard-map-shell{
   position: relative;
   display: flex;
@@ -2568,6 +2559,7 @@
   box-shadow: none;
   padding: 0;
   margin-top: -8px;
+  z-index: 800;
 }
 
 .dashboard-map-hover-card {
@@ -2601,42 +2593,24 @@
   color: var(--foreground);
 }
 
-.dashboard-map-hover-sla{
-  margin-top: 0.5rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  border-top-width: 1px;
-  border-color: var(--border);
-  padding-top: 0.5rem;
+.leaflet-popup.dashboard-map-pin-popup-wrapper .dashboard-map-hover-card {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
 }
 
-.dashboard-map-hover-pill{
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  white-space: nowrap;
+.leaflet-popup.dashboard-map-pin-popup-wrapper .leaflet-popup-content-wrapper {
+  border-radius: 0.375rem;
+}
+
+.dashboard-map-hover-note{
+  margin-top: 0.375rem;
   font-size: 9px;
-  color: var(--foreground);
-}
-
-.dashboard-map-hover-dot{
-  height: 0.5rem;
-  width: 0.5rem;
-  flex-shrink: 0;
-  border-radius: 9999px;
-}
-
-.dashboard-map-hover-dot--within {
-  background: var(--chart-1);
-}
-
-.dashboard-map-hover-dot--breaching {
-  background: var(--chart-2);
-}
-
-.dashboard-map-hover-dot--breached {
-  background: var(--status-breach);
+  line-height: 1.375;
+  color: var(--muted-foreground);
 }
 
 .dashboard-pie-slice {
@@ -2884,6 +2858,10 @@
   top: 3rem;
 }
 
+.tw-top-20{
+  top: 5rem;
+}
+
 .tw-top-3{
   top: 0.75rem;
 }
@@ -3018,6 +2996,10 @@
 
 .tw-min-w-0{
   min-width: 0px;
+}
+
+.tw-max-w-\[220px\]{
+  max-width: 220px;
 }
 
 .tw-max-w-full{
@@ -3213,6 +3195,10 @@
 
 .tw-bg-\[color-mix\(in_srgb\,var\(--chrome-foreground\)_8\%\,transparent\)\]{
   background-color: color-mix(in srgb,var(--chrome-foreground) 8%,transparent);
+}
+
+.tw-bg-amber-50\/95{
+  background-color: rgb(255 251 235 / 0.95);
 }
 
 .tw-bg-background{
@@ -3465,6 +3451,11 @@
 
 .tw-tracking-wider{
   letter-spacing: 0.05em;
+}
+
+.tw-text-amber-900{
+  --tw-text-opacity: 1;
+  color: rgb(120 53 15 / var(--tw-text-opacity, 1));
 }
 
 .tw-text-chrome-foreground{

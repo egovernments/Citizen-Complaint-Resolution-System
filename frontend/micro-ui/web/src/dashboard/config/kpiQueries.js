@@ -607,6 +607,7 @@ export const BATCH_QUERIES = {
     measures: [{ name: "total", agg: "count" }],
     sort: [{ by: "total", dir: "desc" }],
     limit: 200,
+    respectDateRange: true,
   },
   cl_map_ward_resolved: {
     grain: "facts",
@@ -624,9 +625,37 @@ export const BATCH_QUERIES = {
     measures: [{ name: "total", agg: "count" }],
     limit: 600,
   },
-  cl_map_complaint_pins: {
+  cl_map_complaint_pins_created: {
+    grain: "facts",
+    dimensions: [
+      "service_request_id",
+      "latitude",
+      "longitude",
+      "ward_code",
+      "service_code",
+      "application_status",
+    ],
+    measures: [{ name: "total", agg: "count" }],
+    limit: 2000,
+  },
+  cl_map_complaint_pins_open: {
     grain: "facts",
     filters: { is_open: true },
+    dimensions: [
+      "service_request_id",
+      "latitude",
+      "longitude",
+      "ward_code",
+      "service_code",
+      "application_status",
+    ],
+    measures: [{ name: "total", agg: "count" }],
+    limit: 2000,
+    respectDateRange: true,
+  },
+  cl_map_complaint_pins_resolved: {
+    grain: "facts",
+    filters: { is_resolved: true },
     dimensions: [
       "service_request_id",
       "latitude",
@@ -1596,12 +1625,10 @@ function priorRolling7dCreatedAtFilter() {
   return { gte: now - 14 * MS_PER_DAY, lt: now - 7 * MS_PER_DAY };
 }
 
-function applyMapWowQueries(queries, dashboardFilters, apiFilters, dateRangeBounds) {
+function applyMapCreatedQuery(queries, dashboardFilters, apiFilters, dateRangeBounds) {
   const currentKey = "cl_map_ward_wow_current";
-  const priorKey = "cl_map_ward_wow_prior";
   const baseCurrent = BATCH_QUERIES[currentKey];
-  const basePrior = BATCH_QUERIES[priorKey];
-  if (!baseCurrent || !basePrior) return;
+  if (!baseCurrent) return;
 
   const { __dateRange, ...dimensionFilters } = apiFilters || {};
 
@@ -1611,30 +1638,25 @@ function applyMapWowQueries(queries, dashboardFilters, apiFilters, dateRangeBoun
       dashboardFilters,
       apiFilters
     );
-    const priorFilters = { ...(basePrior.filters || {}) };
-    delete priorFilters.created_at;
-    queries[priorKey] = {
-      ...basePrior,
-      filters: mergeQueryFilters(priorFilters, {
-        ...dimensionFilters,
-        created_at: priorPeriodCreatedAtFilter(dateRangeBounds),
-      }),
-    };
-    delete queries[priorKey].window;
     return;
   }
 
   queries[currentKey] = applyDashboardFiltersToQuery({ ...baseCurrent }, dimensionFilters);
-  const priorFilters = { ...(basePrior.filters || {}) };
-  delete priorFilters.created_at;
-  queries[priorKey] = {
-    ...basePrior,
-    filters: mergeQueryFilters(priorFilters, {
-      ...dimensionFilters,
-      created_at: priorRolling7dCreatedAtFilter(),
-    }),
-  };
-  delete queries[priorKey].window;
+}
+
+function applyMapOpenQuery(queries, dashboardFilters, apiFilters, dateRangeBounds) {
+  const key = "cl_map_ward_open";
+  const base = BATCH_QUERIES[key];
+  if (!base || !queries[key]) return;
+
+  const { __dateRange, ...dimensionFilters } = apiFilters || {};
+
+  if (dashboardFilters?.dateRangeActive && dateRangeBounds) {
+    queries[key] = applySelectedDateRangeToQuery({ ...base }, dashboardFilters, apiFilters);
+    return;
+  }
+
+  queries[key] = applyDashboardFiltersToQuery({ ...base }, dimensionFilters);
 }
 
 function applyMapResolvedQuery(queries, dashboardFilters, apiFilters, dateRangeBounds) {
@@ -1653,6 +1675,60 @@ function applyMapResolvedQuery(queries, dashboardFilters, apiFilters, dateRangeB
   }
 
   queries.cl_map_ward_resolved = applyDashboardFiltersToQuery({ ...base }, dimensionFilters);
+}
+
+function applyMapComplaintPinQueries(queries, dashboardFilters, apiFilters, dateRangeBounds) {
+  const createdKey = "cl_map_complaint_pins_created";
+  const openKey = "cl_map_complaint_pins_open";
+  const resolvedKey = "cl_map_complaint_pins_resolved";
+
+  if (queries[createdKey]) {
+    if (dashboardFilters?.dateRangeActive && dateRangeBounds) {
+      queries[createdKey] = applySelectedDateRangeToQuery(
+        { ...BATCH_QUERIES[createdKey] },
+        dashboardFilters,
+        apiFilters
+      );
+    } else {
+      const { __dateRange, ...dimensionFilters } = apiFilters || {};
+      queries[createdKey] = applyDashboardFiltersToQuery(
+        { ...BATCH_QUERIES[createdKey] },
+        dimensionFilters
+      );
+    }
+  }
+
+  if (queries[openKey]) {
+    if (dashboardFilters?.dateRangeActive && dateRangeBounds) {
+      queries[openKey] = applySelectedDateRangeToQuery(
+        { ...BATCH_QUERIES[openKey] },
+        dashboardFilters,
+        apiFilters
+      );
+    } else {
+      const { __dateRange, ...dimensionFilters } = apiFilters || {};
+      queries[openKey] = applyDashboardFiltersToQuery(
+        { ...BATCH_QUERIES[openKey] },
+        dimensionFilters
+      );
+    }
+  }
+
+  if (queries[resolvedKey]) {
+    if (dashboardFilters?.dateRangeActive && dateRangeBounds) {
+      queries[resolvedKey] = applyResolvedAtDateRangeToQuery(
+        { ...BATCH_QUERIES[resolvedKey] },
+        dashboardFilters,
+        apiFilters
+      );
+    } else {
+      const { __dateRange, ...dimensionFilters } = apiFilters || {};
+      queries[resolvedKey] = applyDashboardFiltersToQuery(
+        { ...BATCH_QUERIES[resolvedKey] },
+        dimensionFilters
+      );
+    }
+  }
 }
 
 function applySelectedDateRangeToQuery(query, dashboardFilters, apiFilters) {
@@ -2026,8 +2102,10 @@ export function buildBatchQueries(dashboardFilters) {
   }
 
   applyTodayKpiQueries(queries, apiFilters);
-  applyMapWowQueries(queries, dashboardFilters, apiFilters, dateRangeBounds);
+  applyMapCreatedQuery(queries, dashboardFilters, apiFilters, dateRangeBounds);
+  applyMapOpenQuery(queries, dashboardFilters, apiFilters, dateRangeBounds);
   applyMapResolvedQuery(queries, dashboardFilters, apiFilters, dateRangeBounds);
+  applyMapComplaintPinQueries(queries, dashboardFilters, apiFilters, dateRangeBounds);
 
   return queries;
 }
@@ -2917,143 +2995,109 @@ function parseWardSlaBuckets(result) {
   return byWard;
 }
 
-export function parseGeographyMapLayers(
-  wowCurrentResult,
-  wowPriorResult,
-  slaBreachResult,
-  openResult,
-  slaBucketsResult,
-  resolvedResult
-) {
-  const createdSeries = parseWardCountSeries(wowCurrentResult);
+export function parseGeographyMapLayers(createdResult, openResult, resolvedResult) {
+  const createdSeries = parseWardCountSeries(createdResult);
   const openSeries = parseWardCountSeries(openResult);
   const resolvedSeries = parseWardCountSeries(resolvedResult);
 
-  const currentByWard = Object.fromEntries(
+  const createdByWard = Object.fromEntries(
     createdSeries.map((row) => [row.wardCode, row.count])
   );
-  const priorByWard = Object.fromEntries(
-    parseWardCountSeries(wowPriorResult).map((row) => [row.wardCode, row.count])
-  );
-  const breachedByWard = Object.fromEntries(
-    parseWardCountSeries(slaBreachResult).map((row) => [row.wardCode, row.count])
-  );
-  const openByWard = Object.fromEntries(
-    openSeries.map((row) => [row.wardCode, row.count])
-  );
-  const slaBucketsByWard = parseWardSlaBuckets(slaBucketsResult);
-  const wowCodes = new Set([...Object.keys(currentByWard), ...Object.keys(priorByWard)]);
-  const slaCodes = new Set([
-    ...Object.keys(breachedByWard),
-    ...Object.keys(openByWard),
-    ...Object.keys(slaBucketsByWard),
+
+  const allCodes = new Set([
+    ...createdSeries.map((row) => row.wardCode),
+    ...openSeries.map((row) => row.wardCode),
+    ...resolvedSeries.map((row) => row.wardCode),
   ]);
-  const allCodes = new Set([...wowCodes, ...slaCodes]);
+
   const wardDetails = {};
 
   for (const wardCode of allCodes) {
-    const current = currentByWard[wardCode] ?? 0;
-    const prior = priorByWard[wardCode] ?? 0;
-    const open = openByWard[wardCode] ?? 0;
-    const breached = breachedByWard[wardCode] ?? 0;
-    const buckets = slaBucketsByWard[wardCode] ?? {
-      slaWithin: 0,
-      slaApproaching: 0,
-      slaBreached: 0,
-    };
-    const wowPct =
-      prior <= 0 && current > 0
-        ? Number.POSITIVE_INFINITY
-        : prior <= 0
-          ? 0
-          : ((current - prior) / prior) * 100;
+    const created = createdByWard[wardCode] ?? 0;
+    const open = openSeries.find((row) => row.wardCode === wardCode)?.count ?? 0;
+    const resolved =
+      resolvedSeries.find((row) => row.wardCode === wardCode)?.count ?? 0;
+    const openPct = created > 0 ? (open / created) * 100 : open > 0 ? 100 : 0;
+    const resolvedPct = created > 0 ? (resolved / created) * 100 : resolved > 0 ? 100 : 0;
 
     wardDetails[wardCode] = {
       wardCode,
       label: formatDimensionLabel(wardCode),
-      count: current,
-      current,
-      prior,
-      wowPct,
-      total: current,
+      created,
       open,
-      breached,
-      breachSharePct: open > 0 ? (breached / open) * 100 : 0,
-      ...buckets,
+      resolved,
+      openPct,
+      resolvedPct,
+      count: created,
     };
   }
-
-  const wow_change = [...wowCodes].map((wardCode) => {
-    const detail = wardDetails[wardCode];
-    return {
-      wardCode,
-      label: detail.label,
-      count: detail.current,
-      current: detail.current,
-      prior: detail.prior,
-      wowPct: detail.wowPct,
-      ...detail,
-    };
-  });
-
-  const sla_breach = [...slaCodes].map((wardCode) => {
-    const detail = wardDetails[wardCode] ?? {
-      wardCode,
-      label: formatDimensionLabel(wardCode),
-      count: 0,
-      open: 0,
-      breached: 0,
-      breachSharePct: 0,
-      slaWithin: 0,
-      slaApproaching: 0,
-      slaBreached: 0,
-    };
-
-    return {
-      wardCode,
-      label: detail.label,
-      count: detail.breached,
-      open: detail.open,
-      breached: detail.breached,
-      breachSharePct: detail.breachSharePct,
-      current: detail.current,
-      prior: detail.prior,
-      wowPct: detail.wowPct,
-      total: detail.total,
-      slaWithin: detail.slaWithin,
-      slaApproaching: detail.slaApproaching,
-      slaBreached: detail.slaBreached,
-    };
-  });
 
   const created = createdSeries.map((row) => ({
     wardCode: row.wardCode,
     label: row.label,
     count: row.count,
+    created: row.count,
   }));
 
-  const open = openSeries.map((row) => ({
-    wardCode: row.wardCode,
-    label: row.label,
-    count: row.count,
-  }));
+  const open = openSeries.map((row) => {
+    const created = createdByWard[row.wardCode] ?? 0;
+    const openCount = row.count;
+    const openPct = created > 0 ? (openCount / created) * 100 : openCount > 0 ? 100 : 0;
+    return {
+      wardCode: row.wardCode,
+      label: row.label,
+      count: openCount,
+      open: openCount,
+      created,
+      openPct,
+    };
+  });
 
-  const resolved = resolvedSeries.map((row) => ({
-    wardCode: row.wardCode,
-    label: row.label,
-    count: row.count,
-  }));
+  const resolved = resolvedSeries.map((row) => {
+    const created = createdByWard[row.wardCode] ?? 0;
+    const resolvedCount = row.count;
+    const resolvedPct =
+      created > 0 ? (resolvedCount / created) * 100 : resolvedCount > 0 ? 100 : 0;
+    return {
+      wardCode: row.wardCode,
+      label: row.label,
+      count: resolvedCount,
+      resolved: resolvedCount,
+      created,
+      resolvedPct,
+    };
+  });
 
-  return { wow_change, sla_breach, created, open, resolved, wardDetails };
+  return { created, open, resolved, wardDetails };
 }
 
-/** Surface analytics errors for the complaint-pin query (rows are absent on failure). */
-export function getComplaintMapPinsError(result) {
+export function parseGeographyMapComplaintPins(results) {
+  return {
+    created: parseComplaintMapPins(results?.cl_map_complaint_pins_created),
+    open: parseComplaintMapPins(results?.cl_map_complaint_pins_open),
+    resolved: parseComplaintMapPins(results?.cl_map_complaint_pins_resolved),
+  };
+}
+
+/** Surface analytics errors for complaint-pin queries. */
+export function getComplaintMapPinsError(results) {
+  for (const key of [
+    "cl_map_complaint_pins_created",
+    "cl_map_complaint_pins_open",
+    "cl_map_complaint_pins_resolved",
+  ]) {
+    const message = getComplaintMapPinsErrorForQuery(results?.[key]);
+    if (message) return message;
+  }
+  return null;
+}
+
+function getComplaintMapPinsErrorForQuery(result) {
   if (!result?.error) return null;
   return result.message || result.error;
 }
 
-/** Open complaints for the map — one row per service_request_id. */
+/** Complaint pins for the map — one row per service_request_id. */
 export function parseComplaintMapPins(result) {
   if (!result?.rows?.length) return [];
 
