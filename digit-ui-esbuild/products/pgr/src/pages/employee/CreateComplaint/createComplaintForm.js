@@ -156,7 +156,11 @@ const CreateComplaintForm = ({
       }
     }
 
-    return uniqueItems;
+    // Flat complaint types carry no configurator-authored order, so present
+    // them A–Z by their displayed label (`menuPathName`) for an easy-to-scan,
+    // searchable dropdown (CCRS#941). The hierarchy picker keeps its own
+    // `order` and is unaffected.
+    return uniqueItems.sort((a, b) => (a?.menuPathName || "").localeCompare(b?.menuPathName || ""));
   }
 
   function getSubTypesByDepartment(baseItem, allItems) {
@@ -166,7 +170,12 @@ const CreateComplaintForm = ({
       return [];
     }
 
-    return allItems.filter(item => item.department === baseItem.department);
+    // Sub-types in the flat flow have no configurator order either, so sort
+    // them A–Z by their displayed label (`i18nKey`, with a `name` fallback)
+    // for the searchable dropdown (CCRS#941).
+    return allItems
+      .filter(item => item.department === baseItem.department)
+      .sort((a, b) => (a?.i18nKey || a?.name || "").localeCompare(b?.i18nKey || b?.name || ""));
   }
 
 
