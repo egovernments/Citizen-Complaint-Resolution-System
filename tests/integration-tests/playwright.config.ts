@@ -19,6 +19,7 @@ export default defineConfig({
     'fixtures/auth.setup.ts',
     'fixtures/lifecycle.setup.ts',
     'fixtures/api.setup.ts',
+    'fixtures/citizen.setup.ts',
   ],
   timeout: 120_000,
   expect: { timeout: 15_000 },
@@ -58,9 +59,9 @@ export default defineConfig({
         browserName: 'chromium',
         storageState: 'auth.json',
       },
-      dependencies: ['setup', 'lifecycle-setup'],
+      dependencies: ['setup', 'lifecycle-setup', 'citizen-setup'],
       // Don't try to run setup itself as part of the chromium project.
-      testIgnore: /tests\/fixtures\/(auth|lifecycle|api)\.setup\.ts$/,
+      testIgnore: /tests\/fixtures\/(auth|lifecycle|api|citizen)\.setup\.ts$/,
       grepInvert: EXCLUDE_LOCAL_ONLY,
     },
     {
@@ -68,6 +69,14 @@ export default defineConfig({
       // Used by smoke + api projects which do not exercise the UI login form.
       name: 'api-setup',
       testMatch: /tests\/fixtures\/api\.setup\.ts$/,
+    },
+    {
+      // Provisions ONE fresh citizen per `npx playwright test` invocation
+      // and writes the identity to citizen-fixture.json. Citizen specs
+      // consume the fixture via readProvisionedCitizen() instead of each
+      // registering their own citizen — shared identity, single round-trip.
+      name: 'citizen-setup',
+      testMatch: /tests\/fixtures\/citizen\.setup\.ts$/,
     },
     {
       name: 'smoke',

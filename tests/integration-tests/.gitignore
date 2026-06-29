@@ -19,3 +19,4 @@ history.json
 .git-sha
 lifecycle-fixtures.json
 test-results/
+citizen-fixture.json
