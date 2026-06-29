@@ -408,6 +408,17 @@ function adaptBarRows(ctx) {
   if (viz.kind !== 'histogram' && !viz.categoryOrder && viz.sort !== 'none') {
     rows = rows.sort((a, b) => b.count - a.count);
   }
+  // Explicit category order (e.g. age buckets <1d,1-3d,3-7d,>7d) — apply it so the
+  // backend's arbitrary row order doesn't scramble an ordered axis. Substring match
+  // tolerates label formatting; unknown labels sink to the end.
+  if (viz.categoryOrder) {
+    const ord = viz.categoryOrder;
+    const idx = (l) => {
+      const i = ord.findIndex((o) => l === o || l.includes(o) || o.includes(l));
+      return i < 0 ? ord.length : i;
+    };
+    rows = rows.slice().sort((a, b) => idx(a.label) - idx(b.label));
+  }
   if (viz.limit) rows = rows.slice(0, viz.limit);
   return rows;
 }

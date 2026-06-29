@@ -1616,7 +1616,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "bar",
+        "kind": "stacked-bar",
         "format": "integer",
         "valueKey": "total",
         "accent": "teal",
@@ -1628,7 +1628,11 @@
         ],
         "compose": null,
         "pii": false,
-        "title": "Complaints by type"
+        "title": "Complaints by type",
+        "orientation": "horizontal",
+        "measureKey": "total",
+        "seriesLabel": "Filed",
+        "limit": 8
       },
       "params": [
         {
@@ -2160,7 +2164,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "bar",
+        "kind": "histogram",
         "format": "integer",
         "valueKey": "total",
         "accent": "amber",
@@ -2172,7 +2176,13 @@
         ],
         "compose": null,
         "pii": false,
-        "title": "Complaints by age"
+        "title": "Complaints by age",
+        "categoryOrder": [
+          "<1d",
+          "1-3d",
+          "3-7d",
+          ">7d"
+        ]
       },
       "params": [
         {
@@ -3951,15 +3961,16 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "scalar",
-        "format": "percentNoDecimal",
+        "kind": "number-tile-sparkline",
+        "format": "percentOneDecimal",
         "valueKey": "pct",
         "accent": "teal",
         "group": "resolution-sla",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_SLA_COMPLIANCE_WEEK",
         "compose": null,
         "pii": false,
-        "title": "SLA compliance (this week)"
+        "title": "SLA compliance (this week)",
+        "supportsSeries": true
       },
       "params": [
         {
@@ -5125,7 +5136,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-sparkline",
         "format": "percentOneDecimal",
         "valueKey": "pct",
         "accent": "amber",
@@ -5133,7 +5144,8 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_REOPEN_7D",
         "compose": null,
         "pii": false,
-        "title": "Reopen rate (7d)"
+        "title": "Reopen rate (7d)",
+        "supportsSeries": true
       },
       "params": [
         {
@@ -5186,7 +5198,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-sparkline",
         "format": "percentOneDecimal",
         "valueKey": "pct",
         "accent": "amber",
@@ -5194,7 +5206,8 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CE_REOPEN_30D",
         "compose": null,
         "pii": false,
-        "title": "Reopen rate (30d)"
+        "title": "Reopen rate (30d)",
+        "supportsSeries": true
       },
       "params": [
         {
