@@ -10,7 +10,7 @@ import DashboardTable from './DashboardTable';
 import ComplaintsAtRiskTable from './ComplaintsAtRiskTable';
 import OpenComplaintsByGeographyWidget from './OpenComplaintsByGeographyWidget';
 import { evaluateCompose } from '../utils/composeKpi';
-import { getNumberTileDeltaClass } from '../config/kpiDisplay';
+import { getNumberTileDeltaClass, formatOfficerLabel } from '../config/kpiDisplay';
 import {
   resolveSlaRiskPresentation,
   computeBreachDurationMs,
@@ -1052,14 +1052,6 @@ function formatDimensionLabel(code) {
   if (parts.length > 2) return parts.slice(-2).join(' ').replace(/_/g, ' ');
   const out = humanized.replace(/_/g, ' ');
   return out || 'Unknown';
-}
-
-// Port of kpiQueries.formatOfficerStackedLabel.
-function formatOfficerLabel(uuid) {
-  const id = String(uuid ?? 'Unknown');
-  if (!id || id === 'null' || id === 'undefined') return 'Unassigned';
-  if (id.length <= 8) return id;
-  return `Officer …${id.slice(-6)}`;
 }
 
 function normalizeSeg(value) {

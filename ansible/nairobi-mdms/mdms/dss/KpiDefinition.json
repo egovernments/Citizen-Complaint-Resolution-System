@@ -3307,7 +3307,8 @@
         "pii": {
           "dimension": "current_assignee_uuid"
         },
-        "title": "Officers by open complaints"
+        "title": "Officers by open complaints",
+        "labelFormat": "officer"
       },
       "params": [
         {
@@ -3556,7 +3557,8 @@
         "pii": {
           "dimension": "current_assignee_uuid"
         },
-        "title": "Officers by closed complaints"
+        "title": "Officers by closed complaints",
+        "labelFormat": "officer"
       },
       "params": [
         {
@@ -3629,7 +3631,8 @@
         "pii": {
           "dimension": "current_assignee_uuid"
         },
-        "title": "Top officers by closed complaints"
+        "title": "Top officers by closed complaints",
+        "labelFormat": "officer"
       },
       "params": [
         {
@@ -3749,7 +3752,7 @@
             "id": "current_assignee_uuid",
             "label": "Officer",
             "align": "left",
-            "type": "text"
+            "type": "officer"
           },
           {
             "id": "assigned",
@@ -3781,7 +3784,8 @@
             "align": "right",
             "type": "rating"
           }
-        ]
+        ],
+        "labelFormat": "officer"
       },
       "params": [
         {

@@ -5,6 +5,7 @@ import {
   getDataTableThClass,
 } from "../config/visualizationStyles";
 import { buildRedSeverityStyle } from "../config/tablePresentation";
+import { formatOfficerLabel } from "../config/kpiDisplay";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
 
@@ -76,6 +77,7 @@ const CELL_RENDERERS = {
   rating: (value) => formatRating(value),
   trend: (value) => <TrendCell value={value} />,
   tags: (value) => value,
+  officer: (value) => formatOfficerLabel(value),
 };
 
 function resolveToneClass(tone, styles) {
