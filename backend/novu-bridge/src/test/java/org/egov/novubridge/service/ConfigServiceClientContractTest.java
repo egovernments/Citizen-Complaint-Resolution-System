@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * legacy-fallback semantics, which the RestTemplate-mocked unit tests can't see.
  *
  * Contract mirrored from config-service models:
- *   _search request  : { RequestInfo, criteria:{ schemaCode, tenantId } }   (all records, no enabled filter)
+ *   _search request  : { RequestInfo, criteria:{ schemaCode, tenantId, isActive:true } }  (active records, no enabled filter)
  *   _search response : { configData:[ { data:{ code, enabled } }, ... ] }
  */
 public class ConfigServiceClientContractTest {
@@ -87,6 +87,7 @@ public class ConfigServiceClientContractTest {
         JsonNode criteria = req.get("criteria");
         assertEquals("NotificationChannel", criteria.get("schemaCode").asText());
         assertEquals("pb.amritsar", criteria.get("tenantId").asText());
+        assertTrue(criteria.get("isActive").asBoolean());   // active records only (matches _resolve)
         assertFalse(criteria.has("criteria"));
     }
 

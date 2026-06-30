@@ -100,7 +100,7 @@ public class ConfigServiceClientTest {
     }
 
     @Test
-    void getEnabledChannels_searchRequestHasNoEnabledFilter() {
+    void getEnabledChannels_searchRequestFiltersActiveOnly_noEnabledFilter() {
         Map<String, Object> body = Map.of("configData", List.of(
                 Map.of("data", Map.of("code", "WHATSAPP", "enabled", true))));
         ArgumentCaptor<HttpEntity> captor = ArgumentCaptor.forClass(HttpEntity.class);
@@ -113,7 +113,9 @@ public class ConfigServiceClientTest {
         Map<String, Object> criteria = (Map<String, Object>) sent.get("criteria");
         assertEquals("NotificationChannel", criteria.get("schemaCode"));
         assertEquals("pb.amritsar", criteria.get("tenantId"));
-        // We fetch ALL records (to detect "unconfigured"), so no enabled filter is sent.
+        // Filters to ACTIVE records (so soft-deleted rows don't count as "configured"),
+        // but still no enabled filter (we need all active records to detect "all disabled").
+        assertEquals(Boolean.TRUE, criteria.get("isActive"));
         assertFalse(criteria.containsKey("criteria"));
     }
 }

@@ -255,6 +255,11 @@ public class ConfigServiceClient {
         Map<String, Object> searchCriteria = new HashMap<>();
         searchCriteria.put("schemaCode", "NotificationChannel");
         searchCriteria.put("tenantId", tenantId);
+        // Only ACTIVE records. config-service _search returns inactive (soft-deleted) rows unless
+        // filtered, but _resolve (the runtime path) already ignores them — so a deactivated channel
+        // record must not count as "configured" here, else it would wrongly suppress the legacy
+        // fallback. Matching _resolve keeps the gate consistent with the rest of config-service.
+        searchCriteria.put("isActive", true);
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("RequestInfo", new HashMap<>());
