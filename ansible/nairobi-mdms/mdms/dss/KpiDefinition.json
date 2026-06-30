@@ -1367,25 +1367,45 @@
             "id": "ontime_rate",
             "label": "On-time",
             "align": "right",
-            "type": "percent"
+            "type": "percent",
+            "threshold": {
+              "higherIsBetter": true,
+              "watch": 0.85,
+              "breach": 0.6
+            }
           },
           {
             "id": "reopen_rate",
             "label": "Reopen",
             "align": "right",
-            "type": "percent"
+            "type": "percent",
+            "threshold": {
+              "higherIsBetter": false,
+              "watch": 0.1,
+              "breach": 0.25
+            }
           },
           {
             "id": "oldest_open_ms",
             "label": "Oldest open",
             "align": "right",
-            "type": "hoursDays"
+            "type": "hoursDays",
+            "threshold": {
+              "higherIsBetter": false,
+              "watch": 604800000,
+              "breach": 2592000000
+            }
           },
           {
             "id": "avg_csat",
             "label": "CSAT",
             "align": "right",
-            "type": "rating"
+            "type": "rating",
+            "threshold": {
+              "higherIsBetter": true,
+              "watch": 4,
+              "breach": 3
+            }
           }
         ],
         "subtitle": "Resolution, SLA and reopen metrics per complaint type"
@@ -1703,7 +1723,16 @@
             "id": "open",
             "label": "Open",
             "align": "right",
-            "type": "integer"
+            "type": "integer",
+            "threshold": {
+              "higherIsBetter": false,
+              "watch": 8,
+              "breach": 15,
+              "tag": {
+                "breach": "High open",
+                "watch": "Open load"
+              }
+            }
           },
           {
             "id": "resolved",
@@ -1715,13 +1744,37 @@
             "id": "reopen_rate",
             "label": "Reopen",
             "align": "right",
-            "type": "percent"
+            "type": "percent",
+            "threshold": {
+              "higherIsBetter": false,
+              "watch": 0.12,
+              "breach": 0.2,
+              "tag": {
+                "breach": "High reopen",
+                "watch": "Reopen risk"
+              }
+            }
           },
           {
             "id": "avg_csat",
             "label": "CSAT",
             "align": "right",
-            "type": "rating"
+            "type": "rating",
+            "threshold": {
+              "higherIsBetter": true,
+              "watch": 3.8,
+              "breach": 3.2,
+              "tag": {
+                "breach": "Low CSAT",
+                "watch": "CSAT watch"
+              }
+            }
+          },
+          {
+            "id": "status",
+            "label": "Status",
+            "align": "left",
+            "type": "tags"
           }
         ],
         "labelFormat": "officer",
