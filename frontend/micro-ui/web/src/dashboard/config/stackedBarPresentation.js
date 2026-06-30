@@ -263,6 +263,7 @@ export function buildStackedBarPlotOptions({
   horizontal = false,
   valueFormat,
   containerWidth = 0,
+  containerHeight = 0,
   categoryCount = 0,
 } = {}) {
   const totalLabelColor = resolveDashboardCssColor("var(--foreground)");
@@ -280,6 +281,11 @@ export function buildStackedBarPlotOptions({
     ? 0
     : resolveBarCategorySlotWidth(categoryCount, containerWidth);
   const columnWidth = horizontal ? undefined : resolveBarChartColumnWidth(slotWidth);
+  // Horizontal: cap bar thickness at the same max px as vertical bars (per-category
+  // slot height), so a 1-category chart doesn't render one giant bar.
+  const barHeight = horizontal
+    ? resolveBarChartColumnWidth(containerHeight / Math.max(1, categoryCount))
+    : undefined;
 
   return {
     bar: {
@@ -287,7 +293,7 @@ export function buildStackedBarPlotOptions({
       borderRadius: 4,
       borderRadiusApplication: "end",
       columnWidth,
-      barHeight: horizontal ? HORIZONTAL_STACKED_BAR_HEIGHT : undefined,
+      barHeight,
       dataLabels: {
         hideOverflowingLabels: true,
         position: "center",

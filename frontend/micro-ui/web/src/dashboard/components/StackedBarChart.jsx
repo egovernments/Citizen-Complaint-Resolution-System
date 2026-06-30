@@ -66,6 +66,7 @@ const StackedBarChart = ({
         horizontal,
         valueFormat,
         containerWidth,
+        containerHeight,
         categoryCount: categories.length,
       }),
       dataLabels: buildStackedBarDataLabels({ valueFormat, horizontal }),
@@ -88,6 +89,7 @@ const StackedBarChart = ({
     [
       categories,
       containerWidth,
+      containerHeight,
       horizontal,
       referenceLines,
       resolvedColors,

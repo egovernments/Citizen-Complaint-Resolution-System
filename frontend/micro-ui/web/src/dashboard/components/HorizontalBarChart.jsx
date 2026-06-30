@@ -11,6 +11,7 @@ import {
   buildHorizontalCategoryYAxis,
 } from "../config/stackedBarPresentation";
 import { useScrollableChartSize } from "../hooks/useScrollableChartSize";
+import { resolveBarChartColumnWidth } from "../config/barChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import ChartScrollViewport from "./ChartScrollViewport";
 
@@ -97,7 +98,11 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
           horizontal: true,
           borderRadius: 4,
           borderRadiusApplication: "end",
-          barHeight: "58%",
+          // Cap bar thickness at the same max px as vertical bars so a 1-category
+          // chart doesn't render one giant bar — consistent regardless of the data.
+          barHeight: resolveBarChartColumnWidth(
+            containerHeight / Math.max(1, categories.length)
+          ),
           dataLabels: {
             total: {
               enabled: true,
@@ -185,6 +190,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
       breakEven,
       categories,
       containerWidth,
+      containerHeight,
       foregroundColor,
       mutedColor,
       rows,
