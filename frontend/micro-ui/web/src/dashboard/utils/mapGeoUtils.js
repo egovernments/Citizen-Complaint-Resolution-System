@@ -1003,6 +1003,45 @@ export function boundsForGeoFeatures(features = []) {
  * Always renders every ward polygon from boundary geometry.
  * Complaint pins are always shown when data is available.
  */
+/**
+ * Roll per-ward complaint counts up to a parent boundary level (sub-county / county)
+ * using the relationship hierarchy. `ancestorDepth` 0 = county, 1 = sub-county. Returns
+ * the same row shape joinWardMapData consumes (keyed by `wardCode` = the parent code),
+ * so the existing join + choropleth path renders parent polygons unchanged.
+ */
+export function aggregateWardCountsToLevel(wardCounts = [], hierarchyIndex = {}, ancestorDepth = 1) {
+  const byParent = new Map();
+  for (const ward of wardCounts) {
+    const code = String(ward.wardCode ?? ward.label ?? "");
+    const ancestors = hierarchyIndex[code]?.ancestors ?? [];
+    const parentCode = ancestors[ancestorDepth];
+    if (!parentCode) continue;
+    let agg = byParent.get(parentCode);
+    if (!agg) {
+      agg = { wardCode: parentCode, label: formatDimensionLabel(parentCode), count: 0, created: 0, open: 0, resolved: 0 };
+      byParent.set(parentCode, agg);
+    }
+    agg.count += Number(ward.count) || 0;
+    agg.created += Number(ward.created ?? ward.count) || 0;
+    agg.open += Number(ward.open) || 0;
+    agg.resolved += Number(ward.resolved) || 0;
+  }
+  return [...byParent.values()].map((a) => ({
+    ...a,
+    openPct: a.created > 0 ? (a.open / a.created) * 100 : 0,
+    resolvedPct: a.created > 0 ? (a.resolved / a.created) * 100 : 0,
+  }));
+}
+
+/** Unique ancestor (parent) codes across the hierarchy — the county + sub-county codes. */
+export function deriveBoundaryAncestorCodes(hierarchyIndex = {}) {
+  const set = new Set();
+  for (const code of Object.keys(hierarchyIndex)) {
+    for (const anc of hierarchyIndex[code]?.ancestors ?? []) set.add(anc);
+  }
+  return [...set];
+}
+
 export function buildMapDisplayLayers(
   joined,
   _drillLevel,
