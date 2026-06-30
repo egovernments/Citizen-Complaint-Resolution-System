@@ -268,11 +268,11 @@ public class DispatchPipelineService {
                         "tenantId is required to resolve phone country-code prefix from MDMS");
             }
             MobileValidationConfig validationConfig = mdmsServiceClient.getMobileValidationConfig(tenantId, requestInfo);
-            if (!normalized.matches(validationConfig.getPattern())) {
+            if (!normalized.matches(validationConfig.getMobileNumberRegex())) {
                 throw new CustomException("INVALID_MOBILE_NUMBER",
-                        "Mobile number is not matching with default mobile pattern in MDMS");
+                        "Mobile number does not match the configured pattern for tenantId=" + tenantId);
             }
-            e164 = validationConfig.getPrefix() + normalized;
+            e164 = validationConfig.getCountryCode() + normalized;
         }
 
         // Twilio Programmable WhatsApp requires the `whatsapp:` prefix on the

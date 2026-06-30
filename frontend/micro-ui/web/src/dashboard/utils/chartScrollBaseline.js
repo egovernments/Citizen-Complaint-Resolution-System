@@ -4,6 +4,7 @@ import {
   GRID_MARGIN_Y,
   KPI_ROW_HEIGHT,
 } from "../constants/layoutConfig";
+import { resolveMinHorizontalBarRowHeight } from "./chartLabelWrap";
 
 const STORAGE_PREFIX = "dashboard-chart-baseline:v2:";
 const GRID_MARGIN_X = 16;
@@ -12,6 +13,8 @@ const WIDGET_BODY_PADDING_X_PX = 16;
 
 /** Bars visible in the viewport before horizontal scroll is required. */
 export const BAR_CHART_VISIBLE_SLOTS_WITHOUT_SCROLL = 5;
+/** Horizontal bar charts use taller rows so category labels do not run together. */
+export const HORIZONTAL_BAR_VISIBLE_SLOTS_WITHOUT_SCROLL = 4;
 
 export function chartScrollStorageKey(scrollKey) {
   return scrollKey ? `${STORAGE_PREFIX}${scrollKey}` : null;
@@ -165,7 +168,9 @@ export function resolveHorizontalBarRowHeight(
     120,
     Number(minChartHeight) || Number(viewportHeight) || 0
   );
-  return referenceHeight / BAR_CHART_VISIBLE_SLOTS_WITHOUT_SCROLL;
+  const slotFromViewport =
+    referenceHeight / HORIZONTAL_BAR_VISIBLE_SLOTS_WITHOUT_SCROLL;
+  return Math.max(slotFromViewport, resolveMinHorizontalBarRowHeight());
 }
 
 export function resolveHorizontalBarVisibleSlots(
@@ -174,7 +179,7 @@ export function resolveHorizontalBarVisibleSlots(
 ) {
   const viewport = Math.max(0, Number(viewportHeight) || 0);
   const row = Math.max(0, Number(rowHeight) || 0);
-  if (viewport <= 0 || row <= 0) return BAR_CHART_VISIBLE_SLOTS_WITHOUT_SCROLL;
+  if (viewport <= 0 || row <= 0) return HORIZONTAL_BAR_VISIBLE_SLOTS_WITHOUT_SCROLL;
   return Math.max(1, Math.floor(viewport / row));
 }
 

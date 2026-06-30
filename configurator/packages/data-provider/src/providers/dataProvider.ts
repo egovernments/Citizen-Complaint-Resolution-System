@@ -42,9 +42,8 @@ function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord
   return {
     ...data,
     // Key by the MDMS uniqueIdentifier (genuinely unique per record) rather
-    // than data[idField]. When two records share the idField value (e.g. two
-    // UserValidation rows both fieldType "mobile"), data[idField] collapsed
-    // them to the same react-admin id, so every row opened the first record.
+    // than data[idField]. When two records share the idField value, data[idField]
+    // collapses them to the same react-admin id, so every row opens the first record.
     // uniqueIdentifier is always distinct; fall back to data[idField] only
     // for legacy records that lack it.
     id: mdms.uniqueIdentifier || extractId(data, config),
@@ -584,6 +583,26 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           });
         }
         return { data: records, total };
+      }
+
+      // MDMS resources without the leaf-adapter (all schemas except
+      // complaint-hierarchy): push limit/offset to the server when no
+      // client-side filter is active so the API is called with the actual
+      // page size instead of a fixed 500. MDMS v2 does not return a total
+      // count, so we use a heuristic: a full page means "there may be more"
+      // (next button enabled), a partial page means "last page".
+      if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
+        const filter = (params.filter ?? {}) as Record<string, unknown>;
+        const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
+        if (!hasClientFilter) {
+          const tenant = pickTenant(tenantId, filter);
+          const offset = (page - 1) * perPage;
+          const raw = await client.mdmsSearch(tenant, config.schema!, { limit: perPage, offset });
+          const data = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+          const sorted = clientSort(data, field, order);
+          const total = raw.length >= perPage ? offset + perPage + 1 : offset + data.length;
+          return { data: sorted, total };
+        }
       }
 
       const all = await fetchAll(resource, params.filter);

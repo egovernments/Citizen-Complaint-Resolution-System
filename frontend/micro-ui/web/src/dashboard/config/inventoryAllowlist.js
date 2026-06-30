@@ -26,7 +26,7 @@ export const DEFAULT_VIEW_KPI_IDS = new Set([
   "rs-metric-breach-count",
   "cl-metric-total-resolved",
   "cl-metric-reopen-rate",
-  "ce-metric-csat",
+  "cl-metric-csat",
 ]);
 
 /**
@@ -53,7 +53,7 @@ export const APPROVED_WIDGET_IDS = new Set([
   "cl-chart-complaints-by-type",
   "cl-chart-departments",
   "cl-chart-officer-sla",
-  "cl-chart-open-by-type",
+  "cl-chart-resolution-subtype",
   "cl-map-geography-choropleth",
   "cl-chart-department-resolution-rate",
   "cl-chart-open-by-channel",

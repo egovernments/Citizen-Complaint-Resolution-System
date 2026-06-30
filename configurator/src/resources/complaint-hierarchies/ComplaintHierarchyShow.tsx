@@ -1,7 +1,8 @@
 import { DigitShow } from '@/admin';
 import { FieldSection, FieldRow, DateField } from '@/admin/fields';
 import { Badge } from '@/components/ui/badge';
-import { ArrowDown, CornerDownRight } from 'lucide-react';
+import { ArrowDown } from 'lucide-react';
+import { ComplaintHierarchyTree } from './ComplaintHierarchyTree';
 import { useShowController } from 'ra-core';
 import { useQuery } from '@tanstack/react-query';
 import { mdmsService } from '@/api';
@@ -23,61 +24,57 @@ interface HierarchyNode {
 
 const isLeafNode = (n: HierarchyNode) => n.department != null || n.slaHours != null;
 
-/** Flatten the adjacency list into render rows ordered parent-before-child, each
- *  carrying its depth, so the WHOLE tree (every category → sector → … → sub-type)
- *  renders — not just the level definition. */
-function flattenTree(nodes: HierarchyNode[]): Array<{ node: HierarchyNode; depth: number }> {
-  const byParent = new Map<string, HierarchyNode[]>();
-  for (const n of nodes) {
-    const key = n.parentCode == null || n.parentCode === '' ? '__root' : String(n.parentCode);
-    if (!byParent.has(key)) byParent.set(key, []);
-    byParent.get(key)!.push(n);
-  }
-  for (const arr of byParent.values()) {
-    arr.sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
-  }
-  const out: Array<{ node: HierarchyNode; depth: number }> = [];
-  const seen = new Set<string>();
-  const walk = (key: string, depth: number) => {
-    for (const n of byParent.get(key) ?? []) {
-      if (seen.has(n.code)) continue; // cycle guard
-      seen.add(n.code);
-      out.push({ node: n, depth });
-      walk(String(n.code), depth + 1);
-    }
-  };
-  walk('__root', 0);
-  // Any node whose parent isn't present (orphan) still gets shown, at root depth.
-  for (const n of nodes) {
-    if (!seen.has(n.code)) {
-      seen.add(n.code);
-      out.push({ node: n, depth: 0 });
-    }
-  }
-  return out;
-}
-
 export function ComplaintHierarchyShow() {
   const { record } = useShowController();
   const { state } = useApp();
-  // ComplaintHierarchy is a state-level master; fetch at the state root tenant.
-  const stateTenant = (state.tenant || '').split('.')[0] || state.tenant;
+  // ComplaintHierarchy data is scoped PER TENANT — in some deployments it lives at
+  // the state root, in others at the sub-tenant the user operates under (prod: the
+  // "Complaint_Hierarchy" nodes are seeded at mz.ige, not mz). The definition is
+  // read from state.tenant, so the nodes must be too. Fetch at the CURRENT tenant
+  // AND the state root, then keep this hierarchyType — finds the nodes wherever
+  // they were seeded. (The old `state.tenant.split('.')[0]` forced the root and
+  // returned nothing for sub-tenant-scoped hierarchies.)
+  const currentTenant = state.tenant || '';
+  const stateRoot = currentTenant.split('.')[0] || currentTenant;
   const hierarchyType = String((record as Record<string, unknown> | undefined)?.hierarchyType ?? '');
 
   const { data: nodes = [], isLoading } = useQuery({
-    queryKey: ['complaint-hierarchy-tree', stateTenant, hierarchyType],
-    enabled: !!stateTenant && !!hierarchyType,
+    queryKey: ['complaint-hierarchy-tree', currentTenant, stateRoot, hierarchyType],
+    enabled: !!currentTenant && !!hierarchyType,
     queryFn: async () => {
-      const rows = await mdmsService.search<HierarchyNode>(
-        stateTenant,
-        'RAINMAKER-PGR.ComplaintHierarchy',
-        { limit: 2000 },
-      );
-      return rows.filter((r) => r.active !== false && (!r.hierarchyType || r.hierarchyType === hierarchyType));
+      // Page through the WHOLE hierarchy — it can be thousands of nodes, and a
+      // single { limit } silently truncated large tenants (the old 2000 cap).
+      const PAGE = 1000;
+      const fetchAll = async (tenant: string) => {
+        const acc: HierarchyNode[] = [];
+        for (let offset = 0; ; offset += PAGE) {
+          const page = await mdmsService.search<HierarchyNode>(
+            tenant,
+            'RAINMAKER-PGR.ComplaintHierarchy',
+            { limit: PAGE, offset },
+          );
+          acc.push(...page);
+          if (page.length < PAGE || offset > 100000) break; // last page (or safety cap)
+        }
+        return acc;
+      };
+      // Current tenant first (where the definition came from), then the state root
+      // as a fallback; dedupe by code so a node present at both isn't doubled.
+      const tenants = Array.from(new Set([currentTenant, stateRoot].filter(Boolean)));
+      const seen = new Set<string>();
+      const all: HierarchyNode[] = [];
+      for (const t of tenants) {
+        for (const r of await fetchAll(t)) {
+          if (!seen.has(r.code)) {
+            seen.add(r.code);
+            all.push(r);
+          }
+        }
+      }
+      return all.filter((r) => r.active !== false && (!r.hierarchyType || r.hierarchyType === hierarchyType));
     },
   });
 
-  const tree = flattenTree(nodes);
   const leafCount = nodes.filter(isLeafNode).length;
 
   return (
@@ -137,38 +134,13 @@ export function ComplaintHierarchyShow() {
             <FieldSection title="Full Hierarchy">
               {isLoading ? (
                 <p className="text-sm text-muted-foreground">Loading hierarchy…</p>
-              ) : tree.length === 0 ? (
+              ) : nodes.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No hierarchy nodes found for {hierarchyType || 'this hierarchy'} at {stateTenant}.
+                  No hierarchy nodes found for {hierarchyType || 'this hierarchy'} at {currentTenant}
+                  {stateRoot !== currentTenant ? ` (or ${stateRoot})` : ''}.
                 </p>
               ) : (
-                <div className="flex flex-col gap-0.5">
-                  {tree.map(({ node, depth }) => {
-                    const leaf = isLeafNode(node);
-                    return (
-                      <div
-                        key={`${node.code}-${depth}`}
-                        className="flex items-center gap-2 py-0.5"
-                        style={{ marginLeft: depth * 22 }}
-                      >
-                        {depth > 0 && (
-                          <CornerDownRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        )}
-                        <Badge variant="outline" className="text-[10px] shrink-0">
-                          {labelByLevel.get(String(node.levelCode)) || String(node.levelCode ?? '')}
-                        </Badge>
-                        <span className="text-sm font-medium">{node.name || node.code}</span>
-                        <span className="text-xs text-muted-foreground">({node.code})</span>
-                        {leaf && (
-                          <span className="text-[11px] text-emerald-600 shrink-0">
-                            leaf{node.department ? ` · ${node.department}` : ''}
-                            {node.slaHours != null ? ` · ${node.slaHours}h` : ''}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                <ComplaintHierarchyTree nodes={nodes} labelByLevel={labelByLevel} />
               )}
             </FieldSection>
 

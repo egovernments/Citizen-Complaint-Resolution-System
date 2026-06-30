@@ -16,6 +16,8 @@ export interface DigitFormInputProps extends InputProps {
   className?: string;
   /** Optional helper text shown below the input (muted) */
   help?: string;
+  /** Maximum number of characters the input accepts (sets the HTML maxLength attribute) */
+  maxLength?: number;
 }
 
 export function DigitFormInput({
@@ -25,6 +27,7 @@ export function DigitFormInput({
   disabled = false,
   className,
   help,
+  maxLength,
   ...inputProps
 }: DigitFormInputProps) {
   // Auto-coerce number inputs so the form value is a number, not a string
@@ -40,7 +43,21 @@ export function DigitFormInput({
   } = useInput(parseProps);
 
   const hasError = fieldState.invalid && fieldState.isTouched;
-  const errorMessage = fieldState.error?.message;
+  // ra-core v5 wraps validator errors as `@@react-admin@@${JSON.stringify(msg)}`
+  // before storing them in react-hook-form state. Strip the prefix and unwrap
+  // the JSON string so the raw human-readable message is rendered.
+  const rawError = fieldState.error?.message;
+  const errorMessage = rawError?.startsWith('@@react-admin@@')
+    ? (() => {
+        try {
+          const parsed: unknown = JSON.parse(rawError.slice(15));
+          if (typeof parsed === 'string') return parsed;
+          if (parsed && typeof parsed === 'object' && 'message' in parsed)
+            return String((parsed as { message: unknown }).message);
+          return String(parsed);
+        } catch { return rawError.slice(15); }
+      })()
+    : rawError;
 
   return (
     <div className={className}>
@@ -59,6 +76,7 @@ export function DigitFormInput({
         type={type}
         placeholder={placeholder}
         disabled={disabled}
+        maxLength={maxLength}
         aria-invalid={hasError || undefined}
         aria-describedby={hasError ? `${id}-error` : undefined}
         className={hasError ? 'border-destructive focus-visible:ring-destructive' : ''}

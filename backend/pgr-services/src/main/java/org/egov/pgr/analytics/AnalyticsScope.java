@@ -1,49 +1,37 @@
 package org.egov.pgr.analytics;
 
-import org.egov.common.contract.request.RequestInfo;
-import org.egov.common.contract.request.Role;
-import org.egov.common.contract.request.User;
-
 import java.util.List;
 
 /**
- * Server-resolved RBAC scope. NEVER taken from the request body — derived from the
- * authenticated userInfo + tenantId. Clients can only narrow within this, never widen.
+ * Server-resolved RBAC scope — a pure value object (a "ScopeSpec"). It is NEVER taken from the
+ * request body; it is produced by {@link PrincipalScopeResolver} from the authenticated
+ * userInfo + tenantId. Clients can only narrow within this, never widen.
  *
- * - tenant scope: always applied (LIKE prefix at state level, = at city level).
- * - citizen self-scope: a pure CITIZEN sees only their own complaints (account_id = their uuid).
- * - boundary subtree scope: an employee restricted to a jurisdiction gets boundary_path LIKE.
- *   Full HRMS jurisdiction resolution is the documented extension point; for now an admin/employee
- *   is tenant-scoped and the boundary hook is wired but null unless a jurisdiction is supplied
- *   by the (server-trusted) caller context.
+ * The seam: <b>how</b> this object is derived (HRMS today, a stored JsonLogic policy tomorrow)
+ * lives entirely in {@link PrincipalScopeResolver}. <b>How</b> it is consumed (WHERE-clause
+ * injection) lives entirely in {@link AnalyticsPlanner#applyScope}. Nothing downstream of the
+ * resolver cares how the spec was derived, so a future policy-engine cutover is a one-method swap.
+ *
+ * Fields (all "null/empty = no restriction on this axis"):
+ * - tenant scope:    always applied (LIKE prefix at state level, = at city level).
+ * - departmentCodes: an employee is restricted to the union of their HRMS assignment departments.
+ *                    null/empty => no department restriction (admin / no-assignment => see all).
+ * - boundaryPrefix:  an employee restricted to a jurisdiction subtree (boundary_path LIKE prefix%).
+ * - citizenUuid:     a pure CITIZEN sees only their own complaints (account_id = their uuid).
  */
 public final class AnalyticsScope {
     public final String tenantId;
     public final boolean tenantStateLevel;
-    public final String citizenUuid;     // nullable: set => restrict to this account
-    public final String boundaryPrefix;  // nullable: set => boundary_path LIKE prefix||'%'
+    public final String citizenUuid;          // nullable: set => restrict to this account
+    public final String boundaryPrefix;       // nullable: set => boundary_path LIKE prefix||'%'
+    public final List<String> departmentCodes; // nullable/empty => no department restriction
 
-    private AnalyticsScope(String tenantId, boolean stateLevel, String citizenUuid, String boundaryPrefix){
-        this.tenantId = tenantId; this.tenantStateLevel = stateLevel;
-        this.citizenUuid = citizenUuid; this.boundaryPrefix = boundaryPrefix;
-    }
-
-    public static AnalyticsScope resolve(RequestInfo requestInfo, String tenantId, int stateLevelLen){
-        boolean stateLevel = tenantId != null && tenantId.split("\\.").length == stateLevelLen;
-        String citizenUuid = null;
-        User u = requestInfo == null ? null : requestInfo.getUserInfo();
-        if (u != null) {
-            boolean isCitizen = "CITIZEN".equalsIgnoreCase(u.getType());
-            boolean hasEmployeeRole = false;
-            List<Role> roles = u.getRoles();
-            if (roles != null) for (Role r : roles) {
-                String c = r.getCode() == null ? "" : r.getCode().toUpperCase();
-                if (!c.equals("CITIZEN")) hasEmployeeRole = true;
-            }
-            // a pure citizen is locked to their own records
-            if (isCitizen && !hasEmployeeRole) citizenUuid = u.getUuid();
-        }
-        // boundaryPrefix: extension point for HRMS-jurisdiction-restricted employees (TODO).
-        return new AnalyticsScope(tenantId, stateLevel, citizenUuid, null);
+    public AnalyticsScope(String tenantId, boolean tenantStateLevel, String citizenUuid,
+                          String boundaryPrefix, List<String> departmentCodes) {
+        this.tenantId = tenantId;
+        this.tenantStateLevel = tenantStateLevel;
+        this.citizenUuid = citizenUuid;
+        this.boundaryPrefix = boundaryPrefix;
+        this.departmentCodes = departmentCodes;
     }
 }

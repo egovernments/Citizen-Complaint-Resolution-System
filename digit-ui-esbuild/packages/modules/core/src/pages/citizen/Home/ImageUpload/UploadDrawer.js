@@ -73,7 +73,29 @@ function UploadDrawer({ setProfilePic, closeDrawer, userType, removeProfilePic, 
   const [file, setFile] = useState("");
   const [error, setError] = useState(null);
 
-  const onFilePicked = (e) => setFile(e.target.files[0]);
+  const onFilePicked = (e) => {
+    const originalFile = e.target.files[0];
+    if (!originalFile) return;
+
+    let file = originalFile;
+    // Normalize JPEG files to prevent backend rejection due to uppercase extensions (e.g., .JPG)
+    // or inconsistent MIME types from certain devices.
+    const isJpeg = 
+      originalFile.type === "image/jpeg" || 
+      originalFile.type === "image/jpg" || 
+      /\.(jpg|jpeg)$/i.test(originalFile.name);
+
+    if (isJpeg) {
+      const nameParts = originalFile.name.split('.');
+      nameParts.pop(); // remove extension
+      const baseName = nameParts.join('.') || "image";
+      file = new File([originalFile], `${baseName}.jpeg`, { type: "image/jpeg" });
+    }
+
+    setFile(file);
+    // Reset the input so the same file can be selected again if an upload fails
+    e.target.value = null;
+  };
   const onRemove = () => {
     removeProfilePic();
     closeDrawer();
