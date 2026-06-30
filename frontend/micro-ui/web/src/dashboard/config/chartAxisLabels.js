@@ -9,8 +9,12 @@ import {
   formatWrappedChartLabel,
   wrapChartLabelToLines,
 } from "../utils/chartLabelWrap";
+import { DASHBOARD_FONT_FAMILY } from "./dashboardConfig";
 
-const VERTICAL_LABEL_STYLE = { fontSize: `${CHART_AXIS_LABEL_FONT_SIZE_PX}px` };
+const VERTICAL_LABEL_STYLE = {
+  fontSize: `${CHART_AXIS_LABEL_FONT_SIZE_PX}px`,
+  fontFamily: DASHBOARD_FONT_FAMILY,
+};
 
 export function resolveVerticalCategorySlotWidth(categoryCount, containerWidth, gutterPx = 8) {
   if (!categoryCount || !containerWidth) return 0;

@@ -11,6 +11,7 @@ import {
   buildHorizontalCategoryYAxis,
 } from "../config/stackedBarPresentation";
 import { useScrollableChartSize } from "../hooks/useScrollableChartSize";
+import { resolveBarChartColumnWidth } from "../config/barChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import ChartScrollViewport from "./ChartScrollViewport";
 
@@ -20,13 +21,13 @@ function formatRatio(value) {
   return n.toFixed(2);
 }
 
-function splitAtBreakEven(value, breakEven) {
+function breakEvenSeriesValues(value, breakEven) {
   const v = Math.max(0, Number(value) || 0);
   const threshold = Math.max(0, Number(breakEven) || 0);
-  return {
-    below: Math.min(v, threshold),
-    above: Math.max(0, v - threshold),
-  };
+  if (v >= threshold) {
+    return { below: 0, above: v };
+  }
+  return { below: v, above: 0 };
 }
 
 const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
@@ -69,7 +70,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
     const below = [];
     const above = [];
     for (const value of values) {
-      const split = splitAtBreakEven(value, breakEven);
+      const split = breakEvenSeriesValues(value, breakEven);
       below.push(split.below);
       above.push(split.above);
     }
@@ -97,7 +98,11 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
           horizontal: true,
           borderRadius: 4,
           borderRadiusApplication: "end",
-          barHeight: "68%",
+          // Cap bar thickness at the same max px as vertical bars so a 1-category
+          // chart doesn't render one giant bar — consistent regardless of the data.
+          barHeight: resolveBarChartColumnWidth(
+            containerHeight / Math.max(1, categories.length)
+          ),
           dataLabels: {
             total: {
               enabled: true,
@@ -185,6 +190,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
       breakEven,
       categories,
       containerWidth,
+      containerHeight,
       foregroundColor,
       mutedColor,
       rows,

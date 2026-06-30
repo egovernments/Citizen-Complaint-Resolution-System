@@ -1,7 +1,25 @@
 /** Approximate monospace width per character at 10px axis labels. */
 export const CHART_LABEL_CHAR_WIDTH_PX = 6.5;
 export const CHART_AXIS_LABEL_FONT_SIZE_PX = 10;
-export const CHART_AXIS_LABEL_LINE_HEIGHT_PX = 12;
+/** Vertical gap between wrapped lines of the same category label. */
+export const CHART_AXIS_LABEL_LINE_HEIGHT_PX = 9;
+/** Minimum clear gap between adjacent category labels (horizontal bar rows). */
+export const CHART_AXIS_CATEGORY_GAP_PX = 16;
+export const CHART_AXIS_WRAPPED_LABEL_MAX_LINES = 2;
+
+const HORIZONTAL_BAR_BAND_PX = 14;
+
+/** Smallest row height that keeps wrapped labels readable and separated. */
+export function resolveMinHorizontalBarRowHeight(
+  maxLabelLines = CHART_AXIS_WRAPPED_LABEL_MAX_LINES
+) {
+  const lines = Math.max(1, maxLabelLines);
+  return (
+    lines * CHART_AXIS_LABEL_LINE_HEIGHT_PX +
+    CHART_AXIS_CATEGORY_GAP_PX +
+    HORIZONTAL_BAR_BAND_PX
+  );
+}
 
 export function wrapChartLabelToLines(
   text,

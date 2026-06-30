@@ -112,12 +112,11 @@ describe('resourceRegistry', () => {
   });
 
   it('covers schemas registered on ke tenant that previously had no UI', () => {
-    // Pin Stage-0 hygiene: these 7 schemas live on `ke` but were invisible in
+    // Pin Stage-0 hygiene: these schemas live on `ke` but were invisible in
     // the configurator before. If a future refactor drops one, this fails loud.
     const expected: Record<string, string> = {
       'theme-config': 'common-masters.ThemeConfig',
-      'user-validation': 'common-masters.UserValidation',
-      'mobile-validation': 'ValidationConfigs.mobileNumberValidation',
+      'mobile-number-validation': 'common-masters.MobileNumberValidation',
       'tenant-boundary': 'egov-location.TenantBoundary',
       'auto-escalation-ignore': 'Workflow.AutoEscalationStatesToIgnore',
       'workflow-bs-master': 'Workflow.BusinessServiceMasterConfig',
@@ -128,6 +127,9 @@ describe('resourceRegistry', () => {
       assert.ok(cfg, `Missing resource ${resource}`);
       assert.strictEqual(cfg.schema, schema, `${resource} should point to ${schema}`);
     }
+    // Old aliases must be gone — a single canonical key avoids confusion
+    assert.strictEqual(getResourceConfig('user-validation'), undefined, 'user-validation alias must be removed');
+    assert.strictEqual(getResourceConfig('mobile-validation'), undefined, 'mobile-validation alias must be removed');
   });
 
   it('does not register schemas that do not exist on ke (phantom cleanup)', () => {

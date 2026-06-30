@@ -1,7 +1,6 @@
 import { Header, Loader } from "@egovernments/digit-ui-react-components";
 import {
-  DEFAULT_MOBILE_MAX_LENGTH,
-  DEFAULT_MOBILE_MIN_LENGTH,
+  computeMobileLengths,
   DEFAULT_MOBILE_PATTERN,
   DEFAULT_MOBILE_PATTERN_LAX,
   DEFAULT_MOBILE_PREFIX,
@@ -82,18 +81,22 @@ const Inbox = ({ parentRoute, businessService = "HRMS", initialStates = {}, filt
   const { data: validationConfig } = Digit.Hooks.useCustomMDMS(
     stateId,
     moduleName,
-    [{ name: "UserValidation" }],
+    [{ name: "MobileNumberValidation" }],
     {
       select: (data) => {
-        const validationData = data?.[moduleName]?.UserValidation?.find((x) => x.fieldType === "mobile");
-        const rules = validationData?.rules;
-        const attributes = validationData?.attributes;
+        const validationData =
+          data?.[moduleName]?.MobileNumberValidation?.find((x) => x.default === true && x.isActive !== false) ||
+          data?.[moduleName]?.MobileNumberValidation?.find((x) => x.isActive !== false) ||
+          null;
+        const pattern = validationData?.mobileNumberRegex || DEFAULT_MOBILE_PATTERN;
+        const { max } = computeMobileLengths(pattern);
         return {
-          prefix: attributes?.prefix || DEFAULT_MOBILE_PREFIX,
-          pattern: rules?.pattern || DEFAULT_MOBILE_PATTERN,
-          maxLength: rules?.maxLength || DEFAULT_MOBILE_MAX_LENGTH,
-          minLength: rules?.minLength || DEFAULT_MOBILE_MIN_LENGTH,
-          errorMessage: rules?.errorMessage || "ES_SEARCH_APPLICATION_MOBILE_INVALID",
+          countryCode: validationData?.countryCode || DEFAULT_MOBILE_PREFIX,
+          prefix: validationData?.countryCode || DEFAULT_MOBILE_PREFIX,
+          mobileNumberRegex: pattern,
+          pattern,
+          maxLength: max > 0 ? max : 15,
+          errorMessage: "ES_SEARCH_APPLICATION_MOBILE_INVALID",
         };
       },
       staleTime: 300000,
@@ -110,7 +113,7 @@ const Inbox = ({ parentRoute, businessService = "HRMS", initialStates = {}, filt
       {
         label: t("HR_MOB_NO_LABEL"),
         name: "phone",
-        maxlength: validationConfig?.maxLength || DEFAULT_MOBILE_MAX_LENGTH,
+        maxlength: validationConfig?.maxLength || computeMobileLengths(DEFAULT_MOBILE_PATTERN_LAX).max || 15,
         pattern: validationConfig?.pattern || DEFAULT_MOBILE_PATTERN_LAX,
         title: t(validationConfig?.errorMessage || "ES_SEARCH_APPLICATION_MOBILE_INVALID"),
         componentInFront: validationConfig?.prefix || DEFAULT_MOBILE_PREFIX,

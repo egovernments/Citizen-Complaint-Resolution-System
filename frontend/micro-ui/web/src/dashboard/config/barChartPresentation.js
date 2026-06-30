@@ -22,13 +22,14 @@ export const BAR_CHART_XAXIS_LABEL_HEIGHT_COMPACT_PX = 18;
 /** Fixed bottom reserve for normal vertical bar charts (2 wrapped label lines). */
 export const BAR_CHART_XAXIS_RESERVED_HEIGHT_PX = 28;
 /** Room above the plot for value labels on bar tops (pairs with data label offsetY). */
-export const BAR_CHART_GRID_TOP_PAD = 6;
-export const BAR_CHART_DATA_LABEL_OFFSET_Y = -16;
-/** Bar thickness as a fraction of each category slot — same on every vertical bar chart. */
-export const BAR_COLUMN_WIDTH_RATIO = 0.88;
-export const BAR_COLUMN_MAX_WIDTH_PX = 56;
-export const BAR_COLUMN_MIN_WIDTH_PERCENT = 70;
-export const BAR_COLUMN_MAX_WIDTH_PERCENT = 92;
+export const BAR_CHART_GRID_TOP_PAD = 8;
+export const BAR_CHART_DATA_LABEL_OFFSET_Y = -20;
+/** Bar thickness as a fraction of each category slot — same on every vertical bar chart.
+ *  Tuned to ~60% (thinner bars); the px cap still keeps few-category charts from going giant. */
+export const BAR_COLUMN_WIDTH_RATIO = 0.6;
+export const BAR_COLUMN_MAX_WIDTH_PX = 48;
+export const BAR_COLUMN_MIN_WIDTH_PERCENT = 0;
+export const BAR_COLUMN_MAX_WIDTH_PERCENT = 68;
 export const BAR_CHART_GRID_GUTTER_PX = 4;
 /** Minimum y-axis headroom (data units) above the tallest bar for value labels. */
 export const BAR_CHART_YAXIS_MIN_HEADROOM = 1;
@@ -39,19 +40,13 @@ export function resolveBarChartYAxisMax(seriesMax, { percent = false } = {}) {
   const peak = Math.max(Number(seriesMax) || 0, 0);
   if (peak === 0) return percent ? 10 : 1;
 
-  if (percent) {
-    const headroom = Math.max(
-      1,
-      Math.ceil(peak * BAR_CHART_YAXIS_HEADROOM_RATIO * 10) / 10
-    );
-    return Math.min(100, Math.ceil((peak + headroom) * 10) / 10);
-  }
-
   const headroom = Math.max(
     BAR_CHART_YAXIS_MIN_HEADROOM,
     Math.ceil(peak * BAR_CHART_YAXIS_HEADROOM_RATIO)
   );
-  return peak + headroom;
+
+  const axisMax = peak + headroom;
+  return percent ? Math.ceil(axisMax * 10) / 10 : axisMax;
 }
 
 export function resolveBarChartColumnWidth(slotWidthPx) {

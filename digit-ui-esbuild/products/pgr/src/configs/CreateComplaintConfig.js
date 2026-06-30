@@ -29,30 +29,15 @@ export const CreateComplaintConfig = {
                 // Getters re-evaluate on every read so a tenant switch
                 // mid-session picks up the latest source.
                 get maxLength() {
-                  return (
-                    window?.__DIGIT_USER_VALIDATION?.mobile?.maxLength ||
-                    window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")
-                      ?.mobileNumberLength ||
-                    10
-                  );
+                  return window?.__DIGIT_USER_VALIDATION?.mobile?.maxLength || 15;
                 },
                 validation: {
                   required: true,
                   get minLength() {
-                    return (
-                      window?.__DIGIT_USER_VALIDATION?.mobile?.minLength ||
-                      window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")
-                        ?.mobileNumberLength ||
-                      10
-                    );
+                    return window?.__DIGIT_USER_VALIDATION?.mobile?.minLength || 1;
                   },
                   get maxLength() {
-                    return (
-                      window?.__DIGIT_USER_VALIDATION?.mobile?.maxLength ||
-                      window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")
-                        ?.mobileNumberLength ||
-                      10
-                    );
+                    return window?.__DIGIT_USER_VALIDATION?.mobile?.maxLength || 15;
                   },
                 },
               },

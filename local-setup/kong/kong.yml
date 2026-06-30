@@ -61,23 +61,26 @@ plugins:
         local ri = body["RequestInfo"]
         if not ri or type(ri) ~= "table" then return end
         local token = ri["authToken"]
-        if not token or type(token) ~= "string" or token == "" then return end
-        if ri["userInfo"] and type(ri["userInfo"]) == "table" then
-          local ui = ri["userInfo"]
-          if ui["uuid"] or ui["id"] or ui["userName"] then return end
+        if not token or type(token) ~= "string" or token == "" then
+          -- no token: NEVER trust body userInfo (close the no-token spoof) — strip it.
+          if ri["userInfo"] ~= nil then ri["userInfo"] = nil; body["RequestInfo"] = ri; kong.service.request.set_raw_body(cjson.encode(body)) end
+          return
         end
+        -- Part A: never trust client-supplied userInfo; always resolve from the token.
         local httpc = http.new()
         httpc:set_timeout(5000)
         local res, err = httpc:request_uri("http://egov-user-proxy:8107/user/_details?access_token=" .. token, {
           method = "POST",
           headers = { ["Content-Type"] = "application/json" },
         })
-        if not res then kong.log.err("auth-enrichment: ", err); return end
-        if res.status ~= 200 then kong.log.err("auth-enrichment: status ", res.status); return end
-        local ok2, user = pcall(cjson.decode, res.body)
-        if not ok2 or type(user) ~= "table" then return end
-        if not user["uuid"] and not user["userName"] then return end
-        ri["userInfo"] = user
+        local resolved = nil
+        if res and res.status == 200 then
+          local ok2, user = pcall(cjson.decode, res.body)
+          if ok2 and type(user) == "table" and (user["uuid"] or user["userName"]) then resolved = user end
+        else
+          kong.log.err("auth-enrichment failed; stripping client userInfo")
+        end
+        ri["userInfo"] = resolved
         body["RequestInfo"] = ri
         kong.service.request.set_raw_body(cjson.encode(body))
 services:
@@ -118,22 +121,15 @@ services:
     methods:
     - POST
 - name: user-otp-mock
-  url: http://localhost:9999
+  url: http://user-otp:8090
   tags:
   - core
   - auth
-  - mock
   routes:
   - name: user-otp-route
     paths:
     - /user-otp
     strip_path: false
-  plugins:
-  - name: request-termination
-    config:
-      status_code: 200
-      content_type: application/json
-      body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":".01","ts":"","resMsgId":"uief87324","msgId":"","status":"successful"},"otp":{"otp":"","UUID":"","isValidationSuccessful":true}}'
 - name: enc-service
   url: http://egov-enc-service:1234
   tags:

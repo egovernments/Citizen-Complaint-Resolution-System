@@ -71,10 +71,16 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
           return { ...node, children: filteredChildren };
         })
         .filter(Boolean);
-    return rawChildrenData.map((entry) => ({
+    const filtered = rawChildrenData.map((entry) => ({
       ...entry,
       boundary: filterTree(entry.boundary || []),
     }));
+    // If the jurisdiction filter prunes the entire tree (HRMS boundary codes
+    // don't exactly match boundary-service node codes — common with seeding
+    // drift), fall back to the full unfiltered tree so the dropdown renders.
+    // Silently returning empty would black out the picker with no error shown.
+    const hasAny = filtered.some((e) => (e.boundary || []).length > 0);
+    return hasAny ? filtered : rawChildrenData;
   }, [rawChildrenData, allowedRoots]);
 
   // boundaryHierarchyOrder is populated by usePGRInitialization at

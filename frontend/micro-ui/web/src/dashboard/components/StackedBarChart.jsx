@@ -2,12 +2,9 @@ import React, { useMemo } from "react";
 import Chart from "react-apexcharts";
 import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
 import {
-  resolveVerticalCategorySlotWidth,
-  resolveVerticalXAxisLabelHeight,
-} from "../config/chartAxisLabels";
-import {
   buildApexSeriesHoverTooltip,
 } from "../config/chartTooltipPresentation";
+import { BAR_CHART_XAXIS_RESERVED_HEIGHT_PX } from "../config/barChartPresentation";
 import {
   buildStackedBarAnnotations,
   buildStackedBarDataLabels,
@@ -51,14 +48,9 @@ const StackedBarChart = ({
     [colors]
   );
 
-  const verticalXAxisLabelHeight = useMemo(() => {
-    if (horizontal) return 4;
-    const slotWidthPx = resolveVerticalCategorySlotWidth(categories.length, containerWidth);
-    return resolveVerticalXAxisLabelHeight(categories, slotWidthPx, {
-      minHeightPx: 22,
-      maxHeightPx: 72,
-    });
-  }, [categories, containerWidth, horizontal]);
+  const verticalXAxisLabelHeight = horizontal
+    ? 4
+    : BAR_CHART_XAXIS_RESERVED_HEIGHT_PX;
 
   const options = useMemo(
     () => ({
@@ -74,9 +66,10 @@ const StackedBarChart = ({
         horizontal,
         valueFormat,
         containerWidth,
+        containerHeight,
         categoryCount: categories.length,
       }),
-      dataLabels: buildStackedBarDataLabels({ valueFormat }),
+      dataLabels: buildStackedBarDataLabels({ valueFormat, horizontal }),
       xaxis: buildStackedBarXAxis({ horizontal, categories, containerWidth }),
       yaxis: horizontal
         ? [buildStackedBarYAxis({ horizontal, categories, containerWidth, valueFormat })]
@@ -96,6 +89,7 @@ const StackedBarChart = ({
     [
       categories,
       containerWidth,
+      containerHeight,
       horizontal,
       referenceLines,
       resolvedColors,
