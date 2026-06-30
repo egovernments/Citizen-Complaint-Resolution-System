@@ -17,6 +17,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
 import { formPayloadToCreateComplaint } from "../../../utils";
+import { fieldsFromSchema, deriveCaseRelatedTo } from "../../../utils/extendedAttributes";
 
 const CreateComplaintForm = ({
   createComplaintConfig,      // Form configuration for Create Complaint screen
@@ -180,6 +181,90 @@ const CreateComplaintForm = ({
   // egovernments/CCRS#438 + #447 items 6-7).
 
 
+  // ── Per-category dynamic "extended attributes" (Mozambique IGE/IGSAE) ──
+  // The employee is always logged in under one sub-tenant (e.g. mz.ige), so the
+  // category is implied — derive caseRelatedTo from the tenant (NO picker) and
+  // render that category's JSON-Schema-driven fields. Purely additive: a tenant
+  // not present in ComplaintRelatedToMap gets no extra fields (form unchanged).
+  const stateTenant = (tenantId || "").split(".")[0] || tenantId;
+  const { data: relatedToMap } = Digit.Hooks.useCustomMDMS(
+    stateTenant,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintRelatedToMap" }],
+    { cacheTime: Infinity, select: (raw) => raw?.["RAINMAKER-PGR"]?.ComplaintRelatedToMap || [] },
+    { schemaCode: "PGR_COMPLAINT_RELATED_TO_MAP", tenantId: stateTenant }
+  );
+  const { data: templatesAll } = Digit.Hooks.useCustomMDMS(
+    stateTenant,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintTemplateType" }],
+    { cacheTime: Infinity, select: (raw) => raw?.["RAINMAKER-PGR"]?.ComplaintTemplateType || [] },
+    { schemaCode: "PGR_COMPLAINT_TEMPLATE_TYPE", tenantId: stateTenant }
+  );
+  const { data: schemasByRef } = Digit.Hooks.useCustomMDMS(
+    stateTenant,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintExtendedAttributeSchema" }],
+    {
+      cacheTime: Infinity,
+      select: (raw) => {
+        const rows = raw?.["RAINMAKER-PGR"]?.ComplaintExtendedAttributeSchema || [];
+        const byRef = {};
+        rows.forEach((r) => {
+          if (r?.schemaRef) byRef[r.schemaRef] = r.schema;
+        });
+        return byRef;
+      },
+    },
+    { schemaCode: "PGR_COMPLAINT_EXT_ATTR_SCHEMA", tenantId: stateTenant }
+  );
+  const caseRelatedTo = useMemo(() => deriveCaseRelatedTo(relatedToMap, tenantId), [relatedToMap, tenantId]);
+  const extFields = useMemo(() => {
+    const tpl = (templatesAll || []).find((x) => x?.active !== false && x?.caseRelatedTo === caseRelatedTo);
+    const schema = tpl?.schemaRef ? (schemasByRef || {})[tpl.schemaRef] : null;
+    return fieldsFromSchema(schema);
+  }, [templatesAll, schemasByRef, caseRelatedTo]);
+
+  // Generated FormComposerV2 field configs for the dynamic fields + a
+  // confidentiality checkbox. NOTE: x-security fields render in clear text until
+  // backend encryption lands (same interim posture as the citizen flow).
+  const extFieldConfigs = useMemo(() => {
+    if (!extFields.length) return [];
+    const toType = (dt) => (dt === "textarea" ? "textarea" : dt === "date" ? "date" : dt === "number" ? "number" : "text");
+    const cfgs = extFields.map((f) => {
+      // Date fields → our self-contained calendar-popover component (avoids the
+      // native date input / react-datepicker CSS issues). Writes YYYY-MM-DD.
+      if (f.dataType === "date") {
+        return {
+          inline: true,
+          key: f.fieldKey,
+          label: f.label,
+          isMandatory: !!f.mandatory,
+          type: "component",
+          component: "PGRDatePicker",
+          populators: { name: f.fieldKey },
+        };
+      }
+      const type = toType(f.dataType);
+      const populators = { name: f.fieldKey };
+      if ((type === "text" || type === "textarea") && f.maxLength) populators.maxLength = f.maxLength;
+      if (f.mandatory) {
+        populators.validation = { required: true };
+        populators.error = "CORE_COMMON_REQUIRED_ERRMSG";
+      }
+      // Prettified English label so it reads correctly without a localization push;
+      // switch to f.labelKey once PGR_EXT_* are loaded in egov-localization.
+      return { inline: true, key: f.fieldKey, label: f.label, isMandatory: !!f.mandatory, type, disable: false, populators };
+    });
+    cfgs.push({
+      key: "isConfidential",
+      type: "checkbox",
+      isMandatory: false,
+      populators: { name: "isConfidential", title: "Keep details confidential" },
+    });
+    return cfgs;
+  }, [extFields]);
+
   const updatedConfig = useMemo(() => {
 
     const baseConfig = Digit.Utils.preProcessMDMSConfig(
@@ -238,8 +323,16 @@ const CreateComplaintForm = ({
       };
     });
 
-    return { ...baseConfig, form: updatedForm };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, hasHierarchy, departmentGate]);
+    // Append the per-category dynamic fields to the "Additional details" section
+    // (the one holding the description). No-op when extFieldConfigs is empty.
+    const withExt = (updatedForm || []).map((section) =>
+      section?.head === "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS" && extFieldConfigs.length
+        ? { ...section, body: [...section.body, ...extFieldConfigs] }
+        : section
+    );
+
+    return { ...baseConfig, form: withExt };
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, hasHierarchy, departmentGate, extFieldConfigs]);
 
 
 
@@ -406,7 +499,10 @@ const CreateComplaintForm = ({
         return;
       }
     }
-    const payload = formPayloadToCreateComplaint(_data, tenantId, user?.info);
+    const payload = formPayloadToCreateComplaint(_data, tenantId, user?.info, {
+      caseRelatedTo,
+      fieldKeys: extFields.map((f) => f.fieldKey),
+    });
     handleResponseForCreateComplaint(payload);
   };
 
