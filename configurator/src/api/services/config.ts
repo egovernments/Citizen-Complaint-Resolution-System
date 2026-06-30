@@ -30,11 +30,14 @@ function isDuplicate(err: unknown): boolean {
 }
 
 export const configService = {
-  /** All NotificationChannel records for a tenant (used to pre-populate the toggles). */
+  /** Active NotificationChannel records for a tenant (used to pre-populate the toggles).
+   *  isActive:true mirrors the novu-bridge gate and config-service _resolve — so a soft-deleted
+   *  record doesn't pre-populate a toggle with stale state. (The reconcile search in
+   *  upsertNotificationChannel stays broad so it can locate + revive a soft-deleted duplicate.) */
   async getNotificationChannels(tenantId: string): Promise<NotificationChannelConfig[]> {
     const response = await apiClient.post(ENDPOINTS.CONFIG_SEARCH, {
       RequestInfo: apiClient.buildRequestInfo(),
-      criteria: { tenantId, schemaCode: SCHEMA },
+      criteria: { tenantId, schemaCode: SCHEMA, isActive: true },
     });
     const records = ((response as { configData?: ConfigDataRecord[] }).configData || []);
     return records.map((r) => r.data).filter(Boolean);

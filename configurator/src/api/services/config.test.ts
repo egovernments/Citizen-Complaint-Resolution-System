@@ -154,4 +154,11 @@ describe('configService.getNotificationChannels', () => {
     post.mockResolvedValueOnce({});
     expect(await configService.getNotificationChannels('pb.amritsar')).toEqual([]);
   });
+
+  it('searches active records only (so soft-deleted rows do not pre-populate)', async () => {
+    post.mockResolvedValueOnce({ configData: [] });
+    await configService.getNotificationChannels('pb.amritsar');
+    const [, body] = post.mock.calls[0];
+    expect(body.criteria).toEqual({ tenantId: 'pb.amritsar', schemaCode: 'NotificationChannel', isActive: true });
+  });
 });
