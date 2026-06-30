@@ -279,7 +279,8 @@ export function buildStackedBarPlotOptions({
   const slotWidth = horizontal
     ? 0
     : resolveBarCategorySlotWidth(categoryCount, containerWidth);
-  const columnWidth = horizontal ? undefined : resolveBarChartColumnWidth(slotWidth);
+  // Vertical bars capped at 60% column width (thinner bars across the board).
+  const columnWidth = horizontal ? undefined : "60%";
 
   return {
     bar: {

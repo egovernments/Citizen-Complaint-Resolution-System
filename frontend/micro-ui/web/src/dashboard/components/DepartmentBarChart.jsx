@@ -104,10 +104,8 @@ const DepartmentBarChart = ({
     [categoryCount, containerWidth, xAxisLabelHeight]
   );
 
-  const columnWidth = useMemo(() => {
-    if (histogram) return "74%";
-    return resolveBarChartColumnWidth(slotWidth);
-  }, [histogram, slotWidth]);
+  // Vertical bars capped at 60% column width (thinner bars across the board).
+  const columnWidth = useMemo(() => "60%", []);
 
   const colors = useMemo(
     () => (distributed ? colorsProp : [getBarChartSeriesColor()]),
