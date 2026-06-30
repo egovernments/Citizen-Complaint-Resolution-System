@@ -104,10 +104,13 @@ const DepartmentBarChart = ({
     [categoryCount, containerWidth, xAxisLabelHeight]
   );
 
-  const columnWidth = useMemo(() => {
-    if (histogram) return "74%";
-    return resolveBarChartColumnWidth(slotWidth);
-  }, [histogram, slotWidth]);
+  // Dynamic column width: scales with the slot (full scaling) and is capped at a max
+  // pixel width so few-category charts don't get giant bars. Tuned thin via the
+  // BAR_COLUMN_* constants. Histograms share the same scaled/capped width.
+  const columnWidth = useMemo(
+    () => resolveBarChartColumnWidth(slotWidth),
+    [slotWidth]
+  );
 
   const colors = useMemo(
     () => (distributed ? colorsProp : [getBarChartSeriesColor()]),

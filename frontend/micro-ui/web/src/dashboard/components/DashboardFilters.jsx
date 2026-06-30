@@ -129,15 +129,15 @@ const DashboardFilters = ({
           </select>
         </div>
 
-        {canClear ? (
-          <button
-            type="button"
-            onClick={onClearFilters}
-            className="dashboard-filters-clear-inline"
-          >
-            Clear
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={onClearFilters}
+          disabled={!canClear}
+          className="dashboard-filters-clear-inline"
+          aria-disabled={!canClear}
+        >
+          Clear
+        </button>
         </div>
       </div>
     </div>
