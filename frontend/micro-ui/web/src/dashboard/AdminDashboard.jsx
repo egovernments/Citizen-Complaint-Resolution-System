@@ -272,6 +272,12 @@ function assembleResult(kpiId, def, results) {
           wardCode: String(r.ward_code ?? ""),
           lat: Number(r.latitude),
           lng: Number(r.longitude),
+          // detail fields for the click popup
+          serviceCode: r.service_code,
+          status: r.application_status,
+          createdDate: r.created_date,
+          source: r.source,
+          slaStatus: r.sla_status_bucket,
         }))
         .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
     }

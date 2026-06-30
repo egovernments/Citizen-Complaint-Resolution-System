@@ -2076,7 +2076,12 @@
           "service_request_id",
           "latitude",
           "longitude",
-          "ward_code"
+          "ward_code",
+          "service_code",
+          "application_status",
+          "created_date",
+          "source",
+          "sla_status_bucket"
         ],
         "measures": [
           {
