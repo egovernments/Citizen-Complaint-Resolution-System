@@ -1,0 +1,20 @@
+[
+  {
+    "code": "IGE",
+    "name": "Inspeccão Geral do Estado",
+    "active": true,
+    "tenantCode": "mz.ige",
+    "shortName": "IGE",
+    "tenantId": "mz",
+    "displayOrder": 1
+  },
+  {
+    "code": "IGSAE",
+    "name": "Inspecção-Geral dos Serviços de Administração do Estado",
+    "active": true,
+    "tenantCode": "mz.igsae",
+    "shortName": "IGSAE",
+    "tenantId": "mz",
+    "displayOrder": 2
+  }
+]
