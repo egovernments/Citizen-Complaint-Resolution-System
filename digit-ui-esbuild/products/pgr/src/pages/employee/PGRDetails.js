@@ -10,6 +10,7 @@ import PGRWorkflowModal from "../../components/PGRWorkflowModal";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import Urls from "../../utils/urls";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
+import { buildExtendedAttributeRows } from "../../components/PgrExtendedAttributesView";
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 
@@ -636,6 +637,22 @@ const PGRDetails = () => {
                   },
                 ],
               },
+              // Read-only "Additional Details" — fetch service.extendedAttributes
+              // and show it as label:value rows; backend returns masked ("****")
+              // values. Renders nothing when there are no extended attributes.
+              ...(buildExtendedAttributeRows(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes).length > 0
+                ? [{
+                  cardType: "primary",
+                  header: t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS"),
+                  fieldPairs: buildExtendedAttributeRows(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes).map((r) => ({
+                    inline: true,
+                    label: r.label,
+                    type: "text",
+                    value: r.value,
+                  })),
+                }]
+                : []
+              ),
               ...(pgrData?.ServiceWrappers[0]?.workflow?.verificationDocuments?.length > 0
                 ? [{
                   cardType: "primary",
