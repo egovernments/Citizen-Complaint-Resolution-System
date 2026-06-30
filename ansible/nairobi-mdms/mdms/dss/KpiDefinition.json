@@ -989,34 +989,34 @@
         ],
         "compose": null,
         "pii": false,
-        "title": "Open complaints by complaint types",
+        "title": "Open Complaints by Workflow Stage",
         "orientation": "vertical",
         "measureKey": "total",
         "stackKey": "application_status",
         "stackSeries": [
           {
             "key": "PENDINGFORASSIGNMENT",
-            "label": "Pending assignment",
+            "label": "Pending Assignment",
             "color": "var(--chart-1)"
           },
           {
             "key": "PENDINGATLME",
-            "label": "At LME",
+            "label": "Assigned",
             "color": "var(--chart-2)"
           },
           {
             "key": "PENDINGATSUPERVISOR",
-            "label": "At supervisor",
+            "label": "Pending at Supervisor",
             "color": "var(--chart-3)"
           },
           {
-            "key": "RESOLVED",
-            "label": "Resolved",
-            "color": "var(--status-resolved)"
+            "key": "PENDINGFORREASSIGNMENT",
+            "label": "Pending Reassignment",
+            "color": "var(--chart-4)"
           }
         ],
         "limit": 8,
-        "subtitle": "Subtypes with the most open complaints, broken down by workflow stage"
+        "subtitle": "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in."
       },
       "params": [
         {
