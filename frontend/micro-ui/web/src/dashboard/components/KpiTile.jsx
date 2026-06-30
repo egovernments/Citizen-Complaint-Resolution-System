@@ -233,26 +233,35 @@ function resolvePrior(ctx) {
  * Generalized WoW delta — mirrors resolveSparklineDelta / computeWowPercent:
  * percent metrics use a percentage-point delta, everything else a % change.
  */
-function computeDelta(current, prior, format) {
+function computeDelta(current, prior, format, mode) {
   if (current == null || prior == null || !Number.isFinite(current) || !Number.isFinite(prior)) {
     return null;
   }
-  if (isPercentFormat(format)) {
-    const cur = normalizePct(current);
-    const pri = normalizePct(prior);
-    return cur - pri; // percentage points
-  }
+  // viz.delta.mode (when set) decides the unit; otherwise fall back to the format.
+  const eff = mode || (isPercentFormat(format) ? 'percentPoint' : 'percent');
+  if (eff === 'percentPoint') return normalizePct(current) - normalizePct(prior);
+  if (eff === 'days') return (current - prior) / 86400000; // ms -> whole days
+  if (eff === 'duration') return current - prior; // raw ms difference
+  if (eff === 'rating') return current - prior; // rating points
   if (prior === 0) return null;
-  return ((current - prior) / Math.abs(prior)) * 100;
+  return ((current - prior) / Math.abs(prior)) * 100; // relative %
 }
 
-function formatDeltaDisplay(delta, format) {
+function formatDeltaDisplay(delta, format, mode) {
   if (delta == null || !Number.isFinite(delta)) return null;
   const arrow = delta >= 0 ? '▲' : '▼';
   const abs = Math.abs(delta);
+  const eff = mode || (isPercentFormat(format) ? 'percentPoint' : 'percent');
+  if (eff === 'duration') {
+    return abs >= 86400000
+      ? `${arrow} ${(abs / 86400000).toFixed(1)} days`
+      : `${arrow} ${(abs / 3600000).toFixed(1)} hrs`;
+  }
   const rounded = Math.round(abs * 10) / 10;
   const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-  const unit = isPercentFormat(format) ? 'pp' : '%';
+  if (eff === 'days') return `${arrow} ${formatted} ${rounded === 1 ? 'day' : 'days'}`;
+  if (eff === 'rating') return `${arrow} ${formatted}`;
+  const unit = eff === 'percentPoint' ? 'pp' : '%';
   return `${arrow} ${formatted}${unit}`;
 }
 
@@ -321,7 +330,7 @@ function renderNumberTileDelta(ctx) {
   const { viz, title, loading, onRemove } = ctx;
   const value = resolveScalar(ctx);
   const prior = resolvePrior(ctx);
-  const delta = computeDelta(value, prior, viz.format);
+  const delta = computeDelta(value, prior, viz.format, viz.delta?.mode);
   const status = resolveTileStatus(viz, value);
   return (
     <KpiCard
@@ -329,7 +338,7 @@ function renderNumberTileDelta(ctx) {
       value={loading ? undefined : applyFormat(value, viz.format)}
       context={viz.subtitle || viz.description || viz.contextLabel || ''}
       status={status}
-      deltaDisplay={formatDeltaDisplay(delta, viz.format)}
+      deltaDisplay={formatDeltaDisplay(delta, viz.format, viz.delta?.mode)}
       deltaClass={resolveDeltaClass(viz, value, delta)}
       loading={loading}
       onRemove={onRemove}
@@ -365,14 +374,14 @@ function renderNumberTileSparkline(ctx) {
   const { viz, title, loading, onRemove } = ctx;
   const value = resolveScalar(ctx);
   const prior = resolvePrior(ctx);
-  const delta = computeDelta(value, prior, viz.format);
+  const delta = computeDelta(value, prior, viz.format, viz.delta?.mode);
   const status = resolveTileStatus(viz, value);
   return (
     <KpiSparklineCard
       title={title}
       value={loading ? undefined : applyFormat(value, viz.format)}
       status={status}
-      deltaDisplay={formatDeltaDisplay(delta, viz.format)}
+      deltaDisplay={formatDeltaDisplay(delta, viz.format, viz.delta?.mode)}
       deltaClass={resolveDeltaClass(viz, value, delta)}
       seriesColor={viz.seriesColor || statusToSeriesColor(status) || 'var(--chart-1)'}
       sparkline={resolveSparkline(ctx)}
@@ -841,6 +850,10 @@ function adaptMapLayers(ctx) {
         label: formatLabel(wardCode),
         count: filed,
         total: filed,
+        // named counts so the choropleth hover tooltip (reads created/open/resolved) has values
+        created: filed,
+        open,
+        resolved,
         openPct: filed > 0 ? (open / filed) * 100 : 0,
         resolvedPct: filed > 0 ? (resolved / filed) * 100 : 0,
       };
