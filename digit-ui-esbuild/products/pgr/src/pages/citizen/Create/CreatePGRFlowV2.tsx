@@ -123,43 +123,91 @@ interface FormData {
   // Authority dispatcher + dynamic "additional details" (Mozambique IGE/IGSAE).
   // Populated only when RAINMAKER-PGR.ComplaintRelatedToMap is seeded; absent
   // otherwise so the legacy flow is byte-identical.
-  relatedTo?: string;
-  templateType?: string;
-  resolvedTenantId?: string;
+  caseRelatedTo?: string; // category code (doc discriminator; FK → ComplaintRelatedToMap.code)
+  caseRelatedToName?: string; // display name of the picked category
+  resolvedTenantId?: string; // sub-tenant the complaint files under (ComplaintRelatedToMap.tenantCode)
   dynamicFields?: Record<string, unknown>;
   consents?: string[];
-  prefersConfidentiality?: boolean;
+  isConfidential?: boolean; // doc "Keep details confidential" (backend-enforced later)
+  complainantAddress?: string;
+  email?: string;
 }
 
-// RAINMAKER-PGR.ComplaintRelatedToMap — the citizen-facing dispatcher. Maps a
-// natural-language option → templateType + the sub-tenant the complaint is filed
-// under. State-level master.
+// RAINMAKER-PGR.ComplaintRelatedToMap — the citizen-facing category lookup. Maps
+// a category `code` → display name + the sub-tenant the complaint is filed under.
+// State-level master.
 interface RelatedToOption {
-  relatedTo: string;
-  templateType: string;
-  tenantId: string;
-  order?: number;
+  code: string; // category code (e.g. IGE | IGSAE)
+  name: string; // citizen-facing display name
+  shortName?: string;
+  tenantCode: string; // sub-tenant the complaint is filed under
+  tenantId?: string; // parent state tenant
+  displayOrder?: number;
   active?: boolean;
 }
 
-// RAINMAKER-PGR.ComplaintTemplateType.fields[] — the dynamic detail fields,
-// keyed by templateType. State-level master.
+// A renderable dynamic field, derived from the per-category JSON Schema
+// (RAINMAKER-PGR.ComplaintExtendedAttributeSchema.schema.properties).
 interface TemplateField {
   fieldKey: string;
-  label: string;
+  labelKey?: string; // x-label-key → localization key for the label
+  label: string; // human fallback (prettified fieldKey)
   dataType?: string; // string | textarea | date | number | boolean
-  mandatory?: boolean;
+  mandatory?: boolean; // from schema.required
   maxLength?: number;
-  order?: number;
-  // Confidentiality classification — needs BACKEND enforcement (encryption /
-  // masking). FE+MDMS-only build excludes flagged fields (fail-closed).
-  pii?: boolean;
-  maskable?: boolean;
-  encrypted?: boolean;
+  order?: number; // from x-order
+  encrypted?: boolean; // from top-level x-security (informational; backend encrypts)
 }
 
-function isProtectedField(f: TemplateField): boolean {
-  return f.pii === true || f.encrypted === true || f.maskable === true;
+// camelCase fieldKey → "Title Case" fallback label.
+function prettifyKey(k: string): string {
+  const s = k.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// Build renderable fields from a draft-07 JSON Schema object (properties +
+// required + x-security + the x-order / x-widget / x-label-key UI hints).
+// Control/standard keys are skipped (rendered elsewhere or sent automatically).
+function fieldsFromSchema(schema: any): TemplateField[] {
+  if (!schema || typeof schema !== "object" || !schema.properties) return [];
+  const required: string[] = Array.isArray(schema.required) ? schema.required : [];
+  const security: string[] = Array.isArray(schema["x-security"]) ? schema["x-security"] : [];
+  const CONTROL = new Set([
+    "caseRelatedTo",
+    "isConfidential",
+    "schemaVersion",
+    "hierarchyLevel1",
+    "hierarchyLevel2",
+    "complainantAddress",
+    "email",
+  ]);
+  return Object.keys(schema.properties)
+    .filter((k) => !CONTROL.has(k))
+    .map((k) => {
+      const p = schema.properties[k] || {};
+      const widget = p["x-widget"];
+      const dataType =
+        widget === "textarea"
+          ? "textarea"
+          : p.format === "date"
+          ? "date"
+          : p.type === "number" || p.type === "integer"
+          ? "number"
+          : p.type === "boolean"
+          ? "boolean"
+          : "string";
+      return {
+        fieldKey: k,
+        labelKey: p["x-label-key"],
+        label: prettifyKey(k),
+        dataType,
+        mandatory: required.includes(k),
+        maxLength: typeof p.maxLength === "number" ? p.maxLength : undefined,
+        order: typeof p["x-order"] === "number" ? p["x-order"] : 999,
+        encrypted: security.includes(k),
+      } as TemplateField;
+    })
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
 // Complaint-level declarations confirmed before submit (BRD).
@@ -233,21 +281,30 @@ function getEffectiveServiceCode(
   return mainType?.serviceCode;
 }
 
-function mapFormDataToRequest(formData: FormData, tenantId: string, user: any) {
+function mapFormDataToRequest(formData: FormData, tenantId: string, user: any, documentType = "EVIDENCE") {
   const timestamp = Date.now();
   const userInfo = user;
-  // extendedAttributes (templateType, prefersConfidentiality, consents, fields)
-  // ride inside the EXISTING additionalDetail — there is no top-level
-  // service.extendedAttributes column in this build (that is the backend phase).
-  // Added only when an authority/templateType was resolved (legacy flow unchanged).
+  // FLAT extendedAttributes (doc §5) ride inside the EXISTING additionalDetail —
+  // there is no top-level service.extendedAttributes column in this build (that
+  // is the backend phase). Added only when a category was resolved (legacy flow
+  // unchanged). NOTE: x-security fields are submitted in clear text until the
+  // backend encryption phase lands.
   const additionalDetail: Record<string, unknown> = {};
-  if (formData?.templateType) {
+  if (formData?.caseRelatedTo) {
+    const sct: any = formData.SelectComplaintType;
+    const sst: any = formData.SelectSubComplaintType;
+    const lvl1 = sct?.code ?? sct?.name;
+    const lvl2 = sst?.code ?? sst?.name;
     additionalDetail.extendedAttributes = {
-      templateType: formData.templateType,
-      prefersConfidentiality: !!formData.prefersConfidentiality,
-      consents: formData.consents || [],
+      caseRelatedTo: formData.caseRelatedTo,
+      isConfidential: !!formData.isConfidential,
       schemaVersion: "1.0",
-      fields: { ...(formData.dynamicFields || {}) },
+      ...(lvl1 ? { hierarchyLevel1: lvl1 } : {}),
+      ...(lvl2 ? { hierarchyLevel2: lvl2 } : {}),
+      ...(formData.complainantAddress ? { complainantAddress: formData.complainantAddress } : {}),
+      ...(formData.email ? { email: formData.email } : {}),
+      consents: formData.consents || [],
+      ...(formData.dynamicFields || {}),
     };
   }
   const geoLocation = formData?.GeoLocationsPoint || { lat: null, lng: null };
@@ -293,7 +350,7 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any) {
       action: "APPLY",
       verificationDocuments: Array.isArray(formData?.ComplaintImagesPoint)
         ? formData.ComplaintImagesPoint.map((image) => ({
-            documentType: "PHOTO",
+            documentType,
             fileStoreId: image,
             documentUid: "",
             additionalDetails: {},
@@ -379,7 +436,6 @@ interface StepBodyProps {
   // ComplaintRelatedToMap-seeded flow).
   relatedToOptions?: RelatedToOption[];
   templateFields?: TemplateField[];
-  suppressedCount?: number;
   // The authority-resolved tenant — scopes the boundary cascade (and anything
   // else tenant-specific) to the picked institution, not the login tenant.
   resolvedTenant?: string;
@@ -552,25 +608,25 @@ function RelatedToStepBody({ data, patch, relatedToOptions, t }: StepBodyProps) 
       >
         <Select
           id="related-to"
-          value={data.relatedTo}
+          value={data.caseRelatedTo}
           onValueChange={(value: string) => {
-            const o = options.find((x) => x.relatedTo === value);
+            const o = options.find((x) => x.code === value);
             if (!o) return;
             patch({
-              relatedTo: o.relatedTo,
-              templateType: o.templateType,
-              resolvedTenantId: o.tenantId,
-              // Authority drives the catalogue + fields — reset downstream.
+              caseRelatedTo: o.code,
+              caseRelatedToName: o.name,
+              resolvedTenantId: o.tenantCode,
+              // Category drives the catalogue + fields — reset downstream.
               SelectComplaintType: null,
               SelectSubComplaintType: null,
               dynamicFields: {},
             });
           }}
           placeholder={tr(t, "CS_COMPLAINT_PICK_ONE", "Select…")}
-          options={options.map((o) => ({ value: o.relatedTo, label: o.relatedTo }))}
+          options={options.map((o) => ({ value: o.code, label: o.name }))}
         />
-        {data.relatedTo ? (
-          <FieldHelp ok>{data.relatedTo}</FieldHelp>
+        {data.caseRelatedToName ? (
+          <FieldHelp ok>{data.caseRelatedToName}</FieldHelp>
         ) : (
           <FieldHelp>{tr(t, "CS_RELATED_TO_HELP", "Choose the organization or entity responsible for the issue.")}</FieldHelp>
         )}
@@ -846,11 +902,11 @@ function Step2Location({ data, patch, resolvedTenant, t }: StepBodyProps) {
   );
 }
 
-function Step3Description({ data, patch, templateFields, suppressedCount, t }: StepBodyProps) {
+function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
   const fields = templateFields || [];
   const dyn = data.dynamicFields || {};
   const consents = data.consents || [];
-  const extended = !!data.templateType; // dispatcher flow active
+  const extended = !!data.caseRelatedTo; // dispatcher flow active
   const setDyn = (key: string, value: unknown) => patch({ dynamicFields: { ...dyn, [key]: value } });
   const toggleConsent = (code: string, on: boolean) =>
     patch({ consents: on ? [...consents, code] : consents.filter((c) => c !== code) });
@@ -886,7 +942,7 @@ function Step3Description({ data, patch, templateFields, suppressedCount, t }: S
         {fields.map((f) => {
           const val = (dyn[f.fieldKey] as string) ?? "";
           return (
-            <Field key={f.fieldKey} label={f.label} required={!!f.mandatory} htmlFor={`xf-${f.fieldKey}`}>
+            <Field key={f.fieldKey} label={f.labelKey ? tr(t, f.labelKey, f.label) : f.label} required={!!f.mandatory} htmlFor={`xf-${f.fieldKey}`}>
               {f.dataType === "textarea" ? (
                 <Textarea
                   id={`xf-${f.fieldKey}`}
@@ -897,6 +953,7 @@ function Step3Description({ data, patch, templateFields, suppressedCount, t }: S
               ) : (
                 <Input
                   id={`xf-${f.fieldKey}`}
+                  className={f.dataType === "date" ? "pgr-date-input" : undefined}
                   type={f.dataType === "date" ? "date" : f.dataType === "number" ? "number" : "text"}
                   maxLength={f.dataType === "date" || f.dataType === "number" ? undefined : f.maxLength}
                   value={val}
@@ -907,11 +964,25 @@ function Step3Description({ data, patch, templateFields, suppressedCount, t }: S
           );
         })}
 
-        {suppressedCount ? (
-          <p className="text-xs text-muted-foreground">
-            {suppressedCount} sensitive field{suppressedCount === 1 ? "" : "s"} (personal/encrypted) are not collected
-            here — they require secure handling planned for a later phase.
-          </p>
+        {extended ? (
+          <>
+            <Field label={tr(t, "PGR_EXT_COMPLAINANT_ADDRESS_LABEL", "Complainant Address")} htmlFor="xf-complainantAddress">
+              <Input
+                id="xf-complainantAddress"
+                maxLength={300}
+                value={data.complainantAddress ?? ""}
+                onChange={(e) => patch({ complainantAddress: e.target.value })}
+              />
+            </Field>
+            <Field label={tr(t, "PGR_EXT_EMAIL_LABEL", "Email Address")} htmlFor="xf-email">
+              <Input
+                id="xf-email"
+                type="email"
+                value={data.email ?? ""}
+                onChange={(e) => patch({ email: e.target.value })}
+              />
+            </Field>
+          </>
         ) : null}
 
         {extended ? (
@@ -931,13 +1002,13 @@ function Step3Description({ data, patch, templateFields, suppressedCount, t }: S
               <input
                 type="checkbox"
                 style={CHECKBOX_STYLE}
-                checked={!!data.prefersConfidentiality}
-                onChange={(e) => patch({ prefersConfidentiality: e.target.checked })}
+                checked={!!data.isConfidential}
+                onChange={(e) => patch({ isConfidential: e.target.checked })}
               />
               <span>
-                Mark this complaint as sensitive.{" "}
+                {tr(t, "PGR_EXT_IS_CONFIDENTIAL_LABEL", "Keep details confidential.")}{" "}
                 <span className="text-muted-foreground">
-                  This flags it for staff awareness; it does not yet hide or restrict who can view it.
+                  {tr(t, "PGR_EXT_IS_CONFIDENTIAL_HINT", "Visibility is enforced once secure handling is enabled; for now this flags the complaint for staff awareness.")}
                 </span>
               </span>
             </label>
@@ -1317,6 +1388,12 @@ const WIZARD_CSS = `
 @media (max-width: 480px) {
   .pgr-upload-row { grid-template-columns: repeat(2, 1fr); }
 }
+/* Date input: a global (health-css) rule makes the calendar indicator
+   position:absolute, so without position:relative on the input it escapes to
+   the nearest positioned ancestor (it was showing up near the stepper). Anchor
+   it back inside its own field and centre it vertically. */
+.pgr-date-input { position: relative; }
+.pgr-date-input::-webkit-calendar-picker-indicator { right: 10px !important; top: 50% !important; transform: translateY(-50%) !important; }
 `;
 
 // Contextual hint banner shown at the top of each step (themed, green-tinted).
@@ -1356,11 +1433,60 @@ function FieldHelp({ children, ok }: { children: React.ReactNode; ok?: boolean }
 }
 
 // Muted dashed placeholder shown before a category is chosen.
-function EmptyStateCard({ title, body }: { title: string; body: string }) {
+const HowToTagIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+    <line x1="7" y1="7" x2="7.01" y2="7" />
+  </svg>
+);
+const HowToPinIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);
+const HowToDocIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="16" y1="13" x2="8" y2="13" />
+    <line x1="16" y1="17" x2="8" y2="17" />
+  </svg>
+);
+
+// Shown before a category is picked: a short, friendly "how it works" guide
+// (mirrors the 3 wizard steps) — more useful than an empty placeholder.
+function EmptyStateCard({ t }: { t: (k: string) => string }) {
+  const circle: React.CSSProperties = {
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    width: "1.75rem", height: "1.75rem", borderRadius: "9999px",
+    background: "var(--color-primary-2-bg, #dcecdf)", color: PRIMARY, flexShrink: 0,
+  };
+  const steps = [
+    { icon: HowToTagIcon, title: tr(t, "CS_HOWTO_1_TITLE", "Choose a category"), body: tr(t, "CS_HOWTO_1_BODY", "Tell us what your complaint is about — it's routed to the right office automatically.") },
+    { icon: HowToPinIcon, title: tr(t, "CS_HOWTO_2_TITLE", "Mark the location"), body: tr(t, "CS_HOWTO_2_BODY", "Drop a pin on the map where the issue happened.") },
+    { icon: HowToDocIcon, title: tr(t, "CS_HOWTO_3_TITLE", "Add details & submit"), body: tr(t, "CS_HOWTO_3_BODY", "Describe the issue and attach any photos as evidence.") },
+  ];
   return (
     <div style={{ border: "1px dashed var(--color-border, #cbd5e1)", borderRadius: "0.75rem", padding: "1.5rem", background: "var(--color-surface-secondary, #f8fafc)" }}>
-      <div className="text-sm font-medium">{title}</div>
-      <div className="text-sm text-muted-foreground" style={{ marginTop: "0.15rem" }}>{body}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1.1rem" }}>
+        <span style={circle}>{TipBulbIcon}</span>
+        <div style={{ minWidth: 0 }}>
+          <div className="text-sm font-semibold" style={{ color: PRIMARY }}>{tr(t, "CS_HOWTO_TITLE", "How filing a complaint works")}</div>
+          <div className="text-xs text-muted-foreground">{tr(t, "CS_HOWTO_SUB", "Three quick steps — pick a category above to begin.")}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+        {steps.map((s, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
+            <span style={circle}>{s.icon}</span>
+            <div style={{ minWidth: 0 }}>
+              <div className="text-sm font-medium">{s.title}</div>
+              <div className="text-xs text-muted-foreground" style={{ marginTop: "0.1rem" }}>{s.body}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1395,7 +1521,7 @@ function StepComplaint(props: StepBodyProps) {
   const { data, relatedToOptions, catalogueLoading, dispatcherLoading, t } = props;
   const hasDispatcher = (relatedToOptions?.length ?? 0) > 0;
   if (dispatcherLoading) return <InlineSpinner />;
-  const showType = !hasDispatcher || !!data.relatedTo;
+  const showType = !hasDispatcher || !!data.caseRelatedTo;
   return (
     <div className="space-y-5">
       <HintBanner
@@ -1410,10 +1536,7 @@ function StepComplaint(props: StepBodyProps) {
       {showType ? (
         catalogueLoading ? <InlineSpinner /> : <Step0Type {...props} />
       ) : (
-        <EmptyStateCard
-          title={tr(t, "CS_EMPTY_TITLE", "More details will appear here")}
-          body={tr(t, "CS_EMPTY_BODY", "Once you select a category above, complaint type, sub type and other relevant options will be shown.")}
-        />
+        <EmptyStateCard t={t} />
       )}
     </div>
   );
@@ -1563,8 +1686,8 @@ const CreatePGRFlowV2: React.FC = () => {
       cacheTime: Infinity,
       select: (raw: any) =>
         ((raw?.["RAINMAKER-PGR"]?.ComplaintRelatedToMap || []) as RelatedToOption[])
-          .filter((o) => o?.active !== false && !!o?.relatedTo && !!o?.tenantId && !!o?.templateType)
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+          .filter((o) => o?.active !== false && !!o?.code && !!o?.name && !!o?.tenantCode)
+          .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
     },
     { schemaCode: "PGR_COMPLAINT_RELATED_TO_MAP", tenantId: stateTenant }
   );
@@ -1573,7 +1696,7 @@ const CreatePGRFlowV2: React.FC = () => {
   // Catalogue tenant: the authority-resolved sub-tenant once picked, else the
   // base tenant (legacy). Changing it re-fetches the hierarchy at that tenant.
   const resolvedTenant = formData.resolvedTenantId || baseTenant;
-  const templateType = formData.templateType;
+  const caseRelatedTo = formData.caseRelatedTo;
 
   // The single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes
   // + leaf complaint types) is the only complaint-type master now. We derive:
@@ -1634,9 +1757,9 @@ const CreatePGRFlowV2: React.FC = () => {
   }, [isMDMSFetching, resolvedTenant]);
   const catalogueStale = catalogueLoadedFor !== resolvedTenant;
 
-  // Dynamic "additional details" fields (RAINMAKER-PGR.ComplaintTemplateType @
-  // state tenant), keyed by the resolved templateType. FAIL-CLOSED: fields
-  // flagged pii/encrypted/maskable are excluded (no FE encryption/masking yet).
+  // Per-category templates (RAINMAKER-PGR.ComplaintTemplateType @ state tenant),
+  // keyed by caseRelatedTo. Each points at a JSON Schema (schemaRef) + the
+  // allowed evidence document types.
   const { data: templatesAll } = Digit.Hooks.useCustomMDMS(
     stateTenant,
     "RAINMAKER-PGR",
@@ -1645,25 +1768,50 @@ const CreatePGRFlowV2: React.FC = () => {
       cacheTime: Infinity,
       select: (raw: any) =>
         (raw?.["RAINMAKER-PGR"]?.ComplaintTemplateType || []) as Array<{
-          templateType: string;
+          caseRelatedTo: string;
           active?: boolean;
-          fields?: TemplateField[];
+          schemaRef?: string;
+          allowedDocumentTypes?: string[];
         }>,
     },
     { schemaCode: "PGR_COMPLAINT_TEMPLATE_TYPE", tenantId: stateTenant }
   );
-  // Resolve to the picked templateType's visible fields here (not in select) so
-  // it recomputes when templateType changes without re-fetching.
-  const { templateFields, suppressedCount } = React.useMemo(() => {
+  // The per-category JSON Schemas (RAINMAKER-PGR.ComplaintExtendedAttributeSchema),
+  // keyed by schemaRef — the FE renders the dynamic fields from these.
+  const { data: schemasAll } = Digit.Hooks.useCustomMDMS(
+    stateTenant,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintExtendedAttributeSchema" }],
+    {
+      cacheTime: Infinity,
+      select: (raw: any) => {
+        const rows = (raw?.["RAINMAKER-PGR"]?.ComplaintExtendedAttributeSchema || []) as Array<{
+          schemaRef: string;
+          schema?: any;
+        }>;
+        const byRef: Record<string, any> = {};
+        rows.forEach((r) => {
+          if (r?.schemaRef) byRef[r.schemaRef] = r.schema;
+        });
+        return byRef;
+      },
+    },
+    { schemaCode: "PGR_COMPLAINT_EXT_ATTR_SCHEMA", tenantId: stateTenant }
+  );
+  // Resolve the picked category → its template → its JSON Schema → renderable
+  // fields (recomputes on category change without re-fetching). NOTE: every schema
+  // field renders, incl. x-security ones — they are submitted in clear text until
+  // the backend encryption phase lands.
+  const { templateFields, evidenceDocType } = React.useMemo(() => {
     const entry = (templatesAll || []).find(
-      (x: any) => x?.active !== false && x?.templateType === templateType
+      (x: any) => x?.active !== false && x?.caseRelatedTo === caseRelatedTo
     );
-    const allFields: TemplateField[] = (entry?.fields || [])
-      .slice()
-      .sort((a: TemplateField, b: TemplateField) => (a.order ?? 0) - (b.order ?? 0));
-    const visible = allFields.filter((f) => !isProtectedField(f));
-    return { templateFields: visible, suppressedCount: allFields.length - visible.length };
-  }, [templatesAll, templateType]);
+    const schema = entry?.schemaRef ? (schemasAll || {})[entry.schemaRef] : null;
+    return {
+      templateFields: fieldsFromSchema(schema),
+      evidenceDocType: (entry?.allowedDocumentTypes && entry.allowedDocumentTypes[0]) || "EVIDENCE",
+    };
+  }, [templatesAll, schemasAll, caseRelatedTo]);
 
   const { mutate: createMutation } = Digit.Hooks.pgr.useCreateComplaint(resolvedTenant);
 
@@ -1692,7 +1840,7 @@ const CreatePGRFlowV2: React.FC = () => {
     switch (curId) {
       case "complaint": {
         // Dispatcher (if seeded) must be answered, then a leaf complaint type.
-        if (hasDispatcher && !formData.relatedTo) return false;
+        if (hasDispatcher && !formData.caseRelatedTo) return false;
         if (!isFieldValid(formData, "SelectComplaintType")) return false;
         // Sub-type is conditionally mandatory: if the chosen type has sub-services
         // in the same menuPath, one must be picked (mirrors legacy FormExplorer).
@@ -1716,7 +1864,7 @@ const CreatePGRFlowV2: React.FC = () => {
           if (f.mandatory && !String((formData.dynamicFields || {})[f.fieldKey] ?? "").trim()) return false;
         }
         // Both consents are required once an authority/template is in play.
-        if (formData.templateType && REQUIRED_CONSENTS.some((c) => !(formData.consents || []).includes(c.code))) {
+        if (formData.caseRelatedTo && REQUIRED_CONSENTS.some((c) => !(formData.consents || []).includes(c.code))) {
           return false;
         }
         return true;
@@ -1756,7 +1904,7 @@ const CreatePGRFlowV2: React.FC = () => {
       }
       setSubmitting(true);
       const user = Digit.UserService.getUser();
-      const payload = mapFormDataToRequest(formData, resolvedTenant, user?.info ?? user);
+      const payload = mapFormDataToRequest(formData, resolvedTenant, user?.info ?? user, evidenceDocType);
       createMutation(payload, {
         onError: () => {
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
@@ -1796,7 +1944,6 @@ const CreatePGRFlowV2: React.FC = () => {
     t,
     relatedToOptions: Array.isArray(relatedToOptions) ? relatedToOptions : [],
     templateFields,
-    suppressedCount,
     resolvedTenant,
     catalogueLoading: isMDMSLoading || catalogueStale,
     dispatcherLoading: isDispatcherLoading,

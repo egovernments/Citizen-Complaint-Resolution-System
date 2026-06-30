@@ -43,14 +43,16 @@ const OAUTH_BASIC = process.env.OAUTH_BASIC || "egov-user-client:";
 let TOKEN = process.env.TOKEN || "";
 const DB_CONTAINER = process.env.DB_CONTAINER || "docker-postgres";
 const NO_DB_FIX = process.env.NO_DB_FIX === "1";
+const RESEED = process.env.RESEED === "1"; // drop old schema defs + data for these masters first (use when the master SHAPE changed)
 
 const SCHEMA_FILE = path.join(
   __dirname, "..", "..",
   "utilities", "default-data-handler", "src", "main", "resources", "schema", "RAINMAKER-PGR.json"
 );
 const MASTERS = [
-  { code: "RAINMAKER-PGR.ComplaintRelatedToMap", file: path.join(__dirname, "seed", "ComplaintRelatedToMap.json"), uid: "templateType" },
-  { code: "RAINMAKER-PGR.ComplaintTemplateType", file: path.join(__dirname, "seed", "ComplaintTemplateType.json"), uid: "templateType" },
+  { code: "RAINMAKER-PGR.ComplaintRelatedToMap", file: path.join(__dirname, "seed", "ComplaintRelatedToMap.json"), uid: "code" },
+  { code: "RAINMAKER-PGR.ComplaintTemplateType", file: path.join(__dirname, "seed", "ComplaintTemplateType.json"), uid: "caseRelatedTo" },
+  { code: "RAINMAKER-PGR.ComplaintExtendedAttributeSchema", file: path.join(__dirname, "seed", "ComplaintExtendedAttributeSchema.json"), uid: "schemaRef" },
 ];
 
 function die(msg) { console.error("\n✗ " + msg + "\n"); process.exit(1); }
@@ -140,6 +142,35 @@ function printManualXrefFix(code) {
   console.error("      (prod: same SQL on the prod DB, with the egov DB password)");
 }
 
+// When the master SHAPE changes (e.g. ComplaintRelatedToMap relatedTo→code), the
+// already-registered schema defs + data must be removed first — registerSchemas/
+// seedMaster are idempotent and would otherwise keep the OLD shape (409 "already
+// present"). RESEED=1 clears them (local DB via docker exec; prod prints the SQL).
+function reseedCleanup() {
+  const codes = MASTERS.map((m) => `'${m.code}'`).join(",");
+  const sqlData = `DELETE FROM eg_mdms_data WHERE tenantid='${STATE}' AND schemacode IN (${codes});`;
+  const sqlSchema = `DELETE FROM eg_mdms_schema_definition WHERE tenantid='${STATE}' AND code IN (${codes});`;
+  if (NO_DB_FIX) {
+    console.error("  RESEED needs DB access but NO_DB_FIX=1. Run these once, then re-run WITHOUT RESEED:");
+    console.error("    " + sqlData);
+    console.error("    " + sqlSchema);
+    die("RESEED cleanup not performed (NO_DB_FIX=1).");
+  }
+  const pass = process.env.PGPASSWORD != null ? process.env.PGPASSWORD : process.env.PG_PROD_PASS;
+  const envArg = pass != null ? `-e PGPASSWORD=${JSON.stringify(pass)} ` : "";
+  for (const sql of [sqlData, sqlSchema]) {
+    try {
+      execSync(`docker exec ${envArg}${DB_CONTAINER} psql -U egov -d egov -c ${JSON.stringify(sql)}`, { stdio: "pipe" });
+    } catch {
+      console.error("  ✗ RESEED cleanup could not run (no DB access?). Run manually, then re-run without RESEED:");
+      console.error("    " + sqlData);
+      console.error("    " + sqlSchema);
+      die("RESEED cleanup failed.");
+    }
+  }
+  console.log("  ✓ removed old schema defs + data for " + MASTERS.map((m) => m.code.split(".")[1]).join(", "));
+}
+
 async function seedMaster(m) {
   let rows;
   try { rows = JSON.parse(fs.readFileSync(m.file, "utf8")); }
@@ -198,6 +229,12 @@ async function verify() {
   RI = { apiId: "seed-pgr-masters", ver: "1.0", action: "_create", authToken: TOKEN };
   console.log("  ✓ authenticated\n");
 
+  if (RESEED) {
+    console.log("[reseed] Removing old-shape schema defs + data first…");
+    reseedCleanup();
+    console.log();
+  }
+
   console.log("[2/4] Registering schemas…");
   await registerSchemas(loadSchemaDefs());
   await sleep(4000); // let the async schema-create persist before seeding
@@ -212,7 +249,7 @@ async function verify() {
   console.log();
 
   if (ok) {
-    console.log("✅ DONE — both masters present at '" + STATE + "'. Sub-tenants inherit them via state-fallback.");
+    console.log("✅ DONE — all masters present at '" + STATE + "'. Sub-tenants inherit them via state-fallback.");
     console.log("   Final check in the UI: <host>/digit-ui/citizen → File a Complaint (hard-refresh).");
     process.exit(0);
   }

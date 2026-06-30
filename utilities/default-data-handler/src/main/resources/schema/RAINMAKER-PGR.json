@@ -234,35 +234,44 @@
   {
     "tenantId": "{tenantid}",
     "code": "RAINMAKER-PGR.ComplaintRelatedToMap",
-    "description": "Citizen-facing dispatcher master. Maps a natural-language 'Complaint related to' option to a templateType (e.g. IGE | IGSAE) and the sub-tenant the complaint is filed under. The citizen never sees tenant codes; the UI resolves tenantId from the selected row. State-level master, shared across sub-tenants. Consumed by digit-ui-v2 useComplaintRelatedToMap.",
+    "description": "Citizen-facing complaint-category lookup. Maps a category `code` (e.g. IGE | IGSAE) to its display name, sub-tenant, and ordering. RAINMAKER-PGR.ComplaintTemplateType.caseRelatedTo references a `code` here. State-level master, shared across sub-tenants. Consumed by the citizen UI category selector.",
     "isActive": true,
     "definition": {
       "type": "object",
       "title": "Complaint Related To Map",
       "$schema": "http://json-schema.org/draft-07/schema#",
       "required": [
-        "relatedTo",
-        "templateType",
-        "tenantId"
+        "code",
+        "name",
+        "tenantCode"
       ],
       "x-unique": [
-        "relatedTo"
+        "code"
       ],
       "properties": {
-        "relatedTo": {
+        "code": {
           "type": "string",
-          "description": "Citizen-facing label shown in the 'Complaint related to' step, e.g. 'A public entity (ministry, council, municipality)'."
+          "description": "Unique category code (e.g. IGE | IGSAE). FK referenced by RAINMAKER-PGR.ComplaintTemplateType.caseRelatedTo."
         },
-        "templateType": {
+        "name": {
           "type": "string",
-          "description": "Discriminator (e.g. IGE | IGSAE). Joins to RAINMAKER-PGR.ComplaintTemplateType.templateType and drives the dynamic field set."
+          "description": "Full display name shown in the category selector (also the localization fallback)."
+        },
+        "shortName": {
+          "type": "string",
+          "description": "Abbreviated label for UI chips / dropdowns."
+        },
+        "tenantCode": {
+          "type": "string",
+          "description": "Sub-tenant the complaint is filed under (e.g. mz.ige, mz.igsae)."
         },
         "tenantId": {
           "type": "string",
-          "description": "Resolved sub-tenant the complaint is filed under (e.g. mz.ige, mz.igsae). Never shown to the citizen."
+          "description": "Parent state tenant (e.g. mz)."
         },
-        "order": {
-          "type": "number"
+        "displayOrder": {
+          "type": "number",
+          "description": "Sort order for UI lists."
         },
         "active": {
           "type": "boolean"
@@ -274,73 +283,74 @@
   {
     "tenantId": "{tenantid}",
     "code": "RAINMAKER-PGR.ComplaintTemplateType",
-    "description": "Per-templateType dynamic 'Additional details' fields for the complaint form, keyed by templateType (e.g. IGE | IGSAE). Each field has label/dataType/mandatory/maxLength/order (honoured by the FE). pii/maskable/encrypted classify confidentiality but need backend enforcement; the FE+MDMS build excludes flagged fields. schemaRef names the server-side validator. State-level; overridable per sub-tenant.",
+    "description": "Per-category template, keyed by caseRelatedTo (FK to ComplaintRelatedToMap.code). schemaRef points at the JSON Schema (registered as RAINMAKER-PGR.ComplaintExtendedAttributeSchema) that defines the dynamic fields; allowedDocumentTypes lists permitted evidence document-type codes; allowedViewerRoles lists roles that may view unmasked confidential data (backend-enforced). State-level; overridable per sub-tenant.",
     "isActive": true,
     "definition": {
       "type": "object",
       "title": "Complaint Template Type",
       "$schema": "http://json-schema.org/draft-07/schema#",
       "required": [
-        "templateType",
-        "fields"
+        "caseRelatedTo",
+        "schemaRef"
       ],
       "x-unique": [
-        "templateType"
+        "caseRelatedTo"
       ],
       "properties": {
-        "templateType": {
+        "caseRelatedTo": {
           "type": "string",
-          "description": "Discriminator (e.g. IGE | IGSAE). Joins to RAINMAKER-PGR.ComplaintRelatedToMap.templateType."
+          "description": "Category code (e.g. IGE | IGSAE). FK to RAINMAKER-PGR.ComplaintRelatedToMap.code."
         },
         "active": {
           "type": "boolean"
         },
         "schemaRef": {
           "type": "string",
-          "description": "Name of the JSON Schema validator for extended_attributes (e.g. IgeComplaintExtendedAttributes). Server-side use; ignored by the frontend."
+          "description": "Name of the JSON Schema defining this category's extended attributes (e.g. IgeComplaintExtendedAttributes). Resolved by the FE from RAINMAKER-PGR.ComplaintExtendedAttributeSchema and by the backend validator."
         },
-        "fields": {
+        "allowedDocumentTypes": {
           "type": "array",
-          "description": "Ordered dynamic fields rendered after the standard description/landmark inputs.",
           "items": {
-            "type": "object",
-            "required": [
-              "fieldKey",
-              "label",
-              "dataType"
-            ],
-            "properties": {
-              "fieldKey": {
-                "type": "string"
-              },
-              "label": {
-                "type": "string"
-              },
-              "dataType": {
-                "type": "string",
-                "description": "string | textarea | date | number | boolean"
-              },
-              "mandatory": {
-                "type": "boolean"
-              },
-              "maxLength": {
-                "type": "number"
-              },
-              "order": {
-                "type": "number"
-              },
-              "pii": {
-                "type": "boolean"
-              },
-              "maskable": {
-                "type": "boolean"
-              },
-              "encrypted": {
-                "type": "boolean"
-              }
-            },
-            "additionalProperties": false
-          }
+            "type": "string"
+          },
+          "description": "Permitted evidence documentType codes (e.g. EVIDENCE) from the DocumentType master."
+        },
+        "allowedViewerRoles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Roles permitted to view unmasked confidential complaint data (backend-enforced)."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.ComplaintExtendedAttributeSchema",
+    "description": "Holds the JSON Schema (draft-07 + x-security) for each schemaRef referenced by ComplaintTemplateType. The citizen UI fetches the matching row by schemaRef and renders the dynamic fields from schema.properties (x-order / x-widget / x-label-key UI hints, required, x-security). State-level.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Complaint Extended Attribute Schema",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "schemaRef",
+        "schema"
+      ],
+      "x-unique": [
+        "schemaRef"
+      ],
+      "properties": {
+        "schemaRef": {
+          "type": "string",
+          "description": "Schema name (matches ComplaintTemplateType.schemaRef), e.g. IgeComplaintExtendedAttributes."
+        },
+        "schema": {
+          "type": "object",
+          "description": "The full draft-07 JSON Schema object: properties (with x-order, x-widget, x-label-key), required, and a top-level x-security array.",
+          "additionalProperties": true
         }
       },
       "additionalProperties": false

@@ -1,28 +1,4 @@
 [
-  {
-    "templateType": "IGE",
-    "active": true,
-    "schemaRef": "IgeComplaintExtendedAttributes",
-    "fields": [
-      { "fieldKey": "caseRelatedTo",  "label": "Case Related To",  "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 500,  "order": 1 },
-      { "fieldKey": "instituteName",  "label": "Institute Name",   "dataType": "string", "mandatory": true,  "pii": false, "maskable": false, "encrypted": false, "maxLength": 300,  "order": 2 },
-      { "fieldKey": "witnessName",    "label": "Witness Name",     "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 200,  "order": 3 },
-      { "fieldKey": "witnessAddress", "label": "Witness Address",  "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 1000, "order": 4 },
-      { "fieldKey": "witnessNote",    "label": "Witness Note",     "dataType": "textarea", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 5 }
-    ]
-  },
-  {
-    "templateType": "IGSAE",
-    "active": true,
-    "schemaRef": "IgsaeComplaintExtendedAttributes",
-    "fields": [
-      { "fieldKey": "caseRelatedTo",  "label": "Case Related To", "dataType": "string", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 500,  "order": 1 },
-      { "fieldKey": "dateOfFact",     "label": "Date of Fact",    "dataType": "date",   "mandatory": true,  "pii": false, "maskable": false, "encrypted": false,                    "order": 2 },
-      { "fieldKey": "entityName",     "label": "Entity Name",     "dataType": "string", "mandatory": true,  "pii": false, "maskable": false, "encrypted": false, "maxLength": 300,  "order": 3 },
-      { "fieldKey": "entityAddress",  "label": "Entity Address",  "dataType": "string", "mandatory": true,  "pii": false, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 4 },
-      { "fieldKey": "witnessName",    "label": "Witness Name",    "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 200,  "order": 5 },
-      { "fieldKey": "witnessAddress", "label": "Witness Address", "dataType": "string", "mandatory": false, "pii": true,  "maskable": true,  "encrypted": true,  "maxLength": 1000, "order": 6 },
-      { "fieldKey": "witnessNote",    "label": "Witness Note",    "dataType": "textarea", "mandatory": false, "pii": false, "maskable": false, "encrypted": false, "maxLength": 1000, "order": 7 }
-    ]
-  }
+  { "caseRelatedTo": "IGE",   "active": true, "schemaRef": "IgeComplaintExtendedAttributes",   "allowedDocumentTypes": ["EVIDENCE"], "allowedViewerRoles": ["CONFIDENTIAL_COMPLAINT_VIEWER"] },
+  { "caseRelatedTo": "IGSAE", "active": true, "schemaRef": "IgsaeComplaintExtendedAttributes", "allowedDocumentTypes": ["EVIDENCE"], "allowedViewerRoles": ["CONFIDENTIAL_COMPLAINT_VIEWER"] }
 ]

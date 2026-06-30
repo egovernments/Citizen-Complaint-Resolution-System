@@ -14,8 +14,9 @@ master datasets drive it:
 
 | Master | Plain meaning |
 |---|---|
-| `RAINMAKER-PGR.ComplaintRelatedToMap` | The dropdown options → which authority/sub-tenant each routes to. |
-| `RAINMAKER-PGR.ComplaintTemplateType` | The extra fields shown for each authority. |
+| `RAINMAKER-PGR.ComplaintRelatedToMap` | The category dropdown (`code`/`name`/`shortName`) → which sub-tenant each routes to. |
+| `RAINMAKER-PGR.ComplaintTemplateType` | Per category (`caseRelatedTo`): which JSON Schema (`schemaRef`) + allowed document types. |
+| `RAINMAKER-PGR.ComplaintExtendedAttributeSchema` | The JSON Schema (per `schemaRef`) that defines the dynamic fields the form renders. |
 
 - **Tenant** = an org/area: a **state** (e.g. `mz`) and **sub-tenants** under it (`mz.ige`, `mz.igsae`).
 - **Key fact:** these are **state-level**. Seed them **once at the state** (`mz`); every sub-tenant
@@ -84,7 +85,7 @@ automatically — the command is the same.)*
    can't happen.
 3. **Seed data** — idempotent; if a *pre-existing* schema still has the x-ref quirk it **repairs it
    automatically** (via the DB) and retries.
-4. **Verify** — confirms both masters actually have rows at the state.
+4. **Verify** — confirms all three masters actually have rows at the state.
 
 **Expected output:**
 ```
@@ -93,13 +94,23 @@ automatically — the command is the same.)*
 [3/4] Seeding data…                      ✓ data … created / already present
 [4/4] Verifying…                         ✓ …ComplaintRelatedToMap: 2 row(s)
                                          ✓ …ComplaintTemplateType: 2 row(s)
-✅ DONE — both masters present at 'mz'. Sub-tenants inherit them via state-fallback.
+                                         ✓ …ComplaintExtendedAttributeSchema: 2 row(s)
+✅ DONE — all masters present at 'mz'. Sub-tenants inherit them via state-fallback.
 ```
 
 **If it stops with `✗`** it prints the exact reason **and the fix** (e.g. the one x-ref SQL line if
 it couldn't reach the DB to auto-repair). Apply it, re-run — the script is safe to re-run.
 
 > It's **idempotent**: re-running just reports "already present". No harm.
+
+> **Re-seeding after a shape change (`RESEED=1`).** If a master was *already* seeded with an older
+> shape (e.g. before the `code` / `caseRelatedTo` rename), a plain re-run keeps the old shape
+> (idempotent → "already present"). To replace it, run once with `RESEED=1` — it first removes the
+> old schema definitions + data for these masters, then re-registers and re-seeds:
+> ```bash
+> RESEED=1 BASE_URL=$BASE_URL TENANT=$TENANT node docs/migration/seed-pgr-masters.cjs
+> ```
+> Locally it clears them via the DB container; on prod it prints the exact `DELETE` SQL to run.
 
 ---
 
@@ -148,22 +159,24 @@ baked into the shared product defaults — that would leak onto unrelated deploy
 The script does all of this for you. Use this only to do it by hand or to understand it.
 
 ```bash
-# 1) register the two schemas at the state
-TENANT=$TENANT BASE_URL=$BASE_URL SCHEMA_CODES=RAINMAKER-PGR.ComplaintRelatedToMap,RAINMAKER-PGR.ComplaintTemplateType \
+# 1) register the three schemas at the state
+TENANT=$TENANT BASE_URL=$BASE_URL SCHEMA_CODES=RAINMAKER-PGR.ComplaintRelatedToMap,RAINMAKER-PGR.ComplaintTemplateType,RAINMAKER-PGR.ComplaintExtendedAttributeSchema \
   node docs/migration/install-schemas.cjs
 
 # 2) ONLY if data-create later errors with ClassCastException (x-ref quirk on a pre-existing schema):
 docker exec docker-postgres psql -U egov -d egov -c \
   "UPDATE eg_mdms_schema_definition SET definition=jsonb_set(definition,'{x-ref-schema}','[]'::jsonb) \
-   WHERE tenantid='$TENANT' AND code IN ('RAINMAKER-PGR.ComplaintRelatedToMap','RAINMAKER-PGR.ComplaintTemplateType') \
+   WHERE tenantid='$TENANT' AND code IN ('RAINMAKER-PGR.ComplaintRelatedToMap','RAINMAKER-PGR.ComplaintTemplateType','RAINMAKER-PGR.ComplaintExtendedAttributeSchema') \
      AND jsonb_typeof(definition->'x-ref-schema')='object';"
 #   (prod: same SQL on the prod DB with the egov password)
 
-# 3) seed the data
+# 3) seed the data (UID key per master: code / caseRelatedTo / schemaRef)
 TENANT=$TENANT BASE_URL=$BASE_URL SCHEMA=RAINMAKER-PGR.ComplaintRelatedToMap \
-  FILE=docs/migration/seed/ComplaintRelatedToMap.json UID_KEY=templateType node docs/migration/seed-data.cjs
+  FILE=docs/migration/seed/ComplaintRelatedToMap.json UID_KEY=code node docs/migration/seed-data.cjs
 TENANT=$TENANT BASE_URL=$BASE_URL SCHEMA=RAINMAKER-PGR.ComplaintTemplateType \
-  FILE=docs/migration/seed/ComplaintTemplateType.json UID_KEY=templateType node docs/migration/seed-data.cjs
+  FILE=docs/migration/seed/ComplaintTemplateType.json UID_KEY=caseRelatedTo node docs/migration/seed-data.cjs
+TENANT=$TENANT BASE_URL=$BASE_URL SCHEMA=RAINMAKER-PGR.ComplaintExtendedAttributeSchema \
+  FILE=docs/migration/seed/ComplaintExtendedAttributeSchema.json UID_KEY=schemaRef node docs/migration/seed-data.cjs
 
 # 4) verify
 docker exec docker-postgres psql -U egov -d egov -tA -c \

@@ -1,4 +1,4 @@
 [
-  { "relatedTo": "A public entity (ministry, council, municipality)",      "templateType": "IGE",   "tenantId": "mz.ige",   "order": 1, "active": true },
-  { "relatedTo": "An economic agent (company, trader, service provider)",  "templateType": "IGSAE", "tenantId": "mz.igsae", "order": 2, "active": true }
+  { "code": "IGE",   "name": "Inspeccão Geral do Estado",                                "shortName": "IGE",   "tenantCode": "mz.ige",   "tenantId": "mz", "displayOrder": 1, "active": true },
+  { "code": "IGSAE", "name": "Inspecção-Geral dos Serviços de Administração do Estado", "shortName": "IGSAE", "tenantCode": "mz.igsae", "tenantId": "mz", "displayOrder": 2, "active": true }
 ]
