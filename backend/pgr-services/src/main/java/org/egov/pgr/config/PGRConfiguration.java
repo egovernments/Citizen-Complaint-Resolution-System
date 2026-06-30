@@ -272,4 +272,14 @@ public class PGRConfiguration {
     @Value("${pgr.dashboard.refresh.interval.ms:300000}")
     private Long dashboardRefreshIntervalMs;
 
+    // Encryption (egov-enc-service) — no keyId; resolved by tenantId inside the service
+    @Value("${egov.enc.host:http://egov-enc-service:1234}")
+    private String encHost;
+
+    @Value("${egov.enc.encrypt.endpoint:/egov-enc-service/crypto/v1/_encrypt}")
+    private String encEncryptEndpoint;
+
+    @Value("${egov.enc.decrypt.endpoint:/egov-enc-service/crypto/v1/_decrypt}")
+    private String encDecryptEndpoint;
+
 }

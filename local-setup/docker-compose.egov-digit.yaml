@@ -1387,6 +1387,8 @@ services:
         condition: service_healthy
       egov-localization:
         condition: service_healthy
+      egov-enc-service:
+        condition: service_healthy
       otel-collector:
         condition: service_started
     volumes:
@@ -1417,6 +1419,7 @@ services:
       EGOV_BOUNDARY_HOST: http://boundary-service:8081/
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
+      EGOV_ENC_HOST: http://egov-enc-service:1234
       EGOV_UI_APP_HOST: http://localhost:18080
       # pgr-services' EscalationScheduler resolves the tenant to query
       # MDMS at from the KEYS of this map (PGRConfiguration#getUiAppHostMap,

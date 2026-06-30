@@ -10,6 +10,8 @@ import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.PGRUtils;
 import org.egov.pgr.validator.ServiceRequestValidator;
+import org.egov.pgr.web.models.ComplaintTemplateTypeConfig;
+import org.egov.pgr.web.models.ExtendedAttributes;
 import org.egov.pgr.web.models.Service;
 import org.egov.pgr.web.models.ServiceWrapper;
 import org.egov.pgr.web.models.RequestSearchCriteria;
@@ -23,6 +25,9 @@ import java.util.*;
 import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_SEARCH;
 import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_NAME_SEARCH;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICENAME_SEARCH;
+import static org.egov.pgr.util.PGRConstants.ROLE_CONFIDENTIAL_VIEWER;
+
+import java.util.stream.Collectors;
 
 @Slf4j
 @org.springframework.stereotype.Service
@@ -49,15 +54,20 @@ public class PGRService {
     private MDMSUtils mdmsUtils;
 
     private ComplaintDomainEventService complaintDomainEventService;
-    
+
     private PGRUtils pgrUtils;
 
+    private ExtendedAttributesValidationService extendedAttributesValidationService;
+
+    private EncryptionDecryptionService encryptionDecryptionService;
 
     @Autowired
     public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
                       ServiceRequestValidator serviceRequestValidator, ServiceRequestValidator validator, Producer producer,
                       PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils,
-                      ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils) {
+                      ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils,
+                      ExtendedAttributesValidationService extendedAttributesValidationService,
+                      EncryptionDecryptionService encryptionDecryptionService) {
         this.enrichmentService = enrichmentService;
         this.userService = userService;
         this.workflowService = workflowService;
@@ -69,6 +79,8 @@ public class PGRService {
         this.mdmsUtils = mdmsUtils;
         this.complaintDomainEventService = complaintDomainEventService;
         this.pgrUtils = pgrUtils;
+        this.extendedAttributesValidationService = extendedAttributesValidationService;
+        this.encryptionDecryptionService = encryptionDecryptionService;
     }
 
 
@@ -93,10 +105,33 @@ public class PGRService {
 		backend.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
 		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
 		service.setAdditionalDetail(merged);
+
+		// Extended attributes: validate → encrypt → sync contact details to User Service
+		ExtendedAttributes ext = service.getExtendedAttributes();
+		ComplaintTemplateTypeConfig cfg = null;
+		if (ext != null) {
+			if (ext.getIsConfidential() == null) ext.setIsConfidential(false);
+			cfg = mdmsUtils.fetchComplaintTemplateTypeConfig(
+					request.getRequestInfo(), tenantId, ext.getCaseRelatedTo());
+			if (cfg == null)
+				throw new CustomException("INVALID_CASE_RELATED_TO",
+						"No MDMS config found for caseRelatedTo: " + ext.getCaseRelatedTo());
+			extendedAttributesValidationService.validate(ext, cfg, service, request.getRequestInfo(), tenantId);
+			service.setExtendedAttributes(
+					encryptionDecryptionService.encrypt(ext, cfg, tenantId));
+			enrichmentService.enrichUserContactDetails(request);
+		}
+
 		complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
 
 		producer.push(tenantId, config.getCreateTopic(), request);
 		producer.push(tenantId, config.getInboxCreateTopic(), request);
+
+		// Decrypt for API response so caller sees plain text
+		if (service.getExtendedAttributes() != null)
+			service.setExtendedAttributes(
+					encryptionDecryptionService.decrypt(service.getExtendedAttributes(), cfg));
+
 		return request;
 	}
 
@@ -134,8 +169,44 @@ public class PGRService {
         if(CollectionUtils.isEmpty(serviceWrappers))
             return new ArrayList<>();;
 
-        userService.enrichUsers(serviceWrappers);
+        userService.enrichUsers(serviceWrappers, requestInfo);
         List<ServiceWrapper> enrichedServiceWrappers = workflowService.enrichWorkflow(requestInfo,serviceWrappers);
+
+        // Fetch MDMS configs for all unique category types in this result set (single batch per type).
+        String tenantIdForMdms = criteria.getTenantId() != null
+                ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+        Set<String> categoryTypes = enrichedServiceWrappers.stream()
+                .map(w -> w.getService().getExtendedAttributes())
+                .filter(Objects::nonNull)
+                .map(ExtendedAttributes::getCaseRelatedTo)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, ComplaintTemplateTypeConfig> configCache = new HashMap<>();
+        for (String cat : categoryTypes) {
+            ComplaintTemplateTypeConfig cfg = mdmsUtils.fetchComplaintTemplateTypeConfig(requestInfo, tenantIdForMdms, cat);
+            if (cfg != null) configCache.put(cat, cfg);
+        }
+
+        // Decrypt and conditionally mask extendedAttributes for each result.
+        // Viewer roles come from MDMS allowedViewerRoles; fallback to hardcoded constant if not configured.
+        // All-or-nothing rule: confidential + no matching role → mask ALL fields + citizen PII, skip decryption.
+        // Creator self-access exception: complaint owner always sees plain text regardless of confidentiality.
+        String callerUuid = requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getUuid() : null;
+        for (ServiceWrapper wrapper : enrichedServiceWrappers) {
+            Service svc = wrapper.getService();
+            if (svc.getExtendedAttributes() == null) continue;
+            ComplaintTemplateTypeConfig cfg = configCache.get(svc.getExtendedAttributes().getCaseRelatedTo());
+            List<String> viewerRoles = (cfg != null && !CollectionUtils.isEmpty(cfg.getAllowedViewerRoles()))
+                    ? cfg.getAllowedViewerRoles()
+                    : List.of(ROLE_CONFIDENTIAL_VIEWER);
+            boolean isCreator = callerUuid != null && callerUuid.equals(svc.getAccountId());
+            if (svc.getExtendedAttributes().getIsConfidentialSafe() && !isCreator && !hasAnyRole(requestInfo, viewerRoles)) {
+                encryptionDecryptionService.maskAll(svc.getExtendedAttributes());
+            } else {
+                encryptionDecryptionService.decrypt(svc.getExtendedAttributes(), cfg);
+            }
+        }
+
         Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
         for(ServiceWrapper svc : enrichedServiceWrappers){
             if(sortedWrappers.containsKey(svc.getService().getAuditDetails().getCreatedTime())){
@@ -175,9 +246,31 @@ public class PGRService {
 		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
 		updateService.setAdditionalDetail(merged);
 
+		// Extended attributes: validate → re-encrypt → sync contact details to User Service
+		ExtendedAttributes updatedExt = updateService.getExtendedAttributes();
+		ComplaintTemplateTypeConfig cfg = null;
+		if (updatedExt != null) {
+			if (updatedExt.getIsConfidential() == null) updatedExt.setIsConfidential(false);
+			cfg = mdmsUtils.fetchComplaintTemplateTypeConfig(
+					request.getRequestInfo(), tenantId, updatedExt.getCaseRelatedTo());
+			if (cfg == null)
+				throw new CustomException("INVALID_CASE_RELATED_TO",
+						"No MDMS config found for caseRelatedTo: " + updatedExt.getCaseRelatedTo());
+			extendedAttributesValidationService.validate(updatedExt, cfg, updateService, request.getRequestInfo(), tenantId);
+			updateService.setExtendedAttributes(
+					encryptionDecryptionService.encrypt(updatedExt, cfg, tenantId));
+			enrichmentService.enrichUserContactDetails(request);
+		}
+
         complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
         producer.push(tenantId,config.getUpdateTopic(),request);
         producer.push(tenantId,config.getInboxUpdateTopic(),request);
+
+		// Decrypt for API response so caller sees plain text
+		if (updateService.getExtendedAttributes() != null)
+			updateService.setExtendedAttributes(
+					encryptionDecryptionService.decrypt(updateService.getExtendedAttributes(), cfg));
+
         return request;
     }
 
@@ -214,7 +307,7 @@ public class PGRService {
             return new ArrayList<>();
         }
 
-        userService.enrichUsers(serviceWrappers);
+        userService.enrichUsers(serviceWrappers, requestInfo);
         List<ServiceWrapper> enrichedServiceWrappers = workflowService.enrichWorkflow(requestInfo, serviceWrappers);
 
         Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
@@ -247,6 +340,13 @@ public class PGRService {
 		
 		return Integer.valueOf(config.getComplaintTypes());
 	}
+
+    private boolean hasAnyRole(RequestInfo requestInfo, List<String> roleCodes) {
+        if (requestInfo == null || requestInfo.getUserInfo() == null
+                || requestInfo.getUserInfo().getRoles() == null) return false;
+        return requestInfo.getUserInfo().getRoles().stream()
+                .anyMatch(r -> roleCodes.contains(r.getCode()));
+    }
 
     private String getDepartmentFromMDMS(ServiceRequest request, Object mdmsData) {
 
