@@ -74,8 +74,21 @@ public class ExtendedAttributes {
 
     // ── service-layer helpers ────────────────────────────────────────────────
 
+    /** Unified read: checks named first-class fields before falling back to dynamicFields. */
     public Object getField(String key) {
+        if ("email".equals(key)) return email;
+        if ("complainantAddress".equals(key)) return complainantAddress;
         return dynamicFields != null ? dynamicFields.get(key) : null;
+    }
+
+    /** Shallow copy of metadata + dynamicFields for API response (excludes transient user-service fields). */
+    public ExtendedAttributes copy() {
+        ExtendedAttributes c = new ExtendedAttributes();
+        c.setIsConfidential(this.isConfidential);
+        c.setCaseRelatedTo(this.caseRelatedTo);
+        c.setSchemaVersion(this.schemaVersion);
+        if (this.dynamicFields != null) this.dynamicFields.forEach(c::putField);
+        return c;
     }
 
     public void putField(String key, Object value) {

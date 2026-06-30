@@ -1,12 +1,9 @@
 package org.egov.pgr.service;
 
-import org.egov.common.contract.request.RequestInfo;
-import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.web.models.ComplaintTemplateTypeConfig;
 import org.egov.pgr.web.models.ExtendedAttributes;
 import org.egov.pgr.web.models.Service;
 import org.egov.tracer.model.CustomException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -16,20 +13,12 @@ import java.util.*;
 @Component
 public class ExtendedAttributesValidationService {
 
-    private final MDMSUtils mdmsUtils;
-
-    @Autowired
-    public ExtendedAttributesValidationService(MDMSUtils mdmsUtils) {
-        this.mdmsUtils = mdmsUtils;
-    }
-
-    public void validate(ExtendedAttributes ext, ComplaintTemplateTypeConfig config,
-                         Service service, RequestInfo requestInfo, String tenantId) {
+    /**
+     * Validates extendedAttributes after the caller has already confirmed cfg != null,
+     * so caseRelatedTo validity is guaranteed — no second MDMS round-trip needed.
+     */
+    public void validate(ExtendedAttributes ext, ComplaintTemplateTypeConfig config, Service service) {
         if (ext == null) return;
-
-        if (!mdmsUtils.isValidCaseRelatedTo(requestInfo, tenantId, ext.getCaseRelatedTo()))
-            throw new CustomException("INVALID_CASE_RELATED_TO",
-                    "caseRelatedTo must be an active code in ComplaintRelatedToMap: " + ext.getCaseRelatedTo());
 
         if (service.getDescription() == null || service.getDescription().isBlank())
             throw new CustomException("DESCRIPTION_REQUIRED", "description is mandatory");

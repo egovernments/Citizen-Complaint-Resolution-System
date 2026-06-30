@@ -7,6 +7,7 @@ import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.web.models.ComplaintTemplateTypeConfig;
 import org.egov.pgr.web.models.ExtendedAttributes;
+import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -44,6 +45,9 @@ public class EncryptionDecryptionService {
         this.multiStateInstanceUtil = multiStateInstanceUtil;
     }
 
+    // Fields owned by User Service — never encrypted into JSONB here.
+    private static final Set<String> USER_SERVICE_FIELDS = Set.of("email", "complainantAddress");
+
     /**
      * Encrypts fields listed in cfg.xSecurity. No encryptedFields list is stored —
      * the schema is the source of truth, read again at decrypt time.
@@ -59,6 +63,7 @@ public class EncryptionDecryptionService {
         List<String> plainValues = new ArrayList<>();
 
         for (String fieldKey : secureFields) {
+            if (USER_SERVICE_FIELDS.contains(fieldKey)) continue; // User Service handles these
             Object raw = ext.getField(fieldKey);
             if (raw == null) continue;
             encKeys.add(fieldKey);
@@ -68,10 +73,8 @@ public class EncryptionDecryptionService {
         if (plainValues.isEmpty()) return ext;
 
         List<String> ciphers = encryptWithFallback(plainValues, tenantId);
-        if (ciphers != null) {
-            for (int i = 0; i < encKeys.size(); i++)
-                ext.putField(encKeys.get(i), i < ciphers.size() ? ciphers.get(i) : plainValues.get(i));
-        }
+        for (int i = 0; i < encKeys.size(); i++)
+            ext.putField(encKeys.get(i), i < ciphers.size() ? ciphers.get(i) : plainValues.get(i));
 
         return ext;
     }
@@ -135,9 +138,10 @@ public class EncryptionDecryptionService {
         try {
             return callEncryptBatch(plainValues, stateTenant);
         } catch (Exception stateEx) {
-            log.error("Encryption failed for both tenant '{}' and state tenant '{}'; storing plain text",
-                    tenantId, stateTenant, stateEx);
-            return null;
+            // Refuse to store plaintext PII — a silent fallback would corrupt data on the next decrypt.
+            throw new CustomException("ENCRYPTION_FAILED",
+                    "egov-enc-service unavailable; rejecting to prevent plaintext PII storage: "
+                            + stateEx.getMessage());
         }
     }
 

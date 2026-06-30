@@ -16,9 +16,12 @@ import org.egov.pgr.web.models.ServiceRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import org.egov.tracer.model.CustomException;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_MODULE_NAME;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICEDEF;
@@ -34,6 +37,15 @@ import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_SCHEMA;
 @Slf4j
 @Component
 public class MDMSUtils {
+
+    // Only allow safe alphanumeric codes in JSONPath filter expressions to prevent injection.
+    private static final Pattern SAFE_CODE_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{1,50}$");
+
+    private static void validateCodeForJsonPath(String code, String paramName) {
+        if (code != null && !SAFE_CODE_PATTERN.matcher(code).matches())
+            throw new CustomException("INVALID_INPUT",
+                    paramName + " contains invalid characters: " + code);
+    }
 
     // serviceCode -> SLA millis (from RAINMAKER-PGR.ComplaintHierarchy LEAF rows' slaHours),
     // cached per state-level tenant. Backs per-complaint-type SLA ordering of the inbox (issue
@@ -185,6 +197,7 @@ public class MDMSUtils {
      */
     public boolean isValidCaseRelatedTo(RequestInfo requestInfo, String tenantId, String code) {
         if (code == null) return false;
+        validateCodeForJsonPath(code, "caseRelatedTo");
         String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
         try {
             boolean valid = doIsValidCaseRelatedTo(requestInfo, tenantId, code);
@@ -228,6 +241,7 @@ public class MDMSUtils {
                                                         String tenantId,
                                                         String caseRelatedTo) {
         if (caseRelatedTo == null) return null;
+        validateCodeForJsonPath(caseRelatedTo, "caseRelatedTo");
         String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
 
         ComplaintTemplateTypeConfig result = doFetchComplaintTemplateTypeConfig(requestInfo, tenantId, caseRelatedTo);
@@ -275,8 +289,9 @@ public class MDMSUtils {
 
             if (cfg.getSchemaRef() != null) {
                 try {
+                    String safeSchemaRef = cfg.getSchemaRef().replace("'", "\\'");
                     String schemaPath = "$.MdmsRes.RAINMAKER-PGR." + MDMS_COMPLAINT_SCHEMA
-                            + "[?(@.name=='" + cfg.getSchemaRef() + "')]";
+                            + "[?(@.name=='" + safeSchemaRef + "')]";
                     List<Object> rawSchemas = JsonPath.read(mdmsResult, schemaPath);
                     if (rawSchemas != null && !rawSchemas.isEmpty()) {
                         ComplaintTemplateTypeConfig schema = objectMapper.convertValue(
