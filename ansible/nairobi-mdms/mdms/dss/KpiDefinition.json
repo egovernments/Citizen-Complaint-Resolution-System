@@ -1672,7 +1672,12 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "PGR_SUPERVISOR",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "SUPERVISOR"
+        ]
       }
     }
   },

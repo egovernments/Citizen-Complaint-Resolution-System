@@ -170,13 +170,17 @@ public class AnalyticsController {
     }
 
     private Set<String> extractRoles(RequestInfo requestInfo) {
-        if (requestInfo == null) return Collections.emptySet();
+        // Mirror AnalyticsService's public floor: an anonymous / role-less caller degrades
+        // to PUBLIC so the catalog endpoints expose only PUBLIC tiles (not every
+        // visibleTo:[] tile). Keeps /packs + /catalog/_search consistent with /_query.
+        if (requestInfo == null) return Set.of(AnalyticsService.PUBLIC_ROLE);
         User u = requestInfo.getUserInfo();
-        if (u == null || u.getRoles() == null) return Collections.emptySet();
-        return u.getRoles().stream()
+        if (u == null || u.getRoles() == null) return Set.of(AnalyticsService.PUBLIC_ROLE);
+        Set<String> roles = u.getRoles().stream()
                 .filter(r -> r != null && r.getCode() != null)
                 .map(Role::getCode)
                 .collect(Collectors.toSet());
+        return roles.isEmpty() ? Set.of(AnalyticsService.PUBLIC_ROLE) : roles;
     }
 
     private Map<String,Object> error(Exception e){

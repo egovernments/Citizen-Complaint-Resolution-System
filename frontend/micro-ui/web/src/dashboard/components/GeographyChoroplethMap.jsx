@@ -306,7 +306,9 @@ const GeographyChoroplethMap = ({
   }, [focusedWard, drillTrail]);
 
   const displayLayers = useMemo(() => {
-    const layers = buildMapDisplayLayers(activeJoined, drillLevel, complaintPins, drillHierarchyIndex);
+    // Pass [] for pins here so buildMapDisplayLayers doesn't run the (heavy) pin
+    // resolution against the active level — we place pins by ward code below.
+    const layers = buildMapDisplayLayers(activeJoined, drillLevel, [], drillHierarchyIndex);
     // Pins are placed by ward code, so position them via the ward-level join even when
     // a parent level (county/sub-county) is rendered — otherwise every pin is dropped.
     layers.complaintPins = complaintPins.length
