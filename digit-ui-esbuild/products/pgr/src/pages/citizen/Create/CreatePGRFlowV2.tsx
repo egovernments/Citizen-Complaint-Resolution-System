@@ -284,18 +284,21 @@ function getEffectiveServiceCode(
 function mapFormDataToRequest(formData: FormData, tenantId: string, user: any, documentType = "EVIDENCE") {
   const timestamp = Date.now();
   const userInfo = user;
-  // FLAT extendedAttributes (doc §5) ride inside the EXISTING additionalDetail —
-  // there is no top-level service.extendedAttributes column in this build (that
-  // is the backend phase). Added only when a category was resolved (legacy flow
-  // unchanged). NOTE: x-security fields are submitted in clear text until the
-  // backend encryption phase lands.
+  // FLAT extendedAttributes (doc §2/§5) ride at the TOP LEVEL of service —
+  // jsonPath $.service.extendedAttributes (a dedicated JSONB column), NOT nested
+  // under additionalDetail. Built only when a category was resolved (legacy flow
+  // unchanged). complainantAddress/email travel here too but the backend strips
+  // them to the User Service (eg_user_address / eg_user.emailaddress) — they are
+  // not stored as category data. NOTE: x-security fields are submitted in clear
+  // text until the backend encryption phase lands.
   const additionalDetail: Record<string, unknown> = {};
+  let extendedAttributes: Record<string, unknown> | undefined;
   if (formData?.caseRelatedTo) {
     const sct: any = formData.SelectComplaintType;
     const sst: any = formData.SelectSubComplaintType;
     const lvl1 = sct?.code ?? sct?.name;
     const lvl2 = sst?.code ?? sst?.name;
-    additionalDetail.extendedAttributes = {
+    extendedAttributes = {
       caseRelatedTo: formData.caseRelatedTo,
       isConfidential: !!formData.isConfidential,
       schemaVersion: "1.0",
@@ -338,6 +341,9 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any, d
           longitude: geoLocation.lng ?? null,
         }),
       },
+      // Top-level service.extendedAttributes (doc jsonPath $.service.extendedAttributes).
+      // Attached only when a category resolved; legacy/no-category flow is unchanged.
+      ...(extendedAttributes ? { extendedAttributes } : {}),
       additionalDetail: JSON.stringify(additionalDetail),
       auditDetails: {
         createdBy: user?.uuid,
