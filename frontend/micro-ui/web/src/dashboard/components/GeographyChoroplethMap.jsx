@@ -29,6 +29,7 @@ import {
   getMapZoomLevelLabel,
   getWardFeaturesInHierarchyGroup,
   resolveDrillZoomFeatures,
+  resolveComplaintPinPositions,
   getMapCityLabel,
   isWardDrillLevel,
   joinWardMapData,
@@ -304,10 +305,15 @@ const GeographyChoroplethMap = ({
     return null;
   }, [focusedWard, drillTrail]);
 
-  const displayLayers = useMemo(
-    () => buildMapDisplayLayers(activeJoined, drillLevel, complaintPins, drillHierarchyIndex),
-    [activeJoined, drillLevel, complaintPins, drillHierarchyIndex]
-  );
+  const displayLayers = useMemo(() => {
+    const layers = buildMapDisplayLayers(activeJoined, drillLevel, complaintPins, drillHierarchyIndex);
+    // Pins are placed by ward code, so position them via the ward-level join even when
+    // a parent level (county/sub-county) is rendered — otherwise every pin is dropped.
+    layers.complaintPins = complaintPins.length
+      ? resolveComplaintPinPositions(complaintPins, joined)
+      : [];
+    return layers;
+  }, [activeJoined, joined, drillLevel, complaintPins, drillHierarchyIndex]);
 
   const visibleComplaintPins = displayLayers.complaintPins ?? [];
 
