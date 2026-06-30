@@ -528,6 +528,22 @@ export default function Phase2Page() {
         ? pickedSuggestion.countryCode.trim().toUpperCase().replace(/[\\"]/g, '\\$&')
         : '';
 
+      // OSM stores a place's primary `name` in the LOCAL language, but the
+      // typeahead (Turbopass) usually surfaces a translated/anglicized name —
+      // e.g. it suggests "Maputo Province" while the OSM relation's name is
+      // "Maputo" (the English label lives only in name:en). A strict
+      // ["name"="Maputo Province"] match then resolves nothing, so the search
+      // dead-ends with "No administrative boundaries found" (issue #757).
+      // Match the picked name against the common name variants so either the
+      // native or the translated form resolves the relation.
+      const NAME_KEYS = ['name', 'name:en', 'int_name', 'alt_name'];
+      const relByName = NAME_KEYS
+        .map(k => `  rel(area.country)["boundary"="administrative"]["${k}"="${escaped}"];`)
+        .join('\n');
+      const areaByName = NAME_KEYS
+        .map(k => `  area["${k}"="${escaped}"]["boundary"="administrative"];`)
+        .join('\n');
+
       // When the operator picked a typeahead suggestion with a country code,
       // scope the lookup to that country and resolve the named relation
       // itself (included in the output so the root level isn't lost).
@@ -536,7 +552,9 @@ export default function Phase2Page() {
       const query = countryCode
         ? `[out:json][timeout:90];
 area["ISO3166-1"="${countryCode}"][admin_level=2]->.country;
-rel(area.country)["boundary"="administrative"]["name"="${escaped}"]->.target;
+(
+${relByName}
+)->.target;
 .target map_to_area ->.searchArea;
 (
   rel(area.searchArea)["boundary"="administrative"];
@@ -546,7 +564,9 @@ out body;
 >;
 out skel qt;`
         : `[out:json][timeout:90];
-area["name"="${escaped}"]["boundary"="administrative"]->.searchArea;
+(
+${areaByName}
+)->.searchArea;
 (
   rel(area.searchArea)["boundary"="administrative"];
 );
@@ -566,10 +586,16 @@ out skel qt;`;
       let targetAdminLevel = 0;
       const sTerm = searchTerm.toLowerCase().trim();
       geojson.features.forEach((feature: any) => {
-        const featName = feature.properties?.name?.toLowerCase() || '';
-        const featAltName = feature.properties?.alt_name?.toLowerCase() || '';
-        if (featName === sTerm || featName.includes(sTerm) || featAltName === sTerm) {
-          const lvl = parseInt(feature.properties.admin_level, 10);
+        const props = feature.properties || {};
+        // Match the search term against the same name variants the query
+        // resolves on (name/name:en/int_name/alt_name) — otherwise a place
+        // picked by its translated name (e.g. "Maputo Province" vs the OSM
+        // name "Maputo") never matches here and the root level isn't found.
+        const featNames = NAME_KEYS
+          .map(k => (typeof props[k] === 'string' ? props[k].toLowerCase() : ''))
+          .filter(Boolean);
+        if (featNames.some(n => n === sTerm || n.includes(sTerm))) {
+          const lvl = parseInt(props.admin_level, 10);
           // If we found a match, we prefer the HIGHEST admin_level number (most specific)
           // Wait, if it's the search target, it should be the ROOT.
           // e.g. "Maputo" matches Level 4 (Cidade de maputo).
