@@ -7066,5 +7066,389 @@
         "message": "Pin Location",
         "module": "rainmaker-pgr",
         "locale": "default"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_ONE",
+        "message": "Select…",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_PARENT_FIRST",
+        "message": "Select the level above first",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_SUBTYPE",
+        "message": "Select a subtype",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_COMPLAINT_PICK_TYPE",
+        "message": "Select a complaint type",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_COMPLAINT_RELATED_TO",
+        "message": "What is your complaint about?",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_COMPLAINT_RELATED_TO_FIELD",
+        "message": "Complaint related to",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_COMPLAINT_TYPE_TIP",
+        "message": "Choose the most relevant option that best describes your issue.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_CREATE_STEP_COMPLAINT",
+        "message": "Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_CREATE_STEP_COMPLAINT_SUB",
+        "message": "Tell us about the issue",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_CREATE_STEP_DETAILS",
+        "message": "Details",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_CREATE_STEP_DETAILS_SUB",
+        "message": "Additional information",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_CREATE_STEP_WHERE",
+        "message": "Location",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_CREATE_STEP_WHERE_SUB",
+        "message": "Where did it happen?",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_DESCRIBE_THE_ISSUE_PLACEHOLDER",
+        "message": "Describe the issue in your own words…",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_DESCRIPTION_HINT",
+        "message": "What happened? When did it start? Add as much detail as helps.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_EMPTY_BODY",
+        "message": "Once you select a category above, complaint type, sub type and other relevant options will be shown.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_EMPTY_TITLE",
+        "message": "More details will appear here",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_FILE_COMPLAINT_SUBTITLE",
+        "message": "Provide details about your complaint",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_FILE_TOO_LARGE",
+        "message": "File is too large (max 2 MB).",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_FILE_UPLOAD_FAILED",
+        "message": "File upload failed.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HINT_RELATED_SUB",
+        "message": "Based on your selection, relevant options will appear automatically.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HINT_RELATED_TITLE",
+        "message": "Start by selecting what your complaint is about.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HINT_TYPE_SUB",
+        "message": "This helps us route your complaint to the right team.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HINT_TYPE_TITLE",
+        "message": "Great! Now select the type of complaint.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_LANDMARK_PLACEHOLDER",
+        "message": "e.g. Near Jamia Mosque, Next to Central Market",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_LOCATION_CONFIRM_HINT",
+        "message": "Add details so our team can quickly find the exact spot.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_LOCATION_DETAILS_TITLE",
+        "message": "Location details",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_LOCATION_TIP_BODY",
+        "message": "A landmark helps our team find the exact spot faster.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_LOCATION_TIP_TITLE",
+        "message": "Tip",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_OPTIONAL_SUFFIX",
+        "message": "(Optional)",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_PIN_LOCATION_HINT",
+        "message": "Click and hold on the map to drop the pin on the exact spot.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_PIN_LOCATION_TITLE",
+        "message": "Pin the complaint location",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_RELATED_TO_HELP",
+        "message": "Choose the organization or entity responsible for the issue.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_REMOVE",
+        "message": "Remove",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_SUBMIT_COMPLAINT",
+        "message": "Submit Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_UPLOADED_FILE",
+        "message": "Attachment",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_UPLOADING",
+        "message": "Uploading…",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_UPLOAD_CHOOSE",
+        "message": "Choose files",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_UPLOAD_DND",
+        "message": "Drag and drop files here or",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_UPLOAD_HINT",
+        "message": "JPG, PNG up to 2 MB each. You can upload up to 5 files.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_UPLOAD_MAX_FILES",
+        "message": "You can upload up to 5 files.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HINT_DETAILS_SUB",
+        "message": "Add as much detail as possible to help us take the right action.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HINT_DETAILS_TITLE",
+        "message": "Tell us more about the issue",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HINT_LOC_SUB",
+        "message": "Drop a pin on the map or search for the location where the issue occurred.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HINT_LOC_TITLE",
+        "message": "Pin the exact location",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_EXT_INSTITUTE_NAME_LABEL",
+        "message": "Institute Name",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_NAME_LABEL",
+        "message": "Witness Name",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_ADDRESS_LABEL",
+        "message": "Witness Address",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_NOTE_LABEL",
+        "message": "Witness Note",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_EXT_DATE_OF_FACT_LABEL",
+        "message": "Date of Fact",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_EXT_ENTITY_NAME_LABEL",
+        "message": "Entity Name",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_EXT_ENTITY_ADDRESS_LABEL",
+        "message": "Entity Address",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_EXT_COMPLAINANT_ADDRESS_LABEL",
+        "message": "Complainant Address",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_EXT_EMAIL_LABEL",
+        "message": "Email Address",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_EXT_IS_CONFIDENTIAL_LABEL",
+        "message": "Keep details confidential.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_EXT_IS_CONFIDENTIAL_HINT",
+        "message": "Visibility is enforced once secure handling is enabled; for now this flags the complaint for staff awareness.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOWTO_TITLE",
+        "message": "How filing a complaint works",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOWTO_SUB",
+        "message": "Three quick steps — pick a category above to begin.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOWTO_1_TITLE",
+        "message": "Choose a category",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOWTO_1_BODY",
+        "message": "Tell us what your complaint is about — it's routed to the right office automatically.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOWTO_2_TITLE",
+        "message": "Mark the location",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOWTO_2_BODY",
+        "message": "Drop a pin on the map where the issue happened.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOWTO_3_TITLE",
+        "message": "Add details & submit",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_HOWTO_3_BODY",
+        "message": "Describe the issue and attach any photos as evidence.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
     }
 ]

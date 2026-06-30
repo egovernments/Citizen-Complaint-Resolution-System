@@ -2,22 +2,16 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "IgsaeComplaintExtendedAttributes",
   "title": "IGSAE Complaint Extended Attributes",
-  "description": "Validates the flat extendedAttributes JSONB for IGSAE complaints. x-security lists the fields digit-config-service must encrypt/decrypt via egov-enc-service.",
   "type": "object",
-  "required": ["caseRelatedTo", "entityName", "dateOfFact", "entityAddress"],
+  "required": ["dateOfFact", "entityName", "entityAddress"],
   "x-security": ["dateOfFact", "entityName", "entityAddress", "witnessName", "witnessAddress", "witnessNote"],
-  "additionalProperties": false,
   "properties": {
-    "isConfidential": { "type": "boolean", "default": false },
-    "caseRelatedTo":  { "type": "string", "const": "IGSAE" },
-    "schemaVersion":  { "type": "string" },
-    "hierarchyLevel1": { "type": "string", "maxLength": 100 },
-    "hierarchyLevel2": { "type": "string", "maxLength": 100 },
-    "dateOfFact":     { "type": "string", "format": "date" },
-    "entityName":     { "type": "string", "maxLength": 300 },
-    "entityAddress":  { "type": "string", "maxLength": 1000 },
-    "witnessName":    { "type": "string", "maxLength": 200 },
-    "witnessAddress": { "type": "string", "maxLength": 1000 },
-    "witnessNote":    { "type": "string", "maxLength": 1000 }
-  }
+    "dateOfFact":     { "type": "string", "format": "date", "x-order": 1, "x-label-key": "PGR_EXT_DATE_OF_FACT_LABEL" },
+    "entityName":     { "type": "string", "maxLength": 300,  "x-order": 2, "x-label-key": "PGR_EXT_ENTITY_NAME_LABEL" },
+    "entityAddress":  { "type": "string", "maxLength": 1000, "x-order": 3, "x-widget": "textarea", "x-label-key": "PGR_EXT_ENTITY_ADDRESS_LABEL" },
+    "witnessName":    { "type": "string", "maxLength": 200,  "x-order": 4, "x-label-key": "PGR_EXT_WITNESS_NAME_LABEL" },
+    "witnessAddress": { "type": "string", "maxLength": 1000, "x-order": 5, "x-widget": "textarea", "x-label-key": "PGR_EXT_WITNESS_ADDRESS_LABEL" },
+    "witnessNote":    { "type": "string", "maxLength": 1000, "x-order": 6, "x-widget": "textarea", "x-label-key": "PGR_EXT_WITNESS_NOTE_LABEL" }
+  },
+  "additionalProperties": true
 }

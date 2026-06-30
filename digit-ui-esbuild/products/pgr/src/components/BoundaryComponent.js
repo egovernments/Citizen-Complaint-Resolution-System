@@ -5,7 +5,10 @@ import { useTranslation } from "react-i18next";
 
 const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }) => {
 
-  const tenantId = Digit.ULBService.getCurrentTenantId();
+  // Boundaries are tenant-scoped. Callers that resolve a tenant at runtime
+  // (e.g. the citizen authority→tenant flow) pass it via `config.tenantId`;
+  // everyone else falls back to the logged-in tenant (unchanged behaviour).
+  const tenantId = config?.tenantId || Digit.ULBService.getCurrentTenantId();
 
   // Employee jurisdiction gate (egovernments/CCRS#496).
   //
