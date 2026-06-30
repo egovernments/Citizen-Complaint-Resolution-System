@@ -16,7 +16,7 @@
       },
       "supportsSeries": true,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-sparkline",
         "format": "integer",
         "valueKey": "total",
         "accent": "teal",
@@ -24,7 +24,14 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
         "compose": null,
         "pii": false,
-        "title": "New complaints created"
+        "title": "New complaints created",
+        "delta": {
+          "mode": "percent",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period",
+        "dateKey": "created_date",
+        "sparklineMeasureKey": "total"
       },
       "params": [
         {
@@ -63,7 +70,7 @@
       },
       "supportsSeries": true,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-sparkline",
         "format": "integer",
         "valueKey": "total",
         "accent": "teal",
@@ -71,7 +78,14 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
         "compose": null,
         "pii": false,
-        "title": "Complaints created today"
+        "title": "Complaints created today",
+        "delta": {
+          "mode": "percent",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs yesterday",
+        "dateKey": "created_date",
+        "sparklineMeasureKey": "total"
       },
       "params": [
         {
@@ -115,9 +129,9 @@
           }
         ]
       },
-      "supportsSeries": false,
+      "supportsSeries": true,
       "viz": {
-        "kind": "number-tile-delta",
+        "kind": "number-tile-sparkline",
         "format": "percentOneDecimal",
         "valueKey": "pct",
         "accent": "green",
@@ -136,7 +150,9 @@
           "compare": "prior"
         },
         "deltaLabel": "vs prior period",
-        "title": "Resolution rate"
+        "title": "Resolution rate",
+        "dateKey": "created_date",
+        "sparklineMeasureKey": "pct"
       },
       "params": [
         {
@@ -251,8 +267,8 @@
       },
       "supportsSeries": true,
       "viz": {
-        "kind": "scalar",
-        "format": "decimalOne",
+        "kind": "number-tile-delta",
+        "format": "ratingOutOfFive",
         "valueKey": "avg",
         "accent": "teal",
         "group": "complaint-landscape",
@@ -260,7 +276,18 @@
         "compose": null,
         "pii": false,
         "title": "Citizen satisfaction",
-        "subtitle": "Avg. rating on resolved complaints"
+        "subtitle": "Avg. rating on resolved complaints",
+        "threshold": {
+          "kind": "rating",
+          "higherIsBetter": true,
+          "onTrack": 4,
+          "breaching": 3
+        },
+        "delta": {
+          "mode": "rating",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period"
       },
       "params": [
         {
@@ -313,7 +340,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-delta",
         "format": "percentOneDecimal",
         "valueKey": "pct",
         "accent": "green",
@@ -321,7 +348,19 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
         "compose": null,
         "pii": false,
-        "title": "First-assignment rate"
+        "title": "First-assignment rate",
+        "subtitle": "Never reassigned ÷ assigned",
+        "threshold": {
+          "kind": "percent",
+          "higherIsBetter": true,
+          "onTrack": 90,
+          "breaching": 70
+        },
+        "delta": {
+          "mode": "percentPoint",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period"
       },
       "params": [
         {
@@ -368,7 +407,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-delta",
         "format": "percentOneDecimal",
         "valueKey": "pct",
         "accent": "teal",
@@ -376,7 +415,19 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
         "compose": null,
         "pii": false,
-        "title": "SLA compliance rate"
+        "title": "SLA compliance rate",
+        "subtitle": "Resolved within SLA ÷ all filed",
+        "threshold": {
+          "kind": "percent",
+          "higherIsBetter": true,
+          "onTrack": 85,
+          "breaching": 60
+        },
+        "delta": {
+          "mode": "percentPoint",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period"
       },
       "params": [
         {
@@ -423,9 +474,9 @@
           }
         ]
       },
-      "supportsSeries": false,
+      "supportsSeries": true,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-sparkline",
         "format": "percentOneDecimal",
         "valueKey": "pct",
         "accent": "teal",
@@ -433,7 +484,20 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
         "compose": null,
         "pii": false,
-        "title": "Resolved on time rate"
+        "title": "Resolved on time rate",
+        "threshold": {
+          "kind": "percent",
+          "higherIsBetter": true,
+          "onTrack": 85,
+          "breaching": 60
+        },
+        "delta": {
+          "mode": "percentPoint",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period",
+        "dateKey": "created_date",
+        "sparklineMeasureKey": "pct"
       },
       "params": [
         {
@@ -473,7 +537,7 @@
       },
       "supportsSeries": true,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-sparkline",
         "format": "integer",
         "valueKey": "total",
         "accent": "amber",
@@ -481,7 +545,14 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
         "compose": null,
         "pii": false,
-        "title": "Open complaints"
+        "title": "Open complaints",
+        "delta": {
+          "mode": "percent",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period",
+        "dateKey": "snapshot_date",
+        "sparklineMeasureKey": "total"
       },
       "params": [
         {
@@ -588,7 +659,7 @@
       },
       "supportsSeries": true,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-delta",
         "format": "hoursDays",
         "valueKey": "max_age_ms",
         "accent": "amber",
@@ -596,7 +667,19 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
         "compose": null,
         "pii": false,
-        "title": "Oldest complaint"
+        "title": "Oldest complaint",
+        "subtitle": "Earliest open complaint",
+        "threshold": {
+          "kind": "count",
+          "higherIsBetter": false,
+          "onTrack": 7,
+          "breaching": 30
+        },
+        "delta": {
+          "mode": "days",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs period start"
       },
       "params": [
         {
@@ -637,7 +720,7 @@
       },
       "supportsSeries": true,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-delta",
         "format": "hoursDays",
         "valueKey": "avg_ms",
         "accent": "green",
@@ -645,7 +728,13 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
         "compose": null,
         "pii": false,
-        "title": "Average resolution time"
+        "title": "Average resolution time",
+        "subtitle": "Avg. time to resolve",
+        "delta": {
+          "mode": "duration",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period"
       },
       "params": [
         {
@@ -713,7 +802,8 @@
         "measureKey": "total",
         "seriesLabel": "Filed",
         "limit": 8,
-        "subtitle": "Complaints filed, by type"
+        "subtitle": "Complaints filed, by type",
+        "labelFormat": "dimension"
       },
       "params": [
         {
@@ -748,7 +838,6 @@
           "timeRole": "filed_at"
         },
         "dimensions": [
-          "service_code",
           "department_code"
         ],
         "measures": [
@@ -773,7 +862,9 @@
         ],
         "compose": null,
         "pii": false,
-        "title": "Complaints by departments"
+        "title": "Complaints by departments",
+        "labelFormat": "department",
+        "limit": 12
       },
       "params": [
         {
@@ -996,7 +1087,7 @@
         "stackSeries": [
           {
             "key": "PENDINGFORASSIGNMENT",
-            "label": "Pending Assignment",
+            "label": "Pending assignment",
             "color": "var(--chart-1)"
           },
           {
@@ -1005,18 +1096,19 @@
             "color": "var(--chart-2)"
           },
           {
-            "key": "PENDINGATSUPERVISOR",
-            "label": "Pending at Supervisor",
+            "key": "PENDINGFORREASSIGNMENT",
+            "label": "Pending reassignment",
             "color": "var(--chart-3)"
           },
           {
-            "key": "PENDINGFORREASSIGNMENT",
-            "label": "Pending Reassignment",
+            "key": "PENDINGATSUPERVISOR",
+            "label": "Pending at supervisor",
             "color": "var(--chart-4)"
           }
         ],
         "limit": 8,
-        "subtitle": "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in."
+        "subtitle": "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in.",
+        "labelFormat": "dimension"
       },
       "params": [
         {
@@ -1080,7 +1172,81 @@
         "pii": false,
         "title": "Complaints by channel",
         "measureKey": "total",
-        "subtitle": "Open complaints by intake channel"
+        "subtitle": "Open complaints by intake channel",
+        "channelMap": [
+          {
+            "id": "web",
+            "label": "Web",
+            "sources": [
+              "web",
+              "online",
+              "citizen"
+            ],
+            "color": "var(--chart-2)"
+          },
+          {
+            "id": "mobile",
+            "label": "Mobile",
+            "sources": [
+              "app",
+              "mobile",
+              "mobileapp",
+              "mobile_app"
+            ],
+            "color": "var(--chart-1)"
+          },
+          {
+            "id": "ivr",
+            "label": "IVR",
+            "sources": [
+              "phone",
+              "ivr"
+            ],
+            "color": "var(--chart-3)"
+          },
+          {
+            "id": "walk_in",
+            "label": "Walk-in",
+            "sources": [
+              "walk_in",
+              "walk-in",
+              "walkin",
+              "counter",
+              "csc"
+            ],
+            "color": "var(--chart-4)"
+          },
+          {
+            "id": "sms",
+            "label": "SMS",
+            "sources": [
+              "sms"
+            ],
+            "color": "var(--chart-5)"
+          },
+          {
+            "id": "email",
+            "label": "Email",
+            "sources": [
+              "email"
+            ],
+            "color": "var(--chart-5)"
+          },
+          {
+            "id": "whatsapp",
+            "label": "WhatsApp",
+            "sources": [
+              "whatsapp"
+            ],
+            "color": "var(--chart-1)"
+          },
+          {
+            "id": "other",
+            "label": "Other",
+            "sources": [],
+            "color": "var(--muted-foreground)"
+          }
+        ]
       },
       "params": [
         {
@@ -1347,37 +1513,32 @@
         "columns": [
           {
             "id": "service_code",
-            "label": "Complaint type",
+            "label": "Subtype",
             "align": "left",
-            "type": "text"
+            "type": "dimension"
+          },
+          {
+            "id": "service_group",
+            "label": "Type",
+            "align": "left",
+            "type": "dimension"
           },
           {
             "id": "avg_resolution_ms",
-            "label": "Avg resolution",
-            "align": "right",
+            "label": "Avg resolution time",
+            "align": "left",
             "type": "hoursDays"
           },
           {
             "id": "ideal_sla_ms",
-            "label": "SLA target",
-            "align": "right",
+            "label": "SLA",
+            "align": "left",
             "type": "hoursDays"
           },
           {
-            "id": "ontime_rate",
-            "label": "On-time",
-            "align": "right",
-            "type": "percent",
-            "threshold": {
-              "higherIsBetter": true,
-              "watch": 0.85,
-              "breach": 0.6
-            }
-          },
-          {
             "id": "reopen_rate",
-            "label": "Reopen",
-            "align": "right",
+            "label": "Reopen rate",
+            "align": "left",
             "type": "percent",
             "threshold": {
               "higherIsBetter": false,
@@ -1387,8 +1548,8 @@
           },
           {
             "id": "oldest_open_ms",
-            "label": "Oldest open",
-            "align": "right",
+            "label": "Oldest complaint",
+            "align": "left",
             "type": "hoursDays",
             "threshold": {
               "higherIsBetter": false,
@@ -1397,9 +1558,20 @@
             }
           },
           {
+            "id": "ontime_rate",
+            "label": "Resolved on-time rate",
+            "align": "left",
+            "type": "percent",
+            "threshold": {
+              "higherIsBetter": true,
+              "watch": 0.85,
+              "breach": 0.6
+            }
+          },
+          {
             "id": "avg_csat",
             "label": "CSAT",
-            "align": "right",
+            "align": "left",
             "type": "rating",
             "threshold": {
               "higherIsBetter": true,
@@ -1625,7 +1797,8 @@
       "query": {
         "grain": "facts",
         "dimensions": [
-          "current_assignee_uuid"
+          "current_assignee_uuid",
+          "department_code"
         ],
         "measures": [
           {
@@ -1671,6 +1844,21 @@
               "is_resolved": true,
               "has_rating": true
             }
+          },
+          {
+            "name": "escalation_rate",
+            "agg": "ratio",
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "escalation_count": {
+                  "gte": 1
+                }
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
           }
         ],
         "sort": [
@@ -1699,7 +1887,8 @@
           "open",
           "resolved",
           "reopen_rate",
-          "avg_csat"
+          "avg_csat",
+          "escalation_rate"
         ],
         "compose": null,
         "pii": {
@@ -1709,72 +1898,77 @@
         "columns": [
           {
             "id": "current_assignee_uuid",
-            "label": "Officer",
+            "label": "Name",
             "align": "left",
             "type": "officer"
           },
           {
+            "id": "role",
+            "label": "Role",
+            "align": "left",
+            "type": "text"
+          },
+          {
+            "id": "department_code",
+            "label": "Dept",
+            "align": "left",
+            "type": "department"
+          },
+          {
             "id": "assigned",
             "label": "Assigned",
-            "align": "right",
+            "align": "left",
             "type": "integer"
           },
           {
             "id": "open",
             "label": "Open",
-            "align": "right",
+            "align": "left",
             "type": "integer",
             "threshold": {
               "higherIsBetter": false,
               "watch": 8,
-              "breach": 15,
-              "tag": {
-                "breach": "High open",
-                "watch": "Open load"
-              }
+              "breach": 15
             }
           },
           {
             "id": "resolved",
             "label": "Resolved",
-            "align": "right",
+            "align": "left",
             "type": "integer"
           },
           {
             "id": "reopen_rate",
-            "label": "Reopen",
-            "align": "right",
+            "label": "Reopen rate",
+            "align": "left",
             "type": "percent",
             "threshold": {
               "higherIsBetter": false,
               "watch": 0.12,
-              "breach": 0.2,
-              "tag": {
-                "breach": "High reopen",
-                "watch": "Reopen risk"
-              }
+              "breach": 0.2
             }
           },
           {
             "id": "avg_csat",
             "label": "CSAT",
-            "align": "right",
+            "align": "left",
             "type": "rating",
             "threshold": {
               "higherIsBetter": true,
               "watch": 3.8,
-              "breach": 3.2,
-              "tag": {
-                "breach": "Low CSAT",
-                "watch": "CSAT watch"
-              }
+              "breach": 3.2
             }
           },
           {
-            "id": "status",
-            "label": "Status",
+            "id": "escalation_rate",
+            "label": "Escalation rate",
             "align": "left",
-            "type": "tags"
+            "type": "percent",
+            "threshold": {
+              "higherIsBetter": false,
+              "watch": 0.15,
+              "breach": 0.3
+            }
           }
         ],
         "labelFormat": "officer",
@@ -2025,7 +2219,7 @@
       },
       "supportsSeries": false,
       "viz": {
-        "kind": "scalar",
+        "kind": "number-tile-delta",
         "format": "percentOneDecimal",
         "valueKey": "pct",
         "accent": "red",
@@ -2033,7 +2227,19 @@
         "compose": null,
         "pii": false,
         "title": "SLA non-compliance rate",
-        "subtitle": "Breached ÷ total"
+        "subtitle": "Breached SLA ÷ all complaints",
+        "threshold": {
+          "kind": "percent",
+          "higherIsBetter": false,
+          "onTrack": 15,
+          "breaching": 40
+        },
+        "delta": {
+          "mode": "percentPoint",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT"
       },
       "params": [
         {

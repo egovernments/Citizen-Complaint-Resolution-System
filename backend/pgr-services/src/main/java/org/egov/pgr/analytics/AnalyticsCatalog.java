@@ -73,7 +73,10 @@ public class AnalyticsCatalog {
                   "created_is_weekend","created_at","resolved_at","rating","current_state_seq",
                   // D1c: non-PII integer assignment counters — filterable so first-assignment rate can be
                   // expressed against real facts columns (replaces the nonexistent has_been_assigned/is_reassigned).
-                  "assignment_count","distinct_assignee_count"),
+                  "assignment_count","distinct_assignee_count",
+                  // escalation_count filterable so the employee-performance escalation rate can be a
+                  // count(escalation_count>=1)/count ratio (mirrors the reference escalation companion).
+                  "escalation_count"),
             // measurable (numeric)
             setOf("resolution_ms","time_to_assign_ms","open_age_ms","current_state_age_ms","first_escalation_ms",
                   "max_dwell_ms","assigned_dwell_ms","unassigned_dwell_ms","transition_count","assignment_count",

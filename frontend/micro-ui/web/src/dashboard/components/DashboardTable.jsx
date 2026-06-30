@@ -78,6 +78,14 @@ const CELL_RENDERERS = {
   trend: (value) => <TrendCell value={value} />,
   tags: (value) => value,
   officer: (value) => formatOfficerLabel(value),
+  department: (value) =>
+    !value || value === "null" || value === "undefined"
+      ? "—"
+      : String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase()),
+  dimension: (value) =>
+    !value || value === "null" || value === "undefined"
+      ? "—"
+      : String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase()),
 };
 
 function resolveToneClass(tone, styles) {
