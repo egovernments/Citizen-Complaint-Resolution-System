@@ -16,6 +16,16 @@ import {
   getWidgetBodyClassName,
   getWidgetScrollClassName,
 } from "./config/visualizationStyles";
+import DashboardLogin, {
+  hasDashboardSession,
+  clearDashboardSession,
+} from "./components/DashboardLogin";
+
+import { useDashboardFilters } from "./hooks/useDashboardFilters";
+import { useCatalog } from "./hooks/useCatalog";
+import { useCatalogLayout } from "./hooks/useCatalogLayout";
+import { runKpiBatch, getTenantId } from "./services/analyticsService";
+import { GRID_COLS, KPI_ROW_HEIGHT } from "./constants/layoutConfig";
 
 // Map the catalog's viz.kind onto the reference dashboard's VIZ_TYPE so each widget
 // gets its type-specific header/body chrome (padding, insets, legend tuning) instead
@@ -37,16 +47,6 @@ const KIND_TO_VIZTYPE = {
   "choropleth-map": VIZ_TYPE.MAP,
 };
 const TABLE_KINDS = new Set(["data-table", "table", "sla-risk-table"]);
-import DashboardLogin, {
-  hasDashboardSession,
-  clearDashboardSession,
-} from "./components/DashboardLogin";
-
-import { useDashboardFilters } from "./hooks/useDashboardFilters";
-import { useCatalog } from "./hooks/useCatalog";
-import { useCatalogLayout } from "./hooks/useCatalogLayout";
-import { runKpiBatch, getTenantId } from "./services/analyticsService";
-import { GRID_COLS, KPI_ROW_HEIGHT } from "./constants/layoutConfig";
 
 const RemoveIcon = () => (
   <svg
