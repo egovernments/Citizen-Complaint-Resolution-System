@@ -504,7 +504,7 @@ function renderHorizontalBar(ctx) {
 // ---------------------------------------------------------------------------
 
 function adaptStacked(ctx) {
-  const { viz, result } = ctx;
+  const { viz, result, def } = ctx;
 
   // BE-shaped passthrough.
   if (result.series && Array.isArray(result.series) && result.categories) {
@@ -515,6 +515,7 @@ function adaptStacked(ctx) {
   const stackKey = viz.stackKey;
   const measureKey = viz.measureKey || 'total';
   const stackSeries = viz.stackSeries; // [{ key, label, color }]
+  const rowCap = viz.showAll || def?.kpiId === 'cl_chart_complaints_by_type' ? null : viz.limit;
 
   // Single-series stacked (e.g. complaints-by-type "Filed").
   if (!stackKey || !stackSeries?.length) {
@@ -523,7 +524,7 @@ function adaptStacked(ctx) {
       value: Number(row[measureKey]) || 0,
     }));
     if (viz.sort !== 'none') rows = rows.sort((a, b) => b.value - a.value);
-    if (viz.limit) rows = rows.slice(0, viz.limit);
+    if (rowCap) rows = rows.slice(0, rowCap);
     return {
       categories: rows.map((r) => r.label),
       series: [{ name: viz.seriesLabel || 'Count', data: rows.map((r) => r.value) }],
@@ -657,16 +658,49 @@ function renderPie(ctx) {
 // the BE-shaped { periods, defaultPeriod } or a flat { categories, series }.
 // ---------------------------------------------------------------------------
 
+/** Align created-date and resolved-date daily buckets for the over-time chart. */
+function mergeComplaintsOverTimeRows(viz, createdResult, results) {
+  if (viz.compose?.type !== 'complaintsOverTime' || !Array.isArray(viz.compose.sourceKpiIds)) {
+    return null;
+  }
+  const [resolvedId] = viz.compose.sourceKpiIds;
+  const resolvedResult = results?.[resolvedId];
+  if (!resolvedResult?.rows?.length && !createdResult?.rows?.length) return null;
+
+  const createdByDate = new Map();
+  for (const row of createdResult?.rows || []) {
+    const d = String(row.created_date ?? '');
+    if (!d) continue;
+    createdByDate.set(d, row);
+  }
+  const resolvedByDate = new Map();
+  for (const row of resolvedResult?.rows || []) {
+    const d = String(row.resolved_date ?? '');
+    if (!d) continue;
+    resolvedByDate.set(d, row);
+  }
+
+  const dates = [...new Set([...createdByDate.keys(), ...resolvedByDate.keys()])].sort();
+  const dimKey = viz.dimensionKey || 'created_date';
+  return dates.map((d) => ({
+    [dimKey]: d,
+    created: Number(createdByDate.get(d)?.created) || 0,
+    resolved: Number(resolvedByDate.get(d)?.resolved) || 0,
+    on_time: Number(resolvedByDate.get(d)?.on_time) || 0,
+  }));
+}
+
 function adaptLine(ctx) {
-  const { viz, result, title } = ctx;
+  const { viz, result, results, title } = ctx;
   if (result.periods) {
     return { periods: result.periods, defaultPeriod: result.defaultPeriod || viz.defaultPeriod || 'daily', headerTitle: result.title || title };
   }
   if (result.series && result.categories) {
     return { categories: result.categories, series: result.series };
   }
+  const mergedRows = mergeComplaintsOverTimeRows(viz, result, results);
   const dimKey = primaryDimensionKey(result, viz);
-  const rows = [...(result.rows || [])].sort((a, b) =>
+  const rows = [...(mergedRows ?? result.rows ?? [])].sort((a, b) =>
     String(a[dimKey] ?? '').localeCompare(String(b[dimKey] ?? ''))
   );
   const categories = rows.map((r) => formatDimLabel(r[dimKey], viz));

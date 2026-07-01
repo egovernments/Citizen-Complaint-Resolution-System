@@ -213,6 +213,17 @@ function buildRefs(tiles, kpis, filters) {
       // Per-complaint pins (same filters/scope) overlaid on the ward choropleth.
       refs[`${kpiId}__pins`] = { kpiId: PIN_KPI_ID, params: { ...gp } };
     }
+
+    // Backend-composed cards may need their source KPIs (and daily series) in the batch.
+    const compose = def.viz?.compose;
+    if (compose?.sourceKpiIds?.length) {
+      for (const srcId of compose.sourceKpiIds) {
+        if (!refs[srcId]) refs[srcId] = { kpiId: srcId, params: { ...gp } };
+        if (isSparklineKind(kind) && !refs[`${srcId}__series`]) {
+          refs[`${srcId}__series`] = { kpiId: srcId, params: { ...gp, series: "daily" } };
+        }
+      }
+    }
   }
   return refs;
 }
@@ -262,9 +273,16 @@ function assembleResult(kpiId, def, results) {
 
   // Daily sparkline series.
   if (isSparklineKind(viz.kind)) {
-    const seriesRes = results?.[`${kpiId}__series`];
-    if (seriesRes?.rows?.length) {
-      assembled.sparkline = seriesToPoints(seriesRes.rows, viz, valueKey, seriesRes.columns);
+    const composedSparkline =
+      composedSlaComplianceSparkline(results, viz.compose) ??
+      composedResolvedOverFiledSparkline(results, viz.compose);
+    if (composedSparkline?.length) {
+      assembled.sparkline = composedSparkline;
+    } else {
+      const seriesRes = results?.[`${kpiId}__series`];
+      if (seriesRes?.rows?.length) {
+        assembled.sparkline = seriesToPoints(seriesRes.rows, viz, valueKey, seriesRes.columns);
+      }
     }
   }
 
@@ -329,6 +347,83 @@ function seriesToPoints(rows, viz, valueKey, columns) {
       String(a[dateKey] ?? "").localeCompare(String(b[dateKey] ?? ""))
     )
     .map((row) => Number(row[measureKey]) || 0);
+}
+
+/** Daily compliant ÷ (resolved + open past SLA) for composed SLA / on-time tiles. */
+function composedSlaComplianceSparkline(results, compose) {
+  if (compose?.type !== "slaComplianceRate" || !Array.isArray(compose.sourceKpiIds)) {
+    return null;
+  }
+  const [compliantId, resolvedId, openBreachedId] = compose.sourceKpiIds;
+  const compliantRows = results?.[`${compliantId}__series`]?.rows;
+  const resolvedRows = results?.[`${resolvedId}__series`]?.rows;
+  const openBreachedRows = results?.[`${openBreachedId}__series`]?.rows;
+  if (!compliantRows?.length || !resolvedRows?.length) return null;
+
+  const compliantByDate = new Map();
+  for (const row of compliantRows) {
+    const d = String(row.resolved_date ?? row.created_date ?? "");
+    if (!d) continue;
+    compliantByDate.set(d, Number(row.total) || 0);
+  }
+  const resolvedByDate = new Map();
+  for (const row of resolvedRows) {
+    const d = String(row.resolved_date ?? row.created_date ?? "");
+    if (!d) continue;
+    resolvedByDate.set(d, Number(row.total) || 0);
+  }
+  const openBreachedByDate = new Map();
+  for (const row of openBreachedRows || []) {
+    const d = String(row.created_date ?? "");
+    if (!d) continue;
+    openBreachedByDate.set(d, Number(row.total) || 0);
+  }
+
+  const dates = [
+    ...new Set([
+      ...compliantByDate.keys(),
+      ...resolvedByDate.keys(),
+      ...openBreachedByDate.keys(),
+    ]),
+  ].sort();
+  return dates.map((d) => {
+    const compliant = compliantByDate.get(d) || 0;
+    const resolved = resolvedByDate.get(d) || 0;
+    const openBreached = openBreachedByDate.get(d) || 0;
+    const eligible = resolved + openBreached;
+    return eligible === 0 ? 0 : compliant / eligible;
+  });
+}
+
+/** Daily resolved ÷ filed sparkline for the composed resolution-rate tile. */
+function composedResolvedOverFiledSparkline(results, compose) {
+  if (compose?.type !== "resolvedOverFiledRate" || !Array.isArray(compose.sourceKpiIds)) {
+    return null;
+  }
+  const [resolvedId, filedId] = compose.sourceKpiIds;
+  const resolvedRows = results?.[`${resolvedId}__series`]?.rows;
+  const filedRows = results?.[`${filedId}__series`]?.rows;
+  if (!resolvedRows?.length || !filedRows?.length) return null;
+
+  const resolvedByDate = new Map();
+  for (const row of resolvedRows) {
+    const d = String(row.resolved_date ?? row.created_date ?? "");
+    if (!d) continue;
+    resolvedByDate.set(d, Number(row.total) || 0);
+  }
+  const filedByDate = new Map();
+  for (const row of filedRows) {
+    const d = String(row.created_date ?? "");
+    if (!d) continue;
+    filedByDate.set(d, Number(row.total) || 0);
+  }
+
+  const dates = [...new Set([...resolvedByDate.keys(), ...filedByDate.keys()])].sort();
+  return dates.map((d) => {
+    const filed = filedByDate.get(d) || 0;
+    const resolved = resolvedByDate.get(d) || 0;
+    return filed === 0 ? 0 : resolved / filed;
+  });
 }
 
 /* -------------------------------------------------------------------------- */

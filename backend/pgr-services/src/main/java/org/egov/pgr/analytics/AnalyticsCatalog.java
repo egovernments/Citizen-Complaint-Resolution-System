@@ -64,7 +64,8 @@ public class AnalyticsCatalog {
                   "has_rating","is_negative_rating","is_first_time_complainant","has_geo_pin","filed_on_behalf",
                   "latitude","longitude",   // map pins: per-complaint coordinates (projectable for the pin KPI)
                   "current_state_seq","created_month","created_week_start","created_year","created_quarter",
-                  "created_date","created_dow","created_is_weekend","created_is_business_hr","tenant_id"),
+                  "created_date","created_dow","created_is_weekend","created_is_business_hr",
+                  "resolved_date","resolved_month","tenant_id"),
             // filterable (NOTE: UUID columns intentionally absent)
             setOf("service_code","application_status","source","ward_code","zone_code","service_group",
                   "department_code","aging_bucket","sla_status_bucket","is_open","is_resolved","is_reopened",
@@ -115,11 +116,12 @@ public class AnalyticsCatalog {
             setOf(),  // snapshot_date is a sql date, not epoch-ms
             setOf("snapshot_date","ward_code","zone_code","service_code","sla_status_bucket","aging_bucket",
                   "department_code",   // S2: daily now carries department_code + account_id
-                  "is_open","sla_breached","current_assignee_uuid","boundary_path","tenant_id"),
+                  "is_open","sla_breached","current_assignee_uuid","boundary_path","tenant_id",
+                  "service_request_id","application_status","source","service_group"),
             setOf("snapshot_date","ward_code","zone_code","service_code","sla_status_bucket","aging_bucket",
                   "department_code",   // S2
-                  "is_open","sla_breached"),
-            setOf(),
+                  "is_open","sla_breached","application_status","source","service_group"),
+            setOf("open_age_ms","created_at","sla_target_ms"),
             setOf("service_request_id","current_assignee_uuid","ward_code","account_id"),
             "tenant_id","boundary_path","account_id","department_code","snapshot_date"));   // S2: department + citizen row-scope axes
     }

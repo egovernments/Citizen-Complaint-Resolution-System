@@ -111,24 +111,7 @@
       "id": "cl_resolution_rate_count",
       "version": "1.0.0",
       "status": "published",
-      "query": {
-        "grain": "facts",
-        "measures": [
-          {
-            "name": "pct",
-            "agg": "ratio",
-            "numerator": {
-              "agg": "count",
-              "filter": {
-                "is_resolved": true
-              }
-            },
-            "denominator": {
-              "agg": "count"
-            }
-          }
-        ]
-      },
+      "query": null,
       "supportsSeries": true,
       "viz": {
         "kind": "number-tile-sparkline",
@@ -137,7 +120,13 @@
         "accent": "green",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
-        "compose": null,
+        "compose": {
+          "type": "resolvedOverFiledRate",
+          "sourceKpiIds": [
+            "cl_resolved_date_range_count",
+            "cl_new_created_count"
+          ]
+        },
         "pii": false,
         "threshold": {
           "kind": "percent",
@@ -151,8 +140,64 @@
         },
         "deltaLabel": "vs prior period",
         "title": "Resolution rate",
+        "subtitle": "Resolved in period ÷ filed in period",
         "dateKey": "created_date",
         "sparklineMeasureKey": "pct"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": [
+          "PUBLIC"
+        ]
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_reopen_date_range_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "events",
+        "window": {
+          "name": "last_7d",
+          "timeRole": "event_at"
+        },
+        "filters": {
+          "is_reopen": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count_distinct",
+            "column": "service_request_id"
+          }
+        ]
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "number-tile-delta",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "amber",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_DATE_RANGE_COUNT",
+        "compose": null,
+        "pii": false,
+        "title": "Reopened complaints"
       },
       "params": [
         {
@@ -180,27 +225,7 @@
       "id": "cl_reopen_rate_count",
       "version": "1.0.0",
       "status": "published",
-      "query": {
-        "grain": "facts",
-        "filters": {
-          "is_resolved": true
-        },
-        "measures": [
-          {
-            "name": "pct",
-            "agg": "ratio",
-            "numerator": {
-              "agg": "count",
-              "filter": {
-                "is_reopened": true
-              }
-            },
-            "denominator": {
-              "agg": "count"
-            }
-          }
-        ]
-      },
+      "query": null,
       "supportsSeries": false,
       "viz": {
         "kind": "number-tile-delta",
@@ -209,7 +234,13 @@
         "accent": "amber",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
-        "compose": null,
+        "compose": {
+          "type": "reopenedOverFiledRate",
+          "sourceKpiIds": [
+            "cl_reopen_date_range_count",
+            "cl_new_created_count"
+          ]
+        },
         "pii": false,
         "threshold": {
           "kind": "percent",
@@ -223,7 +254,7 @@
         },
         "deltaLabel": "vs prior period",
         "title": "Reopen rate",
-        "subtitle": "Reopened ÷ resolved"
+        "subtitle": "Reopened in period ÷ filed in period"
       },
       "params": [
         {
@@ -383,28 +414,157 @@
   {
     "tenantId": "ke",
     "data": {
-      "id": "cl_sla_compliance_rate_count",
+      "id": "cl_sla_compliant_resolved_count",
       "version": "1.0.0",
       "status": "published",
       "query": {
         "grain": "facts",
+        "filters": {
+          "is_resolved": true,
+          "sla_breached": false
+        },
         "measures": [
           {
-            "name": "pct",
-            "agg": "ratio",
-            "numerator": {
-              "agg": "count",
-              "filter": {
-                "is_resolved": true,
-                "sla_breached": false
-              }
-            },
-            "denominator": {
-              "agg": "count"
-            }
+            "name": "total",
+            "agg": "count"
           }
         ]
       },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "number-tile-delta",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANT_RESOLVED_COUNT",
+        "compose": null,
+        "pii": false,
+        "title": "Resolved within SLA"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": []
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_sla_accountable_resolved_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": {
+          "is_resolved": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "number-tile-delta",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_ACCOUNTABLE_RESOLVED_COUNT",
+        "compose": null,
+        "pii": false,
+        "title": "Resolved (SLA denominator)"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": []
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_sla_accountable_open_breached_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "filters": {
+          "is_open": true,
+          "sla_breached": true
+        },
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
+      },
+      "supportsSeries": true,
+      "viz": {
+        "kind": "number-tile-delta",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_ACCOUNTABLE_OPEN_BREACHED_COUNT",
+        "compose": null,
+        "pii": false,
+        "title": "Open past SLA (SLA denominator)",
+        "dateKey": "created_date"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": []
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_sla_compliance_rate_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": null,
       "supportsSeries": false,
       "viz": {
         "kind": "number-tile-delta",
@@ -413,10 +573,17 @@
         "accent": "teal",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
-        "compose": null,
+        "compose": {
+          "type": "slaComplianceRate",
+          "sourceKpiIds": [
+            "cl_sla_compliant_resolved_count",
+            "cl_sla_accountable_resolved_count",
+            "cl_sla_accountable_open_breached_count"
+          ]
+        },
         "pii": false,
         "title": "SLA compliance rate",
-        "subtitle": "Resolved within SLA ÷ all filed",
+        "subtitle": "Resolved within SLA ÷ (resolved + open past SLA)",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": true,
@@ -450,30 +617,64 @@
   {
     "tenantId": "ke",
     "data": {
-      "id": "cl_resolved_on_time_rate_count",
+      "id": "cl_resolved_on_time_compliant_count",
       "version": "1.0.0",
       "status": "published",
       "query": {
         "grain": "facts",
+        "window": {
+          "name": "last_7d",
+          "timeRole": "resolved_at"
+        },
         "filters": {
-          "is_resolved": true
+          "is_resolved": true,
+          "sla_breached": false
         },
         "measures": [
           {
-            "name": "pct",
-            "agg": "ratio",
-            "numerator": {
-              "agg": "count",
-              "filter": {
-                "sla_breached": false
-              }
-            },
-            "denominator": {
-              "agg": "count"
-            }
+            "name": "total",
+            "agg": "count"
           }
         ]
       },
+      "supportsSeries": true,
+      "viz": {
+        "kind": "number-tile-delta",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_COMPLIANT_COUNT",
+        "compose": null,
+        "pii": false,
+        "title": "Resolved on time (count)",
+        "dateKey": "resolved_date"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": []
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_resolved_on_time_rate_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": null,
       "supportsSeries": true,
       "viz": {
         "kind": "number-tile-sparkline",
@@ -482,9 +683,17 @@
         "accent": "teal",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
-        "compose": null,
+        "compose": {
+          "type": "slaComplianceRate",
+          "sourceKpiIds": [
+            "cl_resolved_on_time_compliant_count",
+            "cl_resolved_date_range_count",
+            "cl_sla_accountable_open_breached_count"
+          ]
+        },
         "pii": false,
         "title": "Resolved on time rate",
+        "subtitle": "Resolved within SLA ÷ (resolved + open past SLA)",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": true,
@@ -496,7 +705,7 @@
           "compare": "prior"
         },
         "deltaLabel": "vs prior period",
-        "dateKey": "created_date",
+        "dateKey": "resolved_date",
         "sparklineMeasureKey": "pct"
       },
       "params": [
@@ -524,7 +733,7 @@
       "version": "1.0.0",
       "status": "published",
       "query": {
-        "grain": "facts",
+        "grain": "daily",
         "filters": {
           "is_open": true
         },
@@ -582,6 +791,10 @@
       "status": "published",
       "query": {
         "grain": "facts",
+        "window": {
+          "name": "last_7d",
+          "timeRole": "resolved_at"
+        },
         "filters": {
           "is_resolved": true
         },
@@ -613,7 +826,7 @@
           "compare": "prior"
         },
         "deltaLabel": "vs prior period",
-        "dateKey": "created_date",
+        "dateKey": "resolved_date",
         "sparklineMeasureKey": "total",
         "seriesColor": null,
         "title": "Resolved complaints"
@@ -645,7 +858,7 @@
       "version": "1.0.0",
       "status": "published",
       "query": {
-        "grain": "facts",
+        "grain": "daily",
         "filters": {
           "is_open": true
         },
@@ -657,7 +870,7 @@
           }
         ]
       },
-      "supportsSeries": true,
+      "supportsSeries": false,
       "viz": {
         "kind": "number-tile-delta",
         "format": "hoursDays",
@@ -668,7 +881,7 @@
         "compose": null,
         "pii": false,
         "title": "Oldest complaint",
-        "subtitle": "Earliest open complaint",
+        "subtitle": "Oldest open complaint at period end",
         "threshold": {
           "kind": "count",
           "higherIsBetter": false,
@@ -679,7 +892,7 @@
           "mode": "days",
           "compare": "prior"
         },
-        "deltaLabel": "vs period start"
+        "deltaLabel": "vs prior period end"
       },
       "params": [
         {
@@ -707,6 +920,10 @@
       "status": "published",
       "query": {
         "grain": "facts",
+        "window": {
+          "name": "last_7d",
+          "timeRole": "resolved_at"
+        },
         "filters": {
           "is_resolved": true
         },
@@ -729,7 +946,8 @@
         "compose": null,
         "pii": false,
         "title": "Average resolution time",
-        "subtitle": "Avg. time to resolve",
+        "subtitle": "Avg. creation to resolution",
+        "dateKey": "resolved_date",
         "delta": {
           "mode": "duration",
           "compare": "prior"
@@ -781,7 +999,7 @@
             "dir": "desc"
           }
         ],
-        "limit": 8
+        "limit": 1000
       },
       "supportsSeries": false,
       "viz": {
@@ -801,8 +1019,8 @@
         "orientation": "horizontal",
         "measureKey": "total",
         "seriesLabel": "Filed",
-        "limit": 8,
-        "subtitle": "Complaints filed, by type",
+        "showAll": true,
+        "subtitle": "All complaint types filed in period",
         "labelFormat": "dimension"
       },
       "params": [
@@ -962,7 +1180,7 @@
       "version": "1.0.0",
       "status": "published",
       "query": {
-        "grain": "facts",
+        "grain": "daily",
         "filters": {
           "is_open": true
         },
@@ -1018,7 +1236,7 @@
           "dimension": "current_assignee_uuid"
         },
         "title": "Employees with most open complaints",
-        "subtitle": "Open complaints by SLA state per officer"
+        "subtitle": "Open at period end, by SLA state per officer"
       },
       "params": [
         {
@@ -1050,7 +1268,7 @@
       "version": "1.0.0",
       "status": "published",
       "query": {
-        "grain": "facts",
+        "grain": "daily",
         "filters": {
           "is_open": true
         },
@@ -1107,7 +1325,7 @@
           }
         ],
         "limit": 8,
-        "subtitle": "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in.",
+        "subtitle": "Open at period end, by workflow stage",
         "labelFormat": "dimension"
       },
       "params": [
@@ -1135,7 +1353,7 @@
       "version": "1.0.0",
       "status": "published",
       "query": {
-        "grain": "facts",
+        "grain": "daily",
         "filters": {
           "is_open": true
         },
@@ -1172,7 +1390,7 @@
         "pii": false,
         "title": "Complaints by channel",
         "measureKey": "total",
-        "subtitle": "Open complaints by intake channel",
+        "subtitle": "Open at period end, by intake channel",
         "channelMap": [
           {
             "id": "web",
@@ -1273,7 +1491,7 @@
       "version": "1.0.0",
       "status": "published",
       "query": {
-        "grain": "facts",
+        "grain": "daily",
         "filters": {
           "is_open": true
         },
@@ -1309,7 +1527,7 @@
           "3-7d",
           ">7d"
         ],
-        "subtitle": "Open complaints by age bucket"
+        "subtitle": "Open at period end, by age bucket"
       },
       "params": [
         {
@@ -1607,7 +1825,7 @@
       "version": "1.0.0",
       "status": "published",
       "query": {
-        "grain": "facts",
+        "grain": "daily",
         "filters": {
           "is_open": true,
           "sla_status_bucket": {
@@ -1656,7 +1874,7 @@
         "compose": null,
         "pii": false,
         "title": "Complaints at risk",
-        "subtitle": "Open complaints nearing or past SLA"
+        "subtitle": "Open at period end, nearing or past SLA"
       },
       "params": [
         {
@@ -1700,21 +1918,6 @@
           {
             "name": "created",
             "agg": "count"
-          },
-          {
-            "name": "resolved",
-            "agg": "count",
-            "filter": {
-              "is_resolved": true
-            }
-          },
-          {
-            "name": "on_time",
-            "agg": "count",
-            "filter": {
-              "is_resolved": true,
-              "sla_breached": false
-            }
           }
         ],
         "sort": [
@@ -1739,6 +1942,12 @@
           "resolved",
           "on_time"
         ],
+        "compose": {
+          "type": "complaintsOverTime",
+          "sourceKpiIds": [
+            "cl_chart_over_time_resolved_daily"
+          ]
+        },
         "seriesDefs": [
           {
             "name": "Created",
@@ -1771,7 +1980,8 @@
         ],
         "compose": null,
         "pii": false,
-        "title": "Complaints over time"
+        "title": "Complaints over time",
+        "subtitle": "Created and resolved per day"
       },
       "params": [
         {
@@ -1796,11 +2006,85 @@
   {
     "tenantId": "ke",
     "data": {
+      "id": "cl_chart_over_time_resolved_daily",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "window": {
+          "name": "last_7d",
+          "timeRole": "resolved_at"
+        },
+        "dimensions": [
+          "resolved_date"
+        ],
+        "measures": [
+          {
+            "name": "resolved",
+            "agg": "count",
+            "filter": {
+              "is_resolved": true
+            }
+          },
+          {
+            "name": "on_time",
+            "agg": "count",
+            "filter": {
+              "is_resolved": true,
+              "sla_breached": false
+            }
+          }
+        ],
+        "sort": [
+          {
+            "by": "resolved_date",
+            "dir": "asc"
+          }
+        ],
+        "limit": 366
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "line",
+        "format": "integer",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_RESOLVED_DAILY",
+        "dimensionKey": "resolved_date",
+        "compose": null,
+        "pii": false,
+        "title": "Complaints over time (resolved)"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": []
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
       "id": "ep_table_employee_performance",
       "version": "1.0.0",
       "status": "published",
       "query": {
         "grain": "facts",
+        "window": {
+          "name": "last_7d",
+          "timeRole": "filed_at"
+        },
         "dimensions": [
           "current_assignee_uuid",
           "department_code"
@@ -1921,7 +2205,7 @@
           },
           {
             "id": "assigned",
-            "label": "Assigned",
+            "label": "Officer workload",
             "align": "left",
             "type": "integer"
           },
@@ -1977,7 +2261,7 @@
           }
         ],
         "labelFormat": "officer",
-        "subtitle": "Workload and quality metrics per officer"
+        "subtitle": "Officer workload: complaints filed in period"
       },
       "params": [
         {

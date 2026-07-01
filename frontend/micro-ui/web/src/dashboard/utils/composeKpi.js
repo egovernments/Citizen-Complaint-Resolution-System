@@ -43,6 +43,23 @@ export function evaluateCompose(compose, results) {
       const hoursElapsed = asOf ? elapsedHoursSince(startOfDay(new Date(asOf)), new Date(asOf)) : null;
       return hoursElapsed && hoursElapsed > 0 ? total / hoursElapsed : null;
     }
+    case 'resolvedOverFiledRate': {
+      const resolved = sourceData[0]?.total ?? 0;
+      const filed = sourceData[1]?.total ?? 0;
+      return filed === 0 ? 0 : resolved / filed;
+    }
+    case 'reopenedOverFiledRate': {
+      const reopened = sourceData[0]?.total ?? 0;
+      const filed = sourceData[1]?.total ?? 0;
+      return filed === 0 ? 0 : reopened / filed;
+    }
+    case 'slaComplianceRate': {
+      const compliant = sourceData[0]?.total ?? 0;
+      const resolved = sourceData[1]?.total ?? 0;
+      const openBreached = sourceData[2]?.total ?? 0;
+      const eligible = resolved + openBreached;
+      return eligible === 0 ? 0 : compliant / eligible;
+    }
     default:
       return null;
   }

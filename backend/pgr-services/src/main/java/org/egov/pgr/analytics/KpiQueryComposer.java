@@ -113,19 +113,18 @@ public class KpiQueryComposer {
         if (hasDateRange && bounds == null)
             throw new IllegalArgumentException("invalid_param: dateFrom/dateTo is not a valid yyyy-MM-dd range");
 
-        // A "live open snapshot" is a point-in-time count of currently-open complaints
-        // (filters.is_open, non-daily grain, no base time window). The reference dashboard
-        // (sanitizeLiveOpenSnapshotQueries) leaves these UN-narrowed by the global date
-        // range/window — "Breached SLA (open)", "Open complaints", the open-state charts and
-        // at-risk table are NOW snapshots, not time-bounded cohorts. So the current/base query
-        // ignores window + dateFrom/dateTo. (compare:prior and series:daily still apply: the
-        // delta uses a prior-week comparison and the sparkline a rolling window, per reference.)
+        // A "live open snapshot" is a point-in-time count on complaint_facts (filters.is_open,
+        // non-daily grain) — left un-narrowed by the global date range. Open complaints uses the
+        // daily grain instead and resolves to snapshot_date = period end (or today).
         boolean liveOpenSnapshot = isLiveOpenSnapshot(next, g);
+        boolean openDailyEndSnapshot = isOpenDailyEndSnapshot(next, g);
+        boolean scalarOpenDaily = openDailyEndSnapshot && !prior && !series;
 
         // ---- window override (skipped when an explicit range is supplied; range governs time) ----
         // Also skipped for compare:"prior" with no range, where the prior-WEEK fallback governs time,
-        // and for live-open snapshots (point-in-time; no window axis).
-        if (!hasDateRange && !prior && !liveOpenSnapshot && params.hasNonNull("window")) {
+        // for live-open snapshots (point-in-time; no window axis), and for open-backlog scalars that
+        // always resolve to a single snapshot_date (period end / today).
+        if (!hasDateRange && !prior && !liveOpenSnapshot && !scalarOpenDaily && params.hasNonNull("window")) {
             String windowName = params.get("window").asText();
             if (!windowName.isEmpty()) applyWindowName(next, windowName);
         }
@@ -133,6 +132,12 @@ public class KpiQueryComposer {
         if (prior) {
             // ---- prior-period: shift the (selected | default-week) range back one equal duration ----
             applyPrior(next, g, bounds);
+        } else if (bounds != null && openDailyEndSnapshot && !series) {
+            // Open backlog scalar with an explicit range -> snapshot on the inclusive end date.
+            applyEndDateSnapshot(next, g, bounds);
+        } else if (scalarOpenDaily && bounds == null) {
+            // Open backlog scalar with no explicit range -> today's daily snapshot.
+            applyEndDateSnapshotToday(next, g);
         } else if (bounds != null && !liveOpenSnapshot) {
             // ---- explicit date range -> gte/lt filter on the grain's time column ----
             applyDateRange(next, g, bounds);
@@ -217,6 +222,31 @@ public class KpiQueryComposer {
         }
         bindRange(query, col, bounds.fromDate, bounds.toExclusive, bounds.fromMs, bounds.toMs);
         // Range fully governs the time axis -> remove the base window (parity with the FE).
+        query.remove("window");
+    }
+
+    /** Open backlog on the daily grain: count rows on the inclusive end date of the selected range. */
+    private void applyEndDateSnapshot(ObjectNode query, Grain g, Bounds bounds) {
+        String col = dateFilterColumn(query, g);
+        if (col == null || !g.filterable.contains(col)) {
+            log.debug("grain '{}' has no filterable time column for an end-date snapshot; skipping", g.name);
+            return;
+        }
+        LocalDate endDate = bounds.toExclusive.minusDays(1);
+        ObjectNode bound = mergeableFilterObject(query, col);
+        bound.put("eq", endDate.toString());
+        query.remove("window");
+    }
+
+    /** Open backlog scalar with no explicit dashboard range -> today's daily snapshot (EAT). */
+    private void applyEndDateSnapshotToday(ObjectNode query, Grain g) {
+        String col = dateFilterColumn(query, g);
+        if (col == null || !g.filterable.contains(col)) {
+            log.debug("grain '{}' has no filterable time column for today's snapshot; skipping", g.name);
+            return;
+        }
+        ObjectNode bound = mergeableFilterObject(query, col);
+        bound.put("eq", ZonedDateTime.now(EAT).toLocalDate().toString());
         query.remove("window");
     }
 
@@ -313,7 +343,7 @@ public class KpiQueryComposer {
      * the FE base sparkline queries express it.
      */
     private void applyDailySeries(ObjectNode query, Grain g, Bounds bounds) {
-        String dim = dailyDimension(g);
+        String dim = dailyDimension(query, g);
         if (dim == null || !g.groupable.contains(dim)) {
             log.debug("grain '{}' has no daily date dimension; skipping series:daily", g.name);
             return;
@@ -367,11 +397,16 @@ public class KpiQueryComposer {
     }
 
     /** The precomputed daily date dimension per grain: facts/events/daily mirror the FE sparkline defs. */
-    private String dailyDimension(Grain g) {
+    private String dailyDimension(JsonNode query, Grain g) {
         switch (g.name) {
             case "events": return "occurred_date";
             case "daily":  return "snapshot_date";
-            default:        return "created_date";   // facts
+            default:
+                JsonNode window = query != null ? query.get("window") : null;
+                if (window != null && window.hasNonNull("timeRole")
+                        && "resolved_at".equals(window.get("timeRole").asText()))
+                    return "resolved_date";
+                return "created_date";   // facts
         }
     }
 
@@ -398,8 +433,26 @@ public class KpiQueryComposer {
         return !hasTimeWindow;
     }
 
+    /**
+     * Open backlog on {@code complaint_open_state_daily}: {@code grain:daily} with
+     * {@code filters.is_open}. The scalar is a point-in-time value on the period end date
+     * (or today when no explicit range is set); open-count, oldest-open-age, officer SLA,
+     * workflow-stage, channel, age, and at-risk widgets use this path.
+     */
+    private boolean isOpenDailyEndSnapshot(JsonNode query, Grain g) {
+        if (g == null || !"daily".equals(g.name)) return false;
+        JsonNode filters = query.get("filters");
+        return filters != null && filters.path("is_open").asBoolean(false);
+    }
+
     private String dateFilterColumn(JsonNode query, Grain g) {
-        if ("events".equals(g.name)) return "complaint_created_at";
+        if ("events".equals(g.name)) {
+            JsonNode window = query.get("window");
+            if (window != null && window.hasNonNull("timeRole")
+                    && "event_at".equals(window.get("timeRole").asText()))
+                return "entered_at";
+            return "complaint_created_at";
+        }
         if ("daily".equals(g.name)) return "snapshot_date";
         JsonNode window = query.get("window");
         if (window != null && window.hasNonNull("timeRole") && "resolved_at".equals(window.get("timeRole").asText()))

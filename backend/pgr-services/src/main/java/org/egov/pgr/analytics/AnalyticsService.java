@@ -182,7 +182,12 @@ public class AnalyticsService {
             // D1a backend-composed defs are intercepted by maybeComposeResult before this point;
             // a query:null def WITHOUT a valid compose op is a genuine misconfiguration.
             throw new IllegalArgumentException("invalid_kpi: KPI '" + kpiId + "' has no query defined");
-        return queryComposer.mergeParams(storedQuery, queryNode.get("params"));
+        JsonNode merged = queryComposer.mergeParams(storedQuery, queryNode.get("params"));
+        // Complaints-by-type should list every service_code in the period (not top-N).
+        if ("cl_chart_complaints_by_type".equals(kpiId) && merged instanceof com.fasterxml.jackson.databind.node.ObjectNode) {
+            ((com.fasterxml.jackson.databind.node.ObjectNode) merged).remove("limit");
+        }
+        return merged;
     }
 
     /**
@@ -218,7 +223,8 @@ public class AnalyticsService {
      * <p>Returns {@code null} when this is NOT a backend-compose ref (caller proceeds normally). For a
      * compose def that is not found / not visible, returns a {@code kpi_forbidden} result map (parity
      * with the kpiId path). Ports the 4 ops from the FE {@code composeKpi.js}: {@code dailyAvgFromWeekly},
-     * {@code hourlyAvgFromDaily}, {@code openRateComplement}, {@code netBacklogDaily}.
+     * {@code hourlyAvgFromDaily}, {@code openRateComplement}, {@code netBacklogDaily},
+     * {@code resolvedOverFiledRate}, {@code reopenedOverFiledRate}, {@code slaComplianceRate}.
      */
     private Map<String,Object> maybeComposeResult(JsonNode queryNode, AnalyticsScope scope,
                                                   String tenantId, Set<String> callerRoles) {
@@ -317,6 +323,27 @@ public class AnalyticsService {
                 if (!compose.path("elapsedFromAsOf").asBoolean(false)) return null;
                 long elapsed = elapsedHoursSinceStartOfDay(asOf());
                 return elapsed > 0 ? total / elapsed : null;
+            }
+            case "resolvedOverFiledRate": {
+                // Resolved in period (resolved_at cohort) ÷ filed in period (created_at cohort).
+                double resolved = orZero(num(src.get(0), "total"));
+                double filed = orZero(num(src.get(1), "total"));
+                return filed == 0 ? 0.0 : resolved / filed;
+            }
+            case "reopenedOverFiledRate": {
+                // Reopened in period (reopen event_at cohort) ÷ filed in period (created_at cohort).
+                double reopened = orZero(num(src.get(0), "total"));
+                double filed = orZero(num(src.get(1), "total"));
+                return filed == 0 ? 0.0 : reopened / filed;
+            }
+            case "slaComplianceRate": {
+                // Resolved within SLA ÷ (resolved + open past SLA). Filed cohort for SLA compliance;
+                // resolved-on-time uses resolved_at for compliant/resolved and filed cohort for open breached.
+                double compliant = orZero(num(src.get(0), "total"));
+                double resolved = orZero(num(src.get(1), "total"));
+                double openBreached = orZero(num(src.get(2), "total"));
+                double eligible = resolved + openBreached;
+                return eligible == 0 ? 0.0 : compliant / eligible;
             }
             default:
                 throw new IllegalArgumentException("invalid_kpi: unsupported compose op '" + type + "'");

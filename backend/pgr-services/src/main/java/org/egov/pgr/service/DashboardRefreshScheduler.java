@@ -52,10 +52,14 @@ public class DashboardRefreshScheduler {
             "INSERT INTO complaint_open_state_daily "
           + "(snapshot_date, service_request_id, tenant_id, is_open, sla_breached, sla_status_bucket, "
           + " aging_bucket, boundary_path, ward_code, zone_code, service_code, current_assignee_uuid, "
-          + " department_code, account_id) "
+          + " department_code, account_id, created_at, open_age_ms, application_status, source, "
+          + " service_group, sla_target_ms) "
           + "SELECT CURRENT_DATE, service_request_id, tenant_id, is_open, sla_breached, sla_status_bucket, "
           + "       aging_bucket, boundary_path, ward_code, zone_code, service_code, current_assignee_uuid, "
-          + "       department_code, account_id "
+          + "       department_code, account_id, created_at, "
+          + "       (EXTRACT(EPOCH FROM ((CURRENT_DATE + INTERVAL '1 day')::timestamp "
+          + "        AT TIME ZONE 'Africa/Nairobi')) * 1000)::bigint - created_at, "
+          + "       application_status, source, service_group, sla_target_ms "
           + "FROM complaint_facts WHERE is_open "
           + "ON CONFLICT (snapshot_date, service_request_id) DO NOTHING";
 
