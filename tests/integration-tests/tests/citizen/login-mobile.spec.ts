@@ -83,10 +83,15 @@ Catches a regression where the citizen login regresses to the hardcoded Indian v
     await mobileInput.waitFor({ state: 'visible', timeout: 20_000 });
 
     // Helper hint must be visible BEFORE the user touches the field —
-    // that's the whole point of the fix. The regex matches any "N-digit
-    // mobile number" phrasing so it stays tenant-agnostic regardless of
-    // whether MDMS returned 9-digit (Ethiopia) or 10-digit (India/FALLBACK).
-    const lengthHelperRe = /\d+-digit mobile number/i;
+    // that's the whole point of the fix. The regex matches the hint
+    // across digit-ui variants:
+    //   • Ethiopia/naipepea: "9-digit mobile number"
+    //   • Bomet ke:          "10 digits, starting with 6, 7, 8, 9"
+    //                        (idle) or "9-10 digits, starting with 1, 7"
+    //                        (after MDMS lazy-loads the ke rule)
+    // The two patterns cover "N-digit" (hyphenated) and "N digits" /
+    // "N-M digits" (space-separated, possibly with a range).
+    const lengthHelperRe = /\d+(?:-\d+)?\s+digits?|\d+-digit\s+mobile/i;
     const helper = page.getByText(lengthHelperRe).first();
     await expect(helper).toBeVisible({ timeout: 10_000 });
 
