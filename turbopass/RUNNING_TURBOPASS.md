@@ -2,6 +2,17 @@
 
 This guide explains how to fetch the offline administrative boundary data for the target P0 countries (**Mozambique, Kenya, and India**) and run the Turbopass service locally.
 
+> **Just want it running?** See [`README.md`](README.md). The whole pipeline below is wrapped by `overture-scraper/bootstrap.sh` and the root `docker-compose.yml`:
+> ```bash
+> # Docker (no local Python needed):
+> docker compose --profile bootstrap up --build bootstrap   # build the DB
+> docker compose up -d --build search-api                   # serve it
+>
+> # or on the host, one command (auto-creates a venv):
+> cd overture-scraper && ./bootstrap.sh
+> ```
+> The sections below are the manual, step-by-step version of what those do.
+
 ---
 
 ## 1. Local Database and Git Policy
