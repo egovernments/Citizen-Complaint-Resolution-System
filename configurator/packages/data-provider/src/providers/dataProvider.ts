@@ -168,6 +168,11 @@ function clientFilter(records: RaRecord[], filter: Record<string, unknown>): RaR
       // Internal control keys never participate in record-level filtering;
       // they're consumed by fetchers (e.g. mdmsGetList honours __tenantId).
       if (key === TENANT_OVERRIDE_KEY) return true;
+      // Localization fetcher control keys — consumed by localizationGetList to
+      // choose which locales to pivot; they are not record fields, so they must
+      // not participate in record-level filtering (else every pivoted row, which
+      // has msg__<locale> fields but no `locales`/`locale` field, gets dropped).
+      if (key === 'locale' || key === 'locale2' || key === 'locales') return true;
       if (key === 'q' && typeof value === 'string') {
         const q = value.toLowerCase();
         return JSON.stringify(record).toLowerCase().includes(q);
