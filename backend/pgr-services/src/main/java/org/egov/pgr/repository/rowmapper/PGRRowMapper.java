@@ -74,6 +74,17 @@ public class PGRRowMapper implements ResultSetExtractor<List<Service>> {
                 if(additionalDetails != null)
                     currentService.setAdditionalDetail(additionalDetails);
 
+                String extJson = rs.getString("extended_attributes");
+                if (extJson != null) {
+                    try {
+                        currentService.setExtendedAttributes(
+                                mapper.readValue(extJson, ExtendedAttributes.class));
+                    } catch (IOException e) {
+                        throw new CustomException("PARSING_ERROR",
+                                "Failed to parse extended_attributes JSON");
+                    }
+                }
+
                 serviceMap.put(currentService.getId(),currentService);
 
             }

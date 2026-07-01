@@ -100,8 +100,8 @@ export default async function globalSetup() {
       console.log('[Global Setup] MDMS UserValidation fetch failed — trying globalConfigs');
     }
 
-    // 2. globalConfigs.js — compile-time fallback for deployments with no
-    //    MDMS rule. Fills only what MDMS didn't.
+    // 2. globalConfigs.js — compile-time fallback for deployments with no MDMS rule.
+    //    Derive all constraints from mobileNumberRegex (single source of truth).
     if (!process.env.CITIZEN_MOBILE_LENGTH || !process.env.CITIZEN_MOBILE_PREFIX) {
       try {
         const resp = await fetch(`${baseURL}/digit-ui/globalConfigs.js`, { signal: AbortSignal.timeout(5000) });
@@ -109,18 +109,29 @@ export default async function globalSetup() {
         const match = text.match(/coreMobileConfigs\s*=\s*(\{.*?\});/s);
         if (match) {
           const cfg = JSON.parse(match[1]);
-          if (!process.env.CITIZEN_MOBILE_LENGTH && cfg.mobileNumberLength) {
-            process.env.CITIZEN_MOBILE_LENGTH = String(cfg.mobileNumberLength);
-          }
-          const starts = cfg.mobileNumberAllowedStartingCharacters;
-          if (!process.env.CITIZEN_MOBILE_PREFIX && Array.isArray(starts) && starts.length > 0) {
-            process.env.CITIZEN_MOBILE_PREFIX = String(starts[0]);
-          }
-          if (!process.env.CITIZEN_MOBILE_PATTERN && cfg.mobileNumberPattern) {
-            process.env.CITIZEN_MOBILE_PATTERN = String(cfg.mobileNumberPattern);
+          const pattern = cfg.mobileNumberRegex || cfg.mobileNumberPattern;
+          if (pattern) {
+            if (!process.env.CITIZEN_MOBILE_PATTERN) {
+              process.env.CITIZEN_MOBILE_PATTERN = pattern;
+            }
+            // Derive max length from regex when not already set from MDMS
+            if (!process.env.CITIZEN_MOBILE_LENGTH) {
+              const lenMatch = pattern.match(/\{(\d+)(?:,(\d+))?\}/g);
+              if (lenMatch) {
+                const last = lenMatch[lenMatch.length - 1].match(/\{(\d+)(?:,(\d+))?\}/);
+                const maxLen = last ? parseInt(last[2] || last[1], 10) + 1 : undefined;
+                if (maxLen) process.env.CITIZEN_MOBILE_LENGTH = String(maxLen);
+              }
+            }
+            // Derive first allowed starting digit from the regex's first char class
+            if (!process.env.CITIZEN_MOBILE_PREFIX) {
+              const firstClass = pattern.replace(/^\^/, '').match(/\[([^\]]+)\]|\d/);
+              const lead = firstClass ? firstClass[1] || firstClass[0] : null;
+              if (lead) process.env.CITIZEN_MOBILE_PREFIX = lead[0];
+            }
           }
           console.log(
-            `[Global Setup] Mobile rules from globalConfigs (compile-time fallback): length=${process.env.CITIZEN_MOBILE_LENGTH || '(default 10)'} prefix=${process.env.CITIZEN_MOBILE_PREFIX || '(default 9)'}`
+            `[Global Setup] Mobile rules from globalConfigs (compile-time fallback): pattern=${process.env.CITIZEN_MOBILE_PATTERN} length=${process.env.CITIZEN_MOBILE_LENGTH || '(default)'} prefix=${process.env.CITIZEN_MOBILE_PREFIX || '(default)'}`
           );
         }
       } catch {

@@ -1,9 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  INVENTORY_CHART_WIDGETS,
-  INVENTORY_KPI_METRICS,
-} from "../config/supervisorMetrics";
 import AddKpiPreview from "./AddKpiPreview";
 
 const PANEL_WIDTH_PX = 320; // ~tw-w-80
@@ -87,6 +83,8 @@ const AddKpiDropdown = ({
   onOpenChange,
   containerRef,
   kpiCardData,
+  allowedWidgetIds,
+  catalogItems,
 }) => {
   const panelRef = useRef(null);
   const [panelPosition, setPanelPosition] = useState(null);
@@ -94,20 +92,11 @@ const AddKpiDropdown = ({
   const [hoverRect, setHoverRect] = useState(null);
 
   const availableItems = useMemo(() => {
-    const metrics = INVENTORY_KPI_METRICS.filter(
-      (m) => !visibleLayoutIds.includes(m.id)
-    ).map((m) => ({
-      ...m,
-      itemType: "kpi",
-    }));
-    const widgets = INVENTORY_CHART_WIDGETS.filter(
-      (w) => !visibleLayoutIds.includes(w.id)
-    ).map((w) => ({
-      ...w,
-      itemType: "widget",
-    }));
-    return [...metrics, ...widgets];
-  }, [visibleLayoutIds]);
+    // Offer every role-visible catalog tile not already on the grid. The catalog
+    // is role-filtered server-side, so no extra allowedWidgetIds gate is needed.
+    // Each item is { id:kpiId, metric:title, type:viz.kind, itemType }.
+    return (catalogItems || []).filter((it) => !visibleLayoutIds.includes(it.id));
+  }, [visibleLayoutIds, catalogItems]);
 
   useLayoutEffect(() => {
     if (!open) {

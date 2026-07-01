@@ -27,7 +27,7 @@ ansible_host: 10.0.0.10
 #   - Grafana root URL (so dashboard links use the real domain)
 #   - Let's Encrypt certificate
 #   - Citizen-facing URLs the UI generates
-domain: digit.example.com
+domain: digit.example.com  
 
 # Default `true`. Renders nginx with `listen 443 ssl` + HTTP→HTTPS
 # redirect, expects Let's Encrypt certs at /etc/letsencrypt/live/<domain>/.
@@ -87,10 +87,10 @@ pgr_boundary_lowest_level: "Ward"
 boundary_type: "Ward"          # what the smallest selectable boundary is called
 
 # Mobile-number validation rules used by the citizen-side UI on signup.
-# Kenya: +254 prefix, 9 digits starting with 1 or 7.
+# Kenya: +254 prefix, 9-10 digits starting with 7 (Safaricom) or 1 (Airtel/Telkom).
 core_mobile_configs:
   mobilePrefix: "+254"
-  mobileNumberPattern: "^[17][0-9]{8}$"
+  mobileNumberPattern: "^0?[17][0-9]{8}$"
   mobileNumberLength: 9
   mobileNumberAllowedStartingCharacters: ["1", "7"]
   mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
@@ -205,6 +205,14 @@ enable_integration_tests_runner: false
 # integration_tests_runner_tenant_env: "/opt/integration-tests/deploy/bomet.env"
 
 # ────────── Optional services (opt-in via flags) ──────────
+
+# Start the real OTP stack: egov-otp (stores OTPs), user-otp (orchestrates
+# send/validate), egov-notification-sms (delivers via SMS gateway).
+# Default true — real OTP services run by default.
+# Set false before deploying if you want to skip the OTP stack (lean/offline
+# environments); egov-user's fixed OTP (CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE=123456)
+# still allows login, but /user-otp/* requests will fail without a mock in kong.yml.
+enable_otp_services: true
 
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
 # extra). Off by default; only enable if you actually use the inbox.

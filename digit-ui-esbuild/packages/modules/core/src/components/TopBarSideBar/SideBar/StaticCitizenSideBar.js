@@ -25,16 +25,24 @@ import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
 import LogoutDialog from "../../Dialog/LogoutDialog";
 import ChangeCity from "../../ChangeCity";
-import { defaultImage } from "../../utils";
+import { defaultImage, resolveProfilePhoto } from "../../utils";
 import ImageComponent from "../../ImageComponent";
 
 /* 
 Feature :: Citizen Webview sidebar
 */
-const Profile = ({ info, stateName, t }) => (
+const Profile = ({ info, stateName, t, photo }) => (
   <div className="profile-section">
     <div className="imageloader imageloader-loaded">
-      <ImageComponent className="img-responsive img-circle img-Profile" src={defaultImage} alt="Profile Logo" />
+      {/* #997: the desktop citizen sidebar hard-coded src={defaultImage}, so an
+          uploaded profile photo never showed here. Use the resolved photo URL
+          when available, falling back to the default glyph. */}
+      <ImageComponent
+        className="img-responsive img-circle img-Profile"
+        src={photo || defaultImage}
+        style={{ objectFit: "cover", objectPosition: "center" }}
+        alt="Profile Logo"
+      />
     </div>
     {info?.name && info?.name !== info?.mobileNumber && (
       <div id="profile-name" className="label-container name-Profile">
@@ -86,6 +94,28 @@ const StaticCitizenSideBar = ({ linkData, islinkDataLoading }) => {
   const [isEmployee, setisEmployee] = useState(false);
   const [isSidebarOpen, toggleSidebar] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
+  const [profilePic, setProfilePic] = useState(null);
+
+  // #997: fetch + resolve the logged-in user's photo (a bare fileStoreId) so the
+  // sidebar avatar renders the uploaded image instead of always the default.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchProfilePhoto = async () => {
+      const tenant = Digit.ULBService.getCurrentTenantId();
+      const uuid = user?.info?.uuid;
+      if (!uuid) return;
+      const usersResponse = await Digit.UserService.userSearch(tenant, { uuid: [uuid] }, {});
+      const userData = usersResponse?.user?.[0];
+      if (userData?.photo) {
+        const resolved = await resolveProfilePhoto(userData.photo, Digit.ULBService.getStateId());
+        if (!cancelled) setProfilePic(resolved);
+      }
+    };
+    if (!profilePic) fetchProfilePhoto();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.info?.uuid]);
 
   const handleLogout = () => {
     toggleSidebar(false);
@@ -157,7 +187,7 @@ const StaticCitizenSideBar = ({ linkData, islinkDataLoading }) => {
   let profileItem;
 
   if (isFetched && user && user.access_token && user?.info?.type === "CITIZEN") {
-    profileItem = <Profile info={user?.info} stateName={stateInfo?.name} t={t} />;
+    profileItem = <Profile info={user?.info} stateName={stateInfo?.name} t={t} photo={profilePic} />;
     menuItems = menuItems.filter((item) => item?.id !== "login-btn");
     menuItems = [
       ...menuItems,

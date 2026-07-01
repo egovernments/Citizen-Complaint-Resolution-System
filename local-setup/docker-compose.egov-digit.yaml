@@ -599,10 +599,7 @@ services:
     # `registry.preview.egov.theflywheel.in` is a read-only HTTPS proxy
     # in front of the egov-ci VPC registry — public cert, no
     # insecure-registries trust required, pullable from anywhere.
-    # Override EGOV_USER_IMAGE in host_vars if the preview registry is
-    # unreachable; egovio/egov-user:master-e22c7c5 is the last Docker Hub
-    # tag before the 1044 fix was added (lacks tenant-aware encryption).
-    image: ${EGOV_USER_IMAGE:-registry.preview.egov.theflywheel.in/egovio/egov-user:1044-preview}
+    image: egovio/egov-user:master-e22c7c5
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -654,6 +651,8 @@ services:
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'true'
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: '123456'
+      EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '+91'
+      EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '^[6-9][0-9]{9}$'
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8107/user/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1250,6 +1249,123 @@ services:
     restart: "no"
 
   # ===========================================================================
+  # OTP Services (opt-in via `enable_otp_services: true` in Ansible host_vars)
+  #
+  # When disabled (default), Kong mocks /user-otp/* with a 200 response and
+  # egov-user's CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE (123456) is used for
+  # local login/register flows.  When enabled, real OTP generation + SMS
+  # delivery are active — required for production.
+  # ===========================================================================
+
+  egov-otp:
+    image: egovio/egov-otp:v2.9.2-4a60f20
+    container_name: egov-otp
+    profiles: [otp]
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      # Flyway disabled - migrations run by db-migrations container (pgbouncer transaction mode incompatible with Flyway)
+      SPRING_FLYWAY_ENABLED: "false"
+      SERVER_PORT: 8089
+      EGOV_OTP_LENGTH: 6
+      EGOV_OTP_TTL: 900
+      EGOV_OTP_ENCRYPT: "true"
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8089/otp/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+    networks:
+      - egov-network
+
+  user-otp:
+    image: egovio/user-otp:master-e22c7c5
+    container_name: user-otp
+    profiles: [otp]
+    depends_on:
+      egov-otp:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8090
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      OTP_HOST: http://egov-otp:8089
+      OTP_CREATE_URL: /otp/v1/_create
+      USER_HOST: http://egov-user:8107/
+      SEARCH_USER_URL: /user/_search
+      SMS_TOPIC: egov.core.notification.sms
+      EMAIL_TOPIC: egov.core.notification.email
+      EXPIRY_TIME_FOR_OTP: 300000
+      EGOV_LOCALISATION_HOST: http://egov-localization:8096
+      EGOV_LOCALISATION_SEARCH_ENDPOINT: /localization/messages/v1/_search
+      EGOV_LOCALISATION_TENANTID_STRIP_SUFFIX_COUNT: 1
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+    networks:
+      - egov-network
+
+  egov-notification-sms:
+    image: egovio/egov-notification-sms:master-e22c7c5
+    container_name: egov-notification-sms
+    profiles: [otp]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8005
+      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SMS_ENABLED: "true"
+      KAFKA_TOPICS_NOTIFICATION_SMS_NAME: egov.core.notification.sms
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
+      EGOV_STATE_LEVEL_TENANT_ID: pg
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
+      SMS_PROVIDER_CLASS: Console
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.1'
+    networks:
+      - egov-network
+
+  # ===========================================================================
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
@@ -1270,6 +1386,8 @@ services:
       egov-workflow-v2:
         condition: service_healthy
       egov-localization:
+        condition: service_healthy
+      egov-enc-service:
         condition: service_healthy
       otel-collector:
         condition: service_started
@@ -1301,6 +1419,7 @@ services:
       EGOV_BOUNDARY_HOST: http://boundary-service:8081/
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
+      EGOV_ENC_HOST: http://egov-enc-service:1234
       EGOV_UI_APP_HOST: http://localhost:18080
       # pgr-services' EscalationScheduler resolves the tenant to query
       # MDMS at from the KEYS of this map (PGRConfiguration#getUiAppHostMap,

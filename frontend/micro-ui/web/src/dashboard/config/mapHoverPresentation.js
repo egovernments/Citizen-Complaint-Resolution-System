@@ -1,4 +1,22 @@
-import { formatDimensionLabel } from "./kpiQueries";
+import { formatDimensionLabel } from "./labelFormat";
+import { formatWorkflowStatusLabel } from "./complaintsAtRiskPresentation";
+
+const PIN_SLA_LABELS = {
+  within: "Within SLA",
+  approaching: "Nearing breach",
+  breached: "Breached",
+};
+const PIN_CHANNEL_LABELS = {
+  web: "Web",
+  mobile: "Mobile app",
+  csc: "Counter (CSC)",
+  ivr: "IVR",
+  whatsapp: "WhatsApp",
+  sms: "SMS",
+  email: "Email",
+};
+const titleCaseWord = (v) =>
+  String(v ?? "").replace(/\b\w/g, (c) => c.toUpperCase());
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -53,16 +71,40 @@ export function buildMapHoverTooltipHtml(ward = {}, { layerMode = "created", geo
 }
 
 /** Hover card for an individual complaint pin. */
+function formatPinDate(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  try {
+    return new Date(n).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function buildComplaintPinTooltipHtml(pin = {}) {
-  const title = pin.serviceCode || "Complaint";
-  const status = pin.status || "—";
+  const title = pin.serviceCode ? formatDimensionLabel(pin.serviceCode) : "Complaint";
+  const status = pin.status ? formatWorkflowStatusLabel(pin.status) : "—";
   const ward = pin.wardCode ? formatDimensionLabel(pin.wardCode) : null;
+  const filed = formatPinDate(pin.createdDate);
+  const channel = pin.source
+    ? PIN_CHANNEL_LABELS[String(pin.source).toLowerCase()] || titleCaseWord(pin.source)
+    : null;
+  const sla = pin.slaStatus
+    ? PIN_SLA_LABELS[String(pin.slaStatus).toLowerCase()] || titleCaseWord(pin.slaStatus)
+    : null;
 
   return `
     <div class="dashboard-map-hover-card dashboard-map-hover-card--pin">
       <div class="dashboard-map-hover-title">${escapeHtml(title)}</div>
       ${metricRow("Status", status)}
       ${ward ? metricRow("Ward", ward) : ""}
+      ${filed ? metricRow("Filed", filed) : ""}
+      ${channel ? metricRow("Channel", channel) : ""}
+      ${sla ? metricRow("SLA", sla) : ""}
       ${pin.serviceRequestId ? metricRow("ID", pin.serviceRequestId) : ""}
       ${
         pin.approximate

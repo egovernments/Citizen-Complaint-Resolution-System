@@ -10,10 +10,12 @@ import {
   getResolvedShareFillStyle,
 } from "../config/geographyMapPresentation";
 import { buildMapHoverTooltipHtml, buildComplaintPinTooltipHtml } from "../config/mapHoverPresentation";
-import { formatDimensionLabel } from "../config/kpiQueries";
+import { formatDimensionLabel } from "../config/labelFormat";
 import { fetchBoundariesByCodes, fetchBoundaryRelationshipsByCodes } from "../services/boundaryService";
 import { useMapResize } from "../hooks/useMapResize";
 import {
+  aggregateWardCountsToLevel,
+  deriveBoundaryAncestorCodes,
   buildBoundaryLabelIndex,
   buildMapDisplayLayers,
   buildMapDrillHierarchy,
@@ -27,6 +29,7 @@ import {
   getMapZoomLevelLabel,
   getWardFeaturesInHierarchyGroup,
   resolveDrillZoomFeatures,
+  resolveComplaintPinPositions,
   getMapCityLabel,
   isWardDrillLevel,
   joinWardMapData,
@@ -81,6 +84,10 @@ function createComplaintPinPopup(pin, radius) {
   }).setContent(buildComplaintPinPopupContent(pin));
 }
 
+
+// Zoom thresholds that drive which boundary level renders (county/sub-county/ward).
+const MAP_COUNTY_MAX_ZOOM = 10; // below -> county outline only
+const MAP_SUBCOUNTY_MAX_ZOOM = 12; // below -> sub-counties; at/above -> wards
 
 function resolveFeatureStyle(feature, layerMode, focusedCode, zoom = 11) {
   const props = feature?.properties ?? {};
@@ -180,11 +187,25 @@ const GeographyChoroplethMap = ({
   const [legendCollapsed, setLegendCollapsed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const geoLevel = getMapZoomLevelLabel({
-    drillTrailLength: drillTrail.length,
-    focusedCode,
-    drillLevel,
-  });
+  // Zoom-driven boundary level: zoomed out shows the county outline, mid shows
+  // sub-counties, zoomed in shows wards. Thresholds are deliberately coarse.
+  const activeLevel =
+    zoomLevel < MAP_COUNTY_MAX_ZOOM
+      ? "county"
+      : zoomLevel < MAP_SUBCOUNTY_MAX_ZOOM
+        ? "subCounty"
+        : "ward";
+
+  const geoLevel =
+    activeLevel === "county"
+      ? "County"
+      : activeLevel === "subCounty"
+        ? "Sub-county"
+        : getMapZoomLevelLabel({
+            drillTrailLength: drillTrail.length,
+            focusedCode,
+            drillLevel,
+          });
 
   const { resizeToken } = useMapResize(mapRef, frameRef);
 
@@ -204,10 +225,16 @@ const GeographyChoroplethMap = ({
     }
     setBoundariesLoading(true);
     setBoundariesError(null);
-    Promise.all([
-      fetchBoundariesByCodes(wardCodes),
-      fetchBoundaryRelationshipsByCodes(wardCodes),
-    ])
+    // Fetch relationships first so we know the parent (county/sub-county) codes, then
+    // fetch geometries for wards AND parents — the zoom-driven levels need all three.
+    fetchBoundaryRelationshipsByCodes(wardCodes)
+      .then((rels) => {
+        const parentCodes = deriveBoundaryAncestorCodes(rels);
+        return Promise.all([
+          fetchBoundariesByCodes([...wardCodes, ...parentCodes]),
+          Promise.resolve(rels),
+        ]);
+      })
       .then(([items, rels]) => {
         if (cancelled) return;
         setBoundaries(items);
@@ -228,6 +255,24 @@ const GeographyChoroplethMap = ({
     () => joinWardMapData(wardCounts, boundaries),
     [wardCounts, boundaries]
   );
+
+  // Parent-level joins for the zoom-driven boundary levels (counts rolled up to the
+  // sub-county / county, joined against the seeded parent polygons).
+  const subCountyJoined = useMemo(
+    () => joinWardMapData(aggregateWardCountsToLevel(wardCounts, hierarchyIndex, 1), boundaries),
+    [wardCounts, hierarchyIndex, boundaries]
+  );
+  const countyJoined = useMemo(
+    () => joinWardMapData(aggregateWardCountsToLevel(wardCounts, hierarchyIndex, 0), boundaries),
+    [wardCounts, hierarchyIndex, boundaries]
+  );
+  // Active level by zoom; fall back to wards if a level's parent polygons are missing.
+  const activeJoined =
+    activeLevel === "county" && countyJoined.geoFeatures.features.length
+      ? countyJoined
+      : activeLevel === "subCounty" && subCountyJoined.geoFeatures.features.length
+        ? subCountyJoined
+        : joined;
 
   const drillHierarchyIndex = useMemo(
     () =>
@@ -260,10 +305,17 @@ const GeographyChoroplethMap = ({
     return null;
   }, [focusedWard, drillTrail]);
 
-  const displayLayers = useMemo(
-    () => buildMapDisplayLayers(joined, drillLevel, complaintPins, drillHierarchyIndex),
-    [joined, drillLevel, complaintPins, drillHierarchyIndex]
-  );
+  const displayLayers = useMemo(() => {
+    // Pass [] for pins here so buildMapDisplayLayers doesn't run the (heavy) pin
+    // resolution against the active level — we place pins by ward code below.
+    const layers = buildMapDisplayLayers(activeJoined, drillLevel, [], drillHierarchyIndex);
+    // Pins are placed by ward code, so position them via the ward-level join even when
+    // a parent level (county/sub-county) is rendered — otherwise every pin is dropped.
+    layers.complaintPins = complaintPins.length
+      ? resolveComplaintPinPositions(complaintPins, joined)
+      : [];
+    return layers;
+  }, [activeJoined, joined, drillLevel, complaintPins, drillHierarchyIndex]);
 
   const visibleComplaintPins = displayLayers.complaintPins ?? [];
 

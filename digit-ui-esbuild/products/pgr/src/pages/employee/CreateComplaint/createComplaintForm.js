@@ -113,18 +113,16 @@ const CreateComplaintForm = ({
     }
   }, [toast?.show]);
 
-  // Validate phone number based on config
+  // Validate phone number based on config (length + regex pattern)
   const validatePhoneNumber = (value, config) => {
-    const { minLength, maxLength, min, max } = config?.populators?.validation || {};
+    const { minLength, maxLength, pattern } = config?.populators?.validation || {};
     const stringValue = String(value || "");
 
-    if (
-      (minLength && stringValue.length < minLength) ||
-      (maxLength && stringValue.length > maxLength) ||
-      (min && Number(value) < min) ||
-      (max && Number(value) > max)
-    ) {
-      return false;
+    if (minLength && stringValue.length < minLength) return false;
+    if (maxLength && stringValue.length > maxLength) return false;
+    if (pattern) {
+      const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
+      if (!re.test(stringValue)) return false;
     }
     return true;
   };
@@ -250,6 +248,11 @@ const CreateComplaintForm = ({
 
 
   const prevSubTypeRef = React.useRef([]);
+  // null = no error shown; "invalid" = error currently shown.
+  // Used to guard setError/clearErrors so they only fire when the state
+  // actually changes — preventing the infinite render loop that trigger() causes
+  // (trigger → errors change → re-render → watch() new ref → useEffect fires → loop).
+  const mobileErrorRef = useRef(null);
 
   // Track whether every isMandatory field in the live config has a
   // non-empty value, so we can gate the SUBMIT button. FormComposerV2
@@ -291,6 +294,30 @@ const CreateComplaintForm = ({
       formResetRef.current = reset;
     }
     recomputeSubmitDisabled(formData);
+
+    // Real-time mobile validation: show/hide CardLabelError as the user types.
+    // Uses setError/clearErrors guarded by a ref instead of trigger(), which
+    // caused an infinite loop (trigger changed errors state → re-render →
+    // watch() produced a new reference → useEffect fired → trigger again).
+    const mobile = formData?.ComplainantContactNumber;
+    const mobileField = updatedConfig?.form
+      ?.flatMap(s => s.body || [])
+      ?.find(f => f.populators?.name === "ComplainantContactNumber");
+    const mobilePattern = mobileField?.populators?.validation?.pattern;
+    if (mobile && mobilePattern) {
+      const re = mobilePattern instanceof RegExp ? mobilePattern : new RegExp(String(mobilePattern));
+      const isValid = re.test(mobile);
+      if (!isValid && mobileErrorRef.current !== "invalid") {
+        setError?.("ComplainantContactNumber", { type: "pattern", message: mobileField?.populators?.error || "CORE_COMMON_MOBILE_ERROR" });
+        mobileErrorRef.current = "invalid";
+      } else if (isValid && mobileErrorRef.current === "invalid") {
+        clearErrors?.("ComplainantContactNumber");
+        mobileErrorRef.current = null;
+      }
+    } else if (!mobile && mobileErrorRef.current !== null) {
+      clearErrors?.("ComplainantContactNumber");
+      mobileErrorRef.current = null;
+    }
 
     // The flat Type→Sub-Type cascade only applies to the legacy dropdowns.
     // When the hierarchy component is active it owns both fields, so skip this

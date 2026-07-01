@@ -1,5 +1,4 @@
 import type { SchemaDescriptor } from './types';
-import { userValidationDescriptor } from './user-validation';
 import { mobileValidationDescriptor } from './mobile-validation';
 import { themeConfigDescriptor } from './theme-config';
 import { tenantBoundaryDescriptor } from './tenant-boundary';
@@ -10,7 +9,6 @@ import { stateInfoDescriptor } from './state-info';
 
 /** Map of schema code -> descriptor. Add new entries as we cover more schemas. */
 const DESCRIPTORS: Record<string, SchemaDescriptor> = {
-  [userValidationDescriptor.schema]: userValidationDescriptor,
   [mobileValidationDescriptor.schema]: mobileValidationDescriptor,
   [themeConfigDescriptor.schema]: themeConfigDescriptor,
   [tenantBoundaryDescriptor.schema]: tenantBoundaryDescriptor,

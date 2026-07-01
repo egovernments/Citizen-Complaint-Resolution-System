@@ -235,12 +235,14 @@ export function hasTypedGridChrome(vizType) {
   return Boolean(styles?.header || styles?.body);
 }
 
-export function getDataTableThClass() {
-  return DATA_TABLE_STYLES.th;
+export function getDataTableThClass(align = "left") {
+  const { th, thRight } = DATA_TABLE_STYLES;
+  return align === "right" ? `${th} ${thRight}` : th;
 }
 
-export function getDataTableTdClass() {
-  return DATA_TABLE_STYLES.td;
+export function getDataTableTdClass(align = "left") {
+  const { td, tdRight } = DATA_TABLE_STYLES;
+  return align === "right" ? `${td} ${tdRight}` : td;
 }
 
 export function getSlaRiskStatusPillClass(status) {

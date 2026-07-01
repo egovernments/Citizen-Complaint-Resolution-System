@@ -5,6 +5,7 @@ import {
   getDataTableThClass,
 } from "../config/visualizationStyles";
 import { buildRedSeverityStyle } from "../config/tablePresentation";
+import { formatOfficerLabel } from "../config/kpiDisplay";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
 
@@ -76,6 +77,15 @@ const CELL_RENDERERS = {
   rating: (value) => formatRating(value),
   trend: (value) => <TrendCell value={value} />,
   tags: (value) => value,
+  officer: (value) => formatOfficerLabel(value),
+  department: (value) =>
+    !value || value === "null" || value === "undefined"
+      ? "—"
+      : String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase()),
+  dimension: (value) =>
+    !value || value === "null" || value === "undefined"
+      ? "—"
+      : String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase()),
 };
 
 function resolveToneClass(tone, styles) {
@@ -126,11 +136,55 @@ function renderStatusTags(row, styles) {
   );
 }
 
+// Config-driven cell tinting: a column declares
+//   threshold: { higherIsBetter, watch, breach, tag?: { watch, breach } }
+// and the table derives the per-cell tone (+ status tags) itself — so any catalog
+// table gets threshold coloring from MDMS with no per-KPI code. Mirrors the reference
+// watch/breach band model (TYPE_DETAILS_THRESHOLDS / EMPLOYEE_THRESHOLDS).
+function evaluateThresholdTone(value, t) {
+  const v = Number(value);
+  if (!t || !Number.isFinite(v)) return null;
+  if (t.higherIsBetter) {
+    if (v <= t.breach) return "breach";
+    if (v <= t.watch) return "watch";
+  } else {
+    if (v >= t.breach) return "breach";
+    if (v >= t.watch) return "watch";
+  }
+  return null;
+}
+
+function annotateRowsFromThresholds(rows, columns) {
+  const tcols = columns.filter((c) => c.threshold);
+  const hasTagsCol = columns.some((c) => c.type === "tags");
+  if (!tcols.length) return rows;
+  return rows.map((row) => {
+    if (row.cellTones || row.statusTagItems) return row; // already annotated upstream
+    const cellTones = {};
+    const tags = [];
+    for (const c of tcols) {
+      const tone = evaluateThresholdTone(row[c.id], c.threshold);
+      if (!tone) continue;
+      cellTones[c.id] = tone;
+      const label = c.threshold.tag?.[tone];
+      if (label) tags.push({ label, tone });
+    }
+    if (!Object.keys(cellTones).length && !hasTagsCol) return row;
+    const next = { ...row, cellTones };
+    if (hasTagsCol) next.statusTagItems = tags.length ? tags : [{ label: "On track", tone: null }];
+    return next;
+  });
+}
+
 const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
   const styles = DATA_TABLE_STYLES;
   const safeRows = rows ?? [];
+  const annotatedRows = useMemo(
+    () => annotateRowsFromThresholds(safeRows, columns),
+    [safeRows, columns]
+  );
   const { sortState, handleSort, sortRows } = useTableSort(columns);
-  const sortedRows = useMemo(() => sortRows(safeRows), [safeRows, sortRows]);
+  const sortedRows = useMemo(() => sortRows(annotatedRows), [annotatedRows, sortRows]);
 
   return (
     <table className={styles.table}>
