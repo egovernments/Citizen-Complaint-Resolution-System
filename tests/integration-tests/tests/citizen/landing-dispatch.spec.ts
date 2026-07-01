@@ -46,12 +46,13 @@ class CitizenLandingPage {
   }
 
   async detectLanding(timeout = 15_000): Promise<CitizenLanding> {
+    // NOTE: continueButton alone is NOT enough to detect language-selection —
+    // the login page also has a button labelled "Continue".  Only the URL
+    // match or the dedicated "Choose Language" heading reliably identify
+    // the select-language surface.
     return Promise.race<CitizenLanding>([
       this.page
         .waitForURL(/\/citizen\/select-language/, { timeout })
-        .then(() => 'language-selection' as const),
-      this.continueButton
-        .waitFor({ state: 'visible', timeout })
         .then(() => 'language-selection' as const),
       this.chooseLanguageHeading
         .waitFor({ state: 'visible', timeout })
@@ -125,7 +126,14 @@ Skips on deployments with single language or pre-resolved tenant — safe to run
     expect(body.toUpperCase()).toContain('ENGLISH');
 
     await landing.continueButton.click();
-    await page.waitForURL(/\/(citizen\/(login|select-city|home)|user\/login)/, { timeout: 15_000 });
+    // After choosing a language the SPA may route to login, city-select,
+    // all-services (single-language tenants), or stay on select-language
+    // while loading the next surface.  Accept any citizen sub-path except
+    // the bare language-selection page itself.
+    await page.waitForURL(
+      /\/(citizen\/(login|select-city|home|all-services)|user\/login)/,
+      { timeout: 15_000 },
+    );
   });
 
   test('auto-skip-home: All Services menu renders', {

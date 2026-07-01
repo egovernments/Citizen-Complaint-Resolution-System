@@ -21,10 +21,13 @@ test.describe('Citizen home + landing', () => {
 
 Steps:
 1. setTimeout 60s; OTP-login as a fresh citizen.
-2. Navigate to /digit-ui/citizen and wait 3s.
-3. Assert page.url() contains '/citizen/all-services'.
+2. Navigate to /digit-ui/citizen.
+3. Wait (up to 15 s) for the SPA router to settle on /citizen/all-services.
+4. Assert page.url() contains '/citizen/all-services'.
 
-Smoke-level routing check; pairs with the all-services + pgr-home tests in this file.`,
+Uses waitForURL instead of a fixed sleep so the assertion is reliable on both
+fast (naipepea) and slower (ke/bomet) deployments where the React router needs
+a round-trip to MDMS before picking the home route.`,
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(60_000);
@@ -35,7 +38,10 @@ Smoke-level routing check; pairs with the all-services + pgr-home tests in this 
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
-    await page.waitForTimeout(3000);
+    // Wait for the SPA router to settle — on ke the React router makes an
+    // MDMS round-trip before choosing /all-services, so a fixed 3 s sleep
+    // is not enough. waitForURL retries until the URL matches or 15 s pass.
+    await page.waitForURL(/\/citizen\/all-services/, { timeout: 15_000 });
 
     expect(page.url()).toContain('/citizen/all-services');
   });
