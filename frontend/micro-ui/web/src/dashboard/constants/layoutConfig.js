@@ -11,11 +11,22 @@ export const GRID_COLS = 12;
 export const KPI_ROW_HEIGHT = 52;
 export const GRID_MARGIN_Y = 16;
 
+/** react-grid-layout placeholder id while dragging from the Add-KPI inventory. */
+export const DROPPING_ITEM_ID = "__dropping-kpi__";
+
+export const DROPPING_ITEM = {
+  i: DROPPING_ITEM_ID,
+  w: 2,
+  h: 2,
+  x: 0,
+  y: 0,
+};
+
 /** Default grid size for full-width data tables (header + rows + updated stamp). */
 export const FULL_WIDTH_TABLE_GRID = {
   w: 12,
-  h: 6,
-  minW: 6,
+  h: 5,
+  minW: 4,
   minH: 4,
   maxW: 12,
   maxH: 14,
@@ -32,10 +43,13 @@ export const UNIFORM_CHART_SIZE_CONSTRAINTS = {
 /** Map widgets benefit from a taller resize range. */
 export const MAP_SIZE_CONSTRAINTS = {
   minW: 4,
-  minH: 5,
+  minH: 4,
   maxW: 12,
   maxH: 14,
 };
+
+/** Default size when adding a chart from the catalog (not stored on the constraint objects). */
+export const DEFAULT_CHART_GRID = { w: 4, h: 6 };
 
 /**
  * Per-chart default sizes (keyed by the legacy dash-case scrollKey). The catalog
@@ -47,17 +61,17 @@ export const DEFAULT_CHART_LAYOUT = {
   "cl-table-complaint-type-details": { x: 0, ...FULL_WIDTH_TABLE_GRID },
   "cl-table-complaints-at-risk": { x: 0, ...FULL_WIDTH_TABLE_GRID },
   "ep-table-employee-performance": { x: 0, ...FULL_WIDTH_TABLE_GRID },
-  "cl-chart-complaints-by-type": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  "cl-chart-departments": { x: 6, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  "cl-chart-department-resolution-rate": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  "cl-chart-department-flow-ratio": { x: 8, w: 4, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  "cl-map-geography-choropleth": { x: 0, w: 8, h: 6, minW: 4, minH: 5, maxW: 12, maxH: 14 },
-  "cl-chart-over-time": { x: 0, w: 12, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  "cl-chart-resolution-subtype": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  "cl-chart-officer-sla": { x: 0, w: 8, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  "cl-chart-open-by-type": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
-  "cl-chart-open-by-channel": { x: 6, w: 4, h: 5, minW: 3, minH: 4, maxW: 6, maxH: 8 },
-  "cl-chart-complaints-by-age": { x: 0, w: 6, h: 6, minW: 4, minH: 4, maxW: 12, maxH: 10 },
+  "cl-chart-complaints-by-type": { x: 0, ...DEFAULT_CHART_GRID, ...UNIFORM_CHART_SIZE_CONSTRAINTS },
+  "cl-chart-departments": { x: 6, ...DEFAULT_CHART_GRID, ...UNIFORM_CHART_SIZE_CONSTRAINTS },
+  "cl-chart-department-resolution-rate": { x: 0, ...DEFAULT_CHART_GRID, ...UNIFORM_CHART_SIZE_CONSTRAINTS },
+  "cl-chart-department-flow-ratio": { x: 8, ...DEFAULT_CHART_GRID, ...UNIFORM_CHART_SIZE_CONSTRAINTS },
+  "cl-map-geography-choropleth": { x: 0, w: 8, h: 6, ...MAP_SIZE_CONSTRAINTS },
+  "cl-chart-over-time": { x: 0, w: 12, h: 6, ...UNIFORM_CHART_SIZE_CONSTRAINTS },
+  "cl-chart-resolution-subtype": { x: 0, ...DEFAULT_CHART_GRID, ...UNIFORM_CHART_SIZE_CONSTRAINTS },
+  "cl-chart-officer-sla": { x: 0, w: 8, h: 6, ...UNIFORM_CHART_SIZE_CONSTRAINTS },
+  "cl-chart-open-by-type": { x: 0, ...DEFAULT_CHART_GRID, ...UNIFORM_CHART_SIZE_CONSTRAINTS },
+  "cl-chart-open-by-channel": { x: 6, ...DEFAULT_CHART_GRID, ...UNIFORM_CHART_SIZE_CONSTRAINTS },
+  "cl-chart-complaints-by-age": { x: 0, ...DEFAULT_CHART_GRID, ...UNIFORM_CHART_SIZE_CONSTRAINTS },
 };
 
 function rectsOverlap(a, b) {

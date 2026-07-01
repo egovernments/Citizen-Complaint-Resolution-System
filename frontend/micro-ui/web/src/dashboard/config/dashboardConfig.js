@@ -60,5 +60,5 @@ export function getSubMetricStorageKey() {
 }
 
 export function getFiltersStorageKey() {
-  return `${getTenantId()}-supervisor-dashboard-filters-v4`;
+  return `${getTenantId()}-supervisor-dashboard-filters-v5`;
 }

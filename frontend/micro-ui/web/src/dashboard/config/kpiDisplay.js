@@ -154,11 +154,11 @@ export function getNumberTileDeltaClass(status, { unavailable = false } = {}) {
   }
 }
 
-/** Value color for number tiles — threshold-driven, shared by every metric card. */
-export function getNumberTileValueClass(status, { unavailable = false } = {}) {
+/** Value color for number tiles — always foreground; delta/sparkline keep status colors. */
+export function getNumberTileValueClass(_status, { unavailable = false } = {}) {
   const styles = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_DELTA];
   if (unavailable) return styles.valueUnavailable;
-  return getStatusValueClass(status);
+  return "tw-text-foreground";
 }
 
 /** Delta color for KPI tiles — matches the main value (threshold-driven). */

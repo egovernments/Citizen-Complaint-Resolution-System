@@ -1,8 +1,8 @@
-import React, { useCallback } from "react";
+import React, { useMemo } from "react";
 import {
+  buildDefaultFilters,
   COMPLAINT_TYPE_OPTIONS,
   GEOGRAPHY_OPTIONS,
-  GLOBAL_FILTER_FIELDS,
   hasActiveFilters,
 } from "../config/globalFilterGroups";
 
@@ -36,23 +36,16 @@ const DashboardFilters = ({
   const complaintTypeOptions =
     filterOptions?.complaintType ?? COMPLAINT_TYPE_OPTIONS;
 
-  const dateFrom = filters?.dateFrom ?? GLOBAL_FILTER_FIELDS.find((f) => f.id === "dateFrom")?.defaultValue;
-  const dateTo = filters?.dateTo ?? GLOBAL_FILTER_FIELDS.find((f) => f.id === "dateTo")?.defaultValue;
+  const { dateFrom, dateTo, today } = useMemo(() => {
+    const defaults = buildDefaultFilters();
+    return {
+      dateFrom: filters?.dateFrom ?? defaults.dateFrom,
+      dateTo: filters?.dateTo ?? defaults.dateTo,
+      today: defaults.dateTo,
+    };
+  }, [filters?.dateFrom, filters?.dateTo]);
   const geography = filters?.geography ?? "all";
   const complaintType = filters?.complaintType ?? "all";
-
-  const openCalendar = useCallback((input) => {
-    if (!input) return;
-    if (typeof input.showPicker === "function") {
-      try {
-        input.showPicker();
-        return;
-      } catch {
-        /* fall through */
-      }
-    }
-    input.focus();
-  }, []);
 
   return (
     <div className="dashboard-filters-bar tw-mb-4">
@@ -67,9 +60,9 @@ const DashboardFilters = ({
           <div className="dashboard-filter-inline-date-wrap">
             <input
               type="date"
+              max={dateTo}
               value={dateFrom}
               onChange={(e) => onFilterChange("dateFrom", e.target.value)}
-              onClick={(e) => openCalendar(e.currentTarget)}
               aria-label="From date"
               className="dashboard-filter-inline-date"
             />
@@ -80,9 +73,10 @@ const DashboardFilters = ({
           <div className="dashboard-filter-inline-date-wrap">
             <input
               type="date"
+              min={dateFrom}
+              max={today}
               value={dateTo}
               onChange={(e) => onFilterChange("dateTo", e.target.value)}
-              onClick={(e) => openCalendar(e.currentTarget)}
               aria-label="To date"
               className="dashboard-filter-inline-date"
             />

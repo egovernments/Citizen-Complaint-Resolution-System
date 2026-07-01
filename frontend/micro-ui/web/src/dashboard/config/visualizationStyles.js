@@ -61,6 +61,8 @@ const DATA_TABLE_STYLES = {
   title: SHARED_CHROME.dragHandleTitle,
   subtitle: SHARED_CHROME.dragHandleSubtitle,
   scroll: "dashboard-table-scroll",
+  tableFrame: "dashboard-table-frame",
+  tableHead: "dashboard-table-head",
   table: "dashboard-table",
   tableEqualCols: "dashboard-table--equal-cols",
   th: "dashboard-table-th",

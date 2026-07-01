@@ -150,6 +150,9 @@ const AddKpiDropdown = ({
     setHoverRect(null);
     event.dataTransfer.setData("text/plain", widgetId);
     event.dataTransfer.effectAllowed = "copy";
+    // #region agent log
+    fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',location:'AddKpiDropdown.jsx:handleDragStart',message:'external drag started from picker',data:{widgetId,hasParentHandler:typeof onDragWidgetStart==='function'},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
     onDragWidgetStart?.(widgetId);
     // Defer hiding so React does not re-render during dragstart (that cancels the drag).
     requestAnimationFrame(() => {

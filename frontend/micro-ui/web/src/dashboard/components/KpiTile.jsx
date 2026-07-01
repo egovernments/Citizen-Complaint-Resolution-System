@@ -274,9 +274,7 @@ function deltaClassFor(delta) {
 // Threshold-driven status for number cards. Ports kpiDisplay.resolveThresholdStatus
 // so the catalog can carry the on-track / breaching bands per def via
 //   viz.threshold = { kind, higherIsBetter, onTrack, breaching }
-// and the KpiCard/KpiSparklineCard value (and sparkline) colour at parity with the
-// live AdminDashboard path. When no threshold is present we fall back to the
-// static viz.accent (legacy behaviour) so non-card tiles are unaffected.
+// Status still drives delta and sparkline colour; the main value stays black.
 // ---------------------------------------------------------------------------
 
 const KPI_STATUS = { ON_TRACK: 'on_track', NORMAL: 'normal', BREACHING: 'breaching' };

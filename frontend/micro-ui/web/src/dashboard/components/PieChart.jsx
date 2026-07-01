@@ -25,7 +25,8 @@ const PieChart = ({ data = [] }) => {
     <div className={`${pieStyles.container} tw-flex tw-h-full tw-min-h-0 tw-w-full tw-flex-col`}>
       <div className="tw-relative tw-min-h-0 tw-flex-1">
         <svg
-          viewBox={`0 0 ${PIE_CHART_VIEWBOX.width} ${PIE_CHART_VIEWBOX.height}`}
+          viewBox={`${PIE_CHART_VIEWBOX.x} ${PIE_CHART_VIEWBOX.y} ${PIE_CHART_VIEWBOX.width} ${PIE_CHART_VIEWBOX.height}`}
+          preserveAspectRatio="xMidYMax meet"
           className="tw-h-full tw-w-full"
           role="img"
           aria-label="Donut chart"
@@ -86,8 +87,8 @@ const PieChart = ({ data = [] }) => {
           <div
             className={`${SHARED_CHROME.chartTooltip} ${SHARED_CHROME.chartTooltipAnchored}`}
             style={{
-              left: `${(active.hoverX / PIE_CHART_VIEWBOX.width) * 100}%`,
-              top: `${(active.hoverY / PIE_CHART_VIEWBOX.height) * 100}%`,
+              left: `${((active.hoverX - PIE_CHART_VIEWBOX.x) / PIE_CHART_VIEWBOX.width) * 100}%`,
+              top: `${((active.hoverY - PIE_CHART_VIEWBOX.y) / PIE_CHART_VIEWBOX.height) * 100}%`,
             }}
           >
             <div className={SHARED_CHROME.chartTooltipTitle}>{active.label}</div>

@@ -28,8 +28,8 @@ export const COMPLAINT_TYPE_OPTIONS = [
  * timeWindow is retained for volume KPI sub-metric resolution until date-range API wiring.
  */
 export const GLOBAL_FILTER_FIELDS = [
-  { id: "dateFrom", type: "date", label: "From", defaultValue: oneMonthAgoISO() },
-  { id: "dateTo", type: "date", label: "To", defaultValue: todayISO() },
+  { id: "dateFrom", type: "date", label: "From" },
+  { id: "dateTo", type: "date", label: "To" },
   {
     id: "geography",
     type: "select",
@@ -61,6 +61,7 @@ export function buildDefaultFilters() {
   );
   defaults.timeWindow = "weekly";
   defaults.dateRangeActive = true;
+  defaults.datesCustomized = false;
   return defaults;
 }
 
@@ -74,6 +75,7 @@ export function hasActiveFilters(filters) {
   const dateRangeActive = filters.dateRangeActive ?? defaults.dateRangeActive;
 
   return (
+    filters.datesCustomized === true ||
     dateRangeActive !== defaults.dateRangeActive ||
     dateFrom !== defaults.dateFrom ||
     dateTo !== defaults.dateTo ||
@@ -82,8 +84,41 @@ export function hasActiveFilters(filters) {
   );
 }
 
-function isValidISODate(value) {
+export function isValidISODate(value) {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function normalizeDateRange(dateFrom, dateTo) {
+  if (!isValidISODate(dateFrom) || !isValidISODate(dateTo)) {
+    return { dateFrom, dateTo };
+  }
+  if (dateFrom > dateTo) {
+    return { dateFrom: dateTo, dateTo: dateFrom };
+  }
+  return { dateFrom, dateTo };
+}
+
+export function applyFilterChange(prev, groupId, value) {
+  if (!prev || typeof prev !== "object") {
+    return buildDefaultFilters();
+  }
+
+  if (groupId === "dateFrom" || groupId === "dateTo") {
+    if (!isValidISODate(value)) return prev;
+
+    const draft = {
+      ...prev,
+      [groupId]: value,
+      datesCustomized: true,
+      dateRangeActive: true,
+    };
+    const normalized = normalizeDateRange(draft.dateFrom, draft.dateTo);
+    draft.dateFrom = normalized.dateFrom;
+    draft.dateTo = normalized.dateTo;
+    return sanitizeFilters(draft);
+  }
+
+  return sanitizeFilters({ ...prev, [groupId]: value });
 }
 
 export function sanitizeFilters(raw, dynamicOptions = {}) {
@@ -102,8 +137,11 @@ export function sanitizeFilters(raw, dynamicOptions = {}) {
 
   for (const field of GLOBAL_FILTER_FIELDS) {
     const value = raw[field.id];
-    if (field.type === "date" && isValidISODate(value)) {
-      next[field.id] = value;
+    if (field.type === "date") {
+      if (raw.datesCustomized === true && isValidISODate(value)) {
+        next[field.id] = value;
+      }
+      continue;
     }
     if (field.type === "select") {
       const fieldOptions = options[field.id] ?? field.options;
@@ -117,7 +155,11 @@ export function sanitizeFilters(raw, dynamicOptions = {}) {
     next.timeWindow = raw.timeWindow;
   }
 
-  next.dateRangeActive = raw.dateRangeActive === true;
+  next.datesCustomized = raw.datesCustomized === true;
+
+  // One-month default range is always active when dates are set (no UI to disable it).
+  next.dateRangeActive =
+    isValidISODate(next.dateFrom) && isValidISODate(next.dateTo);
 
   return next;
 }

@@ -10,6 +10,7 @@ import {
 import { complaintDetailHref } from "../config/complaintsAtRiskPresentation";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
+import DashboardTableFrame from "./DashboardTableFrame";
 
 const COLUMNS = [
   { id: "id", label: "ID", align: "left", type: "text" },
@@ -31,77 +32,82 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
     defaultDirection: "desc",
   });
   const sortedRows = useMemo(() => sortRows(rows), [rows, sortRows]);
+  const tableClassName = `${tableStyles.tableEqualCols} ${slaStyles.table}`;
+
+  const colgroup = (
+    <colgroup>
+      {COLUMNS.map((col) => (
+        <col key={col.id} style={{ width: `${100 / COLUMNS.length}%` }} />
+      ))}
+    </colgroup>
+  );
+
+  const header = (
+    <tr>
+      {COLUMNS.map((col) => (
+        <th key={col.id} className={getDataTableThClass(col.align)}>
+          <TableSortHeader column={col} sortState={sortState} onSort={handleSort} />
+        </th>
+      ))}
+    </tr>
+  );
 
   return (
-    <table
-      className={`${tableStyles.table} ${tableStyles.tableEqualCols} ${slaStyles.table}`}
+    <DashboardTableFrame
+      tableClassName={tableClassName}
+      colgroup={colgroup}
+      header={header}
     >
-      <colgroup>
-        {COLUMNS.map((col) => (
-          <col key={col.id} style={{ width: `${100 / COLUMNS.length}%` }} />
-        ))}
-      </colgroup>
-      <thead>
+      {sortedRows.length === 0 ? (
         <tr>
-          {COLUMNS.map((col) => (
-            <th key={col.id} className={getDataTableThClass(col.align)}>
-              <TableSortHeader column={col} sortState={sortState} onSort={handleSort} />
-            </th>
-          ))}
+          <td colSpan={COLUMNS.length} className={tableStyles.empty}>
+            No complaints at risk
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        {sortedRows.length === 0 ? (
-          <tr>
-            <td colSpan={COLUMNS.length} className={tableStyles.empty}>
-              No complaints at risk
-            </td>
-          </tr>
-        ) : (
-          sortedRows.map((row) => (
-          <tr key={row.id}>
-            <td className={getDataTableTdClass()}>
-              <a href={complaintDetailHref(row.id)} className={slaStyles.link}>
-                {row.id}
-              </a>
-            </td>
-            <td className={getDataTableTdClass()}>{row.typeLabel}</td>
-            <td className={getDataTableTdClass()}>{row.subtypeLabel}</td>
-            <td className={getDataTableTdClass()}>{row.locality}</td>
-            <td className={getDataTableTdClass()}>
-              <span className={slaStyles.ownerName}>{row.ownerName}</span>
-            </td>
-            <td className={getDataTableTdClass()}>
-              <span className={tableStyles.muted}>{row.ownerRole}</span>
-            </td>
-            <td className={getDataTableTdClass()}>
-              <span className={getSlaRiskStatusPillClass(row.status)}>
-                {row.statusLabel}
+      ) : (
+        sortedRows.map((row) => (
+        <tr key={row.id}>
+          <td className={getDataTableTdClass()}>
+            <a href={complaintDetailHref(row.id)} className={slaStyles.link}>
+              {row.id}
+            </a>
+          </td>
+          <td className={getDataTableTdClass()}>{row.typeLabel}</td>
+          <td className={getDataTableTdClass()}>{row.subtypeLabel}</td>
+          <td className={getDataTableTdClass()}>{row.locality}</td>
+          <td className={getDataTableTdClass()}>
+            <span className={slaStyles.ownerName}>{row.ownerName}</span>
+          </td>
+          <td className={getDataTableTdClass()}>
+            <span className={tableStyles.muted}>{row.ownerRole}</span>
+          </td>
+          <td className={getDataTableTdClass()}>
+            <span className={getSlaRiskStatusPillClass(row.status)}>
+              {row.statusLabel}
+            </span>
+          </td>
+          <td className={getDataTableTdClass()}>
+            <span className={getSlaRiskBreachPillClass(row.slaLevel)}>
+              {row.slaLabel}
+            </span>
+          </td>
+          <td className={getDataTableTdClass()}>
+            {row.breachDurationLabel ? (
+              <span
+                className={
+                  row.slaLevel === "breached" ? slaStyles.overdue : tableStyles.muted
+                }
+              >
+                {row.breachDurationLabel}
               </span>
-            </td>
-            <td className={getDataTableTdClass()}>
-              <span className={getSlaRiskBreachPillClass(row.slaLevel)}>
-                {row.slaLabel}
-              </span>
-            </td>
-            <td className={getDataTableTdClass()}>
-              {row.breachDurationLabel ? (
-                <span
-                  className={
-                    row.slaLevel === "breached" ? slaStyles.overdue : tableStyles.muted
-                  }
-                >
-                  {row.breachDurationLabel}
-                </span>
-              ) : (
-                <span className={tableStyles.muted}>—</span>
-              )}
-            </td>
-          </tr>
-          ))
-        )}
-      </tbody>
-    </table>
+            ) : (
+              <span className={tableStyles.muted}>—</span>
+            )}
+          </td>
+        </tr>
+        ))
+      )}
+    </DashboardTableFrame>
   );
 };
 

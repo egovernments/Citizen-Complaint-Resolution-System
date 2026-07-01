@@ -8,6 +8,7 @@ import { buildRedSeverityStyle } from "../config/tablePresentation";
 import { formatOfficerLabel } from "../config/kpiDisplay";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
+import DashboardTableFrame from "./DashboardTableFrame";
 
 const TrendCell = ({ value }) => {
   const { muted, trendUp, trendDown } = DATA_TABLE_STYLES;
@@ -186,106 +187,108 @@ const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
   const { sortState, handleSort, sortRows } = useTableSort(columns);
   const sortedRows = useMemo(() => sortRows(annotatedRows), [annotatedRows, sortRows]);
 
-  return (
-    <table className={styles.table}>
-      <colgroup>
-        {columns.map((col) => (
-          <col
-            key={col.id}
-            className={col.width ? styles.colFixed : undefined}
-            style={col.width ? { width: col.width } : undefined}
-          />
-        ))}
-      </colgroup>
-      <thead>
-        <tr>
-          {columns.map((col) => (
-            <th key={col.id} className={getDataTableThClass(col.align)}>
-              <TableSortHeader column={col} sortState={sortState} onSort={handleSort} />
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {sortedRows.length === 0 ? (
-          <tr>
-            <td colSpan={columns.length} className={styles.empty}>
-              {emptyMessage}
-            </td>
-          </tr>
-        ) : (
-          sortedRows.map((row, rowIndex) => (
-          <tr
-            key={row.id ?? rowIndex}
-            className={row.highlight ? styles.rowHighlight : undefined}
-            style={
-              row.highlight
-                ? {
-                    "--row-sla-severity": String(
-                      row.highlightSeverity != null ? row.highlightSeverity : 1
-                    ),
-                  }
-                : undefined
-            }
-          >
-            {columns.map((col) => {
-              const raw = row[col.id];
-              const isLabel =
-                col.id === "label" || col.id === "subtypeLabel" || col.id === "officerName";
-              const render = CELL_RENDERERS[col.type] ?? CELL_RENDERERS.text;
-              const content =
-                col.type === "tags"
-                  ? renderStatusTags(row, styles)
-                  : col.type === "trend"
-                    ? render(raw)
-                    : render(raw);
-              const labelText = typeof raw === "string" ? raw : String(raw ?? "");
-              const toneKey = col.thresholdKey ?? col.id;
-              const tone = row.cellTones?.[toneKey];
-              const severity = row.cellToneSeverity?.[toneKey];
-              const severityStyle =
-                severity != null ? buildRedSeverityStyle(severity) : undefined;
-              const usesSeverity = severityStyle != null;
-              const suppressCellBackground = Boolean(row.highlight);
-              const cellToneClass =
-                suppressCellBackground || usesSeverity
-                  ? undefined
-                  : resolveToneClass(tone, styles);
-              const textToneClass = usesSeverity
-                ? styles.slaOverrun
-                : resolveToneTextClass(tone, styles);
-              const legacyHighlight =
-                !tone && !usesSeverity && !suppressCellBackground && row.cellHighlights?.[col.id]
-                  ? styles.cellToneBreach
-                  : undefined;
+  const colgroup = (
+    <colgroup>
+      {columns.map((col) => (
+        <col
+          key={col.id}
+          className={col.width ? styles.colFixed : undefined}
+          style={col.width ? { width: col.width } : undefined}
+        />
+      ))}
+    </colgroup>
+  );
 
-              return (
-                <td
-                  key={col.id}
-                  className={`${getDataTableTdClass(col.align)} ${
-                    cellToneClass ?? legacyHighlight ?? ""
-                  }`.trim()}
-                >
-                  {isLabel ? (
-                    <span className={styles.primary} title={labelText}>
-                      <span className={styles.label}>{content}</span>
-                      {row.badge ? (
-                        <span className={styles.badge}>{row.badge}</span>
-                      ) : null}
-                    </span>
-                  ) : (
-                    <span className={textToneClass} style={usesSeverity ? severityStyle : undefined}>
-                      {content}
-                    </span>
-                  )}
-                </td>
-              );
-            })}
-          </tr>
-          ))
-        )}
-      </tbody>
-    </table>
+  const header = (
+    <tr>
+      {columns.map((col) => (
+        <th key={col.id} className={getDataTableThClass(col.align)}>
+          <TableSortHeader column={col} sortState={sortState} onSort={handleSort} />
+        </th>
+      ))}
+    </tr>
+  );
+
+  return (
+    <DashboardTableFrame colgroup={colgroup} header={header}>
+      {sortedRows.length === 0 ? (
+        <tr>
+          <td colSpan={columns.length} className={styles.empty}>
+            {emptyMessage}
+          </td>
+        </tr>
+      ) : (
+        sortedRows.map((row, rowIndex) => (
+        <tr
+          key={row.id ?? rowIndex}
+          className={row.highlight ? styles.rowHighlight : undefined}
+          style={
+            row.highlight
+              ? {
+                  "--row-sla-severity": String(
+                    row.highlightSeverity != null ? row.highlightSeverity : 1
+                  ),
+                }
+              : undefined
+          }
+        >
+          {columns.map((col) => {
+            const raw = row[col.id];
+            const isLabel =
+              col.id === "label" || col.id === "subtypeLabel" || col.id === "officerName";
+            const render = CELL_RENDERERS[col.type] ?? CELL_RENDERERS.text;
+            const content =
+              col.type === "tags"
+                ? renderStatusTags(row, styles)
+                : col.type === "trend"
+                  ? render(raw)
+                  : render(raw);
+            const labelText = typeof raw === "string" ? raw : String(raw ?? "");
+            const toneKey = col.thresholdKey ?? col.id;
+            const tone = row.cellTones?.[toneKey];
+            const severity = row.cellToneSeverity?.[toneKey];
+            const severityStyle =
+              severity != null ? buildRedSeverityStyle(severity) : undefined;
+            const usesSeverity = severityStyle != null;
+            const suppressCellBackground = Boolean(row.highlight);
+            const cellToneClass =
+              suppressCellBackground || usesSeverity
+                ? undefined
+                : resolveToneClass(tone, styles);
+            const textToneClass = usesSeverity
+              ? styles.slaOverrun
+              : resolveToneTextClass(tone, styles);
+            const legacyHighlight =
+              !tone && !usesSeverity && !suppressCellBackground && row.cellHighlights?.[col.id]
+                ? styles.cellToneBreach
+                : undefined;
+
+            return (
+              <td
+                key={col.id}
+                className={`${getDataTableTdClass(col.align)} ${
+                  cellToneClass ?? legacyHighlight ?? ""
+                }`.trim()}
+              >
+                {isLabel ? (
+                  <span className={styles.primary} title={labelText}>
+                    <span className={styles.label}>{content}</span>
+                    {row.badge ? (
+                      <span className={styles.badge}>{row.badge}</span>
+                    ) : null}
+                  </span>
+                ) : (
+                  <span className={textToneClass} style={usesSeverity ? severityStyle : undefined}>
+                    {content}
+                  </span>
+                )}
+              </td>
+            );
+          })}
+        </tr>
+        ))
+      )}
+    </DashboardTableFrame>
   );
 };
 

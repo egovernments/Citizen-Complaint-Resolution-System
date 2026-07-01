@@ -8,13 +8,11 @@ import DashboardLayout from "./components/DashboardLayout";
 import KpiTile from "./components/KpiTile";
 import CardUpdatedStamp from "./components/CardUpdatedStamp";
 import ResizeGrip from "./components/ResizeGrip";
-import SubtleScroll from "./components/SubtleScroll";
 import {
   VIZ_TYPE,
   SHARED_CHROME,
   buildWidgetHeaderClassName,
   getWidgetBodyClassName,
-  getWidgetScrollClassName,
 } from "./config/visualizationStyles";
 import DashboardLogin, {
   hasDashboardSession,
@@ -23,9 +21,9 @@ import DashboardLogin, {
 
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useCatalog } from "./hooks/useCatalog";
-import { useCatalogLayout } from "./hooks/useCatalogLayout";
+import { useCatalogLayout, getDroppingItemForKpi, defaultSizeForKpi } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
-import { GRID_COLS, KPI_ROW_HEIGHT } from "./constants/layoutConfig";
+import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM, DROPPING_ITEM_ID } from "./constants/layoutConfig";
 
 // Map the catalog's viz.kind onto the reference dashboard's VIZ_TYPE so each widget
 // gets its type-specific header/body chrome (padding, insets, legend tuning) instead
@@ -99,6 +97,18 @@ const WidgetRemoveButton = ({ label, onClick }) => (
 
 const GridLayoutWithWidth = WidthProvider(GridLayout);
 const GRID_MARGIN = [16, 16];
+
+function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, kpiId, kpis) {
+  const { w, h } = defaultSizeForKpi(kpiId, kpis);
+  const colWidth = (containerWidth - GRID_MARGIN[0] * (GRID_COLS + 1)) / GRID_COLS;
+  const left = clientX - gridRect.left;
+  const top = clientY - gridRect.top;
+  let x = Math.round((left - GRID_MARGIN[0]) / (colWidth + GRID_MARGIN[0]));
+  let y = Math.round((top - GRID_MARGIN[1]) / (KPI_ROW_HEIGHT + GRID_MARGIN[1]));
+  x = Math.max(0, Math.min(GRID_COLS - w, x));
+  y = Math.max(0, y);
+  return { x, y };
+}
 
 /* -------------------------------------------------------------------------- */
 /* Auth gate (mirrors AdminDashboard)                                          */
@@ -341,14 +351,209 @@ const AdminDashboardInner = ({ onSignOut }) => {
 
   const {
     layout,
+    gridSyncKey,
     onLayoutChange,
+    onDragStop,
+    onResizeStop,
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
     visibleLayoutIds,
+    findDragHoverTarget,
   } = useCatalogLayout(kpis, pack?.layout);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [draggingWidgetId, setDraggingWidgetId] = useState(null);
+  const draggingWidgetIdRef = useRef(null);
+  const gridWrapRef = useRef(null);
+  const externalDropLockRef = useRef(false);
+  const postDropWidgetRef = useRef(null);
+  const userDragWidgetRef = useRef(null);
+  const dragSwapTargetRef = useRef(null);
+  const dragOriginLayoutRef = useRef(null);
+  const lastHoverTargetRef = useRef(null);
+  const [isGridDragging, setIsGridDragging] = useState(false);
+
+  const handleDragWidgetStart = useCallback((widgetId) => {
+    draggingWidgetIdRef.current = widgetId;
+    setDraggingWidgetId(widgetId);
+    // #region agent log
+    fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',location:'AdminDashboard.jsx:handleDragWidgetStart',message:'parent received external drag start',data:{widgetId},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+  }, []);
+
+  const handleDragWidgetEnd = useCallback(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',location:'AdminDashboard.jsx:handleDragWidgetEnd',message:'external drag ended',data:{widgetId:draggingWidgetIdRef.current,layoutCount:layout.length},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+    draggingWidgetIdRef.current = null;
+    setDraggingWidgetId(null);
+  }, [layout.length]);
+
+  const isExternalDrag = Boolean(draggingWidgetId);
+
+  const droppingItem = useMemo(() => {
+    if (draggingWidgetId && kpis[draggingWidgetId]) {
+      return getDroppingItemForKpi(draggingWidgetId, kpis);
+    }
+    return DROPPING_ITEM;
+  }, [draggingWidgetId, kpis]);
+
+  const completeExternalDrop = useCallback(
+    (widgetId, position, clientX, clientY) => {
+      if (externalDropLockRef.current) return;
+      const activeId = widgetId || draggingWidgetIdRef.current;
+      if (!activeId || !kpis[activeId]) return;
+      if (layout.some((entry) => entry.i === activeId)) return;
+
+      let dropPosition = position;
+      if (!dropPosition && clientX != null && clientY != null && gridWrapRef.current) {
+        const gridEl = gridWrapRef.current.querySelector(".react-grid-layout");
+        if (gridEl) {
+          const rect = gridEl.getBoundingClientRect();
+          dropPosition = pixelToGridPosition(
+            rect.width,
+            clientX,
+            clientY,
+            rect,
+            activeId,
+            kpis
+          );
+        }
+      }
+      if (!dropPosition) return;
+
+      externalDropLockRef.current = true;
+      postDropWidgetRef.current = activeId;
+      requestAnimationFrame(() => {
+        addKpiToLayout(activeId, dropPosition);
+        handleDragWidgetEnd();
+        externalDropLockRef.current = false;
+      });
+    },
+    [addKpiToLayout, handleDragWidgetEnd, kpis, layout]
+  );
+
+  const handleWrapDragOver = useCallback(
+    (event) => {
+      if (!draggingWidgetIdRef.current) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    },
+    []
+  );
+
+  const handleWrapDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const widgetId = event.dataTransfer?.getData("text/plain");
+      // #region agent log
+      fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',runId:'post-fix',location:'AdminDashboard.jsx:handleWrapDrop',message:'external drop on grid wrapper',data:{widgetId,draggingRef:draggingWidgetIdRef.current},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
+      completeExternalDrop(widgetId, null, event.clientX, event.clientY);
+    },
+    [completeExternalDrop]
+  );
+
+  const handleGridDrop = useCallback(
+    (gridLayout, item, event) => {
+      const widgetId = event.dataTransfer.getData("text/plain");
+      const position = item ? { x: item.x, y: item.y } : null;
+      const clientX = event.nativeEvent?.clientX ?? event.clientX;
+      const clientY = event.nativeEvent?.clientY ?? event.clientY;
+      completeExternalDrop(widgetId, position, clientX, clientY);
+    },
+    [completeExternalDrop]
+  );
+
+  const handleDropDragOver = useCallback(() => {
+    const activeId = draggingWidgetIdRef.current;
+    if (!activeId || !kpis[activeId]) return false;
+    if (layout.some((entry) => entry.i === activeId)) return false;
+    return defaultSizeForKpi(activeId, kpis);
+  }, [kpis, layout]);
+
+  const handleLayoutChange = useCallback(
+    (next) => {
+      if (draggingWidgetIdRef.current) return;
+      const withoutPlaceholder = next.filter((item) => item.i !== DROPPING_ITEM_ID);
+      onLayoutChange(withoutPlaceholder);
+    },
+    [onLayoutChange]
+  );
+
+  const handleInternalDragStart = useCallback((_, __, newItem) => {
+    const widgetId = newItem?.i;
+    setIsGridDragging(true);
+    dragOriginLayoutRef.current = layout.map(({ i, x, y, w, h }) => ({ i, x, y, w, h }));
+    lastHoverTargetRef.current = null;
+    dragSwapTargetRef.current = null;
+    if (widgetId && postDropWidgetRef.current === widgetId) {
+      return;
+    }
+    if (postDropWidgetRef.current && widgetId && postDropWidgetRef.current !== widgetId) {
+      postDropWidgetRef.current = null;
+    }
+    userDragWidgetRef.current = widgetId ?? null;
+    // #region agent log
+    fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',location:'AdminDashboard.jsx:onDragStart',message:'internal grid drag started',data:{itemId:widgetId,from:{x:newItem?.x,y:newItem?.y}},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
+  }, [layout]);
+
+  const handleInternalDrag = useCallback(
+    (currentLayout, _oldItem, newItem) => {
+      if (!newItem?.i || !findDragHoverTarget) return;
+      const staticLayout = dragOriginLayoutRef.current ?? currentLayout;
+      const originItem = staticLayout.find((item) => item.i === newItem.i) ?? null;
+      const target = findDragHoverTarget(staticLayout, newItem, newItem.i, originItem);
+      if (target) {
+        lastHoverTargetRef.current = target.i;
+        dragSwapTargetRef.current = target.i;
+      } else {
+        lastHoverTargetRef.current = null;
+        dragSwapTargetRef.current = null;
+      }
+    },
+    [findDragHoverTarget]
+  );
+
+  const handleDragStop = useCallback(
+    (nextLayout, oldItem, newItem) => {
+      if (draggingWidgetIdRef.current) return;
+      const widgetId = newItem?.i;
+      if (widgetId && postDropWidgetRef.current === widgetId) {
+        userDragWidgetRef.current = null;
+        dragSwapTargetRef.current = null;
+        dragOriginLayoutRef.current = null;
+        lastHoverTargetRef.current = null;
+        setIsGridDragging(false);
+        return;
+      }
+      if (userDragWidgetRef.current === widgetId) {
+        postDropWidgetRef.current = null;
+      }
+      userDragWidgetRef.current = null;
+      setIsGridDragging(false);
+      const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
+      const hoverTargetId = lastHoverTargetRef.current ?? dragSwapTargetRef.current;
+      const originLayout = dragOriginLayoutRef.current;
+      dragSwapTargetRef.current = null;
+      dragOriginLayoutRef.current = null;
+      lastHoverTargetRef.current = null;
+      onDragStop(withoutPlaceholder, oldItem, newItem, hoverTargetId, originLayout);
+    },
+    [onDragStop]
+  );
+
+  const handleResizeStop = useCallback(
+    (nextLayout, oldItem, newItem) => {
+      if (draggingWidgetIdRef.current) return;
+      const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
+      onResizeStop(withoutPlaceholder, oldItem, newItem);
+    },
+    [onResizeStop]
+  );
 
   const tiles = useMemo(
     () => layout.map((item) => ({ kpiId: item.i })),
@@ -416,12 +621,12 @@ const AdminDashboardInner = ({ onSignOut }) => {
       })
       .catch((err) => {
         if (reqId !== reqIdRef.current) return;
-        setBatch({
+        setBatch((prev) => ({
+          ...prev,
           loading: false,
-          results: {},
-          errors: { __batch: err?.message || "Batch query failed" },
+          errors: { ...(prev.errors || {}), __batch: err?.message || "Batch query failed" },
           partial: true,
-        });
+        }));
       });
     // refsKey captures both the tile set and the resolved params.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -498,8 +703,8 @@ const AdminDashboardInner = ({ onSignOut }) => {
       catalogItems={catalogItems}
       onAddWidget={addKpiToLayout}
       onResetLayout={resetLayout}
-      onDragWidgetStart={() => {}}
-      onDragWidgetEnd={() => {}}
+      onDragWidgetStart={handleDragWidgetStart}
+      onDragWidgetEnd={handleDragWidgetEnd}
       searchQuery={searchQuery}
       onSearchQueryChange={setSearchQuery}
       onExport={handleExport}
@@ -535,19 +740,37 @@ const AdminDashboardInner = ({ onSignOut }) => {
           </p>
         </div>
       ) : (
+        <div
+          ref={gridWrapRef}
+          className={`${isExternalDrag ? "dashboard-external-drag" : ""}${
+            isGridDragging ? " dashboard-grid-dragging" : ""
+          }`.trim() || undefined}
+          onDragOver={handleWrapDragOver}
+          onDrop={handleWrapDrop}
+        >
         <GridLayoutWithWidth
+          key={gridSyncKey}
           className="dashboard-grid-layout layout"
           layout={gridLayout}
           cols={GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}
           margin={GRID_MARGIN}
           containerPadding={[0, 0]}
-          compactType="vertical"
+          compactType={null}
+          allowOverlap={false}
           isDraggable
           isResizable
+          isDroppable
+          droppingItem={droppingItem}
+          onDrop={handleGridDrop}
+          onDropDragOver={handleDropDragOver}
           draggableHandle=".dashboard-widget-surface"
           draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
-          onLayoutChange={onLayoutChange}
+          onLayoutChange={handleLayoutChange}
+          onDragStart={handleInternalDragStart}
+          onDrag={handleInternalDrag}
+          onDragStop={handleDragStop}
+          onResizeStop={handleResizeStop}
         >
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
@@ -586,7 +809,9 @@ const AdminDashboardInner = ({ onSignOut }) => {
             return (
               <section
                 key={item.i}
-                className={`dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface${dimClass}`}
+                className={`dashboard-widget-surface tw-group tw-relative tw-flex tw-h-full tw-min-h-0 tw-flex-col tw-overflow-hidden tw-rounded tw-border tw-border-border tw-bg-surface${
+                  isTable ? " dashboard-widget-table" : ""
+                }${dimClass}`}
               >
                 {removeBtn}
                 {!selfHeaders && (
@@ -608,13 +833,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
                       : getWidgetBodyClassName(vizType, { isTable })
                   }
                 >
-                  {isTable ? (
-                    <SubtleScroll className={getWidgetScrollClassName()}>
-                      {renderTile(item.i)}
-                    </SubtleScroll>
-                  ) : (
-                    renderTile(item.i)
-                  )}
+                  {renderTile(item.i)}
                 </div>
                 <CardUpdatedStamp label={lastUpdatedLabel} />
                 <ResizeGrip />
@@ -622,6 +841,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
             );
           })}
         </GridLayoutWithWidth>
+        </div>
       )}
     </DashboardLayout>
   );

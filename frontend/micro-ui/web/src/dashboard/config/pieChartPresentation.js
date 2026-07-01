@@ -5,13 +5,16 @@
 import { getChartColor, resolveDashboardCssColor } from "./chartColors";
 import { wrapChartLabelToLines } from "../utils/chartLabelWrap";
 
-export const PIE_CHART_VIEWBOX = { width: 320, height: 230 };
+export const PIE_CHART_VIEWBOX = { x: 0, y: 4, width: 320, height: 218 };
 export const PIE_CHART_CX = 160;
 export const PIE_CHART_CY = 118;
 export const PIE_CHART_OUTER_R = 72;
 export const PIE_CHART_INNER_R = 42;
 export const PIE_CHART_LABEL_R = 94;
 export const PIE_CHART_MIN_SWEEP_FOR_VALUE = 20;
+const PIE_CHART_LABEL_MARGIN_PX = 6;
+/** Approximate character width for 11px medium-weight sans-serif labels. */
+const PIE_CHART_LABEL_CHAR_WIDTH_PX = 6;
 
 export function pieChartValueRadius() {
   return (PIE_CHART_OUTER_R + PIE_CHART_INNER_R) / 2;
@@ -79,12 +82,27 @@ export function pieLabelOffset(midDeg) {
   return 0;
 }
 
-export function resolvePieLabelLines(label, sweepDeg) {
-  const arcWidthPx = Math.max(
-    28,
-    ((sweepDeg / 180) * Math.PI * PIE_CHART_LABEL_R) * 0.88
-  );
-  return wrapChartLabelToLines(label, arcWidthPx, { maxLines: 3 });
+/** Labels sit outside the ring — width is bounded by the viewbox, not slice arc length. */
+export function resolvePieLabelMaxWidth(labelX, labelAnchor) {
+  const margin = PIE_CHART_LABEL_MARGIN_PX;
+
+  if (labelAnchor === "start") {
+    return Math.max(48, PIE_CHART_VIEWBOX.width - labelX - margin);
+  }
+  if (labelAnchor === "end") {
+    return Math.max(48, labelX - margin);
+  }
+
+  const half = Math.min(labelX - margin, PIE_CHART_VIEWBOX.width - labelX - margin);
+  return Math.max(48, half * 2);
+}
+
+export function resolvePieLabelLines(label, labelX, labelAnchor) {
+  const maxWidthPx = resolvePieLabelMaxWidth(labelX, labelAnchor);
+  return wrapChartLabelToLines(label, maxWidthPx, {
+    charWidthPx: PIE_CHART_LABEL_CHAR_WIDTH_PX,
+    maxLines: 2,
+  });
 }
 
 export function normalizePieChartData(data = []) {
@@ -130,7 +148,7 @@ export function normalizePieChartData(data = []) {
       hoverX: hoverPoint.x,
       hoverY: hoverPoint.y,
       showValue: sweep >= PIE_CHART_MIN_SWEEP_FOR_VALUE,
-      labelLines: resolvePieLabelLines(item.label, sweep),
+      labelLines: resolvePieLabelLines(item.label, labelPoint.x + dx, anchor),
     };
   });
 }

@@ -673,6 +673,10 @@
       -webkit-overflow-scrolling: touch;
     }
 
+    .dashboard-grid-layout .react-grid-item.dashboard-widget-table {
+      overflow: hidden;
+    }
+
     .dashboard-kpi-value {
       font-size: clamp(18px, 4.5vw, 26px);
     }
@@ -969,28 +973,38 @@
     padding-bottom: 1.125rem;
   }
 
+  .dashboard-table-frame {
+    @apply tw-flex tw-min-h-0 tw-w-full tw-flex-1 tw-flex-col;
+  }
+
+  .dashboard-table-head {
+    @apply tw-shrink-0 tw-w-full tw-overflow-hidden;
+    scrollbar-gutter: stable;
+  }
+
+  .dashboard-table-scroll {
+    @apply tw-min-h-0 tw-w-full tw-max-w-full tw-overflow-auto;
+    flex: 1 1 0%;
+    scrollbar-gutter: stable;
+    font-family: inherit;
+    font-size: 12px;
+  }
+
   /* SLA table/bar toggle — reserve space for absolute Updated stamp (same as other cards) */
   .dashboard-sla-toggle-body {
     padding-bottom: 1.125rem;
   }
 
-  .dashboard-table-scroll {
-    @apply tw-min-h-0 tw-flex-1 tw-w-full tw-max-w-full tw-overflow-auto;
-    max-height: 100%;
-    font-family: inherit;
-    font-size: 12px;
-  }
-
   /* Override global digit-ui-components bare `table/th/td` rules from index.html */
   .dashboard-root table.dashboard-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     table-layout: fixed;
     font-family: inherit;
     font-size: 12px;
     line-height: 1.25;
     background: transparent;
-    overflow: visible;
   }
 
   .dashboard-root table.dashboard-table.dashboard-table--equal-cols {
@@ -1041,10 +1055,11 @@
     color: var(--dashboard-muted-foreground, #6b6860) !important;
     vertical-align: bottom;
     padding-top: 0.125rem !important;
-    position: sticky;
-    top: 0;
-    z-index: 2;
     background: var(--dashboard-surface, #fff) !important;
+  }
+
+  .dashboard-table-head .dashboard-table-th {
+    box-shadow: 0 1px 0 var(--dashboard-border, #e8e6e1);
   }
 
   .dashboard-table-sort-btn {
@@ -1584,7 +1599,7 @@
   .dashboard-pie-chart-body {
     @apply tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-overflow-visible tw-px-2 tw-pt-0;
     margin-top: -10px;
-    padding-bottom: 1.125rem;
+    padding-bottom: 0.125rem;
   }
 
   .dashboard-pie-chart-header {

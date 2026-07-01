@@ -244,6 +244,10 @@
   pointer-events: none;
 }
 
+.dashboard-external-drag .react-grid-placeholder {
+  transition: none;
+}
+
 .dashboard-external-drag .dashboard-grid-layout .react-grid-placeholder,
   .dashboard-grid-dragging .dashboard-grid-layout .react-grid-placeholder {
   opacity: 1 !important;
@@ -251,6 +255,11 @@
   border-radius: 4px;
   border: 1px dashed color-mix(in srgb, var(--chart-1, #2563eb) 35%, transparent) !important;
   background: color-mix(in srgb, var(--chart-1, #2563eb) 5%, transparent) !important;
+}
+
+.dashboard-grid-dragging .react-grid-placeholder,
+  .dashboard-external-drag .react-grid-placeholder {
+  transition: none;
 }
 
 .dashboard-grid-dragging .react-grid-item.react-draggable-dragging,
@@ -1020,6 +1029,10 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  .dashboard-grid-layout .react-grid-item.dashboard-widget-table {
+    overflow: hidden;
+  }
+
   .dashboard-kpi-value {
     font-size: clamp(18px, 4.5vw, 26px);
   }
@@ -1348,34 +1361,49 @@
   padding-bottom: 1.125rem;
 }
 
-/* SLA table/bar toggle — reserve space for absolute Updated stamp (same as other cards) */
+.dashboard-table-frame{
+  display: flex;
+  min-height: 0px;
+  width: 100%;
+  flex: 1 1 0%;
+  flex-direction: column;
+}
 
-.dashboard-sla-toggle-body {
-  padding-bottom: 1.125rem;
+.dashboard-table-head{
+  width: 100%;
+  flex-shrink: 0;
+  overflow: hidden;
+  scrollbar-gutter: stable;
 }
 
 .dashboard-table-scroll{
   min-height: 0px;
   width: 100%;
   max-width: 100%;
-  flex: 1 1 0%;
   overflow: auto;
-  max-height: 100%;
+  flex: 1 1 0%;
+  scrollbar-gutter: stable;
   font-family: inherit;
   font-size: 12px;
+}
+
+/* SLA table/bar toggle — reserve space for absolute Updated stamp (same as other cards) */
+
+.dashboard-sla-toggle-body {
+  padding-bottom: 1.125rem;
 }
 
 /* Override global digit-ui-components bare `table/th/td` rules from index.html */
 
 .dashboard-root table.dashboard-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
   font-family: inherit;
   font-size: 12px;
   line-height: 1.25;
   background: transparent;
-  overflow: visible;
 }
 
 .dashboard-root table.dashboard-table.dashboard-table--equal-cols {
@@ -1426,11 +1454,11 @@
   color: var(--dashboard-muted-foreground, #6b6860) !important;
   vertical-align: bottom;
   padding-top: 0.125rem !important;
-  position: -webkit-sticky;
-  position: sticky;
-  top: 0;
-  z-index: 2;
   background: var(--dashboard-surface, #fff) !important;
+}
+
+.dashboard-table-head .dashboard-table-th {
+  box-shadow: 0 1px 0 var(--dashboard-border, #e8e6e1);
 }
 
 .dashboard-table-sort-btn{
@@ -2120,7 +2148,7 @@
   padding-right: 0.5rem;
   padding-top: 0px;
   margin-top: -10px;
-  padding-bottom: 1.125rem;
+  padding-bottom: 0.125rem;
 }
 
 .dashboard-pie-chart-header{

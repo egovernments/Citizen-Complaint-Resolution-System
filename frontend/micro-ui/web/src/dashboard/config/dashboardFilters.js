@@ -26,11 +26,29 @@ function migrateTimeWindowFromLegacy() {
   return buildDefaultFilters().timeWindow;
 }
 
+function pickPersistedFilters(parsed) {
+  if (!parsed || typeof parsed !== "object") return {};
+
+  const next = {
+    geography: parsed.geography,
+    complaintType: parsed.complaintType,
+    timeWindow: parsed.timeWindow,
+  };
+
+  if (parsed.datesCustomized === true) {
+    next.datesCustomized = true;
+    next.dateFrom = parsed.dateFrom;
+    next.dateTo = parsed.dateTo;
+  }
+
+  return next;
+}
+
 export function loadDashboardFilters() {
   try {
     const raw = localStorage.getItem(getFiltersStorageKey());
     if (raw) {
-      return sanitizeFilters(JSON.parse(raw));
+      return sanitizeFilters(pickPersistedFilters(JSON.parse(raw)));
     }
   } catch {
     /* fall through */
@@ -44,10 +62,24 @@ export function clearDashboardFilters() {
 }
 
 export function persistDashboardFilters(filters, dynamicOptions) {
-  localStorage.setItem(
-    getFiltersStorageKey(),
-    JSON.stringify(sanitizeFilters(filters, dynamicOptions))
-  );
+  try {
+    const sanitized = sanitizeFilters(filters, dynamicOptions);
+    const toSave = {
+      geography: sanitized.geography,
+      complaintType: sanitized.complaintType,
+      timeWindow: sanitized.timeWindow,
+    };
+
+    if (sanitized.datesCustomized) {
+      toSave.datesCustomized = true;
+      toSave.dateFrom = sanitized.dateFrom;
+      toSave.dateTo = sanitized.dateTo;
+    }
+
+    localStorage.setItem(getFiltersStorageKey(), JSON.stringify(toSave));
+  } catch {
+    /* ignore quota / private-mode storage errors */
+  }
 }
 
 export function reconcileFiltersWithOptions(filters, filterOptions) {
