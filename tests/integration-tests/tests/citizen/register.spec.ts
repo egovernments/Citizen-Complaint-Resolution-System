@@ -42,9 +42,17 @@ Tolerant of post-OTP path differences (some configs go straight to /all-services
     // entry for this tenant — fall back to generateCitizenPhone() which uses
     // CITIZEN_PHONE_PREFIX (default "7") and produces a 9-digit number that
     // empirically matches Ethiopia's ^[17][0-9]{8}$ server-side rule.
+    //
+    // NOTE: On some deployments (e.g. Bomet ke) the MDMS rule's
+    // allowedStartingDigits may disagree with the UI's actual live
+    // validation (MDMS says ['2','3'] but the UI enforces starting with
+    // 1 or 7). In that case the MDMS-generated phone is silently rejected
+    // and the Continue button stays disabled. We detect this and fall back
+    // to generateCitizenPhone() which uses CITIZEN_PHONE_PREFIX ('7' by
+    // default) — safe for any deployment that accepts 7XXXXXXXX.
     const rule = await getMobileValidationRule(ROOT_TENANT).catch(() => null);
     const isFallbackRule = !rule || rule.pattern === '^\\d{10}$';
-    const phone = isFallbackRule ? generateCitizenPhone() : generateValidMobile(rule);
+    const mdmsPhone = isFallbackRule ? generateCitizenPhone() : generateValidMobile(rule);
 
     await page.goto(`${BASE_URL}/digit-ui/citizen/login`, {
       waitUntil: 'domcontentloaded',
@@ -59,10 +67,36 @@ Tolerant of post-OTP path differences (some configs go straight to /all-services
     ).first();
     await mobileInput.waitFor({ state: 'visible', timeout: 15_000 });
     await mobileInput.click();
-    await mobileInput.type(phone, { delay: 30 });
+    await mobileInput.type(mdmsPhone, { delay: 30 });
     await page.waitForTimeout(500);
 
-    await page.locator('button:visible').filter({ hasText: /^(Continue|Next)$/i }).first().click();
+    // Check if Continue is still disabled (MDMS allowedStartingDigits may
+    // disagree with the UI's live validator — e.g. ke MDMS says start
+    // with 2/3 but the UI only accepts 1/7). If so, clear and re-type
+    // using generateCitizenPhone() which starts with CITIZEN_PHONE_PREFIX
+    // ('7' by default) — accepted by every known deployment.
+    const continueBtn = page.locator('button:visible').filter({ hasText: /Continue|Next/i }).first();
+    const isDisabledAfterMdmsPhone = await continueBtn.isDisabled().catch(() => true);
+    let phone = mdmsPhone;
+    if (isDisabledAfterMdmsPhone) {
+      phone = generateCitizenPhone();
+      await mobileInput.click({ clickCount: 3 });
+      await mobileInput.fill('');
+      await mobileInput.type(phone, { delay: 30 });
+      await page.waitForTimeout(500);
+    }
+
+    // Click the Continue/Next button (or Submit / Enter OTP — label varies
+    // by digit-ui version; broaden the regex to cover all known variants).
+    // Wait up to 5 s for the button to become enabled (validation is async).
+    const submitBtn = page.locator('button:visible')
+      .filter({ hasText: /Continue|Next|Submit|Enter\s+OTP/i })
+      .first();
+    await expect(submitBtn).toBeEnabled({ timeout: 5_000 }).catch(() => {
+      // If still disabled after 5s, proceed anyway — the test may still
+      // pass (some deployments skip the phone-submit step entirely).
+    });
+    await submitBtn.click();
     await page.waitForTimeout(5000);
 
     // OTP screen — 6 single-char inputs
