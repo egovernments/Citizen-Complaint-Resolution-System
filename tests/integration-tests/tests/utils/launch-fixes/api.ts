@@ -244,6 +244,52 @@ export async function pgrCreate(params: PgrCreateParams): Promise<PgrCreateResul
 }
 
 /**
+ * Resolve a locality (boundary) code against the deployment's
+ * boundary-service. Returns `preferred` if it exists in the boundary list for
+ * `tenantId`; otherwise returns the first ward-level boundary code found.
+ *
+ * Ward-level codes are identified by having three or more underscore-separated
+ * segments (e.g. `BOMET_BOMET_CENTRAL_CHESOEN`) and not starting with `ZZ_`
+ * (test-only boundaries). Falls back to `preferred` on any network error so
+ * the _create call surfaces the original error.
+ *
+ * Useful when `LOCALITY_CODE` env var holds a Nairobi code
+ * (`NAIROBI_CITY_VIWANDANI`) but the deployment is Bomet ke.
+ */
+export async function resolveLocalityCode(
+  baseUrl: string,
+  authToken: string,
+  tenantId: string,
+  preferred: string,
+): Promise<string> {
+  try {
+    const r = await fetch(
+      `${baseUrl}/boundary-service/boundary/_search?tenantId=${encodeURIComponent(tenantId)}&hierarchyType=REVENUE&offset=0&limit=100`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ RequestInfo: { authToken } }),
+      },
+    );
+    const data = (await r.json()) as { Boundary?: Array<{ code: string }> };
+    const codes = (data.Boundary || []).map((b) => b.code);
+
+    // Return preferred if the deployment knows about it
+    if (codes.includes(preferred)) return preferred;
+
+    // Pick the first ward-level code: 3+ underscore-delimited segments,
+    // not a synthetic test boundary (ZZ_ prefix), not WARD_ORD.
+    const wardCode = codes.find(
+      (c) => c.split('_').length >= 4 && !c.startsWith('ZZ_') && c !== 'WARD_ORD',
+    );
+    if (wardCode) return wardCode;
+  } catch {
+    // Network or parse failure — return preferred and let _create surface the error
+  }
+  return preferred;
+}
+
+/**
  * Resolve a service code against the deployment's RAINMAKER-PGR.ServiceDefs
  * MDMS schema. Returns `preferred` if it is active on `tenantId`; otherwise
  * returns the first active code found.

@@ -12,7 +12,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { pgrCreate, resolveServiceCode } from '../utils/launch-fixes/api';
+import { pgrCreate, resolveServiceCode, resolveLocalityCode } from '../utils/launch-fixes/api';
 import {
   BASE_URL,
   TENANT,
@@ -90,15 +90,17 @@ async function registerCitizenAPI(phone: string): Promise<CitizenAuth> {
 }
 
 async function createComplaintAPI(auth: CitizenAuth): Promise<string> {
-  // Resolve a valid service code for this deployment (ke uses different codes
-  // than the default SERVICE_CODE which may only exist on Ethiopia).
+  // Resolve a valid service code and locality code for this deployment
+  // (ke/Bomet uses different codes than the defaults which may only exist
+  // on Ethiopia or Nairobi).
   const resolvedServiceCode = await resolveServiceCode(BASE_URL, auth.token, TENANT, SERVICE_CODE);
+  const resolvedLocalityCode = await resolveLocalityCode(BASE_URL, auth.token, TENANT, LOCALITY_CODE);
   const created = await pgrCreate({
     baseUrl: BASE_URL,
     auth,
     tenantId: TENANT,
     serviceCode: resolvedServiceCode,
-    localityCode: LOCALITY_CODE,
+    localityCode: resolvedLocalityCode,
     description: 'PW track-complaint test — auto-filed',
     citizenName: CITIZEN_NAME,
     citizenPhone: CITIZEN_PHONE,
