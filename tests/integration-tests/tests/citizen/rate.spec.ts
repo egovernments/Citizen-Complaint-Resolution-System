@@ -18,9 +18,14 @@
  * helper and add a second test there.
  */
 import { test, expect } from '@playwright/test';
+
+// Disable trace/video so the spec runs cleanly with --no-deps (the
+// .playwright-artifacts-0 dir is only created by the full setup DAG).
+test.use({ trace: 'off', video: 'off' });
+
 import { citizenOtpLogin } from '../utils/citizen-login';
 import { getDigitToken } from '../utils/auth';
-import { pgrCreate, resolveServiceCode } from '../utils/launch-fixes/api';
+import { pgrCreate, resolveServiceCode, resolveLocalityCode } from '../utils/launch-fixes/api';
 import {
   ADMIN_PASS,
   ADMIN_USER,
@@ -134,15 +139,17 @@ test.describe('Citizen rate-complaint UI', () => {
 
     // Citizen registers + files complaint
     const citizen = await registerCitizenAPI(CITIZEN_PHONE);
-    // Resolve a valid service code for this deployment (ke uses different codes
-    // than the default SERVICE_CODE which may only exist on Ethiopia).
+    // Resolve a valid service code and locality code for this deployment
+    // (ke/Bomet uses different codes than the defaults which may only exist
+    // on Ethiopia or Nairobi).
     const resolvedServiceCode = await resolveServiceCode(BASE_URL, citizen.token, TENANT, SERVICE_CODE);
+    const resolvedLocalityCode = await resolveLocalityCode(BASE_URL, citizen.token, TENANT, LOCALITY_CODE);
     const created = await pgrCreate({
       baseUrl: BASE_URL,
       auth: citizen,
       tenantId: TENANT,
       serviceCode: resolvedServiceCode,
-      localityCode: LOCALITY_CODE,
+      localityCode: resolvedLocalityCode,
       description: 'PW rate UI test — auto-resolved by spec',
       citizenName: CITIZEN_NAME,
       citizenPhone: CITIZEN_PHONE,
