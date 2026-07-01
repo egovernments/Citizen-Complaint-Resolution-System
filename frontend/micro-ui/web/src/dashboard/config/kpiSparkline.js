@@ -3,7 +3,7 @@
  *
  * Delta display (per supervisor CSV):
  * - whole-number volume tiles → relative % change vs prior period (e.g. ▲ 12.5%)
- * - percentage (1 dp) rate tiles → percentage-point change (e.g. ▲ 5.2 pp)
+ * - percentage (1 dp) rate tiles → percentage-point change (e.g. ▲ 5.2%)
  * - duration tiles → hrs/days change; oldest open → whole-day change (e.g. ▲ 3 d)
  * - CSAT → rating-point change (e.g. ▲ 0.3)
  */

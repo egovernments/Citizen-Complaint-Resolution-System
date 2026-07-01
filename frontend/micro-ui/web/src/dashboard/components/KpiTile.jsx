@@ -261,8 +261,7 @@ function formatDeltaDisplay(delta, format, mode) {
   const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
   if (eff === 'days') return `${arrow} ${formatted} ${rounded === 1 ? 'day' : 'days'}`;
   if (eff === 'rating') return `${arrow} ${formatted}`;
-  const unit = eff === 'percentPoint' ? 'pp' : '%';
-  return `${arrow} ${formatted}${unit}`;
+  return `${arrow} ${formatted}%`;
 }
 
 function deltaClassFor(delta) {
