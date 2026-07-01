@@ -86,6 +86,13 @@ function validateLevelSelection(levels: OsmAdminLevel[]): { valid: boolean; erro
 // proxies it to the search-api container); override via VITE_TURBOPASS_URL.
 const TURBOPASS_BASE: string = import.meta.env.VITE_TURBOPASS_URL || '/turbopass';
 
+// Boundary data source served by turbopass. 'geoapify' hits the hosted
+// Geoapify API (needs GEOAPIFY_API_KEY on the search-api); 'overture' hits the
+// self-hosted offline SQLite DB built by the bootstrap pipeline (docker compose
+// --profile bootstrap). Default stays 'geoapify' for backwards compatibility;
+// set VITE_TURBOPASS_SOURCE=overture to run fully offline.
+const TURBOPASS_SOURCE: string = import.meta.env.VITE_TURBOPASS_SOURCE || 'geoapify';
+
 // The OSM path always writes the ADMIN hierarchy (the Excel path lets the
 // operator name it).
 const OSM_HIERARCHY_TYPE = 'ADMIN';
@@ -239,7 +246,7 @@ export default function Phase2Page() {
 
     const timeoutId = setTimeout(async () => {
       try {
-        const res = await fetch(`${TURBOPASS_BASE}/boundary/search?q=${encodeURIComponent(searchTerm)}&source=geoapify`);
+        const res = await fetch(`${TURBOPASS_BASE}/boundary/search?q=${encodeURIComponent(searchTerm)}&source=${TURBOPASS_SOURCE}`);
         if (!res.ok) throw new Error(`Turbopass boundary search returned ${res.status}`);
         const data = await res.json();
         // Slice features to top 5
@@ -514,7 +521,7 @@ export default function Phase2Page() {
       if (!suggestion) {
         // If user clicked search button without selecting a suggestion, fetch the top suggestion
         try {
-          const res = await fetch(`${TURBOPASS_BASE}/boundary/search?q=${encodeURIComponent(searchTerm)}&source=geoapify`);
+          const res = await fetch(`${TURBOPASS_BASE}/boundary/search?q=${encodeURIComponent(searchTerm)}&source=${TURBOPASS_SOURCE}`);
           if (!res.ok) throw new Error(`Search returned ${res.status}`);
           const data = await res.json();
           if (data.features && data.features.length > 0) {
@@ -532,7 +539,7 @@ export default function Phase2Page() {
       }
       const placeId = suggestion.properties.place_id;
 
-      const res = await fetch(`${TURBOPASS_BASE}/boundary/fetch?id=${encodeURIComponent(placeId)}&source=geoapify`);
+      const res = await fetch(`${TURBOPASS_BASE}/boundary/fetch?id=${encodeURIComponent(placeId)}&source=${TURBOPASS_SOURCE}`);
       if (!res.ok) throw new Error("Geoapify boundary fetch failed");
       const geojson = await res.json();
 

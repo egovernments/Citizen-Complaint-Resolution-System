@@ -14,9 +14,14 @@ export class BoundaryService {
     private readonly configService: ConfigService,
   ) {
     try {
-      // Initialize sqlite db connection. 
-      // search-api runs from turbopass/search-api, so overture-data is at ../overture-data
-      const dbPath = path.resolve(process.cwd(), '../overture-data/boundaries.sqlite');
+      // Initialize sqlite db connection.
+      // Containerized deploys set OVERTURE_DB_PATH (docker-compose mounts the
+      // generated DB at /overture-data/boundaries.sqlite). Local dev falls back
+      // to the repo layout: search-api runs from turbopass/search-api, so the
+      // DB produced by the bootstrap pipeline sits at ../overture-data.
+      const dbPath = process.env.OVERTURE_DB_PATH
+        ? path.resolve(process.env.OVERTURE_DB_PATH)
+        : path.resolve(process.cwd(), '../overture-data/boundaries.sqlite');
       this.db = new Database(dbPath, { readonly: true });
     } catch (e) {
       console.warn('Overture SQLite database not found or cannot be opened. Overture fallback will be disabled.', e);
