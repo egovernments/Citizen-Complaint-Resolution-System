@@ -3,12 +3,12 @@ import { test } from '@playwright/test';
 test('capture MDMS calls from login page', {
   annotation: {
     type: 'description',
-    description: `Diagnostic spec used to inspect what the citizen login page actually requests from MDMS — specifically which tenant it uses and which validation modules it queries (UserValidation, ValidationConfigs, mobileNumberValidation). The test attaches request/response listeners, navigates to the login page, and prints every relevant MDMS POST it sees plus the STATE_LEVEL_TENANT_ID the UI resolved.
+    description: `Diagnostic spec used to inspect what the citizen login page actually requests from MDMS — specifically which tenant it uses and which validation modules it queries (MobileNumberValidation, ValidationConfigs). The test attaches request/response listeners, navigates to the login page, and prints every relevant MDMS POST it sees plus the STATE_LEVEL_TENANT_ID the UI resolved.
 
 Steps:
 1. Attach listeners to capture every POST that hits an mdms URL plus its JSON response.
 2. Navigate to https://naipepea.digit.org/digit-ui/citizen/login and wait 10s for the page to settle.
-3. Walk the captured calls and print URL/tenant/modules/response for any whose body mentions mobileNumberValidation, UserValidation, or ValidationConfigs.
+3. Walk the captured calls and print URL/tenant/modules/response for any whose body mentions MobileNumberValidation or ValidationConfigs.
 4. Print the total MDMS POST count and read STATE_LEVEL_TENANT_ID off window.globalConfigs.
 
 This is a diagnostic, not an assertion-driven test — it has no expect() calls and exists to surface what's going over the wire when mobile validation looks wrong.`,
@@ -44,7 +44,7 @@ This is a diagnostic, not an assertion-driven test — it has no expect() calls 
   // Print all MDMS calls that mentioned mobile/Validation
   for (const c of mdmsCalls) {
     const body = c.body || '';
-    if (body.includes('mobileNumberValidation') || body.includes('UserValidation') || body.includes('ValidationConfigs')) {
+    if (body.includes('MobileNumberValidation') || body.includes('mobileNumberValidation') || body.includes('ValidationConfigs')) {
       console.log('=== MDMS CALL ===');
       console.log('URL:', c.url);
       try {
@@ -55,8 +55,8 @@ This is a diagnostic, not an assertion-driven test — it has no expect() calls 
         console.log('Body (raw):', body.slice(0, 300));
       }
       if (c.response) {
-        const tc = c.response?.MdmsRes?.ValidationConfigs?.mobileNumberValidation;
-        console.log('Returned mobileNumberValidation:', JSON.stringify(tc));
+        const tc = c.response?.mdms;
+        console.log('Returned MobileNumberValidation records:', JSON.stringify(tc));
       }
     }
   }

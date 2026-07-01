@@ -1,7 +1,7 @@
 /**
  * Mobile-number validation rule, sourced from MDMS.
  *
- * Reads the rule under MDMS schema `ValidationConfigs.mobileNumberValidation`
+ * Reads the rule under MDMS schema `common-masters.MobileNumberValidation`
  * for the active tenant — the same rule the citizen + employee login forms
  * use. Lets specs stay tenant-agnostic: the same test passes against an
  * Ethiopia tenant (9-digit starting with 1/7), a Kenya tenant (9-digit),
@@ -42,14 +42,36 @@ export interface MobileRuleOptions {
 }
 
 /**
+ * Derive min/max digit counts from a mobile-number regex.
+ * Tries every (lead, fill) digit combo at lengths 5–15 and records which
+ * lengths produce a match. Falls back to {min:10, max:10} if the regex
+ * is invalid or no length matches.
+ */
+function deriveMobileLengths(regex: string): { min: number; max: number } {
+  let re: RegExp | null = null;
+  try { re = new RegExp(regex); } catch { return { min: 10, max: 10 }; }
+  let min = 16, max = 0;
+  for (const f of '0123456789') {
+    for (const d of '0123456789') {
+      for (let len = 5; len <= 15; len++) {
+        if (re.test(f + d.repeat(len - 1))) {
+          if (len < min) min = len;
+          if (len > max) max = len;
+        }
+      }
+    }
+  }
+  return max > 0 ? { min, max } : { min: 10, max: 10 };
+}
+
+/**
  * Fetch the live mobile-validation rule for `tenant` from MDMS.
  *
  * Authenticates against `rootTenant` (defaults to env ROOT_TENANT or the
  * supplied tenant) with admin credentials, then queries MDMS v2 for the
- * `ValidationConfigs.mobileNumberValidation` schema scoped to `tenant`.
- * Returns the record whose `uniqueIdentifier === 'defaultMobileValidation'`
- * if present, otherwise the first record. Falls back to a 10-digit numeric
- * rule on any failure.
+ * `common-masters.MobileNumberValidation` schema scoped to `tenant`.
+ * Returns the record whose `data.default === true` if present, otherwise
+ * the first record. Falls back to a 10-digit numeric rule on any failure.
  */
 export async function getMobileValidationRule(
   tenant: string,
@@ -83,29 +105,26 @@ export async function getMobileValidationRule(
         RequestInfo: ri,
         MdmsCriteria: {
           tenantId: tenant,
-          schemaCode: 'ValidationConfigs.mobileNumberValidation',
+          schemaCode: 'common-masters.MobileNumberValidation',
         },
       }),
     });
     if (!resp.ok) return FALLBACK;
     const json = (await resp.json()) as {
-      mdms?: Array<{ uniqueIdentifier?: string; data?: { rules?: Partial<MobileRule> } }>;
+      mdms?: Array<{ data?: { countryCode?: string; mobileNumberRegex?: string; default?: boolean } }>;
     };
     const records = json.mdms ?? [];
-    const preferred =
-      records.find((r) => r.uniqueIdentifier === 'defaultMobileValidation') ?? records[0];
-    const rules = preferred?.data?.rules;
-    if (!rules) return FALLBACK;
+    const preferred = records.find((r) => r.data?.default === true) ?? records[0];
+    const data = preferred?.data;
+    if (!data?.mobileNumberRegex) return FALLBACK;
+    const lengths = deriveMobileLengths(data.mobileNumberRegex);
     return {
-      prefix: typeof rules.prefix === 'string' ? rules.prefix : undefined,
-      pattern: typeof rules.pattern === 'string' ? rules.pattern : FALLBACK.pattern,
-      minLength: typeof rules.minLength === 'number' ? rules.minLength : FALLBACK.minLength,
-      maxLength: typeof rules.maxLength === 'number' ? rules.maxLength : FALLBACK.maxLength,
-      errorMessage:
-        typeof rules.errorMessage === 'string' ? rules.errorMessage : FALLBACK.errorMessage,
-      allowedStartingDigits: Array.isArray(rules.allowedStartingDigits)
-        ? (rules.allowedStartingDigits as string[])
-        : undefined,
+      prefix: typeof data.countryCode === 'string' ? data.countryCode : undefined,
+      pattern: data.mobileNumberRegex,
+      minLength: lengths.min,
+      maxLength: lengths.max,
+      errorMessage: `Please enter a valid ${lengths.max}-digit mobile number`,
+      allowedStartingDigits: derivedStartingDigits(data.mobileNumberRegex) ?? undefined,
     };
   } catch {
     return FALLBACK;
