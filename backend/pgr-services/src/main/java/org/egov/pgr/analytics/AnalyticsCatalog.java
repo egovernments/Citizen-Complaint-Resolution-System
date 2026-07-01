@@ -34,15 +34,17 @@ public class AnalyticsCatalog {
         public final String tenantColumn;
         public final String boundaryColumn;             // RBAC subtree scope (LIKE prefix)
         public final String citizenColumn;              // citizen self-scope
+        public final String departmentColumn;           // RBAC department scope (IN list); null => grain has no dept axis
         public final String defaultTimeRole;
 
         Grain(String name, String table, Map<String,String> timeRoles, Set<String> epochMsColumns,
               Set<String> groupable, Set<String> filterable, Set<String> measurable, Set<String> distinctable,
-              String tenantColumn, String boundaryColumn, String citizenColumn, String defaultTimeRole) {
+              String tenantColumn, String boundaryColumn, String citizenColumn, String departmentColumn,
+              String defaultTimeRole) {
             this.name = name; this.table = table; this.timeRoles = timeRoles; this.epochMsColumns = epochMsColumns;
             this.groupable = groupable; this.filterable = filterable; this.measurable = measurable;
             this.distinctable = distinctable; this.tenantColumn = tenantColumn; this.boundaryColumn = boundaryColumn;
-            this.citizenColumn = citizenColumn; this.defaultTimeRole = defaultTimeRole;
+            this.citizenColumn = citizenColumn; this.departmentColumn = departmentColumn; this.defaultTimeRole = defaultTimeRole;
         }
         public boolean isEpochMs(String col){ return epochMsColumns.contains(col); }
     }
@@ -56,9 +58,11 @@ public class AnalyticsCatalog {
             setOf("created_at","resolved_at","last_transition_at","first_assigned_at","facts_built_at"),
             // groupable
             setOf("service_code","application_status","source","ward_code","zone_code","boundary_path",
+                  "service_request_id",   // D1b: natural row id for the at-risk table (already distinctable)
                   "service_group","department_code","aging_bucket","sla_status_bucket","current_assignee_uuid",
                   "is_open","is_resolved","is_reopened","was_rejected","sla_breached","current_state_sla_breached",
                   "has_rating","is_negative_rating","is_first_time_complainant","has_geo_pin","filed_on_behalf",
+                  "latitude","longitude",   // map pins: per-complaint coordinates (projectable for the pin KPI)
                   "current_state_seq","created_month","created_week_start","created_year","created_quarter",
                   "created_date","created_dow","created_is_weekend","created_is_business_hr","tenant_id"),
             // filterable (NOTE: UUID columns intentionally absent)
@@ -66,7 +70,13 @@ public class AnalyticsCatalog {
                   "department_code","aging_bucket","sla_status_bucket","is_open","is_resolved","is_reopened",
                   "was_rejected","sla_breached","current_state_sla_breached","has_rating","is_negative_rating",
                   "is_first_time_complainant","has_geo_pin","created_month","created_year","created_quarter",
-                  "created_is_weekend","created_at","resolved_at","rating","current_state_seq"),
+                  "created_is_weekend","created_at","resolved_at","rating","current_state_seq",
+                  // D1c: non-PII integer assignment counters — filterable so first-assignment rate can be
+                  // expressed against real facts columns (replaces the nonexistent has_been_assigned/is_reassigned).
+                  "assignment_count","distinct_assignee_count",
+                  // escalation_count filterable so the employee-performance escalation rate can be a
+                  // count(escalation_count>=1)/count ratio (mirrors the reference escalation companion).
+                  "escalation_count"),
             // measurable (numeric)
             setOf("resolution_ms","time_to_assign_ms","open_age_ms","current_state_age_ms","first_escalation_ms",
                   "max_dwell_ms","assigned_dwell_ms","unassigned_dwell_ms","transition_count","assignment_count",
@@ -75,37 +85,43 @@ public class AnalyticsCatalog {
                   "mdms_sla_hours","sla_target_ms"),
             // distinct-countable
             setOf("account_id","current_assignee_uuid","service_code","ward_code","zone_code","service_request_id"),
-            "tenant_id","boundary_path","account_id","filed_at"));
+            "tenant_id","boundary_path","account_id","department_code","filed_at"));
 
         // ---------------- complaint_events ----------------
         grains.put("events", new Grain("events", "complaint_events",
             mapOf("event_at","entered_at"),
             setOf("entered_at","exited_at","complaint_created_at"),
             setOf("status","previous_status","action","escalation_source","ward_code","zone_code","service_code",
+                  "department_code",   // S2: events now carries department_code (from MDMS ServiceDefs)
                   "source","occurred_month","occurred_week_start","occurred_date","occurred_dow","occurred_hour",
                   "occurred_is_weekend","occurred_is_business_hr","is_assignment","is_escalation","is_reopen",
                   "is_backward_transition","status_is_terminal","status_is_open","has_comment","has_multiple_assignees",
                   "actor_is_system","is_current_state","assignee_uuid","actor_uuid","status_seq","tenant_id"),
             setOf("status","previous_status","action","escalation_source","ward_code","zone_code","service_code",
+                  "department_code",   // S2
                   "source","occurred_month","occurred_is_weekend","occurred_is_business_hr","is_assignment",
                   "is_escalation","is_reopen","is_backward_transition","status_is_terminal","status_is_open",
-                  "has_comment","has_multiple_assignees","actor_is_system","is_current_state","entered_at","status_seq"),
+                  "has_comment","has_multiple_assignees","actor_is_system","is_current_state","entered_at",
+                  "complaint_created_at",   // D2: real epoch-ms col on complaint_events; lets the global date range / compare:prior actually narrow events-grain tiles
+                  "status_seq"),
             setOf("dwell_ms","state_sla_ms","business_sla_ms","comment_length","seq_delta","complaint_age_at_event_ms",
                   "event_rating","assignee_count"),
             setOf("service_request_id","assignee_uuid","actor_uuid","account_id"),
-            "tenant_id","boundary_path","account_id","event_at"));
+            "tenant_id","boundary_path","account_id","department_code","event_at"));   // S2: department row-scope axis
 
         // ---------------- complaint_open_state_daily ----------------
         grains.put("daily", new Grain("daily", "complaint_open_state_daily",
             mapOf("snapshot_date","snapshot_date"),
             setOf(),  // snapshot_date is a sql date, not epoch-ms
             setOf("snapshot_date","ward_code","zone_code","service_code","sla_status_bucket","aging_bucket",
+                  "department_code",   // S2: daily now carries department_code + account_id
                   "is_open","sla_breached","current_assignee_uuid","boundary_path","tenant_id"),
             setOf("snapshot_date","ward_code","zone_code","service_code","sla_status_bucket","aging_bucket",
+                  "department_code",   // S2
                   "is_open","sla_breached"),
             setOf(),
-            setOf("service_request_id","current_assignee_uuid","ward_code"),
-            "tenant_id","boundary_path",null,"snapshot_date"));
+            setOf("service_request_id","current_assignee_uuid","ward_code","account_id"),
+            "tenant_id","boundary_path","account_id","department_code","snapshot_date"));   // S2: department + citizen row-scope axes
     }
 
     public Grain grain(String name){ return grains.get(name); }

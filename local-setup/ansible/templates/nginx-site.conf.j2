@@ -333,6 +333,22 @@ server {
   }
 
 {% endif %}
+{% if enable_overpass | default(false) %}
+  # Self-hosted Overpass — boundary-polygon fetch for the configurator's
+  # Phase 2 OSM step (POST /overpass/api/interpreter). Proxies to the on-box
+  # bomet-overpass container (loopback only; started by the playbook's
+  # "Overpass" tasks behind the same enable_overpass gate). Trailing slash
+  # strips the /overpass prefix so the app sees /api/interpreter.
+  location /overpass/ {
+    proxy_pass http://127.0.0.1:{{ overpass_port | default(12346) }}/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+  }
+
+{% endif %}
 {% if digit_ui_mode == "static" %}
   # digit-ui in static mode: host nginx serves the build artifact from
   # /opt/digit-ui-esbuild/build/ directly. Built by the playbook
@@ -371,6 +387,12 @@ server {
   #   /filestore/  — egov-filestore JSON API. sub_filter rewrites
   #     `http://minio:9000/` in response bodies to the public passthrough
   #     above. Accept-Encoding stripped so sub_filter sees uncompressed JSON.
+  #     The replacement uses runtime $host (not the inventory `domain` var)
+  #     so attachment URLs follow whatever hostname the client actually
+  #     used — a box rendered with `domain: localhost` but served on a real
+  #     domain otherwise hands browsers unresolvable localhost URLs (CCRS#753).
+  #     Safe for the AWS4 signature: /file-store/ re-sets Host to minio:9000,
+  #     so the public hostname never participates in signature validation.
   location /file-store/ {
     proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_minio_port | default(19000) }}/;
     proxy_set_header Host minio:9000;
@@ -391,7 +413,7 @@ server {
     proxy_set_header Accept-Encoding "";
     sub_filter_once off;
     sub_filter_types application/json;
-    sub_filter 'http://minio:9000/' '{{ "https://" if (tls_enabled | default(true)) else "http://" }}{{ domain }}/file-store/';
+    sub_filter 'http://minio:9000/' '{{ "https://" if (tls_enabled | default(true)) else "http://" }}$host/file-store/';
     client_max_body_size 25M;
     proxy_buffering off;
   }
@@ -478,7 +500,7 @@ server {
     proxy_set_header Accept-Encoding "";
     sub_filter_once off;
     sub_filter_types application/json;
-    sub_filter 'http://minio:9000/' '{{ "https://" if (tls_enabled | default(true)) else "http://" }}{{ domain }}/file-store/';
+    sub_filter 'http://minio:9000/' '{{ "https://" if (tls_enabled | default(true)) else "http://" }}$host/file-store/';
     client_max_body_size 25M;
     proxy_buffering off;
   }

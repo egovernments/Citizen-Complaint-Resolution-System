@@ -54,15 +54,41 @@ export interface DesignationRecord {
   description?: string;
 }
 
-export interface ComplaintTypeRecord {
-  serviceCode: string;
+/**
+ * One row of the single RAINMAKER-PGR.ComplaintHierarchy adjacency-list master.
+ * Interior (grouping) nodes omit department/slaHours/keywords/departments; LEAF
+ * rows (the isLeafServiceCode level) carry them. A leaf row's `code` IS the
+ * serviceCode stored on a complaint (verbatim). `menuPath` is GONE — grouping
+ * derives from `parentCode` and the parent node's `name`.
+ */
+export interface ComplaintHierarchyRow {
+  hierarchyType: string;
+  levelCode: string;
+  code: string;
+  parentCode: string | null;
   name: string;
-  menuPath: string;
-  department: string;
-  slaHours: number;
-  keywords: string;
   order: number;
   active: boolean;
+  path: string;
+  // LEAF-only fields:
+  department?: string;
+  departments?: string[];
+  slaHours?: number;
+  keywords?: string;
+}
+
+/** RAINMAKER-PGR.ComplaintHierarchyDefinition row: the level ladder. */
+export interface ComplaintHierarchyDefinitionRecord {
+  hierarchyType: string;
+  active: boolean;
+  levels: Array<{
+    levelCode: string;
+    order: number;
+    parentLevel: string | null;
+    isFreeText: boolean;
+    isLeafServiceCode: boolean;
+    label: string;
+  }>;
 }
 
 export interface EmployeeRecord {
@@ -424,16 +450,45 @@ function parseBoolish(val: unknown, fallback: boolean): boolean {
   return fallback;
 }
 
+// ── Complaint hierarchy (2-master model) ──────────────────────────────────
+// MDMS masters are now ONLY:
+//   RAINMAKER-PGR.ComplaintHierarchyDefinition (the level ladder) and
+//   RAINMAKER-PGR.ComplaintHierarchy (ONE adjacency list: interior CATEGORY
+//   nodes AND leaf complaint types together).
+// The XLSX always describes a flat 2-level shape (a group + its sub-types), so
+// the reader emits the same CATEGORY → SUB_TYPE definition the configurator's
+// migration derives. `menuPath` is GONE — grouping is expressed purely via the
+// leaf's `parentCode` (the CATEGORY node's code) and the node's `name`.
+const HIERARCHY_TYPE = 'PGR';
+const CATEGORY_LEVEL = 'CATEGORY';
+const LEAF_LEVEL = 'SUB_TYPE';
+
+/** Mirrors hierarchyMigration.flatLevels() — keep both onboarding paths in sync. */
+function flatComplaintLevels(): ComplaintHierarchyDefinitionRecord['levels'] {
+  return [
+    { levelCode: CATEGORY_LEVEL, order: 1, parentLevel: null, isFreeText: false, isLeafServiceCode: false, label: 'Category' },
+    { levelCode: LEAF_LEVEL, order: 2, parentLevel: CATEGORY_LEVEL, isFreeText: false, isLeafServiceCode: true, label: 'Sub-Type' },
+  ];
+}
+
 /**
- * Read "Complaint Type Master" sheet → complaint types + localizations.
- * Handles parent-child hierarchy: parent rows have "Complaint Type*",
- * child rows have "Complaint sub type*". Children inherit department/SLA from parent.
+ * Read the complaint-type sheet → the two-master ComplaintHierarchy model.
+ * Supports both layouts:
+ *   - Legacy "Complaint Type Master": parent rows ("Complaint Type*") become
+ *     CATEGORY interior nodes; child rows ("Complaint sub type*") become leaves.
+ *   - Configurator-style flat "ComplaintType": the "Complaint Type" group cell
+ *     becomes a CATEGORY node and each row becomes a leaf under it.
+ *
+ * Returns the level definition, the full adjacency list (interior + leaf rows
+ * combined, ready to write to RAINMAKER-PGR.ComplaintHierarchy), and the
+ * localization keys. `menuPath` is never produced.
  */
 export function readComplaintTypes(
   workbook: ExcelJS.Workbook,
   deptNameToCode: Map<string, string>,
 ): {
-  complaintTypes: ComplaintTypeRecord[];
+  definition: ComplaintHierarchyDefinitionRecord;
+  hierarchy: ComplaintHierarchyRow[];
   localizations: LocalizationMessage[];
 } {
   // Configurator format: flat sheet with explicit serviceCode + slaHours + department columns.
@@ -451,23 +506,17 @@ export function readComplaintTypes(
   }
 
   const rows = sheetToRows(sheet);
-  const complaintTypes: ComplaintTypeRecord[] = [];
-  const localizations: LocalizationMessage[] = [];
+  const builder = new HierarchyBuilder();
 
-  let currentParent: {
-    name: string;
-    department: string;
-    slaHours: number;
-    keywords: string;
-  } | null = null;
-  let order = 1;
+  let currentParentCode: string | null = null;
+  let currentParent: { name: string; department: string; slaHours: number; keywords: string } | null = null;
 
   for (const row of rows) {
     const parentName = row['Complaint Type*']?.trim();
     const childName = row['Complaint sub type*']?.trim();
 
     if (parentName) {
-      // This is a parent row — update current parent context
+      // Parent row → a CATEGORY interior node (grouping only; no dept/SLA on it).
       const deptName = row['Department Name*']?.trim() || '';
       const deptCode = deptNameToCode.get(deptName) || deptName;
       currentParent = {
@@ -476,103 +525,57 @@ export function readComplaintTypes(
         slaHours: parseInt(row['Resolution Time (Hours)*'] || '48', 10) || 48,
         keywords: row['Search Words*'] || '',
       };
-
-      // Create the parent complaint type record
-      const serviceCode = nameToPascalCode(parentName);
-      complaintTypes.push({
-        serviceCode,
-        name: parentName,
-        menuPath: `complaints.categories.${serviceCode}`,
-        department: deptCode,
-        slaHours: currentParent.slaHours,
-        keywords: currentParent.keywords,
-        order: order++,
-        active: true,
-      });
-
-      localizations.push({
-        code: `SERVICEDEFS.${serviceCode.toUpperCase()}`,
-        message: parentName,
-        module: 'rainmaker-pgr',
-        locale: 'en_IN',
-      });
-      // Department-qualified key: the employee Create-Complaint sub-type
-      // dropdown looks services up as `SERVICEDEFS.<CODE_UPPER>.<DEPT>`
-      // (digit-ui-esbuild useServiceDefs builds the key with the raw,
-      // un-cased department code). Without this the dropdown renders the
-      // raw key. Mirrors the configurator's buildComplaintTypeLocalizations
-      // key #3 — keep both onboarding paths in sync (CCRS#539).
-      if (deptCode) {
-        localizations.push({
-          code: `SERVICEDEFS.${serviceCode.toUpperCase()}.${deptCode}`,
-          message: parentName,
-          module: 'rainmaker-pgr',
-          locale: 'en_IN',
-        });
-      }
-    } else if (childName && currentParent) {
-      // This is a child row — inherits from current parent
-      const serviceCode = nameToPascalCode(`${currentParent.name} ${childName}`);
-      const childDept = row['Department Name*']?.trim();
-      const childDeptCode = childDept ? (deptNameToCode.get(childDept) || childDept) : currentParent.department;
-
-      complaintTypes.push({
-        serviceCode,
+      currentParentCode = builder.addCategory(nameToPascalCode(parentName), parentName);
+    } else if (childName && currentParent && currentParentCode) {
+      // Child row → a leaf complaint type under the current CATEGORY node.
+      // ── MULTI-DEPT (revertible): "Department Name*" may be comma-separated (1
+      //    type → many depts). department = first (primary); departments[] = all.
+      //    REVERT: restore the two original lines:
+      //      const childDept = row['Department Name*']?.trim();
+      //      const childDeptCode = childDept ? (deptNameToCode.get(childDept) || childDept) : currentParent.department;
+      //    and drop the `departments` line from addLeaf below.
+      const childDeptRaw = row['Department Name*']?.trim();
+      const childDeptCodes = childDeptRaw
+        ? [...new Set(childDeptRaw.split(',').map((s) => deptNameToCode.get(s.trim()) || s.trim()).filter(Boolean))]
+        : [currentParent.department];
+      const childDeptCode = childDeptCodes[0];
+      // ── end MULTI-DEPT ──
+      builder.addLeaf({
+        code: nameToPascalCode(`${currentParent.name} ${childName}`),
         name: childName,
-        menuPath: `complaints.categories.${nameToPascalCode(currentParent.name)}.${serviceCode}`,
+        parentCode: currentParentCode,
         department: childDeptCode,
+        departments: childDeptCodes, // ── MULTI-DEPT (revertible) ──
         slaHours: parseInt(row['Resolution Time (Hours)*'] || '', 10) || currentParent.slaHours,
         keywords: row['Search Words*'] || currentParent.keywords,
-        order: order++,
-        active: true,
       });
-
-      localizations.push({
-        code: `SERVICEDEFS.${serviceCode.toUpperCase()}`,
-        message: childName,
-        module: 'rainmaker-pgr',
-        locale: 'en_IN',
-      });
-      // Department-qualified key for the employee sub-type dropdown — see
-      // the parent-row note above. Uses the child's resolved department.
-      if (childDeptCode) {
-        localizations.push({
-          code: `SERVICEDEFS.${serviceCode.toUpperCase()}.${childDeptCode}`,
-          message: childName,
-          module: 'rainmaker-pgr',
-          locale: 'en_IN',
-        });
-      }
     }
   }
 
-  return { complaintTypes, localizations };
+  return builder.build();
 }
 
 /**
  * Configurator format: flat ComplaintType sheet with explicit serviceCode,
- * department references (name or code), and slaHours per row. No parent /
- * sub-type — every row is a standalone service definition.
+ * department references (name or code), and slaHours per row. The "Complaint
+ * Type" group cell becomes the CATEGORY node and each row is a leaf under it.
  */
 function readComplaintTypesFlat(
   sheet: ExcelJS.Worksheet,
   deptNameToCode: Map<string, string>,
 ): {
-  complaintTypes: ComplaintTypeRecord[];
+  definition: ComplaintHierarchyDefinitionRecord;
+  hierarchy: ComplaintHierarchyRow[];
   localizations: LocalizationMessage[];
 } {
-  const complaintTypes: ComplaintTypeRecord[] = [];
-  const localizations: LocalizationMessage[] = [];
-  const seenMenuPaths = new Set<string>();
-  let order = 1;
+  const builder = new HierarchyBuilder();
 
   for (const row of sheetToRows(sheet)) {
     // Operator-friendly headers: the sheet is filled with "Complaint Type"
     // (the menu group) + "Complaint sub type" (the actual service) — the
-    // same vocabulary as the county tracker sheets. menuPath/serviceCode
-    // are DERIVED here so spreadsheet authors never deal with API field
-    // names. Explicit serviceCode/menuPath/name columns still win when
-    // present (old template files).
+    // same vocabulary as the county tracker sheets. serviceCode is DERIVED
+    // here so spreadsheet authors never deal with API field names. An
+    // explicit serviceCode/code column still wins when present.
     const groupName = (row['Complaint Type*'] || row['Complaint Type']
       || row['menuName'] || row['MenuName'] || row['Menu Name'] || '').trim();
     const name = (row['name'] || row['Name']
@@ -588,65 +591,107 @@ function readComplaintTypesFlat(
     const keywords = (row['keywords'] || row['Keywords'] || row['Search Words (comma separated)'] || '').trim();
     const active = parseBoolish(row['active'] ?? row['Active'], true);
 
-    // menuPath groups complaint types in the citizen UI: ServiceDefinitions.js
-    // builds the type menu from DISTINCT menuPath values (labelled via
-    // localization key SERVICEDEFS.<MENUPATH.toUpperCase()>) and lists the
-    // rows sharing that menuPath as its sub-types. The configurator's
-    // complaint-type form exposes this as "Complaint Type (Menu Path)".
-    // Resolution order: explicit menuPath column → derived from the
-    // "Complaint Type" group → legacy per-row auto value.
-    const menuPath = (row['menuPath'] || row['MenuPath'] || row['Menu Path'] || '').trim()
-      || (groupName ? nameToPascalCode(groupName) : '')
-      || `complaints.categories.${serviceCode}`;
-    // Display name for the menu group (one localization per distinct
-    // menuPath). Without it the citizen UI would render the raw
-    // SERVICEDEFS.<MENUPATH> key as the group label.
-    const menuName = groupName;
+    // The "Complaint Type" group becomes the leaf's CATEGORY parent node.
+    // Grouping/label now derive from the tree (parentCode + node name), so
+    // there is no menuPath. A row without a group is parented to a single
+    // catch-all "Complaint" category so the leaf still has a valid parentCode.
+    const categoryCode = groupName ? builder.addCategory(nameToPascalCode(groupName), groupName) : builder.defaultCategory();
 
-    complaintTypes.push({
-      serviceCode,
-      name,
-      menuPath,
-      department: deptCode,
-      slaHours,
-      keywords,
-      order: order++,
-      active,
-    });
-
-    localizations.push({
-      code: `SERVICEDEFS.${serviceCode.toUpperCase()}`,
-      message: name,
-      module: 'rainmaker-pgr',
-      locale: 'en_IN',
-    });
-    // Department-qualified key: the employee Create-Complaint sub-type
-    // dropdown looks services up as `SERVICEDEFS.<CODE_UPPER>.<DEPT>`
-    // (digit-ui-esbuild useServiceDefs builds the key with the raw,
-    // un-cased department code). Without this the dropdown renders the
-    // raw key. Mirrors the configurator's buildComplaintTypeLocalizations
-    // key #3 — keep both onboarding paths in sync (CCRS#539).
-    if (deptCode) {
-      localizations.push({
-        code: `SERVICEDEFS.${serviceCode.toUpperCase()}.${deptCode}`,
-        message: name,
-        module: 'rainmaker-pgr',
-        locale: 'en_IN',
-      });
-    }
-
-    if (menuName && !seenMenuPaths.has(menuPath)) {
-      seenMenuPaths.add(menuPath);
-      localizations.push({
-        code: `SERVICEDEFS.${menuPath.toUpperCase()}`,
-        message: menuName,
-        module: 'rainmaker-pgr',
-        locale: 'en_IN',
-      });
-    }
+    builder.addLeaf({ code: serviceCode, name, parentCode: categoryCode, department: deptCode, slaHours, keywords, active });
   }
 
-  return { complaintTypes, localizations };
+  return builder.build();
+}
+
+/**
+ * Accumulates CATEGORY interior nodes + leaf complaint types into one
+ * RAINMAKER-PGR.ComplaintHierarchy adjacency list, dedupes category nodes by
+ * code, computes `path`, and seeds localization keys. The SERVICEDEFS.* key
+ * prefix is the message-code convention the citizen UI reads — it is unrelated
+ * to the (now-removed) MDMS ServiceDefs master name.
+ */
+class HierarchyBuilder {
+  private categories = new Map<string, ComplaintHierarchyRow>();
+  private leaves: ComplaintHierarchyRow[] = [];
+  private localizations: LocalizationMessage[] = [];
+  private order = 1;
+  private defaultCategoryCode: string | null = null;
+
+  /** Add (or reuse) a CATEGORY interior node, returning its code. */
+  addCategory(code: string, name: string): string {
+    if (!this.categories.has(code)) {
+      this.categories.set(code, {
+        hierarchyType: HIERARCHY_TYPE,
+        levelCode: CATEGORY_LEVEL,
+        code,
+        parentCode: null,
+        name,
+        order: this.order++,
+        active: true,
+        path: code,
+      });
+      // Key-based label (COMPLAINT_HIERARCHY.<code>) for the interior node —
+      // exact-case + uppercase, matching the configurator seed builder. The
+      // runtime resolves complaint labels via COMPLAINT_HIERARCHY.<CODE>.
+      this.localizations.push({ code: `COMPLAINT_HIERARCHY.${code}`, message: name, module: 'rainmaker-pgr', locale: 'en_IN' });
+      this.localizations.push({ code: `COMPLAINT_HIERARCHY.${code.toUpperCase()}`, message: name, module: 'rainmaker-pgr', locale: 'en_IN' });
+    }
+    return code;
+  }
+
+  /** A single catch-all CATEGORY used for leaves that declare no group. */
+  defaultCategory(): string {
+    if (!this.defaultCategoryCode) this.defaultCategoryCode = this.addCategory('Complaint', 'Complaint');
+    return this.defaultCategoryCode;
+  }
+
+  addLeaf(leaf: {
+    code: string;
+    name: string;
+    parentCode: string;
+    department: string;
+    departments?: string[]; // ── MULTI-DEPT (revertible): remove to revert ──
+    slaHours: number;
+    keywords: string;
+    active?: boolean;
+  }): void {
+    const parentPath = this.categories.get(leaf.parentCode)?.path || leaf.parentCode;
+    this.leaves.push({
+      hierarchyType: HIERARCHY_TYPE,
+      levelCode: LEAF_LEVEL,
+      code: leaf.code,
+      parentCode: leaf.parentCode,
+      name: leaf.name,
+      order: this.order++,
+      active: leaf.active ?? true,
+      path: `${parentPath}.${leaf.code}`,
+      // ── MULTI-DEPT (revertible): use the full list when given, else wrap the single.
+      //    REVERT: restore  { department: leaf.department, departments: [leaf.department] }
+      ...(leaf.department ? { department: leaf.department, departments: (leaf.departments && leaf.departments.length ? leaf.departments : [leaf.department]) } : {}),
+      ...(leaf.slaHours ? { slaHours: leaf.slaHours } : {}),
+      ...(leaf.keywords ? { keywords: leaf.keywords } : {}),
+    });
+
+    // Key-based label (COMPLAINT_HIERARCHY.<code>) for the leaf — exact-case +
+    // uppercase, matching the configurator seed builder. The obsolete
+    // department-qualified SERVICEDEFS.<CODE>.<DEPT> key is dropped: the runtime
+    // (useServiceDefs / complaintLabel) now resolves via COMPLAINT_HIERARCHY.<CODE>.
+    this.localizations.push({ code: `COMPLAINT_HIERARCHY.${leaf.code}`, message: leaf.name, module: 'rainmaker-pgr', locale: 'en_IN' });
+    this.localizations.push({ code: `COMPLAINT_HIERARCHY.${leaf.code.toUpperCase()}`, message: leaf.name, module: 'rainmaker-pgr', locale: 'en_IN' });
+  }
+
+  build(): {
+    definition: ComplaintHierarchyDefinitionRecord;
+    hierarchy: ComplaintHierarchyRow[];
+    localizations: LocalizationMessage[];
+  } {
+    return {
+      definition: { hierarchyType: HIERARCHY_TYPE, active: true, levels: flatComplaintLevels() },
+      // Interior nodes first so their parentCode targets exist before leaves are written.
+      hierarchy: [...this.categories.values(), ...this.leaves],
+      localizations: this.localizations,
+    };
+  }
 }
 
 /**

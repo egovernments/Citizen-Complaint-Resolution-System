@@ -165,4 +165,7 @@ public class ServiceConfiguration {
 
     @Value("${default.config.data.path}")
     private String defaultConfigDataPath;
+
+    @Value("#{'${excluded.mdms.schema.codes:}'.split(',')}")
+    private List<String> excludedMdmsSchemaCodes;
 }

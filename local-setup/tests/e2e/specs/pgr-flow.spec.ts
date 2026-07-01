@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { PgrInboxPage } from '../pages/pgr-inbox.page';
 import { getDigitToken, loginViaApi } from '../utils/auth';
+import { getMobileValidationRule, generateValidMobile } from '../common/mdms-mobile';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:18080';
 const TENANT = process.env.DIGIT_TENANT || 'uitest.citya';
@@ -14,6 +15,18 @@ test.describe.serial('Full PGR complaint lifecycle', () => {
   let userInfo: Record<string, unknown>;
   let serviceRequestId: string;
   let createSucceeded = false;
+  // Tenant-aware phone, sourced from MDMS at suite setup.
+  let citizenPhone: string;
+
+  test.beforeAll(async () => {
+    const rule = await getMobileValidationRule(TENANT, {
+      baseURL: BASE_URL,
+      adminUser: ADMIN_USER,
+      adminPassword: ADMIN_PASS,
+    });
+    citizenPhone = generateValidMobile(rule);
+    console.log(`[pgr-flow] citizenPhone=${citizenPhone} pattern=${rule.pattern} (tenant=${TENANT})`);
+  });
 
   test('login as employee', async ({ page }) => {
     await loginViaApi(page, { baseURL: BASE_URL, tenant: TENANT, username: ADMIN_USER, password: ADMIN_PASS });
@@ -58,7 +71,7 @@ test.describe.serial('Full PGR complaint lifecycle', () => {
         },
         citizen: {
           name: 'E2E Test Citizen',
-          mobileNumber: '9888888888',
+          mobileNumber: citizenPhone,
           tenantId: TENANT,
         },
       },

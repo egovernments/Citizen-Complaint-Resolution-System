@@ -16,6 +16,7 @@ import { db } from '../utils/db';
 import { config } from '../utils/config';
 import { LoginResponseSchema } from '../schemas/user';
 import { SearchServiceResponseSchema } from '../schemas/pgr';
+import { uniqueMobile } from '../utils/mobile';
 
 // ── Tenant from env ──────────────────────────────────────────
 const TENANT = process.env.TENANT || 'pg.citya';
@@ -95,7 +96,7 @@ describe(`PGR E2E — ${TENANT}`, () => {
           tenantId: STATE,
           moduleDetails: [
             { moduleName: 'common-masters', masterDetails: [{ name: 'Department' }, { name: 'Designation' }] },
-            { moduleName: 'RAINMAKER-PGR', masterDetails: [{ name: 'ServiceDefs' }] },
+            { moduleName: 'RAINMAKER-PGR', masterDetails: [{ name: 'ComplaintHierarchy' }] },
           ],
         },
       });
@@ -103,17 +104,23 @@ describe(`PGR E2E — ${TENANT}`, () => {
       const mdms = (r.data as any)?.MdmsRes || {};
       const cm = mdms['common-masters'] || {};
       const desigs = cm.Designation || [];
-      const serviceDefs = mdms['RAINMAKER-PGR']?.ServiceDefs || [];
+      // ComplaintHierarchy holds interior + leaf rows; complaint types are the
+      // LEAF rows (those carrying department/slaHours). A leaf's `code` is the
+      // serviceCode stored on a complaint, verbatim.
+      const hierarchy = (mdms['RAINMAKER-PGR']?.ComplaintHierarchy || []) as any[];
+      const serviceDefs = hierarchy.filter(
+        (row) => row && (row.department !== undefined || row.slaHours !== undefined),
+      );
       expect(desigs.length).toBeGreaterThan(0);
       expect(serviceDefs.length).toBeGreaterThan(0);
 
-      // Pick a random ServiceDef and use its department — this ensures ASSIGN works
+      // Pick a random leaf and use its department — this ensures ASSIGN works
       const svcDef = pick(serviceDefs) as any;
       const deptCode = svcDef.department;
-      console.log(`Using ServiceDef: ${svcDef.serviceCode} → dept: ${deptCode}`);
+      console.log(`Using ServiceDef: ${svcDef.code} → dept: ${deptCode}`);
 
       (global as any).__testDeptCode = deptCode;
-      (global as any).__testServiceCode = svcDef.serviceCode;
+      (global as any).__testServiceCode = svcDef.code;
       (global as any).__testDesigs = desigs;
       console.log(`MDMS: ${serviceDefs.length} service defs, ${desigs.length} designations`);
     });
@@ -123,7 +130,7 @@ describe(`PGR E2E — ${TENANT}`, () => {
       const desigs: any[] = (global as any).__testDesigs;
       const desig = pick(desigs);
       userName = `e2e-${cityPart}-${timestamp}`;
-      const mobile = `9${String(timestamp).slice(-9)}`;
+      const mobile = uniqueMobile();
 
       console.log(`Creating HRMS employee: ${userName}, dept=${deptCode}, desig=${desig.code}`);
 
@@ -210,11 +217,15 @@ describe(`PGR E2E — ${TENANT}`, () => {
     test('should have PGR service definitions', async () => {
       const r = await api.post(ports.mdms, '/mdms-v2/v1/_search', {
         RequestInfo: createRequestInfo({ authToken: accessToken }),
-        MdmsCriteria: { tenantId: STATE, moduleDetails: [{ moduleName: 'RAINMAKER-PGR', masterDetails: [{ name: 'ServiceDefs' }] }] },
+        MdmsCriteria: { tenantId: STATE, moduleDetails: [{ moduleName: 'RAINMAKER-PGR', masterDetails: [{ name: 'ComplaintHierarchy' }] }] },
       });
       expect(r.ok).toBe(true);
-      const defs = (r.data as any)?.MdmsRes?.['RAINMAKER-PGR']?.ServiceDefs;
-      expect(defs).toBeDefined();
+      // Complaint types are the LEAF rows of ComplaintHierarchy (those with department/slaHours).
+      const hierarchy = (r.data as any)?.MdmsRes?.['RAINMAKER-PGR']?.ComplaintHierarchy;
+      expect(hierarchy).toBeDefined();
+      const defs = (hierarchy as any[]).filter(
+        (row) => row && (row.department !== undefined || row.slaHours !== undefined),
+      );
       expect(defs.length).toBeGreaterThan(0);
       console.log(`Found ${defs.length} service definitions`);
     });
@@ -230,7 +241,7 @@ describe(`PGR E2E — ${TENANT}`, () => {
           tenantId: TENANT, serviceCode,
           description: `E2E test complaint on ${TENANT} - ${timestamp}`, source: 'web',
           address: { city: TENANT, locality: { code: LOCALITY_CODE, name: `${TENANT_LABEL} Central` }, geoLocation: { latitude: -0.37, longitude: 35.29 } },
-          citizen: { name: 'Test Citizen', mobileNumber: `8${String(timestamp).slice(-9)}`, tenantId: TENANT },
+          citizen: { name: 'Test Citizen', mobileNumber: uniqueMobile(1), tenantId: TENANT },
         },
         workflow: { action: 'APPLY' },
       }, { timeout: 30000 });

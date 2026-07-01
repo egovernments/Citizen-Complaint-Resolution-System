@@ -84,16 +84,25 @@ public class RequestSearchCriteria {
         locality,
         applicationStatus,
         serviceRequestId,
-        createdTime
+        createdTime,
+        sla
     }
 
     @SafeHtml
     @JsonProperty("accountId")
     private String accountId;
 
+    @SafeHtml
+    @JsonProperty("assignee")
+    private String assignee;
+
+    @JsonIgnore
+    private Set<String> serviceRequestIds;
+
     public boolean isEmpty(){
         return (this.tenantId==null && this.serviceCode==null && this.mobileNumber==null && this.serviceRequestId==null
-        && this.applicationStatus==null && this.ids==null && this.userIds==null && this.locality==null);
+        && this.applicationStatus==null && this.ids==null && this.userIds==null && this.locality==null
+        && this.assignee==null);
     }
 
 }

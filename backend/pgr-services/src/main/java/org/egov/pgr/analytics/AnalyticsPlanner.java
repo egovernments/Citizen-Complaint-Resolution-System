@@ -10,6 +10,7 @@ import java.time.temporal.IsoFields;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Translates one validated JSON query node into parameterized SQL against a single grain.
@@ -243,10 +244,28 @@ public class AnalyticsPlanner {
             if (scope.tenantStateLevel) { conj.add(g.tenantColumn + " LIKE ?"); params.add(scope.tenantId + "%"); }
             else { conj.add(g.tenantColumn + " = ?"); params.add(scope.tenantId); }
         }
-        if (scope.citizenUuid != null && g.citizenColumn != null) { conj.add(g.citizenColumn + " = ?"); params.add(scope.citizenUuid); }
-        if (scope.boundaryPrefix != null && g.boundaryColumn != null) {
+        // FAIL-CLOSED: a constrained principal whose scope CANNOT be enforced on the target grain
+        // must NOT have the constraint silently dropped (that leaked cross-department / cross-citizen
+        // data on the events & daily grains, which lack these columns). Reject instead.
+        if (scope.citizenUuid != null) {
+            if (g.citizenColumn == null)
+                throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce citizen self-scope");
+            conj.add(g.citizenColumn + " = ?"); params.add(scope.citizenUuid);
+        }
+        if (scope.boundaryPrefix != null) {
+            if (g.boundaryColumn == null)
+                throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce jurisdiction scope");
             conj.add(g.boundaryColumn + " LIKE ?");
             params.add(scope.boundaryPrefix.replace("\\","\\\\").replace("%","\\%").replace("_","\\_") + "%");
+        }
+        // department scope: restrict to the union of the principal's HRMS assignment departments.
+        // NULL department_code rows won't match an IN list → correctly excluded.
+        if (scope.departmentCodes != null && !scope.departmentCodes.isEmpty()) {
+            if (g.departmentColumn == null)
+                throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce department scope");
+            String placeholders = scope.departmentCodes.stream().map(x -> "?").collect(Collectors.joining(", "));
+            conj.add(g.departmentColumn + " IN (" + placeholders + ")");
+            params.addAll(scope.departmentCodes);
         }
     }
 

@@ -40,15 +40,20 @@ test.beforeAll(async () => {
   const auth = loadAuth();
 
   // --- Pick a live complaint type ---
+  // ComplaintHierarchy is one adjacency list of interior nodes AND leaf complaint
+  // types. Complaint types are the LEAF rows (data carries department/slaHours);
+  // a leaf's `code` is the serviceCode stored on a complaint, verbatim.
   const ctRecords = await mdmsSearch(
     auth,
     TENANT_CODE,
-    'RAINMAKER-PGR.ServiceDefs',
+    'RAINMAKER-PGR.ComplaintHierarchy',
     { limit: 200 },
   ).catch(() => [] as Awaited<ReturnType<typeof mdmsSearch>>);
   for (const r of ctRecords) {
     if (r.isActive === false) continue;
-    const code = (r.data as Record<string, unknown>).serviceCode as string | undefined;
+    const data = r.data as Record<string, unknown>;
+    if (data.department === undefined && data.slaHours === undefined) continue; // interior node
+    const code = data.code as string | undefined;
     if (code) { liveServiceCode = code; break; }
   }
 

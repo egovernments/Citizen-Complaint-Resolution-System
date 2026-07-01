@@ -88,7 +88,21 @@ const UploadImage = ({
     closeDrawer();
     setIsWebcamOpen(false);
     const files = event.target?.files;
-    const newFiles = files ? [...files] : event;
+    
+    const normalizeJpeg = (file) => {
+      const isJpeg = file.type === "image/jpeg" || file.type === "image/jpg" || /\.(jpg|jpeg)$/i.test(file.name);
+      let res = file;
+      if (isJpeg) {
+        const nameParts = file.name.split('.');
+        nameParts.pop();
+        const baseName = nameParts.join('.') || "image";
+        res = new File([file], `${baseName}.jpeg`, { type: "image/jpeg" });
+      }
+      return res;
+    };
+
+    let newFiles = files ? [...files].map(normalizeJpeg) : (Array.isArray(event) ? event.map(normalizeJpeg) : normalizeJpeg(event));
+
 
     let newCapturedImages;
     if (multiple) {

@@ -16,6 +16,12 @@ export interface ResourceConfig {
     update?: string;
   };
   dedicated?: boolean;
+  /** 2-master complaint hierarchy: when set, the MDMS fetcher keeps only the
+   *  LEAF rows of RAINMAKER-PGR.ComplaintHierarchy (rows carrying `department`
+   *  or `slaHours`) and maps each to the legacy ServiceDefs shape
+   *  (serviceCode/menuPath/menuPathName from parentCode) so downstream
+   *  complaint-type UI keeps working unchanged. */
+  leafServiceDefAdapter?: boolean;
 }
 
 export const REGISTRY: Record<string, ResourceConfig> = {
@@ -32,9 +38,16 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     type: 'mdms', label: 'Designations', schema: MDMS_SCHEMAS.DESIGNATION,
     idField: 'code', nameField: 'name', descriptionField: 'description', dedicated: true,
   },
-  'complaint-types': {
-    type: 'mdms', label: 'Complaint Types', schema: 'RAINMAKER-PGR.ServiceDefs',
-    idField: 'serviceCode', nameField: 'serviceName', descriptionField: 'department', dedicated: true,
+  // Complaint types are now the LEAF rows of the single ComplaintHierarchy
+  // adjacency-list master (interior nodes share the same schema). The fetcher
+  // filters to leaves and maps each to the legacy ServiceDefs shape, so the
+  // dedicated complaint-type List/Show/Edit/Create and the complaint pickers
+  // keep reading `serviceCode`/`department`/`slaHours` unchanged. idField is
+  // the leaf row's `code` (== the serviceCode stored verbatim on a complaint).
+  'complaint-hierarchy': {
+    type: 'mdms', label: 'Complaint Types', schema: 'RAINMAKER-PGR.ComplaintHierarchy',
+    idField: 'code', nameField: 'name', descriptionField: 'levelCode',
+    dedicated: true, leafServiceDefAdapter: true,
   },
   employees: {
     type: 'hrms', label: 'Employees', idField: 'uuid', nameField: 'name', descriptionField: 'designation',
@@ -84,8 +97,17 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     type: 'boundary-hierarchy', label: 'Boundary Hierarchies', idField: 'hierarchyType',
     nameField: 'hierarchyType', dedicated: true,
   },
+  // Complaint classification hierarchy (configurable N levels) — dedicated Create
+  // uses a custom level editor; backed by a plain MDMS master.
+  'complaint-hierarchies': {
+    type: 'mdms', label: 'Complaint Hierarchies', schema: 'RAINMAKER-PGR.ComplaintHierarchyDefinition',
+    idField: 'hierarchyType', nameField: 'hierarchyType', dedicated: true,
+  },
 
   // Generic MDMS Resources
+  // (RAINMAKER-PGR.ClassificationNode is gone — interior nodes now live in the
+  // ComplaintHierarchy master alongside the leaves; cascade pickers read it
+  // directly. No standalone classification-nodes resource anymore.)
   'state-info': { type: 'mdms', label: 'State Info', schema: 'common-masters.StateInfo', idField: 'code', nameField: 'name' },
   'city-modules': { type: 'mdms', label: 'City Modules', schema: 'tenant.citymodule', idField: 'code', nameField: 'module' },
   'id-formats': { type: 'mdms', label: 'ID Formats', schema: 'common-masters.IdFormat', idField: 'idname', nameField: 'idname' },
@@ -115,8 +137,7 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // These get the same generic CRUD as the entries above; richer per-field widgets
   // are layered on later via src/admin/schemaDescriptors/ (Stage 1+).
   'theme-config':           { type: 'mdms', label: 'Theme Config',             schema: 'common-masters.ThemeConfig',               idField: 'code',              nameField: 'name' },
-  'user-validation':        { type: 'mdms', label: 'User Field Validation',    schema: 'common-masters.UserValidation',            idField: 'zone',              nameField: 'zone' },
-  'mobile-validation':      { type: 'mdms', label: 'Mobile Number Validation', schema: 'ValidationConfigs.mobileNumberValidation', idField: 'validationName',    nameField: 'validationName' },
+  'mobile-number-validation': { type: 'mdms', label: 'Mobile Number Validation', schema: 'common-masters.MobileNumberValidation', idField: 'countryCode',       nameField: 'countryCode' },
   'tenant-boundary':        { type: 'mdms', label: 'Tenant Boundary (HRMS)',   schema: 'egov-location.TenantBoundary',             idField: 'hierarchyType.code', nameField: 'hierarchyType.code' },
   'auto-escalation-ignore': { type: 'mdms', label: 'Auto-Escalation Ignored',  schema: 'Workflow.AutoEscalationStatesToIgnore',    idField: 'businessService',   nameField: 'businessService' },
   'workflow-bs-master':     { type: 'mdms', label: 'Workflow BS Master',       schema: 'Workflow.BusinessServiceMasterConfig',     idField: 'active',            nameField: 'businessService' },

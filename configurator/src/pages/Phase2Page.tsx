@@ -201,7 +201,7 @@ export default function Phase2Page() {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   // Full turbopass suggestion the operator picked (null once they edit the
-  // text again) — its countryCode scopes the Overpass query to one country.
+  // text again) — its place_id drives the turbopass /boundary/fetch call.
   const [pickedSuggestion, setPickedSuggestion] = useState<any | null>(null);
   const [skippedFeatures, setSkippedFeatures] = useState<SkippedOsmFeature[]>([]);
   const [pendingBoundaries, setPendingBoundaries] = useState<Boundary[]>([]);
@@ -540,7 +540,7 @@ export default function Phase2Page() {
       const placeId = suggestion.properties.place_id;
 
       const res = await fetch(`${TURBOPASS_BASE}/boundary/fetch?id=${encodeURIComponent(placeId)}&source=${TURBOPASS_SOURCE}`);
-      if (!res.ok) throw new Error("Geoapify boundary fetch failed");
+      if (!res.ok) throw new Error("Turbopass boundary fetch failed");
       const geojson = await res.json();
 
       let targetAdminLevel = 0;
@@ -556,11 +556,20 @@ export default function Phase2Page() {
         }
       }
       if (isNaN(targetAdminLevel) || targetAdminLevel === 0) {
+        // A place is often surfaced under a translated/anglicized name while the
+        // source's primary `name` is local (e.g. picked "Maputo Province" vs the
+        // feature's name "Maputo", with the English label only in name:en).
+        // Match the search term against the common name variants so either form
+        // resolves the root level (issue #757).
+        const NAME_KEYS = ['name', 'name:en', 'int_name', 'alt_name'];
         const sTerm = searchTerm.toLowerCase().trim();
         geojson.features.forEach((feature: any) => {
-          const featName = feature.properties?.name?.toLowerCase() || '';
-          if (featName === sTerm || featName.includes(sTerm)) {
-            const lvl = getAdminLevel(feature.properties);
+          const props = feature.properties || {};
+          const featNames = NAME_KEYS
+            .map(k => (typeof props[k] === 'string' ? props[k].toLowerCase() : ''))
+            .filter(Boolean);
+          if (featNames.some(n => n === sTerm || n.includes(sTerm))) {
+            const lvl = getAdminLevel(props);
             if (!isNaN(lvl) && (targetAdminLevel === 0 || lvl < targetAdminLevel)) {
               targetAdminLevel = lvl;
             }
@@ -589,7 +598,9 @@ export default function Phase2Page() {
           features,
           examples: uniqueNames.slice(0, 3),
           mappedName: '',
-          selected: true
+          // Default all selected (a contiguous, valid starting point); the
+          // operator trims the range and names what they keep.
+          selected: true,
         };
       }).sort((a, b) => a.level - b.level);
 

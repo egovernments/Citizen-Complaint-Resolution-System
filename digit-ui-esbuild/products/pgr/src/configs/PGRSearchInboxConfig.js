@@ -88,12 +88,11 @@ const PGRSearchInboxConfig = () => {
             searchResult: {
                 label: "",
                 uiConfig: {
-                    // Per-column `disableSortBy: true` on every column whose
-                    // backend `sortBy` value isn't accepted by pgr-services'
-                    // `RequestSearchCriteria.SortBy` enum (only
-                    // `applicationStatus` is supported today). Showing a sort
-                    // icon on un-sortable columns implied a working sort and
-                    // confused operators when nothing changed on click.
+                    // Column header sort is client-side react-table, which only
+                    // reorders the CURRENT page while pagination is server-side —
+                    // so it misleads operators (issue #432). Every column sets
+                    // `disableSortBy: true`; ordering is done server-side in
+                    // PGRInboxConfig.preProcess (sortBy=sla, most urgent first).
                     columns: [
                         {
                             label: "CS_COMMON_COMPLAINT_NO",
@@ -118,6 +117,10 @@ const PGRSearchInboxConfig = () => {
                             label: "CS_COMPLAINT_DETAILS_CURRENT_STATUS",
                             jsonPath: "businessObject.service.applicationStatus",
                             additionalCustomization: true,
+                            // Client-side header sort only reorders the current
+                            // page (server pagination), so it misleads operators.
+                            // The inbox is ordered server-side by SLA (#432).
+                            disableSortBy: true,
                         },
                         {
                             label: "WF_INBOX_HEADER_CURRENT_OWNER",
@@ -131,19 +134,20 @@ const PGRSearchInboxConfig = () => {
                             jsonPath: "businessObject.serviceSla",
                             additionalCustomization: true,
                             key: "state",
-                            // #432.2: SLA sort is CLIENT-SIDE via react-data-table's
-                            // sortFunction (pgr-services' SortBy enum doesn't accept
-                            // `sortBy=serviceSla`, so we can't sort server-side).
-                            // NOTE: this only reorders rows on the CURRENT page —
-                            // it does not re-sort across the full paginated result set.
-                            sortFunction: (a, b) =>
-                                (a?.businessObject?.serviceSla ?? -Infinity) -
-                                (b?.businessObject?.serviceSla ?? -Infinity),
+                            // #432.2: the inbox is now ordered by SLA remaining
+                            // server-side (sortBy=sla, ASC — most urgent first;
+                            // see PGRInboxConfig.preProcess + PGRQueryBuilder).
+                            // The previous per-column client sortFunction only
+                            // reordered the CURRENT page, so rows dropped in/out
+                            // of view as page size changed. disableSortBy hides
+                            // the misleading per-page sort icon.
+                            disableSortBy: true,
                         },
                     ],
                     enableGlobalSearch: false,
                     enableColumnSort: true,
                     resultsJsonPath: "items",
+                    totalCountJsonPath: "totalCount",
                 },
                 children: {},
                 show: true

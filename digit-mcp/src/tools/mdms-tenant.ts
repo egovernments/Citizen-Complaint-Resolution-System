@@ -103,6 +103,27 @@ export function deriveValidMobile(regex: string, length: number, preferred?: str
 }
 
 /**
+ * Normalize the tenant_bootstrap `pincode_allowlist` arg into the shape
+ * mdms-v2 accepts on tenant.tenants. The schema declares pincode items
+ * as Number, so numeric strings must be coerced or the update is
+ * rejected with "expected type: Number, found: String". Leading zeros
+ * still match in the UI: its serviceability gate strips them from both
+ * sides before comparing. Non-numeric entries pass through unchanged
+ * for deployments with alphanumeric-postcode schemas. Returns null
+ * (meaning "don't touch pincode at all") for non-arrays and for lists
+ * that are empty after trimming — mdms-v2 also rejects pincode: [],
+ * so absence is the only valid off state.
+ */
+export function normalizePincodeAllowlist(input: unknown): Array<string | number> | null {
+  if (!Array.isArray(input)) return null;
+  const cleaned = (input as unknown[])
+    .map((p) => String(p).trim())
+    .filter((p) => p.length > 0)
+    .map((p) => (/^[0-9]+$/.test(p) ? Number(p) : p));
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+/**
  * Search for MDMS records across all state tenants.
  * First queries the default state tenant to discover all root-level tenants,
  * then queries each discovered root to get the complete set.
@@ -800,7 +821,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         codes: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Optional: filter by specific schema codes (e.g. ["RAINMAKER-PGR.ServiceDefs"])',
+          description: 'Optional: filter by specific schema codes (e.g. ["RAINMAKER-PGR.ComplaintHierarchy"])',
         },
       },
       required: ['tenant_id'],
@@ -849,7 +870,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         },
         code: {
           type: 'string',
-          description: 'Schema code (e.g. "RAINMAKER-PGR.ServiceDefs", "common-masters.Department")',
+          description: 'Schema code (e.g. "RAINMAKER-PGR.ComplaintHierarchy", "common-masters.Department")',
         },
         description: {
           type: 'string',
@@ -995,6 +1016,17 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             'if omitted, a value conforming to mobile_regex is generated (the source country\'s ' +
             'mobile would fail the target tenant\'s UserValidation, e.g. India 10-digit vs ' +
             'Mozambique ^8[0-9]{8}$). Set it to pin a specific number.',
+        },
+        pincode_allowlist: {
+          type: 'array',
+          items: { type: ['string', 'integer'] },
+          description:
+            'Serviceable postal codes, seeded as `pincode` on every active tenant.tenants record ' +
+            'under the target root. The citizen UI vetoes complaint submission when a typed postal ' +
+            'code falls outside a configured allowlist (CS_COMMON_PINCODE_NOT_SERVICABLE), so only ' +
+            'set this with real local postal codes for the deployment\'s country. Omit for no ' +
+            'allowlist — every postal code is then serviceable. Never seed an empty array: mdms-v2 ' +
+            'rejects pincode: [] on update; absence is the off state.',
         },
         user_validation: {
           type: 'array',
@@ -1220,10 +1252,10 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         'common-masters.CronJobAPIConfig',
         'common-masters.ThemeConfig',
         // ── PGR ──
-        // ServiceDefs (complaint types) are intentionally excluded: they are
-        // tenant-specific and must be loaded by the operator via Phase 3 of
-        // the configurator. Copying them from the source (pg.citest) would
-        // pollute the target with unrelated demo/test complaint types.
+        // ComplaintHierarchy (complaint types + grouping nodes) is intentionally
+        // excluded: it is tenant-specific and must be loaded by the operator via
+        // Phase 3 of the configurator. Copying it from the source (pg.citest)
+        // would pollute the target with unrelated demo/test complaint types.
         'RAINMAKER-PGR.UIConstants',
         // ── workflow (definition is copied separately in Step 6 below;
         //    these are the MDMS-side companion configs) ──
@@ -1305,7 +1337,8 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         'egov-hrms.Degree':                    ['tenantId'],
         'egov-hrms.EmploymentTest':            ['tenantId'],
         'egov-hrms.Specalization':             ['tenantId'],
-        'RAINMAKER-PGR.ServiceDefs':           ['tenantId'],
+        'RAINMAKER-PGR.ComplaintHierarchy':    ['tenantId'],
+        'RAINMAKER-PGR.ComplaintHierarchyDefinition': ['tenantId'],
         'RAINMAKER-PGR.UIConstants':           ['tenantId'],
         'DataSecurity.DecryptionABAC':         ['tenantId'],
         'DataSecurity.EncryptionPolicy':       ['tenantId'],
@@ -1869,9 +1902,12 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                 if (typeof rec.code !== 'string') continue;
                 const code = rec.code.trim();
                 if (!code) continue;
-                // ServiceDefs localization (SERVICEDEFS.* / SERVICEDEFS_*) is
-                // intentionally excluded — mirrors the MDMS ServiceDefs data
-                // exclusion above. These keys are tenant-specific and must be
+                // Complaint-type localization (SERVICEDEFS.* / SERVICEDEFS_*) is
+                // intentionally excluded — mirrors the MDMS ComplaintHierarchy
+                // data exclusion above. (The localization key prefix stays
+                // SERVICEDEFS.* — that is the message-code convention the
+                // citizen UI reads, independent of the MDMS master name.)
+                // These keys are tenant-specific and must be
                 // seeded by Phase 3 of the configurator. Copying them from
                 // source tenants (e.g. statea has SERVICEDEFS.GARBAGE) causes
                 // a duplicate-constraint 400 when Phase 3 later tries to insert
@@ -1994,6 +2030,48 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         data: { copied: localizationsCopied, failed: localizationsFailed, locales: locales.length },
         pct: 99,
       });
+
+      // ────────────────────────────────────────────────────────────────
+      // Apply the operator-configured pincode allowlist to every active
+      // tenant.tenants record under the root scope. Records come from
+      // multiple writers (the self-record above, default-data-handler's
+      // tenant-create consumer, city_setup) — RMW whatever exists now.
+      // When the arg is omitted nothing is touched: the UI treats an
+      // absent allowlist as "all postal codes serviceable", and the
+      // alternative — seeding pincode: [] — is rejected by mdms-v2 on
+      // update ("expected type: JSONArray, found: JSONObject").
+      // ────────────────────────────────────────────────────────────────
+      const pincodeAllowlist = normalizePincodeAllowlist(args.pincode_allowlist);
+      if (pincodeAllowlist) {
+        emitProgress({ phase: 'pincode:start', message: `Seeding pincode allowlist (${pincodeAllowlist.length} codes) on tenant.tenants`, pct: 97 });
+        try {
+          const tenantRecords = await digitApi.mdmsV2SearchRaw(tenantsScope, 'tenant.tenants', { limit: 100 });
+          for (const rec of tenantRecords) {
+            if (rec.isActive === false) continue;
+            if ((rec as { tenantId?: string }).tenantId !== tenantsScope) continue;
+            const existing = (rec.data as Record<string, unknown> | undefined)?.pincode;
+            if (Array.isArray(existing)
+              && existing.length === pincodeAllowlist.length
+              && existing.every((p, i) => String(p) === String(pincodeAllowlist[i]))) {
+              results.data.skipped.push(`tenant.tenants/${rec.uniqueIdentifier} (pincode allowlist)`);
+              continue;
+            }
+            try {
+              await digitApi.mdmsV2UpdateData(rec, {
+                ...(rec.data as Record<string, unknown>),
+                pincode: pincodeAllowlist,
+              });
+              results.data.copied.push(`tenant.tenants/${rec.uniqueIdentifier} (pincode allowlist)`);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              results.data.failed.push(`tenant.tenants/${rec.uniqueIdentifier} (pincode allowlist): ${msg}`);
+            }
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          results.data.failed.push(`tenant.tenants (pincode allowlist search): ${msg}`);
+        }
+      }
 
       // success now factors in workflow + localization failures too —
       // schema/data-only success used to mask broken UI labels.
@@ -2185,7 +2263,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
 
               // PGR's validateDepartment checks that the assignee's HRMS
               // Employee has an assignment in the complaint's required
-              // department (RAINMAKER-PGR.ServiceDefs.department). On a
+              // department (RAINMAKER-PGR.ComplaintHierarchy leaf .department). On a
               // tenant with one employee (ADMIN), every complaint targeting
               // a different department would fail with INVALID_ASSIGNMENT.
               // Give ADMIN one assignment per available department so it
@@ -3655,7 +3733,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         tenant_id: { type: 'string', description: 'The city tenant_id to destroy, e.g. "ke.maputopoc".' },
         department_codes: { type: 'array', items: { type: 'string' }, description: 'Department codes (at root) to deactivate. From the masters XLSX.' },
         designation_codes: { type: 'array', items: { type: 'string' }, description: 'Designation codes (at root) to deactivate.' },
-        complaint_type_codes: { type: 'array', items: { type: 'string' }, description: 'Complaint type (RAINMAKER-PGR.ServiceDefs) codes (at root) to deactivate.' },
+        complaint_type_codes: { type: 'array', items: { type: 'string' }, description: 'Complaint type (RAINMAKER-PGR.ComplaintHierarchy leaf) codes (at root) to deactivate.' },
         remove_tenant_registration: { type: 'boolean', description: 'Also deactivate the tenant.tenants record for this city at the root. Default true.' },
         dry_run: { type: 'boolean' },
       },
@@ -3687,7 +3765,9 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         rootRecordsToDeactivate.push({ schemaCode: 'common-masters.Designation', uniqueIdentifier: code });
       }
       for (const code of ctCodes) {
-        rootRecordsToDeactivate.push({ schemaCode: 'RAINMAKER-PGR.ServiceDefs', uniqueIdentifier: code });
+        // Complaint types are LEAF rows of the single RAINMAKER-PGR.ComplaintHierarchy
+        // adjacency-list master. The leaf row's uniqueIdentifier (code) IS the serviceCode.
+        rootRecordsToDeactivate.push({ schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy', uniqueIdentifier: code });
       }
       if (removeRegistration) {
         rootRecordsToDeactivate.push({ schemaCode: 'tenant.tenants', uniqueIdentifier: cityCode });

@@ -32,9 +32,20 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     type: 'mdms', label: 'Designations', schema: MDMS_SCHEMAS.DESIGNATION,
     idField: 'code', nameField: 'name', descriptionField: 'description', dedicated: true,
   },
+  // Complaint types are now the LEAF rows of the single ComplaintHierarchy
+  // adjacency-list master (interior grouping nodes share the same schema and
+  // carry no department/slaHours). idField is the leaf row's `code` — which IS
+  // the serviceCode stored verbatim on a complaint. Mirrors the configurator's
+  // 'complaint-hierarchy' rename; the resource KEY stays 'complaint-types' here
+  // because in-repo consumers/tests reference it by that key.
+  // TODO(P5b): the configurator marks this resource leafServiceDefAdapter:true
+  // so its fetcher filters interior nodes out and maps leaves to the legacy
+  // ServiceDefs shape. This data-provider's ResourceConfig/fetcher has no such
+  // hook yet, so getList here returns interior nodes too. Add a leaf filter to
+  // the mdms fetcher (or a config flag) if/when this resource is surfaced.
   'complaint-types': {
-    type: 'mdms', label: 'Complaint Types', schema: 'RAINMAKER-PGR.ServiceDefs',
-    idField: 'serviceCode', nameField: 'serviceName', descriptionField: 'department', dedicated: true,
+    type: 'mdms', label: 'Complaint Types', schema: 'RAINMAKER-PGR.ComplaintHierarchy',
+    idField: 'code', nameField: 'name', descriptionField: 'levelCode', dedicated: true,
   },
   employees: {
     type: 'hrms', label: 'Employees', idField: 'uuid', nameField: 'name', descriptionField: 'designation',

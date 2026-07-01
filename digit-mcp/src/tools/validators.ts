@@ -414,10 +414,24 @@ export function registerValidatorTools(registry: ToolRegistry): void {
       const tenantId = args.tenant_id as string;
       const checkDeptRefs = args.check_department_refs !== false;
 
-      const complaintTypes = await digitApi.mdmsV2Search<Record<string, unknown>>(
+      // Complaint types are now LEAF rows of the single RAINMAKER-PGR.ComplaintHierarchy
+      // adjacency-list master. A leaf carries 'department' or 'slaHours' (interior
+      // grouping nodes omit them) and its 'code' IS the serviceCode. Map each leaf
+      // to the legacy ServiceDefs shape so the validation below is unchanged.
+      const hierarchyRows = await digitApi.mdmsV2Search<Record<string, unknown>>(
         tenantId,
-        MDMS_SCHEMAS.PGR_SERVICE_DEFS
+        MDMS_SCHEMAS.COMPLAINT_HIERARCHY
       );
+      const complaintTypes = hierarchyRows
+        .filter((r) => r.department != null || r.slaHours != null)
+        .map((r) => ({
+          ...r,
+          serviceCode: r.code,
+          serviceName: r.serviceName ?? r.name,
+          department: r.department,
+          slaHours: r.slaHours,
+          active: r.active,
+        }));
 
       const result: ValidationResult = {
         valid: true,

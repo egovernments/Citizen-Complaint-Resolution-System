@@ -1,5 +1,7 @@
-
-
+// ⚠️ DEPRECATED / DORMANT — NOT routed (the live citizen create flow is CreatePGRFlowV2.tsx; see Module.js).
+// This legacy FormExplorer still reads the REMOVED `RAINMAKER-PGR.ServiceDefs` master + `menuPath` grouping.
+// Do NOT re-enable without repointing to `RAINMAKER-PGR.ComplaintHierarchy`
+// (use utils/index.js → selectServiceDefsFromComplaintHierarchy). Kept only as a short-term rollback reference.
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Card, Header, Toast, FormComposerV2 } from "@egovernments/digit-ui-components";
@@ -337,7 +339,7 @@ const FormExplorer = () => {
     // even though the location is geographically valid. Skip the
     // allowlist check in that case (closes egovernments/CCRS#469); the
     // ward-leaf check on the boundary cascade step covers correctness.
-    const wardResolved = !!merged?.GeoLocationsPoint?.ward?.code;
+    const wardResolved = !!merged?.GeoLocationsPoint?.ward?.code || !!merged?.SelectedBoundary?.code;
     if (!wardResolved && merged?.postalCode != null && String(merged.postalCode).length > 0) {
       // Kenyan postal codes preserve leading zeros (e.g. "00100") but number
       // inputs may store them without. Normalise both sides so "00100", "100"

@@ -8856,6 +8856,30 @@
         "locale": "en_IN"
     },
     {
+        "code": "MOBILE_VALIDATION_DIGITS",
+        "message": "digits",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "MOBILE_VALIDATION_AT_LEAST",
+        "message": "at least",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "MOBILE_VALIDATION_STARTING_WITH",
+        "message": "starting with",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "MOBILE_VALIDATION_OR",
+        "message": "or",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
         "code": "EVENTS_DATERANGE_LABEL",
         "message": "Date Range",
         "module": "rainmaker-common",

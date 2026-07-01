@@ -77,6 +77,10 @@
       when:
         - digit_ui_mode in ['static', 'hmr']
         - ansible_system != 'Darwin'
+        # When a prebuilt bundle image is pinned (static mode), the git
+        # tree is not the source of what nginx serves — leave it alone so
+        # a deploy can't silently regress build/ to an older checkout.
+        - not (digit_ui_mode == 'static' and (digit_ui_bundle_image | default('')) | length > 0)
 
 
   tasks:
@@ -336,14 +340,16 @@
     # Same shape as MCP. When `build_default_data_handler: true`, the build
     # task below produces `default-data-handler:local` from utilities/default-data-handler
     # using build/maven/Dockerfile. Otherwise we pull the published image
-    # carrying the relaxed RAINMAKER-PGR schema (see source-file fix dated
-    # 2026-05-24).
+    # carrying the relaxed RAINMAKER-PGR schema (source-file fix dated
+    # 2026-05-24) and the pincode-free tenant.tenants template (the 0525
+    # build seeded pg's Indian pincodes onto every new tenant's citya,
+    # vetoing citizen submits with CS_COMMON_PINCODE_NOT_SERVICABLE).
     - name: "Resolve default-data-handler image tag"
       ansible.builtin.set_fact:
         ddh_image: >-
           {{ ddh_image
              | default('default-data-handler:local' if (build_default_data_handler | default(false))
-                       else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260525-034354') }}
+                       else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260611-111521') }}
 
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
@@ -485,10 +491,11 @@
         compose_profiles: >-
           {{
             ([]
-              + (['search']        if enable_search_stack | default(false) else [])
-              + (['mcp']           if enable_mcp          | default(false) else [])
-              + (['notifications'] if enable_novu         | default(false) else [])
-              + (['keycloak']      if enable_keycloak     | default(false) else [])
+              + (['search']        if enable_search_stack  | default(false) else [])
+              + (['mcp']           if enable_mcp           | default(false) else [])
+              + (['notifications'] if enable_novu          | default(false) else [])
+              + (['keycloak']      if enable_keycloak      | default(false) else [])
+              + (['otp']           if enable_otp_services  | default(false) else [])
             ) | join(',')
           }}
 
@@ -628,6 +635,107 @@
       when:
         - build_digit_ui | default(false)
 
+    # ---- Keycloak readiness BEFORE the dependent compose-up (converge-abort fix) ----
+    # The compose-up below waits on keycloak: service_healthy, but the keycloak DB
+    # secret is otherwise written to .env only AFTER it (the OpenBao block further
+    # down). So the first compose-up runs keycloak with the compose-default
+    # password, recreates keycloak/keycloak-postgres when .env later changes,
+    # keycloak races its DB / fails the healthcheck inside compose's dependency
+    # wait, and the whole play ABORTS — silently skipping every post-compose-up
+    # task (configurator build, overpass, etc.). Bring up OpenBao +
+    # keycloak-postgres, unseal, write the keycloak secrets to .env, and align the
+    # DB-user password HERE so the compose-up finds keycloak able to start healthy
+    # and the play runs to completion. All gated on enable_keycloak; idempotent.
+    - name: "Keycloak prep — bring up OpenBao + keycloak-postgres first"
+      ansible.builtin.shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d openbao keycloak-postgres
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: true
+      when: enable_keycloak | default(false)
+
+    - name: "Keycloak prep — wait for OpenBao to bind 18200"
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 18200
+        timeout: 120
+      when: enable_keycloak | default(false)
+
+    - name: "Keycloak prep — load OpenBao init state"
+      ansible.builtin.slurp:
+        src: "{{ digit_dir }}/.openbao/init.json"
+      register: kcprep_init
+      no_log: true
+      when: enable_keycloak | default(false)
+
+    - name: "Keycloak prep — parse OpenBao init state"
+      ansible.builtin.set_fact:
+        kcprep_unseal_key: "{{ (kcprep_init.content | b64decode | from_json).keys_base64[0] }}"
+        kcprep_root_token: "{{ (kcprep_init.content | b64decode | from_json).root_token }}"
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_init.content is defined
+
+    - name: "Keycloak prep — read OpenBao seal status"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/seal-status
+        status_code: [200]
+      register: kcprep_seal
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_root_token is defined
+
+    - name: "Keycloak prep — unseal OpenBao if sealed"
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18200/v1/sys/unseal
+        method: POST
+        body_format: json
+        body:
+          key: "{{ kcprep_unseal_key }}"
+        status_code: [200]
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_seal.json.sealed | default(false)
+
+    - name: "Keycloak prep — read secrets from OpenBao"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:18200/v1/{{ secrets_path | regex_replace('^kv/', 'kv/data/') }}"
+        headers:
+          X-Vault-Token: "{{ kcprep_root_token }}"
+        status_code: [200]
+      register: kcprep_secrets
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_root_token is defined
+
+    - name: "Keycloak prep — write KEYCLOAK SECRETS into .env BEFORE compose-up"
+      ansible.builtin.blockinfile:
+        path: "{{ digit_dir }}/.env"
+        block: |
+          KC_ADMIN_PASSWORD={{ kcprep_secrets.json.data.data.keycloak_admin_password | default('') }}
+          KC_DB_PASSWORD={{ kcprep_secrets.json.data.data.keycloak_db_password | default('') }}
+          TOKEN_EXCHANGE_SYSTEM_PASSWORD={{ kcprep_secrets.json.data.data.token_exchange_system_password | default('eGov@123') }}
+        marker: "# {mark} KEYCLOAK SECRETS"
+        create: false
+        mode: '0600'
+      no_log: true
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_secrets.json is defined
+
+    - name: "Keycloak prep — align keycloak DB-user password to OpenBao value"
+      ansible.builtin.shell: >-
+        docker exec keycloak-postgres psql -U keycloak -d keycloak -c
+        "ALTER USER keycloak WITH PASSWORD '{{ kcprep_secrets.json.data.data.keycloak_db_password }}';"
+      no_log: true
+      changed_when: true
+      failed_when: false
+      when:
+        - enable_keycloak | default(false)
+        - kcprep_secrets.json.data.data.keycloak_db_password | default('') | length > 0
+
     - name: Pull all images from VPC registry
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
       args:
@@ -749,6 +857,32 @@
       changed_when: stop_digit_ui_static.stdout == "stopped"
       when: digit_ui_mode == "static"
 
+    # Prebuilt-bundle path: when `digit_ui_bundle_image` is set (e.g.
+    # ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop, published
+    # from the monorepo's digit-ui-esbuild/), pull it and extract the
+    # baked SPA into the same build/ dir host nginx already serves —
+    # no on-host node/npm/esbuild, and no dependence on the upstream
+    # git repo's state. Per-tenant globalConfigs.js still propagates:
+    # nginx serves it from {{ digit_dir }}/nginx/ via a location alias
+    # that shadows the build's baked copy.
+    - name: "digit-ui mode=static — deploy prebuilt bundle from digit_ui_bundle_image"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker pull {{ digit_ui_bundle_image }}
+        id=$(docker create {{ digit_ui_bundle_image }})
+        trap 'docker rm -f "$id" >/dev/null' EXIT
+        rm -rf /opt/digit-ui-esbuild/build.new
+        docker cp "$id":/var/web/digit-ui /opt/digit-ui-esbuild/build.new
+        mkdir -p /opt/digit-ui-esbuild/build
+        rsync -a --delete /opt/digit-ui-esbuild/build.new/ /opt/digit-ui-esbuild/build/
+        rm -rf /opt/digit-ui-esbuild/build.new
+      args:
+        executable: /bin/bash
+      changed_when: true
+      when:
+        - digit_ui_mode == "static"
+        - (digit_ui_bundle_image | default('')) | length > 0
+
     - name: "digit-ui mode=static — install Node 20 if missing (esbuild.build.js needs it)"
       ansible.builtin.apt:
         name: nodejs
@@ -756,6 +890,7 @@
       when:
         - digit_ui_mode == "static"
         - ansible_system != "Darwin"
+        - (digit_ui_bundle_image | default('')) | length == 0
 
     - name: "digit-ui mode=static — npm install if package.json is newer than node_modules"
       ansible.builtin.shell: |
@@ -776,7 +911,9 @@
         fi
       register: npm_install
       changed_when: npm_install.stdout == "installed"
-      when: digit_ui_mode == "static"
+      when:
+        - digit_ui_mode == "static"
+        - (digit_ui_bundle_image | default('')) | length == 0
 
     - name: "digit-ui mode=static — run esbuild.build.js (idempotent: skips if build/ index newer than sources)"
       ansible.builtin.shell: |
@@ -799,7 +936,9 @@
         executable: /bin/bash
       register: esbuild_build
       changed_when: "'skipping rebuild' not in esbuild_build.stdout"
-      when: digit_ui_mode == "static"
+      when:
+        - digit_ui_mode == "static"
+        - (digit_ui_bundle_image | default('')) | length == 0
 
     # --- hmr mode ---
     - name: "digit-ui mode=hmr — stop digit-ui container after compose brought it up"
@@ -1267,6 +1406,12 @@
         "{{ configurator_repo | default(playbook_dir ~ '/../../configurator') }}"
         "{{ configurator_repo_url | default('-') }}"
         "{{ configurator_ref | default('') }}"
+      # When the box self-hosts Overpass, bake the same-origin endpoint into the
+      # build so Phase 2's boundary fetch hits the on-box container (nginx
+      # /overpass/) instead of the public, rate-limited overpass-api.de. Empty
+      # otherwise → the code default (public Overpass) applies.
+      environment:
+        VITE_OVERPASS_URL: "{{ '/overpass/api/interpreter' if (enable_overpass | default(false)) else '' }}"
       register: configurator_build_run
       changed_when: true
       when:
@@ -1355,6 +1500,68 @@
       register: turbopass_sweep
       changed_when: turbopass_sweep.stdout | length > 0
       when: not (enable_turbopass | default(false))
+
+    # ---- Self-hosted Overpass (opt-in: enable_overpass) ----
+    # The configurator's Phase 2 boundary-polygon fetch hits Overpass. The
+    # public overpass-api.de is rate-limited / 504-prone; a box can self-host
+    # it as a standalone `bomet-overpass` container (loopback only) fed a
+    # boundary-filtered OSM extract, with nginx proxying /overpass/ → it (same
+    # gate). The configurator build above bakes VITE_OVERPASS_URL=/overpass/...
+    # when this flag is on. The extract is operator-prepared (country choice +
+    # size are deployment-specific) — see overpass/README.md + prepare-extract.sh;
+    # the playbook only runs the container against {{ overpass_planet_file }}.
+    - name: "Overpass — ensure data dir on target"
+      ansible.builtin.file:
+        path: "{{ overpass_data_dir | default('/opt/overpass/data') }}"
+        state: directory
+        mode: '0755'
+      when: enable_overpass | default(false)
+
+    - name: "Overpass — check prepared extract exists"
+      ansible.builtin.stat:
+        path: "{{ overpass_planet_file | default('/opt/overpass/data/boundaries.osm.bz2') }}"
+      register: overpass_extract
+      when: enable_overpass | default(false)
+
+    - name: "Overpass — warn if extract missing (container not started)"
+      ansible.builtin.debug:
+        msg: >-
+          enable_overpass is true but {{ overpass_planet_file | default('/opt/overpass/data/boundaries.osm.bz2') }}
+          is missing. Prepare it with overpass/prepare-extract.sh (geofabrik pbf
+          → osmium boundary-filter → .osm.bz2), then re-run. Skipping container.
+      when:
+        - enable_overpass | default(false)
+        - not (overpass_extract.stat.exists | default(false))
+
+    # (re)create the Overpass container. OVERPASS_RULES_LOAD=10 builds the
+    # area[] index the configurator's `area["name"=...]` query needs; META=no
+    # keeps the DB lean. init mode imports on first run; the DB volume persists.
+    - name: "Overpass — (re)create the bomet-overpass container"
+      ansible.builtin.shell: |
+        docker rm -f bomet-overpass >/dev/null 2>&1 || true
+        docker run -d --name bomet-overpass --restart unless-stopped \
+          -e OVERPASS_META=no -e OVERPASS_MODE=init -e OVERPASS_RULES_LOAD=10 \
+          -e OVERPASS_PLANET_URL=file:///data/{{ (overpass_planet_file | default('/opt/overpass/data/boundaries.osm.bz2')) | basename }} \
+          -p 127.0.0.1:{{ overpass_port | default(12346) }}:80 \
+          -v {{ overpass_data_dir | default('/opt/overpass/data') }}:/data \
+          -v {{ overpass_db_dir | default('/opt/overpass/db') }}:/db \
+          wiktorn/overpass-api
+      register: overpass_run
+      changed_when: true
+      when:
+        - enable_overpass | default(false)
+        - overpass_extract.stat.exists | default(false)
+
+    # Flag flipped true → false: sweep the standalone container (not compose-managed).
+    - name: "Overpass — sweep container when flag is OFF"
+      ansible.builtin.shell: |
+        if docker ps -a --filter name=^bomet-overpass$ --format '{{ "{{" }}.Names{{ "}}" }}' | grep -q '^bomet-overpass$'; then
+          docker rm -f bomet-overpass >/dev/null
+          echo "swept bomet-overpass"
+        fi
+      register: overpass_sweep
+      changed_when: overpass_sweep.stdout | length > 0
+      when: not (enable_overpass | default(false))
 
     # ---- digit-integration-tests dashboards (opt-in: enable_integration_tests) ----
     # Builds the react-admin catalog dashboard from the VENDORED in-tree source
@@ -1789,6 +1996,7 @@
           mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
           mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
+          pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
@@ -1815,6 +2023,7 @@
           mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
           mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
+          pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
             username: "{{ bootstrap_user | default('ADMIN') }}"
             password: "{{ bootstrap_password | default('eGov@123') }}"
@@ -1972,6 +2181,19 @@
         replace: '\1STATE_LEVEL_TENANT_ID: {{ state_root }}'
       when: state_root != 'pg'
 
+    # The hrms-prereq-gate one-shot searches egov-user for the
+    # INTERNAL_MICROSERVICE_ROLE user at tenant `pg` before letting HRMS
+    # start. After the tenant rewrite HRMS boots against state_root, so
+    # the gate must check the same tenant — otherwise it passes on the
+    # pg seed user while state_root has no system user at all and HRMS
+    # crash-loops on the very thing the gate exists to prevent.
+    - name: "post-bootstrap — point hrms-prereq-gate at state_root in compose"
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '("tenantId":")pg(","roleCodes":\["INTERNAL_MICROSERVICE_ROLE"\])'
+        replace: '\1{{ state_root }}\2'
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — recreate services (except egov-hrms) to pick up new STATE_LEVEL_TENANT_ID"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }}
@@ -1990,11 +2212,58 @@
       changed_when: false
       when: state_root != 'pg'
 
+    # user-seed.sh only creates INTERNAL_USER on `pg`. HRMS (now pointed
+    # at state_root) tries to self-create it at boot, but egov-user's
+    # tenant-aware mobile validation (enforced even on _createnovalidate
+    # since :1044-preview) rejects HRMS's hardcoded 10-digit mobile on
+    # tenants with a stricter rule (e.g. ethiopia's ^[17][0-9]{8}$) and
+    # HRMS crash-loops with "Service returned null while fetching user".
+    # Seed it here with a mobile derived from the tenant's own rule:
+    # first allowed starting digit, padded with 9s to the rule length.
+    - name: "post-bootstrap — seed INTERNAL_USER system user on state_root for HRMS"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate"
+        method: POST
+        body_format: json
+        body:
+          RequestInfo: { apiId: digit, ver: "1.0" }
+          User:
+            userName: INTERNAL_USER
+            name: Internal Microservice User
+            mobileNumber: "{{ ((core_mobile_configs.mobileNumberAllowedStartingCharacters | first) ~ ('9' * ((core_mobile_configs.mobileNumberLength | int) - 1))) if core_mobile_configs is defined else '9999999999' }}"
+            gender: MALE
+            active: true
+            type: SYSTEM
+            tenantId: "{{ state_root }}"
+            password: "System@123"
+            roles:
+              - { code: INTERNAL_MICROSERVICE_ROLE, name: Internal Microservice Role, tenantId: "{{ state_root }}" }
+        status_code: [200, 400]
+        return_content: true
+      register: internal_user_seed
+      failed_when: >-
+        internal_user_seed.status != 200 and
+        'DuplicateUserName' not in (internal_user_seed.content | default(''))
+      changed_when: internal_user_seed.status == 200
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }} up -d --force-recreate egov-hrms
       args:
         chdir: "{{ digit_dir }}"
+      when: state_root != 'pg'
+
+    # Without this wait a crash-looping HRMS (e.g. missing system user on
+    # state_root) sails through and the deploy reports success — that is
+    # exactly how the ethiopia HRMS outage went unnoticed on 2026-06-11.
+    - name: "post-bootstrap — wait for egov-hrms healthy after restart"
+      ansible.builtin.shell: docker inspect --format '{{ "{{" }}.State.Health.Status{{ "}}" }}' egov-hrms
+      register: hrms_health_post
+      retries: 30
+      delay: 10
+      until: hrms_health_post.stdout == 'healthy'
+      changed_when: false
       when: state_root != 'pg'
 
     # `docker compose restart egov-user` above does NOT cascade to
@@ -2036,6 +2305,69 @@
       delay: 5
       until: user_kong_ready_post.status in [200, 400, 401]
       changed_when: false
+      when: state_root != 'pg'
+
+    # ────────────────────────────────────────────────────────────────
+    # Configurator UI localization seed. The configurator's own chrome —
+    # nav, field labels, resource names, dashboard strings — for every
+    # supported locale lives in the `configurator-ui` localization module
+    # so it renders from the backend and is editable in the configurator's
+    # own Localization screen (no rebuild to change a label or add a
+    # language). Seed/refresh it from the committed bundle so the strings
+    # survive redeploys (which rewrite server-side state) and every new
+    # tenant gets all languages on day 1. Idempotent: _upsert overwrites
+    # by (tenant, locale, module, code).
+    # ────────────────────────────────────────────────────────────────
+    - name: "configurator-i18n — mint ADMIN token at state_root for localization upsert"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
+        method: POST
+        headers: >-
+          {{
+            {'Authorization': 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+             'Content-Type': 'application/x-www-form-urlencoded'}
+            | combine({'Host': domain} if not (tls_enabled | default(true)) else {})
+          }}
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          username: "{{ bootstrap_user | default('ADMIN') }}"
+          password: "{{ bootstrap_password | default('eGov@123') }}"
+          scope: read
+          tenantId: "{{ state_root }}"
+          userType: EMPLOYEE
+        status_code: [200]
+        timeout: 15
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      register: cfg_i18n_auth
+      retries: 6
+      delay: 10
+      until: cfg_i18n_auth.status == 200
+      no_log: true
+      when: state_root != 'pg'
+
+    - name: "configurator-i18n — upsert configurator-ui bundle (per locale)"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/localization/messages/v1/_upsert"
+        method: POST
+        headers: "{{ {'Content-Type': 'application/json'} | combine({'Host': domain} if not (tls_enabled | default(true)) else {}) }}"
+        body_format: json
+        body:
+          RequestInfo:
+            apiId: emp
+            ver: ".01"
+            action: create
+            authToken: "{{ cfg_i18n_auth.json.access_token }}"
+            userInfo: "{{ cfg_i18n_auth.json.UserRequest }}"
+          tenantId: "{{ state_root }}"
+          locale: "{{ item }}"
+          messages: "{{ configurator_i18n_bundle | selectattr('locale', 'equalto', item) | list }}"
+        status_code: [200, 201]
+        timeout: 60
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      vars:
+        configurator_i18n_bundle: "{{ lookup('file', playbook_dir ~ '/files/configurator-localization/configurator-ui.json') | from_json }}"
+      loop: "{{ configurator_i18n_bundle | map(attribute='locale') | unique | list }}"
       when: state_root != 'pg'
 
     # ────────────────────────────────────────────────────────────────

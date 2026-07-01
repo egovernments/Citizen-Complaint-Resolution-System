@@ -2,8 +2,11 @@
  * Complaint-type management — list / create / bulk-import / dept filter /
  * tenant parity.
  *
- * Backed by MDMS schema `RAINMAKER-PGR.ServiceDefs`. At Nai Pepea time of
- * writing the tenant has 37 seeded types at BOTH `ke` and `ke.nairobi`
+ * Backed by MDMS schema `RAINMAKER-PGR.ComplaintHierarchy` — one adjacency list
+ * of interior nodes AND leaf complaint types. Complaint types are the LEAF rows
+ * (those carrying department/slaHours); a leaf's `code` is the serviceCode stored
+ * on a complaint, verbatim, and the leaf's unique identifier in MDMS. At Nai Pepea
+ * time of writing the tenant has 37 seeded types at BOTH `ke` and `ke.nairobi`
  * (MDMS v2 inherits root → city, so creates at `ke` surface at
  * `ke.nairobi` automatically — probed 2026-04-23). TASKS.md §2.5 calls
  * for registration at BOTH levels; these tests verify the row is visible
@@ -23,8 +26,13 @@ import { cleanupMdms } from '../utils/manage/teardown';
 import { ROOT_TENANT, CITY_TENANT } from '../utils/env';
 
 const TENANT_CODE = ROOT_TENANT;
-const SCHEMA = 'RAINMAKER-PGR.ServiceDefs';
+const SCHEMA = 'RAINMAKER-PGR.ComplaintHierarchy';
 const DEPT_SCHEMA = 'common-masters.Department';
+// Leaf complaint types created in tests link under this parent category node.
+// (Grouping key replaces the legacy menuPath; a real leaf row carries parentCode.)
+const LEAF_PARENT_CODE = 'Complaint';
+const LEAF_LEVEL_CODE = 'SUB_TYPE';
+const HIERARCHY_TYPE = 'PGR';
 const LIST_PATH = '/configurator/manage/complaint-types';
 
 const createdCodes = new Set<string>();
@@ -64,7 +72,7 @@ test.describe('manage/complaint-types', () => {
   test('1. list renders with Service Code / Name / Department / SLA / Status columns', {
     annotation: {
       type: 'description',
-      description: `Smoke check that /manage/complaint-types renders with all five expected column headers (Service Code, Name, Department, SLA, Status) AND that MDMS itself returns at least one record. Catches the case where either the UI list breaks or the underlying RAINMAKER-PGR.ServiceDefs schema is empty.
+      description: `Smoke check that /manage/complaint-types renders with all five expected column headers (Service Code, Name, Department, SLA, Status) AND that MDMS itself returns at least one record. Catches the case where either the UI list breaks or the underlying RAINMAKER-PGR.ComplaintHierarchy schema has no leaf rows.
 
 Steps:
 1. Navigate to /configurator/manage/complaint-types.
@@ -317,7 +325,7 @@ Loose label-match — works whether the row renders the dept code, dept name, or
 Steps:
 1. test.skip if !liveDeptCode.
 2. Generate a unique code; track for cleanup.
-3. mdmsCreate at TENANT_CODE (root) with full ServiceDef payload (serviceCode, name, active, keywords, menuPath, slaHours=24, department=liveDeptCode).
+3. mdmsCreate at TENANT_CODE (root) with a full ComplaintHierarchy leaf-row payload (code, hierarchyType, levelCode, parentCode, path, name, active, keywords, slaHours=24, department=liveDeptCode).
 4. In parallel: mdmsSearch at TENANT_CODE for [code] and mdmsSearch at CITY_TENANT for [code].
 5. Assert atRoot.length === 1.
 6. Assert atCity.length === 1 (proves inheritance).
@@ -335,12 +343,19 @@ If atRoot=1 but atCity=0, MDMS v2 inheritance is broken for this schema — a se
     const code = testCode(testInfo, 'CT_PARITY');
     createdCodes.add(code);
 
+    // Leaf-row shape for RAINMAKER-PGR.ComplaintHierarchy: `code` is the
+    // serviceCode (verbatim) and the MDMS unique identifier; parentCode/path
+    // place it under a category node; department/slaHours mark it as a leaf.
     await mdmsCreate(auth, TENANT_CODE, SCHEMA, code, {
-      serviceCode: code,
+      hierarchyType: HIERARCHY_TYPE,
+      levelCode: LEAF_LEVEL_CODE,
+      code,
+      parentCode: LEAF_PARENT_CODE,
       name: 'PW Parity Type',
+      order: 1,
       active: true,
+      path: `${LEAF_PARENT_CODE}.${code}`,
       keywords: 'parity',
-      menuPath: 'Complaint',
       slaHours: 24,
       department: liveDeptCode!,
     });

@@ -41,6 +41,26 @@ const CreateComplaintForm = ({
   // Fetch the list of service definitions (e.g., complaint types) for current tenant
   const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
 
+  // Does this tenant have a configurable complaint hierarchy (with nodes)?
+  // If so, the flat Type/Sub-Type dropdowns are replaced by the cascading
+  // PGRComplaintHierarchyComponent; otherwise the legacy flat flow runs as-is.
+  const { data: hasHierarchy } = Digit.Hooks.useCustomMDMS(
+    tenantId,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
+    {
+      cacheTime: Infinity,
+      select: (raw) => {
+        const defs = (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter(
+          (d) => d?.active !== false
+        );
+        const rows = raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [];
+        return defs.some((d) => rows.some((n) => n?.hierarchyType === d?.hierarchyType));
+      },
+    },
+    { schemaCode: "PGR_HIER_PRESENT" }
+  );
+
   // Logged-in employee's department — needed to gate the Sub-Type dropdown
   // so an employee can only file sub-types of their own department. The user
   // token doesn't carry the department, so look it up from HRMS by the
@@ -67,6 +87,23 @@ const CreateComplaintForm = ({
     return [...set];
   }, [currentEmployeeData]);
 
+  // Admin-style roles aren't tied to a single department, so they should always
+  // see the full Type/Sub-Type list rather than be scoped to one (or none).
+  const PRIVILEGED_ROLES = ["SUPERUSER", "PGR_ADMIN", "PGR-ADMIN"];
+  const isPrivileged = (user?.info?.roles || []).some((r) => PRIVILEGED_ROLES.includes(r?.code));
+
+  // Department gating is a *refinement*, never a hard block: only scope the
+  // Type/Sub-Type dropdowns to the employee's department(s) when doing so still
+  // leaves something to pick. If the user has no department, a privileged role,
+  // or a department that matches no ServiceDef (HRMS dept codes can diverge from
+  // the ServiceDefs `department`), gating is disabled and every type is shown —
+  // otherwise the dropdowns went blank even though MDMS has the data (issue #810).
+  const departmentGate = useMemo(() => {
+    const scoped = (serviceDefs || []).filter((d) => loggedInUserDepartments.includes(d.department));
+    const enabled = !isPrivileged && loggedInUserDepartments.length > 0 && scoped.length > 0;
+    return { enabled, scoped };
+  }, [serviceDefs, loggedInUserDepartments, isPrivileged]);
+
   useEffect(() => {
     if (toast?.show) {
       const timer = setTimeout(() => {
@@ -76,18 +113,16 @@ const CreateComplaintForm = ({
     }
   }, [toast?.show]);
 
-  // Validate phone number based on config
+  // Validate phone number based on config (length + regex pattern)
   const validatePhoneNumber = (value, config) => {
-    const { minLength, maxLength, min, max } = config?.populators?.validation || {};
+    const { minLength, maxLength, pattern } = config?.populators?.validation || {};
     const stringValue = String(value || "");
 
-    if (
-      (minLength && stringValue.length < minLength) ||
-      (maxLength && stringValue.length > maxLength) ||
-      (min && Number(value) < min) ||
-      (max && Number(value) > max)
-    ) {
-      return false;
+    if (minLength && stringValue.length < minLength) return false;
+    if (maxLength && stringValue.length > maxLength) return false;
+    if (pattern) {
+      const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
+      if (!re.test(stringValue)) return false;
     }
     return true;
   };
@@ -109,35 +144,17 @@ const CreateComplaintForm = ({
 
 
   function getUniqueMenuPaths(data) {
-    // Dedupe by menuPath + department (not menuPath alone). The same menuPath
-    // can exist under more than one department; for a multi-department user
-    // both must stay selectable, so keep one Type option per
-    // (menuPath, department). For single-department users this collapses to
-    // the same result as menuPath-only dedupe.
-    const seen = new Set();
+    const seenMenuPaths = new Set();
     const uniqueItems = [];
-    for (const item of data || []) {
-      const key = `${item.menuPath}__${item.department}`;
-      if (!seen.has(key)) {
-        seen.add(key);
+
+    for (const item of data) {
+      if (!seenMenuPaths.has(item.menuPath)) {
+        seenMenuPaths.add(item.menuPath);
         uniqueItems.push(item);
       }
     }
 
-    // Disambiguate only when the SAME menuPath spans multiple departments in
-    // the (already department-scoped) option set — otherwise a multi-dept user
-    // would see identical labels. Single-department users never trip this, so
-    // their labels stay plain.
-    const deptCountByMenuPath = uniqueItems.reduce((acc, it) => {
-      acc[it.menuPath] = (acc[it.menuPath] || 0) + 1;
-      return acc;
-    }, {});
-
-    return uniqueItems.map((it) =>
-      deptCountByMenuPath[it.menuPath] > 1
-        ? { ...it, menuPathName: `${it.menuPathName} - ${t(`DEPARTMENT_${it.department}`)}` }
-        : it
-    );
+    return uniqueItems;
   }
 
   function getSubTypesByDepartment(baseItem, allItems) {
@@ -147,23 +164,7 @@ const CreateComplaintForm = ({
       return [];
     }
 
-    // Strict gate by the logged-in employee's department(s): only show
-    // sub-types when the user is assigned to the selected Type's department.
-    // Supports multiple departments. If the user isn't assigned to it (or the
-    // assignment hasn't loaded), show nothing — never forward a department the
-    // user isn't assigned to.
-    if (!loggedInUserDepartments.includes(baseItem.department)) {
-      return [];
-    }
-
-    // Sub-types = services under the SELECTED Type — match both menuPath and
-    // department, not department alone (department-only would leak services
-    // from other menuPaths in the same department into this Type's sub-list).
-    return allItems.filter(
-      (item) =>
-        item.department === baseItem.department &&
-        item.menuPath === baseItem.menuPath
-    );
+    return allItems.filter(item => item.department === baseItem.department);
   }
 
 
@@ -179,15 +180,6 @@ const CreateComplaintForm = ({
 
   const updatedConfig = useMemo(() => {
 
-    // Scope the Complaint Type options strictly to the logged-in employee's
-    // assigned department(s) — a user only sees Types they can act on (e.g. an
-    // "ambiental" user doesn't see the "Water"/DEPT_36 Type). If the user has
-    // no assignment (or it hasn't loaded yet), the list is empty: we never
-    // forward Types for a department the user isn't assigned to.
-    const departmentScopedDefs = (serviceDefs || []).filter((d) =>
-      loggedInUserDepartments.includes(d.department)
-    );
-
     const baseConfig = Digit.Utils.preProcessMDMSConfig(
       t,
       createComplaintConfig,
@@ -195,7 +187,7 @@ const CreateComplaintForm = ({
         updateDependent: [
           {
             key: "SelectComplaintType",
-            value: [getUniqueMenuPaths(departmentScopedDefs) ? getUniqueMenuPaths(departmentScopedDefs) : []],
+            value: [getUniqueMenuPaths(serviceDefs) ? getUniqueMenuPaths(serviceDefs) : []],
           },
           {
             key: "SelectSubComplaintType",
@@ -209,27 +201,43 @@ const CreateComplaintForm = ({
       }
     );
 
-    // Update disable flags dynamically
+    // Update disable flags dynamically; when a complaint hierarchy exists,
+    // replace the flat Type dropdown with the cascading hierarchy component and
+    // drop the flat Sub-Type dropdown (the component writes both fields).
     const updatedForm = baseConfig?.form?.map(section => {
       return {
         ...section,
-        body: section.body.map(field => {
+        body: section.body.flatMap(field => {
+          const fname = field.populators?.name || field.key;
+          if (hasHierarchy && fname === "SelectComplaintType") {
+            return [{
+              ...field,
+              type: "component",
+              component: "PGRComplaintHierarchyComponent",
+              key: "SelectComplaintType",
+              isMandatory: true,
+              populators: { ...field.populators, name: "SelectComplaintType" },
+            }];
+          }
+          if (hasHierarchy && fname === "SelectSubComplaintType") {
+            return []; // component handles sub-type + writes this field
+          }
           if (
             field.populators?.name === "ComplainantName" ||
             field.populators?.name === "ComplainantContactNumber"
           ) {
-            return {
+            return [{
               ...field,
               disable: disabledFields[field.populators.name],
-            };
+            }];
           }
-          return field;
+          return [field];
         }),
       };
     });
 
     return { ...baseConfig, form: updatedForm };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments]);
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, hasHierarchy, departmentGate]);
 
 
 
@@ -240,6 +248,11 @@ const CreateComplaintForm = ({
 
 
   const prevSubTypeRef = React.useRef([]);
+  // null = no error shown; "invalid" = error currently shown.
+  // Used to guard setError/clearErrors so they only fire when the state
+  // actually changes — preventing the infinite render loop that trigger() causes
+  // (trigger → errors change → re-render → watch() new ref → useEffect fires → loop).
+  const mobileErrorRef = useRef(null);
 
   // Track whether every isMandatory field in the live config has a
   // non-empty value, so we can gate the SUBMIT button. FormComposerV2
@@ -282,21 +295,51 @@ const CreateComplaintForm = ({
     }
     recomputeSubmitDisabled(formData);
 
-    const selectedComplaintType = formData?.SelectComplaintType;
-    const newSubTypes = getSubTypesByDepartment(selectedComplaintType, serviceDefs);
+    // Real-time mobile validation: show/hide CardLabelError as the user types.
+    // Uses setError/clearErrors guarded by a ref instead of trigger(), which
+    // caused an infinite loop (trigger changed errors state → re-render →
+    // watch() produced a new reference → useEffect fired → trigger again).
+    const mobile = formData?.ComplainantContactNumber;
+    const mobileField = updatedConfig?.form
+      ?.flatMap(s => s.body || [])
+      ?.find(f => f.populators?.name === "ComplainantContactNumber");
+    const mobilePattern = mobileField?.populators?.validation?.pattern;
+    if (mobile && mobilePattern) {
+      const re = mobilePattern instanceof RegExp ? mobilePattern : new RegExp(String(mobilePattern));
+      const isValid = re.test(mobile);
+      if (!isValid && mobileErrorRef.current !== "invalid") {
+        setError?.("ComplainantContactNumber", { type: "pattern", message: mobileField?.populators?.error || "CORE_COMMON_MOBILE_ERROR" });
+        mobileErrorRef.current = "invalid";
+      } else if (isValid && mobileErrorRef.current === "invalid") {
+        clearErrors?.("ComplainantContactNumber");
+        mobileErrorRef.current = null;
+      }
+    } else if (!mobile && mobileErrorRef.current !== null) {
+      clearErrors?.("ComplainantContactNumber");
+      mobileErrorRef.current = null;
+    }
 
-    // Compare previous and new subtype list
-    const prevCodes = prevSubTypeRef.current.map(s => s.code).sort().join(",");
-    const newCodes = newSubTypes.map(s => s.code).sort().join(",");
+    // The flat Type→Sub-Type cascade only applies to the legacy dropdowns.
+    // When the hierarchy component is active it owns both fields, so skip this
+    // (running it would treat the leaf ServiceDef as a menuPath base and clear
+    // SelectSubComplaintType).
+    if (!hasHierarchy) {
+      const selectedComplaintType = formData?.SelectComplaintType;
+      const newSubTypes = getSubTypesByDepartment(selectedComplaintType, serviceDefs);
 
-    if (prevCodes !== newCodes) {
-      prevSubTypeRef.current = newSubTypes;
-      setSubType(newSubTypes);
-      // Mirror citizen FormExplorer fix (CCRS#437): reset the subtype
-      // immediately so the prior selection cannot leak into the next
-      // render under a different ComplaintType. Pass `undefined` so the
-      // Dropdown falls back cleanly to its empty state.
-      setValue("SelectSubComplaintType", undefined, { shouldDirty: true, shouldTouch: true, shouldValidate: false });
+      // Compare previous and new subtype list
+      const prevCodes = prevSubTypeRef.current.map(s => s.code).sort().join(",");
+      const newCodes = newSubTypes.map(s => s.code).sort().join(",");
+
+      if (prevCodes !== newCodes) {
+        prevSubTypeRef.current = newSubTypes;
+        setSubType(newSubTypes);
+        // Mirror citizen FormExplorer fix (CCRS#437): reset the subtype
+        // immediately so the prior selection cannot leak into the next
+        // render under a different ComplaintType. Pass `undefined` so the
+        // Dropdown falls back cleanly to its empty state.
+        setValue("SelectSubComplaintType", undefined, { shouldDirty: true, shouldTouch: true, shouldValidate: false });
+      }
     }
 
     const selectedUser = formData?.complaintUser?.code;

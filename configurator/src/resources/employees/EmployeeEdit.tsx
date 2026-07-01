@@ -231,6 +231,7 @@ export function EmployeeEdit() {
             source="user.mobileNumber"
             label="Mobile Number"
             validate={mobileValidate}
+            maxLength={mobileRules.maxLength}
             help={mobileRules.errorMessage}
           />
           <DigitFormInput source="user.emailId" label="Email" type="email" validate={v.emailOptional} />
