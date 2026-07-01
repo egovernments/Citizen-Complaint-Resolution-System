@@ -129,13 +129,19 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const wardStyle = useMemo(() => wardStyleFor(wardColor, selectedWard, hoveredWard), [wardColor, selectedWard, hoveredWard]);
   const onEachWard = useCallback((feature, layer) => {
     const code = feature?.properties?.code;
-    const name = feature?.properties?.name;
-    if (name) layer.bindTooltip(name, { sticky: true, direction: "top", className: "ward-tooltip" });
+    // Live boundaries carry only the code (boundary-relationships has no name
+    // field), so localize the code the same way the locality dropdown does —
+    // t(<boundaryCode>) against the `rainmaker-boundary-<hierarchy>` module.
+    // trans() echoes the key when unmapped, so an unseeded code still shows
+    // the raw code rather than blank, and the label re-localizes on language
+    // switch (i18n.language is in the dep list).
+    const label = (code && trans(code)) || feature?.properties?.name || code;
+    if (label) layer.bindTooltip(label, { sticky: true, direction: "top", className: "ward-tooltip" });
     layer.on({
       mouseover: () => { if (selectedWard !== code) setHoveredWard(code); },
       mouseout:  () => setHoveredWard((c) => (c === code ? null : c)),
     });
-  }, [selectedWard]);
+  }, [selectedWard, trans, i18n.language]);
 
   useEffect(() => {
     if (!hasInitialized.current) {
@@ -407,7 +413,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
             <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} />
             {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
-                key={`${selectedWard || "_"}-${hoveredWard || "_"}-${tenantBoundaries.features.length}`}
+                key={`${selectedWard || "_"}-${hoveredWard || "_"}-${tenantBoundaries.features.length}-${i18n.language}`}
                 data={tenantBoundaries}
                 style={wardStyle}
                 onEachFeature={onEachWard}
