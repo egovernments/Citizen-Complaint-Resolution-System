@@ -352,6 +352,34 @@ async function localizationGetList(client: DigitApiClient, config: ResourceConfi
   // so the right column starts as all-missing rather than defaulting to a
   // hardcoded locale that may not exist on the tenant.
   const module = filter?.module ? String(filter.module) : undefined;
+  // Multi-locale pivot: when the caller passes `locales` (array or CSV) the
+  // grid wants one editable column per locale (msg__<locale>) instead of the
+  // 2-way message/message2 compare — so every language can be edited side by
+  // side. Rows are keyed by code+module; a code present in one locale but not
+  // another still appears (its missing columns stay empty).
+  const localesRaw = filter?.locales;
+  if (localesRaw) {
+    const locales = (Array.isArray(localesRaw) ? localesRaw : String(localesRaw).split(','))
+      .map((l) => String(l).trim()).filter(Boolean);
+    const perLocale = await Promise.all(locales.map((l) => client.localizationSearch(tenantId, l, module)));
+    const pivotN = new Map<string, Record<string, unknown>>();
+    locales.forEach((loc, i) => {
+      for (const m of perLocale[i] as Record<string, unknown>[]) {
+        const code = String(m.code ?? '');
+        const mod = String(m.module ?? '');
+        const key = `${code}__${mod}`;
+        let row = pivotN.get(key);
+        if (!row) {
+          row = { id: key, code, module: mod };
+          for (const L of locales) row[`msg__${L}`] = '';
+          pivotN.set(key, row);
+        }
+        row[`msg__${loc}`] = String(m.message ?? '');
+      }
+    });
+    return Array.from(pivotN.values()).map((r) => normalizeRecord(r, config));
+  }
+
   const localeA = filter?.locale ? String(filter.locale) : 'en_IN';
   const localeB = filter?.locale2 ? String(filter.locale2) : '';
   const [aMsgs, bMsgs] = await Promise.all([
@@ -953,6 +981,23 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const prev = (params.previousData ?? {}) as Record<string, unknown>;
         const code = String(data.code || params.id);
         const mod = String(data.module ?? '');
+
+        // Multi-locale grid: an inline edit emits msg__<locale> fields. Upsert
+        // only the locales whose value actually changed.
+        const msgKeys = Object.keys(data).filter((k) => k.startsWith('msg__'));
+        if (msgKeys.length) {
+          const localeWrites: Promise<unknown>[] = [];
+          for (const k of msgKeys) {
+            if (data[k] === prev[k]) continue;
+            const loc = k.slice('msg__'.length);
+            localeWrites.push(client.localizationUpsert(tenantId, loc, [
+              { code, message: String(data[k] ?? ''), module: mod },
+            ]));
+          }
+          await Promise.all(localeWrites);
+          return { data: { ...data, id: String(data.id ?? `${code}__${mod}`) } as RaRecord };
+        }
+
         const localeA = String(data.locale ?? 'en_IN');
         const localeB = String(data.locale2 ?? '');
         const writes: Promise<unknown>[] = [];
