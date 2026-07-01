@@ -55,6 +55,11 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const mapRef = useRef(null);
   const searchInputRef = useRef(null);
   const hasInitialized = useRef(false);
+  // Monotonic id for reverse-geocode requests. Reverse geocoding is async and
+  // unordered: the mount-time lookup for MAP_CENTER, or an earlier click, can
+  // resolve *after* a newer selection and overwrite it (the pin "jumps back").
+  // Each fetch captures an id and only commits its result if it is still latest.
+  const geocodeSeqRef = useRef(0);
 
   // Initialize with India center location on first load or from Session Storage
   useEffect(() => {
@@ -87,8 +92,18 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     if (formData?.[config.key]) {
       const { lat, lng, address: savedAddress } = formData[config.key];
       if (lat && lng) {
-        setCoords({ lat, lng });
-        setMarkerPos([lat, lng]);
+        // formData is react-hook-form's watch() snapshot: it gets a fresh object
+        // identity on every change elsewhere in the form, so this effect re-runs
+        // constantly. Only move the marker when the coordinates actually differ
+        // from what we're already showing — otherwise a re-render that lands while
+        // an async reverse-geocode is in flight snaps the pin back to the previous
+        // value and it appears to "jump" on its own.
+        const samePos =
+          markerPos && Math.abs(markerPos[0] - lat) < 1e-9 && Math.abs(markerPos[1] - lng) < 1e-9;
+        if (!samePos) {
+          setCoords({ lat, lng });
+          setMarkerPos([lat, lng]);
+        }
         // Restore saved address if available
         if (savedAddress) {
           setAddress(savedAddress);
@@ -101,19 +116,26 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   }, [formData, config.key]);
 
   const fetchAddress = async (lat, lng) => {
+    const seq = ++geocodeSeqRef.current;
+    // True only if this is still the most recent reverse-geocode request; a
+    // superseded response must not touch state or the form.
+    const isLatest = () => seq === geocodeSeqRef.current;
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
       );
       const data = await response.json();
+      if (!isLatest()) return;
       if (data && data.display_name) {
         setAddress(data.display_name);
         setSearchQuery(data.display_name); // Update search bar with fetched address
-        // Extract pincode if available
+        // Extract pincode if available. Prefer the structured postcode Nominatim
+        // returns for most countries; only fall back to scraping display_name.
+        // The fallback is deliberately not hard-coded to 6 digits (India) so
+        // Kenya/other tenants with 4-5 digit postal codes still resolve.
         let pincode = data.address?.postcode;
         if (!pincode && data.display_name) {
-          // Fallback: Try to extract 6-digit pincode from display_name
-          const pincodeMatch = data.display_name.match(/\b\d{6}\b/);
+          const pincodeMatch = data.display_name.match(/\b\d{4,6}\b/);
           if (pincodeMatch) {
             pincode = pincodeMatch[0];
           }
@@ -128,13 +150,19 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
       }
     } catch (error) {
       console.error("Error fetching address:", error);
-      onSelect(config.key, { lat, lng });
+      if (isLatest()) onSelect(config.key, { lat, lng });
     }
   };
 
   const updateLocation = async (lat, lng) => {
     setCoords({ lat, lng });
     setMarkerPos([lat, lng]);
+    // Commit the coordinates to the form synchronously. fetchAddress only calls
+    // onSelect after its network round-trip, and until then the form still holds
+    // the previous location; any re-render in that window would otherwise reset
+    // the marker via the sync effect above. Writing lat/lng now closes that race;
+    // fetchAddress then enriches the same point with pincode + address.
+    onSelect(config.key, { lat, lng });
     setIsSearching(true);
     await fetchAddress(lat, lng);
     setIsSearching(false);

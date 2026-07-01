@@ -48,9 +48,11 @@ export const locationDetails = {
       "populators": {
         "name": "postalCode",
         "maxlength": 6,
-        "value":"560001",
         validation: {
-                  pattern: /^[1-9][0-9]{5}$/i,
+                  // Accept 4-6 digit postal codes so non-India tenants (e.g. Kenya)
+                  // aren't blocked, and so a value auto-filled from the map pin
+                  // always satisfies the field's own validation.
+                  pattern: /^[0-9]{4,6}$/i,
                 },
       }
     }

@@ -357,10 +357,22 @@ const FormExplorer = () => {
 
 
   const previousMenuPathRef = React.useRef(null);
+  const lastBridgedPincodeRef = React.useRef(null);
 
   const onFormValueChange = (setValue, formData, formState, reset, setError, clearErrors, trigger, getValues) => {
 
-    console.log(`*** LOG formData***`, formData);
+    // Bridge the pincode captured from the map pin (GeoLocationsPoint) into the
+    // postalCode field. This must go through react-hook-form's setValue: the form
+    // is never reset between steps, so mutating defaultValues at render time never
+    // reaches the live field. onFormValueChange fires on every change, so we only
+    // push a value when the *map* pincode actually changes (i.e. a new pin was
+    // dropped) — otherwise we'd overwrite a postalCode the user typed by hand on
+    // every keystroke elsewhere in the form.
+    const mapPincode = formData?.GeoLocationsPoint?.pincode;
+    if (mapPincode && `${mapPincode}` !== `${lastBridgedPincodeRef.current ?? ""}`) {
+      lastBridgedPincodeRef.current = `${mapPincode}`;
+      setValue("postalCode", `${mapPincode}`);
+    }
 
     const complaintType = formData?.SelectComplaintType;
     const currentMenuPath = complaintType?.menuPath;
@@ -412,12 +424,9 @@ const FormExplorer = () => {
     }
   };
 
-  if (formData.GeoLocationsPoint?.pincode) {
-    formData.postalCode = `${formData.GeoLocationsPoint.pincode}`;
-  }
-  else if (formData.postalCode) {
-    formData.postalCode = `${formData.postalCode}`;
-  }
+  // Note: the pincode captured from the map is now propagated into the
+  // postalCode field via setValue() in onFormValueChange, not by mutating
+  // formData here — react-hook-form ignores defaultValues changes after mount.
 
   if (formData.landmark && typeof formData.landmark === "object") {
     formData.landmark = "";
