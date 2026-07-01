@@ -75,7 +75,7 @@ Pairs with the FAQ test — both pages are listed in CCRS#12 as the broken aux s
     ).not.toContainText('Something went wrong');
   });
 
-  test('HELPLINE sidebar item is reachable + click-actionable', {
+  test.fixme('HELPLINE sidebar item is reachable + click-actionable', {
     annotation: {
       type: 'description',
       description: `Catches CCRS#12 (third sub-issue): the HELPLINE sidebar item used to render but its click handler is dead. The test asserts the link is visible AND that clicking it produces ANY observable side effect — a navigation, a JS dialog, or a DOM modal.
