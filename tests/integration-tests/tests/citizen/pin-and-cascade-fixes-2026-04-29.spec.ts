@@ -92,13 +92,19 @@ Long-running with explicit DOM count assertions to lock in the cascade gating co
     await firstOption.click();
     await page.waitForTimeout(1500);
 
-    // Subtype is the 2nd dropdown — appears after Type pick on some deployments.
+    // Subtype is the 2nd dropdown — appears or becomes enabled after Type pick.
+    // On ke (CRS digit-ui) the Sub-Type combobox renders immediately but starts
+    // disabled; it enables after the Category MDMS response arrives. Wait for it.
     const subtypeVisible = await dropdowns.nth(1).isVisible({ timeout: 3000 }).catch(() => false);
     if (subtypeVisible) {
-      await dropdowns.nth(1).click();
-      await page.waitForTimeout(800);
-      await page.locator('[role="option"], .digit-dropdown-item').first().click();
-      await page.waitForTimeout(1000);
+      await expect(dropdowns.nth(1)).toBeEnabled({ timeout: 8000 }).catch(() => {});
+      const subtypeEnabled = await dropdowns.nth(1).isEnabled().catch(() => false);
+      if (subtypeEnabled) {
+        await dropdowns.nth(1).click();
+        await page.waitForTimeout(800);
+        await page.locator('[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible').first().click();
+        await page.waitForTimeout(1000);
+      }
     }
     await clickNext();
 
@@ -142,16 +148,22 @@ Long-running with explicit DOM count assertions to lock in the cascade gating co
     ).toBeGreaterThan(1);
 
     // Walk any remaining unset cascade dropdowns (second and third levels if present).
-    // This handles both 2-level (Region→Ward) and 3-level (County→Sub-County→Ward) deployments.
+    // On ke child dropdowns render immediately but start disabled — wait for each
+    // to become enabled before interacting (Playwright polls via toBeEnabled).
     for (let i = 1; i < afterFirstPick; i++) {
       const dd = cascadeDropdowns.nth(i);
+      // Wait up to 6 s for the dropdown to become enabled after the parent pick.
+      await expect(dd).toBeEnabled({ timeout: 6000 }).catch(() => {});
+      const ddEnabled = await dd.isEnabled().catch(() => false);
+      if (!ddEnabled) break; // still disabled — no further levels
+      // Use /^Select/i (no trailing space) to also match "Select…" (ke shadcn placeholder).
       const hasValue = await dd.evaluate(
-        (el) => !(el as HTMLElement).innerText.match(/^Select /i),
+        (el) => !(el as HTMLElement).innerText.match(/^Select/i),
       ).catch(() => false);
       if (hasValue) continue; // already auto-filled
       await dd.click();
       await page.waitForTimeout(800);
-      await page.locator('[role="option"], .digit-dropdown-item').first().click();
+      await page.locator('[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible').first().click();
       await page.waitForTimeout(1500);
     }
 
