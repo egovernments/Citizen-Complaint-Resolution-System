@@ -17,12 +17,17 @@ const usePGRInboxSearch = (reqCriteria) => {
   const stableParams = useMemo(() => JSON.stringify(params), [params]);
 
   const fetchData = async () => {
-    // 1. Call PGR search
-    const pgrResponse = await CustomService.getResponse({ url, params, body });
+    // 1. Call PGR search + count in parallel
+    const countUrl = url.replace("_search", "_count");
+    const [pgrResponse, countResponse] = await Promise.all([
+      CustomService.getResponse({ url, params, body }),
+      CustomService.getResponse({ url: countUrl, params, body }).catch(() => null),
+    ]);
     const wrappers = pgrResponse?.ServiceWrappers || [];
+    const totalCount = countResponse?.count ?? wrappers.length;
 
     if (wrappers.length === 0) {
-      return { items: [], totalCount: 0, statusMap: [] };
+      return { items: [], totalCount, statusMap: [] };
     }
 
     // 2. Batch-fetch workflow process instances for all complaints on this page
@@ -62,7 +67,7 @@ const usePGRInboxSearch = (reqCriteria) => {
           ProcessInstance: pi,
         };
       }),
-      totalCount: wrappers.length,
+      totalCount,
       statusMap: [],
     };
   };
