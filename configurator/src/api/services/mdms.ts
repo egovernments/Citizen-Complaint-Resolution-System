@@ -333,4 +333,35 @@ export const mdmsService = {
       errorMessage: 'Mobile number does not match the configured format',
     };
   },
+
+  // ============================================
+  // Configured UI locales (common-masters.StateInfo.languages)
+  // ============================================
+
+  // Returns the locale codes the tenant actually serves — the `value` of each
+  // StateInfo.languages entry (e.g. ["en_KE", "sw_KE"]). This is the single
+  // source of truth for the digit-ui language switcher and the configurator's
+  // locale dropdowns (see schemaDescriptors/state-info.ts), so any content we
+  // localize (boundaries, hierarchy levels) must be seeded under THESE locales
+  // — not a hardcoded en_IN, which a non-India tenant's UI never reads, leaving
+  // every boundary dropdown/map tooltip showing the raw code.
+  //
+  // StateInfo lives at the state-root tenant; callers pass a tenant whose root
+  // segment we resolve. Returns [] when StateInfo/languages is absent so callers
+  // can fall back to their own default rather than silently seeding nothing.
+  async getStateInfoLocales(tenantId: string): Promise<string[]> {
+    const rootTenant = tenantId.split('.')[0];
+    try {
+      const records = await this.search<{ languages?: { value?: string }[] }>(
+        rootTenant,
+        'common-masters.StateInfo'
+      );
+      const langs = records.find((r) => Array.isArray(r.languages))?.languages ?? [];
+      return langs
+        .map((l) => (typeof l?.value === 'string' ? l.value : undefined))
+        .filter((v): v is string => !!v);
+    } catch {
+      return [];
+    }
+  },
 };

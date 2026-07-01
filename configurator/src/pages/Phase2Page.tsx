@@ -28,7 +28,7 @@ import { Header, SubHeader } from '@/components/digit/Header';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { Banner } from '@/components/digit/Banner';
-import { apiClient, boundaryService, localizationService, ApiClientError } from '@/api';
+import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
@@ -113,21 +113,32 @@ async function runPostCreatePipeline(
     name: b.name,
   }));
 
-  await localizationService.uploadBoundaryLocalizations(
-    tenantId,
-    boundaryData,
-    hierarchyType,
-    'en_IN'
-  );
+  // Seed under every locale the tenant actually serves (StateInfo.languages),
+  // not a hardcoded en_IN — the digit-ui citizen app reads boundary names under
+  // its ACTIVE locale (e.g. en_KE / sw_KE for Kenya), so seeding only en_IN left
+  // the create-complaint locality dropdown AND the OSM map ward tooltips showing
+  // raw boundary codes. Fall back to en_IN when StateInfo has no languages so an
+  // India tenant behaves exactly as before.
+  const configuredLocales = await mdmsService.getStateInfoLocales(tenantId).catch(() => []);
+  const locales = configuredLocales.length > 0 ? configuredLocales : ['en_IN'];
 
-  // Create level-label localization keys so DIGIT-UI renders "MUNICÍPIO" / "DISTRITO"
-  // instead of the raw key "maputo_hierarchy_type_MUNICÍPIO" in the complaint form.
-  await localizationService.uploadHierarchyLevelLocalizations(
-    tenantId,
-    hierarchyType,
-    levels,
-    'en_IN'
-  ).catch(e => console.warn('hierarchy-level localization failed (non-fatal)', e));
+  for (const locale of locales) {
+    await localizationService.uploadBoundaryLocalizations(
+      tenantId,
+      boundaryData,
+      hierarchyType,
+      locale
+    );
+
+    // Create level-label localization keys so DIGIT-UI renders "MUNICÍPIO" / "DISTRITO"
+    // instead of the raw key "maputo_hierarchy_type_MUNICÍPIO" in the complaint form.
+    await localizationService.uploadHierarchyLevelLocalizations(
+      tenantId,
+      hierarchyType,
+      levels,
+      locale
+    ).catch(e => console.warn(`hierarchy-level localization failed (non-fatal) for ${locale}`, e));
+  }
 
   await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
 

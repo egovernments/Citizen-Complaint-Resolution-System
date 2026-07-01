@@ -1,0 +1,28 @@
+[
+  {
+    "name": "IgeComplaintExtendedAttributes",
+    "active": true,
+    "x-security": ["witnessName", "witnessAddress", "instituteName"],
+    "fields": [
+      { "fieldKey": "caseRelatedTo",  "label": "Case Related To",  "dataType": "string", "mandatory": false, "pii": false, "maxLength": 500,  "order": 1 },
+      { "fieldKey": "instituteName",  "label": "Institute Name",   "dataType": "string", "mandatory": true,  "pii": true,  "maxLength": 300,  "order": 2, "regex": "^[a-zA-Z0-9 .,''\\-&()]{1,300}$" },
+      { "fieldKey": "witnessName",    "label": "Witness Name",     "dataType": "string", "mandatory": false, "pii": true,  "maxLength": 200,  "order": 3, "regex": "^[a-zA-Z .''\\-]{1,200}$" },
+      { "fieldKey": "witnessAddress", "label": "Witness Address",  "dataType": "string", "mandatory": false, "pii": true,  "maxLength": 1000, "order": 4 },
+      { "fieldKey": "witnessNote",    "label": "Witness Note",     "dataType": "string", "mandatory": false, "pii": false, "maxLength": 1000, "order": 5 }
+    ]
+  },
+  {
+    "name": "IgsaeComplaintExtendedAttributes",
+    "active": true,
+    "x-security": ["witnessName", "witnessAddress"],
+    "fields": [
+      { "fieldKey": "caseRelatedTo",  "label": "Case Related To", "dataType": "string", "mandatory": false, "pii": false, "maxLength": 500,  "order": 1 },
+      { "fieldKey": "dateOfFact",     "label": "Date of Fact",    "dataType": "date",   "mandatory": true,  "pii": true,                      "order": 2 },
+      { "fieldKey": "entityName",     "label": "Entity Name",     "dataType": "string", "mandatory": true,  "pii": true,  "maxLength": 300,  "order": 3, "regex": "^[a-zA-Z0-9 .,''\\-&()]{1,300}$" },
+      { "fieldKey": "entityAddress",  "label": "Entity Address",  "dataType": "string", "mandatory": true,  "pii": true,  "maxLength": 1000, "order": 4 },
+      { "fieldKey": "witnessName",    "label": "Witness Name",    "dataType": "string", "mandatory": false, "pii": true,  "maxLength": 200,  "order": 5, "regex": "^[a-zA-Z .''\\-]{1,200}$" },
+      { "fieldKey": "witnessAddress", "label": "Witness Address", "dataType": "string", "mandatory": false, "pii": true,  "maxLength": 1000, "order": 6 },
+      { "fieldKey": "witnessNote",    "label": "Witness Note",    "dataType": "string", "mandatory": false, "pii": false, "maxLength": 1000, "order": 7 }
+    ]
+  }
+]
