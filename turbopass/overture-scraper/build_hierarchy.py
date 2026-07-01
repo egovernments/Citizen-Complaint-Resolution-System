@@ -1,10 +1,11 @@
+import os
 import sqlite3
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import shape
 import json
 
-db_path = '../overture-data/boundaries.sqlite'
+db_path = os.environ.get('OVERTURE_DB_PATH', '../overture-data/boundaries.sqlite')
 print("Loading data from SQLite...")
 conn = sqlite3.connect(db_path)
 df = pd.read_sql("SELECT id, country, admin_level, geometry FROM boundaries", conn)

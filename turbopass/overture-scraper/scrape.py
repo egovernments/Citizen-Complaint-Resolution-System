@@ -2,7 +2,8 @@ import duckdb
 import os
 import json
 
-os.makedirs('../overture-data', exist_ok=True)
+db_path = os.environ.get('OVERTURE_DB_PATH', '../overture-data/boundaries.sqlite')
+os.makedirs(os.path.dirname(db_path) or '.', exist_ok=True)
 
 print("Connecting to DuckDB...")
 con = duckdb.connect()
@@ -10,10 +11,15 @@ con.execute("INSTALL spatial; LOAD spatial;")
 con.execute("INSTALL httpfs; LOAD httpfs;")
 con.execute("INSTALL sqlite; LOAD sqlite;")
 
-RELEASE = '2026-06-17.0'
-COUNTRIES = ['IN', 'KE', 'MZ']
+# Overridable from the environment so the bootstrap pipeline / docker-compose
+# can retarget without editing this file. Defaults are the P0 set.
+RELEASE = os.environ.get('OVERTURE_RELEASE', '2026-06-17.0')
+COUNTRIES = [
+    c.strip().upper()
+    for c in os.environ.get('COUNTRIES', 'IN,KE,MZ').split(',')
+    if c.strip()
+]
 
-db_path = '../overture-data/boundaries.sqlite'
 if os.path.exists(db_path):
     os.remove(db_path)
 
@@ -34,11 +40,12 @@ con.execute("""
     );
 """)
 
-print("Querying Overture S3 Bucket. This may take a few minutes...")
+country_list = ", ".join(f"'{c}'" for c in COUNTRIES)
+print(f"Querying Overture S3 Bucket (release {RELEASE}) for {country_list}. This may take a few minutes...")
 
 query = f"""
     INSERT INTO local_db.boundaries
-    SELECT 
+    SELECT
         id,
         division_id,
         subtype,
@@ -49,7 +56,7 @@ query = f"""
         to_json(bbox) as bbox,
         ST_AsGeoJSON(geometry) as geometry
     FROM read_parquet('s3://overturemaps-us-west-2/release/{RELEASE}/theme=divisions/type=division_area/*', hive_partitioning=1)
-    WHERE country IN ('IN', 'KE', 'MZ')
+    WHERE country IN ({country_list})
 """
 
 try:
