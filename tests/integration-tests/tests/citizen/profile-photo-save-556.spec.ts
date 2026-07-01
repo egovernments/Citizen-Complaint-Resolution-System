@@ -44,7 +44,12 @@ test.describe('citizen profile — photo save round-trip #556', () => {
       await page.getByRole('textbox').first().fill(FIXED_OTP);
     }
     await page.getByRole('button', { name: /verify|login|submit|continue/i }).first().click();
-    await page.waitForURL(/\/digit-ui\/citizen(?!\/login)/, { timeout: 25_000 });
+    // On ke/bomet the SPA performs an MDMS round-trip before settling on
+    // /all-services or /select-language.  The 25 s budget is extended to
+    // 45 s; the regex excludes only the /login leaf so any citizen sub-path
+    // (including intermediate select-language / select-city routes) satisfies
+    // the guard and the test continues without waiting for the final home.
+    await page.waitForURL(/\/digit-ui\/citizen(?!\/login\b)/, { timeout: 45_000 });
     await page.waitForTimeout(3_000);
 
     // ============ Open Edit Profile ============
