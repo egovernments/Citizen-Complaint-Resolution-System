@@ -59,8 +59,17 @@ public class MDMSUtilsNotificationCacheTest {
 
     /** {"MdmsRes":{"RAINMAKER-PGR":{"NotificationRouting":[rows]}}} — the shape fetchResult returns. */
     private Map<String, Object> response(List<Object> rows) {
+        return responseFor("NotificationRouting", rows);
+    }
+
+    /** {"MdmsRes":{"RAINMAKER-PGR":{"NotificationTemplate":[rows]}}} — template-master response shape. */
+    private Map<String, Object> templateResponse(List<Object> rows) {
+        return responseFor("NotificationTemplate", rows);
+    }
+
+    private Map<String, Object> responseFor(String master, List<Object> rows) {
         Map<String, Object> module = new LinkedHashMap<>();
-        module.put("NotificationRouting", rows);
+        module.put(master, rows);
         Map<String, Object> mdmsRes = new LinkedHashMap<>();
         mdmsRes.put("RAINMAKER-PGR", module);
         Map<String, Object> root = new LinkedHashMap<>();
@@ -134,6 +143,61 @@ public class MDMSUtilsNotificationCacheTest {
         Thread.sleep(80);
         // TTL expired and MDMS is failing: serve the last-known non-empty entry (stale), never throw.
         assertEquals("A", marker(mdmsUtils.getNotificationRouting(TENANT)));
+
+        verify(serviceRequestRepository, times(2)).fetchResult(any(StringBuilder.class), any());
+    }
+
+    // ---- Same cache contract mirrored for the NotificationTemplate master (separate cache map) ----
+
+    @Test
+    void templates_nonEmptyResult_isCached_withinTtl() {
+        when(config.getNotificationMdmsCacheTtlMs()).thenReturn(60000L);
+        when(serviceRequestRepository.fetchResult(any(StringBuilder.class), any()))
+                .thenReturn(templateResponse(rows("A")));
+
+        assertEquals("A", marker(mdmsUtils.getNotificationTemplates(TENANT)));
+        assertEquals("A", marker(mdmsUtils.getNotificationTemplates(TENANT)));
+
+        verify(serviceRequestRepository, times(1)).fetchResult(any(StringBuilder.class), any());
+    }
+
+    @Test
+    void templates_emptyResult_isNotCached_retriesNextCall() {
+        when(config.getNotificationMdmsCacheTtlMs()).thenReturn(60000L);
+        when(serviceRequestRepository.fetchResult(any(StringBuilder.class), any()))
+                .thenReturn(templateResponse(new ArrayList<>()));
+
+        assertTrue(mdmsUtils.getNotificationTemplates(TENANT).isEmpty());
+        assertTrue(mdmsUtils.getNotificationTemplates(TENANT).isEmpty());
+
+        verify(serviceRequestRepository, times(2)).fetchResult(any(StringBuilder.class), any());
+    }
+
+    @Test
+    void templates_ttlExpiry_refetches_andServesNewRows() throws InterruptedException {
+        when(config.getNotificationMdmsCacheTtlMs()).thenReturn(50L);
+        when(serviceRequestRepository.fetchResult(any(StringBuilder.class), any()))
+                .thenReturn(templateResponse(rows("A")))
+                .thenReturn(templateResponse(rows("B")));
+
+        assertEquals("A", marker(mdmsUtils.getNotificationTemplates(TENANT)));
+        Thread.sleep(80);
+        assertEquals("B", marker(mdmsUtils.getNotificationTemplates(TENANT)));
+
+        verify(serviceRequestRepository, times(2)).fetchResult(any(StringBuilder.class), any());
+    }
+
+    @Test
+    void templates_fetchFailureAfterTtl_servesStaleRows() throws InterruptedException {
+        when(config.getNotificationMdmsCacheTtlMs()).thenReturn(50L);
+        when(serviceRequestRepository.fetchResult(any(StringBuilder.class), any()))
+                .thenReturn(templateResponse(rows("A")))
+                .thenThrow(new RuntimeException("MDMS down"));
+
+        assertEquals("A", marker(mdmsUtils.getNotificationTemplates(TENANT)));
+        Thread.sleep(80);
+        // TTL expired and MDMS is failing: serve the last-known non-empty entry (stale), never throw.
+        assertEquals("A", marker(mdmsUtils.getNotificationTemplates(TENANT)));
 
         verify(serviceRequestRepository, times(2)).fetchResult(any(StringBuilder.class), any());
     }
