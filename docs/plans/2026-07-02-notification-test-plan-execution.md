@@ -1,5 +1,19 @@
 # Execution Plan: Closing the Notification Test Plan (§6 of the design doc)
 
+> **STATUS: EXECUTED (Phase 1+2) — 2026-07-02, commit `e9ffbbb14`** (pushed to fork PR ChakshuGautam/CCRS#58).
+> Because findings W1–W5 already landed (`a819c12a7`), every previously **BLOCKED (Wx)** test was
+> implemented as its **post-fix** assertion directly — no pre-fix pins survive. Full suites green,
+> 0 failures / 0 errors / 0 skipped:
+> - **default-data-handler**: 7 (DDH-1 golden round-trip ×5 + DDH-2 malformed-skip).
+> - **pgr-services**: 67 (NotificationResolverEdgeCasesTest ×10, SeedFixtureDriftTest ×2, MDMS cache mirrors ×4, + pre-existing).
+> - **novu-bridge**: 70 (WHATSAPP-no-provider, unknown-channel, idempotency + upsert-key, FAILED-row, controller redaction/allowlist, consent matrix, envelope negatives, consumer wiring).
+> - **configurator**: `tsc -b`/vite build clean + 22 vitest + 12 data-provider node:test (CFG-1 UUID checker, CFG-2 happy-path; write-path branches already covered by `notificationWritePath.test.ts`).
+>
+> **Phase 3 (live E2E) DEFERRED**: `local-setup/tests/e2e/notifications/e2e-role-notifications.js` is authored,
+> syntax- and secret-clean, but needs the running DIGIT stack (docker-exec psql) on the pilot server, and
+> the owner-supplied `LME_*`/`GRO_*` contacts for LIVE_DELIVERY. CI note: the data-provider specs run under
+> Node's `node:test` (`npm test` in that package), not root vitest.
+
 **Date**: 2026-07-02
 **Feature branch**: `feat/pgr-notifications-configure` (squashed feature commit on `upstream/develop`)
 **Closes**: the "To add" tables (G1–G20) in `docs/plans/2026-06-29-pgr-config-driven-notifications-design.md` §6, published as fork discussion ChakshuGautam/CCRS#59.

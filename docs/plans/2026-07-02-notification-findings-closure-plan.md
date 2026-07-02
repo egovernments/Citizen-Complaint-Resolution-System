@@ -1,5 +1,15 @@
 # Notification Findings Closure Plan
 
+> **STATUS: EXECUTED — 2026-07-02, commit `a819c12a7`** (pushed to fork PR ChakshuGautam/CCRS#58).
+> All five workstreams (W1 Baileys decommission + channel-enable gate; W2 bridge robustness +
+> PGR emitter fixes; W3 proxy auth + PII masking + Kong route; W4 MDMS cache TTL; W5 configurator
+> write-path) landed and pass a full offline build (pgr-services / novu-bridge / default-data-handler
+> compile; data-provider + configurator tsc). Adversarially verified: Baileys fully gone, channel
+> gate confirmed (unknown → `NB_UNSUPPORTED_CHANNEL`, WHATSAPP-no-provider → `SKIPPED`/`NB_NO_PROVIDER`,
+> never SMS fallback). Residual follow-ups (non-blocking): one gitignored ops file `bomet.yml` still
+> carries dead `baileys_*` vars (operator cleans on the deploy controller); W2.4 role-pool pagination
+> and the deferred maskRecipient comment ownership want confirmation against a running egov-user.
+
 **Date**: 2026-07-02
 **Branch**: `feat/pgr-notifications-configure` (HEAD = squashed feature commit `ea1589b11` on `upstream/develop`)
 **Closes**: the material findings from the design doc's §5 review-findings table
