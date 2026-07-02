@@ -78,10 +78,11 @@ public class DispatchLogRepository {
      * other predicate is appended only when supplied and always via bind
      * parameters — no value is concatenated into the SQL, so this is injection-safe.
      *
-     * <p>Observability boundary: nb_dispatch_log records ONLY sends that went
-     * through novu-bridge's Novu-backed SMS/Email path. Direct Baileys/Telegram
-     * WhatsApp sends bypass Novu and are NOT tracked here, so this list is not a
-     * complete audit of every notification a citizen received.
+     * <p>Observability: every event consumed from the domain topic lands here with
+     * an explicit terminal status — SENT, SKIPPED (preference denied / no provider /
+     * unsupported channel) or FAILED. Channels without an enabled provider (e.g.
+     * WHATSAPP before a legitimate provider is onboarded) appear as
+     * SKIPPED/NB_NO_PROVIDER rather than being invisible.
      *
      * @param referenceNumber when {@code referenceNumberPrefix} is true, matches
      *                        rows whose reference_number starts with this value;

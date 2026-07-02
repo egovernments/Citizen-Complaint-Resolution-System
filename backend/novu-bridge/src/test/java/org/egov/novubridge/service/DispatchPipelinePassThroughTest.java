@@ -2,18 +2,24 @@ package org.egov.novubridge.service;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
+import org.egov.novubridge.service.provider.WhatsAppBusinessApiProviderStrategy;
 import org.egov.novubridge.web.models.ComplaintsDomainEvent;
 import org.egov.novubridge.web.models.Contact;
+import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.DispatchResult;
+import org.egov.tracer.model.CustomException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -26,14 +32,15 @@ import static org.mockito.Mockito.when;
 /**
  * Proves the pass-through inversion: novu-bridge consumes the pre-rendered event
  * verbatim — it never resolves templates/providers/localization and forwards
- * PGR's renderedBody straight through to delivery.
+ * PGR's renderedBody straight through to delivery. Also pins the channel-enable
+ * gate: known-but-disabled channels (WHATSAPP pre-provider) and unknown channels
+ * persist an explicit SKIPPED row and NEVER fall back to the SMS workflow.
  */
 class DispatchPipelinePassThroughTest {
 
     private EnvelopeValidator envelopeValidator;
     private PreferenceServiceClient preferenceServiceClient;
     private NovuClient novuClient;
-    private BaileysSendClient baileysSendClient;
     private DispatchLogRepository dispatchLogRepository;
     private NovuBridgeConfiguration config;
     private MdmsServiceClient mdmsServiceClient;
@@ -45,11 +52,11 @@ class DispatchPipelinePassThroughTest {
         envelopeValidator = new EnvelopeValidator(); // real — validates the contract
         preferenceServiceClient = mock(PreferenceServiceClient.class);
         novuClient = mock(NovuClient.class);
-        baileysSendClient = mock(BaileysSendClient.class);
         dispatchLogRepository = mock(DispatchLogRepository.class);
         config = new NovuBridgeConfiguration();
         config.setChannel("SMS");
         config.setDefaultLocale("en_IN");
+        config.setChannelsEnabled(List.of("SMS", "EMAIL"));
         mdmsServiceClient = mock(MdmsServiceClient.class);
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
@@ -58,7 +65,7 @@ class DispatchPipelinePassThroughTest {
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
-                baileysSendClient, dispatchLogRepository, config, mdmsServiceClient);
+                dispatchLogRepository, config, mdmsServiceClient);
     }
 
     private ComplaintsDomainEvent smsEvent() {
@@ -106,27 +113,41 @@ class DispatchPipelinePassThroughTest {
         assertEquals("jane@example.com", contact.getValue().getEmail());
         assertEquals("Dear Jane, your complaint PGR-001 is assigned.", body.getValue());
         assertEquals("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:SMS", txn.getValue());
-
-        // Baileys is NOT used for SMS.
-        verify(baileysSendClient, never()).send(anyString(), anyString());
     }
 
     @Test
-    void whatsappEvent_routesToBaileys_notNovu() {
+    void whatsappEvent_noEnabledProvider_persistsSkippedNoProvider_neverFallsBackToSms() {
         ComplaintsDomainEvent event = smsEvent();
         event.setChannel("WHATSAPP");
         event.setTransactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP");
-        when(baileysSendClient.send(anyString(), anyString()))
-                .thenReturn(NovuClient.NovuResponse.builder().statusCode(200).response(Map.of("sent", true)).build());
 
         DispatchResult result = service.process(event, true, null);
 
-        assertTrue(result.getNovuTriggered());
-        // WHATSAPP -> Baileys with bare E.164 (no "whatsapp:" prefix) + verbatim body.
-        verify(baileysSendClient).send(eq("+254712345678"),
-                eq("Dear Jane, your complaint PGR-001 is assigned."));
-        // Novu trigger is NOT used for the Baileys WhatsApp path.
-        verify(novuClient, never()).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any());
+        assertFalse(result.getNovuTriggered());
+        // No Novu trigger at all — in particular NOT the SMS workflow.
+        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any());
+        // Explicit SKIPPED/NB_NO_PROVIDER dispatch row.
+        ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(dispatchLogRepository).upsert(captor.capture());
+        assertEquals("SKIPPED", captor.getValue().getStatus());
+        assertEquals("NB_NO_PROVIDER", captor.getValue().getLastErrorCode());
+        assertEquals("WHATSAPP", captor.getValue().getChannel());
+    }
+
+    @Test
+    void unknownChannel_isSkippedWithUnsupportedChannel_notDefaultedToSms() {
+        ComplaintsDomainEvent event = smsEvent();
+        event.setChannel("PIGEON");
+        event.setTransactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:PIGEON");
+
+        DispatchResult result = service.process(event, true, null);
+
+        assertFalse(result.getNovuTriggered());
+        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any());
+        ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(dispatchLogRepository).upsert(captor.capture());
+        assertEquals("SKIPPED", captor.getValue().getStatus());
+        assertEquals("NB_UNSUPPORTED_CHANNEL", captor.getValue().getLastErrorCode());
     }
 
     @Test
@@ -143,8 +164,40 @@ class DispatchPipelinePassThroughTest {
         verify(novuClient).identifyThenTrigger(eq("ke.bomet:uuid-123"), any(), eq("EMAIL"),
                 body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:EMAIL"), any());
         assertEquals("Dear Jane, your complaint PGR-001 is assigned.", body.getValue());
-        // EMAIL is delivered via Novu, not Baileys.
-        verify(baileysSendClient, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    void novuTriggerThrows_persistsFailed_thenRethrows() {
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any()))
+                .thenThrow(new CustomException("NB_NOVU_TRIGGER_FAILED", "boom"));
+
+        assertThrows(CustomException.class, () -> service.process(smsEvent(), true, null));
+
+        // A FAILED row must land in the log BEFORE the exception propagates to the DLQ consumer.
+        ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(dispatchLogRepository).upsert(captor.capture());
+        assertEquals("FAILED", captor.getValue().getStatus());
+        assertEquals("NB_NOVU_TRIGGER_FAILED", captor.getValue().getLastErrorCode());
+    }
+
+    @Test
+    void emailEvent_withoutEmail_skippedContactMissing() {
+        ComplaintsDomainEvent event = smsEvent();
+        event.setChannel("EMAIL");
+        // Contact carries a phone but no email — an EMAIL row must not phantom-SEND.
+        event.setContact(Contact.builder()
+                .userId("uuid-123").type("CITIZEN").name("Jane Doe")
+                .phone("+254712345678").email(null).locale("en_IN").build());
+        event.setTransactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:EMAIL");
+
+        DispatchResult result = service.process(event, true, null);
+
+        assertFalse(result.getNovuTriggered());
+        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any());
+        ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(dispatchLogRepository).upsert(captor.capture());
+        assertEquals("SKIPPED", captor.getValue().getStatus());
+        assertEquals("NB_CONTACT_MISSING", captor.getValue().getLastErrorCode());
     }
 
     @Test
@@ -157,6 +210,12 @@ class DispatchPipelinePassThroughTest {
         assertEquals(Boolean.FALSE, result.getPreferenceAllowed());
         assertEquals(Boolean.FALSE, result.getNovuTriggered());
         verify(novuClient, never()).identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any());
-        verify(baileysSendClient, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    void whatsAppBusinessApiStrategy_ownsBareWhatsappAlias() {
+        // Durable concern carried over from the deleted BaileysProviderStrategyTest:
+        // with Baileys gone, the Meta strategy owns the bare "whatsapp" alias again.
+        assertTrue(new WhatsAppBusinessApiProviderStrategy().supports("whatsapp"));
     }
 }

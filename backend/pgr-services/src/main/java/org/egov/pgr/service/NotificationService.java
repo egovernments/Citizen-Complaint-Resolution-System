@@ -522,7 +522,7 @@ public class NotificationService {
         String localisedComplaint = notificationUtil.getCustomizedMsgForPlaceholder(localizationMessage,"pgr.complaint.category."+request.getService().getServiceCode());
 
         Long createdTime = serviceWrapper.getService().getAuditDetails().getCreatedTime();
-        LocalDate date = Instant.ofEpochMilli(createdTime > 10 ? createdTime : createdTime * 1000)
+        LocalDate date = Instant.ofEpochMilli(createdTime > 1_000_000_000_000L ? createdTime : createdTime * 1000)
                 .atZone(ZoneId.systemDefault()).toLocalDate();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(DATE_PATTERN);
 
@@ -852,6 +852,18 @@ public class NotificationService {
     // bodies from RAINMAKER-PGR.NotificationTemplate. PGR renders+localizes here, then publishes ONE
     // pre-rendered event per (recipient x channel) to complaints.domain.events. novu-bridge delivers.
 
+    /**
+     * Config-driven notification fan-out for one workflow transition. Resolves the routing rows for
+     * (businessService, action, toState), fans each matched (audience, channel) out to its recipients,
+     * renders+localizes the body, and publishes ONE pre-rendered event per (recipient x channel).
+     *
+     * KNOWN LIMITATION (accepted for the single-locale pilot): rendering uses the
+     * instance default locale (pgr.notification.default.locale) for every
+     * recipient. The NotificationTemplate `locale` dimension and Contact.locale
+     * are carried but not yet resolved per recipient. Per-recipient localization
+     * requires resolving a real user locale and rendering per (audience, channel,
+     * locale) group — tracked in the design doc's open items.
+     */
     private void processConfigDriven(ServiceRequest request, String topic) {
         try {
             String tenantId = request.getService().getTenantId();
@@ -872,16 +884,25 @@ public class NotificationService {
             Map<String, String> values = buildPlaceholderValues(request);
 
             Set<String> emitted = new HashSet<>();
+            // Memoize resolved recipients per (audience, assigneeOnly) so a role authored on
+            // SMS+WHATSAPP+EMAIL triggers ONE tenant-wide user search, not three identical ones.
+            Map<String, List<ResolvedRecipient>> audienceCache = new HashMap<>();
             for (RoutingMatch match : matches) {
                 String audience = match.getAudience();
                 String channel = match.getChannel();
                 List<ResolvedRecipient> recipients;
-                try {
-                    recipients = resolveByAudience(audience, match.isAssigneeOnly(), request);
-                } catch (Exception ex) {
-                    log.error("Failed to resolve audience {} for complaint {}; skipping",
-                            audience, request.getService().getServiceRequestId(), ex);
-                    continue;
+                String audienceKey = audience.toUpperCase(Locale.ROOT) + "|" + match.isAssigneeOnly();
+                if (audienceCache.containsKey(audienceKey)) {
+                    recipients = audienceCache.get(audienceKey);
+                } else {
+                    try {
+                        recipients = resolveByAudience(audience, match.isAssigneeOnly(), request);
+                    } catch (Exception ex) {
+                        log.error("Failed to resolve audience {} for complaint {}; skipping",
+                                audience, request.getService().getServiceRequestId(), ex);
+                        continue;   // do NOT poison the cache on failure
+                    }
+                    audienceCache.put(audienceKey, recipients);
                 }
                 if (CollectionUtils.isEmpty(recipients)) {
                     log.info("No recipients for audience {} on complaint {}; skipping",
@@ -891,16 +912,21 @@ public class NotificationService {
                 String body = null;
                 boolean rendered = false;
                 for (ResolvedRecipient recipient : recipients) {
-                    if (recipient == null
-                            || (!StringUtils.hasText(recipient.phone) && !StringUtils.hasText(recipient.email))) {
-                        log.info("No contact for a {} recipient on complaint {}; skipping",
-                                audience, request.getService().getServiceRequestId());
+                    if (recipient == null) continue;
+                    // Per-channel contact requirement: EMAIL needs an email; SMS + WHATSAPP need a
+                    // phone. A phone-only recipient on an EMAIL row would otherwise phantom-SEND.
+                    boolean hasRequiredContact = "EMAIL".equalsIgnoreCase(channel)
+                            ? StringUtils.hasText(recipient.email)
+                            : StringUtils.hasText(recipient.phone);   // SMS + WHATSAPP need a phone
+                    if (!hasRequiredContact) {
+                        log.info("Recipient {} lacks the contact required for {} on complaint {}; skipping this channel",
+                                recipient.userUuid, channel, request.getService().getServiceRequestId());
                         continue;
                     }
                     // Dedupe on (channel, subscriber): a user holding two notified roles gets ONE
                     // message per channel. Audience is intentionally NOT part of the key.
                     String dedupeKey = channel + "|" + recipient.subscriberKey();
-                    if (!emitted.add(dedupeKey)) continue;
+                    if (emitted.contains(dedupeKey)) continue;
                     try {
                         if (!rendered) {
                             body = templateRenderer.render(tenantId, audience, action, toState,
@@ -909,6 +935,7 @@ public class NotificationService {
                         }
                         if (body == null) break; // template missing for this (audience,channel): skip whole row
                         publishRenderedEvent(request, recipient, channel, eventName, action, toState, body);
+                        emitted.add(dedupeKey);   // only a successful publish consumes the key
                     } catch (Exception ex) {
                         log.error("Failed to render/publish {} for audience {} on complaint {}",
                                 channel, audience, request.getService().getServiceRequestId(), ex);
@@ -967,38 +994,56 @@ public class NotificationService {
         String locale = config.getNotificationDefaultLocale();
         User userInfoCopy = ri.getUserInfo();
         ri.setUserInfo(getInternalMicroserviceUser(tenantId));
-        List<ResolvedRecipient> out = new ArrayList<>();
+        // Dedupe holders by uuid across pages / data races; preserve insertion order.
+        Map<String, ResolvedRecipient> byUuid = new LinkedHashMap<>();
+        // Holders with no uuid can't be deduped by key — keep them verbatim.
+        List<ResolvedRecipient> noUuid = new ArrayList<>();
         try {
             StringBuilder uri = new StringBuilder();
             uri.append(config.getUserHost()).append(config.getUserSearchEndpoint());
-            Map<String, Object> userSearchRequest = new HashMap<>();
-            userSearchRequest.put("RequestInfo", ri);
-            userSearchRequest.put("tenantId", tenantId);
-            userSearchRequest.put("userType", "EMPLOYEE");
-            userSearchRequest.put("roleCodes", Collections.singletonList(roleCode));
+            int pageSize = config.getNotificationRolePoolPageSize();
+            int maxPages = config.getNotificationRolePoolMaxPages();
+            for (int page = 0; page < maxPages; page++) {
+                Map<String, Object> userSearchRequest = new HashMap<>();
+                userSearchRequest.put("RequestInfo", ri);
+                userSearchRequest.put("tenantId", tenantId);
+                userSearchRequest.put("userType", "EMPLOYEE");
+                userSearchRequest.put("roleCodes", Collections.singletonList(roleCode));
+                userSearchRequest.put("pageSize", pageSize);
+                userSearchRequest.put("pageNumber", page);
 
-            LinkedHashMap<String, Object> responseMap =
-                    (LinkedHashMap<String, Object>) serviceRequestRepository.fetchResult(uri, userSearchRequest);
-            if (responseMap == null) return out;
-            List<LinkedHashMap<String, Object>> users =
-                    (List<LinkedHashMap<String, Object>>) responseMap.get("user");
-            if (CollectionUtils.isEmpty(users)) return out;
-            // Only contact fields are needed for notification; map a trimmed view so unrelated
-            // date fields (createdDate/dob) don't have to parse cleanly. Strip them defensively.
-            for (LinkedHashMap<String, Object> raw : users) {
-                org.egov.pgr.web.models.User u = mapContactUser(raw);
-                if (u == null) continue;
-                String phone = buildMobileWithCountryCode(u.getMobileNumber(), u.getCountryCode());
-                String email = u.getEmailId();
-                if (!StringUtils.hasText(phone) && !StringUtils.hasText(email)) continue;
-                String type = StringUtils.hasText(roleCode) ? roleCode : AUDIENCE_EMPLOYEE;
-                out.add(new ResolvedRecipient(u.getUuid(), type, u.getName(), phone, email, locale));
+                LinkedHashMap<String, Object> responseMap =
+                        (LinkedHashMap<String, Object>) serviceRequestRepository.fetchResult(uri, userSearchRequest);
+                if (responseMap == null) break;
+                List<LinkedHashMap<String, Object>> users =
+                        (List<LinkedHashMap<String, Object>>) responseMap.get("user");
+                if (CollectionUtils.isEmpty(users)) break;
+                // Only contact fields are needed for notification; map a trimmed view so unrelated
+                // date fields (createdDate/dob) don't have to parse cleanly. Strip them defensively.
+                for (LinkedHashMap<String, Object> raw : users) {
+                    org.egov.pgr.web.models.User u = mapContactUser(raw);
+                    if (u == null) continue;
+                    String phone = buildMobileWithCountryCode(u.getMobileNumber(), u.getCountryCode());
+                    String email = u.getEmailId();
+                    if (!StringUtils.hasText(phone) && !StringUtils.hasText(email)) continue;
+                    String type = StringUtils.hasText(roleCode) ? roleCode : AUDIENCE_EMPLOYEE;
+                    ResolvedRecipient recipient =
+                            new ResolvedRecipient(u.getUuid(), type, u.getName(), phone, email, locale);
+                    if (StringUtils.hasText(u.getUuid())) byUuid.putIfAbsent(u.getUuid(), recipient);
+                    else noUuid.add(recipient);
+                }
+                if (users.size() < pageSize) break;               // last page
+                if (page == maxPages - 1)
+                    log.warn("Role pool '{}' in tenant {} exceeds the {}-user notification cap; remaining holders NOT notified",
+                            roleCode, tenantId, pageSize * maxPages);
             }
         } catch (Exception e) {
             log.error("Failed to resolve role pool '{}' for tenant {}", roleCode, tenantId, e);
         } finally {
             ri.setUserInfo(userInfoCopy);
         }
+        List<ResolvedRecipient> out = new ArrayList<>(byUuid.values());
+        out.addAll(noUuid);
         return out;
     }
 
@@ -1119,7 +1164,7 @@ public class NotificationService {
     private String formatCreatedDate(org.egov.pgr.web.models.Service service) {
         if (service.getAuditDetails() == null || service.getAuditDetails().getCreatedTime() == null) return null;
         Long t = service.getAuditDetails().getCreatedTime();
-        LocalDate date = Instant.ofEpochMilli(t > 10 ? t : t * 1000).atZone(ZoneId.systemDefault()).toLocalDate();
+        LocalDate date = Instant.ofEpochMilli(t > 1_000_000_000_000L ? t : t * 1000).atZone(ZoneId.systemDefault()).toLocalDate();
         return date.format(DateTimeFormatter.ofPattern(DATE_PATTERN));
     }
 
@@ -1170,7 +1215,26 @@ public class NotificationService {
 
         producer.push(tenantId, config.getComplaintsDomainEventsTopic(), event);
         log.info("Published config-driven {} notification: complaint={} subscriber={} txn={}",
-                channel, service.getServiceRequestId(), subscriberId, transactionId);
+                channel, service.getServiceRequestId(), maskPii(subscriberId), maskPii(transactionId));
+    }
+
+    /**
+     * Mask PII embedded in a log value. subscriberId ({@code tenantId:subKey}) and
+     * transactionId can carry a raw mobile when the recipient had no uuid. Replaces
+     * any run of 7+ digits with {@code ***} + its last 3 digits — the same rule as
+     * novu-bridge's PiiMask (kept local to avoid a cross-module dependency for one
+     * method). UUIDs (digit runs < 7) pass through untouched.
+     */
+    private static String maskPii(String value) {
+        if (value == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\d{7,}").matcher(value);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            String run = m.group();
+            m.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement("***" + run.substring(run.length() - 3)));
+        }
+        m.appendTail(sb);
+        return sb.toString();
     }
 
     /** Resolved notification target: who + how to reach them, for one subscriber relationship. */

@@ -2,6 +2,7 @@ package org.egov.novubridge.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.util.PiiMask;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -28,14 +29,14 @@ public class PreferenceServiceClient {
     public boolean isChannelAllowed(String tenantId, String userId, String mobile, String channel) {
         String channelKey = StringUtils.hasText(channel) ? channel.toUpperCase() : "SMS";
         log.info("Preference check: tenantId={}, userId={}, mobile={}, channel={}, preferenceEnabled={}",
-                tenantId, userId, mobile, channelKey, config.getPreferenceEnabled());
+                tenantId, userId, PiiMask.mask(mobile), channelKey, config.getPreferenceEnabled());
 
         if (Boolean.FALSE.equals(config.getPreferenceEnabled())) {
             log.info("Preference check disabled, allowing by default");
             return true;
         }
         if (!StringUtils.hasText(userId)) {
-            log.warn("Preference check denied: userId is blank. tenantId={}, mobile={}", tenantId, mobile);
+            log.warn("Preference check denied: userId is blank. tenantId={}, mobile={}", tenantId, PiiMask.mask(mobile));
             return false;
         }
         try {
@@ -98,7 +99,7 @@ public class PreferenceServiceClient {
             log.info("Preference check allowed for userId={}, tenantId={}, channel={}", userId, tenantId, channelKey);
             return true;
         } catch (Exception e) {
-            log.warn("Preference check failed. tenantId={} userId={} mobile={} channel={}", tenantId, userId, mobile, channelKey, e);
+            log.warn("Preference check failed. tenantId={} userId={} mobile={} channel={}", tenantId, userId, PiiMask.mask(mobile), channelKey, e);
             return false;
         }
     }

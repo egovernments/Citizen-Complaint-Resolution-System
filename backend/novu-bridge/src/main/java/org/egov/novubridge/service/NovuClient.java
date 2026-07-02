@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.service.provider.NovuProviderStrategy;
 import org.egov.novubridge.service.provider.NovuProviderStrategyFactory;
 import org.egov.novubridge.web.models.ResolvedProvider;
@@ -182,7 +183,7 @@ public class NovuClient {
 
             String url = config.getNovuBaseUrl() + "/v1/events/trigger";
             log.info("Novu trigger workflowId={} subscriberId={} channel-phone={} txn={}",
-                    workflowId, subscriberId, phone, transactionId);
+                    workflowId, subscriberId, PiiMask.mask(phone), transactionId);
 
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST,
                     new HttpEntity<>(request, headers), Map.class);

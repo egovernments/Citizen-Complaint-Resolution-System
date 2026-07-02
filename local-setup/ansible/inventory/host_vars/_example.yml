@@ -297,9 +297,9 @@ twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
 # (PGR.NotificationRouting + PGR.NotificationTemplate), renders + localizes per
 # recipient, and publishes ONE pre-rendered event per (recipient × channel) to
 # complaints.domain.events. novu-bridge becomes a thin pass-through that
-# identifies the Novu subscriber and delivers renderedBody; WhatsApp goes via a
-# self-hosted Baileys send-service. Requires enable_novu: true + the seeded
-# MDMS masters + the pass-through novu_bridge_image + baileys_image (below).
+# identifies the Novu subscriber and delivers renderedBody. Requires
+# enable_novu: true + the seeded MDMS masters + the pass-through
+# novu_bridge_image (below).
 
 # Flip PGR onto the config-driven path for THIS tenant. Default false keeps the
 # legacy hardcoded notification path. Cut over one tenant at a time after the
@@ -311,21 +311,16 @@ pgr_notification_config_driven: false
 # Leave unset to keep the published preview / local-build defaults.
 # pgr_services_image:  "10.0.0.4:5000/egovio/pgr-services:notif-config-<sha>"
 # novu_bridge_image:   "10.0.0.4:5000/egovio/novu-bridge:passthrough-<sha>"
-# baileys_image:       "10.0.0.4:5000/egovio/baileys-send-service:<sha>"
 
-# Build the Baileys send-service locally (baileys-send-service:local from
-# utilities/baileys-send-service) instead of pulling baileys_image. Same shape
-# as build_otp_publisher. Only needed when enable_novu + WhatsApp delivery.
-build_baileys: false
 # Build the pass-through novu-bridge from backend/novu-bridge on the box.
 build_novu_bridge: false
 # Build pgr-services from backend/pgr-services on the box (config-driven build).
 build_pgr_services: false
 
-# Baileys send-service bearer token. MANDATORY in production — the service
-# rejects unauthenticated /send and /qr is never exposed publicly. Keep the
-# real value in OpenBao/vault; this template default is empty (dev/sandbox).
-baileys_send_token: ""
+# Channels the bridge actually delivers (comma-separated). WHATSAPP is
+# intentionally omitted until a legitimate provider is onboarded as a Novu
+# integration; then add it here. Default SMS,EMAIL.
+# novu_bridge_channels_enabled: "SMS,EMAIL"
 
 # novu-bridge dispatch channel (sms | whatsapp | email). SMS-first per the
 # Bomet phasing (§3): cut SMS over, then add WhatsApp/EMAIL as config-only

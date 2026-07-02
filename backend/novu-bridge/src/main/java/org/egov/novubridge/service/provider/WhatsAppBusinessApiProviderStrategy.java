@@ -26,12 +26,10 @@ public class WhatsAppBusinessApiProviderStrategy implements NovuProviderStrategy
     
     @Override
     public boolean supports(String providerName) {
-        // NOTE: deliberately does NOT claim the bare "whatsapp" alias — that
-        // would shadow BaileysProviderStrategy (the factory picks the first
-        // matching strategy non-deterministically). Bare WHATSAPP routing goes
-        // to Baileys; only the Meta/Business-API names resolve here.
+        // Owns the bare "whatsapp" alias again now that the Baileys strategy is removed.
         return "whatsapp-business-api".equalsIgnoreCase(providerName) ||
-               "meta".equalsIgnoreCase(providerName);
+               "meta".equalsIgnoreCase(providerName) ||
+               "whatsapp".equalsIgnoreCase(providerName);
     }
     
     @Override

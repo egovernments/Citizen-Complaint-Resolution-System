@@ -206,6 +206,15 @@ public class NotificationRouterTest {
     }
 
     @Test
+    void fromState_authored_butRuntimeSuppliesNone_stillMatches() {
+        // B19: an authored fromState can't be enforced when the runtime path passes fromState=null
+        // (the config-driven emitter always does). The row must still match — behavior pinned; the
+        // router additionally logs a WARN that the constraint is unenforceable (not asserted here).
+        seed(row("PENDINGATLME", "REASSIGN", "PENDINGFORREASSIGNMENT", "CITIZEN", "SMS"));
+        assertEquals(1, router.route(TENANT, "PGR", null, "REASSIGN", "PENDINGFORREASSIGNMENT").size());
+    }
+
+    @Test
     void blankActionOrToState_returnsEmpty() {
         seed(row(null, "ASSIGN", "PENDINGATLME", "CITIZEN", "SMS"));
         assertTrue(router.route(TENANT, "PGR", null, null, "PENDINGATLME").isEmpty());

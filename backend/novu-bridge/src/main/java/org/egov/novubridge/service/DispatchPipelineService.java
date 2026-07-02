@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
+import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.*;
 import org.egov.tracer.model.CustomException;
 import org.springframework.stereotype.Service;
@@ -21,8 +22,9 @@ import java.util.*;
  * templates, providers, or localization. It only:
  * <ol>
  *   <li>upserts the Novu subscriber (identify, D6) with the carried profile,</li>
- *   <li>delivers the rendered body — via Novu for SMS/EMAIL, via the Baileys
- *       send-service for WHATSAPP — and</li>
+ *   <li>delivers the rendered body via the per-channel Novu workflow for every ENABLED channel
+ *       (novu.bridge.channels.enabled); known-but-disabled channels (e.g. WHATSAPP with no
+ *       provider) persist an explicit SKIPPED/NB_NO_PROVIDER row, and</li>
  *   <li>records the result in {@code nb_dispatch_log} keyed by transactionId.</li>
  * </ol>
  */
@@ -30,10 +32,11 @@ import java.util.*;
 @Slf4j
 public class DispatchPipelineService {
 
+    private static final Set<String> KNOWN_CHANNELS = Set.of("SMS", "WHATSAPP", "EMAIL");
+
     private final EnvelopeValidator envelopeValidator;
     private final PreferenceServiceClient preferenceServiceClient;
     private final NovuClient novuClient;
-    private final BaileysSendClient baileysSendClient;
     private final DispatchLogRepository dispatchLogRepository;
     private final NovuBridgeConfiguration config;
     private final MdmsServiceClient mdmsServiceClient;
@@ -41,14 +44,12 @@ public class DispatchPipelineService {
     public DispatchPipelineService(EnvelopeValidator envelopeValidator,
                                    PreferenceServiceClient preferenceServiceClient,
                                    NovuClient novuClient,
-                                   BaileysSendClient baileysSendClient,
                                    DispatchLogRepository dispatchLogRepository,
                                    NovuBridgeConfiguration config,
                                    MdmsServiceClient mdmsServiceClient) {
         this.envelopeValidator = envelopeValidator;
         this.preferenceServiceClient = preferenceServiceClient;
         this.novuClient = novuClient;
-        this.baileysSendClient = baileysSendClient;
         this.dispatchLogRepository = dispatchLogRepository;
         this.config = config;
         this.mdmsServiceClient = mdmsServiceClient;
@@ -72,7 +73,7 @@ public class DispatchPipelineService {
 
         log.info("Derived context: eventId={}, channel={}, subscriberId={}, recipientPhone={}, email={}, locale={}",
                 event.getEventId(), context.getChannel(), subscriberId,
-                context.getRecipientMobile(), context.getEmail(), context.getLocale());
+                PiiMask.mask(context.getRecipientMobile()), PiiMask.mask(context.getEmail()), context.getLocale());
 
         // Optional channel-preference gate (PGR owns locale; preferences only gate delivery).
         String recipientUuid = context.getRecipientUserId();
@@ -101,32 +102,77 @@ public class DispatchPipelineService {
                     .build();
         }
 
-        Contact contact = buildContact(event, context);
         String channel = context.getChannel();
-        NovuClient.NovuResponse response;
+        // Gate 1: unknown/null channel — never guess, never fall back to SMS.
+        if (!isKnownChannel(channel)) {
+            persist(event, context, "SKIPPED", "NB_UNSUPPORTED_CHANNEL",
+                    "Unknown channel: " + channel, null, 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).derivedContext(context)
+                    .novuTriggered(false)
+                    .diagnostics(Collections.singletonList("Unsupported channel " + channel + " skipped"))
+                    .build();
+        }
+        // Gate 2: known channel with no enabled provider (e.g. WHATSAPP pre-onboarding).
+        if (!config.isChannelEnabled(channel)) {
+            persist(event, context, "SKIPPED", "NB_NO_PROVIDER",
+                    "No provider enabled for channel " + channel, null, 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).derivedContext(context)
+                    .novuTriggered(false)
+                    .diagnostics(Collections.singletonList("Channel " + channel + " has no enabled provider; skipped"))
+                    .build();
+        }
 
-        if ("WHATSAPP".equalsIgnoreCase(channel)) {
-            // WhatsApp is delivered out-of-band via Baileys; strip the Twilio
-            // "whatsapp:" prefix so Baileys receives a bare E.164 MSISDN.
-            String to = formatRecipientPhone(context.getRecipientMobile(), event.getTenantId(), "sms", requestInfo);
-            log.info("Routing WHATSAPP via Baileys: eventId={}, to={}, txn={}",
-                    event.getEventId(), to, context.getTransactionId());
-            response = baileysSendClient.send(to, context.getRenderedBody());
-        } else {
-            // SMS / EMAIL: identify the subscriber then trigger the per-channel Novu workflow.
+        Contact contact = buildContact(event, context);
+
+        // Contact gate (bridge-side defense): an EMAIL event needs an email; SMS/WHATSAPP
+        // need a phone. The bridge consumes a shared topic and must defend independently of
+        // PGR's emission-side filter — a phone-only recipient on an EMAIL row would otherwise
+        // trigger complaints-email and phantom-SENT with no address.
+        boolean hasRequiredContact = "EMAIL".equalsIgnoreCase(channel)
+                ? StringUtils.hasText(contact.getEmail())
+                : StringUtils.hasText(contact.getPhone());
+        if (!hasRequiredContact) {
+            persist(event, context, "SKIPPED", "NB_CONTACT_MISSING",
+                    "Recipient has no " + ("EMAIL".equalsIgnoreCase(channel) ? "email" : "phone")
+                    + " for channel " + channel, null, 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).derivedContext(context)
+                    .novuTriggered(false)
+                    .diagnostics(Collections.singletonList("Missing contact for channel " + channel))
+                    .build();
+        }
+
+        NovuClient.NovuResponse response;
+        try {
             response = novuClient.identifyThenTrigger(
-                    subscriberId,
-                    contact,
-                    channel,
-                    context.getRenderedBody(),
-                    context.getRenderedSubject(),
-                    context.getTransactionId(),
-                    event.getData());
+                    subscriberId, contact, channel,
+                    context.getRenderedBody(), context.getRenderedSubject(),
+                    context.getTransactionId(), event.getData());
+        } catch (CustomException ce) {
+            persist(event, context, "FAILED", ce.getCode(), ce.getMessage(), null, 1);
+            throw ce;   // consumer logs + DLQs as before
+        } catch (Exception e) {
+            persist(event, context, "FAILED", "NB_DELIVERY_ERROR", e.getMessage(), null, 1);
+            throw e;
+        }
+
+        Integer sc = response != null ? response.getStatusCode() : null;
+        boolean delivered = sc != null && sc >= 200 && sc < 300;
+        if (!delivered) {
+            persist(event, context, "FAILED", "NB_NOVU_TRIGGER_FAILED",
+                    "Novu returned status " + sc, response != null ? response.getResponse() : null, 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).derivedContext(context)
+                    .novuTriggered(false).novuStatusCode(sc)
+                    .novuResponse(response != null ? response.getResponse() : null)
+                    .diagnostics(Collections.singletonList("Novu trigger failed: status " + sc))
+                    .build();
         }
 
         log.info("Dispatch response: eventId={}, channel={}, statusCode={}, txn={}",
-                event.getEventId(), channel,
-                response != null ? response.getStatusCode() : null, context.getTransactionId());
+                event.getEventId(), channel, sc, context.getTransactionId());
 
         persist(event, context, "SENT", null, null,
                 response != null ? response.getResponse() : null, 1);
@@ -135,7 +181,7 @@ public class DispatchPipelineService {
                 .preferenceAllowed(true)
                 .derivedContext(context)
                 .novuTriggered(true)
-                .novuStatusCode(response != null ? response.getStatusCode() : null)
+                .novuStatusCode(sc)
                 .novuResponse(response != null ? response.getResponse() : null)
                 .diagnostics(Collections.singletonList("Dispatch successful"))
                 .build();
@@ -155,6 +201,10 @@ public class DispatchPipelineService {
                 null,
                 payload,
                 transactionId);
+    }
+
+    private boolean isKnownChannel(String channel) {
+        return channel != null && KNOWN_CHANNELS.contains(channel.toUpperCase());
     }
 
     private Contact buildContact(ComplaintsDomainEvent event, DerivedContext context) {
@@ -203,9 +253,7 @@ public class DispatchPipelineService {
             e164 = validationConfig.getCountryCode() + normalized;
         }
 
-        // Twilio Programmable WhatsApp requires the `whatsapp:` prefix; SMS and
-        // the Baileys path take raw E.164. The WHATSAPP-via-Baileys route in
-        // process() passes channel="sms" here precisely to get bare E.164.
+        // Twilio Programmable WhatsApp requires the "whatsapp:" prefix; SMS takes raw E.164.
         return isWhatsapp ? "whatsapp:" + e164 : e164;
     }
 

@@ -15,7 +15,7 @@ export const notificationTemplateDescriptor: SchemaDescriptor = {
     { title: 'Content', fields: ['subject', 'body', 'placeholders', 'active'] },
   ],
   fields: [
-    { path: 'audience', required: true, label: 'Audience', help: 'CITIZEN or EMPLOYEE (employee covers ASSIGNEE/CREATOR/PREVIOUS_ASSIGNEE).' },
+    { path: 'audience', required: true, label: 'Audience', help: 'CITIZEN (the complaint filer), any workflow role code (e.g. GRO, PGR_LME) to notify every holder, or EMPLOYEE (legacy alias for the current assignee).' },
     { path: 'action', required: true, label: 'Action' },
     { path: 'toState', required: true, label: 'To State' },
     { path: 'channel', required: true, label: 'Channel', help: 'SMS, WHATSAPP, EMAIL.' },

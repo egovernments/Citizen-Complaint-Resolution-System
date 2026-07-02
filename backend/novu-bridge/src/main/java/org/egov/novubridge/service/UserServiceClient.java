@@ -2,6 +2,7 @@ package org.egov.novubridge.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.util.PiiMask;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
@@ -53,7 +54,7 @@ public class UserServiceClient {
             Object uuid = users.get(0).get("uuid");
             return uuid == null ? null : String.valueOf(uuid);
         } catch (Exception e) {
-            log.warn("User uuid resolve failed tenantId={} audience={} mobile={}", tenantId, audience, mobile, e);
+            log.warn("User uuid resolve failed tenantId={} audience={} mobile={}", tenantId, audience, PiiMask.mask(mobile), e);
             return null;
         }
     }

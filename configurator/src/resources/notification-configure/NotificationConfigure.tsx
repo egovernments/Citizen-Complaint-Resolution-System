@@ -66,6 +66,7 @@ import {
   type BusinessServiceRecord,
   type ValidationFinding,
 } from '../workflow-services/validateNotifications';
+import { saveNotificationPair, type Mutate, type WritePathDeps } from './notificationWritePath';
 
 // ---------------------------------------------------------------------------
 // Constants — mirror the checker + schema enums.
@@ -133,6 +134,7 @@ function NotificationForm({
   const notify = useNotify();
   const [create] = useCreate();
   const [update] = useUpdate();
+  const [deleteOne] = useDelete();
   const [saving, setSaving] = useState(false);
 
   const isEdit = !!(seed?.routingId || seed?.templateId);
@@ -157,6 +159,7 @@ function NotificationForm({
         toState: ctx.toState,
         audience,
         channel,
+        // assigneeOnly is schema-supported but deliberately not exposed here yet — see the findings-closure plan (C9, deferred).
         assigneeOnly: false,
         active: true,
       };
@@ -172,25 +175,36 @@ function NotificationForm({
         active: true,
       };
 
-      // Edit: if the (audience/channel) key changed, the MDMS uniqueIdentifier
-      // changes too — an in-place _update would keep the old key. We update
-      // when the key is unchanged (same id derives), else create the new pair.
-      if (isEdit && seed?.routingId && keyUnchanged(seed, audience, channel)) {
-        await update('notification-routing', { id: seed.routingId, data: routingData, previousData: {} });
-      } else {
-        await create('notification-routing', { data: routingData });
-      }
+      // The uid schemes are deterministic and derivable client-side (they mirror
+      // the server's x-unique derivation documented in this file's header).
+      //   routing uid:  businessService.action.toState.audience.channel
+      //   template uid: audience.action.toState.channel.locale
+      const routingUid = [ctx.businessService, ctx.action, ctx.toState, audience, channel].join('.');
+      const templateUid = [audience, ctx.action, ctx.toState, channel, DEFAULT_LOCALE].join('.');
 
-      if (isEdit && seed?.templateId && keyUnchanged(seed, audience, channel)) {
-        await update('notification-template', { id: seed.templateId, data: templateData, previousData: {} });
-      } else {
-        await create('notification-template', { data: templateData });
-      }
+      // ra-core mutation callables need { returnPromise: true } to become real
+      // awaitable promises (else await is a no-op). saveNotificationPair carries
+      // that on every call and orchestrates create/reactivate/deactivate.
+      const deps: WritePathDeps = {
+        create: create as unknown as Mutate,
+        update: update as unknown as Mutate,
+        deleteOne: deleteOne as unknown as Mutate,
+      };
+      await saveNotificationPair(deps, {
+        isEdit,
+        keyUnchanged: !!seed && keyUnchanged(seed, audience, channel),
+        routingUid,
+        templateUid,
+        routingData,
+        templateData,
+        seedRoutingId: seed?.routingId,
+        seedTemplateId: seed?.templateId,
+      });
 
       notify(isEdit ? 'Notification updated.' : 'Notification added.', { type: 'success' });
       onDone();
     } catch (err) {
-      notify(`Save failed: ${(err as Error)?.message ?? 'unknown error'}`, { type: 'error' });
+      notify(`Save failed: ${(err as Error)?.message ?? 'unknown error'} — if the template was saved but routing failed, click Save again to complete the pair.`, { type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -356,12 +370,12 @@ function TransitionRow({
       return;
     }
     try {
-      await deleteOne('notification-routing', { id: r.id, previousData: r });
+      await deleteOne('notification-routing', { id: r.id, previousData: r }, { returnPromise: true });
       // Best-effort: deactivate the orphaned template too (ignore if absent).
       const t = findTemplate(r);
       if (t?.id) {
         try {
-          await deleteOne('notification-template', { id: t.id, previousData: t });
+          await deleteOne('notification-template', { id: t.id, previousData: t }, { returnPromise: true });
         } catch {
           /* template may already be gone — non-fatal */
         }

@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class DispatchLogEntry {

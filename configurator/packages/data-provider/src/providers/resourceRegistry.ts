@@ -25,7 +25,10 @@ export interface ResourceConfig {
   /** For `type: 'custom'` resources only: the origin-relative path of the
    *  read-only GET endpoint on the out-of-band service (e.g.
    *  `/novu-bridge/novu-adapter/v1/logs`). The data provider prefixes it with
-   *  the current origin and attaches the DIGIT auth token. */
+   *  the current origin and attaches the DIGIT Bearer token. Routed by Kong
+   *  (local-setup/kong/kong.yml); novu-bridge validates the Bearer token
+   *  server-side against egov-user /user/_details and masks recipient PII in
+   *  responses. */
   customPath?: string;
   /** For `type: 'custom'` resources: when true, the fetcher appends the session
    *  tenantId as a `tenantId` query param (the novu-bridge /logs endpoint
@@ -163,8 +166,10 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'notification-template':  { type: 'mdms', label: 'PGR Notification Templates', schema: 'RAINMAKER-PGR.NotificationTemplate', idField: 'action', nameField: 'action' },
 
   // Non-MDMS, read-only resources served by the novu-bridge proxy (not egov-mdms).
+  // Routed by Kong (local-setup/kong/kong.yml); novu-bridge validates the Bearer
+  // token server-side against egov-user /user/_details and masks recipient PII.
   // notification-log      -> GET /novu-bridge/novu-adapter/v1/logs         (nb_dispatch_log delivery logs)
-  // notification-provider -> GET /novu-bridge/novu-adapter/v1/integrations (Novu integrations, secrets redacted)
+  // notification-provider -> GET /novu-bridge/novu-adapter/v1/integrations (Novu integrations, allowlisted fields only)
   'notification-log': {
     type: 'custom', label: 'Notification Logs', idField: 'transactionId', nameField: 'referenceNumber',
     descriptionField: 'status', dedicated: true,

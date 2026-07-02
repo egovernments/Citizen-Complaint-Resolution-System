@@ -46,7 +46,7 @@ import static org.mockito.Mockito.when;
  * with the config-driven flag ON, fans out to ONE pre-rendered event per (recipient x channel) on
  * complaints.domain.events — including SMS, WHATSAPP and EMAIL. This is the "drive an action ->
  * notification triggered" assertion; novu-bridge's pass-through tests then prove each event is
- * dispatched to its channel's send (Novu for SMS/EMAIL, Baileys for WHATSAPP).
+ * dispatched via the per-channel Novu workflow (channels without an enabled provider are SKIPPED at the bridge).
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -76,6 +76,8 @@ public class NotificationConfigDrivenEmissionTest {
         when(config.getNotificationDefaultLocale()).thenReturn("en_IN");
         when(config.getComplaintsDomainEventsTopic()).thenReturn(TOPIC);
         when(config.getMobileDownloadLink()).thenReturn("http://app/download");
+        when(config.getNotificationRolePoolPageSize()).thenReturn(100);
+        when(config.getNotificationRolePoolMaxPages()).thenReturn(10);
 
         // Routing: CITIZEN over all three channels for ASSIGN -> PENDINGATLME (one flat row per channel).
         when(notificationRouter.route(eq(TENANT), eq("PGR"), any(), eq("ASSIGN"), eq("PENDINGATLME")))
@@ -230,5 +232,54 @@ public class NotificationConfigDrivenEmissionTest {
         Map<String, Object> e = (Map<String, Object>) evt.getValue();
         assertEquals(TENANT + ":dual-role", e.get("subscriberId"));
         assertEquals("SMS", e.get("channel"));
+    }
+
+    @Test
+    void emailRow_citizenWithoutEmail_isNotEmittedForEmail() {
+        // Channel-appropriate contact filtering (B6): a citizen with a phone but no email must NOT
+        // produce an EMAIL event (Novu would accept it and the email step would fail invisibly).
+        when(notificationRouter.route(eq(TENANT), eq("PGR"), any(), eq("ASSIGN"), eq("PENDINGATLME")))
+                .thenReturn(Collections.singletonList(new RoutingMatch("CITIZEN", "EMAIL")));
+
+        User citizen = User.builder()
+                .uuid("citizen-uuid").name("Jane Doe")
+                .mobileNumber("712345678").countryCode("+254").emailId(null)
+                .build();
+        Service service = Service.builder()
+                .tenantId(TENANT)
+                .serviceRequestId("PGR-2026-001")
+                .applicationStatus("PENDINGATLME")
+                .serviceCode("GarbageNeeds")
+                .citizen(citizen)
+                .auditDetails(AuditDetails.builder().createdTime(1719600000000L).createdBy("citizen-uuid").build())
+                .build();
+        Workflow workflow = Workflow.builder().action("ASSIGN").assignes(Collections.emptyList()).build();
+        ServiceRequest request = ServiceRequest.builder()
+                .requestInfo(new RequestInfo()).service(service).workflow(workflow).build();
+
+        notificationService.process(request, "save-pgr-request");
+
+        verify(producer, org.mockito.Mockito.never()).push(anyString(), anyString(), any());
+    }
+
+    @Test
+    void missingTemplateOnFirstRow_doesNotBlockSecondRowSameSubscriber() {
+        // B8: the dedupe key must be consumed only after a successful publish. Two role rows over
+        // the same channel resolve to the same single holder; the first row's template is missing.
+        when(notificationRouter.route(eq(TENANT), eq("PGR"), any(), eq("ASSIGN"), eq("PENDINGATLME")))
+                .thenReturn(Arrays.asList(
+                        new RoutingMatch("ROLE_A", "SMS"),
+                        new RoutingMatch("ROLE_B", "SMS")));
+        // Both role searches return the same single holder.
+        stubRolePool(userRow("holder", "Holder", "744444444", "holder@gov.ke"));
+        // ROLE_A's template is missing (null); ROLE_B's renders a body.
+        when(templateRenderer.render(anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), any()))
+                .thenAnswer(inv -> "ROLE_A".equals(inv.getArgument(1)) ? null : "BODY");
+
+        notificationService.process(assignRequest(), "save-pgr-request");
+
+        // The burned-early bug would skip ROLE_B; the fix lets ROLE_B publish exactly one event.
+        verify(producer, times(1)).push(eq(TENANT), eq(TOPIC), any());
     }
 }

@@ -1,6 +1,7 @@
 package org.egov.novubridge.web.controllers;
 
 import org.egov.novubridge.repository.DispatchLogRepository;
+import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.DispatchLogEntry;
 import org.egov.novubridge.web.models.DispatchLogListResponse;
 import org.springframework.http.HttpStatus;
@@ -12,17 +13,17 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Read-only proxy over the {@code nb_dispatch_log} delivery-log table for the
  * configurator's Notification Logs screen. Sits alongside {@code DispatchController}
  * under the same {@code /novu-adapter/v1} namespace.
  *
- * <p><b>Observability boundary:</b> {@code nb_dispatch_log} records ONLY the sends
- * that went through novu-bridge's Novu-backed SMS/Email path. Direct Baileys /
- * Telegram WhatsApp deliveries bypass Novu and are NOT written here, so this log
- * is a view of Novu-delivered notifications, not a complete audit of every
- * message a citizen received.
+ * <p><b>Observability:</b> every event consumed from the domain topic lands here with an
+ * explicit terminal status — SENT, SKIPPED (preference denied / no provider / unsupported
+ * channel) or FAILED. Channels without an enabled provider (e.g. WHATSAPP before a legitimate
+ * provider is onboarded) appear as SKIPPED/NB_NO_PROVIDER rather than being invisible.
  *
  * <p>Strictly read-only: no create/update/delete, parameterized SQL only (see
  * {@link DispatchLogRepository}), and the response carries no provider secrets
@@ -75,8 +76,18 @@ public class DispatchLogController {
         long total = dispatchLogRepository.count(
                 tenantId, referenceNumber, referenceNumberPrefix, transactionId, channel, status);
 
+        // Mask recipient PII server-side so the full value never crosses the wire.
+        // recipient_value is the subscriberId (tenantId:userUuid, or tenantId:mobile
+        // when the uuid was missing) and transaction_id embeds the same subscriberId.
+        List<DispatchLogEntry> masked = data.stream()
+                .map(e -> e.toBuilder()
+                        .recipientValue(PiiMask.mask(e.getRecipientValue()))
+                        .transactionId(PiiMask.maskEmbedded(e.getTransactionId()))
+                        .build())
+                .collect(Collectors.toList());
+
         DispatchLogListResponse response = DispatchLogListResponse.builder()
-                .data(data)
+                .data(masked)
                 .total(total)
                 .build();
         return new ResponseEntity<>(response, HttpStatus.OK);

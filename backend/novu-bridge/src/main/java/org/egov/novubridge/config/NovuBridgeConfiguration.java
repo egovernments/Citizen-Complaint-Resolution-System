@@ -3,6 +3,7 @@ package org.egov.novubridge.config;
 import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import org.egov.tracer.config.TracerConfiguration;
+import org.egov.tracer.model.CustomException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Component;
@@ -48,15 +49,6 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.preference.check.path:/v1/_search}")
     private String preferenceCheckPath;
 
-    @Value("${novu.bridge.config.host:http://localhost:9000}")
-    private String configHost;
-
-    @Value("${novu.bridge.config.resolve.path:/config-service/config/v1/_resolve}")
-    private String configResolvePath;
-
-    @Value("${novu.bridge.config.search.path:/config-service/config/v1/_search}")
-    private String configSearchPath;
-
     @Value("${novu.bridge.preference.code:USER_NOTIFICATION_PREFERENCES}")
     private String preferenceCode;
 
@@ -65,6 +57,20 @@ public class NovuBridgeConfiguration {
 
     @Value("${novu.bridge.user.search.path:/user/_search}")
     private String userSearchPath;
+
+    // ---- Proxy auth: validate the DIGIT bearer token server-side ----
+    // The read-only configurator proxy GETs (/novu-adapter/v1/logs|integrations)
+    // are authenticated INSIDE this service (ProxyAuthFilter): the bearer token is
+    // introspected against egov-user POST /user/_details, then gated on
+    // type==EMPLOYEE + at least one role code in the allowlist below.
+    @Value("${novu.bridge.proxy.auth.enabled:true}")
+    private Boolean proxyAuthEnabled;
+
+    @Value("${novu.bridge.user.details.path:/user/_details}")
+    private String userDetailsPath;
+
+    @Value("#{'${novu.bridge.proxy.allowed.roles:EMPLOYEE,SUPERUSER,GRO,PGR_LME}'.split(',')}")
+    private java.util.List<String> proxyAllowedRoles;
 
     @Value("${mdms.host:http://localhost:8082}")
     private String mdmsHost;
@@ -97,35 +103,35 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.identify.cache.ttl.ms:300000}")
     private Long identifyCacheTtlMs;
 
-    // ---- Baileys WhatsApp send-service (out-of-band HTTP delivery) ----
-    @Value("${novu.bridge.whatsapp.baileys.url:http://baileys-send-service:3040}")
-    private String baileysUrl;
+    // ---- Channel delivery gate ----
+    // Only channels listed here are actually delivered. Any other KNOWN channel
+    // (e.g. WHATSAPP until a legitimate provider is onboarded as a Novu
+    // integration) is persisted as SKIPPED / NB_NO_PROVIDER — an honest,
+    // debuggable outcome, never a fallback to another channel.
+    @Value("#{'${novu.bridge.channels.enabled:SMS,EMAIL}'.split(',')}")
+    private java.util.List<String> channelsEnabled;
 
-    @Value("${novu.bridge.whatsapp.baileys.send.path:/send}")
-    private String baileysSendPath;
-
-    @Value("${novu.bridge.whatsapp.baileys.token:}")
-    private String baileysToken;
-
-    @Value("${novu.bridge.whatsapp.baileys.timeout.ms:10000}")
-    private Integer baileysTimeoutMs;
+    public boolean isChannelEnabled(String channel) {
+        if (channel == null) return false;
+        return channelsEnabled.stream().anyMatch(c -> c.trim().equalsIgnoreCase(channel.trim()));
+    }
 
     /**
-     * Resolve the fixed Novu workflow id for a channel. The rendered body
-     * always travels in payload.body; the workflow just relays it.
+     * Resolve the fixed Novu workflow id for a channel. Throws for null/unknown
+     * channels — callers must gate on a known channel first (the pipeline
+     * persists SKIPPED/NB_UNSUPPORTED_CHANNEL instead of ever reaching this
+     * throw in normal operation). NEVER defaults to the SMS workflow.
      */
     public String getNovuWorkflowId(String channel) {
         if (channel == null) {
-            return novuWorkflowSms;
+            throw new CustomException("NB_UNSUPPORTED_CHANNEL", "channel is null; refusing to guess a Novu workflow");
         }
         switch (channel.toUpperCase()) {
-            case "WHATSAPP":
-                return novuWorkflowWhatsapp;
-            case "EMAIL":
-                return novuWorkflowEmail;
-            case "SMS":
+            case "SMS":      return novuWorkflowSms;
+            case "WHATSAPP": return novuWorkflowWhatsapp;
+            case "EMAIL":    return novuWorkflowEmail;
             default:
-                return novuWorkflowSms;
+                throw new CustomException("NB_UNSUPPORTED_CHANNEL", "No Novu workflow for channel: " + channel);
         }
     }
 

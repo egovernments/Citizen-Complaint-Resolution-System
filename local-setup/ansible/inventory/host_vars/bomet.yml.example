@@ -80,11 +80,10 @@ digit_ui_mode: container
 enable_search_stack: false
 enable_mcp: true                   # kit: false — needed locally to bootstrap ke (no ke in this DB)
 build_mcp: true                    # kit: false — build digit-mcp:local like the mz bring-up did
-enable_novu: true                  # config-driven notifications target: Novu + Baileys stack
+enable_novu: true                  # config-driven notifications target: Novu
 db_fast_path: true                 # REQUIRED — see kit NON-PERSISTED-STATE.md / DB section
 build_otp_publisher: true          # not in kit: real Bomet box already has otp-publisher:local;
                                    # the notifications profile needs it, so build it here
-build_baileys: true                # build baileys-send-service:local for WhatsApp delivery (D7)
 build_default_data_handler: true
 build_digit_ui: true
 build_configurator: true
@@ -103,11 +102,6 @@ novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-onl
 # build_* flags above produce local images.
 # pgr_services_image:  "10.0.0.4:5000/egovio/pgr-services:notif-config-<sha>"
 # novu_bridge_image:   "10.0.0.4:5000/egovio/novu-bridge:passthrough-<sha>"
-# baileys_image:       "10.0.0.4:5000/egovio/baileys-send-service:<sha>"
-
-# Baileys send-service bearer token (MANDATORY for production). Keep the real
-# value in OpenBao/vault; set a strong token before the first WhatsApp deploy.
-baileys_send_token: ""
 
 # Novu bootstrap inputs — left empty: Novu stack comes up, operator signs up
 # at /novu/ and pastes the API key here for a second deploy (kit RUNBOOK flow).

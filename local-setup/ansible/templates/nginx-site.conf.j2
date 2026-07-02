@@ -305,14 +305,13 @@ server {
     proxy_set_header Host $host;
   }
 
-  # novu-bridge REST endpoints (diagnostics: _validate, _dry-run,
-  # _test-trigger) are NOT exposed via host nginx by default. The
-  # bridge lives inside the egov-network and is reachable from kong,
-  # from MCP, and from any pod in the same compose. Operators who
-  # need to curl it can `docker exec novu-bridge curl ...` or open a
-  # shell into kong. Add a `location /novu-bridge/` block here if
-  # you want public access — but the diagnostic endpoints can leak
-  # subscriber info, so think before doing it.
+  # novu-bridge: the read-only configurator proxy endpoints
+  # (GET /novu-bridge/novu-adapter/v1/logs|integrations) are routed by Kong
+  # (see local-setup/kong/kong.yml) and auth-gated INSIDE novu-bridge by
+  # validating the DIGIT bearer token against egov-user /user/_details.
+  # The POST diagnostic endpoints (_validate/_dry-run/_test-trigger) are
+  # deliberately NOT routed publicly. Do NOT hand-wire an unauthenticated
+  # location block for them.
 
 {% endif %}
 {% if enable_turbopass | default(false) %}

@@ -1,7 +1,6 @@
 import {
   DigitList,
   DigitDatagrid,
-  SearchFilterInput,
   SelectFilterInput,
   TextFilterInput,
 } from '@/admin';
@@ -9,10 +8,10 @@ import type { DigitColumn } from '@/admin';
 import { StatusChip, DateField } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 
-// Delivery channels novu-bridge writes to nb_dispatch_log. WhatsApp only shows
-// up here when it went through the Novu path; direct Baileys/Telegram sends
-// bypass Novu and are NOT logged (observability boundary — see the backend
-// DispatchLogController javadoc).
+// Delivery channels novu-bridge writes to nb_dispatch_log. Every event lands
+// here with an explicit terminal status; WHATSAPP has no enabled provider yet,
+// so those rows show up as SKIPPED/NB_NO_PROVIDER rather than being invisible
+// (see the backend DispatchLogController javadoc).
 const CHANNEL_CHOICES = [
   { id: 'SMS', name: 'SMS' },
   { id: 'EMAIL', name: 'Email' },
@@ -29,17 +28,19 @@ const STATUS_CHOICES = [
 ];
 
 const filters = [
-  // The list quick-search box also emits `q`; keep it so the search field
-  // renders, but the real filtering is done by the explicit inputs below,
-  // which the data provider maps onto server-side query params.
-  <SearchFilterInput key="q" source="q" alwaysOn />,
+  // referenceNumber is the real search — the data provider maps the explicit
+  // inputs below onto server-side query params. (A generic `q` quick-search was
+  // removed: the dataProvider drops `q` for this resource, so it was a dead
+  // field operators typed into.)
   <TextFilterInput key="referenceNumber" source="referenceNumber" label="Complaint #" alwaysOn />,
   <SelectFilterInput key="channel" source="channel" label="Channel" choices={CHANNEL_CHOICES} alwaysOn />,
   <SelectFilterInput key="status" source="status" label="Status" choices={STATUS_CHOICES} alwaysOn />,
 ];
 
 /** Mask a recipient (phone/email) so the log never renders a full PII value:
- *  keep the domain for emails, the last 3 digits for phones. */
+ *  keep the domain for emails, the last 3 digits for phones.
+ *  Server also masks recipient_value/transaction_id (novu-bridge PiiMask) — this
+ *  is defense-in-depth for older bridges. */
 function maskRecipient(value: unknown): string {
   const s = String(value ?? '');
   if (!s) return '--';
@@ -126,15 +127,16 @@ const columns: DigitColumn[] = [
 
 /**
  * Read-only delivery-log viewer backed by the novu-bridge proxy
- * (`GET /novu-bridge/novu-adapter/v1/logs`). Lists SMS/Email notifications
- * novu-bridge delivered via Novu, newest first. Not a complete notification
- * audit: direct Baileys/Telegram WhatsApp sends bypass Novu and aren't logged.
+ * (`GET /novu-bridge/novu-adapter/v1/logs`). Lists every notification event
+ * novu-bridge processed, newest first, with an explicit terminal status
+ * (SENT / SKIPPED / FAILED); WHATSAPP has no enabled provider yet, so those
+ * rows appear as SKIPPED/NB_NO_PROVIDER.
  */
 export function NotificationLogList() {
   return (
     <DigitList
       title="Notification Logs"
-      subtitle="Novu-delivered SMS/Email — direct WhatsApp not tracked"
+      subtitle="SMS/Email delivered via Novu — WHATSAPP shows as SKIPPED (no provider yet)"
       sort={{ field: 'createdTime', order: 'DESC' }}
       filters={filters}
     >

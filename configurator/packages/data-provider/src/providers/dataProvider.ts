@@ -989,7 +989,11 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
         const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
-        const existing = records.find((r) => r.isActive);
+        // Opt-in reactivation: when meta.includeInactive is set, fall back to a
+        // soft-deleted (inactive) row so Remove -> re-Add can resurrect the uid
+        // that delete() left occupied (mdmsUpdate below forces isActive: true).
+        const includeInactive = Boolean((params.meta as { includeInactive?: boolean } | undefined)?.includeInactive);
+        const existing = records.find((r) => r.isActive) ?? (includeInactive ? records[0] : undefined);
         if (!existing) throw new Error(`Record not found: ${params.id}`);
         // Strip the metadata that normalizeMdmsRecord glued onto the
         // record for react-admin's benefit (id, _isActive, _mdmsId,

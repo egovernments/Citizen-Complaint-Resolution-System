@@ -19,23 +19,29 @@ import java.util.Map;
  * {@code DispatchController} under the same {@code /novu-adapter/v1} namespace.
  *
  * <p><b>Secrets stay server-side.</b> Novu is called here with the ApiKey held
- * by {@link NovuClient} (the keyless configurator SPA never sees that key). The
- * upstream integration objects carry provider {@code credentials} (apiKey /
- * apiToken / secretKey / password / token / ...); every value nested under a
- * {@code credentials} object is masked to {@code "***"} before the response
- * leaves this service. There is deliberately NO endpoint that returns the raw
- * Novu key or any provider secret.
+ * by {@link NovuClient} (the keyless configurator SPA never sees that key). Rather
+ * than denylisting known secret locations, the response is built by an ALLOWLIST
+ * projection: for each integration only a fixed set of non-secret fields
+ * ({@code _id}, {@code providerId}, {@code channel}, {@code name},
+ * {@code identifier}, {@code active}, {@code primary}, {@code environmentId}) is
+ * copied out. Nothing else — in particular no {@code credentials} key, masked or
+ * otherwise — ever leaves this service, so a secret stored outside a
+ * {@code credentials} object cannot leak. There is deliberately NO endpoint that
+ * returns the raw Novu key or any provider secret.
  *
- * <p><b>Observability boundary:</b> this lists the Novu-side provider
- * configuration only. Direct Baileys / Telegram WhatsApp senders that bypass
- * Novu are configured elsewhere and are not represented here.
+ * <p><b>Observability boundary:</b> this lists the Novu-side provider configuration
+ * only. All delivery now goes through Novu; channels with no active Novu integration are gated
+ * off via novu.bridge.channels.enabled and show up in the dispatch log as SKIPPED.
  */
 @RestController
 @RequestMapping("/novu-adapter/v1")
 public class IntegrationController {
 
-    private static final String CREDENTIALS_KEY = "credentials";
-    private static final String REDACTED = "***";
+    // Only these non-secret fields are copied into the response. Everything else
+    // (credentials, conditions, deleted flags, timestamps, ...) is dropped.
+    private static final List<String> ALLOWED_FIELDS = List.of(
+            "_id", "providerId", "channel", "name", "identifier",
+            "active", "primary", "environmentId");
 
     private final NovuClient novuClient;
 
@@ -44,21 +50,21 @@ public class IntegrationController {
     }
 
     /**
-     * Return the Novu integration list with every credential value redacted.
+     * Return the Novu integration list as an allowlist projection (no secrets).
      *
-     * @return {@code {data:[integration...], total}} — read-only, secrets masked.
+     * @return {@code {data:[integration...], total}} — read-only, non-secret fields only.
      */
     @GetMapping("/integrations")
     public ResponseEntity<IntegrationListResponse> integrations() {
         NovuClient.NovuResponse novuResponse = novuClient.listIntegrations();
         List<Map<String, Object>> integrations = extractIntegrations(novuResponse.getResponse());
-        List<Map<String, Object>> redacted = new ArrayList<>(integrations.size());
+        List<Map<String, Object>> projected = new ArrayList<>(integrations.size());
         for (Map<String, Object> integration : integrations) {
-            redacted.add(redactCredentials(integration));
+            projected.add(projectAllowedFields(integration));
         }
         IntegrationListResponse response = IntegrationListResponse.builder()
-                .data(redacted)
-                .total((long) redacted.size())
+                .data(projected)
+                .total((long) projected.size())
                 .build();
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
@@ -82,51 +88,19 @@ public class IntegrationController {
     }
 
     /**
-     * Deep-copy an integration, masking every value found under any nested
-     * {@code credentials} object. Traverses maps and lists so a credentials
-     * block at any depth is caught; leaves all non-credential fields (channel,
-     * providerId, active, primary, name, ...) untouched.
+     * Build a fresh map containing ONLY the allowlisted, non-secret fields present
+     * on the integration. Any field not on the allowlist (including {@code
+     * credentials} at any location, in any shape) is simply never copied — so no
+     * secret can leak, whether or not Novu nests it under a {@code credentials}
+     * key. Fields absent on a given integration are dropped rather than invented.
      */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> redactCredentials(Map<String, Object> integration) {
-        Map<String, Object> copy = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : integration.entrySet()) {
-            String key = entry.getKey();
-            Object value = entry.getValue();
-            if (CREDENTIALS_KEY.equals(key) && value instanceof Map) {
-                copy.put(key, maskAllValues((Map<String, Object>) value));
-            } else if (value instanceof Map) {
-                copy.put(key, redactCredentials((Map<String, Object>) value));
-            } else if (value instanceof List) {
-                copy.put(key, redactList((List<Object>) value));
-            } else {
-                copy.put(key, value);
+    private Map<String, Object> projectAllowedFields(Map<String, Object> integration) {
+        Map<String, Object> projected = new LinkedHashMap<>();
+        for (String field : ALLOWED_FIELDS) {
+            if (integration.containsKey(field)) {
+                projected.put(field, integration.get(field));
             }
         }
-        return copy;
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<Object> redactList(List<Object> list) {
-        List<Object> out = new ArrayList<>(list.size());
-        for (Object item : list) {
-            if (item instanceof Map) {
-                out.add(redactCredentials((Map<String, Object>) item));
-            } else if (item instanceof List) {
-                out.add(redactList((List<Object>) item));
-            } else {
-                out.add(item);
-            }
-        }
-        return out;
-    }
-
-    /** Replace every non-null value in a credentials map with the redaction marker. */
-    private Map<String, Object> maskAllValues(Map<String, Object> credentials) {
-        Map<String, Object> masked = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : credentials.entrySet()) {
-            masked.put(entry.getKey(), entry.getValue() == null ? null : REDACTED);
-        }
-        return masked;
+        return projected;
     }
 }

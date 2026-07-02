@@ -69,6 +69,11 @@ public class NotificationRouter {
             if (!equalsIgnore(toState, row.get("toState"))) continue;
 
             Object rowFrom = row.get("fromState");
+            if (rowFrom != null && !rowFrom.toString().isBlank() && !StringUtils.hasText(fromState)) {
+                log.warn("NotificationRouting row {}.{}.{} authors fromState='{}' but the runtime path does not "
+                        + "supply fromState — the row matches EVERY transition into toState. Clear fromState "
+                        + "or wait for fromState support.", businessService, action, toState, rowFrom);
+            }
             // fromState optional: match when the row leaves it blank OR it equals the request's.
             if (rowFrom != null && StringUtils.hasText(fromState)
                     && !fromState.equalsIgnoreCase(rowFrom.toString())) continue;

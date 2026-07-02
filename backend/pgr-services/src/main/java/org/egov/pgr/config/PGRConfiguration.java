@@ -253,8 +253,14 @@ public class PGRConfiguration {
     @Value("${pgr.notification.default.locale:en_IN}")
     private String notificationDefaultLocale;
 
-    @Value("#{'${pgr.notification.channels.default:SMS}'.split(',')}")
-    private java.util.List<String> notificationDefaultChannels;
+    @Value("${pgr.notification.rolepool.page.size:100}")
+    private Integer notificationRolePoolPageSize;
+
+    @Value("${pgr.notification.rolepool.max.pages:10}")
+    private Integer notificationRolePoolMaxPages;
+
+    @Value("${pgr.notification.mdms.cache.ttl.ms:60000}")
+    private Long notificationMdmsCacheTtlMs;
 
     // Escalation
     @Value("${pgr.escalation.enabled}")

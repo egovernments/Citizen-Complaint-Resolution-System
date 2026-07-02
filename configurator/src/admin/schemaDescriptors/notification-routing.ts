@@ -18,10 +18,10 @@ export const notificationRoutingDescriptor: SchemaDescriptor = {
   ],
   fields: [
     { path: 'businessService', required: true, label: 'Business Service', help: 'Workflow business service, e.g. PGR.' },
-    { path: 'fromState', label: 'From State', help: 'Documentation/UI only — runtime matches on action + toState (the consumer lacks fromState). Leave blank for "any".' },
+    { path: 'fromState', label: 'From State', help: 'Documentation/UI only — runtime matches on action + toState (the consumer lacks fromState). Leave blank for "any". Not currently enforced at runtime — a value here matches EVERY transition into toState. Leave blank.' },
     { path: 'action', required: true, label: 'Action', help: 'Workflow action, e.g. ASSIGN, REASSIGN, REJECT, RESOLVE, REOPEN, RATE, APPLY.' },
     { path: 'toState', required: true, label: 'To State', help: 'Resulting status, e.g. PENDINGATLME. Disambiguates same-action transitions (RATE -> CLOSEDAFTERRESOLUTION vs CLOSEDAFTERREJECTION).' },
-    { path: 'audience', required: true, label: 'Audience', help: 'CITIZEN or EMPLOYEE. CITIZEN -> the citizen; EMPLOYEE -> the assignee (current workflow assignee, else last ASSIGN from history).' },
+    { path: 'audience', required: true, label: 'Audience', help: 'CITIZEN (the complaint filer), any workflow role code (e.g. GRO, PGR_LME) to notify every holder, or EMPLOYEE (legacy alias for the current assignee).' },
     { path: 'channel', required: true, label: 'Channel', help: 'SMS, WHATSAPP, EMAIL.' },
     { path: 'active', widget: 'boolean', label: 'Active' },
   ],

@@ -2129,13 +2129,6 @@ services:
         condition: service_healthy
       otel-collector:
         condition: service_started
-      # WhatsApp delivery target. In pass-through mode the bridge routes
-      # channel=WHATSAPP to baileys-send-service instead of Novu/Twilio.
-      # service_started (NOT service_healthy): baileys /healthz returns 503 until
-      # WhatsApp is QR-paired, so gating on healthy would block the bridge (and
-      # all SMS/email) until pairing. SMS-first must not depend on WhatsApp.
-      baileys-send-service:
-        condition: service_started
     volumes:
       - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
     environment:
@@ -2166,8 +2159,9 @@ services:
       # Channel is compared CASE-SENSITIVELY against the TemplateBinding
       # `channel` field. Our seed data uses lowercase `sms` / `whatsapp`
       # — keep this lowercase too. Override per-tenant in host_vars.
-      # (Default whatsapp: live deploys use it; SMS is paused pending A2P.)
-      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-whatsapp}
+      # (Default SMS: WhatsApp is paused pending an A2P/provider. The config-
+      # driven path uses NOVU_BRIDGE_CHANNELS_ENABLED below, not this legacy knob.)
+      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-SMS}
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
       # NOTE: the preference check calls
       # `digit-user-preferences-service/user-preference/v1/_check`,
@@ -2179,29 +2173,20 @@ services:
       NOVU_BRIDGE_PREFERENCE_HOST: http://digit-user-preferences-service:8080
       NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_check
       NOVU_BRIDGE_PREFERENCE_CODE: USER_NOTIFICATION_PREFERENCES
-      # ── Pass-through mode (design D4): PGR pre-renders + localizes the
-      # body and ships it on the event as `renderedBody`. The bridge must
-      # NOT resolve templates from config-service or re-localize — it only
-      # identifies the Novu subscriber and triggers with renderedBody.
-      # RENDERED_BODY_MODE makes the dispatch pipeline read event.renderedBody
-      # / event.renderedSubject verbatim and skip ConfigServiceClient.
-      NOVU_BRIDGE_RENDERED_BODY_MODE: 'true'
       # Per-channel Novu workflow ids the bridge triggers (rendered text
       # travels in payload.body; the workflow is just the delivery shell).
       NOVU_BRIDGE_WORKFLOW_ID_SMS: ${NOVU_BRIDGE_WORKFLOW_ID_SMS:-complaints-sms}
       NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP: ${NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP:-complaints-whatsapp}
       NOVU_BRIDGE_WORKFLOW_ID_EMAIL: ${NOVU_BRIDGE_WORKFLOW_ID_EMAIL:-complaints-email}
-      # Subscriber identify (D6): upsert POST /v1/subscribers before trigger.
       # TTL cache (ms) skips redundant identifies for the same subscriberId.
-      NOVU_BRIDGE_IDENTIFY_ENABLED: 'true'
       NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
-      # WhatsApp delivery via the self-hosted Baileys send-service (D7).
-      # The bridge's BaileysSendClient POSTs {to,text} here for channel=WHATSAPP.
-      NOVU_BRIDGE_BAILEYS_URL: ${NOVU_BRIDGE_BAILEYS_URL:-http://baileys-send-service:3040/send}
-      NOVU_BRIDGE_BAILEYS_TOKEN: ${NOVU_BRIDGE_BAILEYS_TOKEN:-}
-      # NOTE: config-service template-resolve is DEAD in pass-through mode
-      # (RENDERED_BODY_MODE=true). These three are kept one release for
-      # rollback to the legacy resolve path; remove post-cutover (design D8).
+      # Channels actually delivered. WHATSAPP stays OFF until a legitimate
+      # provider is onboarded as a Novu integration (then just add it here).
+      NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-SMS,EMAIL}
+      # NOTE: config-service template-resolve is DEAD in pass-through mode. The
+      # legacy resolve client was deleted in this PR, so these env vars are inert
+      # and kept only for env-file compatibility; rolling back to the legacy
+      # resolve path now means pinning an older novu-bridge image (design D8).
       NOVU_BRIDGE_CONFIG_HOST: http://digit-config-service:8080
       # Full path = SERVER_SERVLET_CONTEXT_PATH (/config-service) +
       # controller mapping (/config/v1) + endpoint. The earlier
@@ -2466,47 +2451,6 @@ services:
     networks:
       - egov-network
 
-  # ==================== Baileys WhatsApp send-service (opt-in) ==========
-  # Self-hosted WhatsApp delivery via the unofficial Baileys library
-  # (design D7). novu-bridge's BaileysSendClient POSTs {to,text} to /send;
-  # the service keeps its WhatsApp auth-state in a named volume so a single
-  # QR pairing survives container restarts and Ansible re-runs.
-  #
-  # Profile-gated under `notifications` (same as novu-bridge) — it only
-  # starts when enable_novu:true. Image is built+pushed to the VPC registry
-  # on the CI server and pulled here; default falls back to a local build.
-  #
-  # ⚠️ Unofficial WhatsApp API: number-ban / ToS risk. Use a dedicated
-  # number. SEND_TOKEN bearer auth is MANDATORY in production; /qr must NOT
-  # be exposed on any public port (host nginx never proxies it).
-  baileys-send-service:
-    image: ${BAILEYS_IMAGE:-baileys-send-service:local}
-    container_name: baileys-send-service
-    restart: unless-stopped
-    profiles: ["notifications"]
-    environment:
-      PORT: '3040'
-      AUTH_DIR: /app/auth
-      # MANDATORY in production: bearer token the bridge presents on /send.
-      # Left empty in the shared default; set via host_vars (baileys .env).
-      SEND_TOKEN: ${BAILEYS_SEND_TOKEN:-}
-    volumes:
-      # WhatsApp multi-file auth-state (creds + signal keys). Named volume so
-      # the QR pairing persists across recreates and Ansible re-deploys.
-      - baileys_auth_data:/app/auth
-    healthcheck:
-      # 503 until paired, 200 once the WhatsApp socket is connected. node:20-slim
-      # ships NEITHER wget NOR curl, so use a node http one-liner (the Dockerfile
-      # HEALTHCHECK uses the same). This reports WhatsApp readiness for ops; the
-      # bridge gates on service_started (above), not this, so SMS isn't blocked.
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:'+(process.env.PORT||3040)+'/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
-      interval: 15s
-      timeout: 3s
-      retries: 5
-      start_period: 20s
-    networks:
-      - egov-network
-
 networks:
   egov-network:
     driver: bridge
@@ -2525,4 +2469,3 @@ volumes:
   keycloak_postgres_data: null
   openbao_data: null
   novu_mongo_data: null
-  baileys_auth_data: null

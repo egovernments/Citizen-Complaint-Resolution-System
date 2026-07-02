@@ -572,6 +572,10 @@ public class DataHandlerService {
         } catch (IOException e) {
             log.error("Error reading or mapping JSON file: {}", e.getMessage());
 //            throw new CustomException("IO_EXCEPTION", "Error reading or mapping JSON file: " + e.getMessage());
+        } catch (RuntimeException e) {
+            log.error("PGR workflow/notification seed emission failed part-way for tenant {} — "
+                    + "workflow may already be POSTed; MDMS emission is idempotent and safe to re-run",
+                    targetTenantId, e);
         }
     }
 
@@ -587,6 +591,11 @@ public class DataHandlerService {
             String toState = routing.path("toState").asText(null);
             String audience = notification.path("audience").asText(null);
             String channel = notification.path("channel").asText(null);
+            if (action == null || toState == null || audience == null || channel == null) {
+                log.warn("Skipping malformed notification routing row (action={}, toState={}, audience={}, channel={}) — all four are required",
+                        action, toState, audience, channel);
+                continue;
+            }
             boolean assigneeOnly = notification.path("assigneeOnly").asBoolean(false);
 
             ObjectNode data = objectMapper.createObjectNode();
@@ -617,6 +626,11 @@ public class DataHandlerService {
             String audience = template.path("audience").asText(null);
             String action = template.path("action").asText(null);
             String toState = template.path("toState").asText(null);
+            if (audience == null || action == null || toState == null) {
+                log.warn("Skipping malformed notification template (audience={}, action={}, toState={}) — all three are required",
+                        audience, action, toState);
+                continue;
+            }
             JsonNode bodies = template.get("bodies");
             if (bodies == null || !bodies.isArray()) {
                 continue;
@@ -624,6 +638,12 @@ public class DataHandlerService {
             for (JsonNode body : bodies) {
                 String channel = body.path("channel").asText(null);
                 String locale = body.path("locale").asText(null);
+                String bodyText = body.path("body").asText(null);
+                if (channel == null || locale == null || bodyText == null) {
+                    log.warn("Skipping malformed notification template body (audience={}, action={}, toState={}, channel={}, locale={}) — channel, locale and body are required",
+                            audience, action, toState, channel, locale);
+                    continue;
+                }
 
                 ObjectNode data = objectMapper.createObjectNode();
                 data.put("audience", audience);
@@ -632,7 +652,7 @@ public class DataHandlerService {
                 data.put("channel", channel);
                 data.put("locale", locale);
                 data.set("subject", body.has("subject") ? body.get("subject") : NullNode.getInstance());
-                data.put("body", body.path("body").asText(null));
+                data.put("body", bodyText);
                 data.set("placeholders", body.has("placeholders") ? body.get("placeholders") : objectMapper.createArrayNode());
                 data.put("active", true);
 

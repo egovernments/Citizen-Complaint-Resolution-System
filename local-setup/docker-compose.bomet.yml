@@ -25,7 +25,7 @@ services:
   # publishes one pre-rendered event per (recipient × channel) to
   # complaints.domain.events. The shared egov-digit default stays 'false', so
   # only Bomet flips here. This per-tenant overlay survives Ansible re-runs.
-  # Requires the pass-through novu-bridge + baileys-send-service (notifications
+  # Requires the pass-through novu-bridge (notifications
   # profile, enable_novu: true) and the seeded MDMS masters.
   pgr-services:
     environment:
