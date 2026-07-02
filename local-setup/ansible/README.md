@@ -141,8 +141,8 @@ files trigger restarts.
 
 Some production tenants have hand-crafted `/etc/nginx/sites-enabled/<domain>`
 files with routing the templated `nginx-site.conf.j2` doesn't render
-(e.g. Bomet's `/egov-rainmaker/` filestore passthrough, `/novu/`+`/novu-api/`,
-the `/digit-ui/` host-alias). Set `nginx_preserve_vhost: true` in their
+(e.g. Bomet's `/novu/`+`/novu-api/` routing and the `/digit-ui/` host-alias).
+Set `nginx_preserve_vhost: true` in their
 host_vars and the playbook will still install nginx, but will skip
 rendering/symlinking the site file — your hand-managed vhost is left
 ## Per-tenant overrides
@@ -185,8 +185,8 @@ so deploys on tenants without an overlay are unaffected.
 
 Set in host_vars when the tenant's `/etc/nginx/sites-enabled/<domain>`
 has routing the templated `nginx-site.conf.j2` doesn't render (Bomet's
-`/egov-rainmaker/` filestore passthrough, `/novu/`+`/novu-api/`, the
-`/digit-ui/` host-alias). The playbook still installs nginx, but skips
+`/novu/`+`/novu-api/` routing and the `/digit-ui/` host-alias). The
+playbook still installs nginx, but skips
 templating + symlinking the site file — your hand-managed vhost is left
 alone across every redeploy.
 
