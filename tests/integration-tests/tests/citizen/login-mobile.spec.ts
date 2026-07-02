@@ -5,10 +5,10 @@
  * error with no indication of what a valid number looks like. Three
  * things had to change (PR #28, 3b7c917):
  *
- * 1. The citizen login now reads `ValidationConfigs.mobileNumberValidation`
+ * 1. The citizen login now reads `common-masters.MobileNumberValidation`
  *    from MDMS rather than the hardcoded Indian 10-digit regex. On
- *    naipepea this resolves to the Kenya rule (`^0?[17][0-9]{8}$`) with
- *    its own `errorMessage`.
+ *    naipepea this resolves to the Kenya rule (`^0?[17][0-9]{8}$`) driven
+ *    by the countryCode/mobileNumberRegex fields.
  * 2. A helper hint renders under the field even in the idle state, so the
  *    citizen knows what length to type before they type anything.
  * 3. The error renders inline under the input, not just as a toast.
