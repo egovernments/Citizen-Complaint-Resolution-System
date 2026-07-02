@@ -92,6 +92,12 @@ export function sanitizeFilters(raw, dynamicOptions = {}) {
     return defaults;
   }
 
+  // The `= {}` default only applies when the arg is `undefined`. Callers such as
+  // persistDashboardFilters(filters, dynamicOptions) can pass `null` explicitly, which
+  // slips past the default and makes `dynamicOptions[field.id]` throw on the first select
+  // field ("geography") — blanking the dashboard on any date-filter change. Normalize it.
+  const options = dynamicOptions && typeof dynamicOptions === "object" ? dynamicOptions : {};
+
   const next = { ...defaults };
 
   for (const field of GLOBAL_FILTER_FIELDS) {
@@ -100,8 +106,8 @@ export function sanitizeFilters(raw, dynamicOptions = {}) {
       next[field.id] = value;
     }
     if (field.type === "select") {
-      const options = dynamicOptions[field.id] ?? field.options;
-      if (options.some((opt) => opt.id === value)) {
+      const fieldOptions = options[field.id] ?? field.options;
+      if (fieldOptions.some((opt) => opt.id === value)) {
         next[field.id] = value;
       }
     }

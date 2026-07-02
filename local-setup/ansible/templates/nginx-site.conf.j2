@@ -418,25 +418,6 @@ server {
     proxy_buffering off;
   }
 
-{% if nginx_features.minio_egov_rainmaker_alias | default(false) %}
-  # Legacy /egov-rainmaker/ MinIO passthrough. Used when egov-filestore
-  # signs presigned URLs with the public domain (MINIO_URL=https://<domain>)
-  # under the `egov-rainmaker` bucket instead of the internal minio:9000.
-  # Host is preserved so the AWS4 signature ($host) keeps validating.
-  # ^~ prefix beats the Kong catch-all below.
-  location ^~ /egov-rainmaker/ {
-    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_minio_port | default(19000) }};
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_buffering off;
-    proxy_request_buffering off;
-    client_max_body_size 100m;
-    proxy_read_timeout 120s;
-  }
-{% endif %}
-
 {% if nginx_features.root_to_digit_ui | default(false) %}
   # Bare domain -> citizen app login. Lands users in the digit-ui SPA
   # instead of Kong's default response. Exact match (=), so the catch-all
