@@ -19,3 +19,16 @@ services:
     environment:
       SPRING_FLYWAY_ENABLED: "false"
 
+  # Config-driven notifications cutover (design D1/D4/D8). Bomet is the FIRST
+  # tenant on the new path: PGR reads PGR.NotificationRouting +
+  # PGR.NotificationTemplate from MDMS, renders + localizes per recipient, and
+  # publishes one pre-rendered event per (recipient × channel) to
+  # complaints.domain.events. The shared egov-digit default stays 'false', so
+  # only Bomet flips here. This per-tenant overlay survives Ansible re-runs.
+  # Requires the pass-through novu-bridge + baileys-send-service (notifications
+  # profile, enable_novu: true) and the seeded MDMS masters.
+  pgr-services:
+    environment:
+      PGR_NOTIFICATION_CONFIG_DRIVEN: "true"
+      KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: complaints.domain.events
+

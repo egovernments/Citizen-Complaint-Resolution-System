@@ -246,6 +246,16 @@ public class PGRConfiguration {
     @Value("${complaints.domain.events.default.locale:en_IN}")
     private String complaintsDomainEventDefaultLocale;
 
+    // Config-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate)
+    @Value("${pgr.notification.config.driven:false}")
+    private Boolean notificationConfigDriven;
+
+    @Value("${pgr.notification.default.locale:en_IN}")
+    private String notificationDefaultLocale;
+
+    @Value("#{'${pgr.notification.channels.default:SMS}'.split(',')}")
+    private java.util.List<String> notificationDefaultChannels;
+
     // Escalation
     @Value("${pgr.escalation.enabled}")
     private Boolean escalationEnabled;

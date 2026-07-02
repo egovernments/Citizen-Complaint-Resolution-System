@@ -1,0 +1,542 @@
+[
+  {
+    "audience": "CITIZEN",
+    "action": "APPLY",
+    "toState": "PENDINGFORASSIGNMENT",
+    "channel": "SMS",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} has been submitted with ID {id} on {date}. You can track your complaint status on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "ASSIGN",
+    "toState": "PENDINGATLME",
+    "channel": "SMS",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_department",
+      "emp_designation",
+      "emp_name",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "ASSIGN",
+    "toState": "PENDINGATLME",
+    "channel": "SMS",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Shri {emp_name}, Complaint for '{complaint_type}' with ID {id} has been assigned to you. Please take appropriate action. {ao_designation} - {ulb}.\n\nEGOVS",
+    "placeholders": [
+      "ao_designation",
+      "complaint_type",
+      "emp_name",
+      "id",
+      "ulb"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REASSIGN",
+    "toState": "PENDINGFORREASSIGNMENT",
+    "channel": "SMS",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_department",
+      "emp_designation",
+      "emp_name",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "REASSIGN",
+    "toState": "PENDINGFORREASSIGNMENT",
+    "channel": "SMS",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been re-assigned as per your request. {ao_designation} - {ulb}.\n\nEGOVS",
+    "placeholders": [
+      "ao_designation",
+      "complaint_type",
+      "emp_name",
+      "id",
+      "ulb"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REJECT",
+    "toState": "REJECTED",
+    "channel": "SMS",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been rejected. Reason for Rejection: {additional_comments} If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS",
+    "placeholders": [
+      "additional_comments",
+      "complaint_type",
+      "date",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "RESOLVE",
+    "toState": "RESOLVED",
+    "channel": "SMS",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_name",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REOPEN",
+    "toState": "PENDINGFORASSIGNMENT",
+    "channel": "SMS",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been Re-opened as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "REOPEN",
+    "toState": "PENDINGFORASSIGNMENT",
+    "channel": "SMS",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been Re-opened by the citizen. It is being reviewed by Assigning officer - {ulb}.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "emp_name",
+      "id",
+      "ulb"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "RATE",
+    "toState": "CLOSEDAFTERRESOLUTION",
+    "channel": "SMS",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "emp_name",
+      "id",
+      "rating"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "RATE",
+    "toState": "CLOSEDAFTERREJECTION",
+    "channel": "SMS",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "emp_name",
+      "id",
+      "rating"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "APPLY",
+    "toState": "PENDINGFORASSIGNMENT",
+    "channel": "WHATSAPP",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} has been submitted with ID {id} on {date}. You can track your complaint status on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "ASSIGN",
+    "toState": "PENDINGATLME",
+    "channel": "WHATSAPP",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_department",
+      "emp_designation",
+      "emp_name",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "ASSIGN",
+    "toState": "PENDINGATLME",
+    "channel": "WHATSAPP",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Shri {emp_name}, Complaint for '{complaint_type}' with ID {id} has been assigned to you. Please take appropriate action. {ao_designation} - {ulb}.\n\nEGOVS",
+    "placeholders": [
+      "ao_designation",
+      "complaint_type",
+      "emp_name",
+      "id",
+      "ulb"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REASSIGN",
+    "toState": "PENDINGFORREASSIGNMENT",
+    "channel": "WHATSAPP",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_department",
+      "emp_designation",
+      "emp_name",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "REASSIGN",
+    "toState": "PENDINGFORREASSIGNMENT",
+    "channel": "WHATSAPP",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been re-assigned as per your request. {ao_designation} - {ulb}.\n\nEGOVS",
+    "placeholders": [
+      "ao_designation",
+      "complaint_type",
+      "emp_name",
+      "id",
+      "ulb"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REJECT",
+    "toState": "REJECTED",
+    "channel": "WHATSAPP",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been rejected. Reason for Rejection: {additional_comments} If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS",
+    "placeholders": [
+      "additional_comments",
+      "complaint_type",
+      "date",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "RESOLVE",
+    "toState": "RESOLVED",
+    "channel": "WHATSAPP",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_name",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REOPEN",
+    "toState": "PENDINGFORASSIGNMENT",
+    "channel": "WHATSAPP",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been Re-opened as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "REOPEN",
+    "toState": "PENDINGFORASSIGNMENT",
+    "channel": "WHATSAPP",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been Re-opened by the citizen. It is being reviewed by Assigning officer - {ulb}.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "emp_name",
+      "id",
+      "ulb"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "RATE",
+    "toState": "CLOSEDAFTERRESOLUTION",
+    "channel": "WHATSAPP",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "emp_name",
+      "id",
+      "rating"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "RATE",
+    "toState": "CLOSEDAFTERREJECTION",
+    "channel": "WHATSAPP",
+    "locale": "en_IN",
+    "subject": null,
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "emp_name",
+      "id",
+      "rating"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "APPLY",
+    "toState": "PENDINGFORASSIGNMENT",
+    "channel": "EMAIL",
+    "locale": "en_IN",
+    "subject": "DIGIT: Complaint registered ({id})",
+    "body": "Dear Citizen, Your complaint for {complaint_type} has been submitted with ID {id} on {date}. You can track your complaint status on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "ASSIGN",
+    "toState": "PENDINGATLME",
+    "channel": "EMAIL",
+    "locale": "en_IN",
+    "subject": "DIGIT: Complaint assigned ({id})",
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_department",
+      "emp_designation",
+      "emp_name",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "ASSIGN",
+    "toState": "PENDINGATLME",
+    "channel": "EMAIL",
+    "locale": "en_IN",
+    "subject": "DIGIT: Complaint assigned ({id})",
+    "body": "Shri {emp_name}, Complaint for '{complaint_type}' with ID {id} has been assigned to you. Please take appropriate action. {ao_designation} - {ulb}.\n\nEGOVS",
+    "placeholders": [
+      "ao_designation",
+      "complaint_type",
+      "emp_name",
+      "id",
+      "ulb"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REASSIGN",
+    "toState": "PENDINGFORREASSIGNMENT",
+    "channel": "EMAIL",
+    "locale": "en_IN",
+    "subject": "DIGIT: Complaint reassigned ({id})",
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_department",
+      "emp_designation",
+      "emp_name",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "REASSIGN",
+    "toState": "PENDINGFORREASSIGNMENT",
+    "channel": "EMAIL",
+    "locale": "en_IN",
+    "subject": "DIGIT: Complaint reassigned ({id})",
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been re-assigned as per your request. {ao_designation} - {ulb}.\n\nEGOVS",
+    "placeholders": [
+      "ao_designation",
+      "complaint_type",
+      "emp_name",
+      "id",
+      "ulb"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REJECT",
+    "toState": "REJECTED",
+    "channel": "EMAIL",
+    "locale": "en_IN",
+    "subject": "DIGIT: Complaint rejected ({id})",
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been rejected. Reason for Rejection: {additional_comments} If you wish to re-open the complaint, you can visit the web portal.\n\nEGOVS",
+    "placeholders": [
+      "additional_comments",
+      "complaint_type",
+      "date",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "RESOLVE",
+    "toState": "RESOLVED",
+    "channel": "EMAIL",
+    "locale": "en_IN",
+    "subject": "DIGIT: Complaint resolved ({id})",
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_name",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REOPEN",
+    "toState": "PENDINGFORASSIGNMENT",
+    "channel": "EMAIL",
+    "locale": "en_IN",
+    "subject": "DIGIT: Complaint reopened ({id})",
+    "body": "Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been Re-opened as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "REOPEN",
+    "toState": "PENDINGFORASSIGNMENT",
+    "channel": "EMAIL",
+    "locale": "en_IN",
+    "subject": "DIGIT: Complaint reopened ({id})",
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been Re-opened by the citizen. It is being reviewed by Assigning officer - {ulb}.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "emp_name",
+      "id",
+      "ulb"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "RATE",
+    "toState": "CLOSEDAFTERRESOLUTION",
+    "channel": "EMAIL",
+    "locale": "en_IN",
+    "subject": "DIGIT: Complaint feedback ({id})",
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "emp_name",
+      "id",
+      "rating"
+    ],
+    "active": true
+  },
+  {
+    "audience": "EMPLOYEE",
+    "action": "RATE",
+    "toState": "CLOSEDAFTERREJECTION",
+    "channel": "EMAIL",
+    "locale": "en_IN",
+    "subject": "DIGIT: Complaint feedback ({id})",
+    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+    "placeholders": [
+      "complaint_type",
+      "emp_name",
+      "id",
+      "rating"
+    ],
+    "active": true
+  }
+]

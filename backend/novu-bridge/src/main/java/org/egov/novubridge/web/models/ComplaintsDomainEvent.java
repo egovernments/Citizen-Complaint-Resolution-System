@@ -22,6 +22,17 @@ public class ComplaintsDomainEvent {
     private String entityType;
     private String entityId;
     private String tenantId;
+
+    // ---- Config-driven pre-rendered contract (PGR pre-renders one event
+    //      per recipient x channel; novu-bridge is pure pass-through) ----
+    private String channel;          // SMS | WHATSAPP | EMAIL
+    private String subscriberId;     // tenantId:userUuid (fallback tenantId:mobile)
+    private Contact contact;         // recipient profile (phone/email/name/locale)
+    private String renderedBody;     // final localized message body (already rendered by PGR)
+    private String subject;          // EMAIL only, else null
+    private String transactionId;    // serviceRequestId:action:toState:subscriberId:channel
+
+    // ---- Legacy fields (retained for the old coarse-event / dry-run path) ----
     private Actor actor;
     private WorkflowInfo workflow;
     private List<Stakeholder> stakeholders;

@@ -1,7 +1,13 @@
 import { ENDPOINTS } from '../client/endpoints.js';
 import { MDMS_SCHEMAS } from '../client/types.js';
 
-export type ResourceType = 'mdms' | 'hrms' | 'boundary' | 'pgr' | 'localization' | 'user' | 'workflow-bs' | 'workflow-process' | 'access-role' | 'access-action' | 'mdms-schema' | 'boundary-hierarchy';
+export type ResourceType = 'mdms' | 'hrms' | 'boundary' | 'pgr' | 'localization' | 'user' | 'workflow-bs' | 'workflow-process' | 'access-role' | 'access-action' | 'mdms-schema' | 'boundary-hierarchy'
+  // 'custom' resources are NOT MDMS-backed. They are read-only lists fetched
+  // from an out-of-band DIGIT service (today: the novu-bridge read proxy) via
+  // a plain GET to `endpoint.search`, using the same DIGIT auth token the rest
+  // of the provider carries. The data provider maps react-admin filters onto
+  // query params and returns the service's {data,total} envelope verbatim.
+  | 'custom';
 
 export interface ResourceConfig {
   type: ResourceType;
@@ -16,6 +22,15 @@ export interface ResourceConfig {
     update?: string;
   };
   dedicated?: boolean;
+  /** For `type: 'custom'` resources only: the origin-relative path of the
+   *  read-only GET endpoint on the out-of-band service (e.g.
+   *  `/novu-bridge/novu-adapter/v1/logs`). The data provider prefixes it with
+   *  the current origin and attaches the DIGIT auth token. */
+  customPath?: string;
+  /** For `type: 'custom'` resources: when true, the fetcher appends the session
+   *  tenantId as a `tenantId` query param (the novu-bridge /logs endpoint
+   *  requires it). Providers/integrations don't take a tenant, so omit it. */
+  customTenantScoped?: boolean;
   /** 2-master complaint hierarchy: when set, the MDMS fetcher keeps only the
    *  LEAF rows of RAINMAKER-PGR.ComplaintHierarchy (rows carrying `department`
    *  or `slaHours`) and maps each to the legacy ServiceDefs shape
@@ -142,6 +157,24 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'auto-escalation-ignore': { type: 'mdms', label: 'Auto-Escalation Ignored',  schema: 'Workflow.AutoEscalationStatesToIgnore',    idField: 'businessService',   nameField: 'businessService' },
   'workflow-bs-master':     { type: 'mdms', label: 'Workflow BS Master',       schema: 'Workflow.BusinessServiceMasterConfig',     idField: 'active',            nameField: 'businessService' },
   'pgr-ui-constants':       { type: 'mdms', label: 'PGR UI Constants',         schema: 'RAINMAKER-PGR.UIConstants',                idField: 'REOPENSLA',         nameField: 'REOPENSLA' },
+  // Composite-key masters: react-admin id comes from the MDMS uniqueIdentifier
+  // (see mapMdmsRecord), so idField/nameField here are display-only.
+  'notification-routing':   { type: 'mdms', label: 'PGR Notification Routing',  schema: 'RAINMAKER-PGR.NotificationRouting',  idField: 'action', nameField: 'action' },
+  'notification-template':  { type: 'mdms', label: 'PGR Notification Templates', schema: 'RAINMAKER-PGR.NotificationTemplate', idField: 'action', nameField: 'action' },
+
+  // Non-MDMS, read-only resources served by the novu-bridge proxy (not egov-mdms).
+  // notification-log      -> GET /novu-bridge/novu-adapter/v1/logs         (nb_dispatch_log delivery logs)
+  // notification-provider -> GET /novu-bridge/novu-adapter/v1/integrations (Novu integrations, secrets redacted)
+  'notification-log': {
+    type: 'custom', label: 'Notification Logs', idField: 'transactionId', nameField: 'referenceNumber',
+    descriptionField: 'status', dedicated: true,
+    customPath: '/novu-bridge/novu-adapter/v1/logs', customTenantScoped: true,
+  },
+  'notification-provider': {
+    type: 'custom', label: 'Notification Providers', idField: '_id', nameField: 'providerId',
+    descriptionField: 'channel', dedicated: true,
+    customPath: '/novu-bridge/novu-adapter/v1/integrations', customTenantScoped: false,
+  },
 };
 
 export function getResourceConfig(resource: string): ResourceConfig | undefined {

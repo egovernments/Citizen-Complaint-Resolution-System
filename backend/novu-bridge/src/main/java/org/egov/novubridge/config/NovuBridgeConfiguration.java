@@ -81,6 +81,54 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.dispatch.log.enabled:true}")
     private Boolean dispatchLogEnabled;
 
+    // ---- Config-driven pass-through: per-channel Novu workflow ids ----
+    // PGR pre-renders the body; novu-bridge triggers a fixed per-channel
+    // workflow whose step simply emits payload.body. One workflow per channel.
+    @Value("${novu.bridge.workflow.id.sms:complaints-sms}")
+    private String novuWorkflowSms;
+
+    @Value("${novu.bridge.workflow.id.whatsapp:complaints-whatsapp}")
+    private String novuWorkflowWhatsapp;
+
+    @Value("${novu.bridge.workflow.id.email:complaints-email}")
+    private String novuWorkflowEmail;
+
+    // ---- Subscriber identify (upsert) TTL cache ----
+    @Value("${novu.bridge.identify.cache.ttl.ms:300000}")
+    private Long identifyCacheTtlMs;
+
+    // ---- Baileys WhatsApp send-service (out-of-band HTTP delivery) ----
+    @Value("${novu.bridge.whatsapp.baileys.url:http://baileys-send-service:3040}")
+    private String baileysUrl;
+
+    @Value("${novu.bridge.whatsapp.baileys.send.path:/send}")
+    private String baileysSendPath;
+
+    @Value("${novu.bridge.whatsapp.baileys.token:}")
+    private String baileysToken;
+
+    @Value("${novu.bridge.whatsapp.baileys.timeout.ms:10000}")
+    private Integer baileysTimeoutMs;
+
+    /**
+     * Resolve the fixed Novu workflow id for a channel. The rendered body
+     * always travels in payload.body; the workflow just relays it.
+     */
+    public String getNovuWorkflowId(String channel) {
+        if (channel == null) {
+            return novuWorkflowSms;
+        }
+        switch (channel.toUpperCase()) {
+            case "WHATSAPP":
+                return novuWorkflowWhatsapp;
+            case "EMAIL":
+                return novuWorkflowEmail;
+            case "SMS":
+            default:
+                return novuWorkflowSms;
+        }
+    }
+
     @PostConstruct
     public void initialize() {
         TimeZone.setDefault(TimeZone.getTimeZone(timeZone));

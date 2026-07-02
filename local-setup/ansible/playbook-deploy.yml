@@ -647,6 +647,26 @@
       when:
         - build_otp_publisher | default(false)
 
+    # ==================== Build baileys-send-service locally ==============
+    # When `build_baileys: true`, build the vendored Node service at
+    # utilities/baileys-send-service (its own Dockerfile) and tag it
+    # baileys-send-service:local; compose picks it up via BAILEYS_IMAGE.
+    # WhatsApp delivery (design D7) for the config-driven notification path —
+    # only needed when the notifications profile is enabled. Mirrors the
+    # otp-publisher build pattern above.
+    - name: "Build baileys-send-service image locally (when build_baileys)"
+      ansible.builtin.command: >-
+        docker build
+        -t baileys-send-service:local
+        -f utilities/baileys-send-service/Dockerfile
+        utilities/baileys-send-service
+      args:
+        chdir: "{{ playbook_dir }}/../.."
+      register: baileys_build_run
+      changed_when: true
+      when:
+        - build_baileys | default(false)
+
     # ==================== Build digit-ui from source ====================
     # Mirrors the configurator + mcp fold-ins: when `build_digit_ui: true`,
     # clone digit-ui-esbuild + `npm run build` here (files/digit-ui-build.sh).
@@ -2464,6 +2484,28 @@
     # re-runs deploy. Second deploy hits this task with all four values
     # set and creates the Twilio integration + workflow inside Novu.
     # ────────────────────────────────────────────────────────────────
+    # ────────────────────────────────────────────────────────────────
+    # Kafka topics for the config-driven notification pipeline. Redpanda
+    # runs with auto.create.topics.enable defaulting to true, so PGR's
+    # publish to complaints.domain.events and novu-bridge's retry/DLQ
+    # topics would be created on first produce. We create them upfront
+    # anyway (idempotent, -p 1 -r 1 to match the single-broker stack) so
+    # the bridge consumer + retry/DLQ exist before the first event and so
+    # the dependency order is explicit. failed_when:false → re-runs are
+    # no-ops ("TOPIC_ALREADY_EXISTS").
+    - name: "novu — ensure complaints.domain.events + retry + dlq topics exist"
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} \
+          exec -T redpanda rpk topic create \
+          complaints.domain.events novu-bridge.retry novu-bridge.dlq \
+          -p 1 -r 1
+      register: novu_topic_create
+      changed_when: "'CREATED' in (novu_topic_create.stdout | default(''))"
+      failed_when: false
+      when:
+        - enable_novu | default(false)
+
     - name: "novu-bootstrap — wait for novu-api health"
       ansible.builtin.uri:
         url: http://127.0.0.1:14002/v1/health-check

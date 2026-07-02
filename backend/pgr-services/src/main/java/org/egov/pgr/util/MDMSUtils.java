@@ -33,6 +33,10 @@ import static org.egov.pgr.util.PGRConstants.MDMS_DATA_SERVICE_CODE_KEYWORD;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_RELATED_TO_MAP;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_TEMPLATE_TYPE;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_SCHEMA;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_MASTER;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_MASTER;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_JSONPATH;
 
 @Slf4j
 @Component
@@ -52,6 +56,12 @@ public class MDMSUtils {
     // #432). Cache lives for the process lifetime — slaHours changes in MDMS need a
     // pgr-services restart to take effect, same staleness window the migration map had.
     private final Map<String, Map<String, Long>> serviceCodeToSlaCache = new ConcurrentHashMap<>();
+
+    // Config-driven notification masters, cached per state-level tenant. Only NON-EMPTY results
+    // are cached, so a transient MDMS miss is retried (rather than permanently disabling
+    // notifications until restart). Edits in MDMS still need a pgr-services restart to refresh.
+    private final Map<String, List<Object>> notificationRoutingCache = new ConcurrentHashMap<>();
+    private final Map<String, List<Object>> notificationTemplateCache = new ConcurrentHashMap<>();
 
     /**
      * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ComplaintHierarchy leaf rows'
@@ -81,6 +91,57 @@ public class MDMSUtils {
                     + "to the business-level SLA", stateTenant, e);
         }
         return map;
+    }
+
+    /**
+     * Notification routing rows (RAINMAKER-PGR.NotificationRouting) for the tenant, cached per
+     * state-level tenant. Returns an empty list (never null) on MDMS failure so callers fall back
+     * to the legacy hardcoded path.
+     */
+    public List<Object> getNotificationRouting(String tenantId) {
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        List<Object> cached = notificationRoutingCache.get(stateTenant);
+        if (cached != null) return cached;
+        List<Object> fetched = fetchNotificationMaster(stateTenant, MDMS_NOTIFICATION_ROUTING_MASTER, MDMS_NOTIFICATION_ROUTING_JSONPATH);
+        if (!fetched.isEmpty()) notificationRoutingCache.put(stateTenant, fetched);
+        return fetched;
+    }
+
+    /**
+     * Notification template rows (RAINMAKER-PGR.NotificationTemplate) for the tenant, cached per
+     * state-level tenant. Returns an empty list (never null) on MDMS failure.
+     */
+    public List<Object> getNotificationTemplates(String tenantId) {
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        List<Object> cached = notificationTemplateCache.get(stateTenant);
+        if (cached != null) return cached;
+        List<Object> fetched = fetchNotificationMaster(stateTenant, MDMS_NOTIFICATION_TEMPLATE_MASTER, MDMS_NOTIFICATION_TEMPLATE_JSONPATH);
+        if (!fetched.isEmpty()) notificationTemplateCache.put(stateTenant, fetched);
+        return fetched;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> fetchNotificationMaster(String stateTenant, String masterName, String jsonPath) {
+        try {
+            MdmsCriteriaReq req = getNotificationModuleRequest(new RequestInfo(), stateTenant, masterName);
+            Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), req);
+            List<Object> rows = JsonPath.read(result, jsonPath);
+            return rows != null ? rows : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to load notification master {} for tenant {}; config-driven notifications "
+                    + "will fall back to legacy for this tenant", masterName, stateTenant, e);
+            return Collections.emptyList();
+        }
+    }
+
+    private MdmsCriteriaReq getNotificationModuleRequest(RequestInfo requestInfo, String tenantId, String masterName) {
+        List<MasterDetail> masterDetails = new ArrayList<>();
+        masterDetails.add(MasterDetail.builder().name(masterName).build());
+        ModuleDetail moduleDetail = ModuleDetail.builder().masterDetails(masterDetails)
+                .moduleName(MDMS_MODULE_NAME).build();
+        MdmsCriteria mdmsCriteria = MdmsCriteria.builder()
+                .moduleDetails(Collections.singletonList(moduleDetail)).tenantId(tenantId).build();
+        return MdmsCriteriaReq.builder().mdmsCriteria(mdmsCriteria).requestInfo(requestInfo).build();
     }
 
 

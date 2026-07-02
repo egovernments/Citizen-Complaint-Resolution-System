@@ -493,6 +493,69 @@ async function mdmsSchemaGetList(client: DigitApiClient, config: ResourceConfig,
   return schemas.map((s) => normalizeRecord(s, config));
 }
 
+// --- Custom (non-MDMS, read-only) fetchers ---------------------------------
+//
+// `custom` resources are served by an out-of-band DIGIT service, not egov-mdms.
+// Today that's the novu-bridge read proxy (Notification Logs + Providers). We
+// hit its origin-relative `customPath` with a plain GET, attach the same DIGIT
+// bearer token the rest of the provider uses (pulled from the client's auth
+// info — no new auth plumbing), map react-admin filters onto query params, and
+// return the service's `{data,total}` envelope. Read-only: create/update/delete
+// are intentionally unsupported for this type.
+
+/** Origin the SPA is served from; the novu-bridge route is same-origin
+ *  (`${origin}/novu-bridge/...`) behind Kong/nginx. Falls back to empty in
+ *  non-browser contexts (tests), yielding a relative URL. */
+function customOrigin(): string {
+  return typeof window !== 'undefined' && window.location ? window.location.origin : '';
+}
+
+async function customFetchList(
+  client: DigitApiClient,
+  config: ResourceConfig,
+  tenantId: string,
+  query: Record<string, string | number | boolean | undefined>,
+): Promise<{ records: RaRecord[]; total: number }> {
+  if (!config.customPath) throw new Error(`custom resource missing customPath: ${config.label}`);
+  const params = new URLSearchParams();
+  if (config.customTenantScoped) params.set('tenantId', tenantId);
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined || value === null || value === '') continue;
+    params.set(key, String(value));
+  }
+  const qs = params.toString();
+  const url = `${customOrigin()}${config.customPath}${qs ? `?${qs}` : ''}`;
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = client.getAuthInfo().token;
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const response = await fetch(url, { method: 'GET', headers });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`${config.label} request failed (${response.status}): ${text}`);
+  }
+  const body = (await response.json().catch(() => ({}))) as { data?: unknown[]; total?: number };
+  const rows = Array.isArray(body.data) ? (body.data as Record<string, unknown>[]) : [];
+  const records = rows.map((r) => normalizeRecord(ensureId(r, config), config));
+  const total = typeof body.total === 'number' ? body.total : records.length;
+  return { records, total };
+}
+
+/** Custom rows may lack the configured idField (e.g. a Novu integration keyed
+ *  by `_id` that some deployments omit). Synthesise a stable id so react-admin
+ *  never collapses distinct rows onto an empty id. */
+function ensureId(raw: Record<string, unknown>, config: ResourceConfig): Record<string, unknown> {
+  const existing = getNestedValue(raw, config.idField);
+  if (existing != null && String(existing) !== '') return raw;
+  // Deterministic fallback: providerId+channel for providers, txn/ref for logs.
+  const fallback =
+    [raw.providerId, raw.channel, raw.transactionId, raw.referenceNumber, raw.recipientValue]
+      .filter((v) => v != null && v !== '')
+      .join(':') || JSON.stringify(raw);
+  return { ...raw, [config.idField]: fallback };
+}
+
 async function boundaryHierarchyGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string): Promise<RaRecord[]> {
   // Fetch the session tenant's hierarchies first. When at state level,
   // aggregate city-tenant hierarchies too — the boundary service stores each
@@ -539,6 +602,10 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       case 'access-action': return accessActionGetList(client, config, tenantId, filter);
       case 'mdms-schema': return mdmsSchemaGetList(client, config, tenantId);
       case 'boundary-hierarchy': return boundaryHierarchyGetList(client, config, tenantId);
+      // Custom resources normally go through the dedicated getList/getOne
+      // branches; this keeps getMany/getManyReference from throwing by falling
+      // back to a full unfiltered fetch.
+      case 'custom': return (await customFetchList(client, config, tenantId, { limit: 500 })).records;
       default: throw new Error(`Unsupported resource type: ${config.type}`);
     }
   }
@@ -618,6 +685,34 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         return { data: records, total };
       }
 
+      // Custom (non-MDMS) read-only resources served by an out-of-band service.
+      // notification-log pushes pagination + filters to the novu-bridge /logs
+      // proxy (which returns the real total); notification-provider returns the
+      // full integration list, so we paginate/filter/sort it client-side.
+      if (config.type === 'custom') {
+        const filter = (params.filter ?? {}) as Record<string, unknown>;
+        if (resource === 'notification-log') {
+          const { records, total } = await customFetchList(client, config, tenantId, {
+            referenceNumber: typeof filter.referenceNumber === 'string' ? filter.referenceNumber : undefined,
+            // Substring-style search on the complaint number → prefix match server-side.
+            referenceNumberPrefix: typeof filter.referenceNumber === 'string' && filter.referenceNumber ? true : undefined,
+            transactionId: typeof filter.transactionId === 'string' ? filter.transactionId : undefined,
+            channel: typeof filter.channel === 'string' ? filter.channel : undefined,
+            status: typeof filter.status === 'string' ? filter.status : undefined,
+            limit: perPage,
+            offset: (page - 1) * perPage,
+          });
+          return { data: records, total };
+        }
+        // Generic custom list (e.g. notification-provider): fetch-all then
+        // filter/sort/paginate in memory.
+        const { records } = await customFetchList(client, config, tenantId, {});
+        const filtered = clientFilter(records, params.filter);
+        const sorted = clientSort(filtered, field, order);
+        const data = clientPaginate(sorted, page, perPage);
+        return { data, total: filtered.length };
+      }
+
       // MDMS resources without the leaf-adapter (all schemas except
       // complaint-hierarchy): push limit/offset to the server when no
       // client-side filter is active so the API is called with the actual
@@ -647,6 +742,19 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
 
     async getOne(resource, params): Promise<GetOneResult> {
       const config = resolveConfig(resource);
+      if (config.type === 'custom') {
+        // No single-item endpoint on the proxy; fetch the list and match by id.
+        // Logs are tenant-scoped + transactionId-filterable, so pass it through
+        // when the id looks like a transactionId; otherwise scan the page.
+        const query: Record<string, string | number | boolean | undefined> = { limit: 500 };
+        if (resource === 'notification-log' && config.idField === 'transactionId') {
+          query.transactionId = String(params.id);
+        }
+        const { records } = await customFetchList(client, config, tenantId, query);
+        const found = records.find((r) => String(r.id) === String(params.id));
+        if (!found) throw new Error(`Record not found: ${params.id}`);
+        return { data: found };
+      }
       if (config.type === 'mdms') {
         // Leaf-adapter resources need the full record set to resolve a leaf's
         // menuPathName (its parent node's name), so always go through the

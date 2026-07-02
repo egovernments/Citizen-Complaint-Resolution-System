@@ -30,6 +30,11 @@ import {
   ComplaintHierarchyList, ComplaintHierarchyShow, ComplaintHierarchyCreate,
   AdvancedPage,
 } from '@/resources';
+// Novu-into-configurator read-only screens. Imported directly (not via the
+// @/resources barrel) so the notification surfaces stay self-contained.
+import { NotificationLogList } from '@/resources/notification-logs/NotificationLogList';
+import { NotificationProviderList } from '@/resources/notification-providers/NotificationProviderList';
+import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import PgrDashboard from './pages/PgrDashboard';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
 import { ThemeProvider } from '@/providers/ThemeProvider';
@@ -136,6 +141,13 @@ function ManagementAdmin() {
         <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} create={BoundaryHierarchyCreate} />
         <Resource name="complaint-hierarchies" list={ComplaintHierarchyList} show={ComplaintHierarchyShow} create={ComplaintHierarchyCreate} />
 
+        {/* Novu-into-configurator: read-only notification surfaces served by the
+            novu-bridge proxy (not egov-mdms). Names match the 'custom' registry
+            keys the data provider branches on. Routable at
+            /manage/notification-log and /manage/notification-provider. */}
+        <Resource name="notification-log" list={NotificationLogList} />
+        <Resource name="notification-provider" list={NotificationProviderList} />
+
         {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above) */}
         {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions').map((name) => (
           <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
@@ -143,6 +155,7 @@ function ManagementAdmin() {
 
         {/* Custom routes */}
         <CustomRoutes>
+          <Route path="/notification-configure" element={<NotificationConfigure />} />
           <Route path="/advanced" element={<AdvancedPage />} />
           <Route path="/pgr-dashboard" element={<PgrDashboard />} />
           <Route path="/employees/bulk" element={<EmployeeBulkImport />} />

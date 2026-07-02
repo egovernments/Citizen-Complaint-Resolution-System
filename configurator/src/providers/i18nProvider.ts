@@ -40,6 +40,12 @@ const customEnglishMessages: TranslationMessages = {
   app: {
     nav: {
       dashboard: 'Dashboard',
+      notifications: 'Notifications',
+      notification_configure: 'Configure',
+      notification_routing: 'Notification Routing',
+      notification_templates: 'Notification Templates',
+      notification_logs: 'Notification Logs',
+      notification_providers: 'Notification Providers',
       tenant_management: 'Tenant Management',
       tenants: 'Tenants',
       departments: 'Departments',

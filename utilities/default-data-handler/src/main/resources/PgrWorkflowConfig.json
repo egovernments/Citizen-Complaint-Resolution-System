@@ -53,7 +53,33 @@
                 "CITIZEN",
                 "CSR"
               ],
-              "active": true
+              "active": true,
+              "notifications": [
+                {
+                  "audience": "CITIZEN",
+                  "channel": "SMS",
+                  "templateRef": "citizen_registered",
+                  "assigneeOnly": false
+                },
+                {
+                  "audience": "CITIZEN",
+                  "channel": "WHATSAPP",
+                  "templateRef": "citizen_registered",
+                  "assigneeOnly": false
+                },
+                {
+                  "audience": "CITIZEN",
+                  "channel": "EMAIL",
+                  "templateRef": "citizen_registered",
+                  "assigneeOnly": false
+                },
+                {
+                  "audience": "GRO",
+                  "channel": "SMS",
+                  "templateRef": "gro_new",
+                  "assigneeOnly": false
+                }
+              ]
             }
           ]
         },
@@ -96,7 +122,33 @@
                 "GRO",
                 "PGR_VIEWER"
               ],
-              "active": true
+              "active": true,
+              "notifications": [
+                {
+                  "audience": "PGR_LME",
+                  "channel": "SMS",
+                  "templateRef": "lme_assigned",
+                  "assigneeOnly": false
+                },
+                {
+                  "audience": "PGR_LME",
+                  "channel": "WHATSAPP",
+                  "templateRef": "lme_assigned",
+                  "assigneeOnly": false
+                },
+                {
+                  "audience": "PGR_LME",
+                  "channel": "EMAIL",
+                  "templateRef": "lme_assigned",
+                  "assigneeOnly": false
+                },
+                {
+                  "audience": "CITIZEN",
+                  "channel": "SMS",
+                  "templateRef": "citizen_assigned",
+                  "assigneeOnly": false
+                }
+              ]
             },
             {
               "tenantId": "{tenantid}",
@@ -195,7 +247,27 @@
                 "PGR_LME",
                 "PGR_VIEWER"
               ],
-              "active": true
+              "active": true,
+              "notifications": [
+                {
+                  "audience": "CITIZEN",
+                  "channel": "SMS",
+                  "templateRef": "citizen_resolved",
+                  "assigneeOnly": false
+                },
+                {
+                  "audience": "CITIZEN",
+                  "channel": "WHATSAPP",
+                  "templateRef": "citizen_resolved",
+                  "assigneeOnly": false
+                },
+                {
+                  "audience": "CITIZEN",
+                  "channel": "EMAIL",
+                  "templateRef": "citizen_resolved",
+                  "assigneeOnly": false
+                }
+              ]
             },
             {
               "tenantId": "{tenantid}",
@@ -379,6 +451,106 @@
           "isTerminateState": true,
           "isStateUpdatable": false,
           "actions": null
+        }
+      ]
+    }
+  ],
+  "notificationTemplates": [
+    {
+      "ref": "citizen_registered",
+      "audience": "CITIZEN",
+      "action": "APPLY",
+      "toState": "PENDINGFORASSIGNMENT",
+      "bodies": [
+        {
+          "channel": "SMS",
+          "locale": "en_IN",
+          "body": "Your complaint {id} ({complaint_type}) has been registered. Current status: {status}."
+        },
+        {
+          "channel": "WHATSAPP",
+          "locale": "en_IN",
+          "body": "Your complaint {id} ({complaint_type}) has been registered. Current status: {status}."
+        },
+        {
+          "channel": "EMAIL",
+          "locale": "en_IN",
+          "subject": "Complaint {id} registered",
+          "body": "Dear citizen, your complaint {id} for {complaint_type} has been registered. Current status: {status}."
+        }
+      ]
+    },
+    {
+      "ref": "gro_new",
+      "audience": "GRO",
+      "action": "APPLY",
+      "toState": "PENDINGFORASSIGNMENT",
+      "bodies": [
+        {
+          "channel": "SMS",
+          "locale": "en_IN",
+          "body": "New complaint {id} ({complaint_type}) is pending assignment. Status: {status}."
+        }
+      ]
+    },
+    {
+      "ref": "lme_assigned",
+      "audience": "PGR_LME",
+      "action": "ASSIGN",
+      "toState": "PENDINGATLME",
+      "bodies": [
+        {
+          "channel": "SMS",
+          "locale": "en_IN",
+          "body": "Complaint {id} ({complaint_type}) has been assigned to you. Status: {status}."
+        },
+        {
+          "channel": "WHATSAPP",
+          "locale": "en_IN",
+          "body": "Complaint {id} ({complaint_type}) has been assigned to you. Status: {status}."
+        },
+        {
+          "channel": "EMAIL",
+          "locale": "en_IN",
+          "subject": "Complaint {id} assigned to you",
+          "body": "A complaint {id} for {complaint_type} has been assigned to you. Current status: {status}."
+        }
+      ]
+    },
+    {
+      "ref": "citizen_assigned",
+      "audience": "CITIZEN",
+      "action": "ASSIGN",
+      "toState": "PENDINGATLME",
+      "bodies": [
+        {
+          "channel": "SMS",
+          "locale": "en_IN",
+          "body": "Your complaint {id} ({complaint_type}) has been assigned to a field officer. Status: {status}."
+        }
+      ]
+    },
+    {
+      "ref": "citizen_resolved",
+      "audience": "CITIZEN",
+      "action": "RESOLVE",
+      "toState": "RESOLVED",
+      "bodies": [
+        {
+          "channel": "SMS",
+          "locale": "en_IN",
+          "body": "Your complaint {id} ({complaint_type}) has been resolved. Status: {status}."
+        },
+        {
+          "channel": "WHATSAPP",
+          "locale": "en_IN",
+          "body": "Your complaint {id} ({complaint_type}) has been resolved. Status: {status}."
+        },
+        {
+          "channel": "EMAIL",
+          "locale": "en_IN",
+          "subject": "Complaint {id} resolved",
+          "body": "Dear citizen, your complaint {id} for {complaint_type} has been resolved. Current status: {status}."
         }
       ]
     }

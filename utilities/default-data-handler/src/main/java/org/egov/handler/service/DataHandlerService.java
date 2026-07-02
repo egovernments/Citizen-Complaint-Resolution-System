@@ -3,6 +3,7 @@ package org.egov.handler.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
@@ -475,17 +476,189 @@ public class DataHandlerService {
         return defaultDataRequest;
     }
 
+    // Schema codes for the config-driven notification masters emitted by the splitter.
+    private static final String NOTIFICATION_ROUTING_SCHEMA = "RAINMAKER-PGR.NotificationRouting";
+    private static final String NOTIFICATION_TEMPLATE_SCHEMA = "RAINMAKER-PGR.NotificationTemplate";
+    private static final String PGR_BUSINESS_SERVICE = "PGR";
+
+    /**
+     * SPLITTER: PgrWorkflowConfig.json is a single authoring file that carries BOTH the workflow
+     * definition AND the notification routing/templates. This method splits it into two sinks:
+     *   (1) the stripped workflow definition is POSTed to egov-workflow (createWfConfig), and
+     *   (2) the notification routing + template rows are EMITTED to MDMS v2 as
+     *       RAINMAKER-PGR.NotificationRouting and RAINMAKER-PGR.NotificationTemplate records.
+     * PGR (novu-bridge) later READS those MDMS rows at runtime.
+     */
     public void createPgrWorkflowConfig(String targetTenantId) {
         // Load the JSON file
         Resource resource = resourceLoader.getResource("classpath:PgrWorkflowConfig.json");
         try (InputStream inputStream = resource.getInputStream()) {
-            BusinessServiceRequest businessServiceRequest = objectMapper.readValue(inputStream, BusinessServiceRequest.class);
+            // (a) PARSE raw tree (same readTree pattern used by addMdmsData).
+            JsonNode root = objectMapper.readTree(inputStream);
+
+            // Reuse the RequestInfo embedded in the authoring file for the MDMS create calls.
+            RequestInfo requestInfo = root.has("RequestInfo")
+                    ? objectMapper.treeToValue(root.get("RequestInfo"), RequestInfo.class)
+                    : new RequestInfo();
+
+            // Harvest routing notifications (per action) and the top-level templates BEFORE stripping.
+            List<JsonNode> routingNotifications = new ArrayList<>();
+            JsonNode businessServices = root.get("BusinessServices");
+            if (businessServices != null && businessServices.isArray()) {
+                for (JsonNode serviceNode : businessServices) {
+                    JsonNode statesNode = serviceNode.get("states");
+                    if (statesNode == null || !statesNode.isArray()) {
+                        continue;
+                    }
+                    for (JsonNode stateNode : statesNode) {
+                        JsonNode actionsNode = stateNode.get("actions");
+                        if (actionsNode == null || !actionsNode.isArray()) {
+                            continue;
+                        }
+                        for (JsonNode actionNode : actionsNode) {
+                            JsonNode notificationsNode = actionNode.get("notifications");
+                            if (notificationsNode == null || !notificationsNode.isArray()) {
+                                continue;
+                            }
+                            String action = actionNode.path("action").asText(null);
+                            String toState = actionNode.path("nextState").asText(null);
+                            for (JsonNode notificationNode : notificationsNode) {
+                                ObjectNode routing = objectMapper.createObjectNode();
+                                routing.put("action", action);
+                                routing.put("toState", toState);
+                                routing.set("notification", notificationNode);
+                                routingNotifications.add(routing);
+                            }
+                        }
+                    }
+                }
+            }
+
+            JsonNode notificationTemplates = root.get("notificationTemplates");
+
+            // (b) STRIP + POST workflow. Explicitly remove the authoring-only fields so the workflow
+            //     contract (Action/BusinessService have NO @JsonIgnoreProperties) never sees them.
+            if (businessServices != null && businessServices.isArray()) {
+                for (JsonNode serviceNode : businessServices) {
+                    JsonNode statesNode = serviceNode.get("states");
+                    if (statesNode == null || !statesNode.isArray()) {
+                        continue;
+                    }
+                    for (JsonNode stateNode : statesNode) {
+                        JsonNode actionsNode = stateNode.get("actions");
+                        if (actionsNode == null || !actionsNode.isArray()) {
+                            continue;
+                        }
+                        for (JsonNode actionNode : actionsNode) {
+                            if (actionNode.isObject()) {
+                                ((ObjectNode) actionNode).remove("notifications");
+                            }
+                        }
+                    }
+                }
+            }
+            if (root.isObject()) {
+                ((ObjectNode) root).remove("notificationTemplates");
+            }
+
+            BusinessServiceRequest businessServiceRequest = objectMapper.treeToValue(root, BusinessServiceRequest.class);
             businessServiceRequest.getBusinessServices().forEach(service -> service.setTenantId(targetTenantId));
             workflowUtil.createWfConfig(businessServiceRequest);
+
+            // (c) EMIT to MDMS: one NotificationRouting row per action-notification, and one
+            //     NotificationTemplate row per (template x body). Idempotent via createMdmsData.
+            emitNotificationRouting(targetTenantId, requestInfo, routingNotifications);
+            emitNotificationTemplates(targetTenantId, requestInfo, notificationTemplates);
         } catch (IOException e) {
             log.error("Error reading or mapping JSON file: {}", e.getMessage());
 //            throw new CustomException("IO_EXCEPTION", "Error reading or mapping JSON file: " + e.getMessage());
         }
+    }
+
+    /**
+     * EMIT NotificationRouting rows. The action node carries nextState (=toState) and the
+     * notification's audience/channel/assigneeOnly -> that's a routing row.
+     * uniqueIdentifier = businessService.action.toState.audience.channel
+     */
+    private void emitNotificationRouting(String targetTenantId, RequestInfo requestInfo, List<JsonNode> routingNotifications) {
+        for (JsonNode routing : routingNotifications) {
+            JsonNode notification = routing.get("notification");
+            String action = routing.path("action").asText(null);
+            String toState = routing.path("toState").asText(null);
+            String audience = notification.path("audience").asText(null);
+            String channel = notification.path("channel").asText(null);
+            boolean assigneeOnly = notification.path("assigneeOnly").asBoolean(false);
+
+            ObjectNode data = objectMapper.createObjectNode();
+            data.put("businessService", PGR_BUSINESS_SERVICE);
+            data.set("fromState", NullNode.getInstance());
+            data.put("action", action);
+            data.put("toState", toState);
+            data.put("audience", audience);
+            data.put("channel", channel);
+            data.put("assigneeOnly", assigneeOnly);
+            data.put("active", true);
+
+            String uniqueIdentifier = String.join(".", PGR_BUSINESS_SERVICE, action, toState, audience, channel);
+
+            createNotificationMdmsRow(targetTenantId, requestInfo, NOTIFICATION_ROUTING_SCHEMA, uniqueIdentifier, data);
+        }
+    }
+
+    /**
+     * EMIT NotificationTemplate rows, one per (template x body).
+     * uniqueIdentifier = audience.action.toState.channel.locale
+     */
+    private void emitNotificationTemplates(String targetTenantId, RequestInfo requestInfo, JsonNode notificationTemplates) {
+        if (notificationTemplates == null || !notificationTemplates.isArray()) {
+            return;
+        }
+        for (JsonNode template : notificationTemplates) {
+            String audience = template.path("audience").asText(null);
+            String action = template.path("action").asText(null);
+            String toState = template.path("toState").asText(null);
+            JsonNode bodies = template.get("bodies");
+            if (bodies == null || !bodies.isArray()) {
+                continue;
+            }
+            for (JsonNode body : bodies) {
+                String channel = body.path("channel").asText(null);
+                String locale = body.path("locale").asText(null);
+
+                ObjectNode data = objectMapper.createObjectNode();
+                data.put("audience", audience);
+                data.put("action", action);
+                data.put("toState", toState);
+                data.put("channel", channel);
+                data.put("locale", locale);
+                data.set("subject", body.has("subject") ? body.get("subject") : NullNode.getInstance());
+                data.put("body", body.path("body").asText(null));
+                data.set("placeholders", body.has("placeholders") ? body.get("placeholders") : objectMapper.createArrayNode());
+                data.put("active", true);
+
+                String uniqueIdentifier = String.join(".", audience, action, toState, channel, locale);
+
+                createNotificationMdmsRow(targetTenantId, requestInfo, NOTIFICATION_TEMPLATE_SCHEMA, uniqueIdentifier, data);
+            }
+        }
+    }
+
+    /**
+     * Reuses the exact per-row create pattern addMdmsData uses: build Mdms (tenantId, schemaCode,
+     * uniqueIdentifier, data), wrap in MdmsRequest, call mdmsV2Util.createMdmsData (idempotent;
+     * swallows DUPLICATE_RECORD).
+     */
+    private void createNotificationMdmsRow(String targetTenantId, RequestInfo requestInfo, String schemaCode, String uniqueIdentifier, JsonNode data) {
+        Mdms mdms = Mdms.builder()
+                .tenantId(targetTenantId)
+                .schemaCode(schemaCode)
+                .uniqueIdentifier(uniqueIdentifier)
+                .data(data)
+                .isActive(Boolean.TRUE)
+                .build();
+        MdmsRequest mdmsRequest = MdmsRequest.builder().requestInfo(requestInfo).mdms(mdms).build();
+        log.info("{} : {}", schemaCode, uniqueIdentifier);
+        mdmsV2Util.createMdmsData(mdmsRequest);
     }
 
     public void addMdmsData(DataSetupRequest dataSetupRequest) {

@@ -7,6 +7,19 @@ export function getApiBaseUrl(): string {
   return 'https://localhost';
 }
 
+/** Context path of the novu-bridge read-only proxy. It runs as its own Spring
+ *  Boot service with context-path `/novu-bridge`; a Kong/nginx route forwards
+ *  `${origin}/novu-bridge/*` to it, gated by the same DIGIT JWT the SPA already
+ *  sends. The read endpoints (Notification Logs + Providers) live under
+ *  `/novu-adapter/v1` inside that context path. */
+export const NOVU_BRIDGE_BASE_PATH = '/novu-bridge/novu-adapter/v1';
+
+/** Absolute base URL for the novu-bridge read-only proxy on the current
+ *  origin, e.g. `https://naipepea.digit.org/novu-bridge/novu-adapter/v1`. */
+export function getNovuBridgeBaseUrl(): string {
+  return `${getApiBaseUrl()}${NOVU_BRIDGE_BASE_PATH}`;
+}
+
 // Service endpoints
 export const ENDPOINTS = {
   // Authentication
