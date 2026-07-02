@@ -21,7 +21,7 @@ import DashboardLogin, {
 
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useCatalog } from "./hooks/useCatalog";
-import { useCatalogLayout, getDroppingItemForKpi, defaultSizeForKpi } from "./hooks/useCatalogLayout";
+import { useCatalogLayout, getDroppingItemForKpi, defaultSizeForKpi, catalogVizKind } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
 import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM, DROPPING_ITEM_ID } from "./constants/layoutConfig";
 
@@ -36,6 +36,10 @@ const KIND_TO_VIZTYPE = {
   "stacked-bar": VIZ_TYPE.STACKED_BAR,
   line: VIZ_TYPE.LINE_CHART,
   "line-chart": VIZ_TYPE.LINE_CHART,
+  "combo-chart": VIZ_TYPE.LINE_CHART,
+  combo: VIZ_TYPE.LINE_CHART,
+  "scatter-chart": VIZ_TYPE.LINE_CHART,
+  scatter: VIZ_TYPE.LINE_CHART,
   pie: VIZ_TYPE.PIE_CHART,
   "pie-chart": VIZ_TYPE.PIE_CHART,
   "data-table": VIZ_TYPE.DATA_TABLE,
@@ -147,6 +151,23 @@ const MAP_KINDS = new Set(["map", "choropleth-map"]);
 // The internal pin source: map tiles fetch this alongside their ward aggregates
 // to overlay per-complaint pins (the FE map widget has the pin layer; this feeds it).
 const PIN_KPI_ID = "cl_map_complaint_pins";
+/** Bomet MDMS rejects compose enums — companions are fetched implicitly instead. */
+const WARD_OPEN_KPI_ID = "cl_table_ward_open_daily";
+const COMPLAINTS_OVERTIME_RESOLVED_KPI_ID = "cl_chart_over_time_resolved_daily";
+const COMPLAINTS_OVERTIME_OPEN_KPI_ID = "cl_chart_over_time_open_daily";
+
+function implicitCompanionKpiIds(def) {
+  const kpiId = def?.id ?? def?.kpiId;
+  const profile = def?.viz?.tableProfile;
+  const ids = [];
+  if (kpiId === "cl_table_ward_performance" || profile === "wardPerformance") {
+    ids.push(WARD_OPEN_KPI_ID);
+  }
+  if (kpiId === "cl_chart_complaints_over_time") {
+    ids.push(COMPLAINTS_OVERTIME_RESOLVED_KPI_ID, COMPLAINTS_OVERTIME_OPEN_KPI_ID);
+  }
+  return ids;
+}
 
 function isCardKind(kind) {
   return CARD_KINDS.has(kind);
@@ -156,6 +177,11 @@ function isSparklineKind(kind) {
 }
 function isMapKind(kind) {
   return MAP_KINDS.has(kind);
+}
+
+function needsPriorPeriodTable(def) {
+  const viz = def?.viz;
+  return viz?.needsPrior === true || viz?.tableProfile === "wardSubtypeRecurring";
 }
 
 /**
@@ -213,6 +239,9 @@ function buildRefs(tiles, kpis, filters) {
       // Per-complaint pins (same filters/scope) overlaid on the ward choropleth.
       refs[`${kpiId}__pins`] = { kpiId: PIN_KPI_ID, params: { ...gp } };
     }
+    if (needsPriorPeriodTable(def)) {
+      refs[`${kpiId}__prior`] = { kpiId, params: { ...gp, compare: "prior" } };
+    }
 
     // Backend-composed cards may need their source KPIs (and daily series) in the batch.
     const compose = def.viz?.compose;
@@ -223,6 +252,10 @@ function buildRefs(tiles, kpis, filters) {
           refs[`${srcId}__series`] = { kpiId: srcId, params: { ...gp, series: "daily" } };
         }
       }
+    }
+
+    for (const srcId of implicitCompanionKpiIds(def)) {
+      if (!refs[srcId]) refs[srcId] = { kpiId: srcId, params: { ...gp } };
     }
   }
   return refs;
@@ -275,6 +308,7 @@ function assembleResult(kpiId, def, results) {
   if (isSparklineKind(viz.kind)) {
     const composedSparkline =
       composedSlaComplianceSparkline(results, viz.compose) ??
+      composedResolvedOnTimeInRangeSparkline(results, viz.compose) ??
       composedResolvedOverFiledSparkline(results, viz.compose);
     if (composedSparkline?.length) {
       assembled.sparkline = composedSparkline;
@@ -309,6 +343,21 @@ function assembleResult(kpiId, def, results) {
         }))
         .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
     }
+  }
+
+  if (needsPriorPeriodTable(def)) {
+    const priorRes = results?.[`${kpiId}__prior`];
+    if (priorRes?.rows) assembled.priorRows = priorRes.rows;
+  }
+
+  if (
+    kpiId === "cl_table_ward_performance" ||
+    viz.tableProfile === "wardPerformance" ||
+    viz.compose?.type === "wardPerformanceFull"
+  ) {
+    const openId = viz.compose?.sourceKpiIds?.[0] || WARD_OPEN_KPI_ID;
+    const openRes = results?.[openId];
+    if (openRes?.rows) assembled.companionRows = openRes.rows;
   }
 
   return assembled;
@@ -392,6 +441,37 @@ function composedSlaComplianceSparkline(results, compose) {
     const openBreached = openBreachedByDate.get(d) || 0;
     const eligible = resolved + openBreached;
     return eligible === 0 ? 0 : compliant / eligible;
+  });
+}
+
+/** Daily compliant ÷ resolved for on-time resolution rate (resolved-only denominator). */
+function composedResolvedOnTimeInRangeSparkline(results, compose) {
+  if (compose?.type !== "resolvedOnTimeInRangeRate" || !Array.isArray(compose.sourceKpiIds)) {
+    return null;
+  }
+  const [compliantId, resolvedId] = compose.sourceKpiIds;
+  const compliantRows = results?.[`${compliantId}__series`]?.rows;
+  const resolvedRows = results?.[`${resolvedId}__series`]?.rows;
+  if (!compliantRows?.length || !resolvedRows?.length) return null;
+
+  const compliantByDate = new Map();
+  for (const row of compliantRows) {
+    const d = String(row.resolved_date ?? row.created_date ?? "");
+    if (!d) continue;
+    compliantByDate.set(d, Number(row.total) || 0);
+  }
+  const resolvedByDate = new Map();
+  for (const row of resolvedRows) {
+    const d = String(row.resolved_date ?? row.created_date ?? "");
+    if (!d) continue;
+    resolvedByDate.set(d, Number(row.total) || 0);
+  }
+
+  const dates = [...new Set([...compliantByDate.keys(), ...resolvedByDate.keys()])].sort();
+  return dates.map((d) => {
+    const compliant = compliantByDate.get(d) || 0;
+    const resolved = resolvedByDate.get(d) || 0;
+    return resolved === 0 ? 0 : compliant / resolved;
   });
 }
 
@@ -897,7 +977,7 @@ const AdminDashboardInner = ({ onSignOut }) => {
             // (title + sub-line), the type-specific body insets, and a scroll wrapper
             // for tables.
             const viz = kpis[item.i]?.viz || {};
-            const kind = viz.kind;
+            const kind = catalogVizKind(kpis, item.i) || viz.kind;
             const vizType = KIND_TO_VIZTYPE[kind] || kind;
             const isTable = TABLE_KINDS.has(kind);
             const selfHeaders = kind === "map" || kind === "choropleth-map";

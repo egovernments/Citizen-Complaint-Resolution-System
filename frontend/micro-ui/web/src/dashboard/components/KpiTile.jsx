@@ -6,6 +6,8 @@ import HorizontalBarChart from './HorizontalBarChart';
 import StackedBarChart from './StackedBarChart';
 import PieChart from './PieChart';
 import LineChart from './LineChart';
+import ComboChart from './ComboChart';
+import ScatterChart from './ScatterChart';
 import DashboardTable from './DashboardTable';
 import ComplaintsAtRiskTable from './ComplaintsAtRiskTable';
 import OpenComplaintsByGeographyWidget from './OpenComplaintsByGeographyWidget';
@@ -18,6 +20,8 @@ import {
   formatWorkflowStatusLabel,
   normalizeWorkflowStatusKey,
 } from '../config/complaintsAtRiskPresentation';
+import { annotateComplaintTypeDetailsRows } from '../config/complaintTypeDetailsTablePresentation';
+import { formatChannelLabel, resolveChannelForSource } from '../config/complaintChannelConfig';
 
 /**
  * Generic viz-kind-driven tile renderer (the dashboard RENDERING ENGINE).
@@ -123,6 +127,16 @@ function renderByKind(kind, ctx) {
 
     case 'bar':
     case 'bar-chart':
+      if (ctx.viz?.stackKey && ctx.viz?.stackSeries?.length) {
+        return renderStackedBar(ctx);
+      }
+      if (
+        ctx.viz?.numeratorKey != null &&
+        ctx.viz?.denominatorKey != null &&
+        (ctx.viz?.orientation === 'horizontal' || ctx.viz?.breakEven != null)
+      ) {
+        return renderHorizontalBar(ctx);
+      }
       return renderBar(ctx, { histogram: false });
 
     case 'histogram':
@@ -138,9 +152,20 @@ function renderByKind(kind, ctx) {
     case 'pie-chart':
       return renderPie(ctx);
 
+    case 'combo-chart':
+    case 'combo':
+      return renderLine(ctx);
+
     case 'line':
     case 'line-chart':
+      if (ctx.viz?.scatterProfile) {
+        return renderScatter(ctx);
+      }
       return renderLine(ctx);
+
+    case 'scatter-chart':
+    case 'scatter':
+      return renderScatter(ctx);
 
     case 'sla-risk-table':
       return renderSlaRiskTable(ctx);
@@ -151,6 +176,9 @@ function renderByKind(kind, ctx) {
 
     case 'ranked-list':
     case 'rankedList':
+      if (ctx.viz?.columns?.length) {
+        return renderTable(ctx);
+      }
       return <RankedListDisplay {...adaptRanked(ctx)} />;
 
     case 'dow':
@@ -661,47 +689,90 @@ function renderPie(ctx) {
 // the BE-shaped { periods, defaultPeriod } or a flat { categories, series }.
 // ---------------------------------------------------------------------------
 
-/** Align created-date and resolved-date daily buckets for the over-time chart. */
-function mergeComplaintsOverTimeRows(viz, createdResult, results) {
-  if (viz.compose?.type !== 'complaintsOverTime' || !Array.isArray(viz.compose.sourceKpiIds)) {
+/** Align created / resolved / open daily buckets for the over-time combo chart. */
+function normalizeOverTimeBucketDate(value) {
+  if (value == null || value === '') return '';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return new Date(value).toISOString().slice(0, 10);
+  }
+  const s = String(value).trim();
+  const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : s;
+}
+
+function mergeComplaintsOverTimeRows(viz, createdResult, results, kpiId) {
+  const composeType = viz.compose?.type;
+  const isOverTimeKpi = kpiId === 'cl_chart_complaints_over_time';
+  if (
+    !isOverTimeKpi &&
+    composeType !== 'complaintsOverTime' &&
+    composeType !== 'complaintsOverTimeFull'
+  ) {
     return null;
   }
-  const [resolvedId] = viz.compose.sourceKpiIds;
-  const resolvedResult = results?.[resolvedId];
-  if (!resolvedResult?.rows?.length && !createdResult?.rows?.length) return null;
+  const sourceIds = viz.compose?.sourceKpiIds || [];
+  const resolvedId = sourceIds[0] || 'cl_chart_over_time_resolved_daily';
+  const openId =
+    composeType === 'complaintsOverTimeFull' || isOverTimeKpi
+      ? sourceIds[1] || 'cl_chart_over_time_open_daily'
+      : null;
+  const resolvedResult = resolvedId ? results?.[resolvedId] : null;
+  const openResult = openId ? results?.[openId] : null;
+
+  if (
+    !createdResult?.rows?.length &&
+    !resolvedResult?.rows?.length &&
+    !openResult?.rows?.length
+  ) {
+    return null;
+  }
 
   const createdByDate = new Map();
   for (const row of createdResult?.rows || []) {
-    const d = String(row.created_date ?? '');
+    const d = normalizeOverTimeBucketDate(row.created_date);
     if (!d) continue;
     createdByDate.set(d, row);
   }
   const resolvedByDate = new Map();
   for (const row of resolvedResult?.rows || []) {
-    const d = String(row.resolved_date ?? '');
+    const d = normalizeOverTimeBucketDate(row.resolved_date);
     if (!d) continue;
     resolvedByDate.set(d, row);
   }
+  const openByDate = new Map();
+  for (const row of openResult?.rows || []) {
+    const d = normalizeOverTimeBucketDate(row.snapshot_date);
+    if (!d) continue;
+    openByDate.set(d, row);
+  }
 
-  const dates = [...new Set([...createdByDate.keys(), ...resolvedByDate.keys()])].sort();
+  const dates = [
+    ...new Set([
+      ...createdByDate.keys(),
+      ...resolvedByDate.keys(),
+      ...openByDate.keys(),
+    ]),
+  ].sort();
   const dimKey = viz.dimensionKey || 'created_date';
   return dates.map((d) => ({
     [dimKey]: d,
     created: Number(createdByDate.get(d)?.created) || 0,
     resolved: Number(resolvedByDate.get(d)?.resolved) || 0,
     on_time: Number(resolvedByDate.get(d)?.on_time) || 0,
+    open: Number(openByDate.get(d)?.open) || 0,
   }));
 }
 
 function adaptLine(ctx) {
-  const { viz, result, results, title } = ctx;
+  const { viz, result, results, title, def } = ctx;
+  const kpiId = def?.kpiId || def?.id;
   if (result.periods) {
     return { periods: result.periods, defaultPeriod: result.defaultPeriod || viz.defaultPeriod || 'daily', headerTitle: result.title || title };
   }
   if (result.series && result.categories) {
     return { categories: result.categories, series: result.series };
   }
-  const mergedRows = mergeComplaintsOverTimeRows(viz, result, results);
+  const mergedRows = mergeComplaintsOverTimeRows(viz, result, results, kpiId);
   const dimKey = primaryDimensionKey(result, viz);
   const rows = [...(mergedRows ?? result.rows ?? [])].sort((a, b) =>
     String(a[dimKey] ?? '').localeCompare(String(b[dimKey] ?? ''))
@@ -721,6 +792,7 @@ function adaptLine(ctx) {
         color: def.color,
         yAxisGroup: def.yAxisGroup,
         dashArray: def.dashArray ?? 0,
+        chartType: def.chartType || 'line',
         data: rows.map((r) => {
           if (def.numeratorKey != null && def.denominatorKey != null) {
             const num = Number(r[def.numeratorKey]) || 0;
@@ -744,15 +816,84 @@ function adaptLine(ctx) {
   };
 }
 
+function shouldRenderComboChart(viz, series) {
+  if (viz?.kind === 'combo-chart' || viz?.kind === 'combo') return true;
+  if (viz?.seriesDefs?.some((def) => def.chartType === 'column' || def.chartType === 'bar')) {
+    return true;
+  }
+  return series?.some((entry) => entry.chartType === 'column');
+}
+
 function renderLine(ctx) {
-  const { loading } = ctx;
+  const { loading, viz } = ctx;
   const props = adaptLine(ctx);
   const hasStructure = props.periods
     ? Object.values(props.periods).some((p) => p.categories?.length > 0)
     : (props.categories?.length > 0 && props.series?.length > 0);
   if (loading && !hasStructure) return <Placeholder message="Loading…" />;
   if (!hasStructure) return <Placeholder message="No data" />;
-  return <LineChart {...props} />;
+  const ChartView = shouldRenderComboChart(viz, props.series) ? ComboChart : LineChart;
+  return <ChartView {...props} />;
+}
+
+// ---------------------------------------------------------------------------
+// Scatter  -> ScatterChart
+// ---------------------------------------------------------------------------
+
+function isDepartmentBreachScatter(ctx) {
+  const kpiId = ctx.def?.kpiId || ctx.def?.id;
+  return (
+    kpiId === 'cl_chart_department_breach_scatter' ||
+    ctx.viz?.scatterProfile === 'departmentBreachCaseload'
+  );
+}
+
+function adaptDepartmentBreachScatterPoints(ctx) {
+  const { viz, result } = ctx;
+  const dimKey = viz.dimensionKey || 'department_code';
+  const xKey = viz.xMeasureKey || 'open';
+  const breachedKey = viz.numeratorKey || 'breached';
+  const denomKey = viz.denominatorKey || 'sla_elapsed';
+
+  return (result.rows || [])
+    .map((row) => {
+      const deptKey = String(row[dimKey] ?? '').trim();
+      if (!deptKey || deptKey === 'null' || deptKey === 'Unknown') return null;
+
+      const x = Number(row[xKey]) || 0;
+      const breached = Number(row[breachedKey]) || 0;
+      const elapsed = Number(row[denomKey]) || 0;
+      const y = elapsed > 0 ? Math.round((breached / elapsed) * 1000) / 10 : 0;
+      if (x <= 0 && elapsed <= 0) return null;
+
+      return {
+        label: formatDimLabel(deptKey, { labelFormat: 'department' }),
+        x,
+        y,
+      };
+    })
+    .filter(Boolean);
+}
+
+function adaptScatterPoints(ctx) {
+  if (isDepartmentBreachScatter(ctx)) {
+    return adaptDepartmentBreachScatterPoints(ctx);
+  }
+  return [];
+}
+
+function renderScatter(ctx) {
+  const { viz, loading } = ctx;
+  const points = adaptScatterPoints(ctx);
+  if (loading && !points.length) return <Placeholder message="Loading…" />;
+  if (!points.length) return <Placeholder message="No data" />;
+  return (
+    <ScatterChart
+      points={points}
+      xAxisLabel={viz.xAxisLabel || 'Caseload (open)'}
+      yAxisLabel={viz.yAxisLabel || 'Breach rate (%)'}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -761,10 +902,201 @@ function renderLine(ctx) {
 // { id, label, align, type, width, thresholdKey }). Rows pass through verbatim.
 // ---------------------------------------------------------------------------
 
+function isSubtypePerformanceTable(ctx) {
+  const kpiId = ctx.def?.kpiId || ctx.def?.id;
+  return kpiId === 'cl_table_subtype_performance' || ctx.viz?.tableProfile === 'subtypePerformance';
+}
+
+function isRecurringWardSubtypeTable(ctx) {
+  const kpiId = ctx.def?.kpiId || ctx.def?.id;
+  return (
+    kpiId === 'cl_table_recurring_ward_subtype' ||
+    ctx.viz?.tableProfile === 'wardSubtypeRecurring'
+  );
+}
+
+function isWardPerformanceTable(ctx) {
+  const kpiId = ctx.def?.kpiId || ctx.def?.id;
+  return kpiId === 'cl_table_ward_performance' || ctx.viz?.tableProfile === 'wardPerformance';
+}
+
+function isServiceQualityByChannelTable(ctx) {
+  const kpiId = ctx.def?.kpiId || ctx.def?.id;
+  return (
+    kpiId === 'cl_table_service_quality_by_channel' ||
+    ctx.viz?.tableProfile === 'serviceQualityByChannel'
+  );
+}
+
+function adaptServiceQualityByChannelRows(ctx) {
+  const { viz, result } = ctx;
+  const dimKey = viz.dimensionKey || 'source';
+  const channelTotals = new Map();
+
+  for (const row of result.rows || []) {
+    const source = String(row[dimKey] ?? '').trim();
+    const channelId = resolveChannelForSource(source) || 'other';
+    const bucket = channelTotals.get(channelId) || {
+      volume: 0,
+      resolved: 0,
+      csatSum: 0,
+      csatCount: 0,
+    };
+    const volume = Number(row.volume ?? row.created) || 0;
+    const resolved = Number(row.resolved) || 0;
+    const avgCsat = row.avg_csat;
+
+    bucket.volume += volume;
+    bucket.resolved += resolved;
+    if (avgCsat != null && Number.isFinite(Number(avgCsat)) && resolved > 0) {
+      bucket.csatSum += Number(avgCsat) * resolved;
+      bucket.csatCount += resolved;
+    }
+    channelTotals.set(channelId, bucket);
+  }
+
+  return [...channelTotals.entries()]
+    .map(([channelId, bucket]) => ({
+      id: channelId,
+      channelLabel: formatChannelLabel(channelId),
+      volume: bucket.volume,
+      resolutionRate: bucket.volume > 0 ? bucket.resolved / bucket.volume : null,
+      avgCsat: bucket.csatCount > 0 ? bucket.csatSum / bucket.csatCount : null,
+    }))
+    .filter((row) => row.volume > 0)
+    .sort((left, right) => right.volume - left.volume);
+}
+
+function adaptWardPerformanceRows(ctx) {
+  const { viz, result } = ctx;
+  const dimKey = viz.dimensionKey || 'ward_code';
+  const rowByWard = new Map();
+
+  const ensureRow = (wardKey) => {
+    if (!rowByWard.has(wardKey)) {
+      rowByWard.set(wardKey, {
+        id: wardKey,
+        wardLabel: formatDimLabel(wardKey, { labelFormat: 'dimension' }),
+        created: 0,
+        open: 0,
+        reopenRate: null,
+        ontimeRate: null,
+        avgCsat: null,
+      });
+    }
+    return rowByWard.get(wardKey);
+  };
+
+  for (const row of result.rows || []) {
+    const wardKey = String(row[dimKey] ?? '').trim();
+    if (!wardKey || wardKey === 'null') continue;
+    const entry = ensureRow(wardKey);
+    entry.created = Number(row.created) || 0;
+    entry.reopenRate = row.reopen_rate;
+    entry.ontimeRate = row.ontime_rate;
+    entry.avgCsat = row.avg_csat;
+  }
+
+  for (const row of result.companionRows || []) {
+    const wardKey = String(row[dimKey] ?? row.ward_code ?? '').trim();
+    if (!wardKey || wardKey === 'null') continue;
+    const entry = ensureRow(wardKey);
+    entry.open = Number(row.open) || 0;
+  }
+
+  return [...rowByWard.values()]
+    .filter((row) => row.created > 0 || row.open > 0)
+    .sort((left, right) => right.created - left.created);
+}
+
+function wardSubtypeRowKey(wardCode, subtypeCode) {
+  return `${wardCode}|${subtypeCode}`;
+}
+
+function adaptRecurringWardSubtypeRows(ctx) {
+  const { viz, result } = ctx;
+  const minCount = Number(viz.minCount) > 0 ? Number(viz.minCount) : 3;
+  const priorByKey = new Map();
+
+  for (const row of result.priorRows || []) {
+    const wardKey = String(row.ward_code ?? '').trim();
+    const subtypeKey = String(row.service_code ?? '').trim();
+    if (!wardKey || !subtypeKey) continue;
+    priorByKey.set(wardSubtypeRowKey(wardKey, subtypeKey), Number(row.total) || 0);
+  }
+
+  return (result.rows || [])
+    .map((row, index) => {
+      const wardKey = String(row.ward_code ?? '').trim();
+      const subtypeKey = String(row.service_code ?? '').trim();
+      const total = Number(row.total) || 0;
+      if (!wardKey || !subtypeKey || total < minCount) return null;
+
+      const prior = priorByKey.get(wardSubtypeRowKey(wardKey, subtypeKey)) ?? 0;
+      let trendPct = null;
+      if (prior > 0) {
+        trendPct = ((total - prior) / prior) * 100;
+      } else if (total > 0) {
+        trendPct = 100;
+      }
+
+      return {
+        id: wardSubtypeRowKey(wardKey, subtypeKey) || `recurring-${index}`,
+        wardLabel: formatDimensionLabel(wardKey),
+        subtypeLabel: formatDimensionLabel(subtypeKey),
+        total,
+        trendPct,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.total - left.total);
+}
+
+function adaptSubtypePerformanceRows(ctx) {
+  const { viz, result } = ctx;
+  const dimKey = viz.dimensionKey || 'service_code';
+  const rawRows = result.rows || [];
+  const total = rawRows.reduce((sum, row) => sum + (Number(row.total) || 0), 0);
+
+  return rawRows.map((row, index) => {
+    const subtypeKey = String(row[dimKey] ?? '').trim();
+    const count = Number(row.total) || 0;
+    const avgResolutionMs = Number(row.avg_resolution_ms);
+    const idealSlaMs = Number(row.ideal_sla_ms);
+
+    return {
+      id: subtypeKey || `subtype-${index}`,
+      subtypeLabel: subtypeKey ? formatDimensionLabel(subtypeKey) : '—',
+      share_pct: total > 0 ? count / total : null,
+      avgResolutionMs: Number.isFinite(avgResolutionMs) ? avgResolutionMs : null,
+      idealSlaMs: Number.isFinite(idealSlaMs) ? idealSlaMs : null,
+    };
+  });
+}
+
+function adaptTableRows(ctx) {
+  if (isSubtypePerformanceTable(ctx)) {
+    return adaptSubtypePerformanceRows(ctx);
+  }
+  if (isRecurringWardSubtypeTable(ctx)) {
+    return adaptRecurringWardSubtypeRows(ctx);
+  }
+  if (isWardPerformanceTable(ctx)) {
+    return adaptWardPerformanceRows(ctx);
+  }
+  if (isServiceQualityByChannelTable(ctx)) {
+    return adaptServiceQualityByChannelRows(ctx);
+  }
+  return ctx.result?.rows || [];
+}
+
 function renderTable(ctx) {
   const { viz, result, loading } = ctx;
   const columns = viz.columns || deriveColumnsFromResult(result);
-  const rows = result.rows || [];
+  let rows = adaptTableRows(ctx);
+  if (isSubtypePerformanceTable(ctx)) {
+    rows = annotateComplaintTypeDetailsRows(rows);
+  }
   if (loading && !rows.length) return <Placeholder message="Loading…" />;
   return <DashboardTable columns={columns} rows={rows} emptyMessage={viz.emptyMessage || 'No data'} />;
 }

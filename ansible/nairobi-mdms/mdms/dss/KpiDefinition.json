@@ -48,7 +48,13 @@
       ],
       "rbac": {
         "visibleTo": [
-          "PUBLIC"
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER"
         ]
       }
     }
@@ -101,7 +107,15 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER"
+        ]
       }
     }
   },
@@ -140,7 +154,7 @@
         },
         "deltaLabel": "vs prior period",
         "title": "Resolution rate",
-        "subtitle": "Resolved in period ÷ filed in period",
+        "subtitle": "Resolved in period \u00f7 filed in period",
         "dateKey": "created_date",
         "sparklineMeasureKey": "pct"
       },
@@ -159,7 +173,13 @@
       ],
       "rbac": {
         "visibleTo": [
-          "PUBLIC"
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER"
         ]
       }
     }
@@ -197,7 +217,8 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_DATE_RANGE_COUNT",
         "compose": null,
         "pii": false,
-        "title": "Reopened complaints"
+        "title": "Reopened complaints",
+        "internal": true
       },
       "params": [
         {
@@ -213,9 +234,7 @@
         }
       ],
       "rbac": {
-        "visibleTo": [
-          "PUBLIC"
-        ]
+        "visibleTo": []
       }
     }
   },
@@ -254,7 +273,7 @@
         },
         "deltaLabel": "vs prior period",
         "title": "Reopen rate",
-        "subtitle": "Reopened in period ÷ filed in period"
+        "subtitle": "Reopened in period \u00f7 filed in period"
       },
       "params": [
         {
@@ -271,7 +290,13 @@
       ],
       "rbac": {
         "visibleTo": [
-          "PUBLIC"
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER"
         ]
       }
     }
@@ -334,7 +359,17 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
       }
     }
   },
@@ -380,7 +415,7 @@
         "compose": null,
         "pii": false,
         "title": "First-assignment rate",
-        "subtitle": "Never reassigned ÷ assigned",
+        "subtitle": "Never reassigned \u00f7 assigned",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": true,
@@ -407,7 +442,15 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER"
+        ]
       }
     }
   },
@@ -440,7 +483,8 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANT_RESOLVED_COUNT",
         "compose": null,
         "pii": false,
-        "title": "Resolved within SLA"
+        "title": "Resolved within SLA",
+        "internal": true
       },
       "params": [
         {
@@ -488,7 +532,8 @@
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_ACCOUNTABLE_RESOLVED_COUNT",
         "compose": null,
         "pii": false,
-        "title": "Resolved (SLA denominator)"
+        "title": "Resolved (SLA denominator)",
+        "internal": true
       },
       "params": [
         {
@@ -538,7 +583,8 @@
         "compose": null,
         "pii": false,
         "title": "Open past SLA (SLA denominator)",
-        "dateKey": "created_date"
+        "dateKey": "created_date",
+        "internal": true
       },
       "params": [
         {
@@ -583,7 +629,7 @@
         },
         "pii": false,
         "title": "SLA compliance rate",
-        "subtitle": "Resolved within SLA ÷ (resolved + open past SLA)",
+        "subtitle": "Resolved within SLA \u00f7 (resolved + open past SLA)",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": true,
@@ -610,7 +656,15 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER"
+        ]
       }
     }
   },
@@ -648,7 +702,8 @@
         "compose": null,
         "pii": false,
         "title": "Resolved on time (count)",
-        "dateKey": "resolved_date"
+        "dateKey": "resolved_date",
+        "internal": true
       },
       "params": [
         {
@@ -684,16 +739,15 @@
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
         "compose": {
-          "type": "slaComplianceRate",
+          "type": "resolvedOnTimeInRangeRate",
           "sourceKpiIds": [
             "cl_resolved_on_time_compliant_count",
-            "cl_resolved_date_range_count",
-            "cl_sla_accountable_open_breached_count"
+            "cl_resolved_date_range_count"
           ]
         },
         "pii": false,
         "title": "Resolved on time rate",
-        "subtitle": "Resolved within SLA ÷ (resolved + open past SLA)",
+        "subtitle": "Resolved within SLA \u00f7 resolved in period",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": true,
@@ -722,7 +776,17 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
       }
     }
   },
@@ -778,7 +842,13 @@
       ],
       "rbac": {
         "visibleTo": [
-          "PUBLIC"
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER"
         ]
       }
     }
@@ -846,7 +916,15 @@
       ],
       "rbac": {
         "visibleTo": [
-          "PUBLIC"
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
         ]
       }
     }
@@ -908,7 +986,17 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
       }
     }
   },
@@ -968,7 +1056,15 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER"
+        ]
       }
     }
   },
@@ -1151,7 +1247,7 @@
         "compose": null,
         "pii": false,
         "title": "Department-wise resolution rate",
-        "subtitle": "Resolved ÷ filed per department"
+        "subtitle": "Resolved \u00f7 filed per department"
       },
       "params": [
         {
@@ -1257,6 +1353,650 @@
           "PGR_ADMIN",
           "SUPERUSER",
           "SUPERVISOR"
+        ]
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_wards_by_sla",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "daily",
+        "dimensions": [
+          "ward_code",
+          "sla_status_bucket"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "limit": 120
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "stacked-bar",
+        "orientation": "horizontal",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA",
+        "dimensionKey": "ward_code",
+        "measureKey": "total",
+        "measureKeys": [
+          "total"
+        ],
+        "stackKey": "sla_status_bucket",
+        "stackSeries": [
+          {
+            "key": "resolved",
+            "label": "Resolved",
+            "color": "var(--status-resolved-bg)"
+          },
+          {
+            "key": "within",
+            "label": "On track",
+            "color": "var(--chart-1)"
+          },
+          {
+            "key": "approaching",
+            "label": "Nearing breach",
+            "color": "var(--chart-2)"
+          },
+          {
+            "key": "breached",
+            "label": "Breached",
+            "color": "var(--status-breach)"
+          }
+        ],
+        "sortBySegment": "breached",
+        "limit": 12,
+        "labelFormat": "dimension",
+        "compose": null,
+        "pii": false,
+        "title": "Complaints by Wards",
+        "subtitle": "All complaints by SLA state — per ward"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_subtype_performance",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "dimensions": [
+          "service_code"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          },
+          {
+            "name": "avg_resolution_ms",
+            "agg": "avg",
+            "column": "resolution_ms",
+            "filter": {
+              "is_resolved": true
+            }
+          },
+          {
+            "name": "ideal_sla_ms",
+            "agg": "avg",
+            "column": "sla_target_ms"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
+        "limit": 30
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "data-table",
+        "format": "hoursDays",
+        "valueKey": "avg_resolution_ms",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE",
+        "dimensionKey": "service_code",
+        "measureKeys": [
+          "total",
+          "avg_resolution_ms",
+          "ideal_sla_ms"
+        ],
+        "tableProfile": "subtypePerformance",
+        "compose": null,
+        "pii": false,
+        "title": "Complaint sub-type performance",
+        "subtitle": "Share, resolution time and SLA by subtype",
+        "columns": [
+          {
+            "id": "subtypeLabel",
+            "label": "Subtype",
+            "align": "left",
+            "type": "text",
+            "width": "30%"
+          },
+          {
+            "id": "share_pct",
+            "label": "% of complaints",
+            "align": "left",
+            "type": "percent",
+            "width": "18%"
+          },
+          {
+            "id": "avgResolutionMs",
+            "label": "Avg resolution",
+            "align": "left",
+            "type": "hoursDays",
+            "width": "22%"
+          },
+          {
+            "id": "idealSlaMs",
+            "label": "SLA",
+            "align": "left",
+            "type": "hoursDays",
+            "width": "18%"
+          }
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_recurring_ward_subtype",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "dimensions": [
+          "ward_code",
+          "service_code"
+        ],
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
+        "limit": 200
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "data-table",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
+        "dimensionKey": "ward_code",
+        "measureKeys": [
+          "total"
+        ],
+        "tableProfile": "wardSubtypeRecurring",
+        "needsPrior": true,
+        "minCount": 3,
+        "compose": null,
+        "pii": false,
+        "title": "Recurring complaints by ward & sub-type",
+        "subtitle": "Ward × subtype pairs with ≥ 3 complaints in period",
+        "columns": [
+          {
+            "id": "wardLabel",
+            "label": "Ward",
+            "align": "left",
+            "type": "text",
+            "width": "28%"
+          },
+          {
+            "id": "subtypeLabel",
+            "label": "Sub-type",
+            "align": "left",
+            "type": "text",
+            "width": "32%"
+          },
+          {
+            "id": "total",
+            "label": "Total",
+            "align": "left",
+            "type": "integer",
+            "width": "18%"
+          },
+          {
+            "id": "trendPct",
+            "label": "Trend",
+            "align": "left",
+            "type": "trend",
+            "width": "22%"
+          }
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_ward_open_daily",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "daily",
+        "filters": {
+          "is_open": true
+        },
+        "dimensions": [
+          "ward_code"
+        ],
+        "measures": [
+          {
+            "name": "open",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "open",
+            "dir": "desc"
+          }
+        ],
+        "limit": 200
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "line",
+        "format": "integer",
+        "valueKey": "open",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
+        "dimensionKey": "ward_code",
+        "compose": null,
+        "pii": false,
+        "title": "Open complaints by ward (daily)"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": []
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_ward_performance",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "dimensions": [
+          "ward_code"
+        ],
+        "measures": [
+          {
+            "name": "created",
+            "agg": "count"
+          },
+          {
+            "name": "reopen_rate",
+            "agg": "ratio",
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_reopened": true,
+                "is_resolved": true
+              },
+              "window": {
+                "timeRole": "resolved_at"
+              }
+            },
+            "denominator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              },
+              "window": {
+                "timeRole": "resolved_at"
+              }
+            }
+          },
+          {
+            "name": "ontime_rate",
+            "agg": "ratio",
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true,
+                "sla_breached": false
+              },
+              "window": {
+                "timeRole": "resolved_at"
+              }
+            },
+            "denominator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              },
+              "window": {
+                "timeRole": "resolved_at"
+              }
+            }
+          },
+          {
+            "name": "avg_csat",
+            "agg": "avg",
+            "column": "rating",
+            "filter": {
+              "is_resolved": true,
+              "has_rating": true
+            },
+            "window": {
+              "timeRole": "resolved_at"
+            }
+          }
+        ],
+        "sort": [
+          {
+            "by": "created",
+            "dir": "desc"
+          }
+        ],
+        "limit": 200
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "data-table",
+        "format": "integer",
+        "valueKey": "created",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE",
+        "dimensionKey": "ward_code",
+        "measureKeys": [
+          "created",
+          "open",
+          "reopen_rate",
+          "ontime_rate",
+          "avg_csat"
+        ],
+        "tableProfile": "wardPerformance",
+        "compose": {
+          "type": "wardPerformanceFull",
+          "sourceKpiIds": [
+            "cl_table_ward_open_daily"
+          ]
+        },
+        "pii": false,
+        "title": "Ward performance",
+        "subtitle": "Created, open, reopen, on-time and CSAT by ward",
+        "columns": [
+          {
+            "id": "wardLabel",
+            "label": "Ward",
+            "align": "left",
+            "type": "text",
+            "width": "24%"
+          },
+          {
+            "id": "created",
+            "label": "Created",
+            "align": "left",
+            "type": "integer",
+            "width": "14%"
+          },
+          {
+            "id": "open",
+            "label": "Open",
+            "align": "left",
+            "type": "integer",
+            "width": "14%"
+          },
+          {
+            "id": "reopenRate",
+            "label": "Reopen %",
+            "align": "left",
+            "type": "percent",
+            "width": "16%"
+          },
+          {
+            "id": "ontimeRate",
+            "label": "On-time %",
+            "align": "left",
+            "type": "percent",
+            "width": "16%"
+          },
+          {
+            "id": "avgCsat",
+            "label": "CSAT",
+            "align": "left",
+            "type": "rating",
+            "width": "16%"
+          }
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_service_quality_by_channel",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "dimensions": [
+          "source"
+        ],
+        "measures": [
+          {
+            "name": "volume",
+            "agg": "count"
+          },
+          {
+            "name": "resolved",
+            "agg": "count",
+            "filter": {
+              "is_resolved": true
+            },
+            "window": {
+              "timeRole": "resolved_at"
+            }
+          },
+          {
+            "name": "avg_csat",
+            "agg": "avg",
+            "column": "rating",
+            "filter": {
+              "is_resolved": true,
+              "has_rating": true
+            },
+            "window": {
+              "timeRole": "resolved_at"
+            }
+          }
+        ],
+        "sort": [
+          {
+            "by": "volume",
+            "dir": "desc"
+          }
+        ],
+        "limit": 100
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "data-table",
+        "format": "integer",
+        "valueKey": "volume",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL",
+        "dimensionKey": "source",
+        "measureKeys": [
+          "volume",
+          "resolved",
+          "avg_csat"
+        ],
+        "tableProfile": "serviceQualityByChannel",
+        "compose": null,
+        "pii": false,
+        "title": "Service quality by channel",
+        "subtitle": "Volume, resolution rate and CSAT by intake channel",
+        "columns": [
+          {
+            "id": "channelLabel",
+            "label": "Channel",
+            "align": "left",
+            "type": "text",
+            "width": "28%"
+          },
+          {
+            "id": "volume",
+            "label": "Volume",
+            "align": "left",
+            "type": "integer",
+            "width": "20%"
+          },
+          {
+            "id": "resolutionRate",
+            "label": "Resolution",
+            "align": "left",
+            "type": "percent",
+            "width": "26%"
+          },
+          {
+            "id": "avgCsat",
+            "label": "CSAT",
+            "align": "left",
+            "type": "rating",
+            "width": "26%"
+          }
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
         ]
       }
     }
@@ -1597,7 +2337,8 @@
         ],
         "compose": null,
         "pii": false,
-        "title": "Complaint map (week-over-week)"
+        "title": "Complaints map",
+        "subtitle": "Created, open and resolved counts per ward"
       },
       "params": [
         {
@@ -1614,7 +2355,9 @@
       ],
       "rbac": {
         "visibleTo": [
-          "PUBLIC"
+          "PUBLIC",
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
         ]
       }
     }
@@ -1902,6 +2645,167 @@
   {
     "tenantId": "ke",
     "data": {
+      "id": "cl_chart_over_time_open_daily",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "daily",
+        "filters": {
+          "is_open": true
+        },
+        "dimensions": [
+          "snapshot_date"
+        ],
+        "measures": [
+          {
+            "name": "open",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "snapshot_date",
+            "dir": "asc"
+          }
+        ],
+        "limit": 366
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "line",
+        "format": "integer",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
+        "dimensionKey": "snapshot_date",
+        "compose": null,
+        "pii": false,
+        "title": "Open complaints over time (daily)"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": []
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_complaints_over_time",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "dimensions": [
+          "created_date"
+        ],
+        "measures": [
+          {
+            "name": "created",
+            "agg": "count"
+          }
+        ],
+        "sort": [
+          {
+            "by": "created_date",
+            "dir": "asc"
+          }
+        ],
+        "limit": 366
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "combo-chart",
+        "format": "integer",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME",
+        "dimensionKey": "created_date",
+        "labelFormat": "date-dow",
+        "measureKeys": [
+          "created",
+          "resolved",
+          "open",
+          "on_time"
+        ],
+        "compose": {
+          "type": "complaintsOverTimeFull",
+          "sourceKpiIds": [
+            "cl_chart_over_time_resolved_daily",
+            "cl_chart_over_time_open_daily"
+          ]
+        },
+        "seriesDefs": [
+          {
+            "name": "Created",
+            "measureKey": "created",
+            "color": "var(--chart-1)",
+            "yAxisGroup": "count",
+            "chartType": "column"
+          },
+          {
+            "name": "Resolved",
+            "measureKey": "resolved",
+            "color": "var(--chart-2)",
+            "yAxisGroup": "count",
+            "chartType": "column"
+          },
+          {
+            "name": "Open",
+            "measureKey": "open",
+            "color": "var(--chart-3)",
+            "yAxisGroup": "count",
+            "chartType": "column"
+          },
+          {
+            "name": "On-time %",
+            "numeratorKey": "on_time",
+            "denominatorKey": "resolved",
+            "color": "var(--chart-4)",
+            "yAxisGroup": "percent",
+            "chartType": "line"
+          }
+        ],
+        "pii": false,
+        "title": "Complaints over time",
+        "subtitle": "Created, resolved and open per day"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
       "id": "cl_chart_over_time_created_daily",
       "version": "1.0.0",
       "status": "published",
@@ -1942,12 +2846,7 @@
           "resolved",
           "on_time"
         ],
-        "compose": {
-          "type": "complaintsOverTime",
-          "sourceKpiIds": [
-            "cl_chart_over_time_resolved_daily"
-          ]
-        },
+        "compose": null,
         "seriesDefs": [
           {
             "name": "Created",
@@ -1978,7 +2877,6 @@
             "dashArray": 5
           }
         ],
-        "compose": null,
         "pii": false,
         "title": "Complaints over time",
         "subtitle": "Created and resolved per day"
@@ -2345,7 +3243,15 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER"
+        ]
       }
     }
   },
@@ -2462,7 +3368,7 @@
         "compose": null,
         "pii": false,
         "title": "Flow ratio by department",
-        "subtitle": "Resolved ÷ created",
+        "subtitle": "Resolved \u00f7 created",
         "numeratorKey": "resolved",
         "denominatorKey": "filed",
         "breakEven": 1
@@ -2483,6 +3389,101 @@
       "rbac": {
         "visibleTo": [
           "PUBLIC"
+        ]
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_department_breach_scatter",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "daily",
+        "filters": {
+          "is_open": true
+        },
+        "dimensions": [
+          "department_code"
+        ],
+        "measures": [
+          {
+            "name": "open",
+            "agg": "count"
+          },
+          {
+            "name": "breached",
+            "agg": "count",
+            "filter": {
+              "sla_status_bucket": "breached"
+            }
+          },
+          {
+            "name": "sla_elapsed",
+            "agg": "count",
+            "filter": {
+              "sla_status_bucket": {
+                "in": [
+                  "within",
+                  "approaching",
+                  "breached"
+                ]
+              }
+            }
+          }
+        ],
+        "sort": [
+          {
+            "by": "open",
+            "dir": "desc"
+          }
+        ],
+        "limit": 50
+      },
+      "supportsSeries": false,
+      "viz": {
+        "kind": "scatter-chart",
+        "format": "percentOneDecimal",
+        "valueKey": "open",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER",
+        "dimensionKey": "department_code",
+        "measureKeys": [
+          "open",
+          "breached",
+          "sla_elapsed"
+        ],
+        "scatterProfile": "departmentBreachCaseload",
+        "xMeasureKey": "open",
+        "numeratorKey": "breached",
+        "denominatorKey": "sla_elapsed",
+        "xAxisLabel": "Caseload (open)",
+        "yAxisLabel": "Breach rate (%)",
+        "labelFormat": "department",
+        "compose": null,
+        "pii": false,
+        "title": "Breach rate vs caseload by department",
+        "subtitle": "Open caseload vs breach rate at period end"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
         ]
       }
     }
@@ -2521,7 +3522,7 @@
         "compose": null,
         "pii": false,
         "title": "SLA non-compliance rate",
-        "subtitle": "Breached SLA ÷ all complaints",
+        "subtitle": "Breached SLA \u00f7 all complaints",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": false,
@@ -2549,7 +3550,130 @@
         }
       ],
       "rbac": {
-        "visibleTo": []
+        "visibleTo": [
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER"
+        ]
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_total_complaints_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": {
+        "grain": "facts",
+        "measures": [
+          {
+            "name": "total",
+            "agg": "count"
+          }
+        ]
+      },
+      "supportsSeries": true,
+      "viz": {
+        "kind": "number-tile-sparkline",
+        "format": "integer",
+        "valueKey": "total",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT",
+        "compose": null,
+        "pii": false,
+        "title": "Total complaints",
+        "subtitle": "Complaints filed in period",
+        "delta": {
+          "mode": "percent",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period",
+        "dateKey": "created_date",
+        "sparklineMeasureKey": "total"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": [
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_flow_ratio_count",
+      "version": "1.0.0",
+      "status": "published",
+      "query": null,
+      "supportsSeries": false,
+      "viz": {
+        "kind": "number-tile-delta",
+        "format": "decimalTwo",
+        "valueKey": "ratio",
+        "accent": "teal",
+        "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
+        "compose": {
+          "type": "resolvedOverFiledRate",
+          "sourceKpiIds": [
+            "cl_resolved_date_range_count",
+            "cl_total_complaints_count"
+          ]
+        },
+        "pii": false,
+        "title": "Flow ratio",
+        "subtitle": "Resolved in period \u00f7 created in period",
+        "delta": {
+          "mode": "rating",
+          "compare": "prior"
+        },
+        "deltaLabel": "vs prior period"
+      },
+      "params": [
+        {
+          "name": "window",
+          "default": "last_7d",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ]
+        }
+      ],
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
       }
     }
   }

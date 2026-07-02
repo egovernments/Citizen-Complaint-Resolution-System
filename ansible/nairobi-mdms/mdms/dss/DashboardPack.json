@@ -106,5 +106,119 @@
         }
       ]
     }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "executive-default",
+      "description": "Default executive dashboard pack — KPI strip, charts, tables, and map",
+      "roles": [
+        "TICKET_REPORT_VIEWER",
+        "PGR_VIEWER"
+      ],
+      "tiles": [
+        "cl_resolved_on_time_rate_count",
+        "cl_resolved_date_range_count",
+        "cl_total_complaints_count",
+        "cl_flow_ratio_count",
+        "cl_oldest_open_age",
+        "cl_csat_avg",
+        "cl_chart_wards_by_sla",
+        "cl_table_subtype_performance",
+        "cl_map_ward_wow_current",
+        "cl_table_recurring_ward_subtype",
+        "cl_chart_complaints_over_time",
+        "cl_chart_department_breach_scatter",
+        "cl_table_ward_performance",
+        "cl_table_service_quality_by_channel",
+        "cl_chart_department_flow_ratio"
+      ],
+      "layout": [
+        {
+          "kpiId": "cl_resolved_on_time_rate_count",
+          "x": 0,
+          "y": 0,
+          "w": 2,
+          "h": 2
+        },
+        {
+          "kpiId": "cl_resolved_date_range_count",
+          "x": 2,
+          "y": 0,
+          "w": 2,
+          "h": 2
+        },
+        {
+          "kpiId": "cl_total_complaints_count",
+          "x": 4,
+          "y": 0,
+          "w": 2,
+          "h": 2
+        },
+        {
+          "kpiId": "cl_flow_ratio_count",
+          "x": 6,
+          "y": 0,
+          "w": 2,
+          "h": 2
+        },
+        {
+          "kpiId": "cl_oldest_open_age",
+          "x": 8,
+          "y": 0,
+          "w": 2,
+          "h": 2
+        },
+        {
+          "kpiId": "cl_csat_avg",
+          "x": 10,
+          "y": 0,
+          "w": 2,
+          "h": 2
+        },
+        {
+          "kpiId": "cl_chart_wards_by_sla",
+          "x": 0,
+          "y": 2,
+          "w": 8,
+          "h": 6
+        },
+        {
+          "kpiId": "cl_table_subtype_performance",
+          "x": 8,
+          "y": 2,
+          "w": 4,
+          "h": 6
+        },
+        {
+          "kpiId": "cl_map_ward_wow_current",
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 9
+        },
+        {
+          "kpiId": "cl_table_recurring_ward_subtype",
+          "x": 0,
+          "y": 17,
+          "w": 8,
+          "h": 6
+        },
+        {
+          "kpiId": "cl_chart_complaints_over_time",
+          "x": 0,
+          "y": 23,
+          "w": 8,
+          "h": 6
+        },
+        {
+          "kpiId": "cl_chart_department_breach_scatter",
+          "x": 0,
+          "y": 29,
+          "w": 8,
+          "h": 6
+        }
+      ]
+    }
   }
 ]

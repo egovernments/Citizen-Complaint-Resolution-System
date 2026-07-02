@@ -60,6 +60,11 @@ export function evaluateCompose(compose, results) {
       const eligible = resolved + openBreached;
       return eligible === 0 ? 0 : compliant / eligible;
     }
+    case 'resolvedOnTimeInRangeRate': {
+      const compliant = sourceData[0]?.total ?? 0;
+      const resolved = sourceData[1]?.total ?? 0;
+      return resolved === 0 ? 0 : compliant / resolved;
+    }
     default:
       return null;
   }

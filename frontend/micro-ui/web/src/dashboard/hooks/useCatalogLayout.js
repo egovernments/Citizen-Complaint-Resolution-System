@@ -30,8 +30,19 @@ const CARD_KINDS = new Set([
 const KPI_CARD_CONSTRAINTS = { minW: 2, minH: 2, maxW: 6, maxH: 3 };
 const LIST_CONSTRAINTS = { minW: 3, minH: 4, maxW: 12, maxH: 12 };
 
+function resolveCatalogVizKind(kpis, kpiId) {
+  const viz = kpis?.[kpiId]?.viz;
+  if (!viz) return undefined;
+  if (viz.kind === "rankedList" && viz.columns?.length) return "data-table";
+  return viz.kind;
+}
+
+export function catalogVizKind(kpis, kpiId) {
+  return resolveCatalogVizKind(kpis, kpiId);
+}
+
 export function sizeConstraintsForKpi(kpiId, kpis) {
-  const kind = kpis?.[kpiId]?.viz?.kind;
+  const kind = resolveCatalogVizKind(kpis, kpiId);
   if (CARD_KINDS.has(kind)) return KPI_CARD_CONSTRAINTS;
   switch (kind) {
     case "map":
@@ -55,7 +66,7 @@ export function sizeConstraintsForKpi(kpiId, kpis) {
 }
 
 export function defaultSizeForKpi(kpiId, kpis) {
-  const kind = kpis?.[kpiId]?.viz?.kind;
+  const kind = resolveCatalogVizKind(kpis, kpiId);
   if (CARD_KINDS.has(kind)) return { w: 2, h: 2 };
   if (kind === "map" || kind === "choropleth-map") return { w: 8, h: 6 };
   if (kind === "sla-risk-table" || kind === "table" || kind === "data-table") {

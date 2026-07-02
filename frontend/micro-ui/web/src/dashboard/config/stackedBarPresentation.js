@@ -104,6 +104,14 @@ export const SLA_STACKED_SERIES = [
   { key: "breached", label: "Breached", color: "var(--status-breach)" },
 ];
 
+/** Per-ward SLA mix at period end — resolved + open SLA buckets (horizontal stacked bar). */
+export const WARD_COMPLAINTS_BY_SLA_SERIES = [
+  { key: "resolved", label: "Resolved", color: "var(--status-resolved-bg)" },
+  { key: "within", label: "On track", color: "var(--chart-1)" },
+  { key: "approaching", label: "Nearing breach", color: "var(--chart-2)" },
+  { key: "breached", label: "Breached", color: "var(--status-breach)" },
+];
+
 /** Status mix per week — top workflow states. */
 export const STATUS_STACKED_SERIES = [
   { key: "RESOLVED", label: "Resolved", color: "var(--status-resolved)" },

@@ -56,6 +56,8 @@ export function normalizeLineChartSeries(series = []) {
       color: entry.color,
       dashArray: dashed ? Number(entry.dashArray) || 5 : 0,
       yAxisGroup: entry.yAxisGroup === "percent" ? "percent" : "count",
+      chartType:
+        entry.chartType === "column" || entry.chartType === "bar" ? "column" : "line",
     };
   });
 }

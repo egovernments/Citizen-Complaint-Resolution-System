@@ -235,7 +235,10 @@ const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
           {columns.map((col) => {
             const raw = row[col.id];
             const isLabel =
-              col.id === "label" || col.id === "subtypeLabel" || col.id === "officerName";
+              col.id === "label" ||
+              col.id === "subtypeLabel" ||
+              col.id === "wardLabel" ||
+              col.id === "officerName";
             const render = CELL_RENDERERS[col.type] ?? CELL_RENDERERS.text;
             const content =
               col.type === "tags"
