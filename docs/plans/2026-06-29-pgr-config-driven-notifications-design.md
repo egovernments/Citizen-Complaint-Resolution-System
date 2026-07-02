@@ -6,6 +6,12 @@
 **Supersedes direction of:** PR #915 / MOZ_007 (no new `workflow-extension-service`; config in MDMS; all biz logic in PGR)
 **Built in:** commit `ef8b617ec` (`feat: config-driven notifications`).
 
+> **STATUS UPDATE (2026-07-02):** This doc describes the initial build (commit `ef8b617ec`) and is retained as history. The system has since evolved and been re-reviewed:
+>
+> - **Current authoritative design:** [2026-07-02-pgr-notifications-design.md](./2026-07-02-pgr-notifications-design.md), published as fork discussion [ChakshuGautam/Citizen-Complaint-Resolution-System#59](https://github.com/ChakshuGautam/Citizen-Complaint-Resolution-System/discussions/59). Biggest deltas vs this doc: `audience` is no longer the closed `{CITIZEN, EMPLOYEE}` enum — it is **any workflow role code** with role-pool fan-out (EMPLOYEE survives only as a legacy alias for the assignee); notifications are also authored inside `PgrWorkflowConfig.json` and split into the two MDMS masters at seed time by default-data-handler; the configurator gained a per-transition Configure tab, a static config checker, and read-only Logs/Providers screens.
+> - **Baileys is re-classified as TEST-SCAFFOLDING, not a production provider.** Every "WhatsApp live via Baileys" statement below records what was built during the pilot, not what ships. Removal is planned in [2026-07-02-notification-findings-closure-plan.md](./2026-07-02-notification-findings-closure-plan.md). WhatsApp delivery is deferred to a legitimate provider (Meta WhatsApp Cloud API or Twilio WhatsApp as a Novu integration, behind a v2-native `complaints-whatsapp` workflow); until onboarded, `channel=WHATSAPP` terminates at the bridge as an explicit `SKIPPED`/`NB_NO_PROVIDER` dispatch-log row — never a thrown exception, never a fallback to SMS.
+> - **Review corrections:** the 2026-07-02 PR review proved several statements in this doc wrong; each is flagged inline below with a callout in this same style. The full findings table is §5 of the 2026-07-02 design doc; closure steps are in the findings-closure plan; the accompanying test plan is executed via [2026-07-02-notification-test-plan-execution.md](./2026-07-02-notification-test-plan-execution.md).
+
 ---
 
 ## 1. Context & goals
@@ -20,6 +26,8 @@ SMS bodies live in `egov-localization` keyed `PGR_<ROLE>_<ACTION>_<STATUS>_SMS_M
 
 **Goal:** make routing (the "who") and content (the "what") **data-driven via MDMS, editable in the configurator**, with **all orchestration, rendering, and localization in PGR**. PGR pre-renders and publishes per-recipient events to Kafka; novu-bridge is a thin pass-through that, per channel, **delivers through Novu providers** (SMS → Twilio, Email → Gmail/SMTP nodemailer) and **tracks** in Novu. WhatsApp is delivered **today via Baileys directly** (out-of-band over HTTP); wrapping it as a Novu provider so it tracks alongside SMS/Email is a backlog item (BACKLOG TASK-031, GitHub egovernments/CCRS#973).
 
+> **STATUS UPDATE (2026-07-02):** Baileys was test-scaffolding only, not a production provider, and is being removed per [2026-07-02-notification-findings-closure-plan.md](./2026-07-02-notification-findings-closure-plan.md). TASK-031 / CCRS#973 no longer means "wrap Baileys" — the target is a legitimate provider (Meta WhatsApp Cloud API or Twilio WhatsApp via Novu, behind a v2-native `complaints-whatsapp` workflow). Until then, `channel=WHATSAPP` terminates at the bridge as `SKIPPED`/`NB_NO_PROVIDER`.
+
 ## 2. Locked decisions
 
 | # | Decision |
@@ -32,6 +40,8 @@ SMS bodies live in `egov-localization` keyed `PGR_<ROLE>_<ACTION>_<STATUS>_SMS_M
 | D6 | Novu subscribers are **upserted (identify), not fetched** — idempotent by `subscriberId`, before the SMS/Email trigger. |
 | D7 | **WhatsApp via Baileys** (free-form messages, no Twilio approved-template requirement). As built, novu-bridge calls baileys-send-service **directly** (Novu has no Baileys integration); registering Baileys as a Novu provider so it tracks in Novu is deferred (BACKLOG TASK-031, GitHub egovernments/CCRS#973). |
 | D8 | Backward compatible: behind a feature flag (`pgr.notification.config.driven`), legacy path retained one release; Bomet seed reproduces current behavior. |
+
+> **STATUS UPDATE (2026-07-02):** **D3 is superseded** — audience is now any workflow role code (role-pool fan-out via egov-user `roleCodes` search), not the closed `{CITIZEN, EMPLOYEE}` enum; see the 2026-07-02 design doc §4.1. **D5's WhatsApp branch and D7 are superseded** — Baileys is re-classified as test-scaffolding and is being removed per the findings-closure plan; WhatsApp delivery is deferred to a legitimate provider (Meta WhatsApp Cloud API or Twilio WhatsApp as a Novu integration, behind a v2-native `complaints-whatsapp` workflow), with `channel=WHATSAPP` terminating as `SKIPPED`/`NB_NO_PROVIDER` until then — never a fallback to another channel.
 
 ## 3. Architecture
 
@@ -67,6 +77,8 @@ Direct:          WhatsApp → baileys-send-service (paired on Bomet)
 ```
 
 **The inversion vs PR #915 / current code:** novu-bridge **stops** resolving templates from config-service and **stops** localization — PGR owns both. novu-bridge only identifies subscribers and delivers pre-rendered content **through Novu providers** (Twilio/Gmail) for SMS/Email, and out-of-band to Baileys for WhatsApp. This realizes the PR-body intent: "make it more pass-through, retain all biz logic inside PGR."
+
+> **STATUS UPDATE (2026-07-02):** the `WHATSAPP → baileys-send-service` leg in the diagram above is being removed (Baileys = test-scaffolding; see the header callout). Post-removal, WHATSAPP events terminate at novu-bridge as `SKIPPED`/`NB_NO_PROVIDER` dispatch-log rows until a legitimate provider is onboarded. The review also corrected two tracking claims implicit here: (1) delivery **failures never persist a `FAILED` row** in `nb_dispatch_log` — provider exceptions propagate to the consumer, which only logs + DLQs (finding #3 in the 2026-07-02 design §5); (2) `getNovuWorkflowId`'s unknown/null-channel branch silently falls back to the **SMS** Novu workflow (finding #2). Both fixes are in the findings-closure plan.
 
 ## 4. MDMS masters (config 1 & config 2)
 
@@ -141,6 +153,8 @@ Novu identifies subscribers idempotently by `subscriberId`. We **never GET-then-
 - Profile upsert is safe — Novu stores **preferences separately**, so re-identifying won't reset a citizen's channel preferences.
 - **Efficiency:** identify guarded by a short-lived in-memory `subscriberId → identified` TTL cache to skip redundant calls (profiles rarely change).
 
+> **STATUS UPDATE (2026-07-02):** "Identify runs only for SMS/Email; WhatsApp goes straight to Baileys" no longer applies — see the Baileys-removal callouts above. The review also noted the identify TTL map is evict-on-read only, so it grows without bound (nit; tracked in the findings-closure plan).
+
 ## 6. Code changes
 
 ### 6.1 PGR (`backend/pgr-services`)
@@ -151,15 +165,21 @@ Novu identifies subscribers idempotently by `subscriberId`. We **never GET-then-
 - `NotificationService.processConfigDriven`: `for each routing match → resolve recipient → for each channel → render → publishRenderedEvent`. Skips the `NOTIFICATION_ENABLE_FOR_STATUS` gate + 7 if-blocks (legacy retained when flag off). Behind flag `pgr.notification.config.driven`.
 - Per-event `transactionId = serviceRequestId:action:toState:subscriberId:channel` (idempotency, §10).
 
+> **STATUS UPDATE (2026-07-02):** two claims in this section were proven wrong by review. (1) "cached at the state-level tenant (existing TTL-cache pattern)" — `notificationRoutingCache`/`notificationTemplateCache` actually have **no TTL or invalidation**: non-empty results are cached forever per state tenant, so configurator edits are invisible to pgr-services until a restart (finding #8 in the 2026-07-02 design §5). (2) "Localization happens here (D4)" is only half-true — **per-recipient localization is not implemented**: `processConfigDriven` renders every event in the instance default locale, so the template `locale` dimension and `contact.locale` are effectively dead until PGR resolves a real per-recipient locale (finding #13; fine for the single-locale pilot, now an explicitly documented limitation). Fixes tracked in the findings-closure plan.
+
 ### 6.2 novu-bridge (`backend/novu-bridge`)
 - `DispatchPipelineService`: **stops** calling `ConfigServiceClient.resolveTemplate` + locale fallback (the whole `ConfigServiceClient` was deleted); reads pre-rendered `renderedBody`/`subject` + `contact` from the flat event and branches by channel.
 - **SMS / EMAIL → Novu provider.** `NovuClient.identifyThenTrigger`: identify the subscriber (§5) then trigger a fixed per-channel Novu workflow — `complaints-sms` / `complaints-email` (`config.getNovuWorkflowId(channel)`) — with the rendered text in `payload.body`. Novu's integration delivers: **SMS → Twilio, Email → Gmail/SMTP (nodemailer)**, configured as Novu integrations (dashboard / bootstrap).
 - **WHATSAPP → Baileys direct.** `BaileysSendClient.send(to, renderedBody)` POSTs `{to,text}` to `baileys-send-service` (E.164, Twilio `whatsapp:` prefix stripped). **As-built decision (R10): WhatsApp does NOT go through Novu** — Novu has no Baileys integration, so delivery + tracking for WhatsApp live in `nb_dispatch_log` + the Baileys logs. The new strategy `BaileysProviderStrategy` (`providerName=baileys`) exists for routing, and `WhatsAppBusinessApiProviderStrategy.supports()` was narrowed so it no longer shadows bare `whatsapp`. Wrapping Baileys as a first-class Novu provider so it tracks alongside SMS/Email is deferred (BACKLOG TASK-031, GitHub egovernments/CCRS#973).
 - Keep `nb_dispatch_log` + retry/DLQ; unique key widened to `transaction_id` via Flyway migration `V20260701000000__extend_dispatch_unique_key.sql`.
 
+> **STATUS UPDATE (2026-07-02):** the "WHATSAPP → Baileys direct" branch, `BaileysSendClient`, and `BaileysProviderStrategy` are being **removed** (Baileys = test-scaffolding). Replacement behavior: WHATSAPP delivery is gated behind a config flag (default off); when disabled, the bridge persists `SKIPPED`/`NB_NO_PROVIDER` via the existing preference-denied pattern and **never** falls through to the SMS workflow (`getNovuWorkflowId`'s default-to-SMS is fixed in the same change). The as-built claim "delivery + tracking for WhatsApp live in `nb_dispatch_log`" was also optimistic: delivery **failures** never persist a `FAILED` row today (finding #3). See the findings-closure plan.
+
 ### 6.3 Baileys WhatsApp send-service (`utilities/baileys-send-service`)
 - Small Node/Express HTTP service wrapping Baileys (`makeWASocket` + `useMultiFileAuthState`), exposing `POST /send {to, text}`, `GET /healthz`, `GET /qr`, and a QR-pairing/auth-state volume. novu-bridge's `BaileysSendClient` calls `/send` directly for `channel=WHATSAPP`.
 - ⚠️ Unofficial WhatsApp API — ToS risk / number-ban risk. Acceptable "for now"; revisit official WhatsApp Business API later.
+
+> **STATUS UPDATE (2026-07-02):** `utilities/baileys-send-service/` is deleted wholesale in the Baileys removal (module + Dockerfile + compose block + `baileys_auth_data` volume + Ansible/env variables; the paired device is unlinked and the send token discarded). The ToS/ban-risk caveat above is one of the reasons Baileys was never a legitimate production provider.
 
 ## 7. What you (operator) must provide per channel
 
@@ -170,6 +190,8 @@ Novu identifies subscribers idempotently by `subscriberId`. We **never GET-then-
 | **WhatsApp (Baileys)** | A dedicated **WhatsApp number/account** to pair (scan QR once), agreement to persist Baileys **auth state** (volume), acceptance of unofficial-API risk. | baileys-send-service (direct, out-of-band over HTTP). Paired on Bomet. |
 
 **As built:** all three are configured and live on Bomet — SMS via Twilio, Email via Gmail/SMTP, both through Novu; WhatsApp via Baileys directly.
+
+> **STATUS UPDATE (2026-07-02):** the WhatsApp (Baileys) row is obsolete — the service is decommissioned and the paired device unlinked per the findings-closure plan. The future WhatsApp prerequisite is a Meta WhatsApp Cloud API (or Twilio WhatsApp) account configured as a Novu integration behind a v2-native `complaints-whatsapp` workflow; until then WHATSAPP events log `SKIPPED`/`NB_NO_PROVIDER`.
 
 ## 8. Infra — Novu on Bomet (D5)
 
@@ -184,6 +206,8 @@ Novu identifies subscribers idempotently by `subscriberId`. We **never GET-then-
 - Build custom images (`pgr-services`, `novu-bridge`, `baileys`) on the CI server → push to registry `10.0.0.4:5000` → Bomet pulls.
 - Topics: `complaints.domain.events`, `novu-bridge.retry`, `novu-bridge.dlq`.
 
+> **STATUS UPDATE (2026-07-02):** the `baileys-send-service` compose block, `baileys_auth_data` volume, baileys image build/push, and the related env/host_vars entries are all removed by the Baileys decommission — see the findings-closure plan for the exact file-by-file removal scope.
+
 ## 9. Configurator
 
 **As built:** both masters appear under a new top-level **Notifications** nav section (`Notification Routing` + `Notification Templates`, registered in `DigitLayout.tsx` + `i18nProvider.ts`). Both are registered in `resourceRegistry.ts` and given schema descriptors (`schemaDescriptors/notification-routing.ts`, `notification-template.ts`). Because the routing master is now **flat scalar fields only** (audience/channel are scalars, not arrays), no custom editor is needed — the generic schema-driven datagrid handles List/Show/Edit/Create for both masters. Operators edit routing + templates without code. The configurator is built by `local-setup/ansible/files/configurator-build.sh` (build `file:` sub-packages first, then `vite build --base=/configurator/`).
@@ -194,6 +218,8 @@ Novu identifies subscribers idempotently by `subscriberId`. We **never GET-then-
 - **Seed = exact current behavior** (§11) so cutover is behaviorally a no-op; changes are config-only afterward.
 - **Idempotency:** we now emit multiple events per transition (one per recipient×channel). Stable `transactionId` (§6.1) + `nb_dispatch_log` unique key prevent double-send on Kafka redelivery.
 - **Failure isolation:** a per-recipient render/publish failure must not drop the others (the current code's single try/catch swallows the rest).
+
+> **STATUS UPDATE (2026-07-02):** "prevent double-send on Kafka redelivery" overstated it — review found idempotency is **log-level only**: the bridge never consults `nb_dispatch_log` before delivering, so a redelivery re-triggers the send. Safe today only because Novu dedupes triggers on `transactionId`; the (now-removed) Baileys HTTP path had no dedupe at all and would double-message on redelivery (finding #15 in the 2026-07-02 design §5). A pre-send SENT-row check is tracked in the findings-closure plan; redelivery tests are G3 in the test-plan-execution doc.
 
 ## 11. Behavior table — seed source of truth
 
@@ -242,6 +268,8 @@ Validated against `PgrWorkflowConfig.json` (key = `action + toState`; `ASSIGNEE`
 - **WhatsApp (Baileys):** paired test number; `baileys-test.js`-style send; confirm receipt + bridge dispatch_log.
 - **Tracking:** verify each subscriber appears in the Novu dashboard with profile + per-message delivery status (the gap we're closing).
 
+> **STATUS UPDATE (2026-07-02):** the §12.4 "WHATSAPP→Baileys" routing assertion and the §12.5 Baileys delivery check are obsolete post-removal. Their replacement is the WHATSAPP-no-provider safe-skip assertions — unit test G2 and e2e assertion G18 in [2026-07-02-notification-test-plan-execution.md](./2026-07-02-notification-test-plan-execution.md), which also lock in "never a fallback to SMS".
+
 ### 12.6 E2E (UI, Playwright — optional)
 - Citizen files → employee assigns → resolves on Bomet UI; assert the citizen/assignee receive the expected SMS/WhatsApp at each step (smoke-level, against the seeded config).
 
@@ -252,9 +280,13 @@ Validated against `PgrWorkflowConfig.json` (key = `action + toState`; `ASSIGNEE`
 - **Phase 2 — DONE.** Novu + baileys-send-service up on Bomet (`notifications` profile); novu-bridge pass-through + identify + Baileys send client; `nb_dispatch_log` keyed on transactionId.
 - **Phase 3 — LIVE on Bomet.** Flag on (overlay). **SMS + Email live via Novu → Twilio / Gmail-SMTP; WhatsApp live via Baileys (paired).** Tracking for SMS/Email visible in Novu; WhatsApp tracking in `nb_dispatch_log`.
 
+> **STATUS UPDATE (2026-07-02):** Phase 2/3's "WhatsApp live via Baileys (paired)" records the pilot state, not the shipping state — Baileys is decommissioned (container + volume removed, device unlinked, token discarded) per the findings-closure plan. `channel=WHATSAPP` terminates as `SKIPPED`/`NB_NO_PROVIDER` until a legitimate provider (Meta WhatsApp Cloud API or Twilio WhatsApp via Novu) is onboarded.
+
 ## 14. Open items / risks
 - Baileys = unofficial WhatsApp (ban risk). Paired on Bomet; monitor for number bans / IP blocks.
 - **Backlog:** wrap WhatsApp delivery as a first-class Novu provider so it tracks alongside SMS/Email — BACKLOG TASK-031, GitHub egovernments/CCRS#973.
 - **Backlog:** sync templates edited in the Novu editor back to MDMS (MDMS is source of truth) — TASK-030, GitHub egovernments/CCRS#972.
 - NovuClient/Baileys calls use a `RestTemplate` with no connect/read timeout (§4.4) — hardening candidate.
 - `digit-user-preferences-service` gates per-channel delivery; PGR owns locale. Set `NOVU_BRIDGE_PREFERENCE_ENABLED=false` to disable the gate.
+
+> **STATUS UPDATE (2026-07-02):** this list is superseded as follows. The Baileys ban-risk item is **obsolete** — Baileys is removed outright as test-scaffolding, and BACKLOG TASK-031 / CCRS#973 now targets onboarding the legitimate WhatsApp provider (Meta WhatsApp Cloud API or Twilio WhatsApp via Novu, v2-native `complaints-whatsapp` workflow), not wrapping Baileys. The RestTemplate-timeout item was confirmed by review as a real consumer-stalling hazard (finding #4) and is fixed in the findings-closure plan; the Novu→MDMS template-sync item (TASK-030 / CCRS#972) and the consent-gate rollout remain live. The full 2026-07-02 review findings table (24 rows, incl. items this doc predates: no `FAILED` dispatch rows, unauthenticated `/novu-adapter/v1/*` proxy, unpaginated role-pool search, per-channel contact filtering) is in [2026-07-02-pgr-notifications-design.md](./2026-07-02-pgr-notifications-design.md) §5, closed via [2026-07-02-notification-findings-closure-plan.md](./2026-07-02-notification-findings-closure-plan.md).
