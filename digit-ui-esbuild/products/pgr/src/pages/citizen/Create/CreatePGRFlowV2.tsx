@@ -1300,7 +1300,22 @@ function PgrFileUpload({
         accept="image/*"
         multiple
         onChange={onInputChange}
-        style={{ display: "none" }}
+        // Do NOT use display:none. Some Android WebViews refuse to fire the file
+        // chooser (WebChromeClient.onShowFileChooser) for a programmatic .click()
+        // on a display:none input — the tap silently does nothing. Keep the input
+        // rendered but visually hidden so the chooser opens inside the WebView.
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          opacity: 0,
+          overflow: "hidden",
+          border: 0,
+          padding: 0,
+          margin: -1,
+          clip: "rect(0 0 0 0)",
+          pointerEvents: "none",
+        }}
         aria-hidden="true"
         tabIndex={-1}
       />

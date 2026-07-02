@@ -337,8 +337,27 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           setIsSearching(false);
         },
         (error) => {
-          console.error("Error getting location:", error);
-          setShowToast({ key: "error", label: t("CS_GEOLOCATION_ERROR") });
+          // Surface the specific GeolocationPositionError instead of one opaque
+          // toast — a permission denial, an insecure-origin block (code 1,
+          // "Only secure origins are allowed"), a missing GPS fix and a timeout
+          // are otherwise indistinguishable. code: 1=PERMISSION_DENIED,
+          // 2=POSITION_UNAVAILABLE, 3=TIMEOUT.
+          console.error("Error getting location:", error?.code, error?.message, error);
+          const KEY_BY_CODE = {
+            1: "CS_GEOLOCATION_PERMISSION_DENIED",
+            2: "CS_GEOLOCATION_UNAVAILABLE",
+            3: "CS_GEOLOCATION_TIMEOUT",
+          };
+          const specificKey = KEY_BY_CODE[error?.code];
+          const specific = specificKey ? t(specificKey) : null;
+          // Use the per-code message when it is localised; otherwise fall back
+          // to the generic label + the raw message so the cause is visible
+          // on-device even before the new keys are uploaded.
+          const label =
+            specific && specific !== specificKey
+              ? specific
+              : `${t("CS_GEOLOCATION_ERROR")}${error?.message ? ` (${error.message})` : ""}`;
+          setShowToast({ key: "error", label });
           setIsSearching(false);
         },
         {
