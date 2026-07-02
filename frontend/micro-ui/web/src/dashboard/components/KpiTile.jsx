@@ -473,8 +473,12 @@ function adaptHorizontalRows(ctx) {
     resolved: numeratorKey != null ? b.num : undefined,
     created: denominatorKey != null ? b.den : undefined,
   }));
-  // Drop zero-denominator categories (reference filters created<=0).
-  if (isRatio) rows = rows.filter((r) => (r.created || 0) > 0);
+  // Drop categories with no flow (zero ratio) or zero denominator.
+  if (isRatio) {
+    rows = rows.filter((r) => (r.created || 0) > 0 && (r.value || 0) > 0);
+  } else {
+    rows = rows.filter((r) => (r.value || 0) > 0);
+  }
   if (viz.sort !== 'none') rows = rows.sort((a, b) => a.value - b.value);
   if (viz.limit) rows = rows.slice(0, viz.limit);
   return rows;
