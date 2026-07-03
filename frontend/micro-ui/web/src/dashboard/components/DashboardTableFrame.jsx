@@ -22,7 +22,7 @@ const DashboardTableFrame = ({ tableClassName = "", colgroup, header, children }
       <SubtleScroll className={styles.scroll}>
         <table className={tableClass}>
           {colgroup}
-          <thead className="tw-sr-only">{header}</thead>
+          <thead className={styles.tableSrOnly}>{header}</thead>
           <tbody>{children}</tbody>
         </table>
       </SubtleScroll>

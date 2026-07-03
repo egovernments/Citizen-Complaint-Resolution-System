@@ -63,6 +63,7 @@ const DATA_TABLE_STYLES = {
   scroll: "dashboard-table-scroll",
   tableFrame: "dashboard-table-frame",
   tableHead: "dashboard-table-head",
+  tableSrOnly: "dashboard-table-sr-only",
   table: "dashboard-table",
   tableEqualCols: "dashboard-table--equal-cols",
   th: "dashboard-table-th",
