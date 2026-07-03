@@ -2322,9 +2322,8 @@
           target_tenant: "{{ state_root }}"
           source_tenant: "pg"
           user_only: true
-          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern }}"
-          mobile_prefix: "{{ core_mobile_configs.mobilePrefix }}"
-          mobile_length: "{{ core_mobile_configs.mobileNumberLength | int }}"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
         status_code: [200]
         timeout: 60
       register: mcp_rekey_root
@@ -2345,9 +2344,8 @@
           target_tenant: "{{ tenant_id }}"
           source_tenant: "pg"
           user_only: true
-          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern }}"
-          mobile_prefix: "{{ core_mobile_configs.mobilePrefix }}"
-          mobile_length: "{{ core_mobile_configs.mobileNumberLength | int }}"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
         status_code: [200]
         timeout: 60
       register: mcp_rekey_city
