@@ -14,7 +14,7 @@ const DashboardTableFrame = ({ tableClassName = "", colgroup, header, children }
   return (
     <div className={styles.tableFrame}>
       <div className={styles.tableHead}>
-        <table className={tableClass}>
+        <table className={tableClass} aria-hidden="true" role="presentation">
           {colgroup}
           <thead>{header}</thead>
         </table>
@@ -22,6 +22,7 @@ const DashboardTableFrame = ({ tableClassName = "", colgroup, header, children }
       <SubtleScroll className={styles.scroll}>
         <table className={tableClass}>
           {colgroup}
+          <thead className="tw-sr-only">{header}</thead>
           <tbody>{children}</tbody>
         </table>
       </SubtleScroll>

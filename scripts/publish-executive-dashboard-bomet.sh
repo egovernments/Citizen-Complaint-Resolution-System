@@ -119,6 +119,35 @@ EOF
   echo
 }
 
+validate_kpi_exists() {
+  local uid="$1"
+  local search_resp
+  search_resp="$(post_mdms "/mdms-v2/v2/_search" "$(cat <<EOF
+{
+  "RequestInfo": {
+    "apiId": "Rainmaker",
+    "authToken": "${TOKEN}",
+    "msgId": "validate-${uid}"
+  },
+  "MdmsCriteria": {
+    "tenantId": "${TENANT}",
+    "schemaCode": "dss.KpiDefinition",
+    "uniqueIdentifier": "${uid}",
+    "limit": 1
+  }
+}
+EOF
+)")"
+  python3 - <<'PY' "${search_resp}" "${uid}"
+import json, sys
+payload = json.loads(sys.argv[1])
+uid = sys.argv[2]
+found = any(row.get("uniqueIdentifier") == uid for row in payload.get("mdms", []))
+if not found:
+    raise SystemExit(f"ERROR: KPI {uid} not found on tenant after upsert")
+PY
+}
+
 TOTAL_COMPLAINTS_DATA='{
   "id": "cl_total_complaints_count",
   "version": "1.0.0",
@@ -191,6 +220,199 @@ FLOW_RATIO_DATA='{
     "subtitle": "Resolved in period ÷ created in period",
     "delta": { "mode": "rating", "compare": "prior" },
     "deltaLabel": "vs prior period"
+  },
+  "params": [{
+    "name": "window",
+    "default": "last_7d",
+    "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"]
+  }],
+  "rbac": {
+    "visibleTo": ["TICKET_REPORT_VIEWER", "PGR_VIEWER"]
+  }
+}'
+
+RESOLVED_ON_TIME_RATE_DATA='{
+  "id": "cl_resolved_on_time_rate_count",
+  "version": "1.0.0",
+  "status": "published",
+  "query": {
+    "grain": "facts",
+    "measures": [{
+      "name": "pct",
+      "agg": "ratio",
+      "numerator": {
+        "agg": "count",
+        "filter": { "is_resolved": true, "sla_breached": false },
+        "window": { "timeRole": "resolved_at" }
+      },
+      "denominator": {
+        "agg": "count",
+        "filter": { "is_resolved": true },
+        "window": { "timeRole": "resolved_at" }
+      }
+    }]
+  },
+  "supportsSeries": true,
+  "viz": {
+    "kind": "scalar",
+    "format": "percentOneDecimal",
+    "valueKey": "pct",
+    "accent": "teal",
+    "group": "complaint-landscape",
+    "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
+    "compose": null,
+    "pii": false,
+    "title": "Resolved on time rate",
+    "subtitle": "Resolved within SLA ÷ resolved in period",
+    "delta": { "mode": "percentPoint", "compare": "prior" },
+    "deltaLabel": "vs prior period",
+    "dateKey": "resolved_date",
+    "sparklineMeasureKey": "pct"
+  },
+  "params": [{
+    "name": "window",
+    "default": "last_7d",
+    "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"]
+  }],
+  "rbac": {
+    "visibleTo": ["TICKET_REPORT_VIEWER", "PGR_VIEWER"]
+  }
+}'
+
+RESOLVED_DATE_RANGE_COUNT_DATA='{
+  "id": "cl_resolved_date_range_count",
+  "version": "1.0.0",
+  "status": "published",
+  "query": {
+    "grain": "facts",
+    "window": { "name": "last_7d", "timeRole": "resolved_at" },
+    "filters": { "is_resolved": true },
+    "measures": [{ "name": "total", "agg": "count" }]
+  },
+  "supportsSeries": true,
+  "viz": {
+    "kind": "scalar",
+    "format": "integer",
+    "valueKey": "total",
+    "accent": "green",
+    "group": "complaint-landscape",
+    "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
+    "compose": null,
+    "pii": false,
+    "title": "Resolved complaints",
+    "subtitle": "Complaints resolved in period",
+    "delta": { "mode": "percent", "compare": "prior" },
+    "deltaLabel": "vs prior period",
+    "dateKey": "resolved_date",
+    "sparklineMeasureKey": "total"
+  },
+  "params": [{
+    "name": "window",
+    "default": "last_7d",
+    "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"]
+  }],
+  "rbac": {
+    "visibleTo": ["TICKET_REPORT_VIEWER", "PGR_VIEWER"]
+  }
+}'
+
+OLDEST_OPEN_AGE_DATA='{
+  "id": "cl_oldest_open_age",
+  "version": "1.0.0",
+  "status": "published",
+  "query": {
+    "grain": "daily",
+    "filters": { "is_open": true },
+    "measures": [{ "name": "max_age_ms", "agg": "max", "column": "open_age_ms" }]
+  },
+  "supportsSeries": false,
+  "viz": {
+    "kind": "scalar",
+    "format": "hoursDays",
+    "valueKey": "max_age_ms",
+    "accent": "amber",
+    "group": "complaint-landscape",
+    "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
+    "compose": null,
+    "pii": false,
+    "title": "Oldest complaint",
+    "subtitle": "Oldest open complaint at period end",
+    "delta": { "mode": "days", "compare": "prior" },
+    "deltaLabel": "vs prior period end"
+  },
+  "params": [{
+    "name": "window",
+    "default": "last_7d",
+    "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"]
+  }],
+  "rbac": {
+    "visibleTo": ["TICKET_REPORT_VIEWER", "PGR_VIEWER"]
+  }
+}'
+
+CSAT_AVG_DATA='{
+  "id": "cl_csat_avg",
+  "version": "1.0.0",
+  "status": "published",
+  "query": {
+    "grain": "facts",
+    "filters": { "is_resolved": true, "has_rating": true },
+    "measures": [{ "name": "avg", "agg": "avg", "column": "rating" }]
+  },
+  "supportsSeries": true,
+  "viz": {
+    "kind": "scalar",
+    "format": "ratingOutOfFive",
+    "valueKey": "avg",
+    "accent": "teal",
+    "group": "complaint-landscape",
+    "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG",
+    "compose": null,
+    "pii": false,
+    "title": "Citizen satisfaction",
+    "subtitle": "Avg. rating on resolved complaints",
+    "delta": { "mode": "rating", "compare": "prior" },
+    "deltaLabel": "vs prior period"
+  },
+  "params": [{
+    "name": "window",
+    "default": "last_7d",
+    "allowed": ["last_1d", "last_7d", "last_30d", "wtd", "mtd"]
+  }],
+  "rbac": {
+    "visibleTo": ["TICKET_REPORT_VIEWER", "PGR_VIEWER"]
+  }
+}'
+
+MAP_WARD_WOW_DATA='{
+  "id": "cl_map_ward_wow_current",
+  "version": "1.0.0",
+  "status": "published",
+  "query": {
+    "grain": "facts",
+    "dimensions": ["ward_code"],
+    "measures": [
+      { "name": "filed", "agg": "count" },
+      { "name": "open", "agg": "count", "filter": { "is_open": true } },
+      { "name": "resolved", "agg": "count", "filter": { "is_resolved": true } }
+    ],
+    "limit": 200,
+    "filters": {}
+  },
+  "supportsSeries": false,
+  "viz": {
+    "kind": "map",
+    "format": "integer",
+    "valueKey": "filed",
+    "accent": "teal",
+    "group": "complaint-landscape",
+    "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
+    "dimensionKey": "ward_code",
+    "measureKeys": ["filed", "open", "resolved"],
+    "compose": null,
+    "pii": false,
+    "title": "Complaints map",
+    "subtitle": "Created, open and resolved counts per ward"
   },
   "params": [{
     "name": "window",
@@ -699,63 +921,103 @@ DEPARTMENT_FLOW_RATIO_DATA='{
   }
 }'
 
-echo "==> 1/13 Upsert cl_total_complaints_count"
+echo "==> 1/18 Upsert cl_resolved_on_time_rate_count"
+upsert_kpi "cl_resolved_on_time_rate_count" "${RESOLVED_ON_TIME_RATE_DATA}" "cl-resolved-on-time-rate"
+
+echo "==> 2/18 Upsert cl_resolved_date_range_count"
+upsert_kpi "cl_resolved_date_range_count" "${RESOLVED_DATE_RANGE_COUNT_DATA}" "cl-resolved-date-range"
+
+echo "==> 3/18 Upsert cl_total_complaints_count"
 upsert_kpi "cl_total_complaints_count" "${TOTAL_COMPLAINTS_DATA}" "cl-total-complaints"
 
-echo "==> 2/13 Upsert cl_flow_ratio_count"
+echo "==> 4/18 Upsert cl_flow_ratio_count"
 upsert_kpi "cl_flow_ratio_count" "${FLOW_RATIO_DATA}" "cl-flow-ratio"
 
-echo "==> 3/13 Upsert cl_chart_wards_by_sla"
+echo "==> 5/18 Upsert cl_oldest_open_age"
+upsert_kpi "cl_oldest_open_age" "${OLDEST_OPEN_AGE_DATA}" "cl-oldest-open-age"
+
+echo "==> 6/18 Upsert cl_csat_avg"
+upsert_kpi "cl_csat_avg" "${CSAT_AVG_DATA}" "cl-csat-avg"
+
+echo "==> 7/18 Upsert cl_map_ward_wow_current"
+upsert_kpi "cl_map_ward_wow_current" "${MAP_WARD_WOW_DATA}" "cl-map-ward-wow" || {
+  echo "WARN: cl_map_ward_wow_current upsert failed."
+}
+
+echo "==> 8/18 Upsert cl_chart_wards_by_sla"
 upsert_kpi "cl_chart_wards_by_sla" "${WARDS_BY_SLA_DATA}" "cl-chart-wards-sla" || {
   echo "WARN: cl_chart_wards_by_sla upsert failed."
 }
 
-echo "==> 4/13 Upsert cl_table_subtype_performance"
+echo "==> 9/18 Upsert cl_table_subtype_performance"
 upsert_kpi "cl_table_subtype_performance" "${SUBTYPE_PERFORMANCE_DATA}" "cl-table-subtype-perf" || {
   echo "WARN: cl_table_subtype_performance upsert failed."
 }
 
-echo "==> 5/13 Upsert cl_table_recurring_ward_subtype"
+echo "==> 10/18 Upsert cl_table_recurring_ward_subtype"
 upsert_kpi "cl_table_recurring_ward_subtype" "${RECURRING_WARD_SUBTYPE_DATA}" "cl-table-recurring" || {
   echo "WARN: cl_table_recurring_ward_subtype upsert failed."
 }
 
-echo "==> 6/13 Upsert cl_chart_over_time_open_daily"
+echo "==> 11/18 Upsert cl_chart_over_time_open_daily"
 upsert_kpi "cl_chart_over_time_open_daily" "${OPEN_DAILY_DATA}" "cl-chart-open-daily" || {
   echo "WARN: cl_chart_over_time_open_daily upsert failed."
 }
 
-echo "==> 7/13 Upsert cl_chart_complaints_over_time"
+echo "==> 12/18 Upsert cl_chart_complaints_over_time"
 upsert_kpi "cl_chart_complaints_over_time" "${COMPLAINTS_OVER_TIME_DATA}" "cl-chart-over-time" || {
   echo "WARN: cl_chart_complaints_over_time upsert failed."
 }
 
-echo "==> 8/13 Upsert cl_chart_department_breach_scatter"
+echo "==> 13/18 Upsert cl_chart_department_breach_scatter"
 upsert_kpi "cl_chart_department_breach_scatter" "${DEPARTMENT_BREACH_SCATTER_DATA}" "cl-chart-dept-scatter" || {
   echo "WARN: cl_chart_department_breach_scatter upsert failed."
 }
 
-echo "==> 9/13 Upsert cl_table_ward_open_daily"
+echo "==> 14/18 Upsert cl_table_ward_open_daily"
 upsert_kpi "cl_table_ward_open_daily" "${WARD_OPEN_DAILY_DATA}" "cl-table-ward-open-daily" || {
   echo "WARN: cl_table_ward_open_daily upsert failed."
 }
 
-echo "==> 10/13 Upsert cl_table_ward_performance"
+echo "==> 15/18 Upsert cl_table_ward_performance"
 upsert_kpi "cl_table_ward_performance" "${WARD_PERFORMANCE_DATA}" "cl-table-ward-perf" || {
   echo "WARN: cl_table_ward_performance upsert failed."
 }
 
-echo "==> 11/13 Upsert cl_table_service_quality_by_channel"
+echo "==> 16/18 Upsert cl_table_service_quality_by_channel"
 upsert_kpi "cl_table_service_quality_by_channel" "${SERVICE_QUALITY_BY_CHANNEL_DATA}" "cl-table-channel-quality" || {
   echo "WARN: cl_table_service_quality_by_channel upsert failed."
 }
 
-echo "==> 12/13 Upsert cl_chart_department_flow_ratio"
+echo "==> 17/18 Upsert cl_chart_department_flow_ratio"
 upsert_kpi "cl_chart_department_flow_ratio" "${DEPARTMENT_FLOW_RATIO_DATA}" "cl-chart-dept-flow" || {
   echo "WARN: cl_chart_department_flow_ratio upsert failed."
 }
 
-echo "==> 13/13 Update executive-default DashboardPack"
+PACK_TILES=(
+  cl_resolved_on_time_rate_count
+  cl_resolved_date_range_count
+  cl_total_complaints_count
+  cl_flow_ratio_count
+  cl_oldest_open_age
+  cl_csat_avg
+  cl_chart_wards_by_sla
+  cl_table_subtype_performance
+  cl_map_ward_wow_current
+  cl_table_recurring_ward_subtype
+  cl_chart_complaints_over_time
+  cl_chart_department_breach_scatter
+  cl_table_ward_performance
+  cl_table_service_quality_by_channel
+  cl_chart_department_flow_ratio
+)
+
+echo "==> Validating pack tile KPIs exist on tenant"
+for tile_id in "${PACK_TILES[@]}"; do
+  validate_kpi_exists "${tile_id}"
+done
+
+echo "==> 18/18 Update executive-default DashboardPack"
 PACK_SEARCH="$(post_mdms "/mdms-v2/v2/_search" "$(cat <<EOF
 {
   "RequestInfo": {
