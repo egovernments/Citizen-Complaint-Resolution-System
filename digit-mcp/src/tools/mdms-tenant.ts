@@ -1097,20 +1097,19 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             roles: standardRoles,
             tenantId: target,
           };
-          try {
+          // user_only is only ever called after a full bootstrap already created
+          // this user (see the ansible "post-bootstrap — re-provision ADMIN"
+          // tasks) — it always exists here, so update in place to re-encrypt
+          // password/mobileNumber under whichever enc key is currently active,
+          // rather than attempting userCreate and string-matching the resulting
+          // error to detect the duplicate it will always be.
+          const existing = await digitApi.userSearch(target, { userName: currentUsername, limit: 1 });
+          if (existing[0]) {
+            await digitApi.userUpdate({ ...existing[0], ...newUser });
+          } else {
             await digitApi.userCreate(newUser, target);
-            userProvisioned = { username: currentUsername, tenantId: target, roles: standardRoles.map((r) => r.code) };
-          } catch (createErr) {
-            const createMsg = createErr instanceof Error ? createErr.message : String(createErr);
-            const isDuplicate =
-              createMsg.includes('DuplicateUserName') ||
-              createMsg.toLowerCase().includes('duplicate');
-            if (isDuplicate) {
-              userProvisioned = { username: currentUsername, tenantId: target, roles: [] };
-            } else {
-              throw createErr;
-            }
           }
+          userProvisioned = { username: currentUsername, tenantId: target, roles: standardRoles.map((r) => r.code) };
         } catch (error) {
           userProvisionError = error instanceof Error ? error.message : String(error);
         }
