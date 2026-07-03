@@ -45,7 +45,7 @@ test.describe.serial('Citizen PGR complaint — full lifecycle', () => {
   let complaintCreated = false;
   let complaintAssigned = false;
   // Tenant-aware fixtures sourced from the live deployment at setup time.
-  // - mobile rule comes from MDMS ValidationConfigs.mobileNumberValidation
+  // - mobile rule comes from MDMS common-masters.MobileNumberValidation
   // - locality is a RANDOMLY-picked leaf from the boundary tree (egov-location)
   // Random picking is deliberate: it forces the test to exercise different
   // wards across runs instead of pinning a single happy path.
