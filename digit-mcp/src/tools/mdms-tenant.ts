@@ -1043,6 +1043,20 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
 
       const target = args.target_tenant as string;
       const source = (args.source_tenant as string) || 'pg';
+
+      // Register the target with egov-enc-service BEFORE anything below needs
+      // to encrypt/decrypt for it (Step 4's ADMIN user creation, in particular).
+      // egov-enc-service only knows tenants discovered via an MDMS search
+      // scoped to its own STATE_LEVEL_TENANT_ID — a brand-new root is invisible
+      // to it otherwise, and encrypt/decrypt throws "Tenant Id not found".
+      // Non-fatal: if enc-service is unreachable, let the rest of bootstrap
+      // proceed and surface the real error at whichever step needs it.
+      try {
+        await digitApi.generateEncKey(target);
+      } catch (e) {
+        console.error(`[tenant_bootstrap] enc-service key generation failed for "${target}": ${e instanceof Error ? e.message : String(e)}`);
+      }
+
       if (!args.mobile_regex || !args.mobile_prefix) {
         // When regex or prefix are not explicit (e.g. the bootstrap wizard only
         // sends target_tenant + source_tenant), inherit from the SOURCE tenant's
