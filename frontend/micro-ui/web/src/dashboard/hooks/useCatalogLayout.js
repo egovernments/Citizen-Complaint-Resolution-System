@@ -379,21 +379,6 @@ export function useCatalogLayout(kpis, packLayout) {
           { packKpis: false, colStart, colEnd }
         );
       }
-      const finalItem = filled.find((item) => item.i === newItem.i);
-      const officerSla = filled.find((item) => item.i === "cl_chart_officer_sla");
-      const openByStage = filled.find((item) => item.i === "cl_chart_open_by_type_stage");
-      const topKpis = filled
-        .filter((item) => isCatalogCard(item.i, kpis) && geom.vacatedTopBandSlot(item))
-        .map((item) => ({ i: item.i, x: item.x, y: item.y, w: item.w }))
-        .sort((a, b) => a.x - b.x);
-      const topRowGap = topKpis.some((item, idx) => {
-        if (idx === 0) return item.x > 0;
-        const prev = topKpis[idx - 1];
-        return item.x > prev.x + prev.w;
-      });
-      // #region agent log
-      fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',runId:'gap-fill-v8',location:'useCatalogLayout.js:onDragStop',message:'drag committed',data:{itemId:newItem.i,isKpi,dropBelow,shouldPackTop,packKpiPin,vacatedTop,landsInTop,finalY:finalItem?.y,topKpiPositions:topKpis,topRowGap,officerSlaY:officerSla?.y,openByStageY:openByStage?.y,anchoredKpis:geom.getPinnedKpiIds(filled),overlapAfter:geom.hasOverlaps(filled)?1:0},timestamp:Date.now(),hypothesisId:'H24'})}).catch(()=>{});
-      // #endregion
       commitLayoutAfterInteraction(filled);
     },
     [commitLayoutAfterInteraction, geom, kpis]
@@ -411,9 +396,6 @@ export function useCatalogLayout(kpis, packLayout) {
         ];
         next = geom.compactGapsUpward(next, pinIds);
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',runId:'local-compact',location:'useCatalogLayout.js:onResizeStop',message:'resize committed',data:{resizedId:newItem?.i,anchoredKpis:geom.getPinnedKpiIds(next),overlapAfter:geom.hasOverlaps(next)?1:0,tileCount:next.length},timestamp:Date.now(),hypothesisId:'H14'})}).catch(()=>{});
-      // #endregion
       commitLayoutAfterInteraction(next, newItem ? [newItem.i] : null);
     },
     [commitLayoutAfterInteraction, geom]
@@ -481,9 +463,6 @@ export function useCatalogLayout(kpis, packLayout) {
       if (geom.hasOverlaps(next)) {
         next = geom.resolveRemainingOverlaps(next, [kpiId]);
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',runId:'482143e-port',location:'useCatalogLayout.js:addKpiToLayout',message:'tile added',data:{kpiId,layoutCount:next.length},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
       commitInventoryDrop(next);
     },
     [commitInventoryDrop, geom, kpis]
