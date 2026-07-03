@@ -1033,16 +1033,84 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           },
         },
       },
+        user_only: {
+          type: 'boolean',
+          description:
+            'When true, skip all MDMS copy steps and only re-create the ADMIN user on ' +
+            'target_tenant. Called after post-bootstrap changes STATE_LEVEL_TENANT_ID ' +
+            'from pg to the real state root so the user is stored with the correct enc key.',
+        },
       required: ['target_tenant'],
     },
     handler: async (args) => {
       validateTenantId(args.target_tenant, 'target_tenant');
       if (args.source_tenant) validateTenantId(args.source_tenant, 'source_tenant');
 
-      await ensureAuthenticated();
-
       const target = args.target_tenant as string;
       const source = (args.source_tenant as string) || 'pg';
+
+      if (args.user_only) {
+        const mobileRegex = (args.mobile_regex as string) || '^[6-9][0-9]{9}$';
+        const stateTenantForEviction = target.includes('.') ? target.split('.')[0] : target;
+        await evictValidationCache(stateTenantForEviction);
+
+        let userProvisioned: { username: string; tenantId: string; roles: string[] } | null = null;
+        let userProvisionError: string | null = null;
+        try {
+          const currentUsername = process.env.CRS_USERNAME || 'ADMIN';
+          const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
+          const mobileNumber = deriveValidMobile(
+            mobileRegex,
+            Number(args.mobile_length) || 10,
+            (args.admin_mobile as string) || undefined,
+          );
+          const standardRoles = [
+            { code: 'EMPLOYEE', name: 'Employee' },
+            { code: 'CITIZEN', name: 'Citizen' },
+            { code: 'CSR', name: 'CSR' },
+            { code: 'GRO', name: 'Grievance Routing Officer' },
+            { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
+            { code: 'DGRO', name: 'Department GRO' },
+            { code: 'SUPERUSER', name: 'Super User' },
+            { code: 'INTERNAL_MICROSERVICE_ROLE', name: 'Internal Microservice Role' },
+          ].map((r) => ({ ...r, tenantId: target }));
+          const newUser = {
+            name: 'Admin',
+            mobileNumber,
+            userName: currentUsername,
+            password: currentPassword,
+            type: 'EMPLOYEE',
+            active: true,
+            roles: standardRoles,
+            tenantId: target,
+          };
+          try {
+            await digitApi.userCreate(newUser, target);
+            userProvisioned = { username: currentUsername, tenantId: target, roles: standardRoles.map((r) => r.code) };
+          } catch (createErr) {
+            const createMsg = createErr instanceof Error ? createErr.message : String(createErr);
+            const isDuplicate =
+              createMsg.includes('DuplicateUserName') ||
+              createMsg.toLowerCase().includes('duplicate');
+            if (isDuplicate) {
+              userProvisioned = { username: currentUsername, tenantId: target, roles: [] };
+            } else {
+              throw createErr;
+            }
+          }
+        } catch (error) {
+          userProvisionError = error instanceof Error ? error.message : String(error);
+        }
+        return JSON.stringify({
+          success: true,
+          user_only: true,
+          admin_user_provisioned: !!userProvisioned,
+          admin_user_provisioned_details: userProvisioned,
+          admin_user_provision_error: userProvisionError || undefined,
+        }, null, 2);
+      }
+
+      await ensureAuthenticated();
       if (!args.mobile_regex || !args.mobile_prefix) {
         // When regex or prefix are not explicit (e.g. the bootstrap wizard only
         // sends target_tenant + source_tenant), inherit from the SOURCE tenant's
