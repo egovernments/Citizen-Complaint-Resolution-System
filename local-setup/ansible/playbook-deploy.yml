@@ -1990,11 +1990,8 @@
         body:
           target_tenant: "{{ state_root }}"
           source_tenant: "pg"
-          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
-          mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
-          mobile_prefix: "{{ core_mobile_configs.mobilePrefix | default(omit) }}"
-          mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
-          mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
@@ -2017,11 +2014,8 @@
         body:
           target_tenant: "{{ tenant_id }}"
           source_tenant: "pg.citest"
-          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
-          mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
-          mobile_prefix: "{{ core_mobile_configs.mobilePrefix | default(omit) }}"
-          mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
-          mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
@@ -2218,8 +2212,10 @@
     # since :1044-preview) rejects HRMS's hardcoded 10-digit mobile on
     # tenants with a stricter rule (e.g. ethiopia's ^[17][0-9]{8}$) and
     # HRMS crash-loops with "Service returned null while fetching user".
-    # Seed it here with a mobile derived from the tenant's own rule:
-    # first allowed starting digit, padded with 9s to the rule length.
+    # Seed it here with a mobile derived from the tenant's own rule: length +
+    # allowed leading digits aren't separate host_vars fields — they're derived
+    # straight from mobileNumberRegex (see filter_plugins/mobile.py), the same
+    # way digit-mcp's deriveValidMobile() does it for MCP-driven ADMIN seeding.
     - name: "post-bootstrap — seed INTERNAL_USER system user on state_root for HRMS"
       ansible.builtin.uri:
         url: "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate"
@@ -2230,7 +2226,7 @@
           User:
             userName: INTERNAL_USER
             name: Internal Microservice User
-            mobileNumber: "{{ ((core_mobile_configs.mobileNumberAllowedStartingCharacters | first) ~ ('9' * ((core_mobile_configs.mobileNumberLength | int) - 1))) if core_mobile_configs is defined else '9999999999' }}"
+            mobileNumber: "{{ (core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$')) | derive_valid_mobile }}"
             gender: MALE
             active: true
             type: SYSTEM
