@@ -2471,6 +2471,17 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         }, null, 2);
       }
 
+      // Register the city tenant with egov-enc-service before Step 3 creates its
+      // dual-scoped ADMIN user — each tenantId needs its own key (the root's key,
+      // provisioned by tenant_bootstrap, doesn't cover a distinct city tenantId).
+      // See tenant_bootstrap's identical call above for the full rationale.
+      // Non-fatal: if enc-service is unreachable, let Step 3 surface the real error.
+      try {
+        await digitApi.generateEncKey(tenantId);
+      } catch (e) {
+        console.error(`[city_setup] enc-service key generation failed for "${tenantId}": ${e instanceof Error ? e.message : String(e)}`);
+      }
+
       const root = tenantId.split('.')[0];
       const cityCode = tenantId.split('.').slice(1).join('.').toUpperCase().replace(/\./g, '_');
 
