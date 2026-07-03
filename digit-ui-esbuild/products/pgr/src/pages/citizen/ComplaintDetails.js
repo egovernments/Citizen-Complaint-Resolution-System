@@ -19,13 +19,18 @@ import { AlertCircle } from "lucide-react";
 
 import { LOCALIZATION_KEY } from "../../constants/Localization";
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
-import TimeLine from "../../components/TimeLine";
+import TimelineWrapper from "../../components/TimeLineWrapper";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import { buildExtendedAttributeRows } from "../../components/PgrExtendedAttributesView";
 
-const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CLOSEDAFTERREJECTION", "CLOSEDAFTERRESOLUTION"];
-const REJECTED_STATUSES = ["REJECTED", "CLOSEDAFTERREJECTION"];
+// Terminal (non-active) states across standard PGR *and* the mz.igsae CMS workflow.
+// CANCELLED / CLOSEDAFTER* are CMS terminals; without them CANCELLED wrongly showed
+// as "open" (active). A fully workflow-driven derivation would read isTerminateState
+// off the BusinessService, but that state is not fetched on the citizen detail page,
+// so we key off the status name (which the BusinessService states are named after).
+const REJECTED_STATUSES = ["REJECTED", "CLOSEDAFTERREJECTION", "CANCELLED"];
+const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CLOSEDAFTERREJECTION", "CLOSEDAFTERRESOLUTION", "CANCELLED"];
 
 function statusToTone(status) {
   if (REJECTED_STATUSES.includes(status)) return "rejected";
@@ -127,7 +132,17 @@ function WorkflowComponent({ complaintDetails, id }) {
   const tenantId =
     Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
     complaintDetails.service.tenantId;
-  const workFlowDetails = Digit.Hooks.useWorkflowDetails({ tenantId, id, moduleCode: "PGR" });
+
+  // Workflow-driven timeline: fetch the raw process instances (same source the
+  // employee side uses) and render them via the generic TimelineWrapper. This
+  // renders whatever states a BusinessService defines (standard PGR *and* the
+  // mz.igsae CMS workflow) with no hardcoded status list, replacing the legacy
+  // status-ordered <TimeLine>.
+  const { isLoading: isWorkFlowLoading, data: workflowData, revalidate } = Digit.Hooks.useCustomAPIHook({
+    url: "/egov-workflow-v2/egov-wf/process/_search",
+    params: { tenantId, history: true, businessIds: id },
+    changeQueryName: id,
+  });
 
   // Pre-fetched MDMS for downstream rules; kept to avoid changing fetch
   // cadence vs. the legacy file (some hooks gate on its cache hit).
@@ -139,18 +154,16 @@ function WorkflowComponent({ complaintDetails, id }) {
   );
 
   useEffect(() => {
-    workFlowDetails.revalidate();
+    revalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (workFlowDetails.isLoading) return null;
   return (
-    <TimeLine
-      data={workFlowDetails.data}
-      serviceRequestId={id}
-      complaintWorkflow={complaintDetails.workflow}
-      rating={complaintDetails.audit?.rating}
-      complaintDetails={complaintDetails}
+    <TimelineWrapper
+      businessId={id}
+      isWorkFlowLoading={isWorkFlowLoading}
+      workflowData={workflowData}
+      labelPrefix="WF_PGR_"
     />
   );
 }

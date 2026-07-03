@@ -3,7 +3,8 @@ import React, { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 const ROLES = {
-  PGR: ["GRO", "PGR_LME", "CSR"],
+  // CMS_* roles (mz.igsae multi-tier workflow) added alongside the standard PGR roles — additive.
+  PGR: ["GRO", "PGR_LME", "CSR", "CMS_RECEPTION_OFFICER", "CMS_SCREENING_OFFICER", "CMS_SUPERVISOR", "CMS_CASE_MANAGER", "CMS_VIEWER"],
 };
 
 const PGRCard = () => {
@@ -34,7 +35,7 @@ const PGRCard = () => {
   }
 
   let links = [
-    generateLink("ACTION_TEST_CREATE_COMPLAINT", "create-complaint", ["CSR"]),
+    generateLink("ACTION_TEST_CREATE_COMPLAINT", "create-complaint", ["CSR", "CMS_RECEPTION_OFFICER"]),
     generateLink("ACTION_TEST_SEARCH_COMPLAINT", "inbox-v2"),
   ];
   const hasRequiredRoles = (link) => { 
