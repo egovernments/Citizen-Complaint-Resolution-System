@@ -29,31 +29,6 @@ export function hasOverlaps(layout) {
   return false;
 }
 
-function collidesWithAny(item, placed) {
-  return placed.some((other) => rectsOverlap(item, other));
-}
-
-/**
- * Compact vertically, then if any rectangles still overlap re-place colliding
- * items into the first open grid slot (guarantees zero overlap).
- */
-export function resolveLayoutCollisions(layout, findOpen, cols = 12) {
-  let result = compactVertically(layout);
-  if (!hasOverlaps(result)) return result;
-
-  const sorted = [...result].sort((a, b) => a.y - b.y || a.x - b.x);
-  const placed = [];
-  for (const item of sorted) {
-    if (!collidesWithAny(item, placed)) {
-      placed.push({ ...item });
-      continue;
-    }
-    const slot = findOpen(placed, item.w, item.h, cols);
-    placed.push({ ...item, x: slot.x, y: slot.y });
-  }
-  return placed;
-}
-
 /**
  * Compact every item upward to the lowest free row (reading order: top-to-bottom,
  * left-to-right). Removes vertical gaps and resolves overlaps (e.g. after a swap

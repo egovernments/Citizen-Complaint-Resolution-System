@@ -472,18 +472,12 @@ const AdminDashboardInner = ({ onSignOut }) => {
   const handleDragWidgetStart = useCallback((widgetId) => {
     draggingWidgetIdRef.current = widgetId;
     setDraggingWidgetId(widgetId);
-    // #region agent log
-    fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',location:'AdminDashboard.jsx:handleDragWidgetStart',message:'parent received external drag start',data:{widgetId},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
   }, []);
 
   const handleDragWidgetEnd = useCallback(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',location:'AdminDashboard.jsx:handleDragWidgetEnd',message:'external drag ended',data:{widgetId:draggingWidgetIdRef.current,layoutCount:layout.length},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
     draggingWidgetIdRef.current = null;
     setDraggingWidgetId(null);
-  }, [layout.length]);
+  }, []);
 
   const isExternalDrag = Boolean(draggingWidgetId);
 
@@ -543,9 +537,6 @@ const AdminDashboardInner = ({ onSignOut }) => {
       event.preventDefault();
       event.stopPropagation();
       const widgetId = event.dataTransfer?.getData("text/plain");
-      // #region agent log
-      fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',runId:'post-fix',location:'AdminDashboard.jsx:handleWrapDrop',message:'external drop on grid wrapper',data:{widgetId,draggingRef:draggingWidgetIdRef.current},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
       completeExternalDrop(widgetId, null, event.clientX, event.clientY);
     },
     [completeExternalDrop]
@@ -591,9 +582,6 @@ const AdminDashboardInner = ({ onSignOut }) => {
       postDropWidgetRef.current = null;
     }
     userDragWidgetRef.current = widgetId ?? null;
-    // #region agent log
-    fetch('http://127.0.0.1:7630/ingest/ed402528-2e82-4433-9e5e-44ba3731c608',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e2c7b3'},body:JSON.stringify({sessionId:'e2c7b3',location:'AdminDashboard.jsx:onDragStart',message:'internal grid drag started',data:{itemId:widgetId,from:{x:newItem?.x,y:newItem?.y}},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
-    // #endregion
   }, [layout]);
 
   const handleInternalDrag = useCallback(
