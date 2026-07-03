@@ -227,7 +227,9 @@ const didEmployeeHasAtleastOneRole = (roles = []) => {
 const pgrAccess = () => {
   const userInfo = Digit.UserService.getUser();
   const userRoles = userInfo?.info?.roles?.map((roleData) => roleData?.code);
-  const pgrRoles = ["PGR_LME", "PGR-ADMIN", "CSR", "CEMP", "FEMP", "DGRO", "ULB Operator", "GRO", "GO", "RO", "GA"];
+  const pgrRoles = ["PGR_LME", "PGR-ADMIN", "CSR", "CEMP", "FEMP", "DGRO", "ULB Operator", "GRO", "GO", "RO", "GA",
+    // CMS multi-tier workflow roles (mz.igsae) — additive, standard PGR unaffected
+    "CMS_RECEPTION_OFFICER", "CMS_SCREENING_OFFICER", "CMS_SUPERVISOR", "CMS_CASE_MANAGER", "CMS_VIEWER"];
   if (Digit.Utils.getMultiRootTenant()) {
     pgrRoles.push("SUPERUSER");
   }

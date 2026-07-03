@@ -69,8 +69,13 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                 const mobile = isAssigningAction(instance?.action) ? assignee?.mobileNumber : instance?.assigner?.mobileNumber;
                 const contactLine = mobile ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${mobile}` : null;
 
+                // Workflow-driven label: try the localized key, else fall back to the
+                // raw action code so ANY workflow's actions (standard PGR + CMS) render
+                // legibly even before their WF_PGR_* keys are seeded.
+                const labelKey = `${labelPrefix}${instance?.action}`;
+                const localizedLabel = t(labelKey);
                 return {
-                    label: t(`${labelPrefix}${instance?.action}`),
+                    label: localizedLabel && localizedLabel !== labelKey ? localizedLabel : (instance?.action || ""),
                     variant: 'completed',
                     subElements: [
                         convertEpochFormateToDate(instance?.auditDetails?.lastModifiedTime),
