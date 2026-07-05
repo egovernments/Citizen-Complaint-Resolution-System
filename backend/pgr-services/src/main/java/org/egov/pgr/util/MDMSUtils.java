@@ -15,6 +15,7 @@ import org.egov.pgr.web.models.ComplaintTemplateTypeConfig;
 import org.egov.pgr.web.models.ServiceRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.util.CollectionUtils;
 
 import org.egov.tracer.model.CustomException;
 
@@ -33,6 +34,10 @@ import static org.egov.pgr.util.PGRConstants.MDMS_DATA_SERVICE_CODE_KEYWORD;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_RELATED_TO_MAP;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_TEMPLATE_TYPE;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_SCHEMA;
+import static org.egov.pgr.util.PGRConstants.MDMS_SERVICEDEF_MASTER;
+import static org.egov.pgr.util.PGRConstants.MDMS_SERVICEDEFS_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.MDMS_SERVICE_CODE_KEY;
+import static org.egov.pgr.util.PGRConstants.DEPARTMENT;
 
 @Slf4j
 @Component
@@ -309,6 +314,44 @@ public class MDMSUtils {
             log.error("Failed to fetch ComplaintTemplateTypeConfig for caseRelatedTo={} tenant={}", caseRelatedTo, tenantId, e);
             return null;
         }
+    }
+
+    /**
+     * Resolves department codes -> serviceCodes by reading RAINMAKER-PGR.ServiceDefs
+     * (each active def carries serviceCode + department). Returns an empty set (never null)
+     * on MDMS failure so _search can no-op safely. Read against the state-level tenant.
+     */
+    public Set<String> getServiceCodesByDepartment(String tenantId, Set<String> departmentCodes) {
+        Set<String> serviceCodes = new HashSet<>();
+        if (CollectionUtils.isEmpty(departmentCodes))
+            return serviceCodes;
+        try {
+            String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+            MdmsCriteriaReq req = getServiceDefMdmsRequest(new RequestInfo(), stateTenant);
+            Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), req);
+            List<Map<String, Object>> defs = JsonPath.read(result, MDMS_SERVICEDEFS_JSONPATH);
+            for (Map<String, Object> def : defs) {
+                Object code = def.get(MDMS_SERVICE_CODE_KEY);
+                Object dept = def.get(DEPARTMENT);
+                if (code != null && dept != null && departmentCodes.contains(dept.toString()))
+                    serviceCodes.add(code.toString());
+            }
+        } catch (Exception e) {
+            log.error("Failed to resolve serviceCodes for departments {} (tenant {})",
+                    departmentCodes, tenantId, e);
+        }
+        return serviceCodes;
+    }
+
+    /** MDMS request for RAINMAKER-PGR.ServiceDefs (active rows only). */
+    private MdmsCriteriaReq getServiceDefMdmsRequest(RequestInfo requestInfo, String tenantId) {
+        MasterDetail master = MasterDetail.builder()
+                .name(MDMS_SERVICEDEF_MASTER).filter("$.[?(@.active==true)]").build();
+        ModuleDetail module = ModuleDetail.builder()
+                .moduleName(MDMS_MODULE_NAME).masterDetails(List.of(master)).build();
+        MdmsCriteria criteria = MdmsCriteria.builder()
+                .moduleDetails(List.of(module)).tenantId(tenantId).build();
+        return MdmsCriteriaReq.builder().mdmsCriteria(criteria).requestInfo(requestInfo).build();
     }
 
 }

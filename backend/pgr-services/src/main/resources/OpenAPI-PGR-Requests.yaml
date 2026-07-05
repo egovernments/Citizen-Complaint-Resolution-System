@@ -58,6 +58,18 @@ paths:
             type: string
           required: true
           description: Tenant ID for which requests are to be searched
+        - in: query
+          name: department
+          schema:
+            type: array
+            items:
+              type: string
+          required: false
+          description: >
+            Department code(s), comma-separated. Resolved to the department's service
+            codes via MDMS (RAINMAKER-PGR.ServiceDefs) and applied as a serviceCode
+            filter. Employee search only. If combined with serviceCode, the two are
+            intersected (AND).
         # Add other search criteria as needed
       responses:
         '200':
@@ -149,6 +161,18 @@ paths:
             type: string
           required: true
           description: Tenant ID for which requests are to be counted
+        - in: query
+          name: department
+          schema:
+            type: array
+            items:
+              type: string
+          required: false
+          description: >
+            Department code(s), comma-separated. Resolved to the department's service
+            codes via MDMS (RAINMAKER-PGR.ServiceDefs) and applied as a serviceCode
+            filter. Employee search only. If combined with serviceCode, the two are
+            intersected (AND).
         # Add other search criteria as needed
       responses:
         '200':
@@ -179,6 +203,12 @@ components:
     # Local wrappers and models
     RequestInfoWrapper:
       type: object
+      description: >
+        Wrapper carrying only RequestInfo for _search/_count calls. All search filters
+        (tenantId, serviceCode, applicationStatus, department, etc.) are passed as query
+        parameters, not in this body. `department` is employee-only and is resolved to its
+        serviceCodes via MDMS (RAINMAKER-PGR.ServiceDefs), then applied as a serviceCode
+        filter (intersected with serviceCode when both are supplied).
       properties:
         RequestInfo:
           $ref: '#/components/schemas/RequestInfo'

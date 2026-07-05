@@ -162,6 +162,29 @@ public class PGRService {
             criteria.setServiceRequestIds(serviceRequestIds);
         }
 
+        if (!resolveDepartmentFilter(requestInfo, criteria))
+            return new ArrayList<>();
+
+        if (!CollectionUtils.isEmpty(criteria.getDepartment())) {
+            String tenantId = criteria.getTenantId() != null
+                    ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+            Set<String> deptServiceCodes = mdmsUtils.getServiceCodesByDepartment(tenantId, criteria.getDepartment());
+            if (deptServiceCodes.isEmpty()) {
+                return new ArrayList<>();
+            }
+            if (CollectionUtils.isEmpty(criteria.getServiceCode())) {
+                criteria.setServiceCode(deptServiceCodes);
+            } else {
+                // both department AND an explicit serviceCode were supplied -> intersect (AND)
+                Set<String> intersection = new HashSet<>(criteria.getServiceCode());
+                intersection.retainAll(deptServiceCodes);
+                if (intersection.isEmpty()) {
+                    return new ArrayList<>();
+                }
+                criteria.setServiceCode(intersection);
+            }
+        }
+
         criteria.setIsPlainSearch(false);
 
         List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria);
@@ -251,6 +274,8 @@ public class PGRService {
      * @return
      */
     public Integer count(RequestInfo requestInfo, RequestSearchCriteria criteria){
+        if (!resolveDepartmentFilter(requestInfo, criteria))
+            return 0;
         criteria.setIsPlainSearch(false);
         Integer count = repository.getCount(criteria);
         return count;
@@ -420,6 +445,33 @@ public class PGRService {
             log.warn("Failed to parse MDMS response for service name lookup, service: {}. Falling back to serviceCode.", serviceCode, e);
             return serviceCode;
         }
+    }
+
+    /**
+     * Folds a `department` filter into criteria.serviceCode by resolving it to serviceCodes
+     * via MDMS (ServiceDefs). Returns false when the department — or its intersection with an
+     * explicit serviceCode filter — resolves to zero serviceCodes, signalling the caller to
+     * short-circuit to an empty result. Returns true (criteria unchanged) when no department is set.
+     */
+    private boolean resolveDepartmentFilter(RequestInfo requestInfo, RequestSearchCriteria criteria) {
+        if (CollectionUtils.isEmpty(criteria.getDepartment()))
+            return true;
+        String tenantId = criteria.getTenantId() != null
+                ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+        Set<String> deptServiceCodes = mdmsUtils.getServiceCodesByDepartment(tenantId, criteria.getDepartment());
+        if (deptServiceCodes.isEmpty())
+            return false;
+        if (CollectionUtils.isEmpty(criteria.getServiceCode())) {
+            criteria.setServiceCode(deptServiceCodes);
+        } else {
+            // both department AND an explicit serviceCode supplied -> intersect (AND)
+            Set<String> intersection = new HashSet<>(criteria.getServiceCode());
+            intersection.retainAll(deptServiceCodes);
+            if (intersection.isEmpty())
+                return false;
+            criteria.setServiceCode(intersection);
+        }
+        return true;
     }
 
 }
