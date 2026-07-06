@@ -53,6 +53,14 @@ class ProxyAuthFilterTest {
         return req;
     }
 
+    private MockHttpServletRequest preferencesRequest() {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setMethod("GET");
+        req.setServletPath("/novu-adapter/v1/preferences");
+        req.setRequestURI("/novu-bridge/novu-adapter/v1/preferences");
+        return req;
+    }
+
     @Test
     void noAuthHeader_returns401_chainNotInvoked() throws Exception {
         MockHttpServletResponse res = new MockHttpServletResponse();
@@ -62,6 +70,19 @@ class ProxyAuthFilterTest {
 
         assertEquals(401, res.getStatus());
         assertNull(chain.getRequest()); // downstream never reached
+    }
+
+    @Test
+    void preferencesWithoutToken_isGated_returns401() throws Exception {
+        // Regression: /preferences must be auth-gated like /logs and /integrations.
+        // (shouldNotFilter previously excluded it, serving it unauthenticated.)
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(preferencesRequest(), res, chain);
+
+        assertEquals(401, res.getStatus());
+        assertNull(chain.getRequest());
     }
 
     @Test
