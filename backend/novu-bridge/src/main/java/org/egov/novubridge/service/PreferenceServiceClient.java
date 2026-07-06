@@ -190,7 +190,7 @@ public class PreferenceServiceClient {
             payload.put("requestInfo", new HashMap<>());
             payload.put("criteria", criteria);
 
-            String url = config.getPreferenceHost() + config.getPreferenceCheckPath();
+            String url = config.getPreferenceHost() + config.getPreferenceSearchPath();
             log.info("Preference list request: url={}, preferenceCode={}, tenantId={}, limit={}, offset={}",
                     url, config.getPreferenceCode(), tenantId, limit, offset);
 

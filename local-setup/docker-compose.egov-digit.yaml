@@ -2172,6 +2172,10 @@ services:
       NOVU_BRIDGE_PREFERENCE_ENABLED: ${NOVU_BRIDGE_PREFERENCE_ENABLED:-false}
       NOVU_BRIDGE_PREFERENCE_HOST: http://digit-user-preferences-service:8080
       NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_check
+      # Full search endpoint (returns the preferences list) — used by the
+      # read-only /novu-adapter/v1/preferences proxy for the configurator's
+      # User Preferences screen. Distinct from the boolean _check path above.
+      NOVU_BRIDGE_PREFERENCE_SEARCH_PATH: /user-preference/v1/_search
       NOVU_BRIDGE_PREFERENCE_CODE: USER_NOTIFICATION_PREFERENCES
       # Per-channel Novu workflow ids the bridge triggers (rendered text
       # travels in payload.body; the workflow is just the delivery shell).

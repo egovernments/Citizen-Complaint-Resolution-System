@@ -49,6 +49,12 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.preference.check.path:/v1/_search}")
     private String preferenceCheckPath;
 
+    // Full search endpoint (returns the preferences list). The check path above
+    // may point at a boolean-consent endpoint (e.g. /_check) on some deployments;
+    // the configurator's read-only listing always needs _search.
+    @Value("${novu.bridge.preference.search.path:/user-preference/v1/_search}")
+    private String preferenceSearchPath;
+
     @Value("${novu.bridge.preference.code:USER_NOTIFICATION_PREFERENCES}")
     private String preferenceCode;
 
