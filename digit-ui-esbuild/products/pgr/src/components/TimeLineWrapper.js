@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from "react-i18next";
 import { PopUp, Timeline, TimelineMolecule, Loader } from '@egovernments/digit-ui-components';
-import { useMyContext } from "../utils/context";
 import { convertEpochFormateToDate } from '../utils';
 
+// NOTE: no useMyContext() here — the citizen route tree has no MyContext
+// provider, and this wrapper renders on BOTH citizen and employee details.
 const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "" }) => {
-    const { state } = useMyContext();
     const { t } = useTranslation();
 
     const tenantId = Digit.ULBService.getCurrentTenantId();
