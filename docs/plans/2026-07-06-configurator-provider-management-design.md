@@ -1,112 +1,84 @@
-# Design: Self-service provider management in the Configurator
+# Design: Self-service provider management in the Configurator (Novu-native)
 
 **Date:** 2026-07-06 · **Branch:** `feat/pgr-notifications-configure` (fork → PR #58)
 
-Make the configurator's **Notification Providers** screen a self-service surface: add a
-provider (creds entered in the UI, stored server-side), pull the provider's available
-templates (read-only, to show what's available), verify connectivity, and send a live
-test message. Templates themselves stay **user-authored** (the existing Provider Templates /
-Notification Templates screens); this feature is about *providers* + *testing delivery*.
+Make the configurator's **Notification Providers** screen self-service: **add a provider**
+(creds entered in the UI), **pull available templates** (read-only discovery), **verify
+connectivity**, and **send a live test message** — for SMS, Email, and WhatsApp.
 
-Confirmed decisions (owner, 2026-07-06):
-- **Creds entered in the UI → stored server-side** (transit through novu-bridge, never
-  persisted in the keyless SPA).
-- **All 3 channels + live test-send** in v1 (SMS, Email, WhatsApp).
+> **Revision 2 (Novu-native).** An earlier draft proposed a custom `nb_provider_config`
+> table + AES-GCM credential encryption + a bespoke `TwilioClient`. **Dropped.** Novu is
+> already the provider/credential store, and novu-bridge already carries the dormant
+> provider-strategy code (`TwilioProviderStrategy`, `WhatsAppBusinessApiProviderStrategy`,
+> factory) plus `NovuClient.trigger(...overrides...)` that forwards Twilio ContentSid
+> overrides to Novu. So **every capability maps to an existing Novu API** — no new table,
+> no crypto, no direct-Twilio client. Credentials live only in Novu.
 
-## 1. Per-channel reality (this is NOT uniform)
+## 1. Per-channel mapping to Novu
 
-| Channel | "Provider" is… | Add = | Templates = | Test-send = |
-|---|---|---|---|---|
-| **SMS** | a **Novu integration** (`twilio`) | create Novu integration w/ creds | Novu workflows (`complaints-sms`) | Novu `events/trigger` |
-| **Email** | a **Novu integration** (`nodemailer`/SMTP) | create Novu integration w/ creds | Novu workflows (`complaints-email`) | Novu `events/trigger` |
-| **WhatsApp** | **Twilio-direct** (NOT in Novu) | store Twilio WABA creds+sender in novu-bridge | **Twilio Content API** `ContentAndApprovals` (ContentSids + vars) | Twilio ContentSid send |
+| Channel | Novu integration | Delivery |
+|---|---|---|
+| **SMS** | `providerId:"twilio", channel:"sms"` | Novu workflow `complaints-sms` → Twilio SMS |
+| **EMAIL** | `providerId:"nodemailer", channel:"email"` (or SendGrid/Mailgun) | Novu workflow `complaints-email` → SMTP |
+| **WhatsApp** | **same Twilio `channel:"sms"` integration**, `credentials.from = "whatsapp:+<E164>"` | Novu trigger with `to.phone="whatsapp:+…"` + `overrides.providers.twilio = {contentSid, contentVariables}` for approved templates |
 
-So SMS/Email creds live in **Novu**; WhatsApp/Twilio creds live in a **new novu-bridge table**
-(novu-bridge has no Twilio creds today). That table is also what the WhatsApp pull-templates,
-verify, and test-send read from.
+WhatsApp is NOT a separate Novu channel here — it's the Twilio SMS integration used with a
+`whatsapp:` sender, and approved templates ride Novu **provider-overrides** (the existing
+strategy code builds them).
 
-## 2. Storage: `nb_provider_config` (new Flyway migration)
+## 2. novu-bridge endpoints (under `/novu-adapter/v1`, behind `ProxyAuthFilter`)
 
-```
-nb_provider_config
-  id             uuid pk
-  tenant_id      text
-  channel        text        -- SMS | EMAIL | WHATSAPP
-  provider       text        -- twilio | nodemailer | ...
-  sender         text        -- e.g. whatsapp:+<E164> (WhatsApp) / from-number
-  credentials    text        -- ENCRYPTED blob (see §3); JSON of provider-specific creds
-  novu_integration_id text   -- for SMS/EMAIL: the Novu integration _id (creds live in Novu)
-  active         boolean
-  created_by / created_time / last_modified_*  (audit)
-  unique (tenant_id, channel, provider)
-```
+All four MUST be added to `ProxyAuthFilter.shouldNotFilter`'s allowlist (the trap that hit
+`/preferences`) and get Kong routes under `novu-bridge-proxy`.
 
-- **SMS/EMAIL** rows: `credentials` empty, `novu_integration_id` set (Novu holds the secret).
-- **WHATSAPP** rows: `credentials` = encrypted `{accountSid, authToken}`, `sender` = WABA number.
+| Method · Path | Body / Query | Implementation |
+|---|---|---|
+| `POST /providers` | `{channel, providerId, name, identifier?, credentials{…}}` | Map channel→Novu (`WHATSAPP`→`channel:sms`); `NovuClient.createIntegration` → `POST /v1/integrations`. Return the created integration via the **existing allowlist projection** (no `credentials`). |
+| `GET /providers/templates` | `?channel=&providerId=` | `NovuClient.listWorkflows` → `GET /v2/workflows` (delivery shells: workflowId, name). Read-only discovery. WhatsApp ContentSids are shown by the existing Provider Templates (MDMS) screen — this endpoint does not call Twilio. |
+| `POST /providers/verify` | `{integrationId}` or `{channel, providerId}` | `GET /v1/integrations`, match, return `{ok, active, detail}`. |
+| `POST /providers/test-send` | `{channel, to{phone?,email?}, workflowId?, body?, subject?, contentSid?, variables?[]}` | SMS/EMAIL → `NovuClient.trigger(workflowId or complaints-{sms,email}, subscriberId="nb-test-<uuid>", payload{body,subject})`. WHATSAPP → same, `to.phone="whatsapp:+…"` + `overrides` from a provider strategy (`{providers:{twilio:{contentSid, contentVariables}}}`). Returns `{ok, novuStatus, transactionId}`. Writes a `nb_dispatch_log` row tagged `TEST`. |
 
-## 3. Credential handling + encryption
+Response envelopes mirror `/integrations` — **no secret ever leaves** (no `credentials`,
+no token). Creds POST through over TLS to Novu; never logged (reuse `PiiMask`), never returned.
 
-- Creds POST through novu-bridge over TLS; **never** stored in the SPA or a log
-  (reuse `PiiMask`; never log `authToken`/`password`).
-- SMS/EMAIL → forwarded to **Novu** create-integration; Novu stores them. novu-bridge keeps
-  only the returned `integrationId`.
-- WHATSAPP → the `{accountSid, authToken}` are **encrypted at rest** in `credentials` using an
-  app-level symmetric key `novu.bridge.cred.enc.key` (env `NOVU_BRIDGE_CRED_ENC_KEY`,
-  AES-GCM). If the key is unset, provider-add for WhatsApp is **refused** (fail closed) rather
-  than storing plaintext. (Future: delegate to egov-enc-service — out of scope for v1.)
-- All new endpoints sit under `/novu-adapter/v1/*` and are gated by the existing
-  **ProxyAuthFilter** (EMPLOYEE + allowed role). The write/send endpoints MUST be added to
-  `shouldNotFilter`'s allowlist (same trap that hit `/preferences`).
+## 3. Clients (novu-bridge — extend `NovuClient` only)
 
-## 4. Endpoints (novu-bridge, behind auth)
+- `createIntegration(name, identifier, providerId, channel, credentials)` → `POST /v1/integrations`
+  (payload per `bootstrap-novu-whatsapp.sh`: `{name, identifier, providerId, channel, active:true, check:false, credentials{…}}`).
+- `listWorkflows()` → `GET /v2/workflows?limit=100&page=0`.
+- `listIntegrations()` / `getIntegration(id)` → `GET /v1/integrations` (reuse whatever
+  `IntegrationController` already calls; add a match helper for verify).
+- Reuse `NovuClient.trigger(templateKey, subscriberId, phone, payload, txnId, overrides, apiKey)`
+  and `NovuProviderStrategyFactory` for the WhatsApp test-send overrides. **No new client.**
 
-| Method | Path | Body / Query | Does |
-|---|---|---|---|
-| `POST` | `/providers` | `{channel, provider, sender?, credentials{…}}` | SMS/EMAIL → Novu create-integration; WHATSAPP → encrypt+persist row. Returns the created provider (no secrets). |
-| `GET` | `/providers/templates` | `?channel=&provider=` | WHATSAPP/twilio → Twilio `ContentAndApprovals` (ContentSid, name, language, status, variables). SMS/EMAIL → Novu workflows. **Read-only listing** — user maps them manually. |
-| `POST` | `/providers/verify` | `{channel, provider}` or `{id}` | Ping: Novu integration active / Twilio `Accounts/{sid}.json` fetch. Returns `{ok, detail}`. |
-| `POST` | `/providers/test-send` | `{channel, provider, to, templateId?, variables?, body?}` | SMS/EMAIL → Novu trigger to `to`. WHATSAPP → Twilio ContentSid send to `to`. Returns provider status + message id. |
+## 4. Configurator — Notification Providers screen
 
-Response envelopes mirror the existing `/integrations` allowlist style — **no secret ever
-leaves** (no `authToken`, masked `credentials`).
-
-## 5. Clients
-
-- **NovuClient** (extend): `createIntegration(channel, provider, creds)`, `listWorkflows()`,
-  `verifyIntegration(id)`.
-- **TwilioClient** (new): `listContentTemplates()` (`GET content.twilio.com/v1/ContentAndApprovals`),
-  `verifyAccount()` (`GET api.twilio.com/2010-04-01/Accounts/{sid}.json`),
-  `sendContent(to, contentSid, vars)` / `sendSms(to, body)`. Creds read from `nb_provider_config`
-  (decrypted per call), never from a static env.
-
-## 6. Configurator (Notification Providers screen)
-
-- **Add Provider** dialog: channel select → provider → credential fields (per provider) →
-  `POST /providers`. On success, list refreshes.
+- **Add Provider** dialog: channel select → providerId → per-provider credential fields
+  (Twilio: accountSid/token/from; SMTP: host/user/pass/from) → `POST /providers`. On success,
+  the list (existing `/integrations` view) refreshes.
 - Per-provider row actions:
-  - **Pull templates** → `GET /providers/templates` → modal listing available templates
-    (ContentSid / workflow, variables, approval status). Read-only; a "copy" affordance so
-    the operator can paste the id into the Provider Templates mapping they author.
   - **Verify** → `POST /providers/verify` → green/red badge + detail.
-  - **Test delivery** → dialog (recipient + optional template/variables or body) →
-    `POST /providers/test-send` → shows provider status + message id + a link to the Logs screen.
+  - **Test delivery** → dialog (recipient + optional workflow/body, or contentSid+variables
+    for WhatsApp) → `POST /providers/test-send` → shows Novu status + txn id + a link to the
+    Logs screen.
+  - **Pull templates** → `GET /providers/templates` → modal listing Novu workflows (+ a
+    pointer to the Provider Templates screen for WhatsApp ContentSids). Read-only; copy id.
 
-## 7. Security / guardrails
+## 5. Security / guardrails
 
 - Auth: existing EMPLOYEE+role gate on every new path (add to `shouldNotFilter`).
-- Test-send: recipient is operator-entered; the action is behind the auth gate. Log every
-  test-send (who, channel, masked recipient) to `nb_dispatch_log` with a `TEST` marker so it's
-  auditable and distinguishable from real traffic.
-- Creds: fail-closed if the encryption key is unset; never logged; never returned.
-- Kong: add routes for the new GET/POST paths under `novu-bridge-proxy`.
+- Creds: entered in the UI, POST straight to Novu through novu-bridge; **never** persisted in
+  novu-bridge, never logged, never echoed back.
+- Test-send: recipient is operator-entered, behind the auth gate; each is logged to
+  `nb_dispatch_log` tagged `TEST` (who, channel, masked recipient) — auditable + separable.
+- Kong: add GET/POST routes for the new paths under `novu-bridge-proxy`.
 
-## 8. Build phases
+## 6. Build order
 
-1. **Backend foundation** — migration (`nb_provider_config`) + entity/repo + `CredCrypto` (AES-GCM) + config keys.
-2. **Clients** — `TwilioClient` (new) + `NovuClient` additions.
-3. **ProviderController** — the 4 endpoints + allowlist in `ProxyAuthFilter` + Kong routes + tests.
-4. **Configurator** — Add Provider dialog + per-row Pull/Verify/Test actions.
-5. **Deploy + test on Bomet** — build amd64, surgical recreate, exercise all 4 for each channel.
+1. **Backend** — extend `NovuClient` (createIntegration/listWorkflows/verify) + `ProviderController`
+   (4 endpoints) + `ProxyAuthFilter` allowlist + Kong routes + tests. `mvn compile` + tests green.
+2. **Configurator** — Add-Provider dialog + per-row Verify/Test/Pull actions. `tsc`/build green.
+3. **Deploy + test on Bomet** — build novu-bridge amd64, surgical recreate, exercise all four
+   for SMS/Email/WhatsApp (owner-authorized test recipients only).
 
-Test-send + verify are proven against the live Twilio/Novu on Bomet (owner-authorized test
-recipients only). The runbook/tutorial (with screenshots) is written **after** the screens exist.
+No migration, no crypto, no Twilio client — this reuses Novu + the dormant strategy code.
