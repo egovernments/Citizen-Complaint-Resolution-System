@@ -145,14 +145,23 @@ language per recipient, never in every language.
 
 ```
 recipientLocale =
-    user's consented language        (egov-user profile locale / user-preferences)   // 1st
-  ? deployment default language      (config.notification.default.locale / tenant)   // 2nd
-  ? "en"                             (hard fallback)                                  // 3rd
+    user's consented language        (digit-user-preferences-service preferredLanguage)  // 1st
+  ? deployment default language      (config.notification.default.locale / tenant)       // 2nd
+  ? "en"                             (hard fallback)                                      // 3rd
 ```
 
-So each recipient (citizen, GRO, LME, …) is rendered in the language they consented to; if none is
-recorded, the deployment's default language; if that too is absent, English. A role pool with mixed
-locales renders per-member (group by resolved locale), not once for the whole pool.
+**Reuse the consent service for language — no new store.** `digit-user-preferences-service` (the
+same service novu-bridge already calls for per-channel consent via `PreferenceServiceClient`)
+already holds, in the `USER_NOTIFICATION_PREFERENCES` record, a **`preferredLanguage`** field
+validated against `{en_IN, hi_IN, fr_IN, pt_IN}` alongside the per-channel `Consent`. So the emitter
+resolves a recipient's locale by reading `preferredLanguage` from the same lookup it (or the bridge)
+uses for consent — falling back to the deployment default, then `en`. Each recipient (citizen, GRO,
+LME, …) renders in their own language; a role pool with mixed locales renders per-member (group by
+resolved locale), not once for the whole pool.
+
+> **Interim (current):** the emitter renders once in the deployment default. **Email stays `en` by
+> default for now** — per-recipient `preferredLanguage` resolution is deferred (it plugs into the
+> same `digit-user-preferences-service` lookup as consent when built).
 
 **Current limitation:** the emitter renders once in `config.notification.default.locale` for
 *everyone* (the W2.9 single-locale known-limitation) — it does NOT yet read the per-recipient
@@ -191,7 +200,48 @@ with locale). It sequences right after the provider-template mapping (§6): once
 `NotificationProviderTemplate` carries per-locale `approvalStatus`, add (1) egov-localization-backed
 body/subject resolution and (2) the locale+approval fallback in `TemplateRenderer` / the emitter.
 
-## 8. Open questions
+## 8. Notification timeline — who gets what, when
+
+Each recipient receives **one language** (§7 resolution). WhatsApp effectively reaches **CITIZEN
+only** (the sole audience with approved Twilio templates); officer WhatsApp legs `SKIP` until
+officer templates are approved, so officers get **SMS + Email**.
+
+```mermaid
+timeline
+    title PGR complaint — notification timeline (role-based)
+    APPLY  (complaint filed)         : Citizen — SMS + WhatsApp + Email : GRO (routing officer) — SMS
+    ASSIGN (→ pending at LME)        : Citizen — SMS + WhatsApp + Email : Assignee (EMPLOYEE) — SMS + Email : PGR_LME pool — SMS + Email
+    RESOLVE (→ resolved)             : Citizen — SMS + WhatsApp + Email
+    REJECT (→ rejected)              : Citizen — SMS + WhatsApp + Email
+    REOPEN (citizen re-opens)        : Citizen — SMS + WhatsApp + Email
+    REASSIGN (→ pending reassignment): Citizen — SMS + WhatsApp + Email
+    RATE   (closed after rating)     : Assignee (EMPLOYEE) — SMS + Email
+```
+
+Same thing as a matrix (`✓` sent, `wa*` = WhatsApp only if an approved template exists for that
+audience — today only CITIZEN):
+
+| Transition | CITIZEN | GRO | Assignee (EMPLOYEE) | PGR_LME pool |
+|---|---|---|---|---|
+| **APPLY** → PENDINGFORASSIGNMENT | SMS · WA · Email | SMS | — | — |
+| **ASSIGN** → PENDINGATLME | SMS · WA · Email | — | SMS · Email · *(wa\*)* | SMS · Email · *(wa\*)* |
+| **RESOLVE** → RESOLVED | SMS · WA · Email | — | — | — |
+| **REJECT** → REJECTED | SMS · WA · Email | — | — | — |
+| **REOPEN** → PENDINGFORASSIGNMENT | SMS · WA · Email | — | — | — |
+| **REASSIGN** → PENDINGFORREASSIGNMENT | SMS · WA · Email | — | — | — |
+| **RATE** → CLOSEDAFTERRESOLUTION | — | — | SMS · Email · *(wa\*)* | — |
+
+Notes:
+- **Dedup**: a person holding two notified roles (e.g. the assignee also in the PGR_LME pool) gets
+  **one** message per channel (`channel|subscriber` dedup).
+- **No-assignee transitions** (REOPEN, REASSIGN target, RATE-after-reject) carry **no** EMPLOYEE row —
+  there is no assignee to notify (trimmed from the seed).
+- **Language**: every cell is rendered in that recipient's resolved locale (preferredLanguage →
+  deployment default → en); **email is `en` by default in the interim**.
+- This reflects the deployed Bomet routing; the branch's minimal parity seed ships CITIZEN + EMPLOYEE
+  only — GRO/PGR_LME rows are added per deployment.
+
+## 9. Open questions
 
 - **Variable-order confirmation** is inherently manual (positional). The sync should show the body
   + inferred slots and require a save. (§4.3)
