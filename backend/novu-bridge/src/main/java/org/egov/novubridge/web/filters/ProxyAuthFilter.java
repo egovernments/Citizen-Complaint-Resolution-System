@@ -31,13 +31,26 @@ import java.util.stream.Collectors;
  * {@code /novu-adapter/v1/preferences} and the {@code /novu-adapter/v1/providers}
  * self-service management paths — GET/POST).
  *
- * <p>DIGIT access tokens are opaque OAuth tokens minted by egov-user. This filter
- * introspects the incoming {@code Authorization: Bearer <token>} against egov-user
+ * <p><b>egov-user path (opaque tokens):</b> DIGIT access tokens are opaque OAuth
+ * tokens minted by egov-user. This filter introspects the incoming
+ * {@code Authorization: Bearer <token>} against egov-user
  * {@code POST /user/_details?access_token=<token>} and allows the request only when
  * the resolved user is an {@code EMPLOYEE} carrying at least one role code from the
  * configured allowlist ({@code novu.bridge.proxy.allowed.roles}). A valid token is
  * cached (by SHA-256 hash, never raw) for 60s so the Logs screen's polling does not
  * hammer egov-user.
+ *
+ * <p><b>Keycloak fallback (JWTs):</b> when {@code novu.bridge.keycloak.enabled=true}
+ * and egov-user introspection fails/returns null (as it does for a Keycloak RS256 JWT
+ * on an {@code authProvider=keycloak} deployment — egov-user answers
+ * {@code 400 InvalidAccessTokenException}), the token is validated as a Keycloak JWT by
+ * {@link KeycloakTokenValidator}: RS256 signature (via the realm JWKS) + {@code exp}
+ * (future) + {@code iss} (when configured). <b>Authorization limitation:</b> Keycloak
+ * tokens on this deployment carry {@code CITIZEN}/realm-default roles in
+ * {@code realm_access.roles}, NOT DIGIT employee roles, so the KC path validates
+ * authenticity only and accepts any valid realm token — consistent with how mdms-v2
+ * accepts the same token here. Tightening to employee-only would require a Keycloak
+ * protocol mapper injecting DIGIT roles into the token (out of scope).
  *
  * <p>The POST diagnostic endpoints under the same {@code /novu-adapter/v1} namespace
  * ({@code _validate}, {@code _dry-run}, {@code _test-trigger}) are gated by the same
@@ -51,12 +64,14 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
 
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
+    private final KeycloakTokenValidator keycloakValidator;
     // tokenHash -> expiry epoch millis. Never stores the raw token.
     private final ConcurrentHashMap<String, Long> validTokenCache = new ConcurrentHashMap<>();
 
     public ProxyAuthFilter(RestTemplate restTemplate, NovuBridgeConfiguration config) {
         this.restTemplate = restTemplate;
         this.config = config;
+        this.keycloakValidator = new KeycloakTokenValidator(restTemplate, config);
     }
 
     @Override
@@ -105,25 +120,48 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         // Opportunistic sweep of expired entries.
         validTokenCache.entrySet().removeIf(e -> e.getValue() <= now);
 
-        Map<String, Object> user;
+        // --- Path 1: egov-user introspection (opaque DIGIT tokens). Unchanged. ---
+        Map<String, Object> user = null;
         try {
             user = introspect(token);
         } catch (Exception e) {
             log.warn("Proxy auth: token introspection call failed: {}", e.getMessage());
-            writeError(response, HttpStatus.UNAUTHORIZED, "invalid token");
-            return;
         }
-        if (user == null) {
-            writeError(response, HttpStatus.UNAUTHORIZED, "invalid token");
-            return;
-        }
-        if (!isAuthorized(user)) {
-            writeError(response, HttpStatus.FORBIDDEN, "insufficient role");
+        if (user != null) {
+            if (!isAuthorized(user)) {
+                writeError(response, HttpStatus.FORBIDDEN, "insufficient role");
+                return;
+            }
+            validTokenCache.put(tokenHash, now + CACHE_TTL_MS);
+            chain.doFilter(request, response);
             return;
         }
 
-        validTokenCache.put(tokenHash, now + CACHE_TTL_MS);
-        chain.doFilter(request, response);
+        // --- Path 2: Keycloak JWT fallback (KC-based deployments). ---
+        // egov-user rejected/could-not-introspect the token. When Keycloak is enabled,
+        // validate it as a Keycloak RS256 JWT (signature + exp + iss). See class javadoc
+        // for the authz limitation (KC tokens carry CITIZEN/realm-default roles only).
+        if (Boolean.TRUE.equals(config.getKeycloakEnabled())) {
+            Map<String, Object> claims = keycloakValidator.validate(token);
+            if (claims != null) {
+                log.info("Proxy auth: accepted Keycloak token user={} roles={}",
+                        claims.get("preferred_username"), realmRoles(claims));
+                validTokenCache.put(tokenHash, now + CACHE_TTL_MS);
+                chain.doFilter(request, response);
+                return;
+            }
+        }
+
+        writeError(response, HttpStatus.UNAUTHORIZED, "invalid token");
+    }
+
+    /** Extract {@code realm_access.roles} from Keycloak claims for the audit log. */
+    private Object realmRoles(Map<String, Object> claims) {
+        Object realmAccess = claims.get("realm_access");
+        if (realmAccess instanceof Map) {
+            return ((Map<?, ?>) realmAccess).get("roles");
+        }
+        return null;
     }
 
     /** POST /user/_details?access_token=... — returns the flat user object or null on non-2xx. */
