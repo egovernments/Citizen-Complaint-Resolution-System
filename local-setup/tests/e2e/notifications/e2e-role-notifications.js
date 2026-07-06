@@ -359,20 +359,37 @@ function assertTransition(action, toState, complaintId, rows, citizenUuid) {
   else no(`${action}->${toState}: ${smuggled.length} SMS row(s) end in :WHATSAPP — WhatsApp smuggled via SMS`);
 }
 
-// E2E-2: multi-holder pool-size completeness + dual-role dedupe.
-function assertPgrLmePool(rows, poolCount, assignActorUuid) {
-  console.log(`\n[E2E-2 pool] PGR_LME pool=${poolCount}, ASSIGN actor=${assignActorUuid}`);
+// E2E-2: multi-holder pool completeness + no-overreach + dual-role dedupe.
+// The PGR_LME SMS fan-out must reach EVERY contactful pool holder (completeness)
+// and every recipient must genuinely hold PGR_LME (no over-reach). Note the
+// assignee is ALSO notified via the EMPLOYEE (assignee-alias) audience; if that
+// assignee holds PGR_LME they are a LEGITIMATE recipient that may sit outside the
+// city-level contactful pool (e.g. a state-level or differently-scoped holder),
+// so "extra" holders are reported as info, not a failure. Strict pool-size
+// equality would false-fail on that overlap, which is what this check avoids.
+function assertPgrLmePool(rows, poolUuids, assignActorUuid) {
+  const poolCount = poolUuids.size;
+  console.log(`\n[E2E-2 pool] PGR_LME contactful pool=${poolCount}, ASSIGN actor=${assignActorUuid}`);
   if (poolCount > 10) {
-    warn(`PGR_LME pool=${poolCount} > egov-user default page size (10) — the equality check may `
-      + `UNDER-count until the pagination fix (W3) is deployed on the target server; not silently passing`);
+    warn(`PGR_LME pool=${poolCount} > egov-user default page size (10) — fan-out may UNDER-count `
+      + `until role-pool pagination is deployed on the target server; not silently passing`);
   }
   const smsLme = rows.filter((r) => (r.channel || '').toUpperCase() === 'SMS'
     && r.uuid && rolesOf(r.uuid).has('PGR_LME'));
   const distinctLme = new Set(smsLme.map((r) => r.uuid));
-  if (poolCount > 0 && distinctLme.size === poolCount) {
-    ok(`E2E-2: PGR_LME SMS fan-out reached all ${poolCount} pool holder(s) (equality)`);
+  // Completeness: every contactful pool holder must be reached.
+  const missing = [...poolUuids].filter((u) => !distinctLme.has(u));
+  if (poolCount > 0 && missing.length === 0) {
+    ok(`E2E-2: PGR_LME SMS fan-out reached all ${poolCount} contactful pool holder(s)`);
   } else {
-    no(`E2E-2: PGR_LME SMS reached ${distinctLme.size} of ${poolCount} pool holder(s) (expected equality)`);
+    no(`E2E-2: PGR_LME SMS missed ${missing.length}/${poolCount} pool holder(s): ${missing.join(',') || '(pool empty)'}`);
+  }
+  // Extras beyond the city pool are legitimate PGR_LME holders reached via the
+  // EMPLOYEE (assignee) audience — report, do not fail. (Every distinctLme uuid
+  // already holds PGR_LME by construction, so there is no over-reach to flag.)
+  const extra = [...distinctLme].filter((u) => !poolUuids.has(u));
+  if (extra.length) {
+    ok(`E2E-2: ${extra.length} extra PGR_LME holder(s) reached via the assignee audience (deduped): ${extra.join(',')}`);
   }
   // Dual-role dedupe: the ASSIGN actor holds GRO+PGR_LME; must appear exactly once per channel.
   for (const ch of ['SMS', 'WHATSAPP', 'EMAIL']) {
@@ -383,12 +400,12 @@ function assertPgrLmePool(rows, poolCount, assignActorUuid) {
   }
 }
 
-function pgrLmePoolCount() {
-  const rows = psql(`SELECT COUNT(DISTINCT u.uuid) FROM eg_userrole_v1 ur `
+function pgrLmePoolUuids() {
+  const rows = psql(`SELECT DISTINCT u.uuid FROM eg_userrole_v1 ur `
     + `JOIN eg_user u ON u.id=ur.user_id AND u.tenantid=ur.user_tenantid `
     + `WHERE ur.role_code='PGR_LME' AND u.tenantid='${TENANT}' AND u.active=true `
     + `AND (u.mobilenumber IS NOT NULL OR u.emailid IS NOT NULL)`);
-  return rows.length ? (parseInt(rows[0][0], 10) || 0) : 0;
+  return new Set(rows.map((r) => r[0]).filter(Boolean));
 }
 
 // ============================================================================
@@ -669,7 +686,8 @@ async function negativeViaDeactivation(citizen) {
   const citizenBundle = { tok: cTok, ui: cUi, contact: citizenContact };
 
   // E2E-2: measure the PGR_LME pool before we fan out.
-  const poolCount = pgrLmePoolCount();
+  const poolUuids = pgrLmePoolUuids();
+  const poolCount = poolUuids.size;
   if (poolCount < 2) {
     warn(`E2E-2: PGR_LME pool has ${poolCount} holder(s) (<2). Pool-completeness is weak. `
       + `Provision another PGR_LME employee via HRMS /egov-hrms/employees/_create (dept matching `
@@ -688,7 +706,7 @@ async function negativeViaDeactivation(citizen) {
   // ASSIGN to the employee themselves (so they can RESOLVE).
   let wA = await search(eTok, eUi, idA);
   let sA = await step('A', eTok, eUi, wA.service, 'ASSIGN', 'PENDINGATLME', citizenUuid, { assignes: [empUuid] });
-  assertPgrLmePool(sA.rows, poolCount, empUuid); // E2E-2 on the ASSIGN fan-out
+  assertPgrLmePool(sA.rows, poolUuids, empUuid); // E2E-2 on the ASSIGN fan-out
 
   wA = await search(eTok, eUi, idA);
   await step('A', eTok, eUi, wA.service, 'RESOLVE', 'RESOLVED', citizenUuid, {});
