@@ -149,24 +149,6 @@ class ProxyAuthFilterTest {
         assertNull(chain.getRequest());
     }
 
-    @Test
-    void keycloakDisabled_jwtIntrospectionFails_returns401() throws Exception {
-        // KC fallback is off (config.keycloakEnabled is null in setUp). A JWT-looking
-        // token that egov-user rejects (400 InvalidAccessTokenException) must NOT be
-        // accepted — no accidental open path when Keycloak validation is disabled.
-        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(Map.class)))
-                .thenThrow(new RestClientException("400 InvalidAccessTokenException"));
-        MockHttpServletRequest req = logsRequest();
-        req.addHeader("Authorization", "Bearer aaa.bbb.ccc"); // JWT shape (two dots)
-        MockHttpServletResponse res = new MockHttpServletResponse();
-        MockFilterChain chain = new MockFilterChain();
-
-        filter.doFilter(req, res, chain);
-
-        assertEquals(401, res.getStatus());
-        assertNull(chain.getRequest());
-    }
-
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void stubUserDetails(Map<String, Object> body) {
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(Map.class)))

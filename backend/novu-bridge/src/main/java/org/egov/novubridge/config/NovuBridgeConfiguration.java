@@ -78,24 +78,6 @@ public class NovuBridgeConfiguration {
     @Value("#{'${novu.bridge.proxy.allowed.roles:EMPLOYEE,SUPERUSER,GRO,PGR_LME}'.split(',')}")
     private java.util.List<String> proxyAllowedRoles;
 
-    // ---- Keycloak JWT fallback for the proxy auth gate ----
-    // On KC-based deployments (authProvider=keycloak) the browser sends a Keycloak
-    // RS256 JWT that egov-user cannot introspect (400 InvalidAccessTokenException).
-    // When enabled, ProxyAuthFilter falls back to validating the JWT's RS256
-    // signature (via the realm JWKS) + exp + iss. NOTE: KC tokens on this deployment
-    // carry CITIZEN/realm-default roles, not DIGIT employee roles, so this path
-    // validates authenticity only — see ProxyAuthFilter/KeycloakTokenValidator javadoc.
-    @Value("${novu.bridge.keycloak.enabled:false}")
-    private Boolean keycloakEnabled;
-
-    // Full JWKS URL, e.g. https://<domain>/auth/realms/ke/protocol/openid-connect/certs
-    @Value("${novu.bridge.keycloak.certs.url:}")
-    private String keycloakCertsUrl;
-
-    // Expected iss claim, e.g. https://<domain>/auth/realms/ke. Empty = skip iss check.
-    @Value("${novu.bridge.keycloak.issuer:}")
-    private String keycloakIssuer;
-
     @Value("${mdms.host:http://localhost:8082}")
     private String mdmsHost;
 
