@@ -27,8 +27,10 @@ import { Button, Card } from "@egovernments/digit-ui-components-v2";
 import { ChevronRight, FilePlus2, Inbox } from "lucide-react";
 import { LOCALE, LOCALIZATION_KEY } from "../../constants/Localization";
 
-const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CLOSEDAFTERREJECTION", "CLOSEDAFTERRESOLUTION"];
-const REJECTED_STATUSES = ["REJECTED", "CLOSEDAFTERREJECTION"];
+// Terminal states across standard PGR + the mz.igsae CMS workflow (CANCELLED/CLOSEDAFTER*
+// are CMS terminals). Keyed by status name — see ComplaintDetails.js for the rationale.
+const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CLOSEDAFTERREJECTION", "CLOSEDAFTERRESOLUTION", "CANCELLED"];
+const REJECTED_STATUSES = ["REJECTED", "CLOSEDAFTERREJECTION", "CANCELLED"];
 
 function statusToTone(status) {
   if (REJECTED_STATUSES.includes(status)) return "rejected";

@@ -5,7 +5,7 @@ import { getMobileValidationRule, generateValidMobile } from '../utils/mdms-mobi
 test('mobile validation reflects the deployment MDMS rule', {
   annotation: {
     type: 'description',
-    description: `End-to-end verification that the citizen login page reflects the deployment's MDMS UserValidation rule (originally pinned to the 9-digit-only CCRS Kenya rollout, now parameterized). The page must hard-cap input length at rule.maxLength, the visible counter must read x/<maxLength>, and typing a too-long number must truncate to <= maxLength — confirming the MDMS rule made it through the validationRules Redis cache and into the UI.
+    description: `End-to-end verification that the citizen login page reflects the deployment's MDMS MobileNumberValidation rule (originally pinned to the 9-digit-only CCRS Kenya rollout, now parameterized). The page must hard-cap input length at rule.maxLength, the visible counter must read x/<maxLength>, and typing a too-long number must truncate to <= maxLength — confirming the MDMS rule made it through the validationRules Redis cache and into the UI.
 
 Steps:
 1. Fetch the live mobile-validation rule from MDMS for TENANT.

@@ -39,17 +39,16 @@ export function isDuplicateError(msg: string): boolean {
 /**
  * Evict egov-user's Redis-backed ValidationRulesCache entry for a tenant.
  *
- * egov-user caches UserValidation rules in a Redis hash:
+ * egov-user caches MobileNumberValidation rules in a Redis hash:
  *   key: validationRules   field: validation:<tenantId>
  *
- * The default-data-handler seeds India UserValidation for the target tenant
- * at stack startup (before bootstrap). egov-user's first mz request (from
- * the data-handler's own MDMS calls which carry mz in the JWT userInfo)
- * triggers a Cache MISS → reads India from MDMS → caches India in Redis with
+ * The default-data-handler seeds the MobileNumberValidation record for the
+ * target tenant at stack startup (before bootstrap). egov-user's first mz
+ * request triggers a Cache MISS → reads from MDMS → caches in Redis with
  * TTL=3600s. MCP bootstrap then corrects MDMS to the country pattern but
- * Redis still holds India. Evicting the key forces egov-user to re-read from
- * MDMS on the next _createnovalidate call and find the correct pattern.
- * Non-fatal — bootstrap continues if Redis is unreachable.
+ * Redis still holds the stale record. Evicting the key forces egov-user to
+ * re-read from MDMS on the next _createnovalidate call and find the correct
+ * pattern. Non-fatal — bootstrap continues if Redis is unreachable.
  */
 async function evictValidationCache(tenantId: string): Promise<void> {
   const host = process.env.EGOV_REDIS_HOST || 'redis';
@@ -972,50 +971,39 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         mobile_regex: {
           type: 'string',
           description:
-            'Mobile-number regex for the synthesized common-masters.UserValidation "mobile" rule ' +
-            '(citizen register). Source tenants (pg/statea) ship no UserValidation, so it must ' +
-            'be synthesized, not copied. Default "^[6-9][0-9]{9}$" (India 10-digit). ' +
+            'Mobile-number regex stored as mobileNumberRegex in the synthesized ' +
+            'common-masters.MobileNumberValidation record. Inherited from the source tenant\'s ' +
+            'MobileNumberValidation when omitted. Default "^[6-9][0-9]{9}$" (India 10-digit). ' +
             'Kenya: "^[17][0-9]{8}$". Mozambique: "^8[0-9]{8}$".',
         },
         mobile_length: {
           type: 'integer',
           description:
-            'Mobile-number length (min=max) for the back-compat "mobile" UserValidation rule. ' +
-            'Default 10 (India). Kenya/Mozambique: 9. Ignored when user_validation is supplied.',
+            'Mobile-number length used to generate a conforming ADMIN mobile number when ' +
+            'admin_mobile is not supplied. Default 10 (India). Kenya/Mozambique: 9. ' +
+            'Ignored when user_validation is supplied.',
         },
         mobile_prefix: {
           type: 'string',
           description:
-            'Country dialling prefix for the "mobile" UserValidation rule (e.g. "+258" for ' +
-            'Mozambique, "+254" for Kenya). Stored in attributes.prefix so useMobileValidation.js ' +
-            'can read it via mdmsConfig?.attributes?.prefix. Ignored when user_validation is supplied.',
-        },
-        mobile_allowed_starting_characters: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
-            'Allowed leading digit(s) for the mobile field (e.g. ["8"] for Mozambique, ' +
-            '["1","7"] for Kenya). Stored in rules.allowedStartingCharacters on the MDMS record. ' +
+            'Country dialling prefix (e.g. "+258" for Mozambique, "+254" for Kenya). ' +
+            'Used as the countryCode field and x-unique key in the MobileNumberValidation record. ' +
+            'Inherited from the source tenant\'s MobileNumberValidation when omitted. ' +
             'Ignored when user_validation is supplied.',
-        },
-        mobile_error_message: {
-          type: 'string',
-          description: 'Error message (or localization key) for the back-compat "mobile" rule.',
         },
         mobile_zone: {
           type: 'string',
           description:
-            'Zone/country label for the new UserValidation record (e.g. "Mozambique", "Kenya"). ' +
-            'Stored in the "zone" field so the country-specific record coexists with the India ' +
-            'record (pg) without violating x-unique:[\'zone\']. Defaults to the state-level tenant id.',
+            'Deprecated — superseded by mobile_prefix. Accepted for backwards compatibility ' +
+            'but ignored when mobile_prefix is also provided.',
         },
         admin_mobile: {
           type: 'string',
           description:
             'Mobile number for the provisioned ADMIN user on the target tenant. Optional — ' +
             'if omitted, a value conforming to mobile_regex is generated (the source country\'s ' +
-            'mobile would fail the target tenant\'s UserValidation, e.g. India 10-digit vs ' +
-            'Mozambique ^8[0-9]{8}$). Set it to pin a specific number.',
+            'mobile would fail the target tenant\'s MobileNumberValidation pattern). ' +
+            'Set it to pin a specific number.',
         },
         pincode_allowlist: {
           type: 'array',
@@ -1031,56 +1019,116 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         user_validation: {
           type: 'array',
           description:
-            'Config-driven user-field validation rules — one entry per field. Fully declarative: ' +
-            'a new country/field is config, not code. Each entry maps to a common-masters.UserValidation ' +
-            'record (egov-user ValidationData). When supplied, supersedes mobile_regex/mobile_length.',
+            'Mobile validation rules — one entry per country. Each entry maps to a ' +
+            'common-masters.MobileNumberValidation record (x-unique: countryCode). ' +
+            'When supplied, supersedes mobile_regex/mobile_prefix.',
           items: {
             type: 'object',
             properties: {
-              fieldType: { type: 'string', description: 'e.g. "mobile", "userName", "email", "name"' },
-              zone: { type: 'string', description: 'Country/zone label (e.g. "Mozambique"). Used as x-unique key so records with different zones coexist. Defaults to state-level tenant id.' },
-              prefix: { type: 'string', description: 'Country dialling prefix (e.g. "+258"). Stored in attributes.prefix on the MDMS record.' },
-              allowedStartingCharacters: { type: 'array', items: { type: 'string' }, description: 'Allowed leading digits (e.g. ["8"]). Stored in rules.allowedStartingCharacters.' },
-              pattern: { type: 'string', description: 'regex the field value must match' },
-              minLength: { type: 'integer' },
-              maxLength: { type: 'integer' },
-              errorMessage: { type: 'string', description: 'message or localization key' },
+              countryCode: { type: 'string', description: 'Country dialling prefix, used as x-unique key (e.g. "+254" for Kenya, "+258" for Mozambique, "+91" for India).' },
+              mobileNumberRegex: { type: 'string', description: 'regex the mobile number must match (e.g. "^[17][0-9]{8}$")' },
+              default: { type: 'boolean', description: 'Whether this is the default validation rule for the tenant (default: true).' },
             },
-            required: ['fieldType', 'pattern'],
+            required: ['countryCode', 'mobileNumberRegex'],
           },
         },
       },
+        user_only: {
+          type: 'boolean',
+          description:
+            'When true, skip all MDMS copy steps and only re-create the ADMIN user on ' +
+            'target_tenant. Called after post-bootstrap changes STATE_LEVEL_TENANT_ID ' +
+            'from pg to the real state root so the user is stored with the correct enc key.',
+        },
       required: ['target_tenant'],
     },
     handler: async (args) => {
       validateTenantId(args.target_tenant, 'target_tenant');
       if (args.source_tenant) validateTenantId(args.source_tenant, 'source_tenant');
 
-      await ensureAuthenticated();
-
       const target = args.target_tenant as string;
       const source = (args.source_tenant as string) || 'pg';
-      if (!args.mobile_regex) {
-        // When no explicit regex is passed (e.g. the bootstrap wizard, which
-        // only sends target_tenant + source_tenant), inherit the SOURCE
-        // tenant's own mobile rule from common-masters.UserValidation so the
-        // derived ADMIN mobile validates against the same egov-user rule the
-        // target inherits (e.g. Kenya ^0?[17][0-9]{8}$) instead of a hardcoded
-        // India default. Tenant-specific values stay in MDMS, not in code.
+
+      if (args.user_only) {
+        const mobileRegex = (args.mobile_regex as string) || '^[6-9][0-9]{9}$';
+        const stateTenantForEviction = target.includes('.') ? target.split('.')[0] : target;
+        await evictValidationCache(stateTenantForEviction);
+
+        let userProvisioned: { username: string; tenantId: string; roles: string[] } | null = null;
+        let userProvisionError: string | null = null;
         try {
-          const uv = await digitApi.mdmsV2SearchRaw(source, 'common-masters.UserValidation', { limit: 50 });
-          const mob = (uv || []).find(
-            (r: any) => (r && r.data && r.data.fieldType === 'mobile') || (r && r.uniqueIdentifier === 'mobile'),
+          const currentUsername = process.env.CRS_USERNAME || 'ADMIN';
+          const currentPassword = process.env.CRS_PASSWORD || 'eGov@123';
+          const mobileNumber = deriveValidMobile(
+            mobileRegex,
+            Number(args.mobile_length) || 10,
+            (args.admin_mobile as string) || undefined,
           );
-          const rules = (mob && mob.data && (mob.data as any).rules) as any;
-          if (rules && rules.pattern) {
-            (args as any).mobile_regex = rules.pattern;
-            if (!args.mobile_length && rules.minLength) {
-              (args as any).mobile_length = rules.minLength;
+          const standardRoles = [
+            { code: 'EMPLOYEE', name: 'Employee' },
+            { code: 'CITIZEN', name: 'Citizen' },
+            { code: 'CSR', name: 'CSR' },
+            { code: 'GRO', name: 'Grievance Routing Officer' },
+            { code: 'PGR_LME', name: 'PGR Last Mile Employee' },
+            { code: 'DGRO', name: 'Department GRO' },
+            { code: 'SUPERUSER', name: 'Super User' },
+            { code: 'INTERNAL_MICROSERVICE_ROLE', name: 'Internal Microservice Role' },
+          ].map((r) => ({ ...r, tenantId: target }));
+          const newUser = {
+            name: 'Admin',
+            mobileNumber,
+            userName: currentUsername,
+            password: currentPassword,
+            type: 'EMPLOYEE',
+            active: true,
+            roles: standardRoles,
+            tenantId: target,
+          };
+          try {
+            await digitApi.userCreate(newUser, target);
+            userProvisioned = { username: currentUsername, tenantId: target, roles: standardRoles.map((r) => r.code) };
+          } catch (createErr) {
+            const createMsg = createErr instanceof Error ? createErr.message : String(createErr);
+            const isDuplicate =
+              createMsg.includes('DuplicateUserName') ||
+              createMsg.toLowerCase().includes('duplicate');
+            if (isDuplicate) {
+              userProvisioned = { username: currentUsername, tenantId: target, roles: [] };
+            } else {
+              throw createErr;
+            }
+          }
+        } catch (error) {
+          userProvisionError = error instanceof Error ? error.message : String(error);
+        }
+        return JSON.stringify({
+          success: true,
+          user_only: true,
+          admin_user_provisioned: !!userProvisioned,
+          admin_user_provisioned_details: userProvisioned,
+          admin_user_provision_error: userProvisionError || undefined,
+        }, null, 2);
+      }
+
+      await ensureAuthenticated();
+      if (!args.mobile_regex || !args.mobile_prefix) {
+        // When regex or prefix are not explicit (e.g. the bootstrap wizard only
+        // sends target_tenant + source_tenant), inherit from the SOURCE tenant's
+        // common-masters.MobileNumberValidation so the derived ADMIN mobile and
+        // the seeded rule match what the target will enforce.
+        try {
+          const mnv = await digitApi.mdmsV2SearchRaw(source, 'common-masters.MobileNumberValidation', { limit: 50 });
+          const defaultRecord = (mnv || []).find((r: any) => r?.data?.default === true) || (mnv || [])[0];
+          if (defaultRecord?.data) {
+            if (!args.mobile_regex && (defaultRecord.data as any).mobileNumberRegex) {
+              (args as any).mobile_regex = (defaultRecord.data as any).mobileNumberRegex;
+            }
+            if (!args.mobile_prefix && (defaultRecord.data as any).countryCode) {
+              (args as any).mobile_prefix = (defaultRecord.data as any).countryCode;
             }
           }
         } catch (e) {
-          /* no UserValidation at source -> fall through to the generic default */
+          /* no MobileNumberValidation at source -> fall through to the generic default */
         }
       }
       const mobileRegex = (args.mobile_regex as string) || '^[6-9][0-9]{9}$';
@@ -1544,32 +1592,21 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         }
       }
 
-      // ── Step 3b: INSERT country-specific common-masters.UserValidation ──────
-      // Schema + India record (zone:'India') are seeded by default-data-handler
-      // at pg and copied to new root tenants via TenantConsumer. MCP only INSERTs
-      // the country-specific record identified by zone. x-unique:['zone'] allows
-      // both records to coexist; egov-user fetches all active mobile rules.
-      //
-      // FULLY CONFIG-DRIVEN: the caller passes `user_validation` — a list of
-      // { fieldType, zone, pattern, minLength, maxLength, errorMessage } — so a
-      // new country/field is pure config, no code. `mobile_regex`/`mobile_length`/
-      // `mobile_zone` are a back-compat shorthand that builds a single entry.
-      const stateRoot = (target as string).includes('.') ? (target as string).split('.')[0] : (target as string);
-      const mobileZone = (args.mobile_zone as string) || 'mobile';
-      const validationRules: Array<{ fieldType: string; zone: string; prefix?: string; allowedStartingCharacters?: string[]; pattern: string; minLength?: number; maxLength?: number; errorMessage?: string }> =
+      // ── Step 3b: INSERT country-specific common-masters.MobileNumberValidation ──
+      // Schema is seeded by default-data-handler at pg and copied to new root tenants
+      // via TenantConsumer. MCP INSERTs the target-country record identified by
+      // countryCode (the x-unique key). `mobile_regex`/`mobile_prefix` are a
+      // back-compat shorthand; `user_validation` is the fully declarative form.
+      const mobileCountryCode = (args.mobile_prefix as string) || '+91';
+      const validationRules: Array<{ countryCode: string; mobileNumberRegex: string; default?: boolean }> =
         Array.isArray(args.user_validation) && (args.user_validation as unknown[]).length > 0
           ? (args.user_validation as typeof validationRules)
           : [{
-              fieldType: 'mobile',
-              zone: mobileZone,
-              prefix: (args.mobile_prefix as string) || undefined,
-              allowedStartingCharacters: (args.mobile_allowed_starting_characters as string[]) || undefined,
-              pattern: mobileRegex,
-              minLength: Number(args.mobile_length) || 10,
-              maxLength: Number(args.mobile_length) || 10,
-              errorMessage: (args.mobile_error_message as string) || undefined,
+              countryCode: mobileCountryCode,
+              mobileNumberRegex: mobileRegex,
+              default: true,
             }];
-      emitProgress({ phase: 'uservalidation:start', message: `Synthesizing ${validationRules.length} UserValidation rule(s)`, pct: 76 });
+      emitProgress({ phase: 'mobilevalidation:start', message: `Synthesizing ${validationRules.length} MobileNumberValidation rule(s)`, pct: 76 });
       let uvNewlySeeded = false;
       try {
         // data-handler seeds the schema at pg and TenantConsumer copies it to the
@@ -1580,55 +1617,46 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           const schemaMaxAttempts = 20; // up to 60 s
           let schemaReady = false;
           for (let i = 0; i < schemaMaxAttempts; i++) {
-            const schemas = await digitApi.mdmsSchemaSearch(target, ['common-masters.UserValidation']).catch(() => []);
+            const schemas = await digitApi.mdmsSchemaSearch(target, ['common-masters.MobileNumberValidation']).catch(() => []);
             if (schemas && schemas.length > 0) { schemaReady = true; break; }
-            emitProgress({ phase: 'uservalidation:wait', message: `Waiting for common-masters.UserValidation schema at "${target}" (attempt ${i + 1}/${schemaMaxAttempts})…` });
+            emitProgress({ phase: 'mobilevalidation:wait', message: `Waiting for common-masters.MobileNumberValidation schema at "${target}" (attempt ${i + 1}/${schemaMaxAttempts})…` });
             await new Promise(res => setTimeout(res, schemaWaitMs));
           }
           if (!schemaReady) {
-            throw new Error(`common-masters.UserValidation schema not found at "${target}" after ${schemaMaxAttempts * schemaWaitMs / 1000}s — default-data-handler may not have seeded it yet`);
+            throw new Error(`common-masters.MobileNumberValidation schema not found at "${target}" after ${schemaMaxAttempts * schemaWaitMs / 1000}s — default-data-handler may not have seeded it yet`);
           }
         }
         // mdms-v2 search is HIERARCHICAL — filter to exact-tenant rows only,
-        // keyed by zone (the x-unique field).
-        const existingUVraw = await digitApi.mdmsV2SearchRaw(target, 'common-masters.UserValidation', { limit: 50 });
-        const getExistingByZone = (zone: string) => existingUVraw.find(
+        // keyed by countryCode (the x-unique field).
+        const existingUVraw = await digitApi.mdmsV2SearchRaw(target, 'common-masters.MobileNumberValidation', { limit: 50 });
+        const getExistingByCountryCode = (countryCode: string) => existingUVraw.find(
           (r) => (r as { tenantId?: string }).tenantId === target
-            && (r as { data?: { zone?: string } }).data?.zone === zone,
+            && (r as { data?: { countryCode?: string } }).data?.countryCode === countryCode,
         );
         for (const rule of validationRules) {
-          if (getExistingByZone(rule.zone)) {
-            results.data.skipped.push(`common-masters.UserValidation/${rule.zone}`);
+          if (getExistingByCountryCode(rule.countryCode)) {
+            results.data.skipped.push(`common-masters.MobileNumberValidation/${rule.countryCode}`);
             continue;
           }
           try {
-            await mdmsCreateWithSchemaWait(target, 'common-masters.UserValidation', rule.zone, {
-              fieldType: rule.fieldType,
-              zone: rule.zone,
-              isActive: true,
-              default: true,
-              ...(rule.prefix ? { attributes: { prefix: rule.prefix } } : {}),
-              rules: {
-                pattern: rule.pattern,
-                minLength: rule.minLength ?? undefined,
-                maxLength: rule.maxLength ?? undefined,
-                ...(rule.allowedStartingCharacters ? { allowedStartingCharacters: rule.allowedStartingCharacters } : {}),
-                errorMessage: rule.errorMessage ?? `Invalid ${rule.fieldType}`,
-              },
+            await mdmsCreateWithSchemaWait(target, 'common-masters.MobileNumberValidation', rule.countryCode, {
+              countryCode: rule.countryCode,
+              mobileNumberRegex: rule.mobileNumberRegex,
+              default: rule.default ?? true,
             });
           } catch (e) {
             const m = e instanceof Error ? e.message : String(e);
             if (isDuplicateError(m)) {
-              results.data.skipped.push(`common-masters.UserValidation/${rule.zone} (already exists)`);
+              results.data.skipped.push(`common-masters.MobileNumberValidation/${rule.countryCode} (already exists)`);
               continue;
             }
             throw e;
           }
-          results.data.copied.push(`common-masters.UserValidation/${rule.zone} (inserted, pattern=${rule.pattern})`);
+          results.data.copied.push(`common-masters.MobileNumberValidation/${rule.countryCode} (inserted, pattern=${rule.mobileNumberRegex})`);
           uvNewlySeeded = true;
         }
       } catch (e) {
-        results.data.failed.push(`common-masters.UserValidation: ${e instanceof Error ? e.message : String(e)}`);
+        results.data.failed.push(`common-masters.MobileNumberValidation: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       // Poll until the inserted record is readable before Step 4 creates the ADMIN user.
@@ -1638,12 +1666,12 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         let uvReady = false;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
           try {
-            const uvRows = await digitApi.mdmsV2SearchRaw(target, 'common-masters.UserValidation', { limit: 10 });
+            const uvRows = await digitApi.mdmsV2SearchRaw(target, 'common-masters.MobileNumberValidation', { limit: 10 });
             const allCorrect = validationRules.every(rule =>
               uvRows.some(r =>
                 (r as { tenantId?: string }).tenantId === target &&
-                (r as { data?: { zone?: string } }).data?.zone === rule.zone &&
-                (r as { data?: { rules?: { pattern?: string } } }).data?.rules?.pattern === rule.pattern,
+                (r as { data?: { countryCode?: string } }).data?.countryCode === rule.countryCode &&
+                (r as { data?: { mobileNumberRegex?: string } }).data?.mobileNumberRegex === rule.mobileNumberRegex,
               ),
             );
             if (allCorrect) { uvReady = true; break; }
@@ -1651,7 +1679,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           await new Promise(res => setTimeout(res, pollIntervalMs));
         }
         if (!uvReady) {
-          console.warn(`[tenant_bootstrap] UserValidation not yet readable on "${target}" after ${maxAttempts * pollIntervalMs / 1000}s — proceeding anyway`);
+          console.warn(`[tenant_bootstrap] MobileNumberValidation not yet readable on "${target}" after ${maxAttempts * pollIntervalMs / 1000}s — proceeding anyway`);
         }
       }
 
@@ -3358,7 +3386,7 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           type: 'string',
           description: 'Tenant ID the record lives on (must match record.tenantId exactly — inherited records cannot be updated from a child tenant).',
         },
-        schema_code: { type: 'string', description: 'MDMS schema code, e.g. "common-masters.UserValidation".' },
+        schema_code: { type: 'string', description: 'MDMS schema code, e.g. "common-masters.MobileNumberValidation".' },
         unique_identifier: { type: 'string', description: 'The record\'s uniqueIdentifier.' },
         data: { type: 'object', description: 'Optional. Full replacement for the record\'s `data` block. Mutually exclusive with `patch`.' },
         patch: { type: 'object', description: 'Optional. Top-level keys to merge into existing data. Mutually exclusive with `data`.' },

@@ -5,7 +5,14 @@
 -- calls egov-user/_details to resolve the token and injects the user object
 -- as RequestInfo.userInfo before forwarding to the upstream service.
 
-local cjson = require("cjson")
+-- Scoped cjson instance with array metatable on decode. Plain lua-cjson cannot tell an empty
+-- array from an empty object (both are empty Lua tables) and re-encodes [] as {}, so the
+-- decode->encode round-trip below would corrupt every EMPTY array in the body (e.g. an MDMS
+-- schema's "x-ref-schema": []). decode_array_with_array_mt(true) tags decoded arrays (incl.
+-- empty ones) so cjson.encode re-emits them as []; genuinely-empty objects stay {}. .new()
+-- keeps the setting off the shared worker cjson.
+local cjson = require("cjson").new()
+cjson.decode_array_with_array_mt(true)
 local http = require("resty.http")
 
 -- Only enrich POST requests

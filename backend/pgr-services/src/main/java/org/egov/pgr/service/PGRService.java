@@ -153,37 +153,11 @@ public class PGRService {
         if(criteria.getMobileNumber()!=null && CollectionUtils.isEmpty(criteria.getUserIds()))
             return new ArrayList<>();
 
-        if (criteria.getAssignee() != null) {
-            String tenantId = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-            Set<String> serviceRequestIds = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
-            if (serviceRequestIds.isEmpty()) {
-                return new ArrayList<>();
-            }
-            criteria.setServiceRequestIds(serviceRequestIds);
-        }
+        if (!resolveAssigneeFilter(requestInfo, criteria))
+            return new ArrayList<>();
 
         if (!resolveDepartmentFilter(requestInfo, criteria))
             return new ArrayList<>();
-
-        if (!CollectionUtils.isEmpty(criteria.getDepartment())) {
-            String tenantId = criteria.getTenantId() != null
-                    ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-            Set<String> deptServiceCodes = mdmsUtils.getServiceCodesByDepartment(tenantId, criteria.getDepartment());
-            if (deptServiceCodes.isEmpty()) {
-                return new ArrayList<>();
-            }
-            if (CollectionUtils.isEmpty(criteria.getServiceCode())) {
-                criteria.setServiceCode(deptServiceCodes);
-            } else {
-                // both department AND an explicit serviceCode were supplied -> intersect (AND)
-                Set<String> intersection = new HashSet<>(criteria.getServiceCode());
-                intersection.retainAll(deptServiceCodes);
-                if (intersection.isEmpty()) {
-                    return new ArrayList<>();
-                }
-                criteria.setServiceCode(intersection);
-            }
-        }
 
         criteria.setIsPlainSearch(false);
 
@@ -274,6 +248,8 @@ public class PGRService {
      * @return
      */
     public Integer count(RequestInfo requestInfo, RequestSearchCriteria criteria){
+        if (!resolveAssigneeFilter(requestInfo, criteria))
+            return 0;
         if (!resolveDepartmentFilter(requestInfo, criteria))
             return 0;
         criteria.setIsPlainSearch(false);
@@ -470,6 +446,31 @@ public class PGRService {
             if (intersection.isEmpty())
                 return false;
             criteria.setServiceCode(intersection);
+        }
+        return true;
+    }
+
+    /**
+     * Resolves an `assignee` filter into serviceRequestIds via the workflow service and folds it
+     * into criteria.serviceRequestIds. Returns false when the assignee has nothing assigned (or the
+     * intersection with an existing serviceRequestIds set is empty), so the caller short-circuits to
+     * empty. Returns true (criteria unchanged) when no assignee is set.
+     */
+    private boolean resolveAssigneeFilter(RequestInfo requestInfo, RequestSearchCriteria criteria) {
+        if (criteria.getAssignee() == null)
+            return true;
+        String tenantId = criteria.getTenantId() != null
+                ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+        Set<String> ids = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
+        if (ids.isEmpty())
+            return false;
+        if (CollectionUtils.isEmpty(criteria.getServiceRequestIds())) {
+            criteria.setServiceRequestIds(ids);
+        } else {
+            Set<String> intersection = new HashSet<>(criteria.getServiceRequestIds());
+            intersection.retainAll(ids);
+            if (intersection.isEmpty()) return false;
+            criteria.setServiceRequestIds(intersection);
         }
         return true;
     }

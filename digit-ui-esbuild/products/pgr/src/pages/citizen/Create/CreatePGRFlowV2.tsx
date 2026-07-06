@@ -791,36 +791,22 @@ const TipBulbIcon = (
 );
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <StepShell
-      title={t("CS_ADDCOMPLAINT_SELECT_GEOLOCATION_HEADER")}
-      description={tr(
-        t,
-        "CS_PIN_LOCATION_HINT",
-        "Drop a pin on the exact spot — we'll use it to route your complaint to the right ward."
-      )}
-    >
-      <GeoLocations
-        t={t}
-        config={{
-          key: "GeoLocationsPoint",
-          populators: { name: "GeoLocationsPoint" },
-          withoutLabel: true,
-        }}
-        formData={data}
-        onSelect={(_key: string, value: GeoPoint) => {
-          patch({
-            GeoLocationsPoint: value,
-            // Mirror the new pin's pincode onto postalCode. Always reset to the
-            // current pin: if the newly-picked location has no pincode, clear it
-            // rather than keeping the previous pin's value — otherwise a stale
-            // pincode from an earlier pin lingers after the pin is moved
-            // (CCRS#722). The user can still type one on the location step.
-            postalCode:
-              value?.pincode != null && String(value.pincode).length > 0
-                ? String(value.pincode)
-                : "",
-          });
-        }}
+    <div className="mb-4">
+      <h3 style={{ fontSize: "1.05rem", fontWeight: 600, margin: 0, color: PRIMARY }}>{title}</h3>
+      {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+    </div>
+  );
+}
+
+function Step1Map({ data, patch, t }: StepBodyProps) {
+  // Reuse the existing GeoLocations component (leaflet + Nominatim). Rendered
+  // BARE (no card) — it sits in the left pane of the unified "Where" card.
+  const GeoLocations = Digit?.ComponentRegistryService?.getComponent("GeoLocations");
+  return (
+    <div>
+      <SectionHeader
+        title={tr(t, "CS_PIN_LOCATION_TITLE", "Pin the complaint location")}
+        subtitle={tr(t, "CS_PIN_LOCATION_HINT", "Click and hold on the map to drop the pin on the exact spot.")}
       />
       {GeoLocations ? (
         <GeoLocations
@@ -1300,7 +1286,22 @@ function PgrFileUpload({
         accept="image/*"
         multiple
         onChange={onInputChange}
-        style={{ display: "none" }}
+        // Do NOT use display:none. Some Android WebViews refuse to fire the file
+        // chooser (WebChromeClient.onShowFileChooser) for a programmatic .click()
+        // on a display:none input — the tap silently does nothing. Keep the input
+        // rendered but visually hidden so the chooser opens inside the WebView.
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          opacity: 0,
+          overflow: "hidden",
+          border: 0,
+          padding: 0,
+          margin: -1,
+          clip: "rect(0 0 0 0)",
+          pointerEvents: "none",
+        }}
         aria-hidden="true"
         tabIndex={-1}
       />

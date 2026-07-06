@@ -1745,8 +1745,8 @@
       # `nginx_preserve_vhost: true` in host_vars makes the next three tasks
       # (render / enable / remove-default) no-op. Use it for tenants whose
       # production vhost has hand-crafted routing the template can't (yet)
-      # render — e.g. Bomet's /egov-rainmaker/ filestore passthrough,
-      # /novu/+/novu-api/ routing, and the /digit-ui/ host-alias. The nginx
+      # render — e.g. Bomet's /novu/+/novu-api/ routing and the /digit-ui/
+      # host-alias. The nginx
       # install task above still runs (idempotent), so the package is
       # always present; only the site file is left alone.
 
@@ -2306,6 +2306,60 @@
       until: user_kong_ready_post.status in [200, 400, 401]
       changed_when: false
       when: state_root != 'pg'
+
+    # egov-user's EncryptionDecryptionUtil.encryptObject() uses stateLevelTenantId
+    # (STATE_LEVEL_TENANT_ID env var) as the enc key — not the user's tenantId.
+    # Bootstrap runs while STATE_LEVEL=pg → ADMIN@mz stored with pg's enc key.
+    # Post-bootstrap restarts egov-user with STATE_LEVEL=mz → login now encrypts
+    # with mz's key → ciphertext mismatch → "Invalid login credentials".
+    # Fix: call bootstrap with user_only=true AFTER STATE_LEVEL=mz is active so
+    # the new ADMIN row is stored with mz's enc key. configurator-i18n login
+    # finds this row and succeeds.
+    - name: "post-bootstrap — re-provision ADMIN with state_root enc key (user_only)"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:13101/v1/tenant/bootstrap"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body_format: json
+        body:
+          target_tenant: "{{ state_root }}"
+          source_tenant: "pg"
+          user_only: true
+          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern }}"
+          mobile_prefix: "{{ core_mobile_configs.mobilePrefix }}"
+          mobile_length: "{{ core_mobile_configs.mobileNumberLength | int }}"
+        status_code: [200]
+        timeout: 60
+      register: mcp_rekey_root
+      failed_when: >-
+        mcp_rekey_root.status != 200 or
+        not (mcp_rekey_root.json.admin_user_provisioned | default(false))
+      when: state_root != 'pg'
+      no_log: true
+
+    - name: "post-bootstrap — re-provision ADMIN with city enc key (user_only)"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:13101/v1/tenant/bootstrap"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body_format: json
+        body:
+          target_tenant: "{{ tenant_id }}"
+          source_tenant: "pg"
+          user_only: true
+          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern }}"
+          mobile_prefix: "{{ core_mobile_configs.mobilePrefix }}"
+          mobile_length: "{{ core_mobile_configs.mobileNumberLength | int }}"
+        status_code: [200]
+        timeout: 60
+      register: mcp_rekey_city
+      failed_when: >-
+        mcp_rekey_city.status != 200 or
+        not (mcp_rekey_city.json.admin_user_provisioned | default(false))
+      when: state_root != 'pg' and tenant_id != state_root
+      no_log: true
 
     # ────────────────────────────────────────────────────────────────
     # Configurator UI localization seed. The configurator's own chrome —

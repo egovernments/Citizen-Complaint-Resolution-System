@@ -51,7 +51,15 @@ plugins:
     access:
       - |
         -- Auth enrichment: resolve authToken → userInfo (mirrors Spring Cloud Gateway AuthCheckFilterHelper)
-        local cjson = require("cjson")
+        -- Scoped cjson instance with array metatable on decode. Plain lua-cjson cannot tell an
+        -- empty array from an empty object (both are empty Lua tables) and re-encodes [] as {},
+        -- so the decode->encode round-trip below would silently corrupt every EMPTY array in the
+        -- body (e.g. MDMS schema "x-ref-schema": []). decode_array_with_array_mt(true) tags
+        -- decoded arrays (incl. empty ones) so cjson.encode re-emits them as []; genuinely-empty
+        -- objects carry no array mt and stay {}. .new() scopes this so it never leaks to the
+        -- shared cjson used by other pre-functions in the worker.
+        local cjson = require("cjson").new()
+        cjson.decode_array_with_array_mt(true)
         local http = require("resty.http")
         if kong.request.get_method() ~= "POST" then return end
         local raw_body = kong.request.get_raw_body()

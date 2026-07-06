@@ -181,9 +181,9 @@ public class PGRConstants {
     public static final String ROLE_CONFIDENTIAL_VIEWER = "CONFIDENTIAL_COMPLAINT_VIEWER";
 
     // Extended attributes - search by department
-    public static final String MDMS_SERVICEDEF_MASTER = "ServiceDefs";
+    public static final String MDMS_SERVICEDEF_MASTER = "ComplaintHierarchy";
 
-    public static final String MDMS_SERVICEDEFS_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.ServiceDefs";
+    public static final String MDMS_SERVICEDEFS_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy";
 
-    public static final String MDMS_SERVICE_CODE_KEY     = "serviceCode";
+    public static final String MDMS_SERVICE_CODE_KEY     = "code";
 }

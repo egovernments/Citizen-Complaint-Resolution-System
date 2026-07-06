@@ -326,8 +326,7 @@ public class MDMSUtils {
         if (CollectionUtils.isEmpty(departmentCodes))
             return serviceCodes;
         try {
-            String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
-            MdmsCriteriaReq req = getServiceDefMdmsRequest(new RequestInfo(), stateTenant);
+            MdmsCriteriaReq req = getServiceDefMdmsRequest(new RequestInfo(), tenantId);
             Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), req);
             List<Map<String, Object>> defs = JsonPath.read(result, MDMS_SERVICEDEFS_JSONPATH);
             for (Map<String, Object> def : defs) {

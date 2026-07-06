@@ -274,6 +274,9 @@ public class ServiceRequestValidator {
         if(criteria.getDepartment()!=null && !allowedParams.contains("department"))
             throw new CustomException("INVALID SEARCH","Search on department is not allowed");
         
+        if(criteria.getAssignee()!=null && !allowedParams.contains("assignee"))
+            throw new CustomException("INVALID SEARCH","Search on assignee is not allowed");
+            
         if(criteria.getServiceRequestId()!=null && !allowedParams.contains("serviceRequestId"))
             throw new CustomException("INVALID SEARCH","Search on serviceRequestId is not allowed");
 
