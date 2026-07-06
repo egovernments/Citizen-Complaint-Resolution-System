@@ -115,7 +115,7 @@ public class ProviderController {
             @RequestParam(required = false) String channel,
             @RequestParam(required = false) String providerId) {
         NovuClient.NovuResponse novuResponse = novuClient.listWorkflows();
-        List<Map<String, Object>> workflows = IntegrationProjection.extractList(novuResponse.getResponse());
+        List<Map<String, Object>> workflows = extractWorkflows(novuResponse.getResponse());
         List<Map<String, Object>> data = new ArrayList<>(workflows.size());
         for (Map<String, Object> wf : workflows) {
             Map<String, Object> row = new LinkedHashMap<>();
@@ -127,6 +127,29 @@ public class ProviderController {
         out.put("data", data);
         out.put("total", data.size());
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Novu {@code GET /v2/workflows} nests the list at {@code data.workflows}
+     * (unlike {@code /v1/integrations} whose list is {@code data} directly).
+     * Tolerant of both plus a bare {@code workflows} key.
+     */
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> extractWorkflows(Map<String, Object> response) {
+        if (response == null) {
+            return List.of();
+        }
+        Object data = response.get("data");
+        if (data instanceof Map && ((Map<String, Object>) data).get("workflows") instanceof List) {
+            return (List<Map<String, Object>>) ((Map<String, Object>) data).get("workflows");
+        }
+        if (data instanceof List) {
+            return (List<Map<String, Object>>) data;
+        }
+        if (response.get("workflows") instanceof List) {
+            return (List<Map<String, Object>>) response.get("workflows");
+        }
+        return List.of();
     }
 
     // ---- POST /providers/verify -----------------------------------------
