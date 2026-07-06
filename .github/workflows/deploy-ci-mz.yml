@@ -1,0 +1,85 @@
+name: Deploy CI — mz state-root (igse config)
+
+# Runs the full ./deploy.sh ci-mz on every push that touches the deploy,
+# MCP, or utilities code. Identical config to igse (state_root: mz, mz.ige),
+# so it exercises the post-bootstrap ADMIN enc-key re-provision path.
+# Green here → safe to manually deploy on the igse server.
+
+on:
+  push:
+    branches: [main, master, develop, release-*, feat/*]
+    paths:
+      - 'local-setup/**'
+      - 'digit-mcp/**'
+      - 'utilities/**'
+      - '.github/workflows/deploy-ci-mz.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost \
+                      /usr/local/lib/android /usr/share/swift
+          df -h
+
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update && sudo apt-get install -y git rsync ca-certificates curl gnupg
+          curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+          sudo apt-get install -y nodejs
+          pipx install --include-deps ansible
+          ansible --version
+          node --version
+          npm --version
+
+      - name: Pre-run cleanup
+        run: |
+          docker stop $(docker ps -q) 2>/dev/null || true
+          docker rm $(docker ps -aq) 2>/dev/null || true
+          docker volume rm $(docker volume ls -q | grep digit) 2>/dev/null || true
+
+      - name: Run deploy
+        id: deploy
+        run: |
+          cd local-setup/ansible
+          ./deploy.sh ci-mz 2>&1 | tee /tmp/deploy-ci-mz.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload deploy log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-ci-mz-log-${{ github.run_number }}
+          path: /tmp/deploy-ci-mz.log
+          retention-days: 14
+
+      - name: Verify ADMIN login (mz.ige)
+        run: |
+          RESPONSE=$(curl -s 'http://localhost/user/oauth/token' \
+            -H 'Authorization: Basic ZWdvdi11c2VyLWNsaWVudDo=' \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data-raw 'username=ADMIN&password=eGov%40123&userType=EMPLOYEE&tenantId=mz.ige&scope=read&grant_type=password')
+          echo "$RESPONSE" | jq .
+          TOKEN=$(echo "$RESPONSE" | jq -r '.access_token // empty')
+          if [ -z "$TOKEN" ]; then
+            echo "FATAL: ADMIN login failed — access_token missing"
+            exit 1
+          fi
+          echo "ADMIN@mz.ige login OK — token: ${TOKEN:0:8}..."
+
+      - name: Show Ansible RECAP on failure
+        if: failure()
+        run: |
+          echo "=== Ansible RECAP ==="
+          grep -A5 "PLAY RECAP" /tmp/deploy-ci-mz.log 2>/dev/null || echo "(not found)"
+          echo ""
+          echo "=== Last 50 lines ==="
+          tail -50 /tmp/deploy-ci-mz.log 2>/dev/null || echo "(no log)"

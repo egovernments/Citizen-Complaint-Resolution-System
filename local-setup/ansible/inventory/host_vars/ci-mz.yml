@@ -1,0 +1,88 @@
+  # CI copy of igse.yml — exact same config, runs on GitHub Actions ubuntu-latest.
+  # Deploy with: cd local-setup/ansible && ./deploy.sh ci-mz
+
+  # ── target box ──
+  ansible_host: localhost
+  ansible_connection: local
+  deploy_kecome: true            # Linux needs root for apt + nginx
+  docker_default_platform: linux/amd64
+  domain: localhost              # change to real FQDN + tls_enabled: true for prod
+  tls_enabled: false
+  insecure_registries: []        # MUST ke [] for ghcr.io / flywheel — both serve TLS
+
+  # ── tenancy: ke layered as state root, JVMs pinned to ke.bomet ──
+  state_root: mz
+  state_tenant_id: mz
+  city_tenant: mz.ige
+  tenant_id: mz.ige          # JVM STATE_LEVEL_TENANT_ID — workflow + enc-service read this at startup
+  boot_tenant: mz                # citizen-current-tenant default
+  ui_state_tenant_id: mz.ige
+
+  map_center: { lat: -25.9692, lng: 32.5732 }
+  login_tenant_allowlist: [ mz, mz.ige ]
+  employee_module_denylist: [ IM ]
+
+  # Locale stays en_IN (always seeded). pt_ke would need a localization upload first.
+  locale_region: "IN"
+
+  # ── PGR boundary taxonomy — strings MUST exactly match boundaryType values
+  #    in 02-Boundaries.xlsx, INCLUDING the accent on Município. ──
+  pgr_boundary_highest_level: "Província"
+  pgr_boundary_lowest_level: "Município"
+  boundary_type: "Município"
+  hierarchy_type: "divisao_administrativa"
+
+  # ── Mozambique mobile rule — citizen registration + employee mobile validation ──
+  core_mobile_configs:
+    mobilePrefix: "+258"
+    mobileNumberPattern: "^8[0-9]{8}$"
+    mobileNumberLength: 9
+    mobileNumberAllowedStartingCharacters: ['8']
+    mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
+
+  # ── postal validation (4-digit be, guess — adjust if PGR rejects) ──
+  core_postal_configs:
+    postalCodePattern: "^[0-9]{4}$"
+    postalCodeLength: 4
+    postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
+
+  asset_s3_bucket: "bomet-egov-assets"
+  footer_logo_url: ""
+  footer_bw_logo_url: ""
+
+  # ── builds from source on first deploy ──
+  digit_ui_mode: container
+  build_digit_ui: false          # CI: skip source build — pre-built image + globalConfigs.js is sufficient
+  build_configurator: false      # CI: skip source build — enc-key test doesn't need configurator
+  enable_mcp: true
+  build_mcp: true
+  build_default_data_handler: true   # ships PR #598's idempotency guard
+
+  enable_search_stack: false
+  enable_novu: false
+  enable_otp_services: false         # local dev: Kong mocks /user-otp/*, login uses CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE (123456)
+  requires_nairobi_mdms: false
+  db_fast_path: true                 # REQUIRED on first deploy (loads dump, fixes mount path)
+  run_ci_tests: false
+  install_claude_code: false
+
+  # ── tag prefix for MCP/DDH fallback pulls (build_* flags above bypass these) ──
+  docker_registry: "registry.preview.egov.theflywheel.in/egovio"
+
+  nginx_features:
+    brand_assets: false
+    configurator: false          # CI: skip configurator build + nginx block + validation
+    configurator_caching: false
+    status: true
+    api_pgr: false
+    mcp: true
+
+  # ── secrets (LOCAL TEST DEFAULTS — change for any real deploy) ──
+  secrets_path: kv/digit/ci-mz
+  bootstrap_secrets:
+    postgres_password: egov123
+    mcp_db_password: egov123
+    minio_root_user: minioadmin
+    minio_root_password: minioadmin
+    elasticsearch_master_password: "asd@#$@$!132123"   # MUST match exactly when db_fast_path: true
+    egov_hrms_default_password: "eGov@123"
