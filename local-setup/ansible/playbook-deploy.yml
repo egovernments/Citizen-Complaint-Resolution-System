@@ -2975,6 +2975,52 @@
       register: newman_install
       changed_when: "'added' in newman_install.stdout"
 
+    # ─────────── Config-driven notification MDMS seed ───────────
+    # Seeds the 3 PGR notification masters (schema + data) at the state root,
+    # scoped to JUST notifications — the standalone equivalent of DDH's file
+    # loader (which the deploy does NOT invoke; the fast-path dump carries no
+    # notification rows). Two run modes:
+    #   • Fresh install: runs automatically when `seed_notifications` (or the
+    #     config-driven flag) is on.
+    #   • Add-on to an existing deploy:  ./deploy.sh <tenant> --tags notifications
+    #     (state_root / digit_dir / upstream_kong_port are group/host vars, so
+    #     they resolve even under --tags). Idempotent — MDMS dedupes on re-run.
+    - name: "notif-seed — stage schema + data + seeder on target"
+      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ digit_dir }}/notification-seed/"
+      loop:
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationRouting.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json"
+        - "{{ playbook_dir }}/../scripts/seed-notifications.py"
+
+    - name: "notif-seed — seed the 3 notification MDMS masters (idempotent)"
+      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}/notification-seed
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        NOTIF_TENANT={{ state_root }} \
+        DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
+        DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
+        DIGIT_LOGIN_TENANT={{ state_root }} \
+        SCHEMA_FILE={{ digit_dir }}/notification-seed/RAINMAKER-PGR.json \
+        DATA_DIR={{ digit_dir }}/notification-seed \
+        python3 seed-notifications.py
+      register: notif_seed
+      changed_when: "'created' in (notif_seed.stdout | default(''))"
+      failed_when: "'DONE' not in (notif_seed.stdout | default(''))"
+
+    - name: "notif-seed — result"
+      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.debug:
+        msg: "{{ notif_seed.stdout_lines | default(['(no output)']) }}"
+
     - name: "CI — Postman digit-core-validation (every core service)"
       when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |
