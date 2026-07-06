@@ -185,6 +185,15 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     descriptionField: 'channel', dedicated: true,
     customPath: '/novu-bridge/novu-adapter/v1/integrations', customTenantScoped: false,
   },
+  // notification-preference -> GET /novu-bridge/novu-adapter/v1/preferences
+  // (per-user consent per channel + preferredLanguage; same {data,total} envelope
+  // as integrations). Keyed by the row's `userId`, which is always present, so
+  // react-admin gets a stable id straight from the response.
+  'notification-preference': {
+    type: 'custom', label: 'User Preferences', idField: 'userId', nameField: 'userId',
+    descriptionField: 'preferredLanguage', dedicated: true,
+    customPath: '/novu-bridge/novu-adapter/v1/preferences', customTenantScoped: false,
+  },
 };
 
 export function getResourceConfig(resource: string): ResourceConfig | undefined {

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -162,6 +163,53 @@ public class PreferenceServiceClient {
         } catch (Exception e) {
             log.warn("Error getting preferred locale for tenantId={} userId={}, using default: {}", tenantId, userId, defaultLocale, e);
             return defaultLocale;
+        }
+    }
+
+    /**
+     * List the raw user notification preference records for a tenant (or all
+     * tenants when {@code tenantId} is blank), paged via {@code limit}/{@code offset}.
+     * Returns the raw {@code preferences} list from the preference service search
+     * response; the caller is responsible for allowlist-projecting each record
+     * before it leaves the service. Returns an empty list on any error or when no
+     * records are found, mirroring the defensive style of the other search calls.
+     */
+    public List<Map<String, Object>> listPreferences(String tenantId, int limit, int offset) {
+        log.info("Listing preferences: tenantId={}, limit={}, offset={}, preferenceEnabled={}",
+                tenantId, limit, offset, config.getPreferenceEnabled());
+        try {
+            Map<String, Object> criteria = new HashMap<>();
+            criteria.put("preferenceCode", config.getPreferenceCode());
+            if (StringUtils.hasText(tenantId)) {
+                criteria.put("tenantId", tenantId);
+            }
+            criteria.put("limit", limit);
+            criteria.put("offset", offset);
+
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("requestInfo", new HashMap<>());
+            payload.put("criteria", criteria);
+
+            String url = config.getPreferenceHost() + config.getPreferenceCheckPath();
+            log.info("Preference list request: url={}, preferenceCode={}, tenantId={}, limit={}, offset={}",
+                    url, config.getPreferenceCode(), tenantId, limit, offset);
+
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(payload), Map.class);
+            log.info("Preference list response: statusCode={}", response.getStatusCode());
+
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                log.warn("Cannot list preferences: non-success response. statusCode={}", response.getStatusCode());
+                return new ArrayList<>();
+            }
+            List<Map<String, Object>> preferences = (List<Map<String, Object>>) response.getBody().get("preferences");
+            if (preferences == null || preferences.isEmpty()) {
+                log.warn("No preferences found for tenantId={}, limit={}, offset={}", tenantId, limit, offset);
+                return new ArrayList<>();
+            }
+            return preferences;
+        } catch (Exception e) {
+            log.warn("Error listing preferences for tenantId={}, limit={}, offset={}", tenantId, limit, offset, e);
+            return new ArrayList<>();
         }
     }
 

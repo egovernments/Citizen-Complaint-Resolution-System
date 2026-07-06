@@ -34,6 +34,7 @@ import {
 // @/resources barrel) so the notification surfaces stay self-contained.
 import { NotificationLogList } from '@/resources/notification-logs/NotificationLogList';
 import { NotificationProviderList } from '@/resources/notification-providers/NotificationProviderList';
+import { NotificationPreferenceList } from '@/resources/notification-preferences/NotificationPreferenceList';
 import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import PgrDashboard from './pages/PgrDashboard';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
@@ -147,6 +148,7 @@ function ManagementAdmin() {
             /manage/notification-log and /manage/notification-provider. */}
         <Resource name="notification-log" list={NotificationLogList} />
         <Resource name="notification-provider" list={NotificationProviderList} />
+        <Resource name="notification-preference" list={NotificationPreferenceList} />
 
         {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above) */}
         {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions').map((name) => (

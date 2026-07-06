@@ -381,7 +381,7 @@ services:
     config:
       replace:
         uri: /pgr-services/health
-# novu-bridge read-only configurator proxy. Only the two GET endpoints are
+# novu-bridge read-only configurator proxy. Only the three GET endpoints are
 # routed; the POST diagnostics under the same namespace stay unrouted on
 # purpose. Auth happens INSIDE novu-bridge (ProxyAuthFilter validates the
 # DIGIT bearer token against egov-user /user/_details) — Kong is a dumb router
@@ -401,6 +401,12 @@ services:
     - GET
     paths:
     - /novu-bridge/novu-adapter/v1/integrations
+    strip_path: false
+  - name: novu-bridge-preferences-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/preferences
     strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083

@@ -47,6 +47,7 @@ const customEnglishMessages: TranslationMessages = {
       notification_provider_templates: 'Provider Templates (WhatsApp)',
       notification_logs: 'Notification Logs',
       notification_providers: 'Notification Providers',
+      notification_preferences: 'User Preferences',
       tenant_management: 'Tenant Management',
       tenants: 'Tenants',
       departments: 'Departments',
