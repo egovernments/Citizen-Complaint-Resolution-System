@@ -3004,10 +3004,10 @@
       ansible.builtin.shell: |
         cd {{ digit_dir }}/notification-seed
         DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
-        NOTIF_TENANT={{ state_root }} \
+        NOTIF_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
         DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
         DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
-        DIGIT_LOGIN_TENANT={{ state_root }} \
+        DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
         SCHEMA_FILE={{ digit_dir }}/notification-seed/RAINMAKER-PGR.json \
         DATA_DIR={{ digit_dir }}/notification-seed \
         python3 seed-notifications.py

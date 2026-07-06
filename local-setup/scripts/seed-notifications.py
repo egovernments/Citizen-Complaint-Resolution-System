@@ -95,9 +95,11 @@ def create_row(tok, code, row):
 
 def count_rows(tok, code):
     body = ri(tok)
-    body["MdmsCriteria"] = {"tenantId": TENANT, "schemaCode": code}
+    body["MdmsCriteria"] = {"tenantId": TENANT, "schemaCode": code, "limit": 200}
     try:
-        r = json.load(_post("/mdms-v2/v2/_search/" + code, body, tok))
+        # mdms-v2 _search takes the schemaCode in the BODY (not the path — that
+        # path variant silently returns 0). Same quirk the configurator hit.
+        r = json.load(_post("/mdms-v2/v2/_search", body, tok))
         return len(r.get("mdms", []))
     except urllib.error.HTTPError:
         return -1
