@@ -1115,19 +1115,35 @@ public class NotificationService {
         try {
             String loc = notificationUtil.getLocalizationMessages(tenantId, ri, PGR_MODULE);
             put(v, "id", service.getServiceRequestId());
-            if (StringUtils.hasText(service.getServiceCode()))
-                put(v, "complaint_type", notificationUtil.getCustomizedMsgForPlaceholder(loc,
-                        "pgr.complaint.category." + service.getServiceCode()));
-            if (StringUtils.hasText(service.getApplicationStatus()))
-                put(v, "status", notificationUtil.getCustomizedMsgForPlaceholder(loc,
-                        "CS_COMMON_" + service.getApplicationStatus()));
-            put(v, "download_link", notificationUtil.getShortnerURL(config.getMobileDownloadLink()));
+            if (StringUtils.hasText(service.getServiceCode())) {
+                String ct = notificationUtil.getCustomizedMsgForPlaceholder(loc,
+                        "pgr.complaint.category." + service.getServiceCode());
+                // Fall back to the raw service code so a missing localization key never ships a
+                // literal {complaint_type} to the recipient.
+                put(v, "complaint_type", StringUtils.hasText(ct) ? ct : service.getServiceCode());
+            }
+            if (StringUtils.hasText(service.getApplicationStatus())) {
+                String st = notificationUtil.getCustomizedMsgForPlaceholder(loc,
+                        "CS_COMMON_" + service.getApplicationStatus());
+                put(v, "status", StringUtils.hasText(st) ? st : service.getApplicationStatus());
+            }
             put(v, "date", formatCreatedDate(service));
             if (request.getWorkflow() != null) put(v, "additional_comments", request.getWorkflow().getComments());
             if (service.getRating() != null) put(v, "rating", service.getRating().toString());
             if (service.getCitizen() != null) put(v, "citizen_name", service.getCitizen().getName());
         } catch (Exception e) {
             log.warn("Failed building base placeholders for {}", service.getServiceRequestId(), e);
+        }
+        // {download_link} is isolated in its own try: it makes an HTTP call to the url-shortening
+        // service, and an outage there (e.g. a mis-instrumented JDBC driver returning 400) must NOT
+        // abort the base placeholders above — otherwise recipients get a message with literal
+        // {date}/{additional_comments} braces. Blank (not literal) when the shortener is unavailable.
+        try {
+            put(v, "download_link", notificationUtil.getShortnerURL(config.getMobileDownloadLink()));
+        } catch (Exception e) {
+            v.put("download_link", "");
+            log.warn("url-shortening unavailable; blanked {download_link} for {}: {}",
+                    service.getServiceRequestId(), e.getMessage());
         }
         try {
             String common = notificationUtil.getLocalizationMessages(tenantId, ri, COMMON_MODULE);
