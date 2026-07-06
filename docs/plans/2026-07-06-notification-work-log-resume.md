@@ -17,10 +17,14 @@ pilot, and what's left.
   real recipients (Citizen + GRO + LME).
 - **PR #58** holds it all: findings W1–W5, tests, placeholder/subject fixes, provider→template
   mapping (Twilio WhatsApp ContentSids), configurator "Provider Templates" screen, hi_IN seed,
-  schema, design docs.
+  schema, design docs, **user-preference seeder + configurator "User Preferences" screen**.
+- **User preferences DONE + live on Bomet:** the 3 test accounts seeded in
+  `digit-user-preferences-service` (Kanav hi_IN/all-granted, Shambhavi en_IN/WhatsApp-revoked,
+  Chakshu hi_IN/all-granted) and surfaced read-only in the configurator (novu-bridge
+  `/novu-adapter/v1/preferences` proxy → Kong route → "User Preferences" list screen).
+  Verified in-browser (nav + consent chips + preferredLanguage render).
 - **Remaining:** fresh-box Ansible test (`mh-iterations`); per-recipient locale impl; WhatsApp
-  emitter wiring (novu-bridge→Twilio ContentSid); officer WhatsApp templates (Twilio approval);
-  seed user preferences + surface them in the configurator (in progress next).
+  emitter wiring (novu-bridge→Twilio ContentSid); officer WhatsApp templates (Twilio approval).
 
 ## 2. Commits on PR #58 (in order)
 
@@ -105,12 +109,29 @@ Full lifecycle E2E (both languages) delivered: Citizen WA(read)+SMS(delivered)+E
   over `classpath:schema/*.json` at startup (`schema/RAINMAKER-PGR.json` holds the notification
   schemas). Data seeded by `MdmsBulkLoader` from `mdmsData-dev/**` (schemaCode = filename).
 - oauth token for API scripts: `Basic ZWdvdi11c2VyLWNsaWVudDo=` (`egov-user-client:` empty secret).
+- **bometadmin logs in at `ke.bomet`** (city), NOT `ke` (root → "Invalid login credentials").
+- **preference listing = `_search`, NOT `_check`**: `NOVU_BRIDGE_PREFERENCE_CHECK_PATH=/user-preference/v1/_check`
+  is a boolean-consent path (404 where unwired); the full list is `/user-preference/v1/_search`
+  (returns `{preferences:[...]}`). The proxy uses a dedicated `preference.search.path` config.
+- **ProxyAuthFilter gotcha**: `shouldNotFilter` allowlists paths by prefix — any NEW `/novu-adapter/v1/*`
+  endpoint MUST be added there or it serves UNAUTHENTICATED despite `proxyAuthEnabled=true` (caught + fixed
+  for `/preferences`). Bomet's Kong `kong.yml` is hand-maintained and lacked the `novu-bridge-proxy` service
+  entirely — the Logs/Providers/Preferences routes had to be appended + `kong reload`.
+- Configurator "User Preferences" screen queries the proxy WITHOUT a tenant filter (`customTenantScoped:false`),
+  so it lists ALL preferences by `preferenceCode` (all 3 test accounts, across `ke` + `ke.bomet`).
 
 ## 8. Open / remaining work
 
-1. **Seed user preferences** for the 3 test accounts (consent + `preferredLanguage`) in
-   `digit-user-preferences-service` + the branch seed — *(in progress)*.
-2. **Surface preferences in the configurator** (a Preferences resource/screen) — *(next)*.
+1. ~~**Seed user preferences** for the 3 test accounts~~ — **DONE**. Live on Bomet; reproducible
+   seeder `local-setup/scripts/seed-test-account-preferences.py` (looks up test employees by
+   userName → upserts USER_NOTIFICATION_PREFERENCES). Commit `c441e8556`.
+2. ~~**Surface preferences in the configurator**~~ — **DONE**. novu-bridge read-only
+   `GET /novu-adapter/v1/preferences` (allowlist projection: userId, tenantId, preferredLanguage,
+   per-channel consent — no PII) mirroring the `/integrations` proxy; Kong `novu-bridge-preferences-route`;
+   configurator `notification-preference` resource + "User Preferences" list screen (consent chips +
+   preferredLanguage). Commits `93d0fedd2`, `d0cd4c347` (search-path fix), `3396d73a4` (auth-gate fix).
+   Live image on Bomet: `novu-bridge:prefs-3396d73a4`; Kong route hand-added to `/opt/digit/kong/kong.yml`
+   (also in branch `local-setup/kong/kong.yml` so Ansible regen preserves it). Verified in-browser.
 3. **Fresh-box Ansible test** (`./deploy.sh mh-iterations`) — validate reproducibility of the whole
    PR #58 seed/schema/images on a wiped sandbox. (`mh-iterations` reachable, `db_fast_path`+CI on.)
 4. **Per-recipient locale** in `pgr NotificationService.processConfigDriven` (read `preferredLanguage`,
