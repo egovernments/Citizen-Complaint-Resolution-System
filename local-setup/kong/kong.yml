@@ -408,6 +408,30 @@ services:
     paths:
     - /novu-bridge/novu-adapter/v1/preferences
     strip_path: false
+  - name: novu-bridge-providers-create-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers
+    strip_path: false
+  - name: novu-bridge-providers-templates-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/templates
+    strip_path: false
+  - name: novu-bridge-providers-verify-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/verify
+    strip_path: false
+  - name: novu-bridge-providers-test-send-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/test-send
+    strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083
   tags:

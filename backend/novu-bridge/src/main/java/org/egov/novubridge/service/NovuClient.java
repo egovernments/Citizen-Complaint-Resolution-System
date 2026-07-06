@@ -336,6 +336,93 @@ public class NovuClient {
         }
     }
 
+    /**
+     * Create a Novu provider integration ({@code POST /v1/integrations}) with the
+     * same payload shape as {@code bootstrap-novu-whatsapp.sh}:
+     * {@code {name, identifier, providerId, channel, active:true, check:false, credentials}}.
+     * The Novu ApiKey is applied server-side; the operator-entered {@code credentials}
+     * POST straight through to Novu over TLS and live only there.
+     *
+     * <p><b>Secrets never logged.</b> Only the credential <i>key names</i> (never the
+     * values) are logged; the full body — including {@code credentials} — is never
+     * written to a log line. The returned {@link NovuResponse#getResponse()} is the
+     * raw Novu body (the created integration under {@code data}); callers exposing it
+     * to the browser MUST allowlist-project it so no {@code credentials} echo back.
+     *
+     * @param name        human-readable integration name
+     * @param identifier  stable integration identifier (optional; Novu generates one if blank)
+     * @param providerId  Novu provider id (e.g. {@code twilio}, {@code nodemailer})
+     * @param channel     Novu channel (e.g. {@code sms}, {@code email})
+     * @param credentials provider credential map (accountSid/token/from, host/user/pass/…)
+     * @return the parsed Novu response ({@code data} is the created integration)
+     */
+    public NovuResponse createIntegration(String name, String identifier, String providerId,
+                                          String channel, Map<String, Object> credentials) {
+        try {
+            Map<String, Object> body = new HashMap<>();
+            body.put("name", name);
+            if (StringUtils.hasText(identifier)) {
+                body.put("identifier", identifier);
+            }
+            body.put("providerId", providerId);
+            body.put("channel", channel);
+            body.put("active", true);
+            body.put("check", false);
+            body.put("credentials", credentials != null ? credentials : new HashMap<>());
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            String url = config.getNovuBaseUrl() + "/v1/integrations";
+            // Log the credential KEY NAMES only — never the secret values, never the body.
+            log.info("Novu create integration name={} identifier={} providerId={} channel={} credentialKeys={} url={}",
+                    name, identifier, providerId, channel,
+                    credentials != null ? credentials.keySet() : "none", url);
+
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST,
+                    new HttpEntity<>(body, headers), Map.class);
+            return NovuResponse.builder()
+                    .statusCode(response.getStatusCodeValue())
+                    .response(response.getBody())
+                    .build();
+        } catch (Exception e) {
+            // Message deliberately omits the body so a stack trace can never surface a secret.
+            log.error("Novu create integration failed for providerId={} channel={}", providerId, channel, e);
+            throw new CustomException("NB_NOVU_INTEGRATION_CREATE_FAILED",
+                    "Failed creating Novu integration: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Read the configured Novu workflows ({@code GET /v2/workflows?limit=100&page=0}).
+     * Used by the read-only "pull templates" discovery on the Notification Providers
+     * screen — it lists delivery-shell workflows (workflowId + name); it does NOT
+     * call Twilio. The Novu ApiKey is applied server-side.
+     *
+     * @return the parsed Novu response ({@code data} is the workflow list)
+     */
+    public NovuResponse listWorkflows() {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "ApiKey " + config.getNovuApiKey());
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            String url = config.getNovuBaseUrl() + "/v2/workflows?limit=100&page=0";
+            log.info("Novu list workflows url={}", url);
+            ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET,
+                    new HttpEntity<>(headers), Map.class);
+            return NovuResponse.builder()
+                    .statusCode(response.getStatusCodeValue())
+                    .response(response.getBody())
+                    .build();
+        } catch (Exception e) {
+            log.error("Novu list workflows failed", e);
+            throw new CustomException("NB_NOVU_WORKFLOWS_FAILED",
+                    "Failed listing Novu workflows: " + e.getMessage());
+        }
+    }
+
     @Data
     @Builder
     @NoArgsConstructor

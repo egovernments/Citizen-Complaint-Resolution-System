@@ -61,6 +61,14 @@ class ProxyAuthFilterTest {
         return req;
     }
 
+    private MockHttpServletRequest providersCreateRequest() {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setMethod("POST");
+        req.setServletPath("/novu-adapter/v1/providers");
+        req.setRequestURI("/novu-bridge/novu-adapter/v1/providers");
+        return req;
+    }
+
     @Test
     void noAuthHeader_returns401_chainNotInvoked() throws Exception {
         MockHttpServletResponse res = new MockHttpServletResponse();
@@ -80,6 +88,19 @@ class ProxyAuthFilterTest {
         MockFilterChain chain = new MockFilterChain();
 
         filter.doFilter(preferencesRequest(), res, chain);
+
+        assertEquals(401, res.getStatus());
+        assertNull(chain.getRequest());
+    }
+
+    @Test
+    void providersCreateWithoutToken_isGated_returns401() throws Exception {
+        // The /providers self-service management paths (POST) must be auth-gated
+        // like /logs, /integrations and /preferences — they push credentials to Novu.
+        MockHttpServletResponse res = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        filter.doFilter(providersCreateRequest(), res, chain);
 
         assertEquals(401, res.getStatus());
         assertNull(chain.getRequest());

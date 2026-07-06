@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -37,12 +36,6 @@ import java.util.Map;
 @RequestMapping("/novu-adapter/v1")
 public class IntegrationController {
 
-    // Only these non-secret fields are copied into the response. Everything else
-    // (credentials, conditions, deleted flags, timestamps, ...) is dropped.
-    private static final List<String> ALLOWED_FIELDS = List.of(
-            "_id", "providerId", "channel", "name", "identifier",
-            "active", "primary", "environmentId");
-
     private final NovuClient novuClient;
 
     public IntegrationController(NovuClient novuClient) {
@@ -57,50 +50,15 @@ public class IntegrationController {
     @GetMapping("/integrations")
     public ResponseEntity<IntegrationListResponse> integrations() {
         NovuClient.NovuResponse novuResponse = novuClient.listIntegrations();
-        List<Map<String, Object>> integrations = extractIntegrations(novuResponse.getResponse());
+        List<Map<String, Object>> integrations = IntegrationProjection.extractList(novuResponse.getResponse());
         List<Map<String, Object>> projected = new ArrayList<>(integrations.size());
         for (Map<String, Object> integration : integrations) {
-            projected.add(projectAllowedFields(integration));
+            projected.add(IntegrationProjection.project(integration));
         }
         IntegrationListResponse response = IntegrationListResponse.builder()
                 .data(projected)
                 .total((long) projected.size())
                 .build();
         return new ResponseEntity<>(response, HttpStatus.OK);
-    }
-
-    /** Novu returns {@code {data: [...]}}; be defensive about the envelope shape. */
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> extractIntegrations(Map<String, Object> body) {
-        List<Map<String, Object>> result = new ArrayList<>();
-        if (body == null) {
-            return result;
-        }
-        Object data = body.get("data");
-        if (data instanceof List) {
-            for (Object item : (List<Object>) data) {
-                if (item instanceof Map) {
-                    result.add((Map<String, Object>) item);
-                }
-            }
-        }
-        return result;
-    }
-
-    /**
-     * Build a fresh map containing ONLY the allowlisted, non-secret fields present
-     * on the integration. Any field not on the allowlist (including {@code
-     * credentials} at any location, in any shape) is simply never copied — so no
-     * secret can leak, whether or not Novu nests it under a {@code credentials}
-     * key. Fields absent on a given integration are dropped rather than invented.
-     */
-    private Map<String, Object> projectAllowedFields(Map<String, Object> integration) {
-        Map<String, Object> projected = new LinkedHashMap<>();
-        for (String field : ALLOWED_FIELDS) {
-            if (integration.containsKey(field)) {
-                projected.put(field, integration.get(field));
-            }
-        }
-        return projected;
     }
 }
