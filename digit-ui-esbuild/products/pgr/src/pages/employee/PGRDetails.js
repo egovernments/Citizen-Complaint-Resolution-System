@@ -29,7 +29,7 @@ const ACTION_CONFIGS = [
           body: [
             {
               type: "component",
-              isMandatory: true,
+              isMandatory: false,
               component: "PGRAssigneeComponent",
               key: "SelectedAssignee",
               label: "CS_COMMON_EMPLOYEE_NAME",
