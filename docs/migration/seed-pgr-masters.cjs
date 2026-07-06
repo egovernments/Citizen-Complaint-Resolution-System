@@ -15,6 +15,16 @@
  *
  * USAGE
  *   LOCAL:  BASE_URL=http://localhost:18000 TENANT=mz node docs/migration/seed-pgr-masters.cjs
+ *
+ *   CMS multi-tier workflow (optional): add CMS=1 to ALSO seed the CMS_* roles,
+ *   any missing actions-test catalog entries, their role→action grants (all at the
+ *   state tenant) and the CMS PGR BusinessService (at the CITY tenant). Source of
+ *   truth = the default-data-handler resources (same files fresh setups use).
+ *     BASE_URL=http://localhost:18000 TENANT=mz.igsae CMS=1 node docs/migration/seed-pgr-masters.cjs
+ *   With CMS=1, TENANT must be the CITY tenant (or pass CMS_TENANT=<state.city>).
+ *   UPDATE_WF=1 additionally applies in-place workflow role/nextState/flag changes
+ *   when the live BusinessService differs. After a workflow create/update, restart
+ *   egov-workflow-v2 (it caches BusinessServices).
  *   PROD :  BASE_URL=http://<host> TENANT=mz OAUTH_USER=<admin> OAUTH_PASS=<pass> \
  *             PGPASSWORD=<egov-db-pass> node docs/migration/seed-pgr-masters.cjs   (run on the VM)
  *
@@ -44,11 +54,23 @@ let TOKEN = process.env.TOKEN || "";
 const DB_CONTAINER = process.env.DB_CONTAINER || "docker-postgres";
 const NO_DB_FIX = process.env.NO_DB_FIX === "1";
 const RESEED = process.env.RESEED === "1"; // drop old schema defs + data for these masters first (use when the master SHAPE changed)
+const CMS = process.env.CMS === "1";       // also seed the CMS multi-tier workflow (roles/actions/grants/BusinessService)
+const CMS_TENANT = process.env.CMS_TENANT || (TENANT.includes(".") ? TENANT : ""); // city tenant for the workflow
+const UPDATE_WF = process.env.UPDATE_WF === "1";
 
 const SCHEMA_FILE = path.join(
   __dirname, "..", "..",
   "utilities", "default-data-handler", "src", "main", "resources", "schema", "RAINMAKER-PGR.json"
 );
+const CMS_ROLES = ["CMS_RECEPTION_OFFICER", "CMS_SCREENING_OFFICER", "CMS_SUPERVISOR", "CMS_CASE_MANAGER", "CMS_VIEWER"];
+const DDH_RES = path.join(__dirname, "..", "..", "utilities", "default-data-handler", "src", "main", "resources");
+const CMS_FILES = {
+  roles: path.join(DDH_RES, "mdmsData", "ACCESSCONTROL-ROLE", "ACCESSCONTROL-ROLES.roles.json"),
+  roleactions: path.join(DDH_RES, "mdmsData", "ACCESSCONTROL-ROLEACTIONS", "ACCESSCONTROL-ROLEACTIONS.roleactions.json"),
+  actions: path.join(DDH_RES, "mdmsData", "ACCESSCONTROL-ACTIONS-TEST", "ACCESSCONTROL-ACTIONS-TEST.actions-test.json"),
+  workflow: path.join(DDH_RES, "CmsPgrWorkflowConfig.json"),
+};
+
 const MASTERS = [
   { code: "RAINMAKER-PGR.ComplaintRelatedToMap", file: path.join(__dirname, "seed", "ComplaintRelatedToMap.json"), uid: "code" },
   { code: "RAINMAKER-PGR.ComplaintTemplateType", file: path.join(__dirname, "seed", "ComplaintTemplateType.json"), uid: "caseRelatedTo" },
@@ -58,6 +80,9 @@ const MASTERS = [
 function die(msg) { console.error("\n✗ " + msg + "\n"); process.exit(1); }
 if (!BASE || !TENANT) {
   die("Set BASE_URL and TENANT.\n    e.g. BASE_URL=http://localhost:18000 TENANT=mz node docs/migration/seed-pgr-masters.cjs");
+}
+if (CMS && !CMS_TENANT) {
+  die("CMS=1 needs the CITY tenant for the workflow — set TENANT=<state.city> (e.g. mz.igsae) or CMS_TENANT=<state.city>.");
 }
 
 function req(method, p, body, headers) {
@@ -218,6 +243,171 @@ async function verify() {
   return allOk;
 }
 
+
+/* ══════════════════ CMS multi-tier workflow (CMS=1) ══════════════════
+ * Back-fills envs bootstrapped before the CMS defaults existed in the
+ * default-data-handler image. Reads the SAME DDH resource files a fresh
+ * setup uses — no data is duplicated here. All phases idempotent.       */
+
+// Workflow _create/_update stamps auditDetails from RequestInfo.userInfo.
+const cmsRI = () => Object.assign({}, RI, {
+  userInfo: { id: 1, uuid: "cms-migration", userName: OAUTH_USER, type: "EMPLOYEE", tenantId: STATE, roles: [{ code: "SUPERUSER", name: "Super User", tenantId: STATE }] },
+});
+
+async function cmsSearchAll(schemaCode) {
+  const out = [];
+  for (let offset = 0; ; offset += 100) {
+    const r = await req("POST", "/mdms-v2/v2/_search", { MdmsCriteria: { tenantId: STATE, schemaCode, limit: 100, offset }, RequestInfo: cmsRI() });
+    let rows = [];
+    try { rows = JSON.parse(r.body).mdms || []; } catch { }
+    out.push(...rows);
+    if (rows.length < 100) return out;
+  }
+}
+
+// create-one; DUPLICATE_RECORD counts as "already present" (v2 search pages have
+// no stable order, so the pre-scan can miss rows — the server check is the truth).
+async function cmsCreate(schemaCode, uniqueIdentifier, data) {
+  const r = await req("POST", "/mdms-v2/v2/_create/" + schemaCode, {
+    Mdms: { tenantId: STATE, schemaCode, uniqueIdentifier, data, isActive: true },
+    RequestInfo: cmsRI(),
+  });
+  if (r.code >= 200 && r.code < 300) return "created";
+  if (/DUPLICATE_RECORD|already|exist/i.test(r.body)) return "present";
+  die(schemaCode + " create failed for " + uniqueIdentifier + ": " + (r.body || "").slice(0, 220));
+}
+
+async function cmsSeedRoles() {
+  const want = JSON.parse(fs.readFileSync(CMS_FILES.roles, "utf8")).filter((x) => CMS_ROLES.includes(x.code));
+  if (want.length !== CMS_ROLES.length) die("DDH roles file is missing CMS roles — expected 5, found " + want.length);
+  const have = new Set((await cmsSearchAll("ACCESSCONTROL-ROLES.roles")).map((m) => m.data && m.data.code));
+  for (const row of want) {
+    const st = have.has(row.code) ? "present" : await cmsCreate("ACCESSCONTROL-ROLES.roles", row.code, row);
+    console.log("  " + (st === "created" ? "✓ role " + row.code + " created" : "• role " + row.code + " already present"));
+  }
+}
+
+// roleactions x-ref-validate actionid against the actions-test catalog; older envs
+// miss recently-added catalog entries — create those first.
+async function cmsSeedActions() {
+  const grants = JSON.parse(fs.readFileSync(CMS_FILES.roleactions, "utf8")).filter((x) => CMS_ROLES.includes(x.rolecode));
+  const needed = [...new Set(grants.map((g) => g.actionid))];
+  const catalog = {};
+  for (const a of JSON.parse(fs.readFileSync(CMS_FILES.actions, "utf8"))) catalog[a.id] = a;
+  const have = new Set((await cmsSearchAll("ACCESSCONTROL-ACTIONS-TEST.actions-test")).map((m) => m.data && Number(m.data.id)));
+  let created = 0;
+  for (const id of needed) {
+    if (have.has(id)) continue;
+    const row = catalog[id];
+    if (!row) die("actionid " + id + " referenced by CMS grants but absent from the actions-test catalog file");
+    if (await cmsCreate("ACCESSCONTROL-ACTIONS-TEST.actions-test", String(id), Object.assign({}, row, { tenantId: STATE })) === "created") {
+      console.log("  ✓ action " + id + " (" + (row.displayName || row.name) + ") created");
+      created++;
+    }
+  }
+  if (!created) console.log("  • all " + needed.length + " referenced actions already present");
+}
+
+async function cmsSeedRoleactions() {
+  const want = JSON.parse(fs.readFileSync(CMS_FILES.roleactions, "utf8")).filter((x) => CMS_ROLES.includes(x.rolecode));
+  const have = new Set((await cmsSearchAll("ACCESSCONTROL-ROLEACTIONS.roleactions"))
+    .map((m) => m.uniqueIdentifier || (m.data && m.data.rolecode + "." + m.data.actionid)));
+  let created = 0, present = 0;
+  for (const row of want) {
+    const key = row.rolecode + "." + row.actionid;
+    if (have.has(key)) { present++; continue; }
+    const st = await cmsCreate("ACCESSCONTROL-ROLEACTIONS.roleactions", key, Object.assign({}, row, { tenantId: STATE }));
+    if (st === "created") created++; else present++;
+  }
+  console.log("  roleactions: " + created + " created, " + present + " already present (of " + want.length + ")");
+}
+
+// canonical view of a BusinessService: state -> {flags, actions{name -> {next, roles}}}
+function cmsCanon(bs, nameByUuid) {
+  const out = {};
+  for (const s of bs.states) {
+    const actions = {};
+    for (const a of s.actions || []) {
+      const next = nameByUuid ? (nameByUuid[a.nextState] || a.nextState) : a.nextState;
+      actions[a.action] = { next, roles: (a.roles || []).slice().sort() };
+    }
+    out[s.state || "<START>"] = { appStatus: s.applicationStatus || null, doc: !!s.docUploadRequired, term: !!s.isTerminateState, sla: s.sla == null ? null : s.sla, actions };
+  }
+  return out;
+}
+function cmsDiff(wantC, liveC) {
+  const diffs = [];
+  for (const st of new Set([...Object.keys(wantC), ...Object.keys(liveC)])) {
+    if (!liveC[st]) { diffs.push("state " + st + " missing in live"); continue; }
+    if (!wantC[st]) { diffs.push("state " + st + " extra in live"); continue; }
+    const w = wantC[st], l = liveC[st];
+    for (const f of ["appStatus", "doc", "term", "sla"])
+      if (JSON.stringify(w[f]) !== JSON.stringify(l[f])) diffs.push(st + "." + f + ": want " + JSON.stringify(w[f]) + " live " + JSON.stringify(l[f]));
+    for (const act of new Set([...Object.keys(w.actions), ...Object.keys(l.actions)])) {
+      const wa = w.actions[act], la = l.actions[act];
+      if (!la) { diffs.push(st + "." + act + " missing in live"); continue; }
+      if (!wa) { diffs.push(st + "." + act + " extra in live"); continue; }
+      if (wa.next !== la.next) diffs.push(st + "." + act + ".nextState: want " + wa.next + " live " + la.next);
+      if (JSON.stringify(wa.roles) !== JSON.stringify(la.roles)) diffs.push(st + "." + act + ".roles: want " + wa.roles + " live " + la.roles);
+    }
+  }
+  return diffs;
+}
+
+async function cmsSeedWorkflow() {
+  const want = JSON.parse(fs.readFileSync(CMS_FILES.workflow, "utf8").split("{tenantid}").join(CMS_TENANT)).BusinessServices[0];
+  const r = await req("POST", "/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=" + CMS_TENANT + "&businessServices=PGR", { RequestInfo: cmsRI() });
+  let live = null;
+  try { live = (JSON.parse(r.body).BusinessServices || [])[0] || null; } catch { }
+
+  if (!live) {
+    const c = await req("POST", "/egov-workflow-v2/egov-wf/businessservice/_create", { RequestInfo: cmsRI(), BusinessServices: [want] });
+    if (c.code < 200 || c.code >= 300) die("workflow create failed: " + (c.body || "").slice(0, 300));
+    console.log("  ✓ CMS PGR workflow CREATED at " + CMS_TENANT + " (" + want.states.length + " states)");
+    return "created";
+  }
+
+  const nameByUuid = {}; for (const s of live.states) nameByUuid[s.uuid] = s.state || "<START>";
+  const diffs = cmsDiff(cmsCanon(want), cmsCanon(live, nameByUuid));
+  if (!diffs.length) { console.log("  • workflow already present and matches (" + live.states.length + " states)"); return "present"; }
+
+  console.log("  ! workflow present but DIFFERS:");
+  diffs.forEach((d) => console.log("      - " + d));
+  if (!UPDATE_WF) { console.log("  → re-run with UPDATE_WF=1 to apply role/nextState/flag changes in place."); return "differs"; }
+  if (diffs.some((d) => d.includes("missing in live") || d.includes("extra in live")))
+    die("UPDATE_WF can only patch existing states/actions (roles, nextState, flags). State/action add/remove needs a manual _update.");
+
+  const uuidByName = {}; for (const s of live.states) uuidByName[s.state || "<START>"] = s.uuid;
+  const wantC = cmsCanon(want);
+  for (const s of live.states) {
+    const w = wantC[s.state || "<START>"];
+    s.applicationStatus = w.appStatus; s.docUploadRequired = w.doc; s.isTerminateState = w.term; s.sla = w.sla;
+    for (const a of s.actions || []) { const wa = w.actions[a.action]; a.roles = wa.roles; a.nextState = uuidByName[wa.next] || a.nextState; }
+  }
+  const u = await req("POST", "/egov-workflow-v2/egov-wf/businessservice/_update", { RequestInfo: cmsRI(), BusinessServices: [live] });
+  if (u.code < 200 || u.code >= 300) die("workflow update failed: " + (u.body || "").slice(0, 300));
+  console.log("  ✓ workflow UPDATED in place (" + diffs.length + " differences applied)");
+  return "updated";
+}
+
+async function cmsRun() {
+  console.log("[CMS 1/4] Roles @ " + STATE + " …");
+  await cmsSeedRoles();
+  console.log("\n[CMS 2/4] Actions catalog (referenced by CMS grants) @ " + STATE + " …");
+  await cmsSeedActions();
+  console.log("\n[CMS 3/4] Role→action mappings @ " + STATE + " …");
+  await cmsSeedRoleactions();
+  console.log("\n[CMS 4/4] CMS PGR workflow @ " + CMS_TENANT + " …");
+  const wf = await cmsSeedWorkflow();
+  const roles = new Set((await cmsSearchAll("ACCESSCONTROL-ROLES.roles")).map((m) => m.data && m.data.code));
+  const missing = CMS_ROLES.filter((c) => !roles.has(c));
+  if (missing.length) die("CMS verify failed — roles still missing: " + missing);
+  console.log("\n  ✓ all 5 CMS roles present @ " + STATE);
+  if (wf === "created" || wf === "updated")
+    console.log("  ⚠ RESTART egov-workflow-v2 now (it caches BusinessServices): docker restart digit-egov-workflow-v2-1");
+  console.log("  Employees: assign the CMS_* roles to real staff via HRMS/configurator (not created here).");
+}
+
 (async () => {
   console.log("PGR dynamic-fields masters → state tenant '" + STATE + "' @ " + BASE + "\n");
 
@@ -248,10 +438,16 @@ async function verify() {
   const ok = await verify();
   console.log();
 
-  if (ok) {
-    console.log("✅ DONE — all masters present at '" + STATE + "'. Sub-tenants inherit them via state-fallback.");
-    console.log("   Final check in the UI: <host>/digit-ui/citizen → File a Complaint (hard-refresh).");
-    process.exit(0);
+  if (!ok) die("Some masters have 0 rows — see ✗ above.");
+
+  if (CMS) {
+    console.log("── CMS multi-tier workflow (CMS=1) ──\n");
+    await cmsRun();
+    console.log();
   }
-  die("Some masters have 0 rows — see ✗ above.");
+
+  console.log("✅ DONE — all masters present at '" + STATE + "'. Sub-tenants inherit them via state-fallback."
+    + (CMS ? " CMS roles/grants @ '" + STATE + "', workflow @ '" + CMS_TENANT + "'." : ""));
+  console.log("   Final check in the UI: <host>/digit-ui/citizen → File a Complaint (hard-refresh).");
+  process.exit(0);
 })();

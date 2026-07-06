@@ -935,6 +935,9 @@ services:
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
+      # New tenants get the multi-tier CMS PGR workflow (CmsPgrWorkflowConfig.json).
+      # Set to "standard" for the classic GRO/LME single-tier workflow.
+      PGR_WORKFLOW_VARIANT: ${PGR_WORKFLOW_VARIANT:-cms}
       EGOV_MDMS_HOST: http://mdms-backend:8094/
       EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
       EGOV_USER_HOST: http://egov-user-proxy:8107/

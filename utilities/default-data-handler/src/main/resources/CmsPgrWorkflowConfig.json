@@ -1,0 +1,367 @@
+{
+  "RequestInfo": {
+    "apiId": "Rainmaker",
+    "action": "",
+    "did": 1,
+    "key": "",
+    "msgId": "20170310130900|en_IN",
+    "requesterId": "",
+    "ts": 1513579888683,
+    "ver": ".01",
+    "userInfo": {
+      "id": 73,
+      "userName": null,
+      "name": null,
+      "type": "EMPLOYEE",
+      "mobileNumber": null,
+      "emailId": null,
+      "roles": [
+        {
+          "id": 2,
+          "name": "Customer Support Representative",
+          "code": null,
+          "tenantId": null
+        }
+      ],
+      "tenantId": null,
+      "uuid": "uuid"
+    }
+  },
+  "BusinessServices": [
+    {
+      "tenantId": "{tenantid}",
+      "businessService": "PGR",
+      "business": "pgr-services",
+      "businessServiceSla": 432000000,
+      "states": [
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": null,
+          "applicationStatus": null,
+          "docUploadRequired": false,
+          "isStartState": true,
+          "isTerminateState": false,
+          "isStateUpdatable": true,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "ce08d758-1788-4b56-b1ec-91db449d41a4",
+              "action": "APPLY",
+              "nextState": "PENDINGFORASSIGNMENT",
+              "roles": [
+                "CITIZEN",
+                "CMS_RECEPTION_OFFICER"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": "PENDINGFORASSIGNMENT",
+          "applicationStatus": "PENDINGFORASSIGNMENT",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORASSIGNMENT",
+              "action": "ASSIGN",
+              "nextState": "REFERRED",
+              "roles": [
+                "CMS_SCREENING_OFFICER",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORASSIGNMENT",
+              "action": "REJECT",
+              "nextState": "REJECTED",
+              "roles": [
+                "CMS_SCREENING_OFFICER",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": "REFERRED",
+          "applicationStatus": "REFERRED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "REFERRED",
+              "action": "ASSIGN",
+              "nextState": "INVESTIGATION",
+              "roles": [
+                "CMS_SUPERVISOR",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "REFERRED",
+              "action": "REJECT",
+              "nextState": "REJECTED",
+              "roles": [
+                "CMS_SUPERVISOR",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "REFERRED",
+              "action": "REASSIGN",
+              "nextState": "PENDINGFORREASSIGNMENT",
+              "roles": [
+                "CMS_SUPERVISOR",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": 300000,
+          "state": "INVESTIGATION",
+          "applicationStatus": "INVESTIGATION",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "INVESTIGATION",
+              "action": "AWAITINGINFORMATION",
+              "nextState": "INFOFROMCITIZEN",
+              "roles": [
+                "CMS_CASE_MANAGER",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "INVESTIGATION",
+              "action": "REJECT",
+              "nextState": "REJECTED",
+              "roles": [
+                "CMS_CASE_MANAGER",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "INVESTIGATION",
+              "action": "RESOLVE",
+              "nextState": "RESOLVED",
+              "roles": [
+                "CMS_CASE_MANAGER",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": 300000,
+          "state": "INFOFROMCITIZEN",
+          "applicationStatus": "AWAITINGINFORMATION",
+          "docUploadRequired": true,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "INFOFROMCITIZEN",
+              "action": "COMMENT",
+              "nextState": "INVESTIGATION",
+              "roles": [
+                "CMS_CASE_MANAGER",
+                "CMS_RECEPTION_OFFICER"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": 300000,
+          "state": "PENDINGFORREASSIGNMENT",
+          "applicationStatus": "REASSIGND",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": false,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORREASSIGNMENT",
+              "action": "REJECT",
+              "nextState": "REJECTED",
+              "roles": [
+                "CMS_SCREENING_OFFICER",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "PENDINGFORREASSIGNMENT",
+              "action": "ASSIGN",
+              "nextState": "REFERRED",
+              "roles": [
+                "CMS_SCREENING_OFFICER",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": 300000,
+          "state": "REJECTED",
+          "applicationStatus": "REJECTED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "REJECTED",
+              "action": "COMMENT",
+              "nextState": "REJECTED",
+              "roles": [
+                "CITIZEN"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "REJECTED",
+              "action": "REOPEN",
+              "nextState": "REFERRED",
+              "roles": [
+                "CITIZEN",
+                "CMS_RECEPTION_OFFICER",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "REJECTED",
+              "action": "RATE",
+              "nextState": "CLOSEDAFTERREJECTION",
+              "roles": [
+                "CMS_RECEPTION_OFFICER",
+                "CITIZEN"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": 300000,
+          "state": "RESOLVED",
+          "applicationStatus": "RESOLVED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": [
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "RESOLVED",
+              "action": "RATE",
+              "nextState": "CLOSEDAFTERRESOLUTION",
+              "roles": [
+                "CMS_RECEPTION_OFFICER",
+                "CITIZEN"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "RESOLVED",
+              "action": "REOPEN",
+              "nextState": "PENDINGFORASSIGNMENT",
+              "roles": [
+                "CMS_RECEPTION_OFFICER",
+                "CITIZEN",
+                "CMS_VIEWER"
+              ],
+              "active": true
+            },
+            {
+              "tenantId": "{tenantid}",
+              "currentState": "RESOLVED",
+              "action": "COMMENT",
+              "nextState": "RESOLVED",
+              "roles": [
+                "CITIZEN"
+              ],
+              "active": true
+            }
+          ]
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": "CLOSEDAFTERREJECTION",
+          "applicationStatus": "CLOSEDAFTERREJECTION",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": null
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": "CLOSEDAFTERRESOLUTION",
+          "applicationStatus": "CLOSEDAFTERRESOLUTION",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": null
+        },
+        {
+          "tenantId": "{tenantid}",
+          "sla": null,
+          "state": "CANCELLED",
+          "applicationStatus": "CANCELLED",
+          "docUploadRequired": false,
+          "isStartState": false,
+          "isTerminateState": true,
+          "isStateUpdatable": false,
+          "actions": null
+        }
+      ]
+    }
+  ]
+}
