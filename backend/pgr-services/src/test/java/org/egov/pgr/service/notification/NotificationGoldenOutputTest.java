@@ -26,6 +26,7 @@ import java.util.TreeSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 /**
@@ -119,8 +120,10 @@ public class NotificationGoldenOutputTest {
         assertGolden("ASSIGN", "PENDINGATLME");
     }
 
+    // EMPLOYEE dropped on this branch (REASSIGN->PENDINGFORREASSIGNMENT has no assignee), so this
+    // transition now notifies the CITIZEN only.
     @Test
-    void reassign_citizenAndEmployeeSms() {
+    void reassign_citizenSms() {
         assertGolden("REASSIGN", "PENDINGFORREASSIGNMENT");
     }
 
@@ -134,8 +137,10 @@ public class NotificationGoldenOutputTest {
         assertGolden("RESOLVE", "RESOLVED");
     }
 
+    // EMPLOYEE dropped on this branch (REOPEN->PENDINGFORASSIGNMENT has no assignee), so this
+    // transition now notifies the CITIZEN only.
     @Test
-    void reopen_citizenAndEmployeeSms() {
+    void reopen_citizenSms() {
         assertGolden("REOPEN", "PENDINGFORASSIGNMENT");
     }
 
@@ -144,9 +149,18 @@ public class NotificationGoldenOutputTest {
         assertGolden("RATE", "CLOSEDAFTERRESOLUTION");
     }
 
+    /**
+     * On this branch the EMPLOYEE-on-no-assignee rows were trimmed: RATE->CLOSEDAFTERREJECTION has no
+     * assignee, so its routing rows are removed and the transition emits nothing. This asserts the
+     * honest new behavior (both the config-driven and legacy paths route to no one) instead of the
+     * old employee-SMS parity, which no longer applies.
+     */
     @Test
-    void rate_afterRejection_employeeSms() {
-        assertGolden("RATE", "CLOSEDAFTERREJECTION");
+    void rate_afterRejection_emitsNothing() {
+        assertTrue(configDrivenSet("RATE", "CLOSEDAFTERREJECTION").isEmpty(),
+                "RATE->CLOSEDAFTERREJECTION must emit no SMS after the EMPLOYEE-on-no-assignee trim");
+        assertTrue(legacySet("RATE", "CLOSEDAFTERREJECTION").isEmpty(),
+                "legacy path must also route to no one for RATE->CLOSEDAFTERREJECTION (no routing rows)");
     }
 
     /**

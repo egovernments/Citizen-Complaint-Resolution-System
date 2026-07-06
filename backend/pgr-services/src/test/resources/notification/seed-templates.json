@@ -68,23 +68,6 @@
     "active": true
   },
   {
-    "audience": "EMPLOYEE",
-    "action": "REASSIGN",
-    "toState": "PENDINGFORREASSIGNMENT",
-    "channel": "SMS",
-    "locale": "en_IN",
-    "subject": null,
-    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been re-assigned as per your request. {ao_designation} - {ulb}.\n\nEGOVS",
-    "placeholders": [
-      "ao_designation",
-      "complaint_type",
-      "emp_name",
-      "id",
-      "ulb"
-    ],
-    "active": true
-  },
-  {
     "audience": "CITIZEN",
     "action": "REJECT",
     "toState": "REJECTED",
@@ -133,22 +116,6 @@
   },
   {
     "audience": "EMPLOYEE",
-    "action": "REOPEN",
-    "toState": "PENDINGFORASSIGNMENT",
-    "channel": "SMS",
-    "locale": "en_IN",
-    "subject": null,
-    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has been Re-opened by the citizen. It is being reviewed by Assigning officer - {ulb}.\n\nEGOVS",
-    "placeholders": [
-      "complaint_type",
-      "emp_name",
-      "id",
-      "ulb"
-    ],
-    "active": true
-  },
-  {
-    "audience": "EMPLOYEE",
     "action": "RATE",
     "toState": "CLOSEDAFTERRESOLUTION",
     "channel": "SMS",
@@ -164,18 +131,100 @@
     "active": true
   },
   {
-    "audience": "EMPLOYEE",
-    "action": "RATE",
-    "toState": "CLOSEDAFTERREJECTION",
+    "audience": "CITIZEN",
+    "action": "APPLY",
+    "toState": "PENDINGFORASSIGNMENT",
     "channel": "SMS",
-    "locale": "en_IN",
+    "locale": "hi_IN",
     "subject": null,
-    "body": "Shri {emp_name}, Complaint for {complaint_type} with ID {id} has received {rating}/5 feedback from the citizen. Thank you for your service.\n\nEGOVS",
+    "body": "प्रिय नागरिक, आपकी शिकायत {complaint_type} को {id} आईडी के साथ {date} को जमा कर दी गई है। आप अपनी शिकायत की स्थिति वेब पोर्टल पर देख सकते हैं। ई-गव फाउंडेशन",
     "placeholders": [
       "complaint_type",
+      "date",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "ASSIGN",
+    "toState": "PENDINGATLME",
+    "channel": "SMS",
+    "locale": "hi_IN",
+    "subject": null,
+    "body": "प्रिय नागरिक, {complaint_type} और आईडी {id} वाली आपकी शिकायत, जो {date} को जमा की गई थी, {emp_name}, {emp_designation} और {emp_department} को सौंपी गई है। आप पोर्टल पर अपनी शिकायत की स्थिति देख सकते हैं। ई-गव फाउंडेशन",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_department",
+      "emp_designation",
       "emp_name",
-      "id",
-      "rating"
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REASSIGN",
+    "toState": "PENDINGFORREASSIGNMENT",
+    "channel": "SMS",
+    "locale": "hi_IN",
+    "subject": null,
+    "body": "प्रिय नागरिक, {complaint_type} श्रेणी की आपकी शिकायत, जिसका आईडी {id} है और जो {date} को जमा की गई थी, उसे {emp_name}, {emp_designation}, {emp_department} को पुनः सौंप दिया गया है। आप वेब पोर्टल पर स्थिति देख सकते हैं। ई-गव फाउंडेशन",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_department",
+      "emp_designation",
+      "emp_name",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REJECT",
+    "toState": "REJECTED",
+    "channel": "SMS",
+    "locale": "hi_IN",
+    "subject": null,
+    "body": "प्रिय नागरिक, आपकी शिकायत, जिसका आईडी {id} है और जिसे {complaint_type} {date} को जमा किया गया था, को अस्वीकार कर दिया गया है। अस्वीकृति का कारण: {additional_comments}। यदि आप शिकायत को पुनः खोलना चाहते हैं, तो वेब पोर्टल पर जा सकते हैं। ई-गव फाउंडेशन",
+    "placeholders": [
+      "additional_comments",
+      "complaint_type",
+      "date",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "RESOLVE",
+    "toState": "RESOLVED",
+    "channel": "SMS",
+    "locale": "hi_IN",
+    "subject": null,
+    "body": "प्रिय नागरिक, {complaint_type} श्रेणी की आपकी शिकायत, जिसकी आईडी {id} है और जो {date} को जमा की गई थी, का समाधान {emp_name} द्वारा कर दिया गया है। यदि आप संतुष्ट नहीं हैं, तो वेब पोर्टल से शिकायत दोबारा खोल सकते हैं। ई-गव फाउंडेशन",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "emp_name",
+      "id"
+    ],
+    "active": true
+  },
+  {
+    "audience": "CITIZEN",
+    "action": "REOPEN",
+    "toState": "PENDINGFORASSIGNMENT",
+    "channel": "SMS",
+    "locale": "hi_IN",
+    "subject": null,
+    "body": "प्रिय नागरिक, {complaint_type} के लिए आपकी शिकायत, आईडी: {id}, जो {date} को जमा की गई थी, आपके अनुरोध के अनुसार फिर से खोल दी गई है। आप वेब पोर्टल पर स्थिति ट्रैक कर सकते हैं। ई-गव फाउंडेशन",
+    "placeholders": [
+      "complaint_type",
+      "date",
+      "id"
     ],
     "active": true
   }

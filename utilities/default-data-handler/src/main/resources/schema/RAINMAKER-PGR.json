@@ -370,5 +370,85 @@
       "x-ref-schema": [],
       "additionalProperties": false
     }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.NotificationProviderTemplate",
+    "description": "Config-driven provider template mapping (the 'how it's delivered'): one record per (provider, channel, audience, action, toState, locale) mapping a rendered notification to the external provider's pre-registered template and its ordered variables (e.g. a Twilio Content SID for WhatsApp/SMS). Read by novu-bridge to select the templateId and fill variables in order when the provider requires a pre-approved template. Joins to NotificationTemplate by (audience, action, toState, channel, locale).",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "PGR Notification Provider Template",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "provider",
+        "channel",
+        "action",
+        "toState",
+        "locale",
+        "templateId",
+        "variables"
+      ],
+      "x-unique": [
+        "provider",
+        "channel",
+        "audience",
+        "action",
+        "toState",
+        "locale"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "External delivery provider whose template registry this row targets, e.g. twilio."
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "SMS",
+            "WHATSAPP",
+            "EMAIL"
+          ]
+        },
+        "audience": {
+          "type": "string",
+          "description": "Role code to notify; CITIZEN=the filer; AUTO_ESCALATE/SYSTEM are non-notifiable."
+        },
+        "action": {
+          "type": "string"
+        },
+        "toState": {
+          "type": "string"
+        },
+        "locale": {
+          "type": "string",
+          "description": "e.g. en_IN, sw_KE."
+        },
+        "templateId": {
+          "type": "string",
+          "description": "Provider-side template identifier, e.g. a Twilio Content SID (HX...)."
+        },
+        "templateName": {
+          "type": "string",
+          "description": "Human-readable provider template name, for reference in the configurator."
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered {token} names substituted into the provider template positionally, e.g. complaint_type, id, date, emp_name."
+        },
+        "approvalStatus": {
+          "type": "string",
+          "description": "Provider approval state of the template, e.g. approved, pending, rejected."
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
   }
 ]
