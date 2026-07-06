@@ -135,7 +135,45 @@ a Twilio 400 or a free-form WhatsApp rejection.
 4. Enable WHATSAPP on the channel gate → the approved CITIZEN templates start delivering; unmapped
    audiences stay `SKIPPED` until their templates are approved.
 
-## 7. Open questions
+## 7. Localization linkage (a layer not yet built)
+
+Both the free-form content **and** the provider-template selection must be **locale-aware and
+approval-aware**, driven by the recipient's locale (from user preference → tenant default). Two
+gaps today:
+
+**(a) Free-form content is inline in MDMS, not sourced from egov-localization.**
+`NotificationTemplate` stores `body`/`subject` text inline per `(…, locale)` row, so adding a
+language means hand-adding MDMS rows. The linkage: let `body`/`subject` reference a **localization
+code** (e.g. `pgr.notif.citizen.apply.body`) resolved via **egov-localization** for the recipient's
+locale, with default-locale fallback. Then adding a language = adding localization entries (the
+normal i18n path, reusable by the UI), not MDMS edits.
+
+**(b) Provider-template selection isn't locale+approval aware.**
+For WhatsApp we have per-locale approved ContentSids (EN + HI). Selection must prefer the
+recipient locale's **approved** template, with a strict fallback chain:
+
+```
+recipient locale L, routing key K, channel C:
+  WHATSAPP:  approved(provider, K, L)            -> use its ContentSid + ordered vars
+           : approved(provider, K, defaultLocale)-> use that
+           : SKIP  (NB_TEMPLATE_NOT_APPROVED)      // never free-form WhatsApp
+  SMS/EMAIL: localized body/subject in L (egov-localization)
+           : default-locale body/subject
+           : (free-form is always allowed for SMS/email — no approval concept)
+```
+
+So **"when a localized template is available AND approved, use it"** becomes a concrete rule: for
+WhatsApp the emitter checks *provider approval × locale* together and only routes a locale through
+the channel when both line up (else falls back a locale, else SKIPs) — never sending an
+unlocalized or unapproved WhatsApp message. For SMS/email there is no approval gate, only the
+localized→default→free-form content fallback.
+
+This layer is **not built today** (content is inline MDMS; provider approval isn't cross-referenced
+with locale). It sequences right after the provider-template mapping (§6): once
+`NotificationProviderTemplate` carries per-locale `approvalStatus`, add (1) egov-localization-backed
+body/subject resolution and (2) the locale+approval fallback in `TemplateRenderer` / the emitter.
+
+## 8. Open questions
 
 - **Variable-order confirmation** is inherently manual (positional). The sync should show the body
   + inferred slots and require a save. (§4.3)
