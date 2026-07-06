@@ -1571,10 +1571,15 @@ export const UICustomizations = {
     test: "yes",
   },
   PGRInboxConfig: {
-    preProcess: (data) => {
+    preProcess: (data, additionalDetails) => {
       const clonedData = _.cloneDeep(data);
       const searchForm = clonedData?.state?.searchForm || {};
       const filterForm = clonedData?.state?.filterForm || {};
+
+      // Visibility V1 tab context (passed from PGRInbox via additionalDetails).
+      const activeTab = additionalDetails?.activeTab || "MY";
+      const myStates = additionalDetails?.myStates || [];
+      const allStates = additionalDetails?.allStates || [];
 
       // Build clean params from form state
       const params = {
@@ -1638,15 +1643,18 @@ export const UICustomizations = {
       ];
       const rawStatuses = filterForm.status || {};
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
-      params.applicationStatus = statuses.length > 0 ? statuses : OPEN_STATES;
-
-      // Filter: assigned to me
-      const assignedFilter = filterForm.assignedToMe;
-      if (assignedFilter?.code === "ASSIGNED_TO_ME") {
-        const userInfo = Digit.UserService.getUser()?.info;
-        if (userInfo?.uuid) {
-          params.assignee = [userInfo.uuid];
-        }
+      if (statuses.length > 0) {
+        // An explicit status filter always wins (applies within the active tab).
+        params.applicationStatus = statuses;
+      } else if (activeTab === "MY" && myStates.length > 0) {
+        // My = complaints in the queue-states my role(s) act on.
+        params.applicationStatus = myStates;
+      } else if (activeTab === "ALL" && allStates.length > 0) {
+        // All = every open/actionable state (V1 supervisor reportee-scoping is
+        // resolved server-side in the optimised backend — see design §4).
+        params.applicationStatus = allStates;
+      } else {
+        params.applicationStatus = OPEN_STATES;
       }
 
       clonedData.params = params;

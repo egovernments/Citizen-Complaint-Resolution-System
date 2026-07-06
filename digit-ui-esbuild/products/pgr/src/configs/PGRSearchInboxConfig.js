@@ -180,38 +180,12 @@ const PGRSearchInboxConfig = () => {
                     minReqFields: 0,
                     defaultValues: {
                         locality: null,
-                        assignedToMe: {
-                            "code": "ASSIGNED_TO_ALL",
-                            "name": "ASSIGNED_TO_ALL"
-                        },
                         status: null,
                         complaintType: null,
                         serviceCode:null,
 
                     },
                     fields: [
-                        {
-                            label: "",
-                            type: "radio",
-                            isMandatory: false,
-                            disable: false,
-                            populators: {
-                                name: "assignedToMe",
-                                options: [
-                                    { code: "ASSIGNED_TO_ME", name: "ASSIGNED_TO_ME" },
-                                    { code: "ASSIGNED_TO_ALL", name: "ASSIGNED_TO_ALL" },
-                                ],
-                                optionsKey: "name",
-                                styles: {
-                                    "gap": "1rem",
-                                    "flexDirection": "column"
-                                },
-                                innerStyles: {
-                                    "display": "flex"
-                                }
-                            },
-
-                        },
                         {
 
                             label: "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",

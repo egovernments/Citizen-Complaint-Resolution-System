@@ -4,6 +4,9 @@ import { useTranslation } from "react-i18next";
 import _ from "lodash";
 import PGRSearchInboxConfig from "../../configs/PGRSearchInboxConfig";
 import { useLocation } from "react-router-dom";
+import useBusinessServiceStates from "../../hooks/pgr/useBusinessServiceStates";
+import useTabCounts from "../../hooks/pgr/useTabCounts";
+import PGRInboxTabs from "../../components/PGRInboxTabs";
 
 /**
  * PGRSearchInbox - Complaint Search Inbox Screen
@@ -41,6 +44,33 @@ const PGRSearchInbox = () => {
 
   // Used to detect route/location changes to trigger config reset
   const location = useLocation();
+
+  // ---- Visibility V1 (My / All tabs) ----------------------------------------
+  // FE-composed, unoptimised visibility: derive each role's queue-states from the
+  // workflow BusinessService and drive the pgr search per active tab. The real
+  // server-side resolver is CCRS/VISIBILITY-DESIGN.md §4.
+  const [activeTab, setActiveTab] = useState("MY");
+  const myRoleCodes = useMemo(
+    () => (Digit.UserService.getUser()?.info?.roles || []).map((r) => r?.code).filter(Boolean),
+    []
+  );
+  const { statesForRoles, allActionableStates, isLoading: bsLoading } = useBusinessServiceStates(tenantId);
+  // My = states my role(s) act on; fall back to all open states if role codes
+  // don't match any workflow action (config drift) so "My" is never empty.
+  const myStates = useMemo(() => {
+    const s = statesForRoles(myRoleCodes);
+    return s.length ? s : allActionableStates;
+  }, [statesForRoles, myRoleCodes, allActionableStates]);
+  const allStates = allActionableStates;
+
+  const { counts, hasNew, markSeen } = useTabCounts({ tenantId, myStates, allStates });
+
+  // A tab is "seen" once it's the visible tab -> its badge clears, and the other
+  // tab's badge keeps surfacing newly-arrived complaints.
+  useEffect(() => {
+    if (!bsLoading) markSeen(activeTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, bsLoading]);
 
   // Fetch mobile validation config from MDMS
   const { validationRules, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
@@ -123,6 +153,20 @@ const PGRSearchInbox = () => {
     [pageConfig, serviceDefs]
   );
 
+  // Per-tab config: carry the active tab + its state-set into preProcess via
+  // additionalDetails (read as the 2nd arg in PGRInboxConfig.preProcess).
+  // NOTE: declared before the early Loader return to keep hook order stable.
+  const tabConfig = useMemo(() => {
+    const c = _.cloneDeep(updatedConfig || {});
+    c.additionalDetails = {
+      ...(c.additionalDetails || {}),
+      activeTab,
+      myStates,
+      allStates,
+    };
+    return c;
+  }, [updatedConfig, activeTab, myStates, allStates]);
+
   /**
    * Reset or refresh config when the route changes
    */
@@ -166,9 +210,12 @@ const PGRSearchInbox = () => {
       <header className="v2-employee-page-header">
         <h1>{heading}</h1>
       </header>
-      {/* Complaint search and filter interface */}
+      {/* My / All tabs (Visibility V1) */}
+      <PGRInboxTabs activeTab={activeTab} onChange={setActiveTab} counts={counts} hasNew={hasNew} />
+      {/* Complaint search and filter interface. key={activeTab} remounts the
+          composer on tab switch so search + filter forms reset (PRD). */}
       <div className="digit-inbox-search-wrapper">
-        <InboxSearchComposer configs={updatedConfig} />
+        <InboxSearchComposer key={activeTab} configs={tabConfig} />
       </div>
     </div>
   );
