@@ -138,8 +138,26 @@ a Twilio 400 or a free-form WhatsApp rejection.
 ## 7. Localization linkage (a layer not yet built)
 
 Both the free-form content **and** the provider-template selection must be **locale-aware and
-approval-aware**, driven by the recipient's locale (from user preference → tenant default). Two
-gaps today:
+approval-aware**, driven by **each recipient's own locale** — a notification goes out in ONE
+language per recipient, never in every language.
+
+**Locale resolution (per recipient, authoritative rule):**
+
+```
+recipientLocale =
+    user's consented language        (egov-user profile locale / user-preferences)   // 1st
+  ? deployment default language      (config.notification.default.locale / tenant)   // 2nd
+  ? "en"                             (hard fallback)                                  // 3rd
+```
+
+So each recipient (citizen, GRO, LME, …) is rendered in the language they consented to; if none is
+recorded, the deployment's default language; if that too is absent, English. A role pool with mixed
+locales renders per-member (group by resolved locale), not once for the whole pool.
+
+**Current limitation:** the emitter renders once in `config.notification.default.locale` for
+*everyone* (the W2.9 single-locale known-limitation) — it does NOT yet read the per-recipient
+consented locale. Implementing the rule above (resolve locale per `ResolvedRecipient`, render
+per-locale) is the concrete first step of this layer. Two further gaps:
 
 **(a) Free-form content is inline in MDMS, not sourced from egov-localization.**
 `NotificationTemplate` stores `body`/`subject` text inline per `(…, locale)` row, so adding a
