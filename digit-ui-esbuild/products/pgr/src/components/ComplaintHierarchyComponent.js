@@ -1,6 +1,6 @@
 import { Loader } from "@egovernments/digit-ui-components";
 import { Field as V2Field, Select as V2Select } from "@egovernments/digit-ui-components-v2";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../utils/complaintLabel";
 
@@ -24,8 +24,11 @@ import { complaintLabel } from "../utils/complaintLabel";
  * list holding both interior classification nodes and leaf complaint types.
  * Leaf rows carry department/slaHours; interior nodes omit them.
  */
-const ComplaintHierarchyComponent = ({ onSelect }) => {
+const ComplaintHierarchyComponent = ({ onSelect, formData, config }) => {
   const { t } = useTranslation();
+  // When used as a filter we hide the per-level labels (Category / Sub Category…)
+  // and rely on the dropdown placeholders — keeps the filter panel clean.
+  const hideLabels = config?.populators?.hideLabels === true;
   const tenantId =
     Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
     Digit.ULBService.getCurrentTenantId();
@@ -71,6 +74,15 @@ const ComplaintHierarchyComponent = ({ onSelect }) => {
     [def]
   );
   const [sel, setSel] = useState([]);
+
+  // Reset the cascade when the values this component writes are cleared
+  // (e.g. filter "Clear All" resets the form). Guarded so it's a no-op in the
+  // create flow: only fires when a selection exists but both bound values are empty.
+  const boundLeaf = formData?.SelectSubComplaintType;
+  const boundType = formData?.SelectComplaintType;
+  useEffect(() => {
+    if (!boundLeaf && !boundType && sel.length > 0) setSel([]);
+  }, [boundLeaf, boundType]);
 
   if (loadingHier || loadingDefs) return <Loader />;
   if (!def || levels.length === 0) {
@@ -163,7 +175,7 @@ const ComplaintHierarchyComponent = ({ onSelect }) => {
       : -1;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+    <div className="pgr-hierarchy-levels" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
       {levels.map((lvl, i) => {
         // Drop deeper levels once the chosen branch terminates early.
         if (terminalAt >= 0 && i > terminalAt) return null;
@@ -171,7 +183,7 @@ const ComplaintHierarchyComponent = ({ onSelect }) => {
         const opts = optionsForLevel(i);
         const id = `ch-emp-${lvl.levelCode}`;
         return (
-          <V2Field key={lvl.levelCode} label={labelFor(lvl)} required={opts.length > 0} htmlFor={id}>
+          <V2Field key={lvl.levelCode} label={hideLabels ? undefined : labelFor(lvl)} required={opts.length > 0} htmlFor={id}>
             <V2Select
               id={id}
               value={sel[i] || undefined}

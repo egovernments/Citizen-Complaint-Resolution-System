@@ -2621,4 +2621,122 @@ export const UICustomizations = {
       return "TQM_VIEW_TEST_DETAILS";
     },
   },
+
+  PGRComplaintSearchConfig: {
+    preProcess: (data) => {
+      const clonedData = _.cloneDeep(data);
+      const searchForm = clonedData?.state?.searchForm || {};
+      const filterForm = clonedData?.state?.filterForm || {};
+
+      const params = {
+        tenantId: Digit.ULBService.getCurrentTenantId(),
+        limit: clonedData?.state?.tableForm?.limit || 10,
+        offset: clonedData?.state?.tableForm?.offset ?? 0,
+        sortBy: "sla",
+        sortOrder: "ASC",
+      };
+
+      // --- search form (same as inbox) ---
+      if (searchForm.complaintNumber) params.serviceRequestId = searchForm.complaintNumber;
+      if (searchForm.mobileNumber) params.mobileNumber = searchForm.mobileNumber;
+      const requestDate = searchForm?.range?.requestDate;
+      if (requestDate?.startDate && requestDate?.endDate) {
+        params.fromDate = new Date(requestDate.startDate).getTime();
+        params.toDate = new Date(requestDate.endDate).getTime();
+      }
+
+      // --- NEW: department (code string or {code}) -> ?department= ---
+      const dept = filterForm.department;
+      const deptCode = typeof dept === "string" ? dept : dept?.code;
+      if (deptCode) params.department = [deptCode];
+
+      // --- complaint type/subtype from the hierarchy component (leaf = serviceCode) ---
+      const leaf = filterForm.SelectSubComplaintType || filterForm.SelectComplaintType;
+      const serviceCode = leaf?.serviceCode || leaf?.code;
+      if (serviceCode) params.serviceCode = [serviceCode];
+
+      // --- NEW: assignee (AssigneeComponent output) -> ?assignee= ---
+      const assignee = filterForm.assignee;
+      const assigneeUuid = assignee?.uuid || assignee?.code || (typeof assignee === "string" ? assignee : null);
+      if (assigneeUuid) params.assignee = [assigneeUuid];
+
+      // --- Provincia / locality (boundary component) ---
+      const rawLocality = filterForm.locality;
+      if (rawLocality) {
+        const arr = Array.isArray(rawLocality)
+          ? rawLocality.map((l) => l?.code).filter(Boolean)
+          : rawLocality.code ? [rawLocality.code] : [];
+        if (arr.length) params.locality = arr;
+      }
+
+      // --- status (dynamic dropdown -> single code, or object) ---
+      const status = filterForm.status;
+      const statusCode = status?.code || (typeof status === "string" ? status : null);
+      if (statusCode) params.applicationStatus = [statusCode];
+
+      clonedData.params = params;
+      return clonedData;
+    },
+    // reuse the inbox's result renderers verbatim:
+    additionalCustomizations: (row, key, column, value, t, searchResult) => {
+      switch (key) {
+        case "CS_COMMON_COMPLAINT_NO":
+          return (
+            <div style={{ display: "grid" }}>
+              <span className="link" style={{ display: "grid" }}>
+                <Link
+                  to={`/${window.contextPath}/employee/pgr/complaint-details/${value}`}
+                >
+                  {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
+                </Link>
+              </span>
+              {(() => {
+                // Complaint Type label = the parent group's NODE NAME, straight
+                // from ComplaintHierarchy — no SERVICEDEFS localization key. The
+                // leaf def already carries its parent's name as menuPathName; for
+                // a complaint filed on an interior node (no-leaf branch), fall
+                // back to the full code→name map, then the raw code.
+                const sc = row?.businessObject?.service?.serviceCode;
+                const defs = Digit.SessionStorage.get("serviceDefs") || [];
+                const def = Array.isArray(defs) ? defs.find((d) => d?.serviceCode === sc) : null;
+                const nameByCode = Digit.SessionStorage.get("complaintHierarchyNameByCode") || {};
+                // Label the complaint by its parent group, key-based
+                // (COMPLAINT_HIERARCHY.<code>) like every other service, falling
+                // back to the node name when the key isn't seeded.
+                const parentCode = def?.menuPath || sc;
+                const fallback = def?.menuPathName || nameByCode[parentCode] || nameByCode[sc] || sc;
+                return <span>{complaintLabel(t, parentCode, fallback)}</span>;
+              })()}
+            </div>
+          );
+
+        case "WF_INBOX_HEADER_LOCALITY":
+          return value ? <span>{t(`${value}`)}</span> : <span>{t("NA")}</span>;
+
+        case "CS_COMPLAINT_DETAILS_CURRENT_STATUS":
+          return <span>{t(`CS_COMMON_${value}`)}</span>;
+
+        case "WF_INBOX_HEADER_CURRENT_OWNER":
+          return value ? <span>{value?.[0]?.name}</span> : <span>{t("NA")}</span>;
+
+        case "WF_INBOX_HEADER_SLA_DAYS_REMAINING":
+          return value > 0 ? <Tag label={value} showIcon={false} type="success" /> : <Tag label={value} showIcon={false} type="error" />;
+
+        default:
+          return t("ES_COMMON_NA");
+      }
+    },
+    /* `MobileSearchResults` calls
+     *   Digit.Customizations[masterName][moduleName].MobileDetailsOnClick(row.mapping, tenantId)
+     * unconditionally on the mobile inbox render. PGRInboxConfig didn't
+     * define one, so the call resolved to `undefined(...)` and the page
+     * threw "Something went wrong" on phones (worked on desktop because
+     * the desktop `RenderResult` path doesn't go through MobileSearchResults).
+     * Map row → complaint-details URL using the complaint number column. */
+    MobileDetailsOnClick: (row, tenantId) => {
+      const complaintNo = row?.["CS_COMMON_COMPLAINT_NO"];
+      if (!complaintNo) return `/${window.contextPath}/employee/pgr/inbox-v2`;
+      return `/${window.contextPath}/employee/pgr/complaint-details/${complaintNo}`;
+    },
+  },
 };

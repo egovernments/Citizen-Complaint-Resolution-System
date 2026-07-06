@@ -444,6 +444,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "ACTION_TEST_INBOX",
+        "message": "Inbox",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
         "code": "ACTION_TEST_SEARCH_COMPLAINTS",
         "message": "Search Complaint",
         "module": "rainmaker-common",

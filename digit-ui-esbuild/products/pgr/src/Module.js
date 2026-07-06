@@ -13,6 +13,9 @@ import TimelineWrapper from "./components/TimeLineWrapper";
 import AssigneeComponent from "./components/AssigneeComponent";
 import VerificationDocsComponent from "./components/VerificationDocsComponent";
 import PGRSearchInbox from "./pages/employee/PGRInbox";
+import PGRComplaintSearch from "./pages/employee/PGRComplaintSearch";
+import DepartmentComponent from "./components/DepartmentComponent";
+import StatusDropdownComponent from "./components/StatusDropdownComponent";
 import CreateComplaint from "./pages/employee/CreateComplaint";
 import Response from "./components/Response";
 import BreadCrumbs from "./components/BreadCrumbs";
@@ -112,6 +115,9 @@ const componentsToRegister = {
   PGRAssigneeComponent: AssigneeComponent,
   PGRVerificationDocsComponent: VerificationDocsComponent,
   PGRSearchInbox,
+  PGRComplaintSearch,
+  PGRDepartmentComponent: DepartmentComponent,
+  PGRStatusDropdownComponent: StatusDropdownComponent,
   PGRCreateComplaint: CreateComplaint,
   PGRResponse: Response,
   PGRBreadCrumbs: BreadCrumbs,

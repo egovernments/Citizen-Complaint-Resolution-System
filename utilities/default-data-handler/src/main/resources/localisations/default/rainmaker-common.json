@@ -450,6 +450,12 @@
         "locale": "default"
     },
     {
+        "code": "ACTION_TEST_INBOX",
+        "message": "Inbox",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
         "code": "ACTION_TEST_SEARCH_COMPLAINTS",
         "message": "Search Complaint",
         "module": "rainmaker-common",

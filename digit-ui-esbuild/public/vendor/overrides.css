@@ -5958,3 +5958,96 @@ header.digit-header .digit-dropdown-master {
 .navbar .digit-dropdown-employee-select-wrap:focus-within {
   border-color: revert !important;
 }
+
+/* ==================================================================
+ * PGR "Search Citizen Complaint" (/employee/pgr/search) — conservative
+ * design polish layered on the shared .v2-pgr-inbox chrome. Everything
+ * is scoped to .pgr-complaint-search so the employee inbox (inbox-v2)
+ * is unaffected. Border-radius is intentionally left untouched so the
+ * portal's original radius is preserved.
+ * ================================================================== */
+
+/* Page title — clearer hierarchy */
+.pgr-complaint-search .v2-employee-page-header h1 {
+  font-size: 1.375rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+}
+
+/* Kill the empty bordered rectangle: the composer's outer wrapper
+ * (.inbox-search-component-wrapper = .digit-inbox-search-wrapper's first
+ * child) inherits the .v2-pgr-inbox card border. Only the inner cards
+ * (search / filter / results) should be bordered, so strip the wrapper. */
+.pgr-complaint-search .digit-inbox-search-wrapper > div:first-child {
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+/* Filter card — a touch more breathing room and a softer, even shadow
+ * (border + radius inherited from .v2-pgr-inbox). */
+.pgr-complaint-search .section.filter .digit-card-component {
+  padding: 20px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Single-column, evenly spaced filter fields (matches the reference). */
+.pgr-complaint-search .section.filter .digit-label-field-pair {
+  display: block !important;
+  width: 100% !important;
+  margin-bottom: 18px !important;
+}
+.pgr-complaint-search .section.filter .digit-label-field-pair:last-of-type {
+  margin-bottom: 8px !important;
+}
+
+/* Filter labels — dark, normal weight (reference tone). */
+.pgr-complaint-search .section.filter .card-label,
+.pgr-complaint-search .section.filter label {
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: var(--color-text-heading, #363636) !important;
+  margin-bottom: 6px !important;
+}
+
+/* "Complaint Type" — the hierarchy field's label, rendered as a teal
+ * section heading with a divider (matches the reference). Targeted via
+ * :has() on the label-field-pair that contains the cascade component. */
+.pgr-complaint-search .section.filter .digit-label-field-pair:has(.pgr-hierarchy-levels) > .card-label {
+  color: #0b4b66 !important;
+  font-weight: 700 !important;
+  border-top: 1px solid var(--color-border, #e4e4e4) !important;
+  padding-top: 16px !important;
+  margin-top: 4px !important;
+}
+
+/* Assignee disabled until a Department is chosen. */
+.pgr-complaint-search .assignee-dropdown-container.is-disabled {
+  opacity: 0.55 !important;
+  pointer-events: none !important;
+}
+
+/* Results table — a little more density/comfort in rows and cells */
+.pgr-complaint-search .rdt_TableRow,
+.pgr-complaint-search [class*="rdt_TableRow"] {
+  min-height: 60px !important;
+}
+.pgr-complaint-search .rdt_TableCell,
+.pgr-complaint-search [class*="rdt_TableCell"],
+.pgr-complaint-search .rdt_TableCol,
+.pgr-complaint-search [class*="rdt_TableCol"] {
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+}
+.pgr-complaint-search .rdt_TableCell,
+.pgr-complaint-search [class*="rdt_TableCell"] {
+  font-size: 0.875rem !important;
+}
+
+/* "Clear All" link — align it visually under the Apply CTA */
+.pgr-complaint-search .section.filter .clear-search,
+.pgr-complaint-search .section.filter .digit-link-label {
+  font-weight: 600 !important;
+  margin-top: 10px !important;
+}

@@ -1,5 +1,61 @@
 [
   {
+    "rolecode": "CMS_CASE_MANAGER",
+    "actionid": 9001,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 9101
+  },
+  {
+    "rolecode": "CMS_RECEPTION_OFFICER",
+    "actionid": 9001,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 9102
+  },
+  {
+    "rolecode": "CMS_SCREENING_OFFICER",
+    "actionid": 9001,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 9103
+  },
+  {
+    "rolecode": "CMS_SUPERVISOR",
+    "actionid": 9001,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 9104
+  },
+  {
+    "rolecode": "COMPLAINTS_EDITOR",
+    "actionid": 9001,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 9105
+  },
+  {
+    "rolecode": "CSR",
+    "actionid": 9001,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 9106
+  },
+  {
+    "rolecode": "GRO",
+    "actionid": 9001,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 9107
+  },
+  {
+    "rolecode": "PGR_LME",
+    "actionid": 9001,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 9108
+  },
+  {
     "rolecode": "EMPLOYEE",
     "actionid": 2634,
     "actioncode": "",

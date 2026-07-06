@@ -3342,6 +3342,48 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_SEARCH_COMPLAINT",
+        "message": "Search Citizen Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_FILTER_DEPARTMENT",
+        "message": "Department",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_SELECT_DEPARTMENT",
+        "message": "Select Department",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_FILTER_ASSIGNEE",
+        "message": "Assigned",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_FILTER_PROVINCIA",
+        "message": "Province",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_SELECT_STATUS",
+        "message": "Select Status",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_SELECT_DEPARTMENT_FIRST",
+        "message": "Select a department first",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "ES_PGR_HEADER_COMPLAINT",
         "message": "Citizen Complaint Resolution System",
         "module": "rainmaker-pgr",

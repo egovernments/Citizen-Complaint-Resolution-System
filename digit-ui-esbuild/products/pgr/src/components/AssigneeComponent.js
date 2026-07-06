@@ -2,33 +2,62 @@ import { useTranslation } from "react-i18next";
 import React, { useEffect, useState } from "react";
 import { Dropdown, Loader } from "@egovernments/digit-ui-components";
 
-const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
+const AssigneeComponent = ({ config, onSelect, formState, defaultValues, formData }) => {
   const { t } = useTranslation();
   const [assignees, setAssignees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const tenantId = Digit.ULBService.getCurrentTenantId();
+
+  // Reset the picker when the bound form value is cleared (e.g. filter "Clear All").
+  // No-op in the create flow (the value is only empty at initial mount).
+  const boundValue = formData?.[config?.key];
+  useEffect(() => {
+    if (!boundValue && selectedEmployee) setSelectedEmployee(null);
+  }, [boundValue]);
   const hrmsContext = window?.globalConfigs?.getConfig("HRMS_CONTEXT_PATH") || "egov-hrms";
 
   // Get roles from config populators. `allDepartments` is true only for a
   // CMS_SCREENING_OFFICER, who routes across EVERY department in the tenant;
   // everyone else stays scoped to the single primary `department`.
-  const { roles = [], department, allDepartments } = config?.populators || {};
+  //
+  // `dependsOnKey` (filter usage) makes this picker DEPENDENT: the department
+  // comes from another field's selected value (e.g. the Department filter), and
+  // employees are loaded ONLY for that department — so we never pull every
+  // employee in the tenant up front.
+  const { roles = [], department, allDepartments, dependsOnKey } = config?.populators || {};
+  const effectiveDept = dependsOnKey ? formData?.[dependsOnKey]?.code : department;
+  const waitingForDept = !!dependsOnKey && !effectiveDept;
 
-  // Fetch employee data based on roles
-  const { 
-    isLoading: isEmployeeDataLoading, 
-    data: employeeData, 
-    error 
+  // Fetch employees by role, scoped to the effective department. When dependent
+  // and no department is chosen yet, the query is disabled (nothing loads).
+  const {
+    isLoading: isEmployeeDataLoading,
+    data: employeeData,
+    error
   } = Digit.Hooks.useCustomAPIHook({
     url: `/${hrmsContext}/employees/_search`,
     params: {
       tenantId: tenantId,
       roles: roles.join(","),
+      ...(effectiveDept ? { departments: effectiveDept } : {}),
     },
+    // useCustomAPIHook's react-query key is [url, changeQueryName, body] — it does
+    // NOT include params. url/body are constant here, so without a dept-scoped
+    // changeQueryName every department shares one cache entry and switching depts
+    // returns the previous dept's employees (staleTime + keepPreviousData) instead
+    // of refetching. Key on dept (+roles) so a department change refetches.
+    changeQueryName: `pgr-employees-${roles.join("_")}-${effectiveDept || "all"}`,
     config: {
-      enabled: roles.length > 0,
+      enabled: roles.length > 0 && !waitingForDept,
     },
   });
+
+  // Changing the department invalidates any prior assignee pick.
+  useEffect(() => {
+    if (!dependsOnKey) return;
+    setSelectedEmployee(null);
+    if (config?.key) onSelect(config.key, null);
+  }, [effectiveDept]);
 
   // Transform employee data for dropdown
   function transformData(data) {
@@ -76,11 +105,14 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
       const filtered = employeeData.Employees.filter((e) => {
         const d = e?.assignments?.[0]?.department;
         if (!d || !e?.user?.uuid) return false;
+        if (effectiveDept) return d === effectiveDept;
         return allDepartments ? true : d === department;
       });
       setAssignees(transformData(filtered));
+    } else {
+      setAssignees([]);
     }
-  }, [employeeData]);
+  }, [employeeData, effectiveDept]);
 
   // Handle employee selection
   const handleEmployeeSelect = (employee) => {
@@ -95,7 +127,7 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
   if (isEmployeeDataLoading) return <Loader />;
 
   return (
-    <div className="assignee-dropdown-container">
+    <div className={`assignee-dropdown-container${waitingForDept ? " is-disabled" : ""}`}>
       <Dropdown
         t={t}
         option={assignees}
@@ -104,9 +136,16 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
         select={(value) => {
           handleEmployeeSelect(value);
         }}
-        placeholder={t("CS_COMMON_SELECT_EMPLOYEE")}
+        placeholder={
+          waitingForDept
+            ? (t("PGR_SELECT_DEPARTMENT_FIRST") === "PGR_SELECT_DEPARTMENT_FIRST"
+                ? "Select a department first"
+                : t("PGR_SELECT_DEPARTMENT_FIRST"))
+            : t("CS_COMMON_SELECT_EMPLOYEE")
+        }
         label={t(config.label)}
         variant="nesteddropdown"
+        disabled={waitingForDept}
       />
     </div>
   );
