@@ -35,22 +35,39 @@ public class TemplateRenderer {
      */
     public String render(String tenantId, String audience, String action, String toState,
                          String channel, String locale, Map<String, String> values) {
-        String body = findBody(tenantId, audience, action, toState, channel, locale);
-        if (body == null && StringUtils.hasText(config.getNotificationDefaultLocale())
+        return renderField("body", tenantId, audience, action, toState, channel, locale, values);
+    }
+
+    /**
+     * Render the EMAIL subject line (RAINMAKER-PGR.NotificationTemplate {@code subject}) with
+     * placeholders filled. Returns null when the matched template has no subject (SMS/WHATSAPP
+     * rows) or no template matches. Novu's email step REQUIRES a non-empty subject, so callers
+     * must supply a fallback for the EMAIL channel when this returns null/blank.
+     */
+    public String renderSubject(String tenantId, String audience, String action, String toState,
+                                String channel, String locale, Map<String, String> values) {
+        return renderField("subject", tenantId, audience, action, toState, channel, locale, values);
+    }
+
+    private String renderField(String field, String tenantId, String audience, String action,
+                               String toState, String channel, String locale, Map<String, String> values) {
+        String raw = findField(field, tenantId, audience, action, toState, channel, locale);
+        if (raw == null && StringUtils.hasText(config.getNotificationDefaultLocale())
                 && !config.getNotificationDefaultLocale().equalsIgnoreCase(locale)) {
-            body = findBody(tenantId, audience, action, toState, channel, config.getNotificationDefaultLocale());
+            raw = findField(field, tenantId, audience, action, toState, channel, config.getNotificationDefaultLocale());
         }
-        if (body == null) {
-            log.info("No NotificationTemplate for audience={} action={} toState={} channel={} locale={} (tenant {})",
-                    audience, action, toState, channel, locale, tenantId);
+        if (raw == null) {
+            if ("body".equals(field))
+                log.info("No NotificationTemplate for audience={} action={} toState={} channel={} locale={} (tenant {})",
+                        audience, action, toState, channel, locale, tenantId);
             return null;
         }
-        return substitute(body, values);
+        return substitute(raw, values);
     }
 
     @SuppressWarnings("unchecked")
-    private String findBody(String tenantId, String audience, String action, String toState,
-                            String channel, String locale) {
+    private String findField(String field, String tenantId, String audience, String action, String toState,
+                             String channel, String locale) {
         for (Object rowObj : mdmsUtils.getNotificationTemplates(tenantId)) {
             if (!(rowObj instanceof Map)) continue;
             Map<String, Object> row = (Map<String, Object>) rowObj;
@@ -58,8 +75,8 @@ public class TemplateRenderer {
             if (eq(audience, row.get("audience")) && eq(action, row.get("action"))
                     && eq(toState, row.get("toState")) && eq(channel, row.get("channel"))
                     && eq(locale, row.get("locale"))) {
-                Object body = row.get("body");
-                return body != null ? body.toString() : null;
+                Object v = row.get(field);
+                return v != null ? v.toString() : null;
             }
         }
         return null;

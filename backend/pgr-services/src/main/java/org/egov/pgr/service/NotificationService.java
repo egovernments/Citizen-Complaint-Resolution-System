@@ -910,6 +910,7 @@ public class NotificationService {
                     continue;
                 }
                 String body = null;
+                String subject = null;
                 boolean rendered = false;
                 for (ResolvedRecipient recipient : recipients) {
                     if (recipient == null) continue;
@@ -931,10 +932,19 @@ public class NotificationService {
                         if (!rendered) {
                             body = templateRenderer.render(tenantId, audience, action, toState,
                                     channel, locale, values);
+                            // EMAIL requires a non-empty subject (Novu's email step rejects a blank
+                            // one, dropping the whole send). Render the template's subject and fall
+                            // back to a sensible default if it is missing/blank.
+                            if ("EMAIL".equalsIgnoreCase(channel)) {
+                                subject = templateRenderer.renderSubject(tenantId, audience, action, toState,
+                                        channel, locale, values);
+                                if (!StringUtils.hasText(subject))
+                                    subject = "Complaint " + request.getService().getServiceRequestId();
+                            }
                             rendered = true;
                         }
                         if (body == null) break; // template missing for this (audience,channel): skip whole row
-                        publishRenderedEvent(request, recipient, channel, eventName, action, toState, body);
+                        publishRenderedEvent(request, recipient, channel, eventName, action, toState, body, subject);
                         emitted.add(dedupeKey);   // only a successful publish consumes the key
                     } catch (Exception ex) {
                         log.error("Failed to render/publish {} for audience {} on complaint {}",
@@ -1185,7 +1195,7 @@ public class NotificationService {
     }
 
     private void publishRenderedEvent(ServiceRequest request, ResolvedRecipient r, String channel,
-                                      String eventName, String action, String toState, String body) {
+                                      String eventName, String action, String toState, String body, String subject) {
         org.egov.pgr.web.models.Service service = request.getService();
         String tenantId = service.getTenantId();
         String subKey = r.subscriberKey();
@@ -1225,7 +1235,7 @@ public class NotificationService {
         event.put("subscriberId", subscriberId);
         event.put("contact", contact);
         event.put("renderedBody", body);
-        event.put("subject", null);
+        event.put("subject", subject);   // EMAIL subject (rendered); null for SMS/WHATSAPP
         event.put("transactionId", transactionId);
         event.put("data", data);
 
