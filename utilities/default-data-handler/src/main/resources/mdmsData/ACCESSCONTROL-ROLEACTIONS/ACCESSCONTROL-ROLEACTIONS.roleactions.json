@@ -4626,5 +4626,264 @@
     "rolecode": "CMS_ADMIN",
     "actionid": 2557,
     "tenantId": "{tenantid}"
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2553,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1985
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2568,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1986
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2567,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1987
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2560,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1988
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2562,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1989
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2564,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1990
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2557,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1991
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2556,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1992
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 604,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1993
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2317,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1994
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2156,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1995
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 1743,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1996
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2021,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1997
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2020,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1998
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2018,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 1999
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2015,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2000
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2026,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2001
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2009,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2002
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2008,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2003
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2007,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2004
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 2006,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2005
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 1775,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2006
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 1752,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2007
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 1730,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2008
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 1729,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2009
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 1556,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2010
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 870,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2011
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 1557,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2012
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 700,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2013
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 699,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2014
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 695,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2015
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 698,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2016
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 701,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2017
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 1531,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2018
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 1530,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2019
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 1529,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2020
+  },
+  {
+    "rolecode": "CMS_VIEWER",
+    "actionid": 1528,
+    "actioncode": "",
+    "tenantId": "{tenantid}",
+    "id": 2021
   }
 ]

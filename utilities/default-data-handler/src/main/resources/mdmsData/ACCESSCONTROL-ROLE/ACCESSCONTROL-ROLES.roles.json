@@ -140,6 +140,11 @@
     "description": "System administrator; manages master data, categories, and system configuration"
   },
   {
+    "code": "CMS_VIEWER",
+    "name": "CMS Viewer",
+    "description": "Oversight role for the CMS complaint workflow; can view and act on complaints per the workflow definition"
+  },
+  {
     "code": "CENTRAL_USER",
     "name": "Central User",
     "description": "Scope role: user belongs to the central IGE/IGSAE unit and can see complaints across all tenants"
