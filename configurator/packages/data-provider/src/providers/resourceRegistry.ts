@@ -164,6 +164,11 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // (see mapMdmsRecord), so idField/nameField here are display-only.
   'notification-routing':   { type: 'mdms', label: 'PGR Notification Routing',  schema: 'RAINMAKER-PGR.NotificationRouting',  idField: 'action', nameField: 'action' },
   'notification-template':  { type: 'mdms', label: 'PGR Notification Templates', schema: 'RAINMAKER-PGR.NotificationTemplate', idField: 'action', nameField: 'action' },
+  // Provider-scoped external template mapping (e.g. Twilio WhatsApp ContentSids +
+  // ordered variables + per-locale approval). Surfaces the localization linkage:
+  // each row carries `locale` and `approvalStatus`, so an operator sees which
+  // (provider, channel, key, locale) templates are approved and sendable.
+  'notification-provider-template': { type: 'mdms', label: 'PGR Provider Templates', schema: 'RAINMAKER-PGR.NotificationProviderTemplate', idField: 'action', nameField: 'templateName' },
 
   // Non-MDMS, read-only resources served by the novu-bridge proxy (not egov-mdms).
   // Routed by Kong (local-setup/kong/kong.yml); novu-bridge validates the Bearer

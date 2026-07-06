@@ -31,6 +31,7 @@ import {
   ScrollText,
   Plug,
   SlidersHorizontal,
+  MessageCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +49,7 @@ const navGroups = [
       { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
       { id: 'notification-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notification-routing', icon: Bell },
       { id: 'notification-template', nameKey: 'app.nav.notification_templates', path: '/manage/notification-template', icon: Mail },
+      { id: 'notification-provider-template', nameKey: 'app.nav.notification_provider_templates', path: '/manage/notification-provider-template', icon: MessageCircle },
       { id: 'notification-log', nameKey: 'app.nav.notification_logs', path: '/manage/notification-log', icon: ScrollText },
       { id: 'notification-provider', nameKey: 'app.nav.notification_providers', path: '/manage/notification-provider', icon: Plug },
     ],
