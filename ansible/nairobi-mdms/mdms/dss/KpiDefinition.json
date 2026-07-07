@@ -1409,10 +1409,6 @@
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": {
-          "name": "wtd",
-          "timeRole": "filed_at"
-        },
         "dimensions": [
           "service_code",
           "service_group"
@@ -1488,7 +1484,7 @@
             "dir": "desc"
           }
         ],
-        "limit": 30
+        "limit": 100
       },
       "supportsSeries": false,
       "viz": {
@@ -1580,7 +1576,7 @@
             }
           }
         ],
-        "subtitle": "Resolution, SLA and reopen metrics per complaint type"
+        "subtitle": "Resolution, SLA and reopen metrics per complaint type - all complaints, narrowed by the date filter"
       },
       "params": [
         {
