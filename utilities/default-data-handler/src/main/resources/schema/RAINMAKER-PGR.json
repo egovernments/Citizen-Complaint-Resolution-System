@@ -383,6 +383,7 @@
       "required": [
         "provider",
         "channel",
+        "audience",
         "action",
         "toState",
         "locale",
