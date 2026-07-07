@@ -23,6 +23,7 @@ import TimelineWrapper from "../../components/TimeLineWrapper";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import { buildExtendedAttributeRows } from "../../components/PgrExtendedAttributesView";
+import StarRated from "../../components/timelineInstances/StarRated";
 
 // Terminal (non-active) states across standard PGR *and* the mz.igsae CMS workflow.
 // CANCELLED / CLOSEDAFTER* are CMS terminals; without them CANCELLED wrongly showed
@@ -175,17 +176,16 @@ function WorkflowComponent({ complaintDetails, id }) {
     .filter((a) => a && a !== "COMMENT")
     .filter((a) => a !== "REOPEN" || reopenWindowOpen);
 
-  return (
-    <div>
-      <TimelineWrapper
-        businessId={id}
-        isWorkFlowLoading={isWorkFlowLoading}
-        workflowData={workflowData}
-        labelPrefix="WF_PGR_"
-      />
-      {citizenActions.length > 0 ? (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", marginTop: "1rem" }}>
-          {citizenActions.map((action) => {
+  // Rendered INSIDE the current-state timeline row (legacy-checkpoint parity):
+  // action buttons while actions are open; the given star rating once rated.
+  const rating = complaintDetails?.service?.rating;
+  const currentStateChildren =
+    rating || citizenActions.length > 0 ? (
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginTop: "0.5rem" }}>
+        {rating ? <StarRated text={t("CS_ADDCOMPLAINT_YOU_RATED")} rating={rating} /> : null}
+        {citizenActions
+          .filter((action) => !(rating && action === "RATE"))
+          .map((action) => {
             const key = `CS_COMMON_${action}`;
             const label = t(key) === key ? action : t(key);
             return (
@@ -193,7 +193,7 @@ function WorkflowComponent({ complaintDetails, id }) {
                 <button
                   type="button"
                   style={{
-                    padding: "0.5rem 1.25rem",
+                    padding: "0.4rem 1.1rem",
                     fontWeight: 600,
                     color: "#fff",
                     background: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
@@ -207,9 +207,17 @@ function WorkflowComponent({ complaintDetails, id }) {
               </Link>
             );
           })}
-        </div>
-      ) : null}
-    </div>
+      </div>
+    ) : null;
+
+  return (
+    <TimelineWrapper
+      businessId={id}
+      isWorkFlowLoading={isWorkFlowLoading}
+      workflowData={workflowData}
+      labelPrefix="WF_PGR_"
+      currentStateChildren={currentStateChildren}
+    />
   );
 }
 
