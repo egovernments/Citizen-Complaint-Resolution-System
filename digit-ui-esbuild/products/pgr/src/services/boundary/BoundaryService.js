@@ -97,6 +97,39 @@ const fetchBoundaries = async ({ tenantId }) => {
       throw new Error("Couldn't fetch boundary data");
     }
 
+    // Level-heading labels (e.g. DIVISAO_ADMINISTRATIVA_PROVINCIA) are also
+    // seeded at the tree's tenant — fetch exactly those codes (derived from the
+    // boundaryTypes present in the tree) and feed i18next. Best-effort.
+    try {
+      const types = new Set();
+      const walk = (n) => {
+        if (n?.boundaryType) types.add(n.boundaryType);
+        (n?.children || []).forEach(walk);
+      };
+      (fetchBoundaryData?.TenantBoundary || []).forEach((tb) => (tb?.boundary || []).forEach(walk));
+      const strip = (x) =>
+        String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+      const codes = [...types].map((tp) => strip(`${hierarchyType}_${tp}`)).join(",");
+      if (codes) {
+        const locale = Digit.StoreData?.getCurrentLanguage?.() || i18next.language || "en_IN";
+        const res = await Digit.CustomService.getResponse({
+          url: "/localization/messages/v1/_search",
+          useCache: true,
+          method: "POST",
+          userService: false,
+          params: { tenantId, locale, codes },
+        });
+        const msgs = res?.messages || [];
+        if (msgs.length) {
+          const bundle = {};
+          msgs.forEach((m) => { bundle[m.code] = m.message; });
+          i18next.addResources(locale, "translations", bundle);
+        }
+      }
+    } catch (e) {
+      console.warn("boundary level-label localization load failed", e);
+    }
+
     return fetchBoundaryData?.TenantBoundary;
   } catch (error) {
     if (error?.response?.data?.Errors) {
