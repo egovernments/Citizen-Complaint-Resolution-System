@@ -1440,6 +1440,13 @@ services:
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'
+      # Master switch for pgr-services' EscalationScheduler (@Scheduled scan).
+      # Baked-in default is already 'true'; surfaced here so the auto-escalation
+      # engine is a visible, per-tenant-overridable knob. Set 'false' to disable
+      # the scan entirely (no workflow transitions / kafka events). Note: with
+      # EGOV_UI_APP_HOST_MAP set above, this scan actively fires on the 5-day
+      # fallback SLA when MDMS EscalationConfig is unseeded.
+      PGR_ESCALATION_ENABLED: 'true'
       COMMENT_BY_EMPLOYEE_NOTIF_ENABLED: 'false'
       NOTIFICATION_ALLOWED_ON_STATUS: 'open,assigned,rejected,resolved'
       EGOV_USR_EVENTS_NOTIFICATION_ENABLED: 'true'
