@@ -50,20 +50,16 @@ export const PGRModule = ({ stateCode, userType, tenants }) => {
   });
   let user = Digit?.SessionStorage.get("User");
 
-  // Initialize boundary hierarchy for both employee AND citizen users.
-  // Citizens reach the create-complaint flow on naipepea, where the
-  // location step is now driven by `<PGRBoundaryComponent>` (closes
-  // egovernments/CCRS#428 + #433). The component reads
-  // `boundaryHierarchyOrder` from SessionStorage, which this hook
-  // populates on module mount. Without it, the citizen location step
-  // would render nothing.
-  const { isLoading: isPGRInitializing } = Digit.Hooks.pgr.usePGRInitialization({
-    tenantId: tenantId,
-  });
+  // NOTE: the former usePGRInitialization mount-time boundary prefetch is gone.
+  // It fired before the citizen picked an authority (wrong tenant on
+  // multi-authority envs → 400 → react-query retry spam) and its failure left
+  // boundaryHierarchyOrder unset, blanking the cascade. fetchBoundaries now
+  // derives and stores boundaryHierarchyOrder from the SAME response the
+  // cascade renders — one call, right tenant, fired only when needed.
 
   Digit.SessionStorage.set("PGR_TENANTS", tenants);
 
-  if (isLoading || isPGRInitializing) {
+  if (isLoading) {
     return <Loader />;
   }
 
