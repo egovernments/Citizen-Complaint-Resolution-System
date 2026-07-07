@@ -27,7 +27,7 @@ whether the difference is intentional (platform-idiomatic) or a real gap to clos
 | Gateway | `/health/*` | ✅ done | Mechanism difference, not a functional gap |
 | Config | Tenant-identity config model | ✅ done | Not at parity structurally; benign on `pg`, latent risk otherwise |
 | Config | Feature toggles | ✅ done | Explicit toggles match where they overlap; compose inherits image defaults for the rest |
-| Services | K8s-only services (DSS, pdf, audit, service-request) | ✅ done | Optional/feature-adjacent, not core-PGR; intentional scope difference |
+| Services | K8s-only services (DSS, pdf, audit, service-request) | ✅ done | Mostly NOT gaps: compose delivers analytics/email/bulk-boundary via native/newer paths; some are unused eGov cruft |
 | Data | Bootstrap parity | ✅ done | Different mechanism (dump vs migrations); converges on schema, differs on seed data |
 | Infra | Secrets model | ✅ done | Different backend AND different encryption-key origin → encrypted data not portable between stacks |
 
@@ -151,23 +151,49 @@ match (e.g. fixed-OTP `123456`, `citizen-otp-fixed-enabled: true`). A full toggl
 is low value because compose intentionally relies on image defaults; **no functional divergence found in
 the overlapping explicit toggles.**
 
-## Service coverage — the K8s-only set
+## Service coverage — the K8s-only set (deep-dive)
 
 Deployed on K8s (`installed: true`) but absent from compose: `audit-service`, `pdf-service`,
 `service-request`, `egov-notification-mail`, `boundary-bulk-bff`, and DSS analytics
-(`dashboard-analytics`, `dashboard-ingest`). Charts exist but are **not** enabled on K8s either:
-`user-onboard`, `xstate-chatbot`.
+(`dashboard-analytics`, `dashboard-ingest`). (`user-onboard`, `xstate-chatbot` charts exist but are
+not enabled on K8s either.)
 
-**Assessment: these are optional / feature-adjacent, not core-PGR.** The core complaint lifecycle
-(create → assign → resolve → close) works without them — which is why compose runs a leaner set and
-still passes the PGR lifecycle test. Specifically:
-- `audit-service` — audit-trail *query* API. Both stacks ship the `audit-service-persister.yml` config,
-  so audit records are still *captured* via the persister on compose; only the query API is absent.
-- `pdf-service` — PDF generation (e.g. complaint receipts). Optional feature.
-- `egov-notification-mail` — email channel. Compose covers notifications via SMS + Novu.
-- `service-request`, `boundary-bulk-bff` — generic service-request registry / bulk-boundary BFF; compose
-  handles boundary onboarding via MCP/configurator instead.
-- DSS (`dashboard-*`) — analytics dashboards; a separate stack compose doesn't run.
+First: there is **no missed enable-switch** — these services are absent from *every* compose file and
+none of the compose profiles (`notifications`, `otp`, `local-dev`, `search`, `keycloak`, `mcp`) gate
+them. But "absent service" ≠ "absent capability". Looking at each on the **capability** level, most are
+**not parity gaps** — the compose stack delivers the same capability a different way. They fall into
+three buckets:
+
+### Bucket 1 — capability exists on compose via a different (often newer / CCRS-native) path
+- **Analytics / dashboards (DSS `dashboard-analytics` + `dashboard-ingest`).** CCRS built a **native
+  analytics engine into `pgr-services`**: `/v2/analytics` (`/_query`, `/_schema`, `/catalog/_search`,
+  `/packs`) backed by `KpiDefinition` tiles + `DashboardPack`, RBAC-aware (`PrincipalScopeResolver`),
+  reading straight from the PGR DB — no Elasticsearch ingestion pipeline. Because it's the **same
+  `pgr-services` image**, `/v2/analytics` is reachable on **both** stacks. So analytics is **at parity
+  via the native endpoint**; the DSS stack on K8s is the *classic eGov* analytics that CCRS's native one
+  supersedes — a K8s-only legacy layer, **not a compose gap**.
+- **Email (`egov-notification-mail`).** Compose covers email via **Novu** (`novu-bridge` supports
+  `whatsapp/sms/email/push`). Different mechanism (Novu multi-channel vs the classic single-channel mail
+  consumer), same capability.
+- **Bulk boundary (`boundary-bulk-bff`).** Compose handles boundary onboarding via **MCP / configurator
+  / dataloader**. Different tooling, same capability.
+
+### Bucket 2 — unused eGov inheritance (on K8s, needed by neither)
+- **`service-request`.** The `ServiceRequest` type in `pgr-services` is PGR's **own complaint model**
+  (a complaint *is* a "service request"), **not** a call to the `service-request` microservice. PGR does
+  not use that service — it's inherited cruft on K8s.
+- **`pdf-service`.** No references anywhere in CCRS/PGR. Unused.
+
+### Bucket 3 — partial (capture yes, query no)
+- **`audit-service`.** Audit records are **captured on both** stacks (both ship
+  `audit-service-persister.yml`); only the audit **query API** is K8s-only. Low impact.
+
+**Net:** the compose stack isn't missing analytics, email, or bulk-boundary — it implements them via
+native/newer paths (pgr `/v2/analytics`, Novu, MCP), while K8s carries the classic eGov services. The
+only truly-absent-and-relevant capability is audit *query* (data is still captured). In several of these
+the compose side is the *more modern* implementation, so the K8s-only set is largely **not** a parity
+gap to close on the compose side; if anything it flags **legacy services to reconsider on K8s** (DSS,
+service-request, pdf).
 
 This is an **intentional scope difference**, not a bug. For true parity, add these to compose *only if*
 the specific feature (PDF receipts, email, DSS dashboards, audit querying) is required.
