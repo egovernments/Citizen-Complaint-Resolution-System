@@ -138,15 +138,15 @@ UserList does NOT have a search/filter bar (no filters prop in the source) — t
   test('2. create — citizen user lands and is retrievable via API', {
     annotation: {
       type: 'description',
-      description: `Drives the UserCreate form to create a fresh citizen, navigates back to the list, and verifies via egov-user _search that the user landed with the expected fields (userName, mobileNumber, active=true, type='CITIZEN'). Soft-deletes in afterAll.
+      description: `Drives the UserCreate form to create a fresh citizen, navigates back to the list, and verifies via egov-user _search that the user landed with the expected fields. UserCreate has NO Username field — it derives userName from the mobile number (leading 0 stripped), so the persisted userName === mobileNumber. Soft-deletes in afterAll.
 
 Steps:
-1. Generate a unique username (PW + lowercase test code) and a 10-digit mobile number; track for cleanup.
+1. Generate a 10-digit mobile number; derive expectedUserName = mobile with any leading 0 stripped; track expectedUserName for cleanup.
 2. Navigate to /configurator/manage/users/create.
-3. Fill labels Username, Name, Mobile Number, Email.
+3. Fill labels Name, Mobile Number, Email (no Username field).
 4. Click Create; wait for navigation back to /configurator/manage/users (45s timeout).
-5. POST /user/_search with userName=uname; assert exactly 1 result.
-6. Assert userName / mobileNumber / active=true / type='CITIZEN' on the returned user.
+5. POST /user/_search with userName=expectedUserName; assert exactly 1 result.
+6. Assert userName === mobileNumber === expectedUserName, active=true, type='CITIZEN'.
 
 Teardown is API-only — egov-user has no UI delete affordance for users; the afterAll soft-deletes via _updatenovalidate with active=false.`,
     },
@@ -154,14 +154,17 @@ Teardown is API-only — egov-user has no UI delete affordance for users; the af
     page,
   }, testInfo) => {
     const uname = `pw${testCode(testInfo, 'USR').toLowerCase().replace(/_/g, '')}`
-      .slice(0, 40); // usernames in egov-user cap around 64 chars; stay safe.
+      .slice(0, 40); // used for the display name + email only.
     const uniq = uname.replace(/[^0-9]/g, '').slice(-5).padStart(5, '0');
     const mobile = `07${uniq}00${uniq.slice(0, 1)}`.slice(0, 10);
-    createdUsernames.add(uname);
+    // UserCreate has no Username field — it derives userName from the mobile
+    // number, stripping any leading 0. Track the derived value for cleanup.
+    const expectedUserName = mobile.replace(/^0/, '');
+    createdUsernames.add(expectedUserName);
 
     await page.goto(`${LIST_PATH}/create`);
 
-    await page.getByLabel(/^Username/i).fill(uname);
+    // No Username field — userName is derived from the mobile number.
     await page.getByLabel(/^Name/i).fill(`PW Probe User ${uniq}`);
     await page.getByLabel(/^Mobile Number/i).fill(mobile);
     await page.getByLabel(/^Email/i).fill(`${uname}@example.com`);
@@ -171,18 +174,20 @@ Teardown is API-only — egov-user has no UI delete affordance for users; the af
       page.getByRole('button', { name: /^Create$/ }).click(),
     ]);
 
-    // API sanity — user exists and is active.
+    // API sanity — user exists and is active. userName is derived from mobile.
     const auth = loadAuth();
     const res = await postJson(auth, USER_SEARCH, {
       RequestInfo: requestInfo(auth),
       tenantId: TENANT_CODE,
-      userName: uname,
+      userName: expectedUserName,
       pageSize: 1,
     });
     const list = (res.user as Array<Record<string, unknown>> | undefined) || [];
     expect(list.length).toBe(1);
-    expect(list[0].userName).toBe(uname);
-    expect(list[0].mobileNumber).toBe(mobile);
+    expect(list[0].userName).toBe(expectedUserName);
+    // UserCreate derives userName from mobileNumber — they must match.
+    expect(list[0].userName).toBe(list[0].mobileNumber);
+    expect(list[0].mobileNumber).toBe(expectedUserName);
     expect(list[0].active).toBe(true);
     expect(list[0].type).toBe('CITIZEN');
   });

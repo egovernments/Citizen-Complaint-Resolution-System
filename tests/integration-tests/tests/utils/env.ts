@@ -5,7 +5,16 @@
  * This ensures consistent defaults and documents what's configurable.
  */
 
-export const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
+/**
+ * Deployment target. Defaults to a local stack — real runs point the suite at
+ * a deployment by exporting BASE_URL/DIGIT_TENANT (or sourcing a
+ * deploy/<tenant>.env, see runner/run-cycle.sh). The previous default hardcoded
+ * a now-dead demo host (naipepea) paired with personas from a *different* dead
+ * deployment (bomet), so a bare `npx playwright test` authenticated against
+ * neither. Keep the default coherent: localhost + ADMIN, which exists on every
+ * freshly-bootstrapped deployment.
+ */
+export const BASE_URL = process.env.BASE_URL || 'http://localhost';
 export const TENANT = process.env.DIGIT_TENANT || 'ke.nairobi';
 export const ROOT_TENANT = process.env.ROOT_TENANT || (TENANT.includes('.') ? TENANT.split('.')[0] : TENANT);
 export const ADMIN_USER = process.env.DIGIT_USERNAME || 'ADMIN';
@@ -17,22 +26,24 @@ export const LOCALITY_CODE = process.env.LOCALITY_CODE || 'NAIROBI_CITY_VIWANDAN
 export const DEFAULT_PASSWORD = 'eGov@123';
 
 /**
- * Non-ADMIN persona usernames + boundary codes for the 2026-05/06
- * validation suite. Defaults match the bomet ke deployment; override
- * via env on any other tenant.
+ * Non-ADMIN persona usernames + boundary codes for the employee / lifecycle
+ * specs. Defaults fall back to ADMIN because the bootstrap now grants ADMIN the
+ * full PGR bundle (GRO + PGR_LME roles — mdms-tenant.ts), so ADMIN can drive
+ * ASSIGN/RESOLVE on a stock deployment. Override with real persona users on
+ * tenants that enforce role-separation.
  */
 
 /** PGR_LME / GRO employee for digit-ui employee flows (escalate, inbox). */
-export const EMPLOYEE_USER = process.env.EMPLOYEE_USER || 'BOMET_LME';
-export const EMPLOYEE_PASS = process.env.EMPLOYEE_PASSWORD || DEFAULT_PASSWORD;
+export const EMPLOYEE_USER = process.env.EMPLOYEE_USER || ADMIN_USER;
+export const EMPLOYEE_PASS = process.env.EMPLOYEE_PASSWORD || ADMIN_PASS;
 
 /**
  * GRO employee — the role the PGR workflow requires for the ASSIGN action
- * (PENDINGFORASSIGNMENT → PENDINGATLME). ADMIN/SUPERUSER is NOT authorized for
- * ASSIGN, so lifecycle tests must drive that transition as a GRO.
+ * (PENDINGFORASSIGNMENT → PENDINGATLME). The bootstrap grants ADMIN the GRO
+ * role, so ADMIN is a valid default; override on role-strict tenants.
  */
-export const GRO_USER = process.env.GRO_USER || 'KE_GRO';
-export const GRO_PASS = process.env.GRO_PASSWORD || DEFAULT_PASSWORD;
+export const GRO_USER = process.env.GRO_USER || ADMIN_USER;
+export const GRO_PASS = process.env.GRO_PASSWORD || ADMIN_PASS;
 
 /** Ward-scoped CSR for boundary jurisdiction-filter regression. */
 export const WARD_CSR_USER = process.env.WARD_CSR_USER || 'BOMET_CSR_CHESOEN_1780282462';

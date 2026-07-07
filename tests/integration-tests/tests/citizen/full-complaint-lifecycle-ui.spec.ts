@@ -38,7 +38,7 @@ const CITIZEN_PHONE = generateCitizenPhone();
 const CITIZEN_NAME = 'E2E UI Citizen';
 
 // City-level admin for UI tests (getCurrentTenantId returns ke.nairobi)
-const CITY_ADMIN_USER = process.env.CITY_ADMIN_USER || 'EMP-KE_NAIROBI-000089';
+const CITY_ADMIN_USER = process.env.CITY_ADMIN_USER || ADMIN_USER;
 const CITY_ADMIN_PASS = process.env.CITY_ADMIN_PASS || DEFAULT_PASSWORD;
 
 /** Fetch complaint status via API (verification helper — not a "UI under test" action). */

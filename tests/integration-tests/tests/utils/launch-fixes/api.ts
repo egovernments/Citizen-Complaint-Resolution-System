@@ -109,7 +109,7 @@ export async function uploadFile(auth: EmployeeAuth, tenantId: string, fileName:
   const fd = new FormData();
   fd.append('tenantId', tenantId);
   fd.append('module', module);
-  const blob = new Blob([fileBuffer], { type: contentType });
+  const blob = new Blob([new Uint8Array(fileBuffer)], { type: contentType });
   fd.append('file', blob, fileName);
   const r = await fetch(`${BASE}/filestore/v1/files`, {
     method: 'POST',

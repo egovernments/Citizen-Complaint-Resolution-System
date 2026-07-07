@@ -473,7 +473,7 @@ Sets up the situation needed for the level 0→1 escalation in step 6.`,
         service: fullService,
         workflow: {
           action: 'ASSIGN',
-          assignees: [employeeUuid],
+          assignes: [employeeUuid],
           comments: 'Assigned to employee with supervisor for escalation test',
         },
       }),
@@ -523,7 +523,7 @@ Catches Jackson silently-dropped-key bugs and confirms the self-loop preserves s
         service: fullService,
         workflow: {
           action: 'ESCALATE',
-          assignees: [supervisorUuid],
+          assignes: [supervisorUuid],
           comments: 'Manual escalation test — level 0→1',
         },
       }),
@@ -577,20 +577,20 @@ Loose-but-correct assertions because ESCALATE self-loops emit assignes inconsist
     const data: any = await resp.json();
     const wrapper = data.ServiceWrappers[0];
 
-    // Check workflow in the wrapper — assignee should be the supervisor
+    // The assignee should be the supervisor. Two sources can carry it: the PGR
+    // wrapper's workflow.assignes and the latest process-instance's assignes.
+    // Now that the ASSIGN/ESCALATE payloads send the correctly-spelled `assignes`
+    // key (the Workflow POJO binds `assignes`, not `assignees`), at least one of
+    // these MUST be populated and MUST contain the supervisor. Previously the
+    // dropped key left both empty and this test soft-passed without asserting.
     const wfAssignees = (wrapper.workflow?.assignes || []).map((a: any) => a.uuid);
-    if (wfAssignees.length > 0) {
-      expect(wfAssignees).toContain(supervisorUuid);
-      console.log(`PGR wrapper confirms supervisor ${supervisorUuid} is assignee`);
-    } else {
-      // Fallback: check the process instance assignee from the latest action
-      // Some DIGIT versions store assignees differently
-      const piAssignees = (latest.assignes || []).map((a: any) => a.uuid);
-      if (piAssignees.length > 0) {
-        expect(piAssignees).toContain(supervisorUuid);
-      }
-      console.log(`Workflow ESCALATE confirmed; assignee verification via wrapper: ${wfAssignees.length > 0 ? 'found' : 'empty (self-loop)'}`);
-    }
+    const piAssignees = (latest.assignes || []).map((a: any) => a.uuid);
+    const allAssignees = [...wfAssignees, ...piAssignees];
+    expect(
+      allAssignees,
+      `ESCALATE recorded no assignee — expected supervisor ${supervisorUuid} in wrapper.workflow.assignes (${JSON.stringify(wfAssignees)}) or process-instance.assignes (${JSON.stringify(piAssignees)})`,
+    ).toContain(supervisorUuid);
+    console.log(`Escalation assignee confirmed: supervisor ${supervisorUuid} (wrapper=${wfAssignees.length}, processInstance=${piAssignees.length})`);
   });
 
   test('8 — second ESCALATE level 1→2 (skip if no second-level supervisor)', {
@@ -648,7 +648,7 @@ The skip cases are first-class outcomes — the suite is designed to pass on a 2
         service: fullService,
         workflow: {
           action: 'ESCALATE',
-          assignees: [secondSupervisorUuid],
+          assignes: [secondSupervisorUuid],
           comments: 'Manual escalation test — level 1→2',
         },
       }),
@@ -789,7 +789,7 @@ Documents the v2 design: there is no FORWARD → PENDINGATSUPERVISOR detour anym
         service: fullService,
         workflow: {
           action: 'ESCALATE',
-          assignees: [employeeUuid],
+          assignes: [employeeUuid],
           comments: 'Pre-assignment escalation — level 1',
         },
       }),
@@ -824,7 +824,7 @@ Teardown is API-only because PGR has no UI delete affordance — the cleanup is 
       body: JSON.stringify({
         RequestInfo: { apiId: 'Rainmaker', authToken: adminToken, userInfo: adminUserInfo },
         service: fullService,
-        workflow: { action: 'ASSIGN', assignees: [employeeUuid], comments: 'Assigning after PFA-escalate' },
+        workflow: { action: 'ASSIGN', assignes: [employeeUuid], comments: 'Assigning after PFA-escalate' },
       }),
     });
     let data = await assertOk(resp, 'PGR ASSIGN (pfa cleanup)');
@@ -878,6 +878,18 @@ Steps:
 Long-running (240s) because it depends on a real scheduler tick + real SLA breach. If the deployment doesn't have the env vars set or SYSTEM role grant, this fails — flag for env config rather than code regression.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
+    // Pre-flight gate: the 200s poll deadline is only meetable when pgr-services
+    // is deployed with fast escalation tuning (PGR_ESCALATION_INTERVAL_MS=60000 +
+    // PGR_ESCALATION_DEFAULT_SLA_MS=30000). The service defaults are 300000 /
+    // 432000000, and no in-repo deploy passes the fast values, so on a stock
+    // deployment the scheduler can't escalate within the deadline and this would
+    // hard-fail as red noise. Opt in with PGR_FAST_ESCALATION=1.
+    test.skip(
+      process.env.PGR_FAST_ESCALATION !== '1',
+      'Set PGR_FAST_ESCALATION=1 only on a deployment tuned for fast escalation ' +
+        '(PGR_ESCALATION_INTERVAL_MS=60000 + PGR_ESCALATION_DEFAULT_SLA_MS=30000). ' +
+        'pgr-services defaults (300000 / 432000000) make the 200s poll deadline unmeetable.',
+    );
     test.skip(!prerequisitesMet, 'Prerequisites not met');
     test.setTimeout(240_000);  // up to 4 min for the SLA breach + scheduler tick
 

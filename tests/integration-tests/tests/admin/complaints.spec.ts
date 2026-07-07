@@ -21,6 +21,7 @@ import {
   type AuthInfo,
 } from '../utils/manage/api';
 import { cleanupPgrComplaints } from '../utils/manage/teardown';
+import { generateCitizenPhone } from '../utils/env';
 
 const TENANT_CODE = process.env.TENANT_CODE || 'ke';
 const CITY_TENANT = process.env.DIGIT_TENANT || `${TENANT_CODE}.nairobi`;
@@ -108,7 +109,7 @@ Steps:
 3. Click Complaint Type select; pick the option matching liveServiceCode.
 4. Fill Description with >10 chars.
 5. pickLocality(page, liveBoundaryCode) — drives Hierarchy → Boundary type → Locality cascade.
-6. Fill Mobile number with a unique 10-digit phone starting with 7.
+6. Fill Mobile number with a unique phone from generateCitizenPhone() (valid for the deployment's MDMS mobile rule — 9 digits starting with 7/1).
 7. Set up createReqPromise on /pgr-services/v2/request/_create.
 8. Click Create.
 9. Parse the captured request body; assert service.citizen.tenantId === TENANT_CODE (root) and service.address.tenantId === CITY_TENANT, and address.locality.code is non-empty.
@@ -138,8 +139,9 @@ Citizen tenant must be ROOT — assigning to city would break login flows. Clean
     // (if known on this tenant) or the first listed boundary.
     await pickLocality(page, liveBoundaryCode || undefined);
 
-    // Citizen mobile (fresh PW_-namespaced number).
-    const phone = uniquePhoneNumber();
+    // Citizen mobile — valid for the deployment's MDMS mobile rule
+    // (9 digits starting with 7/1). A raw 10-digit 7… fails that rule.
+    const phone = generateCitizenPhone();
     await page.getByLabel(/^Mobile number/i).fill(phone);
     // Leave name blank intentionally — server should fall back to mobile.
 
@@ -691,7 +693,7 @@ Both client-side (single XHR count) and server-side (persistence) checks — tog
     expect(svc?.description).toBe(newDesc);
 
     // Server round-trip confirmation.
-    const wrappers = await pgrSearch(auth, CITY_TENANT, { serviceRequestId: target });
+    const wrappers = await pgrSearch(auth, CITY_TENANT, { serviceRequestId: target ?? undefined });
     const persisted = (wrappers[0]?.service as Record<string, unknown>)?.description;
     expect(persisted).toBe(newDesc);
   });
@@ -729,13 +731,6 @@ Probed 2026-04-23: 11 PENDINGFORASSIGNMENT on ke.nairobi. Hardcoding 11 would dr
 });
 
 // --- Local helpers ---
-
-function uniquePhoneNumber(): string {
-  // 10 digits starting with 7. PW_ prefix lives in the description, not the
-  // phone number; mobile field needs to be valid for the user-service.
-  const tail = String(Date.now()).slice(-9);
-  return `7${tail}`;
-}
 
 async function pickLocality(
   page: import('@playwright/test').Page,

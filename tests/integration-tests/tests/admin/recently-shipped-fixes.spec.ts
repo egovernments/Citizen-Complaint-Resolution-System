@@ -131,24 +131,40 @@ Tests the upstream data — without it, the UI's statusMap fix is moot.`,
     }
   });
 
-  test('API: pgr-services rejects non-applicationStatus sortBy values', {
+  test('API: pgr-services SortBy accepts `sla` but rejects unknown literals like `serviceSla`', {
     annotation: {
       type: 'description',
-      description: `Documents the platform constraint behind the SLA-sort-icon removal in the PGR inbox. pgr-services accepts only certain SortBy enum values. Sending sortBy=serviceSla returns a 400 with a typeMismatch error code — confirming the backend doesn't support sorting by SLA, hence the UI was right to remove the icon.
+      description: `Pins the pgr-services SortBy contract. The backend enum RequestSearchCriteria.SortBy is {locality, applicationStatus, serviceRequestId, createdTime, sla} — so sorting by SLA IS supported (sortBy=sla is accepted). What is NOT a valid enum value is the literal 'serviceSla'; sending it returns a typeMismatch error. This test asserts both halves: sla is accepted, serviceSla is rejected. (The earlier note claiming "the backend can't sort by SLA" is stale — sla was added to the enum.)
 
 Steps:
 1. Acquire admin token.
-2. POST to /pgr-services/v2/request/_search?tenantId=ke.nairobi&limit=2&sortBy=serviceSla.
-3. Read response.Errors; assert length > 0.
-4. Assert Errors[0].code contains 'typeMismatch'.
+2. Positive: POST /pgr-services/v2/request/_search?tenantId=ke.nairobi&limit=2&sortBy=sla; assert response.Errors is empty (sla is a valid enum value).
+3. Negative: POST the same with sortBy=serviceSla; assert response.Errors length > 0 and Errors[0].code contains 'typeMismatch'.
 
-If pgr-services later adds serviceSla to the SortBy enum, this test flips and the UI can re-enable the icon.`,
+Guards against a caller passing the wrong literal AND documents that SLA sorting is now available in the enum.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:432', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
-    // Documents the platform constraint behind the SLA-sort-icon removal.
-    // If pgr-services later adds `serviceSla` to the SortBy enum, this
-    // test flips and we can re-enable the sort icon in the UI config.
     const token = await adminToken();
+
+    // Positive — `sla` is a valid SortBy enum value (backend enum:
+    // {locality, applicationStatus, serviceRequestId, createdTime, sla}), so
+    // pgr-services accepts it without a typeMismatch.
+    const okRes = await fetch(
+      `${PGR_SEARCH}?tenantId=${TENANT}&limit=2&sortBy=sla`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ RequestInfo: adminRequestInfo(token) }),
+      },
+    );
+    const okJson = await okRes.json();
+    expect(
+      okJson.Errors ?? [],
+      `sortBy=sla should be accepted, got ${JSON.stringify(okJson.Errors ?? [])}`,
+    ).toHaveLength(0);
+
+    // Negative — `serviceSla` is NOT a SortBy enum value, so it's rejected
+    // with a typeMismatch. (Guards a caller passing the wrong literal.)
     const r = await fetch(
       `${PGR_SEARCH}?tenantId=${TENANT}&limit=2&sortBy=serviceSla`,
       {

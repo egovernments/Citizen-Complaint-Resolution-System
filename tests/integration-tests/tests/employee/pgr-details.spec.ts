@@ -43,16 +43,20 @@ const EMPLOYEE_PASS = process.env.FLOW5_EMPLOYEE_PASS || ADMIN_PASS;
 //   4. naipepea defaults (last-resort)
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 const _fixtures = readLifecycleFixtures();
+// NOTE: `?.complaints?.terminal_rated` — BOTH links optional-chained. When
+// lifecycle.setup.ts fails soft it writes a `status:'skipped'` fixture with no
+// `complaints` key; guarding only the call (`?.complaints.x`) threw a
+// load-time TypeError and took the whole file down.
 const TERMINAL_COMPLAINT_ID =
   process.env.TERMINAL_COMPLAINT_SRID
   || process.env.FLOW5_TERMINAL_SRID
-  || _fixtures?.complaints.terminal_rated
+  || _fixtures?.complaints?.terminal_rated
   || 'PG-PGR-2026-04-23-004403';
 const NONTERMINAL_COMPLAINT_ID =
   process.env.NONTERMINAL_COMPLAINT_SRID
   || process.env.FLOW5_NONTERMINAL_SRID
-  || _fixtures?.complaints.non_terminal
-  || 'NCCG-PGR-2026-05-06-023467';
+  || _fixtures?.complaints?.non_terminal
+  || 'PG-PGR-2026-05-06-023467';
 
 async function openDetails(page: Page, srid: string): Promise<void> {
   await loginViaApi(page, {
@@ -119,16 +123,40 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
     expect(status.toLowerCase()).toContain('reject');
   });
 
-  test('Story 5.6 — Complaint Type and Subtype labels render values @p1', async ({ page }) => {
+  test('Story 5.6 — complaint classification rows render localized values @p1', async ({ page }) => {
     await openDetails(page, TERMINAL_COMPLAINT_ID);
 
-    const type = await valueForLabel(page, 'Complaint Type');
-    expect(type.length).toBeGreaterThan(0);
-    expect(type).not.toMatch(/^[A-Z_]+$/);
+    // PGRDetails.js renders the classification block between the
+    // "Complaint No." and "Filed Date" rows. FLAT tenants render exactly
+    // two rows there ("Complaint Type" + "Complaint Subtype"); tenants with
+    // a configured RAINMAKER-PGR.ComplaintHierarchy render one row PER
+    // hierarchy level (Main Category › Sector › Sub-Type …) with dynamic,
+    // level-derived labels (buildComplaintPath). So we no longer pin the
+    // two fixed labels — we assert that >=1 classification row renders a
+    // real localized value, tolerating N level-rows.
+    const pairs = page.locator('.digit-viewcard-field-pair');
+    const n = await pairs.count();
+    const rows: { label: string; value: string }[] = [];
+    for (let i = 0; i < n; i++) {
+      const pair = pairs.nth(i);
+      const label = (await pair.locator('.digit-viewcard-label').first().innerText().catch(() => '')).trim();
+      const value = (await pair.locator('.digit-viewcard-value').first().innerText().catch(() => '')).trim();
+      rows.push({ label, value });
+    }
 
-    const subtype = await valueForLabel(page, 'Complaint Subtype');
-    expect(subtype.length).toBeGreaterThan(0);
-    expect(subtype).not.toMatch(/^[A-Z_]+$/);
+    const startIdx = rows.findIndex((r) => /^Complaint No\.?$/i.test(r.label));
+    const endIdx = rows.findIndex((r) => /^Filed Date$/i.test(r.label));
+    expect(startIdx, 'Complaint No. row must render').toBeGreaterThanOrEqual(0);
+    expect(endIdx, 'Filed Date row must render after Complaint No.').toBeGreaterThan(startIdx);
+
+    // Everything between them is classification (flat pair OR N hierarchy levels).
+    const classificationRows = rows.slice(startIdx + 1, endIdx);
+    expect(classificationRows.length, 'at least one classification row must render').toBeGreaterThanOrEqual(1);
+    for (const r of classificationRows) {
+      expect(r.value.length, `classification row "${r.label}" must have a value`).toBeGreaterThan(0);
+      // Not a raw enum / missing-localization key (e.g. "GARBAGE_RELATED").
+      expect(r.value).not.toMatch(/^[A-Z_]+$/);
+    }
   });
 
   test('Story 5.9 — Filed Date renders in DD/MM/YYYY @p1', async ({ page }) => {
@@ -153,13 +181,10 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.18 — timeline actor name is clean (no role-list concat) — #524', async ({ page }) => {
-    // theflywheel/digit-ui-esbuild#112 fix not yet live on naipepea as
-    // of 2026-05-14 — workflow-v2's EMPLOYEE-role enrichment packs the
-    // roles into assigner.name and the frontend hasn't stripped them
-    // yet. Flip from `test.fail` to expected-green once the bundle
-    // ships.
-    test.fail(true, 'CCRS #524 — fix merged in theflywheel/digit-ui-esbuild#112 but not deployed yet');
-
+    // #524 fix is now in-repo (digit-ui-esbuild TimeLineWrapper.js `formatPerson`
+    // returns just `person.name`), so this asserts the post-fix shape directly.
+    // Previously masked with `test.fail(true)` pending a deploy; unmasked once
+    // the bundle shipped.
     await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     // Find any timeline actor row that names the admin who rejected

@@ -41,6 +41,16 @@ function escapeRegex(s: string): string {
 }
 const LIST_PATH = '/configurator/manage/employees';
 
+// Seed FKs for HRMS employee creates. HRMS validates these against the
+// tenant's real boundary / department / designation masters, so they must be
+// live codes. Defaults are the Kenya (ke / ke.nairobi) seed; override per
+// deployment via env. TODO: derive from live lookups once a helper exists in
+// ../utils/manage/ (there is none today — api.ts has no boundary/designation
+// search), then drop the hardcoded fallbacks.
+const SEED_BOUNDARY = process.env.SEED_BOUNDARY || 'NAIROBI_CITY';
+const SEED_DEPT = process.env.SEED_DEPT || 'DEPT_7';
+const SEED_DESIG = process.env.SEED_DESIG || 'DESIG_58';
+
 // HRMS endpoints — the configurator's DigitApiClient hits these verbatim.
 const HRMS_SEARCH = '/egov-hrms/employees/_search';
 const HRMS_UPDATE = '/egov-hrms/employees/_update';
@@ -149,12 +159,12 @@ test.describe('manage/employees', () => {
   test('1. list renders, search narrows, status filter applies', {
     annotation: {
       type: 'description',
-      description: `Smoke check for /manage/employees: the list renders with the four expected columns (Code, Name, Mobile, Status), search narrows the row count, and the Status filter switches between Active and Inactive without crashing.
+      description: `Smoke check for /manage/employees: the list renders with the four expected columns (Employee Code, Name, Mobile, Status), search narrows the row count, and the Status filter switches between Active and Inactive without crashing.
 
 Steps:
 1. Navigate to /configurator/manage/employees.
 2. Assert role=table is visible.
-3. For each header in ['Code','Name','Mobile','Status'], assert the matching role=columnheader is visible.
+3. For each header in ['Employee Code','Name','Mobile','Status'], assert the matching role=columnheader is visible.
 4. Read initial row count; assert > 1.
 5. Type 'zzz_no_such_employee' in the search input; wait networkidle.
 6. Read filtered count; assert filtered <= initial.
@@ -169,7 +179,8 @@ Multi-purpose smoke that exercises the major surface in one pass.`,
     const table = page.getByRole('table');
     await expect(table).toBeVisible();
 
-    for (const header of ['Code', 'Name', 'Mobile', 'Status']) {
+    // The first column header is "Employee Code" (EmployeeList.tsx), not "Code".
+    for (const header of ['Employee Code', 'Name', 'Mobile', 'Status']) {
       await expect(
         page.getByRole('columnheader', { name: new RegExp(`^${header}$`, 'i') }),
       ).toBeVisible();
@@ -441,8 +452,8 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
           password: 'eGov@123', tenantId: TENANT_CODE,
           roles: [{ code: 'EMPLOYEE', name: 'Employee', tenantId: TENANT_CODE }],
         },
-        jurisdictions: [{ boundary: 'NAIROBI_CITY', boundaryType: 'County', hierarchy: 'ADMIN', hierarchyType: 'ADMIN', tenantId: TENANT_CODE, isActive: true }],
-        assignments: [{ department: 'DEPT_7', designation: 'DESIG_58', fromDate: Date.now() - 24 * 3600_000, isCurrentAssignment: true }],
+        jurisdictions: [{ boundary: SEED_BOUNDARY, boundaryType: 'County', hierarchy: 'ADMIN', hierarchyType: 'ADMIN', tenantId: TENANT_CODE, isActive: true }],
+        assignments: [{ department: SEED_DEPT, designation: SEED_DESIG, fromDate: Date.now() - 24 * 3600_000, isCurrentAssignment: true }],
       }],
     });
 
@@ -550,12 +561,12 @@ The MDMS reason source is asserted indirectly — if the dropdown has no options
           roles: [{ code: 'EMPLOYEE', name: 'Employee', tenantId: TENANT_CODE }],
         },
         jurisdictions: [{
-          boundary: 'NAIROBI_CITY', boundaryType: 'County',
+          boundary: SEED_BOUNDARY, boundaryType: 'County',
           hierarchy: 'ADMIN', hierarchyType: 'ADMIN',
           tenantId: TENANT_CODE, isActive: true,
         }],
         assignments: [{
-          department: 'DEPT_7', designation: 'DESIG_58',
+          department: SEED_DEPT, designation: SEED_DESIG,
           fromDate: Date.now() - 30 * 24 * 3600_000,
           isCurrentAssignment: true,
         }],
@@ -634,8 +645,8 @@ Affirms the safety contract — admins must explicitly opt-in to password rotati
           password: 'eGov@123', tenantId: TENANT_CODE,
           roles: [{ code: 'EMPLOYEE', name: 'Employee', tenantId: TENANT_CODE }],
         },
-        jurisdictions: [{ boundary:'NAIROBI_CITY', boundaryType:'County', hierarchy:'ADMIN', hierarchyType:'ADMIN', tenantId: TENANT_CODE, isActive:true }],
-        assignments: [{ department:'DEPT_7', designation:'DESIG_58', fromDate: Date.now()-24*3600_000, isCurrentAssignment:true }],
+        jurisdictions: [{ boundary:SEED_BOUNDARY, boundaryType:'County', hierarchy:'ADMIN', hierarchyType:'ADMIN', tenantId: TENANT_CODE, isActive:true }],
+        assignments: [{ department:SEED_DEPT, designation:SEED_DESIG, fromDate: Date.now()-24*3600_000, isCurrentAssignment:true }],
       }],
     });
 
@@ -708,10 +719,10 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         emailId: `${c.toLowerCase()}@example.com`,
         gender: 'FEMALE',
         dob: '1992-03-15',
-        department: 'DEPT_7',
-        designation: 'DESIG_58',
+        department: SEED_DEPT,
+        designation: SEED_DESIG,
         roles: 'EMPLOYEE',
-        jurisdictions: 'NAIROBI_CITY',
+        jurisdictions: SEED_BOUNDARY,
         dateOfAppointment: '2026-02-01',
       })),
       // Invalid row 1 — mobile too short, DOB malformed.
@@ -723,10 +734,10 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         emailId: '',
         gender: 'MALE',
         dob: 'not-a-date',
-        department: 'DEPT_7',
-        designation: 'DESIG_58',
+        department: SEED_DEPT,
+        designation: SEED_DESIG,
         roles: 'EMPLOYEE',
-        jurisdictions: 'NAIROBI_CITY',
+        jurisdictions: SEED_BOUNDARY,
         dateOfAppointment: '',
       },
       // Invalid row 2 — unknown department + unknown role code.
@@ -739,9 +750,9 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         gender: 'MALE',
         dob: '1990-01-01',
         department: 'NO_SUCH_DEPT',
-        designation: 'DESIG_58',
+        designation: SEED_DESIG,
         roles: 'NO_SUCH_ROLE',
-        jurisdictions: 'NAIROBI_CITY',
+        jurisdictions: SEED_BOUNDARY,
         dateOfAppointment: '',
       },
     ];

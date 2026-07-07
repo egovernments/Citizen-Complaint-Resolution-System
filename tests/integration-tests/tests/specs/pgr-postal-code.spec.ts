@@ -11,19 +11,33 @@
 import { test, expect } from '@playwright/test';
 import { loginViaApi } from '../utils/auth';
 import {
-  BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS, DEFAULT_PASSWORD,
+  BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS,
 } from '../utils/env';
 
-const CITY_ADMIN_USER = process.env.CITY_ADMIN_USER || 'EMP-KE_NAIROBI-000089';
-const CITY_ADMIN_PASS = process.env.CITY_ADMIN_PASS || DEFAULT_PASSWORD;
+// Default to the deployment ADMIN. The previous default
+// (EMP-KE_NAIROBI-000089) is a known-dead principal — its password broke
+// during the encryption-key rotation, so every run authenticated as a
+// user that can't log in. ADMIN is the resilient employee on a stock
+// deployment; override CITY_ADMIN_USER/PASS for a role-strict tenant.
+const CITY_ADMIN_USER = process.env.CITY_ADMIN_USER || ADMIN_USER;
+const CITY_ADMIN_PASS = process.env.CITY_ADMIN_PASS || ADMIN_PASS;
+
+// NOTE: postal-code validation is now driven by the CORE_POSTAL_CONFIGS
+// global config (per-tenant regex). The hardcoded 00100 (valid) / 110001
+// (invalid Indian 6-digit) / 123 (too short) samples below only hold on a
+// config-LESS tenant, where the UI falls back to the Kenya 5-digit rule.
+// On a tenant that ships an explicit CORE_POSTAL_CONFIGS regex these
+// samples may no longer hold — override or gate the tests there.
 
 const CREATE_URL = `${BASE_URL}/digit-ui/employee/pgr/create-complaint`;
 
 test.describe('PGR Postal Code Validation (#478)', () => {
   test.beforeEach(async ({ page }) => {
+    // No authTenant override: ADMIN lives at the root tenant, so let
+    // loginViaApi derive the root for the OAuth call while still injecting
+    // the city TENANT into the Employee.* localStorage keys.
     await loginViaApi(page, {
       tenant: TENANT,
-      authTenant: TENANT,
       username: CITY_ADMIN_USER,
       password: CITY_ADMIN_PASS,
     });

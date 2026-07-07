@@ -5,7 +5,7 @@
  * No API calls in the body of the test — only the post-test teardown,
  * which is API because the configurator has no UI affordance for tenant
  * deactivation today (`src/resources/tenants/` ships TenantList +
- * TenantShow only). Track in #21.
+ * TenantShow + TenantEdit — but no delete). Track in #21.
  *
  * What the test asserts:
  *   1. Onboarding-mode login from the configurator login form lands on
@@ -66,7 +66,8 @@ async function generateTenantFixture(): Promise<void> {
 
 async function deactivateTenantViaApi(code: string): Promise<void> {
   // NOTE: API teardown — no UI delete affordance for tenants in the
-  // configurator today (TenantList + TenantShow only). Track in #21.
+  // configurator today (TenantList + TenantShow + TenantEdit, no delete).
+  // Track in #21.
   const token = await getDigitToken({ tenant: ROOT, username: ADMIN_USER, password: ADMIN_PASS });
   const ri = {
     apiId: 'Rainmaker',
@@ -119,7 +120,7 @@ Steps:
 6. Click "Upload to DIGIT" — wizard advances to Step 1.2 (branding).
 7. Navigate to /configurator/manage/tenants and assert the new tenant code is visible in the list.
 
-Teardown is API-only because tenants have no UI delete affordance today (TenantList + TenantShow only — see #21). The teardown sets isActive=false via mdms-v2 _update.`,
+Teardown is API-only because tenants have no UI delete affordance today (TenantList + TenantShow + TenantEdit, but no delete — see #21). The teardown sets isActive=false via mdms-v2 _update.`,
     },
     tag: ['@area:onboarding', '@kind:regression', '@layer:ui', '@persona:admin'],
   }, async ({ page }) => {
