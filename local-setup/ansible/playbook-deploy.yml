@@ -2282,6 +2282,33 @@
       changed_when: "'CHANGED' in (internal_user_seed.stdout | default(''))"
       when: state_root != 'pg'
 
+    # The MCP tenant bootstrap is supposed to create an ADMIN eg_user on
+    # state_root, but if it ran during the async UserValidation window (above)
+    # its ADMIN create was rejected on the mobile rule — and because that task is
+    # ignore_errors, the deploy continued WITHOUT an ADMIN on state_root. Then
+    # every later ADMIN@state_root token mint (configurator-i18n, dashboards, …)
+    # 400s "Invalid login credentials". The tenant rule is guaranteed live by now
+    # (the INTERNAL_USER seed above blocks until it is), so ensure ADMIN exists
+    # with the expected password + SUPERUSER. Idempotent (DuplicateUserName ok);
+    # distinct mobile (8s vs INTERNAL_USER's 9s) to avoid any collision.
+    - name: "post-bootstrap — ensure ADMIN exists on state_root (MCP bootstrap may miss it in the validation window)"
+      ansible.builtin.shell: |
+        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"{{ bootstrap_user | default('ADMIN') }}","name":"Admin","mobileNumber":"{{ ((core_mobile_configs.mobileNumberAllowedStartingCharacters | first) ~ ('8' * ((core_mobile_configs.mobileNumberLength | int) - 1))) if core_mobile_configs is defined else '8888888888' }}","gender":"MALE","active":true,"type":"EMPLOYEE","tenantId":"{{ state_root }}","password":"{{ bootstrap_password | default('eGov@123') }}","roles":[{"code":"SUPERUSER","name":"Super User","tenantId":"{{ state_root }}"},{"code":"LOC_ADMIN","name":"Localisation Admin","tenantId":"{{ state_root }}"},{"code":"MDMS_ADMIN","name":"MDMS Admin","tenantId":"{{ state_root }}"},{"code":"EMPLOYEE","name":"Employee","tenantId":"{{ state_root }}"}]}}'
+        for i in $(seq 1 6); do
+          resp=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
+          code=$(printf '%s' "$resp" | tail -n1)
+          content=$(printf '%s' "$resp" | sed '$d')
+          if [ "$code" = "200" ]; then echo "CHANGED ADMIN created on {{ state_root }} (attempt $i)"; exit 0; fi
+          if printf '%s' "$content" | grep -q DuplicateUserName; then echo "ADMIN already present on {{ state_root }}"; exit 0; fi
+          echo "attempt $i/6: http=$code $(printf '%s' "$content" | head -c 120)"; sleep 8
+        done
+        echo "ADMIN seed on {{ state_root }} failed" >&2; exit 1
+      args:
+        chdir: "{{ digit_dir }}"
+      register: admin_state_seed
+      changed_when: "'CHANGED' in (admin_state_seed.stdout | default(''))"
+      when: state_root != 'pg'
+
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
       ansible.builtin.shell: >-
         docker compose {{ compose_files }} up -d --force-recreate egov-hrms
