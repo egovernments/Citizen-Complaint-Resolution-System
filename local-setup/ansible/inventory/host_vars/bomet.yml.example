@@ -67,13 +67,12 @@ boundary_type: Ward
 # empty because the data lives under a different hierarchy name.
 hierarchy_type: BOMET-Hierarchy
 
-# ── Kenya mobile validation (drives UserValidation master) ──
+# ── Kenya mobile validation (drives common-masters.MobileNumberValidation) ──
+# Length + allowed leading digits are derived from mobileNumberRegex (see
+# filter_plugins/mobile.py) — no separate length/starting-character fields.
 core_mobile_configs:
-  mobilePrefix: '+254'
-  mobileNumberPattern: ^[17][0-9]{8}$
-  mobileNumberLength: 9
-  mobileNumberAllowedStartingCharacters: ['1', '7']
-  mobileNumberErrorMessage: CORE_COMMON_MOBILE_ERROR
+  countryCode: '+254'
+  mobileNumberRegex: ^[17][0-9]{8}$
 
 # ── feature toggles (exact Bomet shape, except MCP — see header) ──
 asset_s3_bucket: pg-egov-assets

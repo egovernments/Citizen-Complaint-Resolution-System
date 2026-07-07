@@ -44,8 +44,8 @@ employee_module_denylist: [ IM ]
 # Keep locale_region "IN" → i18n locale stays en_IN, which the bootstrap always
 # seeds (generic English, nothing India-specific) → localization works with zero
 # extra seeding. The phone-input prefix is INDEPENDENT in the current digit-ui:
-# the citizen login reads CORE_MOBILE_CONFIGS.mobilePrefix (below), not
-# LOCALE_REGION. So +258 comes from mobilePrefix while text stays readable.
+# the citizen login reads CORE_MOBILE_CONFIGS.countryCode (below), not
+# LOCALE_REGION. So +258 comes from countryCode while text stays readable.
 # (Requires the from-source build — build_digit_ui: true; the old pinned image
 # lacked this decoupling and fell back to +91.)
 locale_region: "IN"
@@ -53,12 +53,11 @@ locale_region: "IN"
 pgr_boundary_highest_level: "Município"
 pgr_boundary_lowest_level: "Bairro"
 boundary_type: "Bairro"
+# Length + allowed leading digits are derived from mobileNumberRegex (see
+# filter_plugins/mobile.py) — no separate length/starting-character fields.
 core_mobile_configs:
-  mobilePrefix: "+258"
-  mobileNumberPattern: "^8[0-9]{8}$"
-  mobileNumberLength: 9
-  mobileNumberAllowedStartingCharacters: ["8"]
-  mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
+  countryCode: "+258"
+  mobileNumberRegex: "^8[0-9]{8}$"
 asset_s3_bucket: "maputo-egov-assets"
 footer_logo_url: ""
 footer_bw_logo_url: ""
