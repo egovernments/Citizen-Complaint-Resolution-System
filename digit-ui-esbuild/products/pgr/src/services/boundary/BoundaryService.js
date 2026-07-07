@@ -107,9 +107,14 @@ const fetchBoundaries = async ({ tenantId }) => {
         (n?.children || []).forEach(walk);
       };
       (fetchBoundaryData?.TenantBoundary || []).forEach((tb) => (tb?.boundary || []).forEach(walk));
-      const strip = (x) =>
-        String(x).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-      const codes = [...types].map((tp) => strip(`${hierarchyType}_${tp}`)).join(",");
+      // Seeded heading keys KEEP accents; request every shape onboarding writes.
+      const codes = [...types]
+        .flatMap((tp) => [
+          `${hierarchyType}_${String(tp).toUpperCase()}`,
+          `${String(hierarchyType).toUpperCase()}_${String(tp).toUpperCase()}`,
+          `${hierarchyType}_${tp}`,
+        ])
+        .join(",");
       if (codes) {
         const locale = Digit.StoreData?.getCurrentLanguage?.() || i18next.language || "en_IN";
         const res = await Digit.CustomService.getResponse({

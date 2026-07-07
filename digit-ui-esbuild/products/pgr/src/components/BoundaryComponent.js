@@ -279,16 +279,22 @@ useEffect(() => {
               <BoundaryDropdown
                 key={key}
                 fieldKey={key}
-                // Level-heading key normalized the way seeding does it:
-                // ASCII (accents stripped), uppercase, non-alnum → "_"
-                // (divisao_administrativa + "Província" → DIVISAO_ADMINISTRATIVA_PROVINCIA).
-                // Unseeded → show the human boundaryType ("Província"), never the raw key.
+                // Level-heading localization: onboarding seeds several key shapes
+                // (accents KEPT): "divisao_administrativa_PROVÍNCIA",
+                // "DIVISAO_ADMINISTRATIVA_PROVÍNCIA", "divisao_administrativa_Província".
+                // Try each; if none is loaded, show the human boundaryType
+                // ("Província") — never the raw composite key.
                 label={(() => {
-                  const norm = `${hierarchyType}_${key}`
-                    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                    .toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-                  const l = t(norm);
-                  return l === norm ? key : l;
+                  const candidates = [
+                    `${hierarchyType}_${key?.toUpperCase()}`,
+                    `${String(hierarchyType).toUpperCase()}_${key?.toUpperCase()}`,
+                    `${hierarchyType}_${key}`,
+                  ];
+                  for (const c of candidates) {
+                    const l = t(c);
+                    if (l !== c) return l;
+                  }
+                  return key;
                 })()}
                 data={value[key]}
                 onChange={(selectedValue) => handleSelection(selectedValue)}
