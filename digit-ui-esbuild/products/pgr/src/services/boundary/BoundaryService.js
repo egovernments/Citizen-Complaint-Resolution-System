@@ -34,7 +34,14 @@ const fetchBoundaries = async ({ tenantId }) => {
     const userType = user.type;
 
     if (userType === "CITIZEN") {
-      tenantId = Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || tenantId;
+      // The caller passes the tenant RESOLVED from the complaint's "related to"
+      // selection (e.g. mz.ige / mz.igsae) — that is where the boundary tree is
+      // onboarded. Only fall back to the citizen's home city when no tenant was
+      // passed. The old unconditional override sent every lookup to the citizen's
+      // home tenant (the state root on multi-authority envs), which has no tree
+      // → 400 HIERARCHY_DEFINITION_DOES_NOT_EXIST → the location cascade never
+      // rendered even though the city-level data exists.
+      tenantId = tenantId || Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code;
     }
   } else {
     console.log("No CITIZEN user info found in localStorage.");
