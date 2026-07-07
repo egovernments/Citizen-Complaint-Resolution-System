@@ -73,10 +73,14 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
       // Screening officer (allDepartments): NO department filter — list every
       // department's assignable employees (transformData groups them by
       // department). Every other actor stays scoped to the single primary dept.
+      // Unmapped complaint type (department "NA" or absent in the hierarchy):
+      // pgr-services skips its department validation for these, so the actor may
+      // route to ANY department — filtering by "NA" would empty the dropdown.
+      const unscoped = allDepartments || !department || department === "NA";
       const filtered = employeeData.Employees.filter((e) => {
         const d = e?.assignments?.[0]?.department;
         if (!d || !e?.user?.uuid) return false;
-        return allDepartments ? true : d === department;
+        return unscoped ? true : d === department;
       });
       setAssignees(transformData(filtered));
     }

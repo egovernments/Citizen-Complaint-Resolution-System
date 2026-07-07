@@ -27,7 +27,7 @@ import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 //   • comments        — always
 // Per-action extras can later be driven by an MDMS master (RAINMAKER-PGR.WorkflowActionUiConfig)
 // without touching this code.
-const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false, docUploadRequired = false }) => {
+const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false, docUploadRequired = false, assigneeMandatory }) => {
   const body = [];
   if (action === "REJECT") {
     body.push({
@@ -47,7 +47,9 @@ const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false,
   if (!isTerminal && (assigneeRoles?.length || 0) > 0) {
     body.push({
       type: "component",
-      isMandatory: action === "ASSIGN",
+      // Callers pass assigneeMandatory (dept-mapping + actor aware); default
+      // preserves the original rule: picking a person is required on ASSIGN.
+      isMandatory: assigneeMandatory !== undefined ? assigneeMandatory : action === "ASSIGN",
       component: "PGRAssigneeComponent",
       key: "SelectedAssignee",
       label: "CS_COMMON_EMPLOYEE_NAME",
@@ -190,10 +192,25 @@ const PGRDetails = () => {
     setToast({ show: false, label: "", type: "" });
   };
 
+  // Assignee requirement on ASSIGN:
+  // - complaint type mapped to a department  -> mandatory (scoped routing; a person must be picked)
+  // - unmapped type ("NA"/absent department) -> OPTIONAL — the complaint may move forward
+  //   unassigned (pgr skips department validation and the workflow accepts empty assignes)
+  // - EXCEPT a CMS_SCREENING_OFFICER (incl. multi-role users): routing IS their job,
+  //   so the assignee stays mandatory for them even on unmapped types.
+  const isAssigneeMandatory = (action) => {
+    if (action?.action !== "ASSIGN") return false;
+    const roles = userInfo?.info?.roles?.map((r) => r.code) || [];
+    if (roles.includes("CMS_SCREENING_OFFICER")) return true;
+    const def = serviceDefs?.find((d) => d.serviceCode === pgrData?.ServiceWrappers?.[0]?.service?.serviceCode);
+    const department = def?.department;
+    return !!department && department !== "NA";
+  };
+
   // Prepare and submit the update complaint request
   const handleActionSubmit = (_data) => {
     // Build the same generic form config the modal renders, so mandatory-field validation stays in sync.
-    const actionConfig = { formConfig: buildActionFormConfig(selectedAction) };
+    const actionConfig = { formConfig: buildActionFormConfig({ ...selectedAction, assigneeMandatory: isAssigneeMandatory(selectedAction) }) };
 
     const missingFields = [];
 
@@ -301,7 +318,7 @@ const PGRDetails = () => {
     const department = def?.department;
     // Build the modal form generically from workflow metadata — no hardcoded per-action allowlist,
     // so ANY action defined on the BusinessService (standard PGR + the CMS workflow) renders a form.
-    const actionConfig = { formConfig: buildActionFormConfig(selectedAction) };
+    const actionConfig = { formConfig: buildActionFormConfig({ ...selectedAction, assigneeMandatory: isAssigneeMandatory(selectedAction) }) };
     // The dropdown is the *assignee* picker, so we want the roles that can ACT on
     // the next state — not the roles that can perform the current action. The
     // latter (selectedAction.roles) was returning the GRO/PGR_VIEWER set, which
