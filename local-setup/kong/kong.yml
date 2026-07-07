@@ -138,6 +138,30 @@ services:
     paths:
     - /user-otp
     strip_path: false
+    # MOCK (default): request-termination short-circuits every /user-otp/*
+    # call with a canned success response, so login/register work using the
+    # fixed OTP (123456, see CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE in
+    # docker-compose.egov-digit.yaml) without the real egov-otp/user-otp/
+    # egov-notification-sms stack running or any SMS gateway integrated.
+    #
+    # TO ENABLE REAL OTP FOR PRODUCTION, before deploying:
+    #   1. Delete the `plugins:` block below (the request-termination mock).
+    #   2. Set enable_otp_services: true in the tenant's Ansible host_vars
+    #      (local-setup/ansible/inventory/host_vars/<tenant>.yml) so compose
+    #      starts the `otp` profile (egov-otp, user-otp, egov-notification-sms).
+    #   3. Configure a real SMS gateway: egov-notification-sms defaults to
+    #      SMS_PROVIDER_CLASS: Console (logs OTP SMS to container stdout only)
+    #      in docker-compose.egov-digit.yaml — point it at a real provider
+    #      class + credentials before relying on SMS delivery.
+    # Without all three, the first OTP request has nothing to answer it
+    # (real stack down or SMS not actually sent), and only the fixed
+    # 123456 fallback keeps working.
+    plugins:
+    - name: request-termination
+      config:
+        status_code: 200
+        content_type: application/json
+        body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":null,"ts":null,"resMsgId":"uief87324","msgId":null,"status":"successful"},"otp":{"identity":"","tenantId":"","type":"","otp":"","expiryTime":0}}'
 - name: enc-service
   url: http://egov-enc-service:1234
   tags:
