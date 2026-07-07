@@ -68,7 +68,7 @@ build_pgr_services: false
 
 ---
 
-## Step 2 — first full deploy (brings up the Novu stack)
+## Step 2 — one full deploy (Novu stack + auto-minted key + seed)
 
 ```bash
 cd local-setup/ansible
@@ -77,42 +77,34 @@ cd local-setup/ansible
 
 This starts the 8 notification containers **alongside** your running stack and
 recreates `pgr-services` / `novu-bridge` with the config-driven env. Existing
-Postgres data is untouched (`db_fast_path` stays `false`). Because
-`novu_api_key` is still empty, the Novu bootstrap is skipped and the playbook
-prints a hint — expected.
+Postgres data is untouched (`db_fast_path` stays `false`).
 
-Since `pgr_notification_config_driven: true`, the seed (part B) also runs at the
-end of this deploy. That's fine — it's idempotent — but SMS/Email won't deliver
-until the key is wired in Step 4.
+Because `novu_api_key` is empty, the playbook **mints the Novu key
+programmatically** ([`novu-mint-key.sh`](../../backend/novu-bridge/config/novu-mint-key.sh):
+`register` → JWT → read the Development env key), wires it into the compose
+`.env`, and recreates `novu-bridge`. No dashboard signup, no second deploy.
+(Pin `novu_api_key:` in host_vars to use an external key instead — a pinned key
+skips minting.) The seed (part B) also runs at the end of this deploy.
 
----
-
-## Step 3 — mint the Novu key + provider creds
-
-1. Open `https://<host>/novu/`, sign up, and copy the **Development**-environment
-   API key.
-2. Paste it and the Twilio creds into `inventory/host_vars/<tenant>.yml`:
-   ```yaml
-   novu_api_key: "<pasted-key>"
-   twilio_account_sid: "<sid>"
-   twilio_auth_token: "<token>"
-   ```
+`novu-bridge` can now reach Novu — but nothing **delivers** until a provider is
+added (Step 3).
 
 ---
 
-## Step 4 — second full deploy (wires the key + provider)
+## Step 3 — add a provider
 
-```bash
-./deploy.sh <tenant>
-```
+Credentials live in Novu, not our DB. Pick one:
 
-Now the playbook creates the Twilio SMS integration + `complaints-sms` /
-`complaints-email` workflows in Novu, writes `NOVU_API_KEY` into the compose
-`.env`, and **force-recreates `novu-bridge`** so it picks up the key.
+- **Self-service:** Configurator → *Notifications → Notification Providers → Add
+  provider* (Twilio SMS/WhatsApp or SMTP) → Verify → Test-send. See the
+  [tutorial](./TUTORIAL.md).
+- **Ansible-bootstrapped:** set `twilio_account_sid` / `twilio_auth_token` /
+  `twilio_whatsapp_from` in host_vars and re-run `./deploy.sh <tenant>` — creates
+  the Twilio integration + `complaints-sms` / `complaints-email` workflows.
 
 ---
 
-## Step 5 — (re)seed / update the MDMS masters anytime
+## Step 4 — (re)seed / update the MDMS masters anytime
 
 Whenever you change routing/templates (or want to confirm the masters are
 present), run the seed on its own — no full redeploy, no downtime:
@@ -126,7 +118,7 @@ Idempotent: existing rows are skipped, new/changed rows are added. This is the
 
 ---
 
-## Step 6 — verify the cutover
+## Step 5 — verify the cutover
 
 ```bash
 # Novu integration exists

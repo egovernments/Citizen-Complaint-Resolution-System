@@ -2497,8 +2497,43 @@
       until: novu_api_health.status == 200
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length > 0
-        - (twilio_account_sid | default('')) | length > 0
+
+    # Self-hosted Novu mints its first env API key only after a signup at /novu/.
+    # That signup is just a REST call — POST /v1/auth/register creates the first
+    # user + org + Development/Production envs and returns a JWT; the env's key is
+    # then readable. So when novu_api_key is unset we mint it programmatically here
+    # (idempotent: re-runs log in instead of registering) and use it for the rest
+    # of the bootstrap. No human, no second deploy. Deployments that pin an
+    # explicit novu_api_key (e.g. Bomet/Nairobi) skip minting and keep their key.
+    - name: "novu-bootstrap — copy key-mint script to target"
+      ansible.builtin.copy:
+        src: ../../backend/novu-bridge/config/novu-mint-key.sh
+        dest: "{{ digit_dir }}/novu-mint-key.sh"
+        mode: '0755'
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length == 0
+
+    - name: "novu-bootstrap — mint Development API key programmatically when unset"
+      ansible.builtin.shell: |
+        NOVU_API_URL=http://127.0.0.1:14002 \
+        NOVU_ADMIN_EMAIL='{{ novu_admin_email | default("admin@digit.local") }}' \
+        NOVU_ADMIN_PASSWORD='{{ novu_admin_password | default("Digit@12345") }}' \
+        NOVU_ORG_NAME='{{ novu_org_name | default("DIGIT") }}' \
+        bash {{ digit_dir }}/novu-mint-key.sh
+      args:
+        chdir: "{{ digit_dir }}"
+      register: novu_mint
+      changed_when: true
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length == 0
+
+    - name: "novu-bootstrap — resolve effective Novu key (pinned or minted)"
+      ansible.builtin.set_fact:
+        effective_novu_key: "{{ (novu_api_key | default('')) if ((novu_api_key | default('')) | length > 0) else (novu_mint.stdout | default('') | trim) }}"
+      when:
+        - enable_novu | default(false)
 
     - name: "novu-bootstrap — copy bootstrap script to target"
       ansible.builtin.copy:
@@ -2507,14 +2542,14 @@
         mode: '0755'
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length > 0
+        - (effective_novu_key | default('')) | length > 0
         - (twilio_account_sid | default('')) | length > 0
 
     - name: "novu-bootstrap — run Twilio integration + workflow create"
       ansible.builtin.shell: |
         cd {{ digit_dir }}
         NOVU_BASE_URL=http://127.0.0.1:14002 \
-        NOVU_API_KEY={{ novu_api_key }} \
+        NOVU_API_KEY={{ effective_novu_key }} \
         TWILIO_ACCOUNT_SID={{ twilio_account_sid }} \
         TWILIO_AUTH_TOKEN={{ twilio_auth_token }} \
         TWILIO_WHATSAPP_FROM='{{ twilio_whatsapp_from | default("whatsapp:+14155238886") }}' \
@@ -2522,7 +2557,7 @@
       register: novu_bootstrap_result
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length > 0
+        - (effective_novu_key | default('')) | length > 0
         - (twilio_account_sid | default('')) | length > 0
       changed_when: "'created' in (novu_bootstrap_result.stdout | default(''))"
 
@@ -2530,12 +2565,12 @@
       ansible.builtin.lineinfile:
         path: "{{ digit_dir }}/.env"
         regexp: '^NOVU_API_KEY='
-        line: "NOVU_API_KEY={{ novu_api_key }}"
+        line: "NOVU_API_KEY={{ effective_novu_key }}"
         create: true
         mode: '0600'
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length > 0
+        - (effective_novu_key | default('')) | length > 0
 
     - name: "novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY"
       ansible.builtin.shell: |
@@ -2543,27 +2578,25 @@
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d --force-recreate novu-bridge
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length > 0
+        - (effective_novu_key | default('')) | length > 0
       changed_when: false
 
-    - name: "novu-bootstrap — operator setup hint (when api_key missing)"
+    - name: "novu-bootstrap — provider setup hint (Novu key auto-minted; no provider yet)"
       ansible.builtin.debug:
         msg: |
-          Novu containers are up. To finish setup:
-            1. Open {{ 'https://' + domain if (tls_enabled | default(true)) else 'http://' + domain }}/novu/
-            2. Sign up (first signup creates the org + API key)
-            3. Settings → API Keys → copy the API key
-            4. Set in host_vars/{{ inventory_hostname }}.yml:
-                 novu_api_key: <pasted key>
-                 twilio_account_sid: <from twilio console>
-                 twilio_auth_token: <from twilio console>
-                 twilio_whatsapp_from: 'whatsapp:+14155238886'  # Twilio Sandbox default
-            5. Re-run ./deploy.sh {{ inventory_hostname }}
-          The next deploy will run the bootstrap script and wire NOVU_API_KEY
-          into compose .env so novu-bridge can dispatch.
+          Novu is up and its API key was minted + wired automatically
+          (key: {{ (effective_novu_key | default(''))[:6] ~ '…' if (effective_novu_key | default('')) | length > 0 else 'MINT FAILED — see the novu-mint task above' }}).
+          novu-bridge can now reach Novu. To actually DELIVER messages, add a
+          provider (credentials live in Novu, never in our DB):
+            • Self-service: Configurator → Notifications → Notification Providers →
+              Add provider (Twilio SMS/WhatsApp or SMTP), then Verify + Test-send.
+            • Or ansible-bootstrapped: set twilio_account_sid / twilio_auth_token /
+              twilio_whatsapp_from in host_vars/{{ inventory_hostname }}.yml and
+              re-run ./deploy.sh {{ inventory_hostname }} (creates the Twilio
+              integration + complaints-* workflows for you).
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length == 0
+        - (twilio_account_sid | default('')) | length == 0
 
     # ────────────────────────────────────────────────────────────────
     # Keycloak bootstrap. Once the keycloak container is up (created the

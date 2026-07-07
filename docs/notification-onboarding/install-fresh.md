@@ -71,62 +71,61 @@ box.
 
 ---
 
-## Step 2 — first deploy (brings the stack up)
+## Step 2 — one deploy (stack + auto-minted Novu key + seed)
 
 ```bash
 cd local-setup/ansible
 ./deploy.sh <tenant>
 ```
 
-This brings up the full stack **including** the 8 notification containers. On a
-self-hosted Novu the API key does not exist yet, so `novu_api_key` is empty and
-the playbook **skips the Novu bootstrap** and prints an operator hint. That is
-expected on the first run.
+A single deploy does everything:
 
-Because `pgr_notification_config_driven: true`, the **notif-seed tasks run as
-part of this same deploy** (they are gated on that flag) — the 3 MDMS masters
-are created at the state root. No separate `--tags` run is needed on a fresh
-install.
+- Brings up the full stack **including** the 8 notification containers.
+- **Mints the Novu API key programmatically** — since `novu_api_key` is empty,
+  the playbook waits for `novu-api` to be healthy, then runs
+  [`novu-mint-key.sh`](../../backend/novu-bridge/config/novu-mint-key.sh): one
+  `POST /v1/auth/register` creates the first org + Development/Production
+  environments and returns a JWT; the Development env key is read back and wired
+  into the compose `.env`, and `novu-bridge` is recreated to pick it up. No
+  dashboard signup, no second deploy. (Idempotent — a re-run logs in instead of
+  registering and returns the same key.)
+- Because `pgr_notification_config_driven: true`, the **notif-seed tasks run in
+  the same deploy** — the 3 MDMS masters are created at the state root.
 
----
+> **Overriding the minted admin identity:** the mint uses
+> `admin@digit.local` / `Digit@12345` / org `DIGIT` by default. Override with
+> `novu_admin_email` / `novu_admin_password` / `novu_org_name` in host_vars.
+> To use an *externally* minted key instead, set `novu_api_key:` — a pinned key
+> always wins and minting is skipped (this is what Bomet/Nairobi do).
 
-## Step 3 — mint the Novu key + provider creds
-
-1. Open `https://<host>/novu/` and sign up — this creates the first
-   organization + environment + **API key** in your self-hosted Novu. Use the
-   **Development** environment (self-hosted Novu only allows workflow creation
-   in Dev).
-2. Paste the key and your Twilio creds into `inventory/host_vars/<tenant>.yml`:
-   ```yaml
-   novu_api_key: "<pasted-key>"
-   twilio_account_sid: "<sid>"
-   twilio_auth_token: "<token>"
-   ```
-   (Or store them in OpenBao if you don't want plaintext — see the
-   [runbook](./provider-onboarding-runbook.md#6-wiring-reference).)
+At this point notifications can reach Novu, but nothing **delivers** until a
+provider is added (next step).
 
 ---
 
-## Step 4 — second deploy (wires the key + bootstraps the provider)
+## Step 3 — add a provider (credentials live in Novu)
+
+Two ways, pick one:
+
+- **Self-service (recommended):** Configurator → *Notifications → Notification
+  Providers → Add provider* — add Twilio (SMS/WhatsApp) or SMTP, then **Verify**
+  and **Test-send**. Credentials go straight to Novu; they are never stored on
+  our side. See the [tutorial](./TUTORIAL.md).
+- **Ansible-bootstrapped:** set `twilio_account_sid` / `twilio_auth_token` /
+  `twilio_whatsapp_from` in host_vars and re-run `./deploy.sh <tenant>` — the
+  bootstrap creates the Twilio integration + `complaints-sms` / `complaints-email`
+  workflows for you.
+
+---
+
+## Step 4 — verify
 
 ```bash
-./deploy.sh <tenant>
-```
+# 0. The auto-minted key (on the target box)
+KEY=$(grep '^NOVU_API_KEY=' /opt/digit/.env | cut -d= -f2)
 
-With `novu_api_key` now set, the playbook:
-- creates the Twilio **SMS integration** + the `complaints-sms` / `complaints-email`
-  workflows inside Novu (via `config/bootstrap-novu-whatsapp.sh`),
-- writes `NOVU_API_KEY=…` into the compose `.env`,
-- **force-recreates `novu-bridge`** so it picks up the key,
-- re-runs the (idempotent) MDMS seed.
-
----
-
-## Step 5 — verify
-
-```bash
 # 1. Novu has the integration
-curl -s -H "Authorization: ApiKey <novu_api_key>" https://<host>/novu-api/v1/integrations | jq '.data[] | {providerId, channel, active}'
+curl -s -H "Authorization: ApiKey $KEY" http://localhost:14002/v1/integrations | jq '.data[] | {providerId, channel, active}'
 
 # 2. The masters landed (state root)
 #    Configurator → Notifications → Notification Routing / Templates / Provider Templates
