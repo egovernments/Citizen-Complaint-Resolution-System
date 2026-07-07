@@ -5,7 +5,7 @@ import { convertEpochFormateToDate } from '../utils';
 
 // NOTE: no useMyContext() here — the citizen route tree has no MyContext
 // provider, and this wrapper renders on BOTH citizen and employee details.
-const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "" }) => {
+const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", currentStateChildren = null }) => {
     const { t } = useTranslation();
 
     const tenantId = Digit.ULBService.getCurrentTenantId();
@@ -97,7 +97,10 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                     <Timeline
                         key={index}
                         label={step.label}
-                        subElements={step.subElements}
+                        // currentStateChildren renders inside the FIRST (current-state) row —
+                        // the citizen action links/rating live in the timeline, like the
+                        // legacy checkpoints did.
+                        subElements={index === 0 && currentStateChildren ? [...step.subElements, currentStateChildren] : step.subElements}
                         variant={step.variant}
                         showConnector={step.showConnector}
                     />
