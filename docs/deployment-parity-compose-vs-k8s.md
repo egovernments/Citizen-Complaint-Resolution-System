@@ -47,10 +47,10 @@ Both share the **same ~24 `egov-*` microservice core**. Parity is meaningful at 
 | Route / concern | Compose (Kong) | K8s (Spring gateway) | Parity | Comments |
 |---|---|---|---|---|
 | `/mdms-v2`, `/user`, `/egov-*` core APIs | routed to service | routed to service (zuul discovery) | ✅ | same path→service on both |
-| `/user-otp`, `/otp` | **mocked** (canned 200); real via `otp` profile + de-mock | real OTP services | ❌ default | compose fine for dev; enable real for prod |
+| `/user-otp`, `/otp` | **mocked** (canned 200); real via `otp` profile + de-mock Kong + real SMS provider | real OTP services | ❌ default | compose fine for dev; enable real for prod |
 | `/egov-location` (modern `/boundary-service/*`) | routed to boundary-service | routed to boundary-service | ✅ | what CCRS actually uses |
 | `/egov-location` (legacy API) | **Kong Lua adapter** → boundary-service + reshape | no service, dangling refs | ❌ K8s gap | K8s would break PGR ward selector / configurator / MCP — migrate callers to boundary-service |
-| `/egov-user-event` (in-app feed) | **mocked empty** (service not deployed) | real service | ❌ (compose gap) | notif bell empty on compose; deploy the service for parity |
+| `/egov-user-event` (in-app feed) | **mocked empty** (service not deployed) | real service | ❌ (compose gap) | notif bell empty on compose; deploy the service for parity. K8s's `.staging` service-host ref is **dead config, not a break** (gateway routes via k8s discovery) |
 | Novu notifications | real (behind `notifications` profile) | real | ✅ | opt-in flag on both |
 | Auth — **authentication** | none (forwards to service) | validates token → 401 | ❌ | compose relies on services failing closed (they do) |
 | Auth — **RBAC (role→action)** | none | `egov-accesscontrol` | ❌ | record-level scoping is still a service responsibility (issue #1071) |
@@ -103,7 +103,7 @@ Both share the **same ~24 `egov-*` microservice core**. Parity is meaningful at 
 
 | Aspect | Compose | K8s | Comments |
 |---|---|---|---|
-| Schema | `db_fast_path` loads `db/full-dump.sql` (54 tables + Flyway history + test tenant) | per-service Flyway migration (init container), full replay | converges on equivalent schema |
+| Schema | `db_fast_path` loads `db/full-dump.sql` (54 tables + Flyway history + `pg.citest`/CI-ADMIN test tenant + 33 ServiceDefs + 20k localization rows) | per-service Flyway migration (init container), full replay | converges on equivalent schema |
 | Seed data | bundled `pg`/`pg.citest` tenant + `user-seed.sh` + optional MCP | `default-data-handler` + `boundary-bulk-bff`; starts empty | different out-of-box data |
 | Consequence | fast, deterministic | clean replay | dump is a **maintenance burden**; "works on compose" ≠ clean K8s migration |
 
