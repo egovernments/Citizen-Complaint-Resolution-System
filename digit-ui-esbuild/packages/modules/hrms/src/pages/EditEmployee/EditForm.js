@@ -278,6 +278,9 @@ const EditForm = ({ tenantId, data }) => {
     requestdata["user"]["name"] = input?.SelectEmployeeName?.employeeName;
     requestdata.user.correspondenceAddress = input?.SelectEmployeeCorrespondenceAddress?.correspondenceAddress;
     requestdata.user.roles = roles.filter((role) => role && role.name);
+    // egov-hrms/employees/_update NPEs on Employee.getReActivateEmployee().booleanValue()
+    // when this field is null — carry over the value the _search response gave us.
+    requestdata.reActivateEmployee = data?.reActivateEmployee ?? false;
     let Employees = [requestdata];
 
     /* use customiseUpdateFormData hook to make some chnages to the Employee object */
