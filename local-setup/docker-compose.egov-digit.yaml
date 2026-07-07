@@ -600,16 +600,6 @@ services:
     # in front of the egov-ci VPC registry — public cert, no
     # insecure-registries trust required, pullable from anywhere.
     #
-    # This line previously read `egovio/egov-user:master-e22c7c5` with no
-    # registry host, which silently resolved to the plain Docker Hub tag —
-    # a build that predates the #1044 cherry-pick and lacks tenant-aware
-    # encryption. That image can create/store a new tenant's ADMIN user
-    # fine, but can never decrypt/validate it again (it decrypts with a
-    # fixed/global key instead of the tenant's own key), so ADMIN login on
-    # any newly bootstrapped tenant fails with "Invalid login credentials"
-    # even though the user row genuinely exists. The registry only carries
-    # this build under the `1044-preview` tag — pin to that, qualified with
-    # the registry host so it doesn't fall back to Docker Hub.
     image: registry.preview.egov.theflywheel.in/egovio/egov-user:mobilevalidation-jdk8-4984479
     depends_on:
       pgbouncer:
