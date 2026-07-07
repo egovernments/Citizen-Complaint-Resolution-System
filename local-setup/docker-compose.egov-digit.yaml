@@ -610,7 +610,7 @@ services:
     # even though the user row genuinely exists. The registry only carries
     # this build under the `1044-preview` tag — pin to that, qualified with
     # the registry host so it doesn't fall back to Docker Hub.
-    image: registry.preview.egov.theflywheel.in/egovio/egov-user:1044-preview
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:mobilevalidation-jdk8-4984479
     depends_on:
       pgbouncer:
         condition: service_healthy
