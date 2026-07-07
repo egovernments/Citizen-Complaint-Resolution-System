@@ -256,7 +256,11 @@ const ComplaintDetailsPage = () => {
         return { defs, allRows };
       },
     },
-    { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
+    // NOTE: this 5th arg switches useCustomMDMS into its v2 branch, which
+    // IGNORES the positional tenantId — the tenant must ride inside this
+    // object (mdmsv2.tenantId) or the fetch silently uses the logged-in
+    // tenant (the citizen's home/state root) no matter what we pass above.
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS", tenantId: hierarchyTenant }
   );
 
   // Pick the hierarchy DEFINITION that owns this complaint's leaf node — a
