@@ -926,7 +926,9 @@
         # still echoed "installed" and reported success — the real error
         # only surfaced one task later as a confusing "Cannot find module
         # esbuild". Detect a broken environment here, at the right task.
-        set -uo pipefail
+        # -e so a failed `cd` aborts instead of running the npm checks (and
+        # echoing a false "skipped"/"installed") in the wrong directory.
+        set -euo pipefail
         cd /opt/digit-ui-esbuild
         command -v npm >/dev/null || { echo "ERROR: npm not on PATH (apt nodejs ships no npm on Ubuntu; NodeSource task above should have fixed this)"; exit 1; }
         if [ ! -d node_modules ] \
