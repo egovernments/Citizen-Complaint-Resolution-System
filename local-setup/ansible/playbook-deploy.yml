@@ -2241,60 +2241,45 @@
       changed_when: false
       when: state_root != 'pg'
 
-    # The fast-path base dump ships egov-user's mobile UserValidation as the
-    # India default (^[6-9][0-9]{9}$), and egov-user caches it in Redis under
-    # `validationRules` (the cache survives container restarts). The MCP tenant
-    # bootstrap above reseeds UserValidation for THIS tenant (e.g. Kenya
-    # ^0?[17][0-9]{8}$) into MDMS, but the stale India rule stays cached — so the
-    # INTERNAL_USER seed below (mobile derived from the tenant's OWN rule) is
-    # rejected with INVALID_MOBILE_NUMBER, the deploy aborts, and no ADMIN is ever
-    # created (breaking everything downstream: HRMS, user-seed, notif-seed…).
-    # Drop the cache so egov-user re-reads the freshly-seeded tenant rule from
-    # MDMS on the next validation. (See CLAUDE.md "Mobile Number Validation".)
-    - name: "post-bootstrap — drop egov-user validationRules cache after tenant UserValidation reseed"
-      ansible.builtin.shell: >-
-        docker exec {{ redis_container | default('digit-redis') }} redis-cli DEL validationRules
+    # user-seed.sh only creates INTERNAL_USER on `pg`. HRMS (now pointed at
+    # state_root) tries to self-create it at boot, but egov-user's tenant-aware
+    # mobile validation (enforced even on _createnovalidate since :1044-preview)
+    # rejects HRMS's hardcoded 10-digit mobile on tenants with a stricter rule,
+    # and HRMS crash-loops with "Service returned null while fetching user".
+    #
+    # We seed it here with a mobile derived from the tenant's own rule (first
+    # allowed starting digit + 9s to the rule length). BUT: the fast-path base
+    # dump ships the India default UserValidation (^[6-9][0-9]{9}$), and the MCP
+    # tenant bootstrap above reseeds the tenant's own rule (e.g. Kenya
+    # ^0?[17][0-9]{8}$) into MDMS *asynchronously* (via the persister). For a
+    # short window after bootstrap egov-user still validates against the stale
+    # India rule (also cached in Redis `validationRules`, which survives restarts
+    # — see CLAUDE.md "Mobile Number Validation"), so a one-shot create hits
+    # INVALID_MOBILE_NUMBER, the deploy aborts, and no ADMIN is ever created
+    # (breaking HRMS, user-seed, notif-seed…). So retry: each round drop the
+    # cached rule and re-POST until the tenant rule is live (200) or the user
+    # already exists. Idempotent; non-pg tenants only.
+    - name: "post-bootstrap — seed INTERNAL_USER on state_root (retry until tenant UserValidation is live)"
+      ansible.builtin.shell: |
+        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"INTERNAL_USER","name":"Internal Microservice User","mobileNumber":"{{ ((core_mobile_configs.mobileNumberAllowedStartingCharacters | first) ~ ('9' * ((core_mobile_configs.mobileNumberLength | int) - 1))) if core_mobile_configs is defined else '9999999999' }}","gender":"MALE","active":true,"type":"SYSTEM","tenantId":"{{ state_root }}","password":"System@123","roles":[{"code":"INTERNAL_MICROSERVICE_ROLE","name":"Internal Microservice Role","tenantId":"{{ state_root }}"}]}}'
+        for i in $(seq 1 30); do
+          docker exec {{ redis_container | default('digit-redis') }} redis-cli DEL validationRules >/dev/null 2>&1 || true
+          resp=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
+          code=$(printf '%s' "$resp" | tail -n1)
+          content=$(printf '%s' "$resp" | sed '$d')
+          if [ "$code" = "200" ] || printf '%s' "$content" | grep -q DuplicateUserName; then
+            echo "CHANGED INTERNAL_USER seeded (attempt $i/30, http=$code)"
+            exit 0
+          fi
+          echo "attempt $i/30: http=$code $(printf '%s' "$content" | head -c 120)"
+          sleep 10
+        done
+        echo "INTERNAL_USER seed failed after 30 attempts — tenant UserValidation never went live" >&2
+        exit 1
       args:
         chdir: "{{ digit_dir }}"
-      changed_when: false
-      failed_when: false
-      when: state_root != 'pg'
-
-    # user-seed.sh only creates INTERNAL_USER on `pg`. HRMS (now pointed
-    # at state_root) tries to self-create it at boot, but egov-user's
-    # tenant-aware mobile validation (enforced even on _createnovalidate
-    # since :1044-preview) rejects HRMS's hardcoded 10-digit mobile on
-    # tenants with a stricter rule (e.g. ethiopia's ^[17][0-9]{8}$) and
-    # HRMS crash-loops with "Service returned null while fetching user".
-    # Seed it here with a mobile derived from the tenant's own rule: length +
-    # allowed leading digits aren't separate host_vars fields — they're derived
-    # straight from mobileNumberRegex (see filter_plugins/mobile.py), the same
-    # way digit-mcp's deriveValidMobile() does it for MCP-driven ADMIN seeding.
-    - name: "post-bootstrap — seed INTERNAL_USER system user on state_root for HRMS"
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate"
-        method: POST
-        body_format: json
-        body:
-          RequestInfo: { apiId: digit, ver: "1.0" }
-          User:
-            userName: INTERNAL_USER
-            name: Internal Microservice User
-            mobileNumber: "{{ (core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$')) | derive_valid_mobile }}"
-            gender: MALE
-            active: true
-            type: SYSTEM
-            tenantId: "{{ state_root }}"
-            password: "System@123"
-            roles:
-              - { code: INTERNAL_MICROSERVICE_ROLE, name: Internal Microservice Role, tenantId: "{{ state_root }}" }
-        status_code: [200, 400]
-        return_content: true
       register: internal_user_seed
-      failed_when: >-
-        internal_user_seed.status != 200 and
-        'DuplicateUserName' not in (internal_user_seed.content | default(''))
-      changed_when: internal_user_seed.status == 200
+      changed_when: "'CHANGED' in (internal_user_seed.stdout | default(''))"
       when: state_root != 'pg'
 
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
