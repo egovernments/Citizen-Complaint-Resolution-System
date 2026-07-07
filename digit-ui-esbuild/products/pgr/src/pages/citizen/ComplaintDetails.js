@@ -10,7 +10,7 @@
 // the rest of the modernized citizen surface.
 
 import React, { useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { Loader } from "@egovernments/digit-ui-react-components";
@@ -129,6 +129,7 @@ function renderRowValue(val, t) {
 }
 
 function WorkflowComponent({ complaintDetails, id }) {
+  const { t } = useTranslation();
   const tenantId =
     Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
     complaintDetails.service.tenantId;
@@ -144,9 +145,10 @@ function WorkflowComponent({ complaintDetails, id }) {
     changeQueryName: id,
   });
 
-  // Pre-fetched MDMS for downstream rules; kept to avoid changing fetch
-  // cadence vs. the legacy file (some hooks gate on its cache hit).
-  Digit.Hooks.useCustomMDMS(
+  // Reopen window (RAINMAKER-PGR.ComplainClosingTime → cct): REOPEN is offered
+  // to the citizen only within this many ms of the last workflow update —
+  // same rule the legacy status-ordered <TimeLine> applied.
+  const { data: complainMaxIdleTime } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
     [{ name: "ComplainClosingTime" }],
@@ -158,13 +160,56 @@ function WorkflowComponent({ complaintDetails, id }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Citizen actions for the CURRENT state (RATE / REOPEN / …) straight from the
+  // workflow's nextActions — the legacy <TimeLine> rendered these links inside
+  // its Resolved/Rejected checkpoints, so the TimelineWrapper swap dropped them.
+  // COMMENT is excluded (no citizen page for it); REOPEN honors the idle-window.
+  const current = workflowData?.ProcessInstances?.[0];
+  const lastModifiedTime = complaintDetails?.service?.auditDetails?.lastModifiedTime;
+  const maxIdle = typeof complainMaxIdleTime === "number" ? complainMaxIdleTime : 3600000;
+  const reopenWindowOpen =
+    typeof lastModifiedTime === "number" && Number.isFinite(lastModifiedTime) && Date.now() - lastModifiedTime < maxIdle;
+  const citizenActions = (current?.nextActions || [])
+    .filter((a) => Array.isArray(a?.roles) && a.roles.includes("CITIZEN"))
+    .map((a) => a?.action)
+    .filter((a) => a && a !== "COMMENT")
+    .filter((a) => a !== "REOPEN" || reopenWindowOpen);
+
   return (
-    <TimelineWrapper
-      businessId={id}
-      isWorkFlowLoading={isWorkFlowLoading}
-      workflowData={workflowData}
-      labelPrefix="WF_PGR_"
-    />
+    <div>
+      <TimelineWrapper
+        businessId={id}
+        isWorkFlowLoading={isWorkFlowLoading}
+        workflowData={workflowData}
+        labelPrefix="WF_PGR_"
+      />
+      {citizenActions.length > 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", marginTop: "1rem" }}>
+          {citizenActions.map((action) => {
+            const key = `CS_COMMON_${action}`;
+            const label = t(key) === key ? action : t(key);
+            return (
+              <Link key={action} to={`/digit-ui/citizen/pgr/${action.toLowerCase()}/${id}`}>
+                <button
+                  type="button"
+                  style={{
+                    padding: "0.5rem 1.25rem",
+                    fontWeight: 600,
+                    color: "#fff",
+                    background: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
+                    border: "none",
+                    borderRadius: "0.375rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  {label}
+                </button>
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
