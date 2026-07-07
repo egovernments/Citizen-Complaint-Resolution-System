@@ -2,127 +2,205 @@
 
 **Status: 🚧 Living document — updated as the parity test progresses.**
 
-Comparing the two ways CCRS/DIGIT is deployed:
+This tracks a functional-parity comparison between the two ways CCRS/DIGIT is deployed:
 
-| | Stack | Orchestrator | Gateway | Infra | Comments |
-|---|---|---|---|---|---|
-| **Compose** | `local-setup/` | Ansible → `docker compose` | Kong | all in-container (single box) | dev/demo + some single-node prod tenants |
-| **K8s** | `devops/deploy-as-code/` | Helmfile → Helm | Spring-Cloud `gateway` | EKS + managed RDS/S3 | multi-node production on AWS |
+- **`local-setup/`** — single-box **Docker Compose** stack, orchestrated by Ansible
+  (`local-setup/ansible/`), fronted by **Kong**. Used for dev/demo and some single-node
+  production tenants.
+- **`devops/deploy-as-code/`** — multi-node **Kubernetes** stack (Helmfile + Helm charts),
+  fronted by the **Spring-Cloud `gateway`**. On AWS, infra comes from
+  `devops/infra-as-code/terraform/sample-aws` (EKS + RDS + S3).
 
-Both share the **same ~24 `egov-*` microservice core**. Parity is meaningful at the **application layer**; the **platform layer** is intentionally different.
+The goal is to know, per capability, whether the two behave the same — and where they don't,
+whether the difference is intentional (platform-idiomatic) or a real gap to close.
+
+---
 
 ## Progress tracker
 
-| Area | Item | Status | Verdict / Comments |
+| Area | Item | Status | Verdict (short) |
 |---|---|---|---|
-| Gateway | OTP (`/user-otp`, `/otp`) | ✅ | Not at parity by default (compose mocks); fine for dev, enable real for prod |
-| Gateway | `/egov-location` | ✅ | Modern boundary ✅; legacy egov-location a K8s gap |
-| Gateway | `/egov-user-event` | ✅ | In-app feed mocked on compose / real on K8s |
-| Gateway | Auth enforcement | ✅ | Different model (authn + RBAC on K8s only); security note tracked separately |
-| Gateway | `/health/*` | ✅ | Mechanism difference, not a functional gap |
-| Config | Tenant-identity model | ✅ | Not at parity structurally; benign on `pg`, latent risk otherwise |
-| Config | Feature toggles | ✅ | Match where explicit on both |
-| Services | K8s-only services | ✅ | Optional/feature-adjacent, not core-PGR |
-| Data | Bootstrap parity | ✅ | Different mechanism (dump vs migrations) |
-| Infra | Secrets model | ✅ | Different backend + key origin (not portable) |
+| Gateway | OTP (`/user-otp`, `/otp`) | ✅ done | Not at parity by default (compose mocks; real is opt-in) |
+| Gateway | `/egov-location` | ✅ done | Modern boundary ✅; legacy egov-location a K8s gap |
+| Gateway | `/egov-user-event` | ✅ done | In-app feed mocked on compose / real on K8s; Novu at parity |
+| Gateway | Auth enforcement | ✅ done | Different model (see below); security-sensitive parts tracked privately |
+| Gateway | `/health/*` | ✅ done | Mechanism difference, not a functional gap |
+| Config | Tenant-identity config model | ✅ done | Not at parity structurally; benign on `pg`, latent risk otherwise |
+| Config | Feature toggles | ✅ done | Explicit toggles match where they overlap; compose inherits image defaults for the rest |
+| Services | K8s-only services (DSS, pdf, audit, service-request) | ✅ done | Optional/feature-adjacent, not core-PGR; intentional scope difference |
+| Data | Bootstrap parity | ✅ done | Different mechanism (dump vs migrations); converges on schema, differs on seed data |
+| Infra | Secrets model | ✅ done | Different backend AND different encryption-key origin → encrypted data not portable between stacks |
+
+---
+
+## Big picture
+
+The two stacks **share the same ~24 `egov-*` microservice core** but are different platforms
+around it. Parity is meaningful mainly at the **application layer** (same services, same routes,
+same config semantics); the **platform layer** (managed DB/S3, ingress, HA, secrets backend) is
+intentionally different and not something to "make identical".
+
+Structural note: **`Kong ≈ ingress-nginx + gateway`.** Compose collapses the edge (TLS/UI) and the
+API gateway into Kong (+ host nginx); K8s splits them into `ingress-nginx` (edge) and the Spring
+`gateway` (API). Any route comparison has to account for that split.
 
 ## Platform dimensions
 
-| Dimension | Compose (Ansible) | Kubernetes | At parity? | Comments |
-|---|---|---|---|---|
-| Orchestrator | Ansible → `docker compose` | Helmfile → Helm | intentional diff | both idempotent; different ops skill sets |
-| Unit of deploy | 1 host per tenant (`host_vars`) | 1 cluster per env (`env.yaml`) | intentional diff | compose = per-tenant isolation; K8s = shared multi-tenant cluster |
-| API gateway | Kong | Spring-Cloud `gateway` | ❌ different | biggest app-layer divergence — see gateway table |
-| Edge/TLS | certbot + host nginx | cert-manager + ingress-nginx | intentional diff | manual-ish renew vs auto cert rotation |
-| Postgres | in-container + `db_fast_path` dump | external RDS (`postgresql` chart off) | intentional diff | compose fast but ephemeral; K8s durable/managed/backed-up |
-| Object store | in-container MinIO | external S3 (`minio` chart off) | intentional diff | same trade-off as Postgres |
-| Kafka | Redpanda | `kafka-kraft` | ✅ equivalent | Redpanda is Kafka-API compatible |
-| Secrets | OpenBao (per-host) | SOPS + AWS-KMS | ❌ different | no shared source of truth — see secrets table |
-| Health/observability | Docker healthchecks + Gatus + OTEL (default on) | kubelet probes + Prometheus (opt-in) | intentional diff | compose more visible OOTB; K8s needs monitoring helmfile enabled |
+| Dimension | Compose (Ansible) | Kubernetes (deploy-as-code) |
+|---|---|---|
+| Orchestrator | Ansible → `docker compose` | Helmfile → Helm charts |
+| Unit of deploy | 1 host per tenant (`host_vars`) | 1 cluster per env (`environments/env.yaml`) |
+| API gateway | Kong | Spring-Cloud `gateway` |
+| Secrets | OpenBao (per-host) | SOPS + AWS-KMS (`env-secrets.yaml`) |
+| Postgres | in-container + `db_fast_path` dump | external managed (RDS); `postgresql` chart `installed:false` |
+| Object store | in-container MinIO | external S3; `minio` chart `installed:false` |
+| Kafka | Redpanda | `kafka-kraft` (in-cluster) |
+| TLS / edge | certbot + host nginx | cert-manager + ingress-nginx |
+| Health/observability | Docker healthchecks + Gatus + OTEL/Grafana/Loki (default on) | kubelet probes + Prometheus/Grafana (monitoring helmfile, opt-in) |
 
-> Structural note: **`Kong ≈ ingress-nginx + gateway`** — compose collapses edge + API into Kong (+ host nginx); K8s splits them.
+The K8s AWS infra (EKS + RDS + S3 + a default `gp3` StorageClass) is provisioned by
+`terraform/sample-aws`, which is why the in-cluster `postgresql`/`minio` charts are off by design.
 
-## Gateway parity — route by route
+## Service coverage (summary)
 
-| Route / concern | Compose (Kong) | K8s (Spring gateway) | Parity | Comments |
-|---|---|---|---|---|
-| `/mdms-v2`, `/user`, `/egov-*` core APIs | routed to service | routed to service (zuul discovery) | ✅ | same path→service on both |
-| `/user-otp`, `/otp` | **mocked** (canned 200); real via `otp` profile + de-mock Kong + real SMS provider | real OTP services | ❌ default | compose fine for dev; enable real for prod |
-| `/egov-location` (modern `/boundary-service/*`) | routed to boundary-service | routed to boundary-service | ✅ | what CCRS actually uses |
-| `/egov-location` (legacy API) | **Kong Lua adapter** → boundary-service + reshape | no service, dangling refs | ❌ K8s gap | K8s would break PGR ward selector / configurator / MCP — migrate callers to boundary-service |
-| `/egov-user-event` (in-app feed) | **mocked empty** (service not deployed) | real service | ❌ (compose gap) | notif bell empty on compose; deploy the service for parity. K8s's `.staging` service-host ref is **dead config, not a break** (gateway routes via k8s discovery) |
-| Novu notifications | real (behind `notifications` profile) | real | ✅ | opt-in flag on both |
-| Auth — **authentication** | none (forwards to service) | validates token → 401 | ❌ | compose relies on services failing closed (they do) |
-| Auth — **RBAC (role→action)** | none | `egov-accesscontrol` | ❌ | record-level scoping is still a service responsibility (issue #1071) |
-| Auth — **userInfo enrich + anti-spoof** | Kong Lua | `AuthCheckFilterHelper` | ✅ | forged `userInfo` in body is stripped on both |
-| Auth — **session-expiry re-login** | broken (Kong never emits `InvalidAccessTokenException`) | works | ❌ | compose users see empty screens instead of a re-login prompt |
-| `/health/*` | Kong routes + Gatus | kubelet probes + Prometheus | mechanism diff | map any external monitors to K8s probes/Prometheus |
+- **Shared core (~24):** mdms-v2, egov-user, egov-enc-service, egov-accesscontrol, egov-workflow-v2,
+  egov-persister, egov-indexer, egov-filestore, egov-idgen, egov-localization, egov-otp, user-otp,
+  egov-url-shortening, egov-notification-sms, boundary-service, egov-hrms, egov-user-event,
+  digit-config-service, digit-user-preferences-service, novu-bridge, pgr-services,
+  default-data-handler, digit-ui, egov-bndry-mgmnt, inbox.
+- **K8s-only (deployed there, absent from compose):** audit-service, service-request, pdf-service,
+  egov-notification-mail, boundary-bulk-bff, DSS analytics (dashboard-analytics/ingest); the Spring
+  `gateway`; ops/aux (cert-manager, ingress-nginx, oauth2-proxy, pgadmin, s3-proxy, kafka-connect).
+- **Compose-only:** Kong, digit-mcp, Keycloak + token-exchange, configurator, Jupyter, Gatus,
+  OpenBao, OTEL tracing (tempo/promtail).
 
-> Fixed-OTP `123456` (`citizen-otp-fixed-enabled`) is enabled on **both** stacks. The auth-enforcement difference has a security implication tracked separately (not in this public doc).
+## Gateway parity — per-row findings
 
-## Service coverage
+### OTP — `/user-otp`, `/otp`  — ❌ not at parity by default
+Compose short-circuits both at Kong with canned success responses; the real OTP services
+(`egov-otp`/`user-otp`/`egov-notification-sms`) exist behind the `otp` compose profile and require
+tearing out the Kong mock + a real SMS provider to enable. K8s runs them for real.
+The fixed-OTP `123456` shortcut (`citizen-otp-fixed-enabled`) is enabled on **both** stacks.
 
-**Shared core (~24, at parity):** mdms-v2, egov-user, egov-enc-service, egov-accesscontrol, egov-workflow-v2, egov-persister, egov-indexer, egov-filestore, egov-idgen, egov-localization, egov-otp, user-otp, egov-url-shortening, egov-notification-sms, boundary-service, egov-hrms, egov-user-event, digit-config-service, digit-user-preferences-service, novu-bridge, pgr-services, default-data-handler, digit-ui, egov-bndry-mgmnt, inbox.
+### `/egov-location`  — split
+- **Modern `/boundary-service/*` (hierarchy, relationships): ✅ at parity** — what CCRS actually uses
+  (UI, `EGOV_BOUNDARY_HOST`). Deployed + routed on both.
+- **Legacy `/egov-location/*`: ❌ gap** — compose provides a Kong Lua adapter that rewrites the legacy
+  boundary API onto `boundary-service` and reshapes the response; K8s has dangling `egov-location`
+  references and no such service. Still live-used by the PGR ward/locality selector, configurator, and
+  MCP. Recommended fix: migrate remaining callers to `/boundary-service/boundary-relationships/_search`
+  (already at parity), which removes the legacy dependency on both stacks.
 
-**K8s-only** (deployed on K8s, absent from compose):
+### `/egov-user-event`  — in-app feed differs; Novu at parity
+The in-app notification/events feed (`egov-user-event`, powering the bell) is **mocked-empty on
+compose** (the service isn't deployed) and **real on K8s**. PGR produces these events on complaint
+lifecycle (`persist-user-events-async`), so it's a real feature — reaching parity on compose means
+deploying `egov-user-event`. The separate **Novu** multi-channel notification stack works on **both**
+(compose behind the `notifications` profile). Note: the K8s `egov-user-event` `service-host` entry
+uses a stale `.staging` namespace, but the gateway routes via k8s service discovery, so it's dead
+config rather than a functional break (worth cleaning up).
 
-| Service | Purpose | Core-PGR? | Comments |
-|---|---|---|---|
-| `audit-service` | audit-trail query API | no | audit still *captured* on compose via persister; only query API absent |
-| `pdf-service` | PDF generation (receipts) | no | optional; add if you need downloadable complaint PDFs |
-| `egov-notification-mail` | email channel | no | compose covers notifications via SMS + Novu |
-| `service-request` | generic service-request registry | no | not used by core PGR v2 |
-| `boundary-bulk-bff` | bulk-boundary BFF | no | compose onboards boundaries via MCP/configurator |
-| `dashboard-analytics`, `dashboard-ingest` (DSS) | analytics dashboards | no | separate analytics stack; port only if dashboards are needed |
+### Auth enforcement  — different model
+- **Compose (Kong):** performs userInfo enrichment (resolves `userInfo` from the token; strips
+  client-supplied `userInfo` — anti-spoofing) but **no authentication rejection and no RBAC**.
+- **K8s (Spring gateway):** enforces authentication (validates the token, rejects non-whitelisted
+  calls) and authorization via `egov-accesscontrol`, driven by
+  `EGOV_OPEN/MIXED_MODE_ENDPOINTS_WHITELIST`.
 
-**Compose-only:** Kong, digit-mcp, Keycloak + token-exchange, configurator, Jupyter, Gatus, OpenBao, OTEL tracing (tempo/promtail).
+Consequence: unauthorized/expired-token behavior differs between stacks (e.g. the digit-ui's
+`InvalidAccessTokenException`-based re-login path fires on K8s but not on compose, since Kong does not
+emit that error). **Security-sensitive implications of this difference — including an access-control
+gap that is not specific to either gateway — have been reported to the maintainers separately and are
+tracked outside this public document.**
 
-> K8s-only services are **optional / feature-adjacent** — the core complaint lifecycle works without them (compose runs lean and passes the PGR lifecycle test). (`user-onboard`, `xstate-chatbot` charts exist but are not enabled on K8s either.)
+### `/health/*`  — mechanism difference, not a functional gap
+Compose exposes friendly `/health/<svc>` gateway routes (Kong `request-transformer` → `/<svc>/health`)
+plus a Gatus `/status/` board and Docker healthchecks. K8s uses native kubelet liveness/readiness
+probes plus Prometheus/blackbox (via the opt-in `monitoring-helmfile`). Both check the same underlying
+`/<svc>/health` endpoints; the tooling is platform-idiomatic. Only follow-up: map any external
+monitors/runbooks that reference the compose `/health/<svc>` or `/status/` URLs to the K8s equivalents.
+
+---
 
 ## Config parity
 
-### Tenant identity — ❌ not at parity (structurally)
+### Tenant-identity config model — ❌ not at parity (structurally)
+The two stacks configure tenant identity (`STATE_LEVEL_TENANT_ID` etc.) very differently:
+- **K8s:** a single `<tenant_id>` placeholder in `environments/env.yaml`, Helm-templated uniformly to
+  every service. Consistent by construction — set the tenant once, everything follows.
+- **Compose:** tenant IDs are hardcoded per-service in the base compose (a mix of `pg`, `pg.citya`,
+  `mz`) and normalized to the real tenant by a chain of Ansible `replace`/overlay tasks plus a
+  **deferred** batch of `STATE_LEVEL_TENANT_ID` rewrites that is gated on `enable_mcp` **and**
+  `state_root != 'pg'`.
 
-| Aspect | Compose | K8s | Comments |
-|---|---|---|---|
-| Source of tenant IDs | hardcoded per-service (`pg` / `pg.citya` / `mz`) | single `<tenant_id>` placeholder in `env.yaml` | K8s = one source of truth |
-| How normalized | Ansible `replace`/overlay + **deferred** `STATE_LEVEL` rewrites, gated on `enable_mcp` **and** `state_root != 'pg'` | Helm templating, uniform | compose path is fragile / conditional |
-| Result | residual drift (`egov-enc-service`, `egov-user-proxy` on `pg.citya`) | consistent by construction | drift observed live; benign on `pg`, risky on other tenants without MCP |
+Consequence: on a `pg` tenant or an MCP-disabled deploy, the deferred rewrites don't run and some
+services keep base defaults (observed: `egov-enc-service` and `egov-user-proxy` on `STATE_LEVEL_TENANT_ID:
+pg.citya`). This is **benign for a `pg` tenant** (auth/login verified working) but is a latent
+robustness gap — a non-`pg` tenant deployed without MCP could keep wrong tenant values and hit
+encryption-tenant / login issues.
 
-**Recommendation:** derive all tenant vars on compose from the single inventory value, unconditionally.
+**Recommendation:** derive all tenant-ID vars on compose from the single inventory `state_root` /
+`state_tenant_id` (as K8s does), unconditionally, rather than base defaults + conditional rewrites.
 
 ### Feature toggles
+K8s makes behaviour toggles explicit in one `env.yaml` (`otp-validation`, `roles-state-level`,
+`citizen-registration-withlogin`, `workflow-statelevel`, …). Compose spreads config across hardcoded
+compose env, Ansible rewrites, `digit.env.j2`, and image `application.properties` defaults — so many
+toggles aren't set as env vars and inherit image defaults. Where toggles are explicit on both, they
+match (e.g. fixed-OTP `123456`, `citizen-otp-fixed-enabled: true`). A full toggle-vs-image-default diff
+is low value because compose intentionally relies on image defaults; **no functional divergence found in
+the overlapping explicit toggles.**
 
-| Aspect | Compose | K8s | Comments |
-|---|---|---|---|
-| Where set | scattered (compose env + Ansible + `digit.env.j2` + image defaults) | explicit in one `env.yaml` | K8s easier to audit |
-| Overlap | matches where explicit on both (e.g. fixed-OTP `123456`) | — | no functional divergence found |
-| Non-explicit toggles | inherit image `application.properties` defaults | explicit values | full diff low value — compose intentionally uses defaults |
+## Service coverage — the K8s-only set
+
+Deployed on K8s (`installed: true`) but absent from compose: `audit-service`, `pdf-service`,
+`service-request`, `egov-notification-mail`, `boundary-bulk-bff`, and DSS analytics
+(`dashboard-analytics`, `dashboard-ingest`). Charts exist but are **not** enabled on K8s either:
+`user-onboard`, `xstate-chatbot`.
+
+**Assessment: these are optional / feature-adjacent, not core-PGR.** The core complaint lifecycle
+(create → assign → resolve → close) works without them — which is why compose runs a leaner set and
+still passes the PGR lifecycle test. Specifically:
+- `audit-service` — audit-trail *query* API. Both stacks ship the `audit-service-persister.yml` config,
+  so audit records are still *captured* via the persister on compose; only the query API is absent.
+- `pdf-service` — PDF generation (e.g. complaint receipts). Optional feature.
+- `egov-notification-mail` — email channel. Compose covers notifications via SMS + Novu.
+- `service-request`, `boundary-bulk-bff` — generic service-request registry / bulk-boundary BFF; compose
+  handles boundary onboarding via MCP/configurator instead.
+- DSS (`dashboard-*`) — analytics dashboards; a separate stack compose doesn't run.
+
+This is an **intentional scope difference**, not a bug. For true parity, add these to compose *only if*
+the specific feature (PDF receipts, email, DSS dashboards, audit querying) is required.
 
 ## Data bootstrap — ❌ different mechanism
 
-| Aspect | Compose | K8s | Comments |
-|---|---|---|---|
-| Schema | `db_fast_path` loads `db/full-dump.sql` (54 tables + Flyway history + `pg.citest`/CI-ADMIN test tenant + 33 ServiceDefs + 20k localization rows) | per-service Flyway migration (init container), full replay | converges on equivalent schema |
-| Seed data | bundled `pg`/`pg.citest` tenant + `user-seed.sh` + optional MCP | `default-data-handler` + `boundary-bulk-bff`; starts empty | different out-of-box data |
-| Consequence | fast, deterministic | clean replay | dump is a **maintenance burden**; "works on compose" ≠ clean K8s migration |
+| | Compose | K8s |
+|---|---|---|
+| Schema | `db_fast_path` loads `db/full-dump.sql` (prebuilt: 54 tables + Flyway history + `pg`/`pg.citest` test tenant + CI-ADMIN + 33 ServiceDefs + 20k localization). A `db-migrations` compose exists but the dump is the default path. | Each service runs its **own Flyway migration** via an init container (`dbMigration`, schema/locations/creds from secrets) — full replay from scratch, no dump. |
+| Seed data | Dump ships a ready test tenant; `seeds/user-seed.sh` ensures ADMIN/GRO/INTERNAL_USER; optional MCP tenant bootstrap. | `default-data-handler` seeds MDMS/tenant data; `boundary-bulk-bff` for boundaries. Starts empty. |
 
-## Secrets model — ❌ different backend *and* key origin
+Both converge on an **equivalent schema**, but via different paths and with **different out-of-box
+data** (compose has a bundled test tenant; K8s onboards fresh). Two consequences: (1) the compose dump is
+a **maintenance burden** — it must be regenerated as migrations evolve, or compose drifts behind K8s;
+(2) "works on compose" is not proof of a clean migration path on K8s (which replays every migration).
 
-| Aspect | Compose | K8s | Comments |
-|---|---|---|---|
-| Backend | OpenBao (runtime, per-host; seeded `cas=0` → `.env`) | SOPS + AWS-KMS `env-secrets.yaml` (git) → k8s Secrets | no shared source of truth |
-| Encryption master key | **inherited from the dump** (`eg_enc_*_keys`, pinned ES master pw) | **generated** from `master_password`/`master_salt`/`master_initialvector` | **data-portability blocker** — keys differ |
-| Secret sets | db, user, hrms, notification, keycloak | db, user, hrms, notification, enc keys | mostly overlap; enc-key origin diverges |
+## Secrets model — ❌ different backend *and* different key origin
 
-> **Data-portability blocker:** the two stacks use different encryption master keys, so data encrypted on one (usernames, PII) is **not decryptable on the other**.
+| | Compose | K8s |
+|---|---|---|
+| Backend | **OpenBao** (runtime, per-host; `bootstrap_secrets` seeded once with `cas=0`, rendered to `.env`) | **SOPS + AWS-KMS** encrypted `env-secrets.yaml` in git; decrypted at `helmfile apply`, injected as k8s Secrets |
+| Encryption master key | **Inherited from the dump** — `eg_enc_*_keys` decrypt only under the pinned `elasticsearch_master_password` (`asd@#$@$!132123`) | **Generated** from `egov-enc-service` `master_password`/`master_salt`/`master_initialvector` in `env-secrets.yaml` |
 
-## Overall summary
+The important consequence: **the two stacks use different encryption master keys**, so data encrypted on
+one (usernames, PII) is **not decryptable on the other**. That's a real **data-migration blocker** between
+stacks, separate from the "which backend" difference. Secret *sets* mostly overlap (db, user, hrms,
+notification), but there's no shared source of truth and the enc-key origin diverges by design.
 
-| Layer | Parity | Items | Comments |
-|---|---|---|---|
-| **Application** | largely ✅ (few real gaps) | ~24 shared services + core routes | gaps: legacy `/egov-location`, `/egov-user-event` feed, auth model, tenant-config model |
-| **Platform** | intentionally different | gateway, secrets, bootstrap, managed infra, K8s-only services | not meant to be identical |
-| **Portability blockers** | ⚠️ be aware | encryption master keys; dump-vs-migrations | affect data migration between stacks |
+## Overall parity summary
 
-**Realistic parity target:** the application layer + config semantics — not the platform layer.
+The **application layer** is largely at parity (same ~24 services, same core routes) with a handful of
+real gaps: legacy `/egov-location`, the in-app `egov-user-event` feed, the auth-enforcement model, and
+the tenant-identity config model. The **platform layer** (gateway, secrets backend + key origin, data
+bootstrap, managed vs in-cluster infra, K8s-only optional services) is **intentionally different** and
+not meant to be made identical — the realistic parity target is the app layer + config semantics, plus
+the two data-portability blockers to be aware of (encryption keys, dump vs migrations).
