@@ -97,6 +97,18 @@ const fetchBoundaries = async ({ tenantId }) => {
       throw new Error("Couldn't fetch boundary data");
     }
 
+    // Derive the cascade's level order from THIS response and store it under the
+    // key BoundaryComponent reads. This used to be done by a separate
+    // usePGRInitialization prefetch at module mount — which fired before the
+    // citizen picked an authority (wrong tenant → 400 → react-query retry spam)
+    // and on failure left the order unset, blanking the cascade. Computing it
+    // here means: no boundary call until the cascade loads, one call, right
+    // tenant, order always consistent with the tree being rendered.
+    const rootBoundary = fetchBoundaryData?.TenantBoundary?.[0]?.boundary;
+    if (Array.isArray(rootBoundary) && rootBoundary.length > 0) {
+      Digit.SessionStorage.set("boundaryHierarchyOrder", getBoundaryTypeOrder(rootBoundary));
+    }
+
     // Level-heading labels (e.g. DIVISAO_ADMINISTRATIVA_PROVINCIA) are also
     // seeded at the tree's tenant — fetch exactly those codes (derived from the
     // boundaryTypes present in the tree) and feed i18next. Best-effort.

@@ -83,16 +83,18 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
     return hasAny ? filtered : rawChildrenData;
   }, [rawChildrenData, allowedRoots]);
 
-  // boundaryHierarchyOrder is populated by usePGRInitialization at
-  // module mount and changes when the operator switches city. Reading
-  // it once at render meant a city switch left the cascade pointing at
-  // the previous tenant's hierarchy — a 2-level tenant after coming
-  // from a 3-level tenant would still try to render a Sub-County
-  // dropdown that the new tenant doesn't have.
+  // boundaryHierarchyOrder is written by fetchBoundaries just before its data
+  // resolves (lazy loading — no more module-mount prefetch). The memo must be
+  // keyed on the fetched DATA, not just tenantId: on first visit the order
+  // lands AFTER mount, and a tenantId-only memo cached [] for the tenant's
+  // lifetime — blank cascade until a full page refresh remounted with the
+  // storage already seeded. Re-keying on rawChildrenData recomputes exactly
+  // when the tree (and therefore the freshly written order) arrives; the
+  // tenantId key still handles operator city switches.
   const boundaryHierarchy = useMemo(() => {
     const order = Digit.SessionStorage.get("boundaryHierarchyOrder");
     return Array.isArray(order) ? order.map((item) => item.code) : [];
-  }, [tenantId]);
+  }, [tenantId, rawChildrenData]);
   const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
 
   // State to manage selected values and dropdown options
