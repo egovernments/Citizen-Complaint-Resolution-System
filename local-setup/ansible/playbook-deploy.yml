@@ -2241,6 +2241,25 @@
       changed_when: false
       when: state_root != 'pg'
 
+    # The fast-path base dump ships egov-user's mobile UserValidation as the
+    # India default (^[6-9][0-9]{9}$), and egov-user caches it in Redis under
+    # `validationRules` (the cache survives container restarts). The MCP tenant
+    # bootstrap above reseeds UserValidation for THIS tenant (e.g. Kenya
+    # ^0?[17][0-9]{8}$) into MDMS, but the stale India rule stays cached — so the
+    # INTERNAL_USER seed below (mobile derived from the tenant's OWN rule) is
+    # rejected with INVALID_MOBILE_NUMBER, the deploy aborts, and no ADMIN is ever
+    # created (breaking everything downstream: HRMS, user-seed, notif-seed…).
+    # Drop the cache so egov-user re-reads the freshly-seeded tenant rule from
+    # MDMS on the next validation. (See CLAUDE.md "Mobile Number Validation".)
+    - name: "post-bootstrap — drop egov-user validationRules cache after tenant UserValidation reseed"
+      ansible.builtin.shell: >-
+        docker exec {{ redis_container | default('digit-redis') }} redis-cli DEL validationRules
+      args:
+        chdir: "{{ digit_dir }}"
+      changed_when: false
+      failed_when: false
+      when: state_root != 'pg'
+
     # user-seed.sh only creates INTERNAL_USER on `pg`. HRMS (now pointed
     # at state_root) tries to self-create it at boot, but egov-user's
     # tenant-aware mobile validation (enforced even on _createnovalidate
