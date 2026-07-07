@@ -208,11 +208,14 @@ enable_integration_tests_runner: false
 
 # Start the real OTP stack: egov-otp (stores OTPs), user-otp (orchestrates
 # send/validate), egov-notification-sms (delivers via SMS gateway).
-# Default true — real OTP services run by default.
-# Set false before deploying if you want to skip the OTP stack (lean/offline
-# environments); egov-user's fixed OTP (CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE=123456)
-# still allows login, but /user-otp/* requests will fail without a mock in kong.yml.
-enable_otp_services: true
+# Default false — local-setup/kong/kong.yml mocks /user-otp/* with a canned
+# 200 response so login/register work via the fixed OTP (123456, see
+# CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) without any SMS infra.
+# Set true for production, AND follow the "TO ENABLE REAL OTP FOR PRODUCTION"
+# steps in local-setup/kong/kong.yml (remove the mock plugin there, and wire
+# up a real SMS_PROVIDER_CLASS in docker-compose.egov-digit.yaml — it
+# defaults to Console, which only logs OTP SMS instead of sending it).
+enable_otp_services: false
 
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
 # extra). Off by default; only enable if you actually use the inbox.
