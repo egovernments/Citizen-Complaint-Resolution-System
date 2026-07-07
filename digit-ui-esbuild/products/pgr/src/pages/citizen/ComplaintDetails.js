@@ -238,8 +238,14 @@ const ComplaintDetailsPage = () => {
   // Single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes +
   // leaf complaint types). buildComplaintPath finds the leaf (code===serviceCode)
   // and walks parentCode up through these same rows.
+  // The hierarchy (nodes + their names) is onboarded at the COMPLAINT'S tenant
+  // (e.g. mz.igsae) — not the citizen's home city, which on multi-authority envs
+  // is the state root with no such rows. Read it where it lives, else the
+  // Type/Sub-Type rows render raw COMPLAINT_HIERARCHY.* keys with no name
+  // fallback (nodes absent at the home tenant too).
+  const hierarchyTenant = complaintDetails?.service?.tenantId || tenantId;
   const { data: hier } = Digit.Hooks.useCustomMDMS(
-    tenantId,
+    hierarchyTenant,
     "RAINMAKER-PGR",
     [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
     {
@@ -247,18 +253,34 @@ const ComplaintDetailsPage = () => {
       select: (raw) => {
         const defs = (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter((d) => d?.active !== false);
         const allRows = raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [];
-        const def = defs.find((d) => allRows.some((n) => n?.hierarchyType === d?.hierarchyType)) || defs[0] || null;
-        const nodes = def ? allRows.filter((n) => n?.hierarchyType === def.hierarchyType) : [];
-        return { def, nodes };
+        return { defs, allRows };
       },
     },
     { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
   );
 
+  // Pick the hierarchy DEFINITION that owns this complaint's leaf node — a
+  // tenant can hold several hierarchies (e.g. the state root aggregates every
+  // authority's), and "first def with any rows" mis-picked for complaints of
+  // the other authority, collapsing the view to the legacy flat rows.
+  const { hierDef, hierNodes } = React.useMemo(() => {
+    const defs = hier?.defs || [];
+    const allRows = hier?.allRows || [];
+    const sc = complaintDetails?.service?.serviceCode;
+    const leaf = sc ? allRows.find((n) => n?.code === sc) : null;
+    const def =
+      (leaf && defs.find((d) => d?.hierarchyType === leaf?.hierarchyType)) ||
+      defs.find((d) => allRows.some((n) => n?.hierarchyType === d?.hierarchyType)) ||
+      defs[0] ||
+      null;
+    const nodes = def ? allRows.filter((n) => n?.hierarchyType === def.hierarchyType) : [];
+    return { hierDef: def, hierNodes: nodes };
+  }, [hier, complaintDetails?.service?.serviceCode]);
+
   const classification = buildComplaintPath({
     serviceCode: complaintDetails?.service?.serviceCode,
-    def: hier?.def,
-    nodes: hier?.nodes,
+    def: hierDef,
+    nodes: hierNodes,
     t,
   });
 
