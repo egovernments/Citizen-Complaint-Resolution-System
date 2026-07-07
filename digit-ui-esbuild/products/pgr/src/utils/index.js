@@ -239,6 +239,18 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, extOpts) 
     complaint.service.extendedAttributes = ext;
   }
 
+  // Complainant address (citizen-flow parity — same extendedAttributes key the
+  // citizen "Your details" card writes). Attached even when the tenant has no
+  // category mapping so the field never silently drops its value; deliberately
+  // NOT citizen.correspondenceAddress, which would round-trip the user service.
+  const complainantAddress = formData?.ComplainantAddress?.trim();
+  if (complainantAddress) {
+    complaint.service.extendedAttributes = {
+      ...(complaint.service.extendedAttributes || {}),
+      complainantAddress,
+    };
+  }
+
   return complaint;
 };
 

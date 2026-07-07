@@ -61,6 +61,22 @@ export const CreateComplaintConfig = {
                 }
               },
             },
+            {
+              // Complainant address — citizen-flow parity ("Your details" card).
+              // Optional; travels as extendedAttributes.complainantAddress so it
+              // shows on the employee details page and never round-trips the
+              // user service.
+              inline: true,
+              label: "ES_CREATECOMPLAINT_ADDRESS",
+              isMandatory: false,
+              type: "text",
+              key: "ComplainantAddress",
+              disable: false,
+              populators: {
+                name: "ComplainantAddress",
+                validation: { maxLength: 300 },
+              },
+            },
 
           ],
         },
