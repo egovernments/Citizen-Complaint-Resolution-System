@@ -883,14 +883,34 @@
         - digit_ui_mode == "static"
         - (digit_ui_bundle_image | default('')) | length > 0
 
-    - name: "digit-ui mode=static — install Node 20 if missing (esbuild.build.js needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Ubuntu's `apt install nodejs` ships Node 18 AND NO npm (npm is a
+    # separate archive package). esbuild.build.js needs Node 20 + npm, so
+    # apt alone left node present but npm missing -> the npm-install task
+    # below silently no-op'd and the build failed with "Cannot find module
+    # 'esbuild'". Install from NodeSource (bundles a matching npm), gated on
+    # a version check so re-deploys are a no-op once Node >=20 is present.
+    - name: "digit-ui mode=static — ensure Node 20 + npm (NodeSource) for on-host build"
       when:
         - digit_ui_mode == "static"
         - ansible_system != "Darwin"
         - (digit_ui_bundle_image | default('')) | length == 0
+      block:
+        - name: "digit-ui static — probe installed node version"
+          ansible.builtin.command: node --version
+          register: dui_node_ver
+          changed_when: false
+          failed_when: false
+
+        - name: "digit-ui static — install NodeSource Node 20 (node <20 or npm absent)"
+          ansible.builtin.shell: |
+            set -euo pipefail
+            curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            apt-get install -y nodejs
+          args:
+            executable: /bin/bash
+          when: >-
+            dui_node_ver.rc != 0
+            or (dui_node_ver.stdout | default('') is not match('^v(2[0-9]|[3-9][0-9])\.'))
 
     - name: "digit-ui mode=static — npm install if package.json is newer than node_modules"
       ansible.builtin.shell: |
@@ -900,15 +920,25 @@
         # node_modules is stale and esbuild.build.js fails to resolve.
         # Re-run if package.json or package-lock.json is newer than the
         # node_modules root, or if node_modules doesn't exist at all.
+        #
+        # Fail LOUD: this block previously had no error handling, so a
+        # missing npm (Ubuntu apt nodejs ships no npm) or a failed install
+        # still echoed "installed" and reported success — the real error
+        # only surfaced one task later as a confusing "Cannot find module
+        # esbuild". Detect a broken environment here, at the right task.
+        set -uo pipefail
         cd /opt/digit-ui-esbuild
+        command -v npm >/dev/null || { echo "ERROR: npm not on PATH (apt nodejs ships no npm on Ubuntu; NodeSource task above should have fixed this)"; exit 1; }
         if [ ! -d node_modules ] \
            || [ package.json -nt node_modules ] \
            || [ package-lock.json -nt node_modules ]; then
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps || { echo "ERROR: npm install failed"; exit 1; }
           echo installed
         else
           echo skipped
         fi
+      args:
+        executable: /bin/bash
       register: npm_install
       changed_when: npm_install.stdout == "installed"
       when:
@@ -1019,13 +1049,29 @@
         force: true
       when: enable_digit_ui_v2 | default(false)
 
-    - name: "digit-ui-v2 — install Node 20 if missing (Vite build needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Ubuntu's apt nodejs is Node 18 + no npm; the Vite build needs Node 20
+    # + npm. Install from NodeSource (bundles npm), gated on a version check.
+    - name: "digit-ui-v2 — ensure Node 20 + npm (NodeSource) for Vite build"
       when:
         - enable_digit_ui_v2 | default(false)
         - ansible_system != "Darwin"
+      block:
+        - name: "digit-ui-v2 — probe installed node version"
+          ansible.builtin.command: node --version
+          register: dui2_node_ver
+          changed_when: false
+          failed_when: false
+
+        - name: "digit-ui-v2 — install NodeSource Node 20 (node <20 or npm absent)"
+          ansible.builtin.shell: |
+            set -euo pipefail
+            curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            apt-get install -y nodejs
+          args:
+            executable: /bin/bash
+          when: >-
+            dui2_node_ver.rc != 0
+            or (dui2_node_ver.stdout | default('') is not match('^v(2[0-9]|[3-9][0-9])\.'))
 
     - name: "digit-ui-v2 — npm install if package.json newer than node_modules"
       ansible.builtin.shell: |
@@ -1574,13 +1620,29 @@
     # nginx_preserve_vhost (e.g. Bomet) the template is NOT rendered, so wire
     # the blocks from tests/integration-tests/deploy/nginx-integration-tests.conf
     # by hand there.
-    - name: "integration-tests — install Node 20 if missing (Vite build needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Ubuntu's apt nodejs is Node 18 + no npm; the Vite build needs Node 20
+    # + npm. Install from NodeSource (bundles npm), gated on a version check.
+    - name: "integration-tests — ensure Node 20 + npm (NodeSource) for Vite build"
       when:
         - enable_integration_tests | default(false)
         - ansible_system != "Darwin"
+      block:
+        - name: "integration-tests — probe installed node version"
+          ansible.builtin.command: node --version
+          register: itest_node_ver
+          changed_when: false
+          failed_when: false
+
+        - name: "integration-tests — install NodeSource Node 20 (node <20 or npm absent)"
+          ansible.builtin.shell: |
+            set -euo pipefail
+            curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+            apt-get install -y nodejs
+          args:
+            executable: /bin/bash
+          when: >-
+            itest_node_ver.rc != 0
+            or (itest_node_ver.stdout | default('') is not match('^v(2[0-9]|[3-9][0-9])\.'))
 
     - name: "integration-tests — build react-admin dashboard (vendored in-tree source)"
       ansible.builtin.command: >-
