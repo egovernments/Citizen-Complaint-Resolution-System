@@ -100,8 +100,8 @@ novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-onl
 # Custom image pins (built+pushed to the VPC registry by CI). Replace <sha>
 # with the actual CI tags once the Phase 1/2 images are built. Until then the
 # build_* flags above produce local images.
-# pgr_services_image:  "10.0.0.4:5000/egovio/pgr-services:notif-config-<sha>"
-# novu_bridge_image:   "10.0.0.4:5000/egovio/novu-bridge:passthrough-<sha>"
+# pgr_services_image:  "<vpc-registry>:5000/egovio/pgr-services:notif-config-<sha>"
+# novu_bridge_image:   "<vpc-registry>:5000/egovio/novu-bridge:passthrough-<sha>"
 
 # Novu bootstrap inputs — left empty: Novu stack comes up, operator signs up
 # at /novu/ and pastes the API key here for a second deploy (kit RUNBOOK flow).
