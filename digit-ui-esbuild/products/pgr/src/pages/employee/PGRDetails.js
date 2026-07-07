@@ -384,12 +384,11 @@ const PGRDetails = () => {
           // Look up the target state so the modal can adapt generically (terminal → no assignee,
           // docUploadRequired → future doc capture) with no per-action code.
           const nextStateData = businessServiceResponse?.states?.find((s) => s.uuid === action.nextState);
-          const wfLabel = t(`WF_PGR_${action.action}`);
           return {
             action: action.action,
-            // Localized label for the Take-Action dropdown; falls back to the raw code if the
-            // WF_PGR_<ACTION> key isn't seeded yet, so new workflow actions are never blank.
-            name: wfLabel === `WF_PGR_${action.action}` ? action.action : wfLabel,
+            // Raw workflow action code, shown as-is — the WF_PGR_* keys hold past-tense
+            // timeline labels ("Rejected"), which read as states in an action menu.
+            name: action.action,
             roles: action.roles,
             nextState: action.nextState,
             assigneeRoles: computeAssigneeRoles(action.nextState, businessServiceResponse),

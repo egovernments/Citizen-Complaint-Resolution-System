@@ -174,6 +174,10 @@ interface FormData {
   dynamicFields?: Record<string, unknown>;
   consents?: string[];
   isConfidential?: boolean; // doc "Keep details confidential" (backend-enforced later)
+  // Reporter identity (step 1, optional, prefilled from the citizen profile).
+  // Travels in extendedAttributes — deliberately NOT citizen.name: posting an
+  // edited name back to the user service triggers its masked-update rejection.
+  complainantName?: string;
   complainantAddress?: string;
   email?: string;
 }
@@ -223,6 +227,7 @@ function fieldsFromSchema(schema: any): TemplateField[] {
     "schemaVersion",
     "hierarchyLevel1",
     "hierarchyLevel2",
+    "complainantName",
     "complainantAddress",
     "email",
   ]);
@@ -349,6 +354,7 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any, d
       schemaVersion: "1.0",
       ...(lvl1 ? { hierarchyLevel1: lvl1 } : {}),
       ...(lvl2 ? { hierarchyLevel2: lvl2 } : {}),
+      ...(formData.complainantName ? { complainantName: formData.complainantName } : {}),
       ...(formData.complainantAddress ? { complainantAddress: formData.complainantAddress } : {}),
       ...(formData.email ? { email: formData.email } : {}),
       consents: formData.consents || [],
@@ -782,6 +788,21 @@ function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBod
 }
 
 // ── Section header (title + subtitle) for the unified "Where" card ──
+// Footer nav arrows as SVGs: the ←/→ TEXT glyphs sit off the optical center of
+// the label no matter how they are flexed (font draws them low in the em-box).
+const ArrowLeftIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ display: "block" }}>
+    <line x1="19" y1="12" x2="5" y2="12" />
+    <polyline points="12 19 5 12 12 5" />
+  </svg>
+);
+const ArrowRightIcon = (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ display: "block" }}>
+    <line x1="5" y1="12" x2="19" y2="12" />
+    <polyline points="12 5 19 12 12 19" />
+  </svg>
+);
+
 const TipBulbIcon = (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 18h6" />
@@ -823,14 +844,11 @@ function Step1Map({ data, patch, t }: StepBodyProps) {
           }}
           formData={data}
           onSelect={(_key: string, value: GeoPoint) => {
-            patch({
-              GeoLocationsPoint: value,
-              // Mirror the pin's pincode onto postalCode (matches FormExplorer).
-              postalCode:
-                value?.pincode != null && String(value.pincode).length > 0
-                  ? String(value.pincode)
-                  : data.postalCode,
-            });
+            // Postal code is NOT mirrored from the pin: geocoder pincodes come in
+            // foreign formats ("0101-03") that fail the tenant's pattern and block
+            // NEXT with a validation error the citizen never typed. The field is
+            // optional — leave it to manual entry only.
+            patch({ GeoLocationsPoint: value });
           }}
         />
       ) : (
@@ -869,17 +887,6 @@ function Step2Location({ data, patch, resolvedTenant, t }: StepBodyProps) {
   const wardHint = data?.GeoLocationsPoint?.ward;
   const wardFromMap = !!(wardHint?.code || wardHint?.name);
 
-  // The pincode pre-fills from the map pin (Nominatim) but stays EDITABLE —
-  // the reverse-geocode is frequently wrong or the wrong length, so the user
-  // must always be able to correct it (CCRS#722). It used to be disabled
-  // whenever the map produced a value, which locked in bad pincodes.
-  const pincodeFromMap = data?.GeoLocationsPoint?.pincode;
-  // What's actually shown/submitted: a manual entry (data.postalCode) wins over
-  // the map-derived value.
-  const effectivePincode = data.postalCode ?? (pincodeFromMap != null ? String(pincodeFromMap) : "");
-  const postalValid = isPostalCodeValid(effectivePincode);
-  const showPostalError = effectivePincode.length > 0 && !postalValid;
-
   return (
     <div>
       <SectionHeader
@@ -903,23 +910,6 @@ function Step2Location({ data, patch, resolvedTenant, t }: StepBodyProps) {
         ) : (
           <p className="text-sm text-destructive">Boundary component not registered.</p>
         )}
-
-        <Field
-          label={t("CS_COMPLAINT_POSTALCODE__DETAILS")}
-          htmlFor="postal-code"
-          error={showPostalError ? postalErrorText(t) : undefined}
-        >
-          <Input
-            id="postal-code"
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={7}
-            invalid={showPostalError}
-            value={effectivePincode}
-            onChange={(e) => patch({ postalCode: e.target.value.replace(/\D/g, "") })}
-          />
-        </Field>
 
         <Field
           label={tr(t, "CS_COMPLAINT_LANDMARK__DETAILS", "Landmark") + " " + tr(t, "CS_OPTIONAL_SUFFIX", "(Optional)")}
@@ -1021,26 +1011,7 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
           );
         })}
 
-        {extended ? (
-          <>
-            <Field label={tr(t, "PGR_EXT_COMPLAINANT_ADDRESS_LABEL", "Complainant Address")} htmlFor="xf-complainantAddress">
-              <Input
-                id="xf-complainantAddress"
-                maxLength={300}
-                value={data.complainantAddress ?? ""}
-                onChange={(e) => patch({ complainantAddress: e.target.value })}
-              />
-            </Field>
-            <Field label={tr(t, "PGR_EXT_EMAIL_LABEL", "Email Address")} htmlFor="xf-email">
-              <Input
-                id="xf-email"
-                type="email"
-                value={data.email ?? ""}
-                onChange={(e) => patch({ email: e.target.value })}
-              />
-            </Field>
-          </>
-        ) : null}
+        {/* Complainant name + address + email moved to step 1 (ReporterDetailsCard, prefilled). */}
 
         {extended ? (
           <div className="space-y-2">
@@ -1052,7 +1023,13 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
                   checked={consents.includes(c.code)}
                   onChange={(e) => toggleConsent(c.code, e.target.checked)}
                 />
-                <span>{c.label}</span>
+                <span>
+                  {c.label}
+                  {/* Same required marker the design-system Label renders. */}
+                  <span className="ml-0.5 text-destructive" style={{ color: "var(--color-error, #d4351c)" }} aria-hidden>
+                    *
+                  </span>
+                </span>
               </label>
             ))}
             <label className="flex items-start gap-2 text-sm pt-2 border-t border-border">
@@ -1539,26 +1516,20 @@ function EmptyStateCard({ t }: { t: (k: string) => string }) {
     { icon: HowToPinIcon, title: tr(t, "CS_HOWTO_2_TITLE", "Mark the location"), body: tr(t, "CS_HOWTO_2_BODY", "Drop a pin on the map where the issue happened.") },
     { icon: HowToDocIcon, title: tr(t, "CS_HOWTO_3_TITLE", "Add details & submit"), body: tr(t, "CS_HOWTO_3_BODY", "Describe the issue and attach any photos as evidence.") },
   ];
+  // Compact single strip: the three steps inline (titles only, bodies dropped)
+  // — the walkthrough was eating ~half the first screen (CCRS feedback).
   return (
-    <div style={{ border: "1px dashed var(--color-border, #cbd5e1)", borderRadius: "0.75rem", padding: "1.5rem", background: "var(--color-surface-secondary, #f8fafc)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1.1rem" }}>
+    <div style={{ border: "1px dashed var(--color-border, #cbd5e1)", borderRadius: "0.75rem", padding: "0.65rem 1rem", background: "var(--color-surface-secondary, #f8fafc)", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem 1.25rem" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}>
         <span style={circle}>{TipBulbIcon}</span>
-        <div style={{ minWidth: 0 }}>
-          <div className="text-sm font-semibold" style={{ color: PRIMARY }}>{tr(t, "CS_HOWTO_TITLE", "How filing a complaint works")}</div>
-          <div className="text-xs text-muted-foreground">{tr(t, "CS_HOWTO_SUB", "Three quick steps — pick a category above to begin.")}</div>
-        </div>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-        {steps.map((s, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
-            <span style={circle}>{s.icon}</span>
-            <div style={{ minWidth: 0 }}>
-              <div className="text-sm font-medium">{s.title}</div>
-              <div className="text-xs text-muted-foreground" style={{ marginTop: "0.1rem" }}>{s.body}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+        <span className="text-xs font-semibold" style={{ color: PRIMARY }}>{tr(t, "CS_HOWTO_SUB", "Three quick steps — pick a category above to begin.")}</span>
+      </span>
+      {steps.map((s, i) => (
+        <span key={i} className="text-xs text-muted-foreground" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", whiteSpace: "nowrap" }}>
+          <span style={{ ...circle, width: "1.15rem", height: "1.15rem", fontSize: "0.65rem", fontWeight: 600 }}>{i + 1}</span>
+          {s.title}
+        </span>
+      ))}
     </div>
   );
 }
@@ -1589,6 +1560,60 @@ function InlineSpinner() {
 // progressively, by the complaint-type picker for the resolved sub-tenant. The
 // type section appears only once an authority is chosen, and shows an inline
 // spinner while that tenant's catalogue loads (no full-page blank).
+// Step 1 — "Who is reporting": optional reporter identity card, prefilled from
+// the logged-in citizen's profile (name + address editable per complaint). The
+// values travel in extendedAttributes (complainantName/complainantAddress), so
+// editing them never round-trips through the user service.
+function ReporterDetailsCard({ data, patch, t }: StepBodyProps) {
+  React.useEffect(() => {
+    const info = Digit.UserService.getUser()?.info;
+    const prefill: Partial<FormData> = {};
+    if (data.complainantName === undefined && info?.name) prefill.complainantName = info.name;
+    if (data.complainantAddress === undefined && (info?.permanentAddress || info?.correspondenceAddress)) {
+      prefill.complainantAddress = info.permanentAddress || info.correspondenceAddress;
+    }
+    if (data.email === undefined && info?.emailId) prefill.email = info.emailId;
+    if (Object.keys(prefill).length) patch(prefill);
+  }, []);
+  return (
+    <Card className="p-6 space-y-4">
+      <div>
+        <h3 className="text-base font-semibold">{tr(t, "CS_REPORTER_DETAILS_TITLE", "Your details")}</h3>
+        <p className="text-sm text-muted-foreground">
+          {tr(t, "CS_REPORTER_DETAILS_SUB", "Shown to the handling officers. You can edit them for this complaint.")}
+        </p>
+      </div>
+      <Field label={tr(t, "CS_REPORTER_FULL_NAME_LABEL", "Full Name")} htmlFor="reporter-name">
+        <Input
+          id="reporter-name"
+          maxLength={128}
+          value={data.complainantName ?? ""}
+          onChange={(e) => patch({ complainantName: e.target.value })}
+        />
+        <FieldHelp>{tr(t, "CS_COMMON_OPTIONAL", "Optional")}</FieldHelp>
+      </Field>
+      <Field label={tr(t, "CS_REPORTER_ADDRESS_LABEL", "Address")} htmlFor="reporter-address">
+        <Input
+          id="reporter-address"
+          maxLength={300}
+          value={data.complainantAddress ?? ""}
+          onChange={(e) => patch({ complainantAddress: e.target.value })}
+        />
+        <FieldHelp>{tr(t, "CS_COMMON_OPTIONAL", "Optional")}</FieldHelp>
+      </Field>
+      <Field label={tr(t, "PGR_EXT_EMAIL_LABEL", "Email Address")} htmlFor="reporter-email">
+        <Input
+          id="reporter-email"
+          type="email"
+          value={data.email ?? ""}
+          onChange={(e) => patch({ email: e.target.value })}
+        />
+        <FieldHelp>{tr(t, "CS_COMMON_OPTIONAL", "Optional")}</FieldHelp>
+      </Field>
+    </Card>
+  );
+}
+
 function StepComplaint(props: StepBodyProps) {
   const { data, relatedToOptions, catalogueLoading, dispatcherLoading, t } = props;
   const hasDispatcher = (relatedToOptions?.length ?? 0) > 0;
@@ -1605,6 +1630,7 @@ function StepComplaint(props: StepBodyProps) {
           : tr(t, "CS_HINT_RELATED_SUB", "Based on your selection, relevant options will appear automatically.")}
       />
       {hasDispatcher ? <RelatedToStepBody {...props} /> : null}
+      <ReporterDetailsCard {...props} />
       {showType ? (
         catalogueLoading ? <InlineSpinner /> : <Step0Type {...props} />
       ) : (
@@ -1899,28 +1925,8 @@ const CreatePGRFlowV2: React.FC = () => {
   const curId = steps[stepIndex]?.id;
   const isLast = stepIndex === steps.length - 1;
 
-  // Seed postalCode from the map pin's pincode, but ONLY when the pin's pincode
-  // actually changes — never on a postalCode edit. The previous version listed
-  // `formData.postalCode` as a dependency and forced it back to the map value,
-  // so the auto-filled field reverted on every keystroke and was effectively
-  // un-editable (CCRS#722). A ref tracking the last map pincode lets the user
-  // freely correct the auto-filled value; a pin move still resets it (and
-  // clears it when the new pin has no pincode, rather than keeping a stale one).
-  const lastMapPincodeRef = React.useRef<string | undefined>(
-    formData?.GeoLocationsPoint?.pincode != null && String(formData.GeoLocationsPoint.pincode).length > 0
-      ? String(formData.GeoLocationsPoint.pincode)
-      : undefined
-  );
-  React.useEffect(() => {
-    const pin = formData?.GeoLocationsPoint?.pincode;
-    const mapPin = pin != null && String(pin).length > 0 ? String(pin) : undefined;
-    if (mapPin !== lastMapPincodeRef.current) {
-      lastMapPincodeRef.current = mapPin;
-      setFormData((prev) => ({ ...prev, postalCode: mapPin ?? "" }));
-    }
-    // Intentionally excludes formData.postalCode — see comment above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData?.GeoLocationsPoint?.pincode]);
+  // Postal code was removed from the citizen flow (CCRS feedback): geocoder
+  // pincodes are unreliable and the value is optional server-side.
 
   const stepIsValid = React.useMemo(() => {
     switch (curId) {
@@ -1957,13 +1963,6 @@ const CreatePGRFlowV2: React.FC = () => {
       }
       default:
         return true;
-    }
-    // Location step: don't let the user past a pincode that doesn't match the
-    // tenant's configured length (CCRS#722). Empty is allowed (optional); an
-    // invalid map-autofilled value must be corrected before continuing.
-    if (stepIndex === 2) {
-      const effective = formData.postalCode ?? formData?.GeoLocationsPoint?.pincode;
-      if (!isPostalCodeValid(effective)) return false;
     }
     return true;
   }, [stepIndex, formData, serviceDefs]);
@@ -2089,7 +2088,16 @@ const CreatePGRFlowV2: React.FC = () => {
       </div>
       <FormFooter>
         <Button variant="outline" onClick={handleBack} type="button">
-          {stepIndex === 0 ? tr(t, "CS_COMMON_CANCEL", "Cancel") : "← " + t("BACK")}
+          {stepIndex === 0 ? (
+            tr(t, "CS_COMMON_CANCEL", "Cancel")
+          ) : (
+            // Arrow glyphs sit above the text baseline when concatenated into the
+            // label string — flex-center them against the text instead.
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}>
+              {ArrowLeftIcon}
+              <span>{t("BACK")}</span>
+            </span>
+          )}
         </Button>
         <Button
           variant="primary"
@@ -2098,7 +2106,14 @@ const CreatePGRFlowV2: React.FC = () => {
           disabled={!stepIsValid}
           type="button"
         >
-          {isLast ? tr(t, "CS_SUBMIT_COMPLAINT", "Submit Complaint") : t("NEXT") + " →"}
+          {isLast ? (
+            tr(t, "CS_SUBMIT_COMPLAINT", "Submit Complaint")
+          ) : (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}>
+              <span>{t("NEXT")}</span>
+              {ArrowRightIcon}
+            </span>
+          )}
         </Button>
       </FormFooter>
     </ScreenContainer>
