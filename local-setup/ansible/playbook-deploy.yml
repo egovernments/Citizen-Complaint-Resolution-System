@@ -160,7 +160,8 @@
       # ==================== Docker Installation ====================
       - name: Install Docker prerequisites
         apt:
-          name: [ca-certificates, curl, gnupg]
+          # jq is used by config/bootstrap-novu-whatsapp.sh (Twilio provider bootstrap).
+          name: [ca-certificates, curl, gnupg, jq]
           state: present
           update_cache: yes
 
@@ -2590,7 +2591,24 @@
         - enable_novu | default(false)
         - (effective_novu_key | default('')) | length > 0
         - (twilio_account_sid | default('')) | length > 0
+      # The provider bootstrap is OPTIONAL — the Novu key is already minted and
+      # wired, so a provider can always be added later via the Configurator
+      # (Notifications → Providers). A missing/placeholder Twilio cred or a
+      # transient Novu error must NOT abort the whole deploy.
+      failed_when: false
       changed_when: "'created' in (novu_bootstrap_result.stdout | default(''))"
+
+    - name: "novu-bootstrap — warn if the (optional) Twilio provider bootstrap did not succeed"
+      ansible.builtin.debug:
+        msg: >-
+          Twilio provider bootstrap did not complete (rc={{ novu_bootstrap_result.rc | default('n/a') }}):
+          {{ (novu_bootstrap_result.stderr | default('')) | truncate(160) }}
+          — the Novu key is minted + wired; add a provider via the Configurator
+          (Notifications → Providers) or set real twilio_* and re-run.
+      when:
+        - enable_novu | default(false)
+        - novu_bootstrap_result is defined
+        - (novu_bootstrap_result.rc | default(0)) != 0
 
     - name: "novu-bootstrap — wire NOVU_API_KEY into compose .env"
       ansible.builtin.lineinfile:
