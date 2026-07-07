@@ -1,26 +1,37 @@
 ---
-name: User Story Template
-about: This template provides a basic structure for user stories.
-title: "Broad Set Template"
-labels: user-story
-assignees: ''
+name: Story
+about: User-facing capability described from the user's perspective
+title: "[Story] "
+labels: ["user-story"]
+assignees: []
+---
+
+# User Story
+
+**As a** <!-- role: Citizen, Employee, CSR, GRO, Admin, Partner -->
+**I want to** <!-- what capability -->
+**So that** <!-- why it matters -->
 
 ---
 
-# User story
-Role: As a ....
-Ability: I want...
-Rationale: so that I can...
+# Acceptance Criteria
 
-*Add links to PRDs where applicable*
+- [ ]
+- [ ]
+- [ ]
 
-# Acceptance criteria
+---
 
-- [ ] This is something that can be verified to show that this user story is satisfied.
+# Notes / References
 
-# Sprint Ready Checklist 
-1. - [ ] Acceptance criteria defined 
-2. - [ ] Team understands acceptance criteria 
-3. - [ ] Team has defined solution / steps to satisfy acceptance criteria 
-4. - [ ] Acceptance criteria is verifiable / testable 
-5. - [ ] External / 3rd Party dependencies identified
+<!-- Link to PRDs, designs, or related issues -->
+
+---
+
+# Classification
+
+> Add these labels before submitting. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full list.
+
+- **Feature**: <!-- Add ONE feature label -->
+- **Area**: <!-- area:frontend, area:backend, or area:devops -->
+- **Priority**: <!-- P0 / P1 / P2 / P3 -->

@@ -1367,6 +1367,11 @@ services:
       OTEL_METRICS_EXPORTER: none
       OTEL_LOGS_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
+      # Console only logs the OTP SMS to this container's stdout — no SMS is
+      # actually sent. For production, set enable_otp_services: true in the
+      # tenant's Ansible host_vars AND replace this with a real provider
+      # class + credentials (e.g. an SMSCountry/Twilio/MSG91 provider class
+      # supported by this image) before relying on real OTP delivery.
       SMS_PROVIDER_CLASS: Console
     deploy:
       resources:
