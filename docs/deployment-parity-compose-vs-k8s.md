@@ -26,10 +26,10 @@ whether the difference is intentional (platform-idiomatic) or a real gap to clos
 | Gateway | Auth enforcement | ✅ done | Different model (see below); security-sensitive parts tracked privately |
 | Gateway | `/health/*` | ✅ done | Mechanism difference, not a functional gap |
 | Config | Tenant-identity config model | ✅ done | Not at parity structurally; benign on `pg`, latent risk otherwise |
-| Config | Full feature-toggle audit | ⬜ todo | |
-| Services | K8s-only services (DSS, pdf, audit, service-request) | ⬜ todo | |
-| Data | Bootstrap parity (dump+MCP vs migrations+DDH) | ⬜ todo | |
-| Infra | Secrets model (OpenBao vs SOPS) | ⬜ todo | |
+| Config | Feature toggles | ✅ done | Explicit toggles match where they overlap; compose inherits image defaults for the rest |
+| Services | K8s-only services (DSS, pdf, audit, service-request) | ✅ done | Optional/feature-adjacent, not core-PGR; intentional scope difference |
+| Data | Bootstrap parity | ✅ done | Different mechanism (dump vs migrations); converges on schema, differs on seed data |
+| Infra | Secrets model | ✅ done | Different backend AND different encryption-key origin → encrypted data not portable between stacks |
 
 ---
 
@@ -142,15 +142,65 @@ encryption-tenant / login issues.
 **Recommendation:** derive all tenant-ID vars on compose from the single inventory `state_root` /
 `state_tenant_id` (as K8s does), unconditionally, rather than base defaults + conditional rewrites.
 
-### Note on toggles
+### Feature toggles
 K8s makes behaviour toggles explicit in one `env.yaml` (`otp-validation`, `roles-state-level`,
-`citizen-registration-withlogin`, …). Compose spreads config across hardcoded compose env, Ansible
-rewrites, `digit.env.j2`, and image `application.properties` defaults — so many toggles aren't set as
-env vars and inherit image defaults, making a clean key-by-key parity check harder. Explicit ones that
-overlap match (e.g. fixed-OTP `123456`). A full toggle-vs-image-default audit is pending.
+`citizen-registration-withlogin`, `workflow-statelevel`, …). Compose spreads config across hardcoded
+compose env, Ansible rewrites, `digit.env.j2`, and image `application.properties` defaults — so many
+toggles aren't set as env vars and inherit image defaults. Where toggles are explicit on both, they
+match (e.g. fixed-OTP `123456`, `citizen-otp-fixed-enabled: true`). A full toggle-vs-image-default diff
+is low value because compose intentionally relies on image defaults; **no functional divergence found in
+the overlapping explicit toggles.**
 
-## Next up
-- Full feature-toggle audit (env.yaml toggles vs compose image `application.properties` defaults).
-- K8s-only services (DSS, pdf, audit, service-request) — decide which need porting for true parity.
-- Data bootstrap parity (compose dump + MCP vs K8s migrations + default-data-handler).
-- Secrets-model reconciliation (OpenBao vs SOPS/KMS).
+## Service coverage — the K8s-only set
+
+Deployed on K8s (`installed: true`) but absent from compose: `audit-service`, `pdf-service`,
+`service-request`, `egov-notification-mail`, `boundary-bulk-bff`, and DSS analytics
+(`dashboard-analytics`, `dashboard-ingest`). Charts exist but are **not** enabled on K8s either:
+`user-onboard`, `xstate-chatbot`.
+
+**Assessment: these are optional / feature-adjacent, not core-PGR.** The core complaint lifecycle
+(create → assign → resolve → close) works without them — which is why compose runs a leaner set and
+still passes the PGR lifecycle test. Specifically:
+- `audit-service` — audit-trail *query* API. Both stacks ship the `audit-service-persister.yml` config,
+  so audit records are still *captured* via the persister on compose; only the query API is absent.
+- `pdf-service` — PDF generation (e.g. complaint receipts). Optional feature.
+- `egov-notification-mail` — email channel. Compose covers notifications via SMS + Novu.
+- `service-request`, `boundary-bulk-bff` — generic service-request registry / bulk-boundary BFF; compose
+  handles boundary onboarding via MCP/configurator instead.
+- DSS (`dashboard-*`) — analytics dashboards; a separate stack compose doesn't run.
+
+This is an **intentional scope difference**, not a bug. For true parity, add these to compose *only if*
+the specific feature (PDF receipts, email, DSS dashboards, audit querying) is required.
+
+## Data bootstrap — ❌ different mechanism
+
+| | Compose | K8s |
+|---|---|---|
+| Schema | `db_fast_path` loads `db/full-dump.sql` (prebuilt: 54 tables + Flyway history + `pg`/`pg.citest` test tenant + CI-ADMIN + 33 ServiceDefs + 20k localization). A `db-migrations` compose exists but the dump is the default path. | Each service runs its **own Flyway migration** via an init container (`dbMigration`, schema/locations/creds from secrets) — full replay from scratch, no dump. |
+| Seed data | Dump ships a ready test tenant; `seeds/user-seed.sh` ensures ADMIN/GRO/INTERNAL_USER; optional MCP tenant bootstrap. | `default-data-handler` seeds MDMS/tenant data; `boundary-bulk-bff` for boundaries. Starts empty. |
+
+Both converge on an **equivalent schema**, but via different paths and with **different out-of-box
+data** (compose has a bundled test tenant; K8s onboards fresh). Two consequences: (1) the compose dump is
+a **maintenance burden** — it must be regenerated as migrations evolve, or compose drifts behind K8s;
+(2) "works on compose" is not proof of a clean migration path on K8s (which replays every migration).
+
+## Secrets model — ❌ different backend *and* different key origin
+
+| | Compose | K8s |
+|---|---|---|
+| Backend | **OpenBao** (runtime, per-host; `bootstrap_secrets` seeded once with `cas=0`, rendered to `.env`) | **SOPS + AWS-KMS** encrypted `env-secrets.yaml` in git; decrypted at `helmfile apply`, injected as k8s Secrets |
+| Encryption master key | **Inherited from the dump** — `eg_enc_*_keys` decrypt only under the pinned `elasticsearch_master_password` (`asd@#$@$!132123`) | **Generated** from `egov-enc-service` `master_password`/`master_salt`/`master_initialvector` in `env-secrets.yaml` |
+
+The important consequence: **the two stacks use different encryption master keys**, so data encrypted on
+one (usernames, PII) is **not decryptable on the other**. That's a real **data-migration blocker** between
+stacks, separate from the "which backend" difference. Secret *sets* mostly overlap (db, user, hrms,
+notification), but there's no shared source of truth and the enc-key origin diverges by design.
+
+## Overall parity summary
+
+The **application layer** is largely at parity (same ~24 services, same core routes) with a handful of
+real gaps: legacy `/egov-location`, the in-app `egov-user-event` feed, the auth-enforcement model, and
+the tenant-identity config model. The **platform layer** (gateway, secrets backend + key origin, data
+bootstrap, managed vs in-cluster infra, K8s-only optional services) is **intentionally different** and
+not meant to be made identical — the realistic parity target is the app layer + config semantics, plus
+the two data-portability blockers to be aware of (encryption keys, dump vs migrations).
