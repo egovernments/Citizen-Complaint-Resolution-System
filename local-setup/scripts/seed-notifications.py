@@ -87,10 +87,13 @@ def create_row(tok, code, row):
         _post("/mdms-v2/v2/_create/" + code, body, tok).read()
         return "created"
     except urllib.error.HTTPError as e:
-        blob = e.read().decode()[:200]
+        blob = e.read().decode()[:160]
         if e.code in (400, 409) and ("DUPLICATE" in blob.upper() or "ALREADY" in blob.upper()):
             return "dup"
-        raise RuntimeError("row create failed for %s: HTTP %s %s" % (code, e.code, blob))
+        # Resilient: log + skip a failing row rather than aborting the whole seed,
+        # so the core masters still land. main() surfaces failures + the exit code.
+        print("    ! %s row FAILED: HTTP %s %s" % (code, e.code, blob))
+        return "failed"
 
 
 def count_rows(tok, code):
@@ -121,24 +124,32 @@ def main():
     time.sleep(3)  # let schema definitions settle before data validates against them
 
     total_created = total_dup = 0
+    failed_masters = []
     for code in NOTIF_CODES:
         path = os.path.join(DATA_DIR, code + ".json")
         rows = json.load(open(path))
-        c = d = 0
+        c = d = f = 0
         for row in rows:
             r = create_row(tok, code, row)
-            c += (r == "created"); d += (r == "dup")
+            c += (r == "created"); d += (r == "dup"); f += (r == "failed")
         total_created += c; total_dup += d
-        print("  data %-45s +%d created, %d already-present (%d in file)" % (code, c, d, len(rows)))
+        if f:
+            failed_masters.append(code)
+        print("  data %-45s +%d created, %d already-present, %d FAILED (%d in file)" % (code, c, d, f, len(rows)))
 
     time.sleep(3)
     print("verify (tenant=%s):" % TENANT)
-    ok = True
     for code in NOTIF_CODES:
-        n = count_rows(tok, code)
-        print("  %-45s %s rows" % (code, n))
-        ok = ok and n > 0
-    print("DONE: %d created, %d already-present.%s" % (total_created, total_dup, "" if ok else "  WARNING: a master is empty"))
+        print("  %-45s %s rows" % (code, count_rows(tok, code)))
+    # Core = Routing + Template (who + what). ProviderTemplate is the WhatsApp
+    # ContentSid layer (a follow-up); a failure there is a WARNING, not fatal to the
+    # install — the deploy still gets working config-driven SMS/Email notifications.
+    core_failed = [c for c in failed_masters if c != "RAINMAKER-PGR.NotificationProviderTemplate"]
+    note = ""
+    if failed_masters:
+        note = "  WARNING: failures in %s" % ", ".join(m.split(".")[-1] for m in failed_masters)
+    print("DONE: %d created, %d already-present.%s" % (total_created, total_dup, note))
+    sys.exit(2 if core_failed else 0)
     sys.exit(0 if ok else 2)
 
 

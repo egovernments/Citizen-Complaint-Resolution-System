@@ -18,7 +18,7 @@ SCHEMA = {
         "variables": {"type": "array", "items": {"type": "string"}},
         "approvalStatus": {"type": "string"}, "active": {"type": "boolean"},
     },
-    "required": ["provider", "channel", "action", "toState", "locale", "templateId", "variables"],
+    "required": ["provider", "channel", "audience", "action", "toState", "locale", "templateId", "variables"],
 }
 
 # (action, toState, en_sid, hi_sid, variables, en_name)
