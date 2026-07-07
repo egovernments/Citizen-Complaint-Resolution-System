@@ -17,11 +17,17 @@ const usePGRInboxSearch = (reqCriteria) => {
   const stableParams = useMemo(() => JSON.stringify(params), [params]);
 
   const fetchData = async () => {
-    // 1. Call PGR search + count in parallel
+    // 1. Call PGR search + count in parallel.
+    // pgr-services' _count is genuinely unpaginated (LIMIT NULL / no OFFSET
+    // is treated as "no limit"), but reuses the same criteria object as
+    // _search — forwarding the UI's page-size limit/offset into it made the
+    // reported total cap out at one page (#916). Drop both so the backend
+    // returns the true total.
     const countUrl = url.replace("_search", "_count");
+    const { limit, offset, ...countParams } = params;
     const [pgrResponse, countResponse] = await Promise.all([
       CustomService.getResponse({ url, params, body }),
-      CustomService.getResponse({ url: countUrl, params, body }).catch(() => null),
+      CustomService.getResponse({ url: countUrl, params: countParams, body }).catch(() => null),
     ]);
     const wrappers = pgrResponse?.ServiceWrappers || [];
     const totalCount = countResponse?.count ?? wrappers.length;
