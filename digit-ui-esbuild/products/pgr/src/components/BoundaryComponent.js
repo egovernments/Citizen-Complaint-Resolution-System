@@ -279,7 +279,23 @@ useEffect(() => {
               <BoundaryDropdown
                 key={key}
                 fieldKey={key}
-                label={`${t(`${hierarchyType}_${key?.toUpperCase()}`)}`}
+                // Level-heading localization: onboarding seeds several key shapes
+                // (accents KEPT): "divisao_administrativa_PROVÍNCIA",
+                // "DIVISAO_ADMINISTRATIVA_PROVÍNCIA", "divisao_administrativa_Província".
+                // Try each; if none is loaded, show the human boundaryType
+                // ("Província") — never the raw composite key.
+                label={(() => {
+                  const candidates = [
+                    `${hierarchyType}_${key?.toUpperCase()}`,
+                    `${String(hierarchyType).toUpperCase()}_${key?.toUpperCase()}`,
+                    `${hierarchyType}_${key}`,
+                  ];
+                  for (const c of candidates) {
+                    const l = t(c);
+                    if (l !== c) return l;
+                  }
+                  return key;
+                })()}
                 data={value[key]}
                 onChange={(selectedValue) => handleSelection(selectedValue)}
                 selected={selectedAtLevel}
