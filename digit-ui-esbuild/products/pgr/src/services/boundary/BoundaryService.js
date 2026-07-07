@@ -1,3 +1,4 @@
+import i18next from "i18next";
 const getBoundaryTypeOrder = (tenantBoundary) => {
   const order = [];
   const seenTypes = new Set();
@@ -48,18 +49,49 @@ const fetchBoundaries = async ({ tenantId }) => {
   }
 
 
+  // Boundary labels are seeded WITH the tree at the CITY tenant, while the app
+  // bootstrap loads localization at the STATE tenant only — so load the label
+  // module for the SAME tenant the tree comes from and feed i18next directly.
+  // (LocalizationService.getLocale dedupes by module NAME, and the state's —
+  // possibly empty — copy of this module is already registered, so it would
+  // skip the refetch.) Best-effort: a failure only means raw codes render.
+  const loadBoundaryLabels = async () => {
+    try {
+      const locale =
+        Digit.StoreData?.getCurrentLanguage?.() || i18next.language || "en_IN";
+      const res = await Digit.CustomService.getResponse({
+        url: "/localization/messages/v1/_search",
+        useCache: true,
+        method: "POST",
+        userService: false,
+        params: { tenantId, locale, module: `rainmaker-boundary-${hierarchyType}` },
+      });
+      const msgs = res?.messages || [];
+      if (msgs.length) {
+        const bundle = {};
+        msgs.forEach((m) => { bundle[m.code] = m.message; });
+        i18next.addResources(locale, "translations", bundle);
+      }
+    } catch (e) {
+      console.warn("boundary label localization load failed", e);
+    }
+  };
+
   try {
-    const fetchBoundaryData = await Digit.CustomService.getResponse({
-      url: `/boundary-service/boundary-relationships/_search`,
-      useCache: false,
-      method: "POST",
-      userService: false,
-      params: {
-        tenantId: tenantId,
-        hierarchyType: hierarchyType,
-        includeChildren: true,
-      },
-    });
+    const [fetchBoundaryData] = await Promise.all([
+      Digit.CustomService.getResponse({
+        url: `/boundary-service/boundary-relationships/_search`,
+        useCache: false,
+        method: "POST",
+        userService: false,
+        params: {
+          tenantId: tenantId,
+          hierarchyType: hierarchyType,
+          includeChildren: true,
+        },
+      }),
+      loadBoundaryLabels(),
+    ]);
 
     if (!fetchBoundaryData) {
       throw new Error("Couldn't fetch boundary data");
