@@ -24,7 +24,11 @@ def derive_valid_mobile(regex, length=10, preferred=None):
         return preferred
 
     n = length if length and length > 0 else 10
-    for try_len in (n, n + 1, n - 1):
+    # Search a wide window around n, closest lengths first, so a tenant whose
+    # mobileNumberRegex requires a length far from the hinted default (e.g. 7
+    # or 12 digits) still derives a match instead of exhausting n-1/n/n+1 and
+    # falling through to an unmatched placeholder.
+    for try_len in sorted(set(range(6, 16)) | {n, n + 1, n - 1}, key=lambda x: abs(x - n)):
         if try_len <= 0:
             continue
         for lead in "0123456789":
@@ -33,7 +37,9 @@ def derive_valid_mobile(regex, length=10, preferred=None):
                 if len(candidate) == try_len and matches(candidate):
                     return candidate
 
-    return preferred or ("9" * n)
+    # preferred already failed matches() above -- never return a value known
+    # not to satisfy the regex; fall back to a length-only placeholder.
+    return "9" * n
 
 
 class FilterModule(object):

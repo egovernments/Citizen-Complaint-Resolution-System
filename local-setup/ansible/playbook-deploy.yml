@@ -125,12 +125,16 @@
     # which is wrong on every non-India tenant and was previously caught only
     # by a live HRMS crash-loop. Fail fast instead.
     - name: "preflight — core_mobile_configs must use the current mobile-validation schema"
+      vars:
+        _mobile_missing_keys: "{{ ['countryCode', 'mobileNumberRegex'] | reject('in', core_mobile_configs.keys() | list) | list }}"
+        _mobile_legacy_keys: "{{ core_mobile_configs.keys() | list | intersect(['mobilePrefix', 'mobileNumberPattern', 'mobileNumberLength', 'mobileNumberAllowedStartingCharacters', 'mobileNumberErrorMessage']) }}"
       ansible.builtin.fail:
         msg: |
-          host_vars for {{ inventory_hostname }} sets core_mobile_configs using
-          the retired field names: {{ (core_mobile_configs.keys() | list |
-            intersect(['mobilePrefix', 'mobileNumberPattern', 'mobileNumberLength',
-                        'mobileNumberAllowedStartingCharacters', 'mobileNumberErrorMessage'])) }}
+          host_vars for {{ inventory_hostname }} sets an incomplete
+          core_mobile_configs — missing required field(s): {{ _mobile_missing_keys }}
+          {% if _mobile_legacy_keys | length > 0 %}
+          (retired field names found instead: {{ _mobile_legacy_keys }})
+          {% endif %}
 
           common-masters.MobileNumberValidation now only takes countryCode +
           mobileNumberRegex (length and allowed leading digits are derived
@@ -145,7 +149,6 @@
         - core_mobile_configs is defined
         - core_mobile_configs
         - not (core_mobile_configs.mobileNumberRegex is defined and core_mobile_configs.countryCode is defined)
-        - (core_mobile_configs.keys() | list | intersect(['mobilePrefix', 'mobileNumberPattern', 'mobileNumberLength', 'mobileNumberAllowedStartingCharacters', 'mobileNumberErrorMessage'])) | length > 0
 
     # ==================== Docker host install + config ====================
     # Linux/Debian targets only. On macOS the operator already runs Docker
