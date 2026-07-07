@@ -75,6 +75,15 @@ def schema_exists(tok, code):
 
 def create_schema(tok, sdef):
     sdef = dict(sdef); sdef["tenantId"] = TENANT
+    # MDMS's schema-create mangles an empty "x-ref-schema": [] into {} on storage;
+    # then MdmsDataValidator does (JSONArray) get("x-ref-schema") on that {} and
+    # throws ClassCastException for EVERY subsequent data create. The validator only
+    # runs `if schemaObject.has("x-ref-schema")`, so drop an empty x-ref-schema
+    # entirely — it's a no-op reference list anyway — and the whole block is skipped.
+    defn = dict(sdef.get("definition") or {})
+    if defn.get("x-ref-schema") == []:
+        defn.pop("x-ref-schema", None)
+        sdef["definition"] = defn
     body = ri(tok); body["SchemaDefinition"] = sdef
     _post("/mdms-v2/schema/v1/_create", body, tok).read()
 
