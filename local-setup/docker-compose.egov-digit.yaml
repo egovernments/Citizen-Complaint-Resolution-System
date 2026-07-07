@@ -599,7 +599,8 @@ services:
     # `registry.preview.egov.theflywheel.in` is a read-only HTTPS proxy
     # in front of the egov-ci VPC registry — public cert, no
     # insecure-registries trust required, pullable from anywhere.
-    image: egovio/egov-user:master-e22c7c5
+    #
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:mobilevalidation-jdk8-4984479
     depends_on:
       pgbouncer:
         condition: service_healthy

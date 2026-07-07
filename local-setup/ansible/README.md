@@ -575,9 +575,8 @@ state_tenant_id: ke                   # root tenant
 digit_ui_mode: static                 # default UI serving mode
 enable_search_stack: false            # search stack opt-in per host
 core_mobile_configs:                  # Kenya mobile validation defaults
-  mobilePrefix: "+254"
-  mobileNumberPattern: "^[17][0-9]{8}$"
-  mobileNumberLength: 9
+  countryCode: "+254"
+  mobileNumberRegex: "^[17][0-9]{8}$"
 # … plus auth, locale, boundary taxonomy, etc.
 
 # inventory/host_vars/<tenant>.yml — overrides + per-tenant data

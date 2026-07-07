@@ -115,6 +115,41 @@
         - ansible_facts['os_family'] != 'Debian'
         - ansible_system != 'Darwin'
 
+    # common-masters.MobileNumberValidation (utilities/default-data-handler)
+    # only accepts countryCode + mobileNumberRegex — the old UserValidation-era
+    # fields (mobilePrefix, mobileNumberPattern, mobileNumberLength,
+    # mobileNumberAllowedStartingCharacters, mobileNumberErrorMessage) are
+    # gone from the schema. Every core_mobile_configs lookup below reads the
+    # new names with `| default(...)`, so a host_vars file still on the old
+    # names doesn't error — it silently falls back to the India defaults,
+    # which is wrong on every non-India tenant and was previously caught only
+    # by a live HRMS crash-loop. Fail fast instead.
+    - name: "preflight — core_mobile_configs must use the current mobile-validation schema"
+      vars:
+        _mobile_missing_keys: "{{ ['countryCode', 'mobileNumberRegex'] | reject('in', core_mobile_configs.keys() | list) | list }}"
+        _mobile_legacy_keys: "{{ core_mobile_configs.keys() | list | intersect(['mobilePrefix', 'mobileNumberPattern', 'mobileNumberLength', 'mobileNumberAllowedStartingCharacters', 'mobileNumberErrorMessage']) }}"
+      ansible.builtin.fail:
+        msg: |
+          host_vars for {{ inventory_hostname }} sets an incomplete
+          core_mobile_configs — missing required field(s): {{ _mobile_missing_keys }}
+          {% if _mobile_legacy_keys | length > 0 %}
+          (retired field names found instead: {{ _mobile_legacy_keys }})
+          {% endif %}
+
+          common-masters.MobileNumberValidation now only takes countryCode +
+          mobileNumberRegex (length and allowed leading digits are derived
+          from the regex — see filter_plugins/mobile.py). Update host_vars to:
+
+            core_mobile_configs:
+              countryCode: "<dial prefix, e.g. +254>"
+              mobileNumberRegex: "<pattern, e.g. ^[17][0-9]{8}$>"
+
+          See inventory/host_vars/_example.yml for a worked example.
+      when:
+        - core_mobile_configs is defined
+        - core_mobile_configs
+        - not (core_mobile_configs.mobileNumberRegex is defined and core_mobile_configs.countryCode is defined)
+
     # ==================== Docker host install + config ====================
     # Linux/Debian targets only. On macOS the operator already runs Docker
     # Desktop / OrbStack, so apt + docker.service + /etc/docker/daemon.json
@@ -1990,11 +2025,8 @@
         body:
           target_tenant: "{{ state_root }}"
           source_tenant: "pg"
-          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
-          mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
-          mobile_prefix: "{{ core_mobile_configs.mobilePrefix | default(omit) }}"
-          mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
-          mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
@@ -2017,11 +2049,8 @@
         body:
           target_tenant: "{{ tenant_id }}"
           source_tenant: "pg.citest"
-          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
-          mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
-          mobile_prefix: "{{ core_mobile_configs.mobilePrefix | default(omit) }}"
-          mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
-          mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
@@ -2218,8 +2247,10 @@
     # since :1044-preview) rejects HRMS's hardcoded 10-digit mobile on
     # tenants with a stricter rule (e.g. ethiopia's ^[17][0-9]{8}$) and
     # HRMS crash-loops with "Service returned null while fetching user".
-    # Seed it here with a mobile derived from the tenant's own rule:
-    # first allowed starting digit, padded with 9s to the rule length.
+    # Seed it here with a mobile derived from the tenant's own rule: length +
+    # allowed leading digits aren't separate host_vars fields — they're derived
+    # straight from mobileNumberRegex (see filter_plugins/mobile.py), the same
+    # way digit-mcp's deriveValidMobile() does it for MCP-driven ADMIN seeding.
     - name: "post-bootstrap — seed INTERNAL_USER system user on state_root for HRMS"
       ansible.builtin.uri:
         url: "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate"
@@ -2230,7 +2261,7 @@
           User:
             userName: INTERNAL_USER
             name: Internal Microservice User
-            mobileNumber: "{{ ((core_mobile_configs.mobileNumberAllowedStartingCharacters | first) ~ ('9' * ((core_mobile_configs.mobileNumberLength | int) - 1))) if core_mobile_configs is defined else '9999999999' }}"
+            mobileNumber: "{{ (core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$')) | derive_valid_mobile }}"
             gender: MALE
             active: true
             type: SYSTEM
@@ -2326,9 +2357,8 @@
           target_tenant: "{{ state_root }}"
           source_tenant: "pg"
           user_only: true
-          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern }}"
-          mobile_prefix: "{{ core_mobile_configs.mobilePrefix }}"
-          mobile_length: "{{ core_mobile_configs.mobileNumberLength | int }}"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
         status_code: [200]
         timeout: 60
       register: mcp_rekey_root
@@ -2349,9 +2379,8 @@
           target_tenant: "{{ tenant_id }}"
           source_tenant: "pg"
           user_only: true
-          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern }}"
-          mobile_prefix: "{{ core_mobile_configs.mobilePrefix }}"
-          mobile_length: "{{ core_mobile_configs.mobileNumberLength | int }}"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
         status_code: [200]
         timeout: 60
       register: mcp_rekey_city
