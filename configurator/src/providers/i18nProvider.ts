@@ -195,6 +195,7 @@ const customEnglishMessages: TranslationMessages = {
         token: 'Auth Token',
         from: 'From',
         host: 'SMTP Host',
+        port: 'SMTP Port',
         user: 'SMTP User',
         password: 'SMTP Password',
         secure: 'Use TLS (secure)',

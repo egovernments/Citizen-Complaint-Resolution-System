@@ -153,6 +153,9 @@ export function credFields(channel: Channel, providerId: string): CredField[] {
   if (providerId === 'nodemailer' || channel === 'EMAIL') {
     return [
       { key: 'host', labelKey: 'app.providers.cred.host', labelDefault: 'SMTP Host', type: 'text', placeholder: 'smtp.example.com', required: true },
+      // Novu validates nodemailer `port` as a STRING — keep this a text input so it
+      // serializes as "587" not 587 (a numeric port → 422 from Novu).
+      { key: 'port', labelKey: 'app.providers.cred.port', labelDefault: 'SMTP Port', type: 'text', placeholder: '587', required: true },
       { key: 'user', labelKey: 'app.providers.cred.user', labelDefault: 'SMTP User', type: 'text', placeholder: 'apikey / username', required: true },
       { key: 'password', labelKey: 'app.providers.cred.password', labelDefault: 'SMTP Password', type: 'password', required: true },
       { key: 'from', labelKey: 'app.providers.cred.from', labelDefault: 'From', type: 'text', placeholder: 'noreply@example.com', required: true },
