@@ -238,8 +238,14 @@ const ComplaintDetailsPage = () => {
   // Single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes +
   // leaf complaint types). buildComplaintPath finds the leaf (code===serviceCode)
   // and walks parentCode up through these same rows.
+  // The hierarchy (nodes + their names) is onboarded at the COMPLAINT'S tenant
+  // (e.g. mz.igsae) — not the citizen's home city, which on multi-authority envs
+  // is the state root with no such rows. Read it where it lives, else the
+  // Type/Sub-Type rows render raw COMPLAINT_HIERARCHY.* keys with no name
+  // fallback (nodes absent at the home tenant too).
+  const hierarchyTenant = complaintDetails?.service?.tenantId || tenantId;
   const { data: hier } = Digit.Hooks.useCustomMDMS(
-    tenantId,
+    hierarchyTenant,
     "RAINMAKER-PGR",
     [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
     {
