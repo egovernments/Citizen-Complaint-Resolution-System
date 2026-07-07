@@ -211,7 +211,10 @@ public class PGRService {
         Service updateService = request.getService();
 		Map<String, Object> existing = pgrUtils.extractAdditionalDetails(updateService.getAdditionalDetail());
 		Map<String, Object> backend = new HashMap<>();
-		backend.put("department", getDepartmentFromMDMS(request, mdmsData));
+		Object clientDept = existing.get("department");
+        if (clientDept == null || (clientDept instanceof String s && (s.isBlank() || s.equalsIgnoreCase("NA")))) {
+            backend.put("department", getDepartmentFromMDMS(request, mdmsData));
+        }
 		backend.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
 		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
 		updateService.setAdditionalDetail(merged);
