@@ -23,6 +23,50 @@ const FunnelIcon = () => (
   </svg>
 );
 
+/**
+ * Render a flat {id,label,group?} option list, batching consecutive same-group
+ * runs into native <optgroup>s. The list arrives group-contiguous (sentinel
+ * first, grouped options sorted by group, strays last), so a single pass
+ * yields: plain sentinel option → one <optgroup> per root complaint category →
+ * plain trailing options for codes missing from the hierarchy master. Lists
+ * without any `group` (wards; hierarchy-fetch failure) render exactly as the
+ * old flat <option> list.
+ */
+function renderGroupedOptions(options) {
+  const rendered = [];
+  let run = null; // { group, items } — current <optgroup> being accumulated
+
+  const flushRun = () => {
+    if (!run) return;
+    rendered.push(
+      <optgroup key={`group-${run.group}`} label={run.group}>
+        {run.items}
+      </optgroup>
+    );
+    run = null;
+  };
+
+  for (const opt of options) {
+    const node = (
+      <option key={opt.id} value={opt.id}>
+        {opt.label}
+      </option>
+    );
+    if (opt.group) {
+      if (!run || run.group !== opt.group) {
+        flushRun();
+        run = { group: opt.group, items: [] };
+      }
+      run.items.push(node);
+    } else {
+      flushRun();
+      rendered.push(node);
+    }
+  }
+  flushRun();
+  return rendered;
+}
+
 const DashboardFilters = ({
   filters,
   onFilterChange,
@@ -120,11 +164,7 @@ const DashboardFilters = ({
             {filterOptionsLoading && complaintTypeOptions.length <= 1 ? (
               <option value="">Loading…</option>
             ) : (
-              complaintTypeOptions.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
-                </option>
-              ))
+              renderGroupedOptions(complaintTypeOptions)
             )}
           </select>
         </div>
