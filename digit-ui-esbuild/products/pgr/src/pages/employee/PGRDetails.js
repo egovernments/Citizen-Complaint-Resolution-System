@@ -27,6 +27,17 @@ import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 //   • comments        — always
 // Per-action extras can later be driven by an MDMS master (RAINMAKER-PGR.WorkflowActionUiConfig)
 // without touching this code.
+// additionalDetail arrives as an OBJECT on some complaints and a JSON STRING on
+// others (citizen create sends "{}", employee create sends a stringified object).
+// Parse both shapes; anything unparseable is treated as empty.
+const parseAdditionalDetail = (ad) => {
+  if (ad && typeof ad === "object") return ad;
+  if (typeof ad === "string") {
+    try { const o = JSON.parse(ad); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; }
+  }
+  return {};
+};
+
 const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false, docUploadRequired = false, assigneeMandatory }) => {
   const body = [];
   if (action === "REJECT") {
@@ -265,10 +276,9 @@ const PGRDetails = () => {
     // department is picked (REJECT/RESOLVE etc. leave additionalDetail untouched).
     const baseService = pgrData?.ServiceWrappers[0].service;
     const assigneeDept = _data?.SelectedAssignee?.department;
-    const baseAdditionalDetail =
-      baseService?.additionalDetail && typeof baseService.additionalDetail === "object"
-        ? baseService.additionalDetail
-        : {};
+    // Parse (object OR stringified) so stamping never discards existing keys
+    // like supervisorName / serviceName that older flows stored as a string.
+    const baseAdditionalDetail = parseAdditionalDetail(baseService?.additionalDetail);
     const updateRequest = {
       service: assigneeDept
         ? { ...baseService, additionalDetail: { ...baseAdditionalDetail, department: assigneeDept } }
@@ -315,7 +325,14 @@ const PGRDetails = () => {
   // Enhance config with roles and department dynamically
   const getUpdatedConfig = (selectedAction, workflowData, configs, serviceDefs, complaintData) => {
     const def = serviceDefs?.find((d) => d.serviceCode === complaintData?.ServiceWrappers[0]?.service?.serviceCode);
-    const department = def?.department;
+    // Assignee-scoping department, in precedence order:
+    //   1. the complaint TYPE's mapped department (MDMS — authoritative, backend enforces it)
+    //   2. the ROUTED department stamped on additionalDetail at the previous ASSIGN
+    //      (screening picked the department; every later stage stays inside it)
+    //   3. none -> the assignee list stays unscoped (all departments, grouped)
+    const typeDept = def?.department;
+    const routedDept = parseAdditionalDetail(complaintData?.ServiceWrappers?.[0]?.service?.additionalDetail)?.department;
+    const department = typeDept && typeDept !== "NA" ? typeDept : routedDept || typeDept;
     // Build the modal form generically from workflow metadata — no hardcoded per-action allowlist,
     // so ANY action defined on the BusinessService (standard PGR + the CMS workflow) renders a form.
     const actionConfig = { formConfig: buildActionFormConfig({ ...selectedAction, assigneeMandatory: isAssigneeMandatory(selectedAction) }) };
