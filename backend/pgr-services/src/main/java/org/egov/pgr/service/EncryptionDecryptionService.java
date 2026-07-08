@@ -14,6 +14,8 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 
+import static org.egov.pgr.util.PGRConstants.MASK_SENTINEL;
+
 /**
  * Encrypt/decrypt/mask extendedAttributes fields via egov-enc-service.
  *
@@ -104,10 +106,10 @@ public class EncryptionDecryptionService {
         try {
             List<String> plains = callDecryptBatch(ciphers);
             for (int i = 0; i < keys.size(); i++)
-                ext.putField(keys.get(i), i < plains.size() ? plains.get(i) : "****");
+                ext.putField(keys.get(i), i < plains.size() ? plains.get(i) : MASK_SENTINEL);
         } catch (Exception e) {
             log.error("Batch decryption failed for fields {}; masking values", keys, e);
-            keys.forEach(k -> ext.putField(k, "****"));
+            keys.forEach(k -> ext.putField(k, MASK_SENTINEL));
         }
 
         return ext;
@@ -121,7 +123,7 @@ public class EncryptionDecryptionService {
         if (ext == null || ext.getDynamicFields() == null || ext.getDynamicFields().isEmpty())
             return ext;
         new ArrayList<>(ext.getDynamicFields().keySet())
-                .forEach(k -> ext.putField(k, "****"));
+                .forEach(k -> ext.putField(k, MASK_SENTINEL));
         return ext;
     }
 
