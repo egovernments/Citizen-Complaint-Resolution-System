@@ -99,14 +99,20 @@ The fixed-OTP `123456` shortcut (`citizen-otp-fixed-enabled`) is enabled on **bo
   remaining **client** callers to `/boundary-service/boundary-relationships/_search` (already at parity),
   removing the legacy dependency on both stacks.
 
-### `/egov-user-event`  — in-app feed differs; Novu at parity
+### `/egov-user-event`  — in-app feed differs (confirmed used feature); Novu is separate
 The in-app notification/events feed (`egov-user-event`, powering the bell) is **mocked-empty on
-compose** (the service isn't deployed) and **real on K8s**. PGR produces these events on complaint
-lifecycle (`persist-user-events-async`), so it's a real feature — reaching parity on compose means
-deploying `egov-user-event`. The separate **Novu** multi-channel notification stack works on **both**
-(compose behind the `notifications` profile). Note: the K8s `egov-user-event` `service-host` entry
-uses a stale `.staging` namespace, but the gateway routes via k8s service discovery, so it's dead
-config rather than a functional break (worth cleaning up).
+compose** (the service isn't deployed) and **real on K8s** (`egov-user-event:v1.3.0-…`, `installed:
+true`). This is a **confirmed, bundled UI feature**, not vestigial — the exact deployed image
+`egovio/digit-ui:v2.11-a520687` contains `NotificationBell` ×80, `useNotificationCount` ×10,
+`engagement` ×118, and all five `/egov-user-event/v1/events/*` endpoints. PGR produces these events on
+complaint lifecycle (`persist-user-events-async`) on **both** stacks — so on compose the events are
+emitted but **nothing consumes them** and the reads are mocked → the bell/inbox render but stay
+permanently empty. Reaching parity on compose = deploy `egov-user-event` (public
+`egovio/egov-user-event`) to consume the topic + drop the Kong mock; it largely lights up the existing
+pipeline. The separate **Novu** multi-channel stack (SMS/WhatsApp/email delivery) works on both and is
+**not** a substitute for the in-app feed. Note: the K8s `egov-user-event` `service-host` entry uses a
+stale `.staging` namespace, but the gateway routes via k8s service discovery, so it's dead config
+rather than a functional break (tracked as item #3, worth cleaning up).
 
 ### Auth enforcement  — different model
 - **Compose (Kong):** performs userInfo enrichment (resolves `userInfo` from the token; strips
@@ -251,7 +257,7 @@ divergence to close · **Cleanup** = remove dead/legacy config · **Decision** =
 | # | Item | Where | Type | Recommended action | Ref | Status |
 |---|---|---|---|---|---|---|
 | 1 | Legacy `/egov-location` API not served — **confirmed** live break on K8s (deployed `digit-ui` bundle calls it 27×; nothing serves it) → PGR ward selector, configurator, MCP break | K8s | Gap | Migrate **client** callers to `/boundary-service/boundary-relationships/_search` (backend already on boundary-service; fixes both stacks; lets the Kong adapter be dropped) | — | ☐ |
-| 2 | In-app `egov-user-event` feed mocked empty | Compose | Gap | Deploy `egov-user-event` (+ consume `persist-user-events-async`) if the in-app bell is required; else accept Novu-only | — | ☐ |
+| 2 | In-app `egov-user-event` feed mocked empty — **confirmed** used feature (deployed `digit-ui` bundle: `NotificationBell`×80, `useNotificationCount`×10, `engagement`×118, all 5 events endpoints). Works on K8s (`egov-user-event` deployed), dead on compose (Kong mock, no consumer). pgr already emits events → nothing consumes them | Compose | Gap | Deploy `egov-user-event` on compose (public `egovio/egov-user-event`) to consume `persist-user-events-async` + drop the Kong mock — "lights up" the existing pipeline. (Novu ≠ substitute; it's delivery, not the in-app feed) | — | ☐ |
 | 3 | `egov-user-event` `service-host` points at stale `.staging` namespace | K8s | Cleanup | Fix to `.egov` (dead config today — gateway uses k8s discovery — but should be corrected) | — | ☐ |
 | 4 | Session-expiry re-login broken (Kong never emits `InvalidAccessTokenException`) | Compose | Gap | Have the Kong `pre-function` emit that error on failed `/user/_details` resolution (or add full RBAC, which also fixes it) | — | ☐ |
 | 5 | Gateway does no authn/RBAC enforcement | Compose | Decision | Decide: add RBAC in Kong (call `egov-accesscontrol`) vs formally accept "auth-soft dev mode, never public" (conflicts with public tenants) | — | ☐ |
