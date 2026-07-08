@@ -1326,6 +1326,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         'Workflow.AutoEscalationStatesToIgnore',
         // ── inbox ──
         'INBOX.InboxQueryConfiguration',
+        // ── dashboard analytics catalog ──
+        // KPI defs and packs are platform-level definitions (queries + viz +
+        // role visibility) with no tenant identity inside — without them a new
+        // root gets a working dashboard shell but an empty catalog ("no tiles
+        // in the catalog pack for this role"). Complaint-type–specific data
+        // (ServiceDefs/ComplaintHierarchy) stays operator-owned; these are not.
+        'dss.KpiDefinition',
+        'dss.DashboardPack',
         'ACCESSCONTROL-ROLEACTIONS.roleactions',
       ];
 
