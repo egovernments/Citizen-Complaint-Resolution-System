@@ -391,9 +391,14 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any, d
         street: "",
         pincode: validateString(formData?.postalCode),
         locality: {
+          // SelectedBoundary FIRST: it is the confirmed cascade value (a real
+          // boundary-tree code, and the user's manual correction when they
+          // overrode the pin's auto-fill). The raw ward hint is only a
+          // fallback — it comes from the GeoJSON resolver and may not even be
+          // a valid tree code (e.g. KILIMANI vs NAIROBI_CITY_KILIMANI).
           code:
-            formData?.GeoLocationsPoint?.ward?.code ||
             formData?.SelectedBoundary?.code ||
+            formData?.GeoLocationsPoint?.ward?.code ||
             "",
         },
         geoLocation: validateGeoLocation({
@@ -433,8 +438,13 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
     case "SelectedBoundary": {
       const sb = data.SelectedBoundary;
       if (sb?.code) {
-        // Must be a leaf (no children) — mirrors the citizen-side fix in
-        // FormExplorer (egovernments/CCRS#478).
+        // Trust the emitter's isLeaf tag first (BoundaryComponent computes it
+        // from hierarchy depth precisely because `.children` isn't reliable —
+        // a tree deeper than the rendered levels leaves children on the
+        // deepest PICKABLE node, which dead-locked NEXT with every dropdown
+        // filled). The children check stays as fallback for untagged values
+        // (mirrors the FormExplorer fix, egovernments/CCRS#478).
+        if (typeof sb.isLeaf === "boolean") return sb.isLeaf;
         return !Array.isArray(sb.children) || sb.children.length === 0;
       }
       return false;
@@ -2011,11 +2021,12 @@ const CreatePGRFlowV2: React.FC = () => {
         return true;
       }
       case "where":
-        // Map pin + a leaf ward (auto-cascaded from the pin; manual fallback).
-        return (
-          isFieldValid(formData, "GeoLocationsPoint") &&
-          isFieldValid(formData, "SelectedBoundary")
-        );
+        // A leaf ward is what routing needs; the map pin is the fast path to
+        // it (auto-cascade) but NOT mandatory — clearing the pin (the map's ✕)
+        // and picking the cascade manually is a supported flow, and requiring
+        // the pin left NEXT disabled with every dropdown filled. Payload-safe:
+        // validateGeoLocation falls back to {} exactly like the employee flow.
+        return isFieldValid(formData, "SelectedBoundary");
       case "details": {
         if (!isFieldValid(formData, "description")) return false;
         // Mandatory dynamic fields (dispatcher flow).
