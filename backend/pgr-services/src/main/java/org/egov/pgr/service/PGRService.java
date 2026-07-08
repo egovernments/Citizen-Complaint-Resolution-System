@@ -26,6 +26,7 @@ import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_SEARCH;
 import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_NAME_SEARCH;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICENAME_SEARCH;
 import static org.egov.pgr.util.PGRConstants.ROLE_CONFIDENTIAL_VIEWER;
+import static org.egov.pgr.util.PGRConstants.MASK_SENTINEL;
 
 import java.util.stream.Collectors;
 
@@ -230,6 +231,7 @@ public class PGRService {
 			if (cfg == null)
 				throw new CustomException("INVALID_CASE_RELATED_TO",
 						"No MDMS config found for caseRelatedTo: " + updatedExt.getCaseRelatedTo());
+			restoreMaskedPlaceholders(updatedExt, updateService.getId(), tenantId);
 			extendedAttributesValidationService.validate(updatedExt, cfg, updateService);
 			plainExt = updatedExt.copy(); // snapshot before encrypt — avoids decrypt round-trip for response
 			updateService.setExtendedAttributes(
@@ -342,6 +344,35 @@ public class PGRService {
             if (cfg != null) cache.put(cat, cfg);
         }
         return cache;
+    }
+
+    /**
+     * Clients that fetched a complaint while it was masked (e.g. a transient MDMS lookup
+     * failure, or the citizen UI caching a stale view) may echo the "****" sentinel back
+     * on a later update — the citizen RATE flow resubmits the whole cached service object.
+     * Restore the currently-stored value for any field the client sends back as the
+     * sentinel, so a masked placeholder never permanently overwrites real data.
+     */
+    private void restoreMaskedPlaceholders(ExtendedAttributes updatedExt, String serviceId, String tenantId) {
+        boolean hasMasked = updatedExt.getDynamicFields().values().stream().anyMatch(MASK_SENTINEL::equals);
+        if (!hasMasked) return;
+
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder()
+                .ids(Collections.singleton(serviceId)).tenantId(tenantId).build();
+        criteria.setIsPlainSearch(false);
+        List<ServiceWrapper> existing = repository.getServiceWrappers(criteria);
+        if (CollectionUtils.isEmpty(existing)) return;
+
+        ExtendedAttributes existingExt = existing.get(0).getService().getExtendedAttributes();
+        if (existingExt == null) return;
+
+        new ArrayList<>(updatedExt.getDynamicFields().keySet()).forEach(key -> {
+            if (MASK_SENTINEL.equals(updatedExt.getField(key))) {
+                Object existingValue = existingExt.getField(key);
+                if (existingValue != null) updatedExt.putField(key, existingValue);
+                else updatedExt.removeField(key);
+            }
+        });
     }
 
     /**
