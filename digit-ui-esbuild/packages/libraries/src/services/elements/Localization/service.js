@@ -96,9 +96,31 @@ export const LocalizationService = {
     // never correct. Drop it.
     const [newModules, messages] = LocalizationStore.get(locale, modules);
     if (newModules.length > 0) {
-      const data = await Request({ url: Urls.localization, params: { module: newModules.join(","), locale, tenantId }, useCache: false });
-      messages.push(...data.messages);
-      setTimeout(() => LocalizationStore.store(locale, newModules, data.messages), 100);
+      // City overlay: modules are loaded at the STATE tenant, but data
+      // onboarding seeds label keys at the LOGGED-IN city tenant
+      // (COMPLAINT_HIERARCHY.*, COMMON_MASTERS_DEPARTMENT_*, boundary level
+      // headings, …) — those never loaded, so employee screens rendered raw
+      // codes. Fetch the same modules at the current tenant in parallel and
+      // let the city copy win per code (a city can override a state label,
+      // and the state set — often newer — fills everything the city copy
+      // lacks). Best-effort: a city fetch failure must never break the load.
+      const cityTenant = (() => {
+        try { return Digit.ULBService.getCurrentTenantId(); } catch (e) { return null; }
+      })();
+      const wantCityOverlay = !!cityTenant && cityTenant !== tenantId && String(cityTenant).includes(".");
+      const [data, cityData] = await Promise.all([
+        Request({ url: Urls.localization, params: { module: newModules.join(","), locale, tenantId }, useCache: false }),
+        wantCityOverlay
+          ? Request({ url: Urls.localization, params: { module: newModules.join(","), locale, tenantId: cityTenant }, useCache: false }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      let merged = data.messages;
+      if (cityData?.messages?.length) {
+        const cityCodes = new Set(cityData.messages.map((m) => m.code));
+        merged = [...merged.filter((m) => !cityCodes.has(m.code)), ...cityData.messages];
+      }
+      messages.push(...merged);
+      setTimeout(() => LocalizationStore.store(locale, newModules, merged), 100);
     }
     LocalizationStore.updateResources(locale, messages);
     return messages;
