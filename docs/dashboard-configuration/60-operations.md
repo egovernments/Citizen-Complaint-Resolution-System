@@ -77,20 +77,22 @@ an explicit allowlist (`essentialSchemas`, ~line 1276). Relevant to the dashboar
 `tenant.citymodule`, `common-masters.StateInfo`/branding, `RAINMAKER-PGR.UIConstants`,
 `Workflow.*`, `INBOX.InboxQueryConfiguration` — i.e. the **view-access surface** arrives.
 
-**NOT copied — the `dss.*` allowlist gap**: no `dss.KpiDefinition`, no `dss.DashboardPack`
-(zero references to `dss` in `digit-mcp/src`). Also `RAINMAKER-PGR.ComplaintHierarchy` is
-*deliberately* excluded (operator-loaded in configurator Phase 3).
+**Also copied — the KPI catalog** (`dss.KpiDefinition`, `dss.DashboardPack`; added to the
+allowlist in PR #1062): KPI defs and packs are platform-level definitions with no tenant
+identity inside, so a new state root gets a working catalog out of the box.
+`RAINMAKER-PGR.ComplaintHierarchy` remains *deliberately* excluded (operator-loaded in
+configurator Phase 3).
 
-Mitigations:
+Per-tier notes:
 
 - **New city under an existing state root** (`ke.newcity`): nothing to do — the KPI catalog is
   read at the **state root** (`KpiCatalogService` collapses the tenant), so city tenants inherit
-  `ke`'s defs/packs automatically. This is why the gap rarely bites on Bomet/Nairobi-shaped
-  installs.
-- **New state root** (`mz`, `pg.x` as its own root): seed `dss.KpiDefinition` +
-  `dss.DashboardPack` yourself (copy `ansible/nairobi-mdms/mdms/dss/*.json`, rewrite `tenantId`,
-  mdms-v2 `_create`), or the dashboard renders empty (`/packs` returns no tiles; the service
-  logs "MDMS path not found for dss.KpiDefinition" and gracefully returns empty).
+  `ke`'s defs/packs automatically.
+- **New state root** (`mz`, `pg.x` as its own root): covered by bootstrap since PR #1062. On
+  roots bootstrapped with an OLDER digit-mcp, seed `dss.KpiDefinition` + `dss.DashboardPack`
+  manually (copy `ansible/nairobi-mdms/mdms/dss/*.json`, rewrite `tenantId`, mdms-v2 `_create`),
+  or the dashboard renders empty (`/packs` returns no tiles; the service logs "MDMS path not
+  found for dss.KpiDefinition" and gracefully returns empty).
 
 ## 4. What a redeploy wipes — never hand-patch bundles
 
