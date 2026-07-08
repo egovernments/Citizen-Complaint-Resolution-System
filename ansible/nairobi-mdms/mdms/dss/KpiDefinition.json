@@ -1585,7 +1585,6 @@
       "params": [
         {
           "name": "window",
-          "default": "last_7d",
           "allowed": [
             "last_1d",
             "last_7d",

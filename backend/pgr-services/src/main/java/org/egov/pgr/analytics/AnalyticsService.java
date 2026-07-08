@@ -172,17 +172,49 @@ public class AnalyticsService {
             log.debug("kpiId '{}' not found or not authorized (roles={})", kpiId, callerRoles);
             return null;
         }
-        // C1: validate the request's window param against the def's params.allowed allow-list
+        // #1026: apply the def's declared params[].default for any param the caller omitted.
+        // Precedence: explicit caller param > declared default > the def's baked query.
+        JsonNode effectiveParams = withDeclaredDefaults(def.get(), queryNode.get("params"));
+
+        // C1: validate the EFFECTIVE window param against the def's params.allowed allow-list
         // (the def is in scope here). An out-of-list window must be a per-entry invalid_param,
         // not silently honoured by the composer/planner (which accept any well-formed window).
-        validateWindowParam(def.get(), queryNode.get("params"));
+        validateWindowParam(def.get(), effectiveParams);
 
         JsonNode storedQuery = def.get().getQuery();
         if (storedQuery == null || storedQuery.isNull())
             // D1a backend-composed defs are intercepted by maybeComposeResult before this point;
             // a query:null def WITHOUT a valid compose op is a genuine misconfiguration.
             throw new IllegalArgumentException("invalid_kpi: KPI '" + kpiId + "' has no query defined");
-        return queryComposer.mergeParams(storedQuery, queryNode.get("params"));
+        return queryComposer.mergeParams(storedQuery, effectiveParams);
+    }
+
+    /**
+     * #1026 — server-side application of the def's declared {@code params[].default}. Any declared
+     * param with a non-empty default that the caller did NOT supply is filled in, so a bare
+     * {@code {kpiId}} reference behaves like the dashboard's default global-filter state instead of
+     * silently ignoring the declared default. Precedence: explicit caller param > declared default
+     * > the def's baked query (a defaulted param flows through {@link KpiQueryComposer#mergeParams}
+     * exactly like a caller-sent one, and the C1 window allow-list check runs on the EFFECTIVE
+     * params). Returns {@code reqParams} untouched (possibly null) when no default applies.
+     */
+    private JsonNode withDeclaredDefaults(KpiDefinition def, JsonNode reqParams) {
+        List<KpiDefinition.KpiParam> declared = def.getParams();
+        if (declared == null || declared.isEmpty()) return reqParams;
+        com.fasterxml.jackson.databind.node.ObjectNode merged = null;
+        for (KpiDefinition.KpiParam p : declared) {
+            if (p == null || p.getName() == null) continue;
+            String dflt = p.getDefaultValue();
+            if (dflt == null || dflt.isEmpty()) continue;
+            if (reqParams != null && reqParams.hasNonNull(p.getName())) continue;   // explicit wins
+            if (merged == null) {
+                merged = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+                if (reqParams != null && reqParams.isObject())
+                    merged.setAll((com.fasterxml.jackson.databind.node.ObjectNode) reqParams);
+            }
+            merged.put(p.getName(), dflt);
+        }
+        return merged != null ? merged : reqParams;
     }
 
     /**
@@ -231,12 +263,15 @@ public class AnalyticsService {
         if (!def.isPublished() || !def.isVisibleTo(callerRoles))
             return Map.of("error", "kpi_forbidden", "message", "KPI not found or not authorized for role set");
 
-        // C1: the compose def's window allow-list still applies to the request params.
-        validateWindowParam(def, queryNode.get("params"));
+        // #1026: apply the compose def's declared params[].default before validation/propagation,
+        // so a bare {kpiId} compose ref honours its declared defaults too (explicit caller wins).
+        JsonNode params = withDeclaredDefaults(def, queryNode.get("params"));
+
+        // C1: the compose def's window allow-list still applies to the effective params.
+        validateWindowParam(def, params);
 
         JsonNode compose = def.getViz().getCompose();
         String type = compose.get("type").asText();
-        JsonNode params = queryNode.get("params");
 
         // Resolve + run each source kpiId with the same params, RBAC and row-scope.
         List<Map<String,Object>> sourceRows = new ArrayList<>();
@@ -394,7 +429,7 @@ public class AnalyticsService {
     public Map<String,Object> schema(){
         Map<String,Object> out = new LinkedHashMap<>();
         out.put("aggFns", AnalyticsCatalog.AGG_FNS);
-        out.put("filterOps", Arrays.asList("eq","ne","gt","gte","lt","lte","in","isnull"));
+        out.put("filterOps", Arrays.asList("eq","ne","gt","gte","lt","lte","in","isnull","starts_with"));
         out.put("windows", Arrays.asList("all","live","last_<N>d","wtd","mtd","qtd","ytd"));
         out.put("timeBuckets", Arrays.asList("day","week","month","quarter","year"));
         Map<String,Object> grains = new LinkedHashMap<>();
@@ -404,6 +439,7 @@ public class AnalyticsService {
             gi.put("defaultTimeRole", g.defaultTimeRole);
             gi.put("dimensions", g.groupable);
             gi.put("filterable", g.filterable);
+            gi.put("prefixFilterable", g.prefixFilterable);   // #1079: starts_with-eligible path columns
             gi.put("measurable", g.measurable);
             gi.put("distinctCountable", g.distinctable);
             gi.put("scopeColumns", scopeCols(g));
