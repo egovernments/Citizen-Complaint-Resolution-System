@@ -222,13 +222,12 @@ public class NovuClient {
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             String url = config.getNovuBaseUrl() + "/v1/events/trigger";
-            
-            log.info("=== NOVU PAYLOAD ===");
-            log.info("URL: {}", url);
-            log.info("Headers: {}", headers);
-            log.info("Request Body: {}", request);
-            log.info("==================");
-            
+            // Masked like the pass-through overload above — never log the raw
+            // request (recipient phone + message text) or headers (Novu ApiKey).
+            log.info("Novu trigger templateKey={} subscriberId={} channel-phone={} txn={} overrides={}",
+                    templateKey, subscriberId, PiiMask.mask(phone), transactionId,
+                    overrides != null && !overrides.isEmpty());
+
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.POST, new HttpEntity<>(request, headers), Map.class);
             return NovuResponse.builder()
                     .statusCode(response.getStatusCodeValue())

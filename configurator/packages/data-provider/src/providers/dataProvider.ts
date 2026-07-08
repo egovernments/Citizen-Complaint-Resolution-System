@@ -537,20 +537,38 @@ async function customFetchList(
   }
   const body = (await response.json().catch(() => ({}))) as { data?: unknown[]; total?: number };
   const rows = Array.isArray(body.data) ? (body.data as Record<string, unknown>[]) : [];
-  const records = rows.map((r) => normalizeRecord(ensureId(r, config), config));
+  // De-dupe synthesized ids within the batch: two Novu integrations that share
+  // providerId+channel (e.g. Twilio SMS + Twilio WhatsApp-as-sms) must never
+  // collapse onto one react-admin id — duplicate ids make the datagrid drop or
+  // mispaint one of the rows on the next re-render.
+  const seenIds = new Set<string>();
+  const records = rows.map((r) => {
+    let withId = ensureId(r, config);
+    let id = String(getNestedValue(withId, config.idField));
+    if (seenIds.has(id)) {
+      let n = 2;
+      while (seenIds.has(`${id}#${n}`)) n += 1;
+      id = `${id}#${n}`;
+      withId = { ...withId, [config.idField]: id };
+    }
+    seenIds.add(id);
+    return normalizeRecord(withId, config);
+  });
   const total = typeof body.total === 'number' ? body.total : records.length;
   return { records, total };
 }
 
 /** Custom rows may lack the configured idField (e.g. a Novu integration keyed
  *  by `_id` that some deployments omit). Synthesise a stable id so react-admin
- *  never collapses distinct rows onto an empty id. */
+ *  never collapses distinct rows onto an empty id. Includes identifier/name so
+ *  two integrations on the same provider+channel stay distinct. */
 function ensureId(raw: Record<string, unknown>, config: ResourceConfig): Record<string, unknown> {
   const existing = getNestedValue(raw, config.idField);
   if (existing != null && String(existing) !== '') return raw;
-  // Deterministic fallback: providerId+channel for providers, txn/ref for logs.
+  // Deterministic fallback: providerId+channel+identifier/name for providers,
+  // txn/ref for logs.
   const fallback =
-    [raw.providerId, raw.channel, raw.transactionId, raw.referenceNumber, raw.recipientValue]
+    [raw.providerId, raw.channel, raw.identifier, raw.name, raw.transactionId, raw.referenceNumber, raw.recipientValue]
       .filter((v) => v != null && v !== '')
       .join(':') || JSON.stringify(raw);
   return { ...raw, [config.idField]: fallback };

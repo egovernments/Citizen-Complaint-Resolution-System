@@ -93,6 +93,15 @@ public class ProviderController {
         }
         String novuChannel = toNovuChannel(channel);
 
+        // WHATSAPP is stored as a Novu `sms` integration, which destroys the
+        // channel designation in every subsequent list/projection. Preserve it in
+        // the integration identifier (the only round-trippable field — credentials
+        // are never echoed back) so the UI can derive WHATSAPP for display.
+        // Deterministic (stableId of the name), no clock/random.
+        if ("WHATSAPP".equalsIgnoreCase(channel) && !StringUtils.hasText(identifier)) {
+            identifier = "whatsapp-" + stableId(StringUtils.hasText(name) ? name : providerId);
+        }
+
         NovuClient.NovuResponse novuResponse =
                 novuClient.createIntegration(name, identifier, providerId, novuChannel, credentials);
         Map<String, Object> created = extractCreatedIntegration(novuResponse.getResponse());
@@ -106,9 +115,14 @@ public class ProviderController {
 
     /**
      * Read-only discovery of Novu workflows (delivery shells). Lists
-     * {@code {workflowId, name}} — does NOT call Twilio. {@code channel} /
-     * {@code providerId} are accepted for symmetry with the UI but the discovery
-     * lists all workflows.
+     * {@code {workflowId, name, channels}} — does NOT call Twilio (Twilio has no
+     * SMS template registry; SMS/EMAIL message text lives in MDMS
+     * NotificationTemplate, approved WhatsApp ContentSids in
+     * NotificationProviderTemplate). {@code channel} filters by the workflow's
+     * Novu step types ({@code stepTypeOverviews}): SMS/WHATSAPP → {@code sms}
+     * steps (WhatsApp rides the Twilio SMS integration), EMAIL → {@code email}.
+     * {@code providerId} is accepted but not filterable — Novu workflows are
+     * channel-scoped, not provider-scoped.
      */
     @GetMapping("/providers/templates")
     public ResponseEntity<Map<String, Object>> templates(
@@ -116,17 +130,41 @@ public class ProviderController {
             @RequestParam(required = false) String providerId) {
         NovuClient.NovuResponse novuResponse = novuClient.listWorkflows();
         List<Map<String, Object>> workflows = extractWorkflows(novuResponse.getResponse());
+        String wantedStep = StringUtils.hasText(channel) ? toNovuChannel(channel) : null;
         List<Map<String, Object>> data = new ArrayList<>(workflows.size());
         for (Map<String, Object> wf : workflows) {
+            List<String> steps = stepTypes(wf);
+            // Skip-on-mismatch only when the workflow declares steps: a response
+            // without stepTypeOverviews (older Novu) degrades to the unfiltered list.
+            if (wantedStep != null && !steps.isEmpty() && !steps.contains(wantedStep)) {
+                continue;
+            }
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("workflowId", wf.get("workflowId"));
             row.put("name", wf.get("name"));
+            row.put("channels", steps);
             data.add(row);
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("data", data);
         out.put("total", data.size());
         return ResponseEntity.ok(out);
+    }
+
+    /** Lower-cased step types of a Novu v2 workflow ({@code stepTypeOverviews}). */
+    @SuppressWarnings("unchecked")
+    private static List<String> stepTypes(Map<String, Object> workflow) {
+        Object raw = workflow.get("stepTypeOverviews");
+        if (!(raw instanceof List)) {
+            return List.of();
+        }
+        List<String> steps = new ArrayList<>();
+        for (Object step : (List<Object>) raw) {
+            if (step != null) {
+                steps.add(String.valueOf(step).toLowerCase());
+            }
+        }
+        return steps;
     }
 
     /**
@@ -252,8 +290,11 @@ public class ProviderController {
         } else {
             String workflow = StringUtils.hasText(workflowId) ? workflowId
                     : ("EMAIL".equals(upperChannel) ? WORKFLOW_EMAIL : WORKFLOW_SMS);
-            novuResponse = novuClient.trigger(workflow, subscriberId, phone, payload,
-                    transactionId, null, null);
+            // The email-capable overload: to.email must reach Novu or the email
+            // step has no address (the synthetic nb-test-* subscriber carries no
+            // stored email) and the "successful" trigger silently delivers nothing.
+            novuResponse = novuClient.trigger(workflow, subscriberId, phone, email,
+                    payload, transactionId);
         }
 
         int novuStatus = novuResponse.getStatusCode() != null ? novuResponse.getStatusCode() : 0;

@@ -35,7 +35,7 @@ export interface CreateProviderInput {
 }
 
 export interface TemplatesResponse {
-  data: { workflowId: string; name: string }[];
+  data: { workflowId: string; name: string; channels?: string[] }[];
   total: number;
 }
 
@@ -105,7 +105,11 @@ export function createProvider(input: CreateProviderInput): Promise<Integration>
   return call<Integration>(BASE, 'POST', input);
 }
 
-/** GET /providers/templates — read-only discovery of Novu delivery workflows. */
+/** GET /providers/templates — read-only discovery of Novu delivery workflows.
+ *  `channel` filters server-side by the workflow's Novu step types; these are
+ *  Novu workflows, NOT provider templates (Twilio has no SMS template registry —
+ *  SMS/EMAIL text lives in MDMS NotificationTemplate, approved WhatsApp
+ *  ContentSids in NotificationProviderTemplate). */
 export function pullTemplates(channel: string, providerId: string): Promise<TemplatesResponse> {
   const qs = new URLSearchParams();
   if (channel) qs.set('channel', channel);
@@ -172,8 +176,17 @@ export function credFields(channel: Channel, providerId: string): CredField[] {
 }
 
 /** Coarse channel for a row served by the integrations projection. WhatsApp is
- *  stored as a Twilio `sms` integration, so a `sms` row may be used for either —
- *  the Test dialog lets the operator pick SMS vs WhatsApp explicitly. */
-export function rowChannel(raw: unknown): Channel {
-  return String(raw ?? '').toUpperCase() === 'EMAIL' ? 'EMAIL' : 'SMS';
+ *  stored as a Twilio `sms` integration (Novu has no whatsapp channel here), so
+ *  the create path marks WhatsApp integrations in the identifier/name — the only
+ *  round-trippable fields (credentials are never echoed back). Derive WHATSAPP
+ *  from that marker so the row keeps its designation across refetches; the Test
+ *  dialog still lets the operator pick SMS vs WhatsApp explicitly. */
+export function rowChannel(record: {
+  channel?: unknown;
+  identifier?: unknown;
+  name?: unknown;
+}): Channel {
+  if (String(record.channel ?? '').toUpperCase() === 'EMAIL') return 'EMAIL';
+  const marker = `${record.identifier ?? ''} ${record.name ?? ''}`;
+  return /(^|[\s\-_])whatsapp/i.test(marker) ? 'WHATSAPP' : 'SMS';
 }

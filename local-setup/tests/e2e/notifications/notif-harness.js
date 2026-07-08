@@ -132,8 +132,8 @@ async function token(username, password, userType, tenantId) {
 // ---------------------------------------------------------------------------
 const providerCreate = (body, auth) =>
   post(`${NB_PREFIX}/providers`, body, jsonHeaders(auth));
-const providerTemplates = (auth) =>
-  get(`${NB_PREFIX}/providers/templates`, auth ? bearer(auth) : {});
+const providerTemplates = (auth, query) =>
+  get(`${NB_PREFIX}/providers/templates${query ? `?${query}` : ''}`, auth ? bearer(auth) : {});
 const providerVerify = (body, auth) =>
   post(`${NB_PREFIX}/providers/verify`, body, jsonHeaders(auth));
 const providerTestSend = (body, auth) =>

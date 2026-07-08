@@ -165,10 +165,23 @@ async function run(ctx) {
       const hasEmail = ids.includes('complaints-email');
       if (!hasSms || !hasEmail)
         return H.FAIL('A8', `expected complaints-sms + complaints-email, got [${ids.join(', ')}]`);
-      // structural: only workflowId+name surfaced (no step internals)
-      const leaky = data.find((w) => Object.keys(w).some((k) => k !== 'workflowId' && k !== 'name'));
+      // structural: only workflowId+name+channels surfaced (no step internals)
+      const allowed = ['workflowId', 'name', 'channels'];
+      const leaky = data.find((w) => Object.keys(w).some((k) => !allowed.includes(k)));
       if (leaky) return H.FAIL('A8', 'templates surface unexpected fields: ' + JSON.stringify(leaky));
-      return H.PASS('A8', `templates listed: [${ids.join(', ')}] (workflowId+name only)`);
+      return H.PASS('A8', `templates listed: [${ids.join(', ')}] (workflowId+name+channels only)`);
+    }));
+
+    // ---- A8b: channel filter narrows by Novu step types ----
+    results.push(await H.guard('A8b', async () => {
+      const r = await H.providerTemplates(auth, 'channel=EMAIL');
+      if (r.status !== 200) return H.FAIL('A8b', `GET /providers/templates?channel=EMAIL → ${r.status}`);
+      const ids = ((r.json && r.json.data) || []).map((w) => w.workflowId);
+      if (!ids.includes('complaints-email'))
+        return H.FAIL('A8b', `EMAIL filter must keep complaints-email, got [${ids.join(', ')}]`);
+      if (ids.includes('complaints-sms'))
+        return H.FAIL('A8b', `EMAIL filter must drop complaints-sms, got [${ids.join(', ')}]`);
+      return H.PASS('A8b', `EMAIL filter → [${ids.join(', ')}]`);
     }));
 
     // ---- A9: Multiple integrations, different numbers coexist ----

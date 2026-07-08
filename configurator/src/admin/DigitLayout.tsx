@@ -247,9 +247,13 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                           `}
                           title={sidebarCollapsed ? translate(item.nameKey) : undefined}
                         >
-                          <Icon className="w-4.5 h-4.5 flex-shrink-0" />
+                          {/* w-4.5 is not a Tailwind v3 utility (no CSS emitted) — the
+                              icon rendered at its intrinsic 24px and shrank the label box.
+                              text-left keeps a wrapped label on the shared left edge
+                              (buttons default to text-align:center). */}
+                          <Icon className="w-4 h-4 flex-shrink-0" />
                           {!sidebarCollapsed && (
-                            <span className="text-sm font-medium">{translate(item.nameKey)}</span>
+                            <span className="text-sm font-medium flex-1 min-w-0 text-left">{translate(item.nameKey)}</span>
                           )}
                         </button>
                       );

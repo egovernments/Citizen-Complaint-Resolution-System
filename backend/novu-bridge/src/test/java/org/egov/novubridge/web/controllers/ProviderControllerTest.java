@@ -93,7 +93,7 @@ class ProviderControllerTest {
     }
 
     @Test
-    void createProvider_mapsWhatsappToNovuSmsChannel() {
+    void createProvider_mapsWhatsappToNovuSmsChannel_andMarksIdentifier() {
         when(novuClient.createIntegration(nullable(String.class), nullable(String.class),
                 anyString(), anyString(), nullable(Map.class)))
                 .thenReturn(novuResp(201, Map.of("data", Map.of("_id", "i2", "providerId", "twilio"))));
@@ -106,10 +106,32 @@ class ProviderControllerTest {
 
         controller.createProvider(req);
 
+        ArgumentCaptor<String> identifier = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> channel = ArgumentCaptor.forClass(String.class);
-        verify(novuClient).createIntegration(nullable(String.class), nullable(String.class),
+        verify(novuClient).createIntegration(nullable(String.class), identifier.capture(),
                 eq("twilio"), channel.capture(), nullable(Map.class));
         assertEquals("sms", channel.getValue(), "WHATSAPP maps to the Twilio Novu sms channel");
+        assertTrue(identifier.getValue().startsWith("whatsapp-"),
+                "blank identifier must default to a whatsapp- marker so the UI can derive the channel back");
+    }
+
+    @Test
+    void createProvider_whatsappKeepsOperatorIdentifier() {
+        when(novuClient.createIntegration(nullable(String.class), nullable(String.class),
+                anyString(), anyString(), nullable(Map.class)))
+                .thenReturn(novuResp(201, Map.of("data", Map.of("_id", "i3", "providerId", "twilio"))));
+
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("channel", "WHATSAPP");
+        req.put("providerId", "twilio");
+        req.put("name", "Twilio WhatsApp");
+        req.put("identifier", "my-wa-sender");
+        req.put("credentials", Map.of("from", "whatsapp:+14155238886"));
+
+        controller.createProvider(req);
+
+        verify(novuClient).createIntegration(nullable(String.class), eq("my-wa-sender"),
+                eq("twilio"), anyString(), nullable(Map.class));
     }
 
     // ---- GET /providers/templates ---------------------------------------
@@ -129,7 +151,36 @@ class ProviderControllerTest {
         List<Map<String, Object>> data = (List<Map<String, Object>>) out.get("data");
         assertEquals("complaints-sms", data.get(0).get("workflowId"));
         assertEquals("Complaints SMS", data.get(0).get("name"));
-        assertFalse(data.get(0).containsKey("steps"), "only workflowId+name are surfaced");
+        assertFalse(data.get(0).containsKey("steps"), "only workflowId+name+channels are surfaced");
+    }
+
+    @Test
+    void templates_filtersByChannelStepTypes() {
+        Map<String, Object> sms = new LinkedHashMap<>();
+        sms.put("workflowId", "complaints-sms");
+        sms.put("name", "Complaints SMS");
+        sms.put("stepTypeOverviews", List.of("sms"));
+        Map<String, Object> email = new LinkedHashMap<>();
+        email.put("workflowId", "complaints-email");
+        email.put("name", "Complaints Email");
+        email.put("stepTypeOverviews", List.of("email"));
+        when(novuClient.listWorkflows()).thenReturn(novuResp(200,
+                Map.of("data", Map.of("workflows", List.of(sms, email)))));
+
+        Map<String, Object> out = controller.templates("EMAIL", null).getBody();
+
+        assertEquals(1, out.get("total"), "EMAIL filter must drop the sms-step workflow");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> data = (List<Map<String, Object>>) out.get("data");
+        assertEquals("complaints-email", data.get(0).get("workflowId"));
+        assertEquals(List.of("email"), data.get(0).get("channels"));
+
+        // WHATSAPP rides the Twilio sms integration → sms-step workflows.
+        Map<String, Object> wa = controller.templates("WHATSAPP", null).getBody();
+        assertEquals(1, wa.get("total"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> waData = (List<Map<String, Object>>) wa.get("data");
+        assertEquals("complaints-sms", waData.get(0).get("workflowId"));
     }
 
     // ---- POST /providers/verify -----------------------------------------
@@ -170,8 +221,8 @@ class ProviderControllerTest {
 
     @Test
     void testSend_sms_triggersSmsWorkflow_writesTestLog() {
-        when(novuClient.trigger(anyString(), anyString(), nullable(String.class), anyMap(),
-                anyString(), nullable(Map.class), nullable(String.class)))
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
+                nullable(String.class), anyMap(), anyString()))
                 .thenReturn(novuResp(201, Map.of("acknowledged", true)));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -185,8 +236,8 @@ class ProviderControllerTest {
         assertTrue(((String) out.get("transactionId")).startsWith("nb-test-"));
 
         ArgumentCaptor<String> phone = ArgumentCaptor.forClass(String.class);
-        verify(novuClient).trigger(eq("complaints-sms"), anyString(), phone.capture(), anyMap(),
-                anyString(), isNull(), isNull());
+        verify(novuClient).trigger(eq("complaints-sms"), anyString(), phone.capture(),
+                nullable(String.class), anyMap(), anyString());
         assertEquals("+15550100", phone.getValue());
 
         ArgumentCaptor<DispatchLogEntry> logged = ArgumentCaptor.forClass(DispatchLogEntry.class);
@@ -238,8 +289,8 @@ class ProviderControllerTest {
 
     @Test
     void testSend_subscriberIdIsStable_reproducibleAcrossCalls() {
-        when(novuClient.trigger(anyString(), anyString(), nullable(String.class), anyMap(),
-                anyString(), nullable(Map.class), nullable(String.class)))
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
+                nullable(String.class), anyMap(), anyString()))
                 .thenReturn(novuResp(201, Map.of()));
 
         Map<String, Object> req = new LinkedHashMap<>();
@@ -249,5 +300,28 @@ class ProviderControllerTest {
         String txn1 = (String) controller.testSend(req).getBody().get("transactionId");
         String txn2 = (String) controller.testSend(req).getBody().get("transactionId");
         assertEquals(txn1, txn2, "same recipient must yield a reproducible transactionId (no clock/random)");
+    }
+
+    @Test
+    void testSend_email_passesRecipientEmailToNovu() {
+        when(novuClient.trigger(anyString(), anyString(), nullable(String.class),
+                nullable(String.class), anyMap(), anyString()))
+                .thenReturn(novuResp(201, Map.of("acknowledged", true)));
+
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("channel", "EMAIL");
+        req.put("to", Map.of("email", "operator@example.com"));
+        req.put("subject", "test");
+        req.put("body", "hello");
+
+        Map<String, Object> out = controller.testSend(req).getBody();
+        assertEquals(true, out.get("ok"));
+
+        // to.email MUST reach Novu — the synthetic nb-test-* subscriber has no
+        // stored email, so dropping it makes the email step silently deliver nothing.
+        ArgumentCaptor<String> email = ArgumentCaptor.forClass(String.class);
+        verify(novuClient).trigger(eq("complaints-email"), anyString(), nullable(String.class),
+                email.capture(), anyMap(), anyString());
+        assertEquals("operator@example.com", email.getValue());
     }
 }

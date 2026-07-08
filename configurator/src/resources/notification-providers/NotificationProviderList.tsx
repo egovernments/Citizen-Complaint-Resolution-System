@@ -35,7 +35,15 @@ function notify(title: string, description?: string, variant?: 'default' | 'dest
 }
 
 const columns: DigitColumn[] = [
-  { source: 'channel', label: 'app.providers.col_channel', sortable: false },
+  {
+    source: 'channel',
+    label: 'app.providers.col_channel',
+    sortable: false,
+    // Novu stores WhatsApp as a Twilio `sms` integration; rowChannel derives
+    // the WHATSAPP designation back from the identifier/name marker so the
+    // row doesn't silently morph into a second SMS entry after a refetch.
+    render: (record) => <span>{rowChannel(record)}</span>,
+  },
   {
     source: 'providerId',
     label: 'app.providers.col_provider',
@@ -154,7 +162,11 @@ function AddProviderAction() {
       });
       notify(
         t('app.providers.msg_created', { _: 'Provider created.' }),
-        `${channel} · ${providerId}`,
+        // WhatsApp rides the Twilio SMS integration in Novu — say so, or the
+        // operator reads the refetched `sms` row as their WHATSAPP entry vanishing.
+        channel === 'WHATSAPP'
+          ? `${channel} · ${providerId} (stored as Novu sms integration)`
+          : `${channel} · ${providerId}`,
       );
       setOpen(false);
       reset();
@@ -489,10 +501,12 @@ function PullTemplatesDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t('app.providers.templates_title', { _: 'Available Templates' })}</DialogTitle>
+          <DialogTitle>{t('app.providers.templates_title', { _: 'Novu Workflows' })}</DialogTitle>
           <DialogDescription>
             {t('app.providers.templates_hint', {
-              _: 'Novu delivery workflows discovered for this provider. Copy a workflow ID to reference it.',
+              _: 'Delivery workflows configured in Novu for this channel — not provider templates '
+                + '(Twilio has no SMS template registry). SMS/Email message text is managed under '
+                + 'Notification Templates. Copy a workflow ID to reference it.',
             })}
           </DialogDescription>
         </DialogHeader>
@@ -507,13 +521,20 @@ function PullTemplatesDialog({
           {error && !loading && <p className="text-sm text-destructive py-4">{error}</p>}
           {!loading && !error && result && result.data.length === 0 && (
             <p className="text-sm text-muted-foreground py-4">
-              {t('app.providers.templates_empty', { _: 'No workflows found for this provider.' })}
+              {t('app.providers.templates_empty', { _: 'No Novu workflows found for this channel.' })}
             </p>
           )}
           {!loading && !error && result && result.data.map((w) => (
             <div key={w.workflowId} className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
               <div className="min-w-0">
-                <div className="text-sm font-medium truncate">{w.name}</div>
+                <div className="text-sm font-medium truncate">
+                  {w.name}
+                  {(w.channels ?? []).length > 0 && (
+                    <span className="ml-2 font-mono text-[10px] uppercase text-muted-foreground">
+                      {(w.channels ?? []).join(', ')}
+                    </span>
+                  )}
+                </div>
                 <div className="font-mono text-xs text-muted-foreground truncate">{w.workflowId}</div>
               </div>
               <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => copy(w.workflowId)}>
@@ -549,7 +570,7 @@ function ProviderRowActions({ record }: { record: Record<string, unknown> }) {
   const t = useTranslate();
   const integrationId = String(record._id ?? record.id ?? '');
   const providerId = String(record.providerId ?? DEFAULT_PROVIDER.SMS);
-  const channel = rowChannel(record.channel);
+  const channel = rowChannel(record);
 
   const [verify, setVerify] = useState<VerifyState>({ status: 'idle' });
   const [testOpen, setTestOpen] = useState(false);
