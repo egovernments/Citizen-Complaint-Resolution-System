@@ -230,3 +230,32 @@ the tenant-identity config model. The **platform layer** (gateway, secrets backe
 bootstrap, managed vs in-cluster infra, K8s-only optional services) is **intentionally different** and
 not meant to be made identical — the realistic parity target is the app layer + config semantics, plus
 the two data-portability blockers to be aware of (encryption keys, dump vs migrations).
+
+---
+
+## Action tracker
+
+The consolidated list of concrete items surfaced by this audit. Update **Status** as items are resolved
+(`☐` open · `🟡` in progress · `✅` done · `➖` accepted / won't-fix). "Type" legend: **Gap** = real
+divergence to close · **Cleanup** = remove dead/legacy config · **Decision** = needs a call · **Harden**
+= production-hardening · **Process** = ongoing discipline · **Awareness** = document, no code change.
+
+| # | Item | Where | Type | Recommended action | Ref | Status |
+|---|---|---|---|---|---|---|
+| 1 | Legacy `/egov-location` API not served (PGR ward selector, configurator, MCP would break) | K8s | Gap | Migrate callers to `/boundary-service/boundary-relationships/_search` (fixes both stacks; lets the Kong adapter be dropped) — or deploy an egov-location service/shim on K8s | — | ☐ |
+| 2 | In-app `egov-user-event` feed mocked empty | Compose | Gap | Deploy `egov-user-event` (+ consume `persist-user-events-async`) if the in-app bell is required; else accept Novu-only | — | ☐ |
+| 3 | `egov-user-event` `service-host` points at stale `.staging` namespace | K8s | Cleanup | Fix to `.egov` (dead config today — gateway uses k8s discovery — but should be corrected) | — | ☐ |
+| 4 | Session-expiry re-login broken (Kong never emits `InvalidAccessTokenException`) | Compose | Gap | Have the Kong `pre-function` emit that error on failed `/user/_details` resolution (or add full RBAC, which also fixes it) | — | ☐ |
+| 5 | Gateway does no authn/RBAC enforcement | Compose | Decision | Decide: add RBAC in Kong (call `egov-accesscontrol`) vs formally accept "auth-soft dev mode, never public" (conflicts with public tenants) | — | ☐ |
+| 6 | `pgr-services` search lacks server-side ownership scoping (IDOR) | Both | Gap | Scope a CITIZEN's search to their own `userInfo`/`account_id` (reuse `PrincipalScopeResolver` pattern) | #1071 | ☐ |
+| 7 | Real OTP hard to enable on compose (`/otp` mock has dead upstream, undocumented) | Compose | Gap | Repoint the Kong `/otp` route to real `egov-otp` + document the de-mock steps | — | ☐ |
+| 8 | Fixed-OTP `123456` enabled on both stacks | Both | Harden | Set `citizen-otp-fixed-enabled: false` for production; run real OTP/SMS | — | ☐ |
+| 9 | Tenant-ID config scattered + conditionally rewritten; residual drift (`enc-service`/`user-proxy` on `pg.citya`) | Compose | Gap | Derive all tenant-ID vars from a single inventory `state_root`/`state_tenant_id`, unconditionally (like K8s) | — | ☐ |
+| 10 | Compose DB dump can drift behind K8s migrations | Compose | Process | Regenerate `full-dump.sql` as migrations evolve; ideally a CI check that dump == migrated schema | — | ☐ |
+| 11 | Encryption master keys differ → encrypted data not portable between stacks | Both | Awareness | Document; if cross-stack data migration is ever needed, plan a re-encryption/key-alignment step | — | ☐ |
+| 12 | Legacy/unused services still deployed (DSS, `service-request`, `pdf-service`) | K8s | Cleanup | Decide whether to drop from the helmfile — CCRS uses native pgr `/v2/analytics`, and `service-request`/`pdf` are unused by PGR | — | ☐ |
+| 13 | Audit **query** API absent (records still captured via persister) | Compose | Decision | Deploy `audit-service` only if an audit-query API is needed | — | ☐ |
+
+**Not action items (intentional / at parity, listed for completeness):** modern `/boundary-service/*`
+routing, feature toggles, `/health/*` mechanism, Novu email, MCP bulk-boundary, and the platform-layer
+differences (managed RDS/S3 vs in-container, ingress split, secrets backend). These are by design.
