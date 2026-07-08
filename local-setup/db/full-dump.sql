@@ -6,10 +6,24 @@
 -- statea*/statea.citya (legacy pre-"pg" naming, superseded everywhere else
 -- in this repo), and CI-test-run leftover tenants (ciwf*, cids*, ciregtest,
 -- etc). Rows across 21 tenant-scoped tables went from 41,540 to 1,478.
--- pg.citya's own data was left untouched — it was already sparse (e.g. 1
--- HRMS employee row) before this filter; enriching it to match the new
--- 4-department/3-level-hierarchy/8-employee seed data is a separate,
--- larger follow-up requiring an actual seeder run, not done here.
+--
+-- pg.citya DEMO DATA (#1034) — pg.citya had zero Department rows and a
+-- 4-level boundary hierarchy (City/Zone/Block/Locality) before this pass.
+-- Added 4 representative departments (DEPT_1-4) and collapsed the
+-- hierarchy to City -> Zone -> Ward (2 zones, 3 wards), hand-inserted
+-- to match exactly what boundary-service/mdms-v2 would have written
+-- (verified by reloading into a scratch Postgres and checking the
+-- resulting rows). No PGR complaints referenced the old Block/Locality
+-- codes, so this was safe to restructure.
+--
+-- NOT done here: demo employees (CSR/GRO/department-head/supervisor)
+-- per role wired to these departments/boundaries — employee records
+-- require the live egov-user/egov-hrms APIs for PII encryption
+-- (username/name are encrypted at rest; can't be hand-crafted), and
+-- employee creation in this sandbox is separately blocked by a
+-- pre-existing boundary-service bug (IllegalArgumentException:
+-- "content" is null) unrelated to this seed-data work. Left as a
+-- follow-up once that's fixed or a working environment is available.
 -- ============================================================================
 -- STALE COMPLAINT MASTERS — REGENERATE THIS DUMP FROM A MIGRATED TENANT
 -- ----------------------------------------------------------------------------
@@ -1918,12 +1932,12 @@ f971f0f0-f691-4b3d-bde1-a539daf5029c	pg	PG_STATE	{"type": "Polygon", "coordinate
 8cf59d36-879b-498d-886c-969b799b9ed0	pg	SUN01_LOCALITY	{"type": "Point", "coordinates": [74.87155, 31.63089]}	\N	1781073055245	system	1781073055245	system
 d160ceda-65a5-4d2a-b19d-e69ef9be2c22	pg	SUN02_LOCALITY	{"type": "Point", "coordinates": [74.85, 31.61]}	\N	1781073055245	system	1781073055245	system
 78120481-4402-4284-a81c-c8f2b00e58ad	pg	SUN03_LOCALITY	{"type": "Point", "coordinates": [74.84, 31.60]}	\N	1781073055245	system	1781073055245	system
-6ac86cdb-750c-4c17-aa7e-fd88db95aced	pg.citya	B1_ADMIN_BLOCK	{"type": "Polygon", "coordinates": [[[77.17, 28.56], [70.11, 22.50], [77.58, 13.05], [86.42, 23.77], [77.17, 28.56]]]}	\N	1781072283555	system	1781072283555	system
 88ba1d4c-540f-4351-9289-becd79cfdeae	pg.citya	PG_CITYA_ADMIN_CITY	{"type": "Polygon", "coordinates": [[[77.17, 28.56], [70.11, 22.50], [77.58, 13.05], [86.42, 23.77], [77.17, 28.56]]]}	\N	1781072283555	system	1781072283555	system
-2dcb1072-1a09-48ca-b011-b24931d864eb	pg.citya	SUN01_ADMIN_LOCALITY	{"type": "Point", "coordinates": [74.871552, 31.63089]}	\N	1781072283555	system	1781072283555	system
-f97cd7b4-8c8c-47c2-9f28-817f10ac5e15	pg.citya	SUN02_ADMIN_LOCALITY	{"type": "Point", "coordinates": [74.9, 31.6]}	\N	1781072283555	system	1781072283555	system
-02e084bc-d649-4863-bfc5-332dd11db818	pg.citya	SUN03_ADMIN_LOCALITY	{"type": "Point", "coordinates": [74.85, 31.65]}	\N	1781072283555	system	1781072283555	system
 665a5db2-b61f-4730-b769-fee204b70a0a	pg.citya	Z1_ADMIN_ZONE	{"type": "Polygon", "coordinates": [[[77.17, 28.56], [70.11, 22.50], [77.58, 13.05], [86.42, 23.77], [77.17, 28.56]]]}	\N	1781072283555	system	1781072283555	system
+e7675727-dcfa-46b7-aa92-09bacb36f673	pg.citya	Z2_ADMIN_ZONE	{"type": "Polygon", "coordinates": [[[77.20, 28.60], [70.15, 22.55], [77.60, 13.10], [86.45, 23.80], [77.20, 28.60]]]}	\N	1783555200000	system	1783555200000	system
+a04109d4-ace4-4608-9903-e279d4d9c158	pg.citya	W1_ADMIN_WARD	{"type": "Point", "coordinates": [74.871552, 31.63089]}	\N	1783555200000	system	1783555200000	system
+8c1db4e2-50d7-4f1f-b3ed-0620944eafa9	pg.citya	W2_ADMIN_WARD	{"type": "Point", "coordinates": [74.9, 31.6]}	\N	1783555200000	system	1783555200000	system
+d6fa339e-c7b3-4d0e-8ef4-d5f80837c8a0	pg.citya	W3_ADMIN_WARD	{"type": "Point", "coordinates": [74.85, 31.65]}	\N	1783555200000	system	1783555200000	system
 \.
 
 
@@ -1933,7 +1947,7 @@ f97cd7b4-8c8c-47c2-9f28-817f10ac5e15	pg.citya	SUN02_ADMIN_LOCALITY	{"type": "Poi
 
 COPY public.boundary_hierarchy (id, tenantid, hierarchytype, boundaryhierarchy, createdtime, createdby, lastmodifiedtime, lastmodifiedby) FROM stdin;
 53ad64eb-6ea1-4e5b-927f-fa46a76cf77f	pg	ADMIN	[{"active": true, "boundaryType": "State", "parentBoundaryType": null}, {"active": true, "boundaryType": "City", "parentBoundaryType": "State"}, {"active": true, "boundaryType": "Zone", "parentBoundaryType": "City"}, {"active": true, "boundaryType": "Block", "parentBoundaryType": "Zone"}, {"active": true, "boundaryType": "Locality", "parentBoundaryType": "Block"}]	1781072811606	system	1781072811606	system
-7c3ee1b7-0d7c-4f1b-bf98-2d21482bd7dc	pg.citya	ADMIN	[{"active": true, "boundaryType": "City", "parentBoundaryType": null}, {"active": true, "boundaryType": "Zone", "parentBoundaryType": "City"}, {"active": true, "boundaryType": "Block", "parentBoundaryType": "Zone"}, {"active": true, "boundaryType": "Locality", "parentBoundaryType": "Block"}]	1781072233000	system	1781072233000	system
+7c3ee1b7-0d7c-4f1b-bf98-2d21482bd7dc	pg.citya	ADMIN	[{"active": true, "boundaryType": "City", "parentBoundaryType": null}, {"active": true, "boundaryType": "Zone", "parentBoundaryType": "City"}, {"active": true, "boundaryType": "Ward", "parentBoundaryType": "Zone"}]	1783555200000	system	1783555200000	system
 \.
 
 
@@ -1949,12 +1963,12 @@ e0e17092-8f46-4412-ab8f-2b54adf1341e	pg	PG_CITYA	ADMIN	City	PG_STATE	PG_STATE|PG
 efbe8abb-e405-46af-9155-9508574cf794	pg	SUN01_LOCALITY	ADMIN	Locality	PG_CITYA_B1	PG_STATE|PG_CITYA|PG_CITYA_Z1|PG_CITYA_B1|SUN01_LOCALITY	1781073055245	system	1781073055245	system
 4ba318df-1337-47c0-8e2a-561b2952641d	pg	SUN02_LOCALITY	ADMIN	Locality	PG_CITYA_B1	PG_STATE|PG_CITYA|PG_CITYA_Z1|PG_CITYA_B1|SUN02_LOCALITY	1781073055245	system	1781073055245	system
 77281ff2-34ef-4d35-b5bb-fcb453c76ee7	pg	SUN03_LOCALITY	ADMIN	Locality	PG_CITYA_B1	PG_STATE|PG_CITYA|PG_CITYA_Z1|PG_CITYA_B1|SUN03_LOCALITY	1781073055245	system	1781073055245	system
-0a19da97-2331-498d-b902-350c5f7869d4	pg.citya	B1_ADMIN_BLOCK	ADMIN	Block	Z1_ADMIN_ZONE	PG_CITYA_ADMIN_CITY|Z1_ADMIN_ZONE|B1_ADMIN_BLOCK	1781072303298	system	1781072303298	system
 7af4fb46-91bc-40b3-bad5-41339464f48d	pg.citya	PG_CITYA_ADMIN_CITY	ADMIN	City	\N	PG_CITYA_ADMIN_CITY	1781072303298	system	1781072303298	system
-6ffbad6d-2bd0-4cd9-9c7a-ef80cc049067	pg.citya	SUN01_ADMIN_LOCALITY	ADMIN	Locality	B1_ADMIN_BLOCK	PG_CITYA_ADMIN_CITY|Z1_ADMIN_ZONE|B1_ADMIN_BLOCK|SUN01_ADMIN_LOCALITY	1781072303298	system	1781072303298	system
-5c0d753e-c8b3-4540-be50-e29071c74d48	pg.citya	SUN02_ADMIN_LOCALITY	ADMIN	Locality	B1_ADMIN_BLOCK	PG_CITYA_ADMIN_CITY|Z1_ADMIN_ZONE|B1_ADMIN_BLOCK|SUN02_ADMIN_LOCALITY	1781072303298	system	1781072303298	system
-2b834c9a-de94-4cef-9ff4-7263b34ff185	pg.citya	SUN03_ADMIN_LOCALITY	ADMIN	Locality	B1_ADMIN_BLOCK	PG_CITYA_ADMIN_CITY|Z1_ADMIN_ZONE|B1_ADMIN_BLOCK|SUN03_ADMIN_LOCALITY	1781072303298	system	1781072303298	system
 d35f7376-f2e0-42b3-8a68-fa57ec7a56d9	pg.citya	Z1_ADMIN_ZONE	ADMIN	Zone	PG_CITYA_ADMIN_CITY	PG_CITYA_ADMIN_CITY|Z1_ADMIN_ZONE	1781072303298	system	1781072303298	system
+e244488b-2bc5-4ad7-9bf3-167fd13ef410	pg.citya	Z2_ADMIN_ZONE	ADMIN	Zone	PG_CITYA_ADMIN_CITY	PG_CITYA_ADMIN_CITY|Z2_ADMIN_ZONE	1783555200000	system	1783555200000	system
+61dd8a2d-5b43-4ee1-b5b4-81d29b766b6e	pg.citya	W1_ADMIN_WARD	ADMIN	Ward	Z1_ADMIN_ZONE	PG_CITYA_ADMIN_CITY|Z1_ADMIN_ZONE|W1_ADMIN_WARD	1783555200000	system	1783555200000	system
+bd68986e-ed79-4307-a04e-1f816b4ddd9f	pg.citya	W2_ADMIN_WARD	ADMIN	Ward	Z1_ADMIN_ZONE	PG_CITYA_ADMIN_CITY|Z1_ADMIN_ZONE|W2_ADMIN_WARD	1783555200000	system	1783555200000	system
+3a82bc2f-8fd3-4209-b379-636a19f1c795	pg.citya	W3_ADMIN_WARD	ADMIN	Ward	Z2_ADMIN_ZONE	PG_CITYA_ADMIN_CITY|Z2_ADMIN_ZONE|W3_ADMIN_WARD	1783555200000	system	1783555200000	system
 \.
 
 
@@ -3106,6 +3120,10 @@ theme-config-data-001	pg	themeconfig	common-masters.ThemeConfig	{"id": "themecon
 c674e5c2-7983-459b-bb0f-6929245fea2b	pg.citya	CMS|All	CMS-BOUNDARY.HierarchySchema	{"hierarchy": "ADMIN", "department": "All", "moduleName": "CMS", "lowestHierarchy": "Locality", "highestHierarchy": "Zone"}	t	system	system	1781074295688	1781074295688
 a51e8099-4433-4409-b0ac-5b5873d78957	pg.citya	HRMS|All	CMS-BOUNDARY.HierarchySchema	{"hierarchy": "ADMIN", "department": "All", "moduleName": "HRMS", "lowestHierarchy": "Locality", "highestHierarchy": "Zone"}	t	system	system	1781074295688	1781074295688
 91e3b381-dfc4-4dfd-9768-3f193e57c088	pg.citya	CRS_BOUNDARY_DATA	CRS-ADMIN-CONSOLE.adminSchema	{"title": "CRS_BOUNDARY_DATA", "properties": {"numberProperties": [{"name": "CRS_LAT", "type": "number", "isRequired": true, "description": "Latitude", "orderNumber": 2}, {"name": "CRS_LONG", "type": "number", "isRequired": true, "description": "Longitude", "orderNumber": 3}], "stringProperties": [{"name": "CRS_BOUNDARY_CODE", "type": "string", "isRequired": true, "description": "Boundary Code", "orderNumber": 1, "freezeColumn": true}]}, "campaignType": "all"}	t	system	system	1781074295688	1781074295688
+956a5be3-d952-4291-842a-c94653946ac1	pg.citya	common-masters.Department.DEPT_1	common-masters.Department	{"code": "DEPT_1", "name": "Street Lighting & Electrical", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
+2cade399-9d00-4423-8ddf-eda05af5c904	pg.citya	common-masters.Department.DEPT_2	common-masters.Department	{"code": "DEPT_2", "name": "Roads & Public Works", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
+07da774b-1bc0-4154-b542-0ad17b645374	pg.citya	common-masters.Department.DEPT_3	common-masters.Department	{"code": "DEPT_3", "name": "Health & Sanitation", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
+9c2e1397-8a1e-49ac-83c0-50c784db5133	pg.citya	common-masters.Department.DEPT_4	common-masters.Department	{"code": "DEPT_4", "name": "Water Supply & Sewerage", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
 \.
 
 
