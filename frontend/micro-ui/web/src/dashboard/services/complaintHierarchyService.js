@@ -1,6 +1,21 @@
 import { getTenantId, hasAuth } from "./analyticsService";
 import { formatDimensionLabel } from "../config/labelFormat";
 
+/**
+ * MDMS context path from globalConfigs (deployments serve MDMS under
+ * "mdms-v2"; the v1-compat search stays available under that context).
+ * Falls back to the legacy service name when no config is present
+ * (e.g. the standalone dashboard build without globalConfigs.js).
+ */
+function getMdmsSearchUrl() {
+  const get = window.globalConfigs?.getConfig?.bind(window.globalConfigs);
+  const contextPath =
+    get?.("MDMS_V1_CONTEXT_PATH") ||
+    get?.("MDMS_CONTEXT_PATH") ||
+    "egov-mdms-service";
+  return `/${String(contextPath).replace(/^\/+|\/+$/g, "")}/v1/_search`;
+}
+
 function parseJson(raw) {
   try {
     return JSON.parse(raw);
@@ -99,7 +114,7 @@ export async function fetchComplaintTypeIndex() {
   if (!hasAuth()) return null;
 
   try {
-    const response = await fetch("/egov-mdms-service/v1/_search", {
+    const response = await fetch(getMdmsSearchUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "omit",
