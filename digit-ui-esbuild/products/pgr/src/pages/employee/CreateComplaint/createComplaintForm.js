@@ -45,7 +45,10 @@ const CreateComplaintForm = ({
   // mismatch: after a ULB switch (ChangeCity) or a re-login, restoring the old
   // tenant's SelectComplaintType/SelectedBoundary would submit foreign codes
   // under the new tenant while the pickers render blank.
-  const draftUserUuid = user?.info?.uuid;
+  // NOTE: read the user directly — `const user` is declared further down and
+  // referencing it here is a temporal-dead-zone ReferenceError that crashed
+  // the whole page to the error boundary.
+  const draftUserUuid = Digit.UserService.getUser()?.info?.uuid;
   const initialDraftRef = useRef(null);
   if (initialDraftRef.current === null) {
     const { __draftMeta, ...draftValues } = sessionFormData || {};
