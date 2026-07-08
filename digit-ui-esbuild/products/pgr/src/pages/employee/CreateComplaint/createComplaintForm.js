@@ -34,6 +34,31 @@ const CreateComplaintForm = ({
   const [type, setType] = useState({});
   const [subType, setSubType] = useState([]);
 
+  // Hydrate the form ONCE from the session draft, then keep the reference
+  // FIXED. FormComposerV2 calls reset(defaultValues) whenever the defaultValues
+  // reference changes (guarded only by non-empty), so passing the live
+  // sessionFormData would reset the form — dropping focus and in-flight
+  // edits — on every persisted change. onFormValueChange below mirrors each
+  // change into sessionStorage; this ref is only the mount-time snapshot.
+  //
+  // The draft carries a __draftMeta {tenant, user} stamp and is DISCARDED on
+  // mismatch: after a ULB switch (ChangeCity) or a re-login, restoring the old
+  // tenant's SelectComplaintType/SelectedBoundary would submit foreign codes
+  // under the new tenant while the pickers render blank.
+  const draftUserUuid = user?.info?.uuid;
+  const initialDraftRef = useRef(null);
+  if (initialDraftRef.current === null) {
+    const { __draftMeta, ...draftValues } = sessionFormData || {};
+    const draftValid = __draftMeta
+      ? __draftMeta.tenant === tenantId && __draftMeta.user === draftUserUuid
+      : Object.keys(draftValues).length === 0; // legacy/unstamped non-empty drafts are stale — drop
+    initialDraftRef.current = draftValid ? draftValues : {};
+  }
+  // JSON snapshot of the last persisted draft — cheap change detection so the
+  // sessionStorage write (and the re-render it causes) happens only on real
+  // value changes, never in a loop.
+  const draftJsonRef = useRef(JSON.stringify(initialDraftRef.current));
+
   const user = Digit.UserService.getUser();
 
   // Hook for creating a complaint
@@ -427,11 +452,21 @@ const CreateComplaintForm = ({
       if (prevCodes !== newCodes) {
         prevSubTypeRef.current = newSubTypes;
         setSubType(newSubTypes);
-        // Mirror citizen FormExplorer fix (CCRS#437): reset the subtype
-        // immediately so the prior selection cannot leak into the next
-        // render under a different ComplaintType. Pass `undefined` so the
-        // Dropdown falls back cleanly to its empty state.
-        setValue("SelectSubComplaintType", undefined, { shouldDirty: true, shouldTouch: true, shouldValidate: false });
+        // Mirror citizen FormExplorer fix (CCRS#437): reset the subtype so the
+        // prior selection cannot leak into the next render under a different
+        // ComplaintType — but only when the held value is actually INVALID for
+        // the new list. The list also "changes" on mount when a session draft
+        // restores SelectComplaintType (empty -> restored options); wiping
+        // unconditionally would destroy the restored SelectSubComplaintType.
+        const curSub = formData?.SelectSubComplaintType;
+        const stillValid =
+          curSub &&
+          newSubTypes.some(
+            (s) => (s.serviceCode && s.serviceCode === curSub.serviceCode) || (s.code && s.code === curSub.code)
+          );
+        if (!stillValid) {
+          setValue("SelectSubComplaintType", undefined, { shouldDirty: true, shouldTouch: true, shouldValidate: false });
+        }
       }
     }
 
@@ -455,6 +490,16 @@ const CreateComplaintForm = ({
       setValue("ComplainantName", updatedData.ComplainantName);
       setValue("ComplainantContactNumber", updatedData.ComplainantContactNumber);
       setSessionFormData(updatedData);
+    }
+
+    // Persist the whole draft on every real change so a page refresh restores
+    // the form (initialDraftRef seeds defaultValues once at mount, so this
+    // write never triggers a form reset). Stamped with tenant+user for the
+    // validity check above; cleared on successful create.
+    const draftJson = JSON.stringify(formData ?? {});
+    if (draftJson !== draftJsonRef.current) {
+      draftJsonRef.current = draftJson;
+      setSessionFormData({ ...JSON.parse(draftJson), __draftMeta: { tenant: tenantId, user: draftUserUuid } });
     }
   };
 
@@ -551,6 +596,7 @@ const CreateComplaintForm = ({
           // (or the route is remounted) the form is empty rather than
           // restored to the just-submitted complaint's values.
           clearSessionFormData();
+          draftJsonRef.current = JSON.stringify({});
           if (typeof formResetRef.current === "function") {
             try { formResetRef.current({}); } catch (_) { /* noop */ }
           }
@@ -586,7 +632,7 @@ const CreateComplaintForm = ({
     <React.Fragment>
       <FormComposerV2
         onSubmit={onFormSubmit}
-        defaultValues={sessionFormData}
+        defaultValues={initialDraftRef.current}
         heading={t("")}
         config={updatedConfig?.form}
         className="custom-form"
