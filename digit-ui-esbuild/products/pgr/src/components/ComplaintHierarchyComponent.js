@@ -1,6 +1,6 @@
 import { Loader } from "@egovernments/digit-ui-components";
 import { Field as V2Field, Select as V2Select } from "@egovernments/digit-ui-components-v2";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../utils/complaintLabel";
 
@@ -24,7 +24,7 @@ import { complaintLabel } from "../utils/complaintLabel";
  * list holding both interior classification nodes and leaf complaint types.
  * Leaf rows carry department/slaHours; interior nodes omit them.
  */
-const ComplaintHierarchyComponent = ({ onSelect }) => {
+const ComplaintHierarchyComponent = ({ onSelect, formData }) => {
   const { t } = useTranslation();
   const tenantId =
     Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
@@ -71,6 +71,29 @@ const ComplaintHierarchyComponent = ({ onSelect }) => {
     [def]
   );
   const [sel, setSel] = useState([]);
+
+  // Draft-restore repaint: the per-level selection is private state, so a
+  // session-restored form has a valid SelectComplaintType while the dropdowns
+  // render blank. While the picker is untouched, rebuild the visible chain by
+  // walking parentCode up from the restored code (leaf or terminal interior
+  // node). No onSelect emit — the value is already in the form. Placed BEFORE
+  // the early returns below (hooks must run unconditionally).
+  const restoreCode = formData?.SelectComplaintType?.serviceCode || formData?.SelectComplaintType?.code;
+  useEffect(() => {
+    if (!restoreCode || sel.some((s) => s != null)) return;
+    if (!levels.length || (!nodes.length && !serviceDefs.length)) return;
+    const byCode = new Map((nodes || []).map((n) => [n.code, n]));
+    const leafDef = (serviceDefs || []).find((s) => s.serviceCode === restoreCode);
+    if (!leafDef && !byCode.has(restoreCode)) return; // catalogue not loaded / foreign code
+    const chain = [restoreCode];
+    let parent = leafDef ? leafDef.parentCode ?? leafDef.menuPath : byCode.get(restoreCode)?.parentCode;
+    while (parent) {
+      chain.unshift(parent);
+      parent = byCode.get(parent)?.parentCode ?? null;
+    }
+    setSel(levels.map((_, i) => chain[i] ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restoreCode, nodes, serviceDefs, levels.length]);
 
   if (loadingHier || loadingDefs) return <Loader />;
   if (!def || levels.length === 0) {

@@ -152,9 +152,25 @@ useEffect(() => {
   // pick manually.
   const wardHintCode = formData?.GeoLocationsPoint?.ward?.code;
   const wardHintName = formData?.GeoLocationsPoint?.ward?.name;
+  // The hint key this mount has already handled. Guards two replays:
+  // (1) a session-restored draft replays the OLD pin's hint on remount — if
+  //     the draft also carries a SelectedBoundary (possibly a manual
+  //     correction of that very hint), the saved boundary is the user's final
+  //     intent and wins; only a hint CHANGE (fresh pin drop) re-derives;
+  // (2) childrenData is recreated when the HRMS jurisdiction filter settles —
+  //     without the key guard that re-ran the effect and re-applied the same
+  //     hint over a manual correction mid-session.
+  const processedHintRef = React.useRef(null);
   useEffect(() => {
     if (!wardHintCode && !wardHintName) return;
     if (!childrenData || childrenData.length === 0) return;
+    const hintKey = (wardHintCode || "") + "|" + (wardHintName || "");
+    if (processedHintRef.current === hintKey) return;
+    if (processedHintRef.current === null && formData?.SelectedBoundary?.code) {
+      // First hint of this mount with a saved boundary — the draft wins.
+      processedHintRef.current = hintKey;
+      return;
+    }
     // boundaryHierarchyOrder may not be seeded yet (usePGRInitialization
     // still in flight / city just switched). Without it the deepest-level
     // targetType is undefined and findWardPath would match the hint at
@@ -200,9 +216,54 @@ useEffect(() => {
     const deepest = path[path.length - 1];
     const isDeepestLevel =
       deepest?.boundaryType === hierarchy[hierarchy.length - 1];
+    processedHintRef.current = hintKey;
     onSelect(config.key, { ...deepest, isLeaf: isDeepestLevel });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wardHintCode, wardHintName, childrenData]);
+
+  // Draft-restore repaint: a session-restored form holds a valid
+  // SelectedBoundary while selectedValues (private state) starts empty, so the
+  // cascade rendered blank after a refresh even though the value was set.
+  // While the picker is untouched, rebuild the visible chain by locating the
+  // saved node in the tree. Runs regardless of any ward hint — the hint effect
+  // above yields its mount round to the saved boundary (which may be a manual
+  // correction of that very hint, and repaints anyway when they agree). No
+  // onSelect emit — the value is already in the form.
+  const savedBoundaryCode = formData?.SelectedBoundary?.code;
+  useEffect(() => {
+    if (!savedBoundaryCode) return;
+    if (Object.keys(selectedValues).length > 0) return;
+    if (!childrenData || childrenData.length === 0) return;
+    const findPathByCode = (nodes, code, path = []) => {
+      for (const n of nodes || []) {
+        const p = [...path, n];
+        if (n.code === code) return p;
+        const found = findPathByCode(n.children, code, p);
+        if (found) return found;
+      }
+      return null;
+    };
+    const path = findPathByCode(childrenData[0]?.boundary, savedBoundaryCode);
+    if (!path || path.length === 0) return;
+    const newSelectedValues = {};
+    const newValue = {};
+    let levelOptions = childrenData[0]?.boundary || [];
+    for (const node of path) {
+      newSelectedValues[node.boundaryType] = node;
+      newValue[node.boundaryType] = levelOptions;
+      levelOptions = node.children || [];
+    }
+    // A mid-cascade draft (SelectedBoundary saved at every level pick) restores
+    // a NON-leaf node: its children are the next level's options. Without this,
+    // the init effect's first-chain walk leaks another parent's children into
+    // the next dropdown (pick County B, refresh -> Sub-Counties of county A).
+    if (levelOptions.length > 0 && levelOptions[0]?.boundaryType) {
+      newValue[levelOptions[0].boundaryType] = levelOptions;
+    }
+    setSelectedValues(newSelectedValues);
+    setValue((prev) => ({ ...prev, ...newValue }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedBoundaryCode, childrenData]);
 
   /**
    * Handle dropdown selection.

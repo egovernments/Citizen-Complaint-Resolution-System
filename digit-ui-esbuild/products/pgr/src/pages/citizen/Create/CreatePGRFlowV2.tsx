@@ -295,6 +295,15 @@ const STEPS = [
   { id: "details", title: "Details", sub: "Additional information" },
 ] as const;
 
+// Session-draft key for the whole wizard. All 3 steps live on ONE route with
+// plain component state, so a refresh (or leaving and re-entering the route)
+// used to wipe every answer. {formData, stepIndex} is mirrored into
+// Digit.SessionStorage under this key (same-tab, 24h TTL, quota-guarded) and
+// deleted after a successful create. Photos are already fileStoreIds (strings)
+// so the draft stays tiny. Distinct from the legacy PGR_CITIZEN_CREATE_COMPLAINT
+// key, which Module.js clears on every citizen-home mount.
+const CREATE_DRAFT_KEY = "PGR_CREATE_CITIZEN_DRAFT";
+
 // ---------------------------------------------------------------------------
 // Helpers (kept identical to the legacy FormExplorer so the API payload
 // shape is preserved byte-for-byte)
@@ -517,12 +526,14 @@ function ComplaintHierarchyPicker({
   nodes,
   serviceDefs,
   onLeafChange,
+  restoreCode,
   t,
 }: {
   def: ComplaintHierarchyDef;
   nodes: ClassificationNode[];
   serviceDefs: ServiceDef[];
   onLeafChange: (leaf: ServiceDef | null) => void;
+  restoreCode?: string;
   t: (k: string) => string;
 }) {
   const levels = React.useMemo(
@@ -534,6 +545,29 @@ function ComplaintHierarchyPicker({
     setSel((prev) => levels.map((_, i) => prev[i] ?? null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [levels.length]);
+
+  // Draft-restore repaint: the per-level selection is private state, so a
+  // restored session draft has a valid SelectComplaintType while the dropdowns
+  // render blank. While the picker is untouched, rebuild the visible chain by
+  // walking parentCode up from the restored code (leaf or terminal interior
+  // node). No onLeafChange emit — the value is already in formData.
+  React.useEffect(() => {
+    if (!restoreCode || sel.some((s) => s != null)) return;
+    if (!levels.length) return;
+    const byCode = new Map((nodes || []).map((n) => [n.code, n]));
+    const leaf = (serviceDefs || []).find((s) => s.serviceCode === restoreCode);
+    if (!leaf && !byCode.has(restoreCode)) return; // catalogue not loaded / other tenant
+    const chain: string[] = [restoreCode];
+    let parent: string | null | undefined = leaf
+      ? leaf.parentCode ?? leaf.menuPath
+      : byCode.get(restoreCode)?.parentCode;
+    while (parent) {
+      chain.unshift(parent);
+      parent = byCode.get(parent)?.parentCode ?? null;
+    }
+    setSel(levels.map((_, i) => chain[i] ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restoreCode, nodes, serviceDefs, levels.length]);
 
   const labelFor = (lvl: HierarchyLevel) =>
     tr(t, (def.hierarchyType + "_" + lvl.levelCode).toUpperCase(), lvl.label || lvl.levelCode);
@@ -677,6 +711,15 @@ function RelatedToStepBody({ data, patch, relatedToOptions, t }: StepBodyProps) 
               SelectComplaintType: null,
               SelectSubComplaintType: null,
               dynamicFields: {},
+              // The boundary tree is fetched at the resolved tenant, so a
+              // previously picked node belongs to the OLD tenant's tree.
+              // The map pin (geographic) is kept — its ward hint re-cascades
+              // against the new tree automatically.
+              SelectedBoundary: null,
+              // Filestore ids are tenant-scoped: photos uploaded under the old
+              // resolved tenant are unreadable under the new one. Drop them so
+              // the citizen re-uploads (previews would break anyway).
+              ComplaintImagesPoint: undefined,
             });
           }}
           placeholder={tr(t, "CS_COMPLAINT_PICK_ONE", "Select…")}
@@ -733,6 +776,7 @@ function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBod
             nodes={nodes || []}
             serviceDefs={serviceDefs}
             t={t}
+            restoreCode={data.SelectComplaintType?.serviceCode}
             onLeafChange={(leaf) =>
               patch({ SelectComplaintType: leaf, SelectSubComplaintType: leaf })
             }
@@ -1768,10 +1812,33 @@ const CreatePGRFlowV2: React.FC = () => {
     (baseTenant ? String(baseTenant).split(".")[0] : baseTenant);
   const tenants: any = Digit.Hooks.pgr.useTenants();
 
-  const [stepIndex, setStepIndex] = React.useState(0);
-  const [formData, setFormData] = React.useState<FormData>({});
+  // Seed from the session draft (if any) so refresh / re-entry restores both
+  // the answers and the step the citizen was on. The draft is stamped with the
+  // tenant + user it was written under and DISCARDED on mismatch — a home-city
+  // switch or a re-login must never restore another tenant's serviceCode /
+  // boundary (they would submit under the new tenant with blank pickers).
+  const draftUserUuid = Digit.UserService.getUser()?.info?.uuid;
+  const savedDraftRef = React.useRef<any>(null);
+  if (savedDraftRef.current === null) {
+    const d = Digit.SessionStorage.get(CREATE_DRAFT_KEY) || {};
+    savedDraftRef.current =
+      d.formData && typeof d.formData === "object" && d.tenant === baseTenant && d.user === draftUserUuid
+        ? d
+        : {};
+  }
+  const [stepIndex, setStepIndex] = React.useState(() => {
+    const saved = Number(savedDraftRef.current.stepIndex);
+    return Number.isInteger(saved) ? Math.min(Math.max(saved, 0), STEPS.length - 1) : 0;
+  });
+  const [formData, setFormData] = React.useState<FormData>(() => savedDraftRef.current.formData || {});
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Mirror every change into the session draft. Deleted on successful create;
+  // kept on failure so "Try Again" restores the answers.
+  React.useEffect(() => {
+    Digit.SessionStorage.set(CREATE_DRAFT_KEY, { formData, stepIndex, tenant: baseTenant, user: draftUserUuid });
+  }, [formData, stepIndex, baseTenant, draftUserUuid]);
 
   // Authority dispatcher (RAINMAKER-PGR.ComplaintRelatedToMap @ state tenant).
   // Empty (the default for any tenant that hasn't seeded it) => the legacy flow:
@@ -1965,7 +2032,10 @@ const CreatePGRFlowV2: React.FC = () => {
         return true;
     }
     return true;
-  }, [stepIndex, formData, serviceDefs]);
+    // templateFields/hasDispatcher must be deps: with a restored draft the memo
+    // otherwise never recomputes when the catalogue/templates settle AFTER
+    // mount, letting a last-step draft submit with empty mandatory dynamic fields.
+  }, [stepIndex, formData, serviceDefs, templateFields, hasDispatcher]);
 
   function pincodeAllowlistOk(): boolean {
     const wardResolved =
@@ -2005,6 +2075,8 @@ const CreatePGRFlowV2: React.FC = () => {
           history.push(`/digit-ui/citizen/pgr/response`);
         },
         onSuccess: async (responseData: any) => {
+          // Create is done — drop the session draft so the next visit starts fresh.
+          Digit.SessionStorage.del(CREATE_DRAFT_KEY);
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
