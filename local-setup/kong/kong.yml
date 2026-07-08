@@ -79,6 +79,9 @@ plugins:
         -- Flip ENFORCE_UNAUTH=true after an observation period (first confirm no RBAC-audit warning
         -- is a legitimate anonymous call — if it is, add its EXACT path to AUTH_OPTIONAL AND env.yaml).
         local ENFORCE_UNAUTH = false
+        -- Phase 2 (#5): action-level RBAC via egov-accesscontrol on protected paths. Also ships in
+        -- AUDIT mode (log-only); flip to true to enforce (403 on deny). Independent of ENFORCE_UNAUTH.
+        local ENFORCE_RBAC = false
         local AUTH_OPTIONAL = {
           ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
           ["/user/citizen/_create"]=true, ["/user/password/nologin/_update"]=true,
@@ -211,6 +214,42 @@ plugins:
         ri["userInfo"] = resolved
         body["RequestInfo"] = ri
         kong.service.request.set_raw_body(cjson.encode(body))
+
+        -- ===== Gateway RBAC, Phase 2 (#5): action-level authorization for protected paths =====
+        -- For a PROTECTED path with a resolved principal, ask egov-accesscontrol whether the
+        -- principal's roles may call this action (uri): 200 = allow, non-200 = deny. Mirrors the
+        -- Spring gateway's RBAC filter. Ships in AUDIT mode; when ENFORCE_RBAC it fails CLOSED (a
+        -- protected action is denied unless we get an explicit allow). See
+        -- docs/parity-item5-gateway-rbac-design.md. (Perf: one accesscontrol call per protected
+        -- request; response caching keyed by roles+uri+tenant is a documented follow-up.)
+        if is_protected and resolved then
+          local az = http.new()
+          az:set_timeout(5000)
+          local ares = az:request_uri("http://egov-accesscontrol:8090/access/v1/actions/_authorize", {
+            method = "POST",
+            headers = { ["Content-Type"] = "application/json" },
+            body = cjson.encode({
+              RequestInfo = { apiId = "Rainmaker", authToken = token },
+              AuthorizationRequest = {
+                roles = resolved["roles"] or {},
+                uri = uri,
+                tenantIds = { resolved["tenantId"] },
+              },
+            }),
+          })
+          if not (ares and ares.status == 200) then
+            local why = ares and ("accesscontrol status " .. ares.status) or "accesscontrol unreachable"
+            if ENFORCE_RBAC then
+              return kong.response.exit(403, cjson.encode({
+                ResponseInfo = cjson.null,
+                Errors = {{ code = "AccessDeniedException", message = "AccessDeniedException",
+                            description = "You are not authorized to perform this action" }},
+              }), { ["Content-Type"] = "application/json" })
+            end
+            kong.log.warn("RBAC-audit(#5 p2): would 403 (", why, ") uri=", uri,
+                          " roles=", cjson.encode(resolved["roles"] or {}))
+          end
+        end
 services:
 - name: mdms-service
   url: http://egov-mdms-service:8094
