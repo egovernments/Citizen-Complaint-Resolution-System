@@ -23,7 +23,6 @@ export interface Integration {
   identifier?: string;
   active?: boolean;
   primary?: boolean;
-  credentials?: Record<string, unknown>;
 }
 
 export interface CreateProviderInput {

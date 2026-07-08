@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRefresh, useTranslate } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -74,24 +74,6 @@ const columns: DigitColumn[] = [
     label: 'app.providers.col_primary',
     sortable: false,
     render: (record) => flag(record.primary),
-  },
-  {
-    source: 'credentials',
-    label: 'app.providers.col_credentials',
-    sortable: false,
-    render: (record) => {
-      // The backend masks every credential value to "***" before it reaches
-      // the browser, so we only surface which credential keys are configured —
-      // never any secret. If a provider carries no credentials block, show --.
-      const creds = record.credentials as Record<string, unknown> | undefined;
-      const keys = creds ? Object.keys(creds).filter((k) => creds[k] != null) : [];
-      if (keys.length === 0) return <span className="text-muted-foreground">--</span>;
-      return (
-        <span className="font-mono text-xs" title="Values are redacted server-side">
-          {keys.join(', ')} <span className="text-muted-foreground">(redacted)</span>
-        </span>
-      );
-    },
   },
 ];
 
@@ -481,10 +463,18 @@ function PullTemplatesDialog({
     }
   };
 
+  // The dialog is opened by the PARENT flipping the `open` prop, so Radix's
+  // onOpenChange never fires for the open transition — an effect on `open` is
+  // the only reliable trigger for the fetch. handleOpenChange below only ever
+  // runs for the close path (Esc/overlay/Close button).
+  useEffect(() => {
+    if (open) { void load(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, channel, providerId]);
+
   const handleOpenChange = (o: boolean) => {
     onOpenChange(o);
-    if (o) void load();
-    else { setResult(null); setError(null); setCopied(null); }
+    if (!o) { setResult(null); setError(null); setCopied(null); }
   };
 
   const copy = async (id: string) => {

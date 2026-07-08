@@ -188,7 +188,6 @@ const customEnglishMessages: TranslationMessages = {
       col_name: 'Name',
       col_active: 'Active',
       col_primary: 'Primary',
-      col_credentials: 'Credentials',
       // Credential field labels.
       cred: {
         account_sid: 'Account SID',
@@ -214,9 +213,9 @@ const customEnglishMessages: TranslationMessages = {
       view_logs: 'View Notification Logs',
       whatsapp_sid_hint: 'Approved WhatsApp ContentSids are listed on the Provider Templates screen.',
       // Templates dialog.
-      templates_title: 'Available Templates',
-      templates_hint: 'Novu delivery workflows discovered for this provider. Copy a workflow ID to reference it.',
-      templates_empty: 'No workflows found for this provider.',
+      templates_title: 'Novu Workflows',
+      templates_hint: 'Delivery workflows configured in Novu for this channel — not provider templates (Twilio has no SMS template registry). SMS/Email message text is managed under Notification Templates. Copy a workflow ID to reference it.',
+      templates_empty: 'No Novu workflows found for this channel.',
       whatsapp_sid_note: 'WhatsApp ContentSids are managed on the Provider Templates screen, not here.',
       copy: 'Copy',
       copied: 'Copied',
