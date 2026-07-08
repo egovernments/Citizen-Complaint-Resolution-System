@@ -18,7 +18,6 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -96,9 +95,8 @@ class DispatchPipelinePassThroughTest {
 
         assertTrue(result.getNovuTriggered());
         assertEquals(201, result.getNovuStatusCode());
-        // No template/provider resolution surfaces in the result anymore.
-        assertNull(result.getResolvedTemplate());
-        assertNull(result.getResolvedProvider());
+        // No template/provider resolution happens anymore — DispatchResult no
+        // longer even carries resolvedTemplate/resolvedProvider fields.
 
         ArgumentCaptor<String> subId = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Contact> contact = ArgumentCaptor.forClass(Contact.class);

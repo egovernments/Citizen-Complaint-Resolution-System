@@ -247,7 +247,7 @@ public class DispatchPipelineService {
             }
             MobileValidationConfig validationConfig = mdmsServiceClient.getMobileValidationConfig(tenantId, requestInfo);
             if (!normalized.matches(validationConfig.getMobileNumberRegex())) {
-                throw new CustomException("INVALID_MOBILE_NUMBER",
+                throw new CustomException("NB_INVALID_MOBILE_NUMBER",
                         "Mobile number does not match the configured pattern for tenantId=" + tenantId);
             }
             e164 = validationConfig.getCountryCode() + normalized;

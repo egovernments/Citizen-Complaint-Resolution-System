@@ -21,6 +21,7 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.kafka.input.topic:complaints.domain.events}")
     private String inputTopic;
 
+    // Retry topic is reserved for future use — nothing publishes to it yet.
     @Value("${novu.bridge.kafka.retry.topic:novu-bridge.retry}")
     private String retryTopic;
 
@@ -36,9 +37,6 @@ public class NovuBridgeConfiguration {
 
     @Value("${novu.bridge.default.locale:en_IN}")
     private String defaultLocale;
-
-    @Value("${novu.bridge.max.retries:3}")
-    private Integer maxRetries;
 
     @Value("${novu.bridge.preference.enabled:true}")
     private Boolean preferenceEnabled;

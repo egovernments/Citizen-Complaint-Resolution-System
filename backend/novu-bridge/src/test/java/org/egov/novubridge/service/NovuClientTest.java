@@ -1,7 +1,6 @@
 package org.egov.novubridge.service;
 
 import org.egov.novubridge.config.NovuBridgeConfiguration;
-import org.egov.novubridge.service.provider.NovuProviderStrategyFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -39,7 +38,7 @@ class NovuClientTest {
         config = new NovuBridgeConfiguration();
         config.setNovuBaseUrl("http://novu:3000");
         config.setNovuApiKey("secret-key");
-        novuClient = new NovuClient(restTemplate, config, mock(NovuProviderStrategyFactory.class));
+        novuClient = new NovuClient(restTemplate, config);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

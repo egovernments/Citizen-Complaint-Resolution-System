@@ -2155,7 +2155,6 @@ services:
       NOVU_BRIDGE_KAFKA_INPUT_TOPIC: complaints.domain.events
       NOVU_BRIDGE_KAFKA_RETRY_TOPIC: novu-bridge.retry
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
-      NOVU_BRIDGE_MAX_RETRIES: '3'
       # Channel is compared CASE-SENSITIVELY against the TemplateBinding
       # `channel` field. Our seed data uses lowercase `sms` / `whatsapp`
       # — keep this lowercase too. Override per-tenant in host_vars.
@@ -2187,17 +2186,6 @@ services:
       # Channels actually delivered. WHATSAPP stays OFF until a legitimate
       # provider is onboarded as a Novu integration (then just add it here).
       NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-SMS,EMAIL}
-      # NOTE: config-service template-resolve is DEAD in pass-through mode. The
-      # legacy resolve client was deleted in this PR, so these env vars are inert
-      # and kept only for env-file compatibility; rolling back to the legacy
-      # resolve path now means pinning an older novu-bridge image (design D8).
-      NOVU_BRIDGE_CONFIG_HOST: http://digit-config-service:8080
-      # Full path = SERVER_SERVLET_CONTEXT_PATH (/config-service) +
-      # controller mapping (/config/v1) + endpoint. The earlier
-      # `/config-service/v1/_resolve` was missing the `/config/`
-      # segment and got Spring's "No static resource v1/_resolve" 500.
-      NOVU_BRIDGE_CONFIG_RESOLVE_PATH: /config-service/config/v1/_resolve
-      NOVU_BRIDGE_CONFIG_SEARCH_PATH: /config-service/config/v1/_search
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
       # MDMS_HOST MUST be set. The bridge's application.properties default
