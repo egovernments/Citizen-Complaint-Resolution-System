@@ -84,9 +84,39 @@ function StatusPill({ status, t }) {
 
 function ComplaintRow({ data, onClick, t, typeCode, typeName }) {
   const { serviceRequestId, applicationStatus, auditDetails } = data;
+  // The list aggregates complaints across authority tenants (mz.ige/mz.igsae/…)
+  // while the list-level serviceDefs are fetched at the CITIZEN's tenant — so
+  // foreign complaints missed the map and rendered the raw serviceCode. Fetch
+  // the hierarchy at THIS complaint's tenant (same read-at-complaint-tenant fix
+  // as the details page; react-query dedupes rows of the same tenant into one
+  // request, cached indefinitely). NOTE the useCustomMDMS v2 quirk: the tenant
+  // must ride inside the 5th (mdmsv2) arg — the positional one is ignored.
+  const { data: ownRows } = Digit.Hooks.useCustomMDMS(
+    data.tenantId,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintHierarchy" }],
+    {
+      cacheTime: Infinity,
+      enabled: !!data.tenantId,
+      select: (raw) => raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [],
+    },
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS", tenantId: data.tenantId }
+  );
+  const own = React.useMemo(() => {
+    const rows = Array.isArray(ownRows) ? ownRows : [];
+    const self = rows.find((n) => n?.code === data.serviceCode);
+    if (!self) return null;
+    const parent = self.parentCode ? rows.find((n) => n?.code === self.parentCode) : null;
+    // Card shows the complaint TYPE (parent group); a root/parentless node is
+    // its own group.
+    return parent
+      ? { code: parent.code, name: parent.name }
+      : { code: self.code, name: self.name };
+  }, [ownRows, data.serviceCode]);
   // Complaint Type label = key-based (COMPLAINT_HIERARCHY.<code>) like every
   // other service, falling back to the node name; OTHERS for no resolvable group.
-  const title = complaintLabel(t, typeCode, typeName) || t("CS_COMPLAINT_TYPE_OTHERS");
+  const title =
+    complaintLabel(t, own?.code || typeCode, own?.name || typeName) || t("CS_COMPLAINT_TYPE_OTHERS");
   const dateStr = auditDetails?.createdTime
     ? Digit.DateUtils.ConvertTimestampToDate(auditDetails.createdTime)
     : "";
