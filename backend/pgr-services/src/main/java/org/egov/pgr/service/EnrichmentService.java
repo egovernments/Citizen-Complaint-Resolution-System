@@ -2,11 +2,13 @@ package org.egov.pgr.service;
 
 import static org.egov.pgr.util.PGRConstants.USERTYPE_CITIZEN;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.pgr.analytics.PrincipalScopeResolver;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.IdGenRepository;
 import org.egov.pgr.util.PGRUtils;
@@ -34,12 +36,15 @@ public class EnrichmentService {
 
     private UserService userService;
 
+    private PrincipalScopeResolver principalScopeResolver;
+
     @Autowired
-    public EnrichmentService(PGRUtils utils, IdGenRepository idGenRepository, PGRConfiguration config, UserService userService) {
+    public EnrichmentService(PGRUtils utils, IdGenRepository idGenRepository, PGRConfiguration config, UserService userService, PrincipalScopeResolver principalScopeResolver) {
         this.utils = utils;
         this.idGenRepository = idGenRepository;
         this.config = config;
         this.userService = userService;
+        this.principalScopeResolver = principalScopeResolver;
     }
 
 
@@ -125,16 +130,17 @@ public class EnrichmentService {
      */
     public void enrichSearchRequest(RequestInfo requestInfo, RequestSearchCriteria criteria){
 
-        if(criteria.isEmpty() && requestInfo.getUserInfo().getType().equalsIgnoreCase(USERTYPE_CITIZEN)){
-            String citizenMobileNumber = requestInfo.getUserInfo().getUserName();
-            criteria.setMobileNumber(citizenMobileNumber);
-        }
-
-        criteria.setAccountId(requestInfo.getUserInfo().getUuid());
-
-        String tenantId = (criteria.getTenantId()!=null) ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-
-        if(criteria.getMobileNumber()!=null){
+        // CCRS #1071: a pure citizen may only see their OWN complaints. The query builder scopes
+        // results with `ser.accountId IN (userIds)`, so force userIds to the authenticated uuid and
+        // drop any client-supplied mobileNumber. Without this a citizen could search by another
+        // user's mobileNumber (reading their complaints — an IDOR) or omit all filters and read
+        // every complaint (unscoped). Employees / internal principals are unaffected and may still
+        // look up complaints by mobileNumber.
+        if (principalScopeResolver.isPureCitizen(requestInfo)) {
+            criteria.setUserIds(Collections.singleton(requestInfo.getUserInfo().getUuid()));
+            criteria.setMobileNumber(null);
+        } else if (criteria.getMobileNumber() != null) {
+            String tenantId = (criteria.getTenantId()!=null) ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
             userService.enrichUserIds(tenantId, criteria);
         }
 

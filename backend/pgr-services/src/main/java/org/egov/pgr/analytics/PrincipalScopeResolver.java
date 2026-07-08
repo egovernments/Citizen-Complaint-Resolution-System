@@ -74,20 +74,31 @@ public class PrincipalScopeResolver {
         if (u == null)
             return new AnalyticsScope(tenantId, stateLevel, null, null, null);
 
-        boolean isCitizen = "CITIZEN".equalsIgnoreCase(u.getType());
-        boolean hasEmployeeRole = false;
-        List<Role> roles = u.getRoles();
-        if (roles != null) for (Role r : roles) {
-            String c = r.getCode() == null ? "" : r.getCode().toUpperCase();
-            if (!c.equals("CITIZEN")) hasEmployeeRole = true;
-        }
-
         // a pure citizen is locked to their own records; no department/boundary axis applies.
-        if (isCitizen && !hasEmployeeRole)
+        if (isPureCitizen(requestInfo))
             return new AnalyticsScope(tenantId, stateLevel, u.getUuid(), null, null);
 
         // employee principal → derive department/jurisdiction scope from HRMS.
         return resolveEmployeeScope(requestInfo, u, tenantId, stateLevel);
+    }
+
+    /**
+     * A "pure citizen" is a principal of type CITIZEN that holds no employee role. Such a
+     * principal is locked to their OWN records everywhere — analytics self-scope here, and
+     * complaint-search ownership scoping in {@code EnrichmentService.enrichSearchRequest}. This
+     * is the single source of truth for that security-relevant classification, so the two call
+     * sites cannot drift.
+     */
+    public boolean isPureCitizen(RequestInfo requestInfo) {
+        User u = requestInfo == null ? null : requestInfo.getUserInfo();
+        if (u == null || !"CITIZEN".equalsIgnoreCase(u.getType()))
+            return false;
+        List<Role> roles = u.getRoles();
+        if (roles != null) for (Role r : roles) {
+            String c = r.getCode() == null ? "" : r.getCode().toUpperCase();
+            if (!c.equals("CITIZEN")) return false; // holds an employee role → not a pure citizen
+        }
+        return true;
     }
 
     /**
