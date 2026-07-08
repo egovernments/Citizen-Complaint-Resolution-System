@@ -1292,7 +1292,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          # 256M OOM-kills (Exited 137) this Spring Boot 3.2 / Java 17 service — heap
+          # (Xmx192m) + metaspace/threads/off-heap exceeds the container cap. 512M is headroom.
+          memory: 512M
           cpus: '0.2'
     networks:
       - egov-network
@@ -1334,7 +1336,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          # 256M OOM-kills (Exited 137) this Spring Boot 3.2 / Java 17 service — see egov-otp above.
+          memory: 512M
           cpus: '0.2'
     networks:
       - egov-network
@@ -1368,7 +1371,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          # Bumped 256M→512M with the other otp-profile services for headroom (Spring Boot 3.2 / Java 17).
+          memory: 512M
           cpus: '0.1'
     networks:
       - egov-network

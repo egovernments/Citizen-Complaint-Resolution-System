@@ -495,9 +495,20 @@ services:
     paths:
     - /kc
     strip_path: true
-# OTP validate mock — returns success for citizen OTP login flow
+# OTP validate — real upstream (egov-otp:8089) fronted by a default request-termination MOCK.
+# Mirrors /user-otp: the mock rubber-stamps every OTP validation as successful, so citizen
+# login works with the fixed OTP (123456) without the `otp` profile running.
+#
+# TO ENABLE REAL OTP VALIDATION FOR PRODUCTION, before deploying:
+#   1. Delete the `plugins:` block below (the request-termination mock).
+#   2. Set enable_otp_services: true in the tenant's Ansible host_vars so compose
+#      starts the `otp` profile (egov-otp, user-otp, egov-notification-sms).
+#   3. Configure a real SMS gateway (see egov-notification-sms SMS_PROVIDER_CLASS).
+# With the mock removed and the otp profile running, /otp reaches egov-otp for real
+# validation (an incorrect OTP is rejected instead of rubber-stamped). The upstream was
+# previously a dead localhost:9999, so de-mocking alone returned HTTP 502 — now fixed.
 - name: otp-validate-mock
-  url: http://localhost:9999
+  url: http://egov-otp:8089
   tags:
   - core
   - auth
