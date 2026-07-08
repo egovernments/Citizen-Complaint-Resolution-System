@@ -22,6 +22,7 @@ import DashboardLogin, {
 } from "./components/DashboardLogin";
 
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
+import { useFilterOptions } from "./hooks/useFilterOptions";
 import { useCatalog } from "./hooks/useCatalog";
 import { useCatalogLayout } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
@@ -328,8 +329,18 @@ function seriesToPoints(rows, viz, valueKey, columns) {
 /* -------------------------------------------------------------------------- */
 
 const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
-  const { filters, setFilter, clearFilters } = useDashboardFilters();
+  const { filters, setFilter, clearFilters, applyFilterOptions } =
+    useDashboardFilters();
+  const { options: filterOptions, loading: filterOptionsLoading } =
+    useFilterOptions();
   const tenantId = useMemo(() => getTenantId(), []);
+
+  // Feed the server-scoped option lists into the filter store so persisted
+  // filter values that no longer match any option get reconciled
+  // (reconcileFiltersWithOptions) instead of silently sending dead params.
+  useEffect(() => {
+    if (filterOptions) applyFilterOptions(filterOptions);
+  }, [filterOptions, applyFilterOptions]);
   const { loading: catalogLoading, kpis, pack, error: catalogError } =
     useCatalog(tenantId);
 
@@ -509,8 +520,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       filters={filters}
       onFilterChange={setFilter}
       onClearFilters={clearFilters}
-      filterOptions={null}
-      filterOptionsLoading={catalogLoading}
+      filterOptions={filterOptions}
+      filterOptionsLoading={filterOptionsLoading}
       kpiCardData={{}}
       allowedWidgetIds={null}
       scopedRole={null}

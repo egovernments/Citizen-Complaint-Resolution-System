@@ -847,43 +847,40 @@ const GeographyChoroplethMap = ({
           </div>
         ) : null}
         {showEmpty ? (
-          <div className="tw-flex tw-h-full tw-min-h-[220px] tw-items-center tw-justify-center tw-p-4 tw-text-[12px] tw-text-muted-foreground">
+          <div className="tw-pointer-events-none tw-absolute tw-inset-0 tw-z-[500] tw-flex tw-items-center tw-justify-center tw-bg-surface/70 tw-p-4 tw-text-[12px] tw-text-muted-foreground">
             No geographic data
           </div>
-        ) : (
-          <>
-            <div
-              ref={elRef}
-              className={`${mapStyles.container} dashboard-map-canvas tw-h-full tw-min-h-[220px] tw-w-full tw-flex-1`}
-            />
+        ) : null}
+        <div
+          ref={elRef}
+          className={`${mapStyles.container} dashboard-map-canvas tw-h-full tw-min-h-[220px] tw-w-full tw-flex-1`}
+        />
 
-            {activeFilterLabel ? (
-              <div className="dashboard-map-filter-chip tw-pointer-events-auto tw-absolute tw-right-3 tw-top-3 tw-z-[1000] tw-flex tw-items-center tw-gap-2 tw-rounded-sm tw-border tw-border-border tw-bg-surface/95 tw-px-2.5 tw-py-1.5 tw-text-[10px] tw-shadow-sm">
-                <span className="tw-text-muted-foreground">Filter:</span>
-                <span className="tw-font-semibold tw-text-foreground">{activeFilterLabel}</span>
-                <button
-                  type="button"
-                  className="dashboard-map-filter-clear"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={resetView}
-                >
-                  Clear
-                </button>
-              </div>
-            ) : null}
+        {activeFilterLabel ? (
+          <div className="dashboard-map-filter-chip tw-pointer-events-auto tw-absolute tw-right-3 tw-top-3 tw-z-[1000] tw-flex tw-items-center tw-gap-2 tw-rounded-sm tw-border tw-border-border tw-bg-surface/95 tw-px-2.5 tw-py-1.5 tw-text-[10px] tw-shadow-sm">
+            <span className="tw-text-muted-foreground">Filter:</span>
+            <span className="tw-font-semibold tw-text-foreground">{activeFilterLabel}</span>
+            <button
+              type="button"
+              className="dashboard-map-filter-clear"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={resetView}
+            >
+              Clear
+            </button>
+          </div>
+        ) : null}
 
-            {boundariesError ? (
-              <div className="tw-pointer-events-none tw-absolute tw-right-3 tw-top-12 tw-z-[1000] tw-rounded tw-bg-surface/90 tw-px-2 tw-py-1 tw-text-[10px] tw-text-muted-foreground">
-                {boundariesError}
-              </div>
-            ) : null}
-            {complaintPinsError ? (
-              <div className="tw-pointer-events-none tw-absolute tw-right-3 tw-top-20 tw-z-[1000] tw-max-w-[220px] tw-rounded tw-bg-amber-50/95 tw-px-2 tw-py-1 tw-text-[10px] tw-text-amber-900">
-                Complaint pins unavailable: analytics API must expose latitude, longitude, and service_request_id on the facts grain.
-              </div>
-            ) : null}
-          </>
-        )}
+        {boundariesError ? (
+          <div className="tw-pointer-events-none tw-absolute tw-right-3 tw-top-12 tw-z-[1000] tw-rounded tw-bg-surface/90 tw-px-2 tw-py-1 tw-text-[10px] tw-text-muted-foreground">
+            {boundariesError}
+          </div>
+        ) : null}
+        {complaintPinsError ? (
+          <div className="tw-pointer-events-none tw-absolute tw-right-3 tw-top-20 tw-z-[1000] tw-max-w-[220px] tw-rounded tw-bg-amber-50/95 tw-px-2 tw-py-1 tw-text-[10px] tw-text-amber-900">
+            Complaint pins unavailable: analytics API must expose latitude, longitude, and service_request_id on the facts grain.
+          </div>
+        ) : null}
       </div>
 
       {!showEmpty && !showLoading ? (
