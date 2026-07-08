@@ -85,11 +85,19 @@ The fixed-OTP `123456` shortcut (`citizen-otp-fixed-enabled`) is enabled on **bo
 ### `/egov-location`  — split
 - **Modern `/boundary-service/*` (hierarchy, relationships): ✅ at parity** — what CCRS actually uses
   (UI, `EGOV_BOUNDARY_HOST`). Deployed + routed on both.
-- **Legacy `/egov-location/*`: ❌ gap** — compose provides a Kong Lua adapter that rewrites the legacy
-  boundary API onto `boundary-service` and reshapes the response; K8s has dangling `egov-location`
-  references and no such service. Still live-used by the PGR ward/locality selector, configurator, and
-  MCP. Recommended fix: migrate remaining callers to `/boundary-service/boundary-relationships/_search`
-  (already at parity), which removes the legacy dependency on both stacks.
+- **Legacy `/egov-location/*`: ❌ gap (confirmed live break on K8s)** — compose provides a Kong Lua
+  adapter that rewrites the legacy boundary API onto `boundary-service` and reshapes the response; K8s
+  has **no such service** and no route/rewrite for it (verified across all manifests: no workload, no
+  ingress rewrite, no gateway static route; the gateway routes only discovered k8s services). The K8s
+  config even **contradicts itself** — the gateway whitelists `/egov-location/location/v11/boundarys/_search`
+  and `service-host` maps `egov-location`, yet nothing serves it. Confirmed by inspecting the **exact
+  deployed image** `egovio/digit-ui:v2.11-a520687`: its built bundle references
+  `/egov-location/location/v11/boundarys/_search` **27×** (vs `/boundary-service/boundary-relationships/_search`
+  9× — a half-migrated state). So the PGR ward/locality selector (and configurator/MCP boundary flows)
+  would **fail on K8s**. Note the backend is already migrated — `pgr-services` uses `egov.boundary.host`
+  (→ boundary-service); its injected `EGOV_LOCATION_HOST` is dead config. Recommended fix: migrate the
+  remaining **client** callers to `/boundary-service/boundary-relationships/_search` (already at parity),
+  removing the legacy dependency on both stacks.
 
 ### `/egov-user-event`  — in-app feed differs; Novu at parity
 The in-app notification/events feed (`egov-user-event`, powering the bell) is **mocked-empty on
@@ -242,7 +250,7 @@ divergence to close · **Cleanup** = remove dead/legacy config · **Decision** =
 
 | # | Item | Where | Type | Recommended action | Ref | Status |
 |---|---|---|---|---|---|---|
-| 1 | Legacy `/egov-location` API not served (PGR ward selector, configurator, MCP would break) | K8s | Gap | Migrate callers to `/boundary-service/boundary-relationships/_search` (fixes both stacks; lets the Kong adapter be dropped) — or deploy an egov-location service/shim on K8s | — | ☐ |
+| 1 | Legacy `/egov-location` API not served — **confirmed** live break on K8s (deployed `digit-ui` bundle calls it 27×; nothing serves it) → PGR ward selector, configurator, MCP break | K8s | Gap | Migrate **client** callers to `/boundary-service/boundary-relationships/_search` (backend already on boundary-service; fixes both stacks; lets the Kong adapter be dropped) | — | ☐ |
 | 2 | In-app `egov-user-event` feed mocked empty | Compose | Gap | Deploy `egov-user-event` (+ consume `persist-user-events-async`) if the in-app bell is required; else accept Novu-only | — | ☐ |
 | 3 | `egov-user-event` `service-host` points at stale `.staging` namespace | K8s | Cleanup | Fix to `.egov` (dead config today — gateway uses k8s discovery — but should be corrected) | — | ☐ |
 | 4 | Session-expiry re-login broken (Kong never emits `InvalidAccessTokenException`) | Compose | Gap | Have the Kong `pre-function` emit that error on failed `/user/_details` resolution (or add full RBAC, which also fixes it) | — | ☐ |
