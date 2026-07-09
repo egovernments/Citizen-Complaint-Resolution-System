@@ -3097,7 +3097,10 @@
         python3 seed-notifications.py
       register: notif_seed
       changed_when: "'created' in (notif_seed.stdout | default(''))"
-      failed_when: "'DONE' not in (notif_seed.stdout | default(''))"
+      # Gate on the exit code too: seed-notifications.py prints DONE even when it
+      # exits non-zero on core-master failures, so a DONE-only check would let a
+      # broken seed pass.
+      failed_when: "notif_seed.rc != 0 or 'DONE' not in (notif_seed.stdout | default(''))"
 
     - name: "notif-seed — result"
       when: seed_notifications | default(pgr_notification_config_driven | default(false))
