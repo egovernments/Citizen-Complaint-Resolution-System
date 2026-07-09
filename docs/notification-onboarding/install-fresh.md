@@ -113,8 +113,9 @@ Two ways, pick one:
   our side. See the [tutorial](./TUTORIAL.md).
 - **Ansible-bootstrapped:** set `twilio_account_sid` / `twilio_auth_token` /
   `twilio_whatsapp_from` in host_vars and re-run `./deploy.sh <tenant>` — the
-  bootstrap creates the Twilio integration + `complaints-sms` / `complaints-email`
-  workflows for you.
+  bootstrap creates the Twilio integration plus all three workflows for you:
+  the `complaints-sms` / `complaints-email` pass-through workflows the bridge
+  triggers, and the legacy `complaints-whatsapp-v1` workflow.
 
 ---
 

@@ -100,7 +100,9 @@ Credentials live in Novu, not our DB. Pick one:
   [tutorial](./TUTORIAL.md).
 - **Ansible-bootstrapped:** set `twilio_account_sid` / `twilio_auth_token` /
   `twilio_whatsapp_from` in host_vars and re-run `./deploy.sh <tenant>` — creates
-  the Twilio integration + `complaints-sms` / `complaints-email` workflows.
+  the Twilio integration plus all three workflows: the `complaints-sms` /
+  `complaints-email` pass-through workflows the bridge triggers, and the legacy
+  `complaints-whatsapp-v1` workflow.
 
 ---
 
