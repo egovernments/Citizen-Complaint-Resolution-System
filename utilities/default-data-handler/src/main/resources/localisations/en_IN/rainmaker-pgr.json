@@ -2221,7 +2221,7 @@
     },
     {
         "code": "CS_COMPLAINT_RATE_TEXT",
-        "message": "How would you rate your experience with us?",
+        "message": "Overall, how satisfied are you with the handling of your complaint?",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -2365,7 +2365,7 @@
     },
     {
         "code": "CS_FEEDBACK_OTHERS",
-        "message": "Others",
+        "message": "Other",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -2407,7 +2407,7 @@
     },
     {
         "code": "CS_FEEDBACK_WHAT_WAS_GOOD",
-        "message": "What was good ?",
+        "message": "What did we do well? (Select all that apply) (optional)",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -6547,7 +6547,7 @@
     },
     {
         "code": "CS_FILE_TOO_LARGE",
-        "message": "File is too large (max 2 MB).",
+        "message": "File is too large (max 5 MB).",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -6673,7 +6673,7 @@
     },
     {
         "code": "CS_UPLOAD_HINT",
-        "message": "JPG, PNG up to 2 MB each. You can upload up to 5 files.",
+        "message": "Images, PDF, DOC, audio or video up to 5 MB each. You can upload up to 5 files.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -6818,6 +6818,144 @@
     {
         "code": "CS_HOWTO_3_BODY",
         "message": "Describe the issue and attach any photos as evidence.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ACTION_COMMENT",
+        "message": "Add Comment",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ACTION_AWAITINGINFORMATION",
+        "message": "Request Information from Citizen",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ACTION_ESCALATE",
+        "message": "Escalate Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ACTION_RESOLVEBYSUPERVISOR",
+        "message": "Resolve Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ACTION_APPLY",
+        "message": "File Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ACTION_RATE",
+        "message": "Rate Resolution",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_ACTION_ASSIGNEDBYAUTOESCALATION",
+        "message": "Auto-escalate",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_DESC_MIN_CHARS",
+        "message": "Description must be 20–1000 characters",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_CATEGORY",
+        "message": "Complaint Category",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FEEDBACK_EASY_SUBMIT",
+        "message": "Easy to submit the complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_FEEDBACK_COMMUNICATION",
+        "message": "Communication and updates",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_GEOLOCATION_ERROR",
+        "message": "Could not get your current location. Please drop the pin manually.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_GEOLOCATION_PERMISSION_DENIED",
+        "message": "Location access is blocked. Allow location for this site in your browser, or drop the pin manually.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_GEOLOCATION_UNAVAILABLE",
+        "message": "Your location could not be determined. Please drop the pin manually.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_GEOLOCATION_TIMEOUT",
+        "message": "Getting your location took too long. Try again or drop the pin manually.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_GEOLOCATION_NOT_SUPPORTED",
+        "message": "Your browser does not support location. Please drop the pin manually.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_LOCATION_NOT_FOUND",
+        "message": "Location not found. Try a different search or drop the pin manually.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGATSUPERVISOR",
+        "message": "Pending at supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_RESOLVEDBYSUPERVISOR",
+        "message": "Resolved by supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_CANCELLED",
+        "message": "Cancelled",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_REFERRED",
+        "message": "Referred to department",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_INVESTIGATION",
+        "message": "Under investigation",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_INFOFROMCITIZEN",
+        "message": "Awaiting information from citizen",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     }

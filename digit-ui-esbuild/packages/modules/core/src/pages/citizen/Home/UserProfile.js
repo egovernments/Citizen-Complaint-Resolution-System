@@ -787,8 +787,11 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   // `CORE_COMMON_GENDER_*` ("Male" / "Female" / "Transgender") in
   // rainmaker-common, so switch to that prefix and the dropdown
   // renders readable labels (CCRS#556 follow-up).
+  // CCSD-1971 (Moz feedback A6): only Female and Male are offered — filter
+  // TRANSGENDER out of the MDMS GenderType list on the FE so the change
+  // holds regardless of per-env master seeding.
   Menu &&
-    Menu.map((genderDetails) => {
+    Menu.filter((genderDetails) => genderDetails?.code !== "TRANSGENDER").map((genderDetails) => {
       menu.push({
         i18nKey: `CORE_COMMON_GENDER_${genderDetails.code}`,
         code: `${genderDetails.code}`,

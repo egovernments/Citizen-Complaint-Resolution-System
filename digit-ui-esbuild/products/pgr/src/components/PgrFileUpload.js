@@ -12,7 +12,12 @@ import React from "react";
 // class names/rules as the wizard's WIZARD_CSS block, so double-injection on
 // the citizen page is harmless).
 
-const MAX_BYTES = 2 * 1024 * 1024; // 2 MB per file
+// Per the Moz feedback doc (CCSD-1971): PDF, DOC, images, audio and video up
+// to 5 MB each. Server-side, filestore's allowed-format list for module
+// "property-upload" must also permit these (platform config).
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB per file
+const DEFAULT_ACCEPT =
+  "image/*,.pdf,.doc,.docx,.mp3,.wav,.m4a,.aac,.mp4,.mov,.avi,.mkv";
 
 function tr(t, key, fallback) {
   const v = typeof t === "function" ? t(key) : key;
@@ -143,7 +148,7 @@ function ensureStyles() {
   document.head.appendChild(el);
 }
 
-const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = "image/*", maxFiles = 5, hint, compact = false }) => {
+const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAULT_ACCEPT, maxFiles = 5, hint, compact = false }) => {
   ensureStyles();
   const [items, setItems] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
@@ -203,7 +208,7 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = "image
     const accepted = [];
     for (const f of files.slice(0, room)) {
       if (f.size > MAX_BYTES) {
-        setError(tr(t, "CS_FILE_TOO_LARGE", "File is too large (max 2 MB)."));
+        setError(tr(t, "CS_FILE_TOO_LARGE", "File is too large (max 5 MB)."));
         continue;
       }
       accepted.push(f);
@@ -279,7 +284,7 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = "image
         {busy ? tr(t, "CS_UPLOADING", "Uploading…") : tr(t, "CS_UPLOAD_CHOOSE", "Choose files")}
       </span>
       <p className="pgr-upload-hint">
-        {hint || tr(t, "CS_UPLOAD_HINT", `JPG, PNG up to 2 MB each. You can upload up to ${maxFiles} files.`)}
+        {hint || tr(t, "CS_UPLOAD_HINT", `Images, PDF, DOC, audio or video up to 5 MB each. You can upload up to ${maxFiles} files.`)}
       </p>
     </div>
   );

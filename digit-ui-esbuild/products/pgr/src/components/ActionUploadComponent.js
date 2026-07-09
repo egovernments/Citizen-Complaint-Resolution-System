@@ -35,11 +35,7 @@ const ActionUploadComponent = ({ config, onSelect, formData }) => {
       tenantId={tenantId}
       fieldKey={config?.key || "SelectedDocuments"}
       value={value}
-      accept="image/*,.pdf"
       compact
-      hint={t("CS_UPLOAD_HINT_DOCS") === "CS_UPLOAD_HINT_DOCS"
-        ? "JPG, PNG or PDF up to 2 MB each. You can upload up to 5 files."
-        : t("CS_UPLOAD_HINT_DOCS")}
       onSelect={(key, ids) => onSelect(key, ids.map(toDocument))}
     />
   );

@@ -80,7 +80,10 @@ const EmployeeApp = ({
               logoUrl={logoUrl}
               logoUrlWhite={logoUrlWhite}
               showSidebar={isUserProfile ? true : false}
-              showLanguageChange={!showLanguageChange}
+              // CCSD-1971 (Moz feedback B1): the language selector is removed
+              // from the EMPLOYEE surface entirely (was hidden only on the
+              // language-selection route before). Citizen keeps its selector.
+              showLanguageChange={false}
             />
           )}
           <div

@@ -602,7 +602,16 @@ const PGRDetails = () => {
                     inline: false,
                     type: "custom",
                     renderCustomContent: () => (
-                      <TimelineWrapper isWorkFlowLoading={isWorkflowLoading} workflowData={workflowData} businessId={id} labelPrefix="WF_PGR_" tenantId={complaintTenantId} />
+                      <TimelineWrapper
+                        isWorkFlowLoading={isWorkflowLoading}
+                        workflowData={workflowData}
+                        businessId={id}
+                        labelPrefix="WF_PGR_"
+                        tenantId={complaintTenantId}
+                        // CCSD-1971 (B4): confidential complaints hide the
+                        // citizen's identity from the employee timeline.
+                        maskConfidential={!!pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes?.isConfidential}
+                      />
                     ),
                   },
                 ],
