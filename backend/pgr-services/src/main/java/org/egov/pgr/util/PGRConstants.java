@@ -196,8 +196,11 @@ public class PGRConstants {
     // Extended attributes — complaint category config and field schemas
     public static final String MDMS_COMPLAINT_RELATED_TO_MAP = "ComplaintRelatedToMap";
     public static final String MDMS_COMPLAINT_TEMPLATE_TYPE  = "ComplaintTemplateType";
-    public static final String MDMS_COMPLAINT_SCHEMA         = "ComplaintSchema";
+    public static final String MDMS_COMPLAINT_SCHEMA         = "ComplaintExtendedAttributeSchema";
 
     public static final String ROLE_CONFIDENTIAL_VIEWER = "CONFIDENTIAL_COMPLAINT_VIEWER";
+
+    // Placeholder written over dynamic fields the caller isn't authorized to see in plaintext.
+    public static final String MASK_SENTINEL = "****";
 
 }

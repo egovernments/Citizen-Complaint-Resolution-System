@@ -355,9 +355,11 @@ public class MDMSUtils {
                     .name(MDMS_COMPLAINT_TEMPLATE_TYPE)
                     .filter("$.[?(@.active==true && @.caseRelatedTo=='" + caseRelatedTo + "')]")
                     .build(),
+                // ComplaintExtendedAttributeSchema rows carry no top-level "active" flag —
+                // fetch unfiltered, same as the citizen/employee UI does, and match by
+                // schemaRef below.
                 MasterDetail.builder()
                     .name(MDMS_COMPLAINT_SCHEMA)
-                    .filter("$.[?(@.active==true)]")
                     .build()
             );
             MdmsCriteriaReq req = MdmsCriteriaReq.builder()
@@ -384,16 +386,19 @@ public class MDMSUtils {
                 try {
                     String safeSchemaRef = cfg.getSchemaRef().replace("'", "\\'");
                     String schemaPath = "$.MdmsRes.RAINMAKER-PGR." + MDMS_COMPLAINT_SCHEMA
-                            + "[?(@.name=='" + safeSchemaRef + "')]";
+                            + "[?(@.schemaRef=='" + safeSchemaRef + "')]";
                     List<Object> rawSchemas = JsonPath.read(mdmsResult, schemaPath);
                     if (rawSchemas != null && !rawSchemas.isEmpty()) {
-                        ComplaintTemplateTypeConfig schema = objectMapper.convertValue(
-                                rawSchemas.get(0), ComplaintTemplateTypeConfig.class);
-                        cfg.setXSecurity(schema.getXSecurity());
-                        cfg.setFields(schema.getFields());
+                        Object schemaObj = ((Map<?, ?>) rawSchemas.get(0)).get("schema");
+                        if (schemaObj instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> schema = (Map<String, Object>) schemaObj;
+                            cfg.setXSecurity(asStringList(schema.get("x-security")));
+                            cfg.setFields(parseFieldDefinitions(schema));
+                        }
                     }
                 } catch (Exception e) {
-                    log.warn("ComplaintSchema '{}' not found for tenant '{}'", cfg.getSchemaRef(), tenantId);
+                    log.warn("ComplaintExtendedAttributeSchema '{}' not found for tenant '{}'", cfg.getSchemaRef(), tenantId);
                 }
             }
 
@@ -402,6 +407,49 @@ public class MDMSUtils {
             log.error("Failed to fetch ComplaintTemplateTypeConfig for caseRelatedTo={} tenant={}", caseRelatedTo, tenantId, e);
             return null;
         }
+    }
+
+    /**
+     * Converts a draft-07 JSON Schema's "properties" map (+ "required" array) into the
+     * flat FieldDefinition list ExtendedAttributesValidationService/EncryptionDecryptionService
+     * expect. Mirrors the transform the citizen/employee UI applies to the same MDMS row —
+     * "mandatory" comes from membership in "required", "dataType" from "format"/"type", and
+     * "label" falls back to the raw x-label-key (an i18n key, not resolved text) since the
+     * backend has no localization context; this only surfaces in validation error messages.
+     */
+    @SuppressWarnings("unchecked")
+    private List<ComplaintTemplateTypeConfig.FieldDefinition> parseFieldDefinitions(Map<String, Object> schema) {
+        Object propertiesObj = schema.get("properties");
+        if (!(propertiesObj instanceof Map)) return Collections.emptyList();
+
+        Set<String> required = new HashSet<>(asStringList(schema.get("required")));
+        List<ComplaintTemplateTypeConfig.FieldDefinition> fields = new ArrayList<>();
+
+        ((Map<String, Object>) propertiesObj).forEach((fieldKey, rawProperty) -> {
+            if (!(rawProperty instanceof Map)) return;
+            Map<String, Object> property = (Map<String, Object>) rawProperty;
+
+            ComplaintTemplateTypeConfig.FieldDefinition fd = new ComplaintTemplateTypeConfig.FieldDefinition();
+            fd.setFieldKey(fieldKey);
+            Object labelKey = property.get("x-label-key");
+            fd.setLabel(labelKey != null ? labelKey.toString() : fieldKey);
+            fd.setDataType("date".equals(property.get("format")) ? "date"
+                    : property.get("type") != null ? property.get("type").toString() : "string");
+            fd.setMandatory(required.contains(fieldKey));
+            if (property.get("maxLength") instanceof Number)
+                fd.setMaxLength(((Number) property.get("maxLength")).intValue());
+            if (property.get("x-order") instanceof Number)
+                fd.setOrder(((Number) property.get("x-order")).intValue());
+            fields.add(fd);
+        });
+        return fields;
+    }
+
+    private List<String> asStringList(Object raw) {
+        if (!(raw instanceof List)) return Collections.emptyList();
+        List<String> out = new ArrayList<>();
+        for (Object o : (List<?>) raw) out.add(String.valueOf(o));
+        return out;
     }
 
 }
