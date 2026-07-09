@@ -20,12 +20,38 @@
  * How to run: see local-setup/tests/README.md.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { loginViaApi } from '../utils/auth';
+import { loginViaApi, getDigitToken } from '../utils/auth';
 
 const BASE_URL  = process.env.BASE_URL   || 'http://localhost:18080';
 const TENANT    = process.env.DIGIT_TENANT   || 'pg.citya';
 const USERNAME  = process.env.DIGIT_USERNAME || 'ADMIN';
 const PASSWORD  = process.env.DIGIT_PASSWORD || 'eGov@123';
+
+// Same default status filter the employee inbox queries on load.
+const INBOX_STATUSES = ['PENDINGFORASSIGNMENT', 'PENDINGFORREASSIGNMENT', 'PENDINGATLME', 'PENDINGATSUPERVISOR'];
+
+/**
+ * Ground-truth total via the _count API directly, bypassing the UI entirely.
+ * The footer's displayed total is exactly what the regression corrupts, so
+ * it can't be used to decide whether a dataset is "big enough" to test
+ * pagination on — that would be circular under the bug (a broken UI always
+ * reports total === page size, indistinguishable from a genuinely small
+ * dataset). This calls pgr-services directly, with no limit/offset, so it
+ * reflects the real total regardless of whether the UI fix is present.
+ */
+async function getTrueComplaintCount(): Promise<number> {
+  const { access_token, UserRequest } = await getDigitToken({ baseURL: BASE_URL, tenant: TENANT, username: USERNAME, password: PASSWORD });
+  const params = new URLSearchParams({ tenantId: TENANT });
+  INBOX_STATUSES.forEach(s => params.append('applicationStatus', s));
+  const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_count?${params}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ RequestInfo: { apiId: 'Rainmaker', authToken: access_token, userInfo: UserRequest } }),
+  });
+  if (!resp.ok) throw new Error(`_count failed (${resp.status}): ${await resp.text()}`);
+  const data = await resp.json();
+  return data.count;
+}
 
 async function goToInbox(page: Page) {
   // The employee inbox route is inbox-v2 (PGRSearchInbox component) — plain
@@ -45,8 +71,13 @@ test.describe('PGR inbox pagination (#916)', () => {
   test('Next-page button is enabled when more than 10 complaints exist', async ({ page }) => {
     await goToInbox(page);
 
-    // Check total count shown in the pagination footer (e.g. "1-10 of 25")
-    const paginationText = await page.locator('[class*="footer"], [class*="pagination"]').innerText().catch(() => '');
+    // Check total count shown in the pagination footer (e.g. "1-10 of 25").
+    // Match on the visible text pattern rather than guessing class names —
+    // the built bundle's class names don't reliably contain "footer"/
+    // "pagination" as substrings, and innerText() on a locator that matches
+    // nothing waits indefinitely (no actionTimeout is configured), silently
+    // eating the whole test budget instead of failing fast.
+    const paginationText = await page.getByText(/\d+\s*[-–]\s*\d+\s+of\s+\d+/i).first().innerText({ timeout: 10_000 }).catch(() => '');
 
     // If there are ≤ 10 complaints we can't test pagination — skip gracefully.
     const totalMatch = paginationText.match(/of\s+(\d+)/i);
@@ -109,11 +140,26 @@ test.describe('PGR inbox pagination (#916)', () => {
   });
 
   test('Pagination footer shows total count (not just page size)', async ({ page }) => {
+    // This test does an extra API round-trip on top of the normal UI load
+    // (the ground-truth _count fetch below), which can exceed the default
+    // 60s budget against a slow/remote deployment.
+    test.setTimeout(90_000);
+
+    // Ground truth first, independent of anything the UI renders — see
+    // getTrueComplaintCount's comment for why the footer can't self-validate.
+    const trueTotal = await getTrueComplaintCount();
+    if (trueTotal <= 10) {
+      test.skip(true, `Only ${trueTotal} complaints exist — need >10 to distinguish the regression from a small dataset`);
+      return;
+    }
+
     await goToInbox(page);
 
     // Footer should render "X-Y of Z" — if totalCountJsonPath is wired correctly
-    // Z will be the real server total; without the fix Z would equal Y (= page size).
-    const footerText = await page.locator('[class*="footer-content"], [class*="pagination"]').innerText().catch(() => '');
+    // Z will equal the real server total; under the regression Z === Y (page size).
+    // Match on visible text, not class names — see the identical comment on
+    // the first test for why (they don't reliably appear in the built bundle).
+    const footerText = await page.getByText(/\d+\s*[-–]\s*\d+\s+of\s+\d+/i).first().innerText({ timeout: 10_000 }).catch(() => '');
 
     const match = footerText.match(/(\d+)\s*[-–]\s*(\d+)\s+of\s+(\d+)/i);
     if (!match) {
@@ -122,12 +168,13 @@ test.describe('PGR inbox pagination (#916)', () => {
       return;
     }
 
-    const [, , pageEnd, total] = match.map(Number);
-    // If the fix is absent, total === pageEnd (e.g. "1-10 of 10").
-    // With the fix, total is the real server-side count.
-    if (total === pageEnd) {
+    const [, , pageEnd, displayedTotal] = match.map(Number);
+    if (displayedTotal === pageEnd) {
       await page.screenshot({ path: 'test-results/pgr-pagination-total-equals-page.png' });
     }
-    expect(total).toBeGreaterThanOrEqual(pageEnd);
+    // This is the actual regression check: under the bug, displayedTotal is
+    // always capped at pageEnd (page size) regardless of the true total, so
+    // this fails exactly when #916 recurs.
+    expect(displayedTotal).toBe(trueTotal);
   });
 });
