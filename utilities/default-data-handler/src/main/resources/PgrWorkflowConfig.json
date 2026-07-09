@@ -128,19 +128,19 @@
                   "audience": "PGR_LME",
                   "channel": "SMS",
                   "templateRef": "lme_assigned",
-                  "assigneeOnly": false
+                  "assigneeOnly": true
                 },
                 {
                   "audience": "PGR_LME",
                   "channel": "WHATSAPP",
                   "templateRef": "lme_assigned",
-                  "assigneeOnly": false
+                  "assigneeOnly": true
                 },
                 {
                   "audience": "PGR_LME",
                   "channel": "EMAIL",
                   "templateRef": "lme_assigned",
-                  "assigneeOnly": false
+                  "assigneeOnly": true
                 },
                 {
                   "audience": "CITIZEN",
