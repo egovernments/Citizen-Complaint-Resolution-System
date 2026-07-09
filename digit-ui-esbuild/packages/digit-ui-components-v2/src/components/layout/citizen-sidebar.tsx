@@ -39,6 +39,8 @@ interface ProfileInfo {
   name?: string;
   mobileNumber?: string;
   emailId?: string;
+  /** Bare fileStoreId (or URL) of the uploaded profile photo, if any. */
+  photo?: string;
 }
 
 export interface CitizenSidebarProps {
@@ -50,8 +52,31 @@ export interface CitizenSidebarProps {
   contextPath?: string;
 }
 
-function Avatar({ name }: { name?: string }) {
+function Avatar({ name, photoUrl }: { name?: string; photoUrl?: string | null }) {
   const initial = (name || "").trim().charAt(0).toUpperCase() || null;
+  // Uploaded profile photo wins; the letter/glyph disc stays the fallback
+  // (and the error fallback if the photo URL dies).
+  const [broken, setBroken] = React.useState(false);
+  React.useEffect(() => setBroken(false), [photoUrl]);
+  if (photoUrl && !broken) {
+    return (
+      <img
+        src={photoUrl}
+        alt=""
+        aria-hidden
+        onError={() => setBroken(true)}
+        style={{
+          height: "5rem",
+          width: "5rem",
+          borderRadius: "9999px",
+          objectFit: "cover",
+          objectPosition: "center",
+          flexShrink: 0,
+          backgroundColor: "rgba(255, 255, 255, 0.92)",
+        }}
+      />
+    );
+  }
   // Inline sizing so the avatar still renders even if the v2 Tailwind
   // build hasn't compiled `h-20 w-20`. The colour pulls from a neutral
   // theme var so it tints with the tenant palette.
@@ -246,6 +271,42 @@ function SidebarRow({ item, isActive }: { item: NavItem; isActive: boolean }) {
 }
 
 function Profile({ info }: { info: ProfileInfo }) {
+  // Resolve the session profile photo (bare fileStoreId written by the
+  // profile save) to a URL — shown in the avatar when present, letter
+  // initial otherwise. Re-resolves when the photo changes (no re-login).
+  const [photoUrl, setPhotoUrl] = React.useState<string | null>(null);
+  const rawPhoto = (info as any)?.photo as string | undefined;
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!rawPhoto) {
+          if (!cancelled) setPhotoUrl(null);
+          return;
+        }
+        if (/^https?:\/\//.test(rawPhoto)) {
+          if (!cancelled) setPhotoUrl(rawPhoto);
+          return;
+        }
+        const D = (window as any).Digit;
+        const stateId = D?.ULBService?.getStateId?.();
+        const res = await D?.UploadServices?.Filefetch?.([rawPhoto], stateId);
+        const d = res?.data || {};
+        let url: string | null = null;
+        if (Array.isArray(d.fileStoreIds) && d.fileStoreIds[0]?.url) {
+          url = String(d.fileStoreIds[0].url).split(",")[0];
+        } else if (typeof d[rawPhoto] === "string") {
+          url = String(d[rawPhoto]).split(",")[0];
+        }
+        if (!cancelled) setPhotoUrl(url);
+      } catch (e) {
+        if (!cancelled) setPhotoUrl(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rawPhoto]);
   // Mirror the legacy StaticCitizenSideBar exactly: show the name line
   // only when info.name is present and isn't a duplicate of the mobile
   // number (some tenants store the phone in both fields).
@@ -261,7 +322,7 @@ function Profile({ info }: { info: ProfileInfo }) {
         borderBottom: "1px solid rgba(255, 255, 255, 0.12)",
       }}
     >
-      <Avatar name={info?.name} />
+      <Avatar name={info?.name} photoUrl={photoUrl} />
       {info?.name && info?.name !== info?.mobileNumber ? (
         <div
           style={{
