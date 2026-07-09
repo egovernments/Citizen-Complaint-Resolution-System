@@ -27,6 +27,7 @@ cd local-setup
 ./scripts/hot-deploy.sh configurator    # after editing configurator/**
 ./scripts/hot-deploy.sh all             # all three, in sequence
 ```
+**If you encounter any permission issues while running the above commands, execute them with sudo.**
 
 Each target does exactly the same steps a developer would otherwise do by
 hand (see below), plus a health check at the end so you know whether the
