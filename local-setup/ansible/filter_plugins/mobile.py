@@ -28,7 +28,26 @@ def derive_valid_mobile(regex, length=10, preferred=None):
     # mobileNumberRegex requires a length far from the hinted default (e.g. 7
     # or 12 digits) still derives a match instead of exhausting n-1/n/n+1 and
     # falling through to an unmatched placeholder.
-    for try_len in sorted(set(range(6, 16)) | {n, n + 1, n - 1}, key=lambda x: abs(x - n)):
+    lengths = sorted(set(range(6, 16)) | {n, n + 1, n - 1}, key=lambda x: abs(x - n))
+
+    # If the caller's preferred number didn't match outright, first retry
+    # candidates that keep its fill digit (e.g. '9' for '9999999999', '8' for
+    # '8888888888') and only vary the lead digit. Two callers seeding
+    # different usernames with different `preferred` values (INTERNAL_USER
+    # vs ADMIN) must not collide on the same derived mobile number just
+    # because both preferred values failed the regex and fell through to an
+    # identical lead x fill sweep below.
+    preferred_fill = preferred[-1] if preferred else None
+    if preferred_fill:
+        for try_len in lengths:
+            if try_len <= 0:
+                continue
+            for lead in "0123456789":
+                candidate = lead + preferred_fill * (try_len - 1)
+                if len(candidate) == try_len and matches(candidate):
+                    return candidate
+
+    for try_len in lengths:
         if try_len <= 0:
             continue
         for lead in "0123456789":
