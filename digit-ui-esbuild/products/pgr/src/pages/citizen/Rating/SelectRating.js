@@ -22,11 +22,13 @@ function tr(t, key, fallback) {
   return v === key ? fallback : v;
 }
 
-const FEEDBACK_KEYS = [
-  "CS_FEEDBACK_SERVICES",
-  "CS_FEEDBACK_RESOLUTION_TIME",
-  "CS_FEEDBACK_QUALITY_OF_WORK",
-  "CS_FEEDBACK_OTHERS",
+// CCSD-1961 option set. Keys → English fallback (used until the locale
+// bundle carries them; seeded at mz/en_IN).
+const FEEDBACK_OPTIONS = [
+  { key: "CS_FEEDBACK_EASY_SUBMIT", fallback: "Easy to submit the complaint" },
+  { key: "CS_FEEDBACK_COMMUNICATION", fallback: "Communication and updates" },
+  { key: "CS_FEEDBACK_RESOLUTION_TIME", fallback: "Resolution time" },
+  { key: "CS_FEEDBACK_OTHERS", fallback: "Other" },
 ];
 
 /**
@@ -162,7 +164,7 @@ const SelectRating = ({ parentRoute }) => {
     // CS_FEEDBACK_WHAT_WAS_GOOD historically shipped as undefined when
     // no boxes were ticked and `.join` blew up the page (CCRS#441).
     // Sticking to the same payload: csv of localised picks.
-    const selections = FEEDBACK_KEYS.filter((k) => picks[k]).map((k) => t(k));
+    const selections = FEEDBACK_OPTIONS.filter((o) => picks[o.key]).map((o) => tr(t, o.key, o.fallback));
 
     complaintDetails.service.rating = rating;
     complaintDetails.service.additionalDetail = selections.join(",");
@@ -211,7 +213,11 @@ const SelectRating = ({ parentRoute }) => {
       <div style={{ flex: "1 1 auto", padding: "1rem 1.25rem" }}>
         <Card className="p-6 space-y-6">
           <Field
-            label={tr(t, "CS_COMPLAINT_RATE_TEXT", "Rate your experience")}
+            label={tr(
+              t,
+              "CS_COMPLAINT_RATE_TEXT",
+              "Overall, how satisfied are you with the handling of your complaint?"
+            )}
             required
           >
             <StarRow value={rating} onChange={setRating} />
@@ -234,7 +240,11 @@ const SelectRating = ({ parentRoute }) => {
           </Field>
 
           <Field
-            label={tr(t, "CS_FEEDBACK_WHAT_WAS_GOOD", "What was good?")}
+            label={tr(
+              t,
+              "CS_FEEDBACK_WHAT_WAS_GOOD",
+              "What did we do well? (Select all that apply) (optional)"
+            )}
           >
             <div
               style={{
@@ -243,14 +253,14 @@ const SelectRating = ({ parentRoute }) => {
                 gap: "4px",
               }}
             >
-              {FEEDBACK_KEYS.map((k) => (
+              {FEEDBACK_OPTIONS.map((o) => (
                 <FeedbackCheckbox
-                  key={k}
-                  checked={!!picks[k]}
+                  key={o.key}
+                  checked={!!picks[o.key]}
                   onChange={(checked) =>
-                    setPicks((prev) => ({ ...prev, [k]: checked }))
+                    setPicks((prev) => ({ ...prev, [o.key]: checked }))
                   }
-                  label={t(k)}
+                  label={tr(t, o.key, o.fallback)}
                 />
               ))}
             </div>
