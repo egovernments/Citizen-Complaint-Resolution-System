@@ -72,7 +72,7 @@ there's no live class reload.
 ### `frontend` — digit-ui-esbuild
 
 ```bash
-cd digit-ui-esbuild && node esbuild.build.js
+(cd digit-ui-esbuild && node esbuild.build.js)
 tar -czf - -C digit-ui-esbuild/build . | docker exec -i digit-ui tar -xzf - -C /usr/share/nginx/html
 ```
 
@@ -87,8 +87,8 @@ restart is needed.
 ### `configurator` — DIGIT Studio
 
 ```bash
-cd configurator/packages/data-provider && npm run build   # + digit-datagrid
-cd configurator && npx vite build --base=/configurator/
+(cd configurator/packages/data-provider && npm run build)   # + digit-datagrid
+(cd configurator && npx vite build --base=/configurator/)
 sudo cp -r configurator/dist/. /var/www/configurator/ && sudo nginx -s reload
 ```
 

@@ -20,6 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CONFIGURATOR_WWW_DIR="${CONFIGURATOR_WWW_DIR:-/var/www/configurator}"
 SKIP_SUBPKGS="${SKIP_SUBPKGS:-0}"
+SKIP_TESTS="${SKIP_TESTS:-1}"
 
 usage() {
     cat <<EOF
@@ -51,13 +52,17 @@ require_container() {
 }
 
 cmd_backend() {
-    log "building backend/pgr-services jar..."
-    mvn -f "$REPO_ROOT/backend/pgr-services/pom.xml" clean package -DskipTests
-
     require_container digit-pgr-services-1
 
+    log "building backend/pgr-services jar..."
+    local mvn_args=(clean package)
+    if [ "$SKIP_TESTS" = "1" ]; then
+        mvn_args+=(-DskipTests)
+    fi
+    mvn -f "$REPO_ROOT/backend/pgr-services/pom.xml" "${mvn_args[@]}"
+
     local jar
-    jar="$(ls "$REPO_ROOT"/backend/pgr-services/target/pgr-services-*.jar 2>/dev/null | head -1)"
+    jar="$(find "$REPO_ROOT/backend/pgr-services/target" -maxdepth 1 -name 'pgr-services-*.jar' 2>/dev/null | head -1)"
     [ -n "$jar" ] || { echo "[hot-deploy] ERROR: no jar found under backend/pgr-services/target/" >&2; exit 1; }
 
     log "hot-swapping $(basename "$jar") into digit-pgr-services-1..."
@@ -69,8 +74,8 @@ cmd_backend() {
     until docker exec digit-pgr-services-1 wget -qO- http://localhost:8080/pgr-services/health >/dev/null 2>&1; do
         i=$((i + 1))
         if [ "$i" -ge 30 ]; then
-            echo "[hot-deploy] WARNING: health check still not responding after 60s — check 'docker logs digit-pgr-services-1'" >&2
-            return 0
+            echo "[hot-deploy] ERROR: health check still not responding after 60s — check 'docker logs digit-pgr-services-1'" >&2
+            return 1
         fi
         sleep 2
     done
@@ -78,17 +83,18 @@ cmd_backend() {
 }
 
 cmd_frontend() {
+    require_container digit-ui
+
     log "building digit-ui-esbuild bundle..."
     (cd "$REPO_ROOT/digit-ui-esbuild" && node esbuild.build.js)
-
-    require_container digit-ui
 
     log "pushing build/ into digit-ui container..."
     tar -czf - -C "$REPO_ROOT/digit-ui-esbuild/build" . | docker exec -i digit-ui tar -xzf - -C /usr/share/nginx/html
 
     local code
-    code="$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:18080/digit-ui/ || true)"
+    code="$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:18080/digit-ui/)" || { echo "[hot-deploy] ERROR: digit-ui did not respond" >&2; return 1; }
     log "digit-ui responded with HTTP $code"
+    [[ "$code" =~ ^[23] ]] || { echo "[hot-deploy] ERROR: digit-ui returned HTTP $code" >&2; return 1; }
 }
 
 cmd_configurator() {
@@ -105,31 +111,42 @@ cmd_configurator() {
     log "building configurator SPA (vite build, no root typecheck)..."
     (cd "$REPO_ROOT/configurator" && npx vite build --base=/configurator/)
 
-    log "syncing dist/ to $CONFIGURATOR_WWW_DIR..."
+    [ -d "$CONFIGURATOR_WWW_DIR" ] || { echo "[hot-deploy] ERROR: CONFIGURATOR_WWW_DIR must be an existing directory: $CONFIGURATOR_WWW_DIR" >&2; exit 1; }
+    local www_dir_real
+    www_dir_real="$(cd "$CONFIGURATOR_WWW_DIR" && pwd -P)"
+    [ "$www_dir_real" != "/" ] || { echo "[hot-deploy] ERROR: refusing to sync configurator into /" >&2; exit 1; }
+
+    log "syncing dist/ to $www_dir_real..."
     # Try a plain copy first (works when the docroot and everything in it is
     # user-owned); some files in there may be root-owned leftovers from an
     # ansible/root-run build, in which case rm/cp fails partway through even
     # though the top-level directory itself is writable — fall back to sudo,
     # then to a throwaway root container, on failure rather than pre-checking
     # only the top-level directory's permissions.
-    if rm -rf "${CONFIGURATOR_WWW_DIR:?}"/* 2>/dev/null && cp -r "$REPO_ROOT/configurator/dist/." "$CONFIGURATOR_WWW_DIR/" 2>/dev/null; then
+    if rm -rf "${www_dir_real:?}"/* 2>/dev/null && cp -r "$REPO_ROOT/configurator/dist/." "$www_dir_real/" 2>/dev/null; then
         :
     elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
         log "plain copy failed (likely root-owned leftovers) — retrying with sudo"
-        sudo rm -rf "${CONFIGURATOR_WWW_DIR:?}"/*
-        sudo cp -r "$REPO_ROOT/configurator/dist/." "$CONFIGURATOR_WWW_DIR/"
-        sudo nginx -s reload 2>/dev/null || true
+        sudo rm -rf "${www_dir_real:?}"/*
+        sudo cp -r "$REPO_ROOT/configurator/dist/." "$www_dir_real/"
     else
         log "plain copy failed and no passwordless sudo — falling back to a throwaway container to copy as root"
         docker run --rm \
             -v "$REPO_ROOT/configurator/dist:/src:ro" \
-            -v "$CONFIGURATOR_WWW_DIR:/dst" \
+            -v "$www_dir_real:/dst" \
             alpine sh -c "rm -rf /dst/* && cp -r /src/. /dst/"
     fi
 
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+        sudo nginx -s reload 2>/dev/null || true
+    else
+        nginx -s reload 2>/dev/null || true
+    fi
+
     local code
-    code="$(curl -sS -o /dev/null -w '%{http_code}' http://localhost/configurator/ || true)"
+    code="$(curl -sS -o /dev/null -w '%{http_code}' http://localhost/configurator/)" || { echo "[hot-deploy] ERROR: configurator did not respond" >&2; return 1; }
     log "configurator responded with HTTP $code"
+    [[ "$code" =~ ^[23] ]] || { echo "[hot-deploy] ERROR: configurator returned HTTP $code" >&2; return 1; }
 }
 
 cmd_all() {
