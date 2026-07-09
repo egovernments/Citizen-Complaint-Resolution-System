@@ -33,6 +33,10 @@ import static org.egov.pgr.util.PGRConstants.MDMS_DATA_SERVICE_CODE_KEYWORD;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_RELATED_TO_MAP;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_TEMPLATE_TYPE;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_SCHEMA;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_MASTER;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_MASTER;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_JSONPATH;
 
 @Slf4j
 @Component
@@ -52,6 +56,22 @@ public class MDMSUtils {
     // #432). Cache lives for the process lifetime — slaHours changes in MDMS need a
     // pgr-services restart to take effect, same staleness window the migration map had.
     private final Map<String, Map<String, Long>> serviceCodeToSlaCache = new ConcurrentHashMap<>();
+
+    // Config-driven notification masters, cached per state-level tenant with a short TTL
+    // (pgr.notification.mdms.cache.ttl.ms, default 60s). Configurator edits to
+    // NotificationRouting/NotificationTemplate become visible within that window without a
+    // pgr-services restart. Only NON-EMPTY results are cached, so a transient MDMS miss is
+    // retried on the next event rather than caching an empty result; during an MDMS outage the
+    // last-known non-empty entry is served stale (past its TTL) so notifications keep flowing
+    // with the last good config instead of being dropped.
+    private static final class TimedRows {
+        final List<Object> rows;
+        final long fetchedAt;
+        TimedRows(List<Object> rows) { this.rows = rows; this.fetchedAt = System.currentTimeMillis(); }
+        boolean fresh(long ttlMs) { return System.currentTimeMillis() - fetchedAt < ttlMs; }
+    }
+    private final Map<String, TimedRows> notificationRoutingCache = new ConcurrentHashMap<>();
+    private final Map<String, TimedRows> notificationTemplateCache = new ConcurrentHashMap<>();
 
     /**
      * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ComplaintHierarchy leaf rows'
@@ -81,6 +101,79 @@ public class MDMSUtils {
                     + "to the business-level SLA", stateTenant, e);
         }
         return map;
+    }
+
+    /**
+     * Notification routing rows (RAINMAKER-PGR.NotificationRouting) for the tenant, cached per
+     * state-level tenant with a short TTL (pgr.notification.mdms.cache.ttl.ms). Returns an empty
+     * list (never null) on MDMS failure; callers DROP the event's notifications in that case —
+     * there is no legacy fallback when the config-driven flag is on. During an MDMS outage a
+     * last-known non-empty entry is served stale rather than dropping notifications.
+     */
+    public List<Object> getNotificationRouting(String tenantId) {
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        long ttl = config.getNotificationMdmsCacheTtlMs();
+        TimedRows cached = notificationRoutingCache.get(stateTenant);
+        if (cached != null && cached.fresh(ttl)) return cached.rows;
+        List<Object> fetched = fetchNotificationMaster(stateTenant,
+                MDMS_NOTIFICATION_ROUTING_MASTER, MDMS_NOTIFICATION_ROUTING_JSONPATH);
+        if (!fetched.isEmpty()) {
+            notificationRoutingCache.put(stateTenant, new TimedRows(fetched));
+            return fetched;
+        }
+        // Empty fetch = transient MDMS miss OR genuinely unseeded tenant. Never cache empties
+        // (retry next event); serve a stale non-empty entry if we have one rather than dropping
+        // notifications during an MDMS blip.
+        return cached != null ? cached.rows : fetched;
+    }
+
+    /**
+     * Notification template rows (RAINMAKER-PGR.NotificationTemplate) for the tenant, cached per
+     * state-level tenant with a short TTL (pgr.notification.mdms.cache.ttl.ms). Returns an empty
+     * list (never null) on MDMS failure; there is no legacy fallback when the config-driven flag
+     * is on. During an MDMS outage a last-known non-empty entry is served stale.
+     */
+    public List<Object> getNotificationTemplates(String tenantId) {
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        long ttl = config.getNotificationMdmsCacheTtlMs();
+        TimedRows cached = notificationTemplateCache.get(stateTenant);
+        if (cached != null && cached.fresh(ttl)) return cached.rows;
+        List<Object> fetched = fetchNotificationMaster(stateTenant,
+                MDMS_NOTIFICATION_TEMPLATE_MASTER, MDMS_NOTIFICATION_TEMPLATE_JSONPATH);
+        if (!fetched.isEmpty()) {
+            notificationTemplateCache.put(stateTenant, new TimedRows(fetched));
+            return fetched;
+        }
+        // Empty fetch = transient MDMS miss OR genuinely unseeded tenant. Never cache empties
+        // (retry next event); serve a stale non-empty entry if we have one rather than dropping
+        // notifications during an MDMS blip.
+        return cached != null ? cached.rows : fetched;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> fetchNotificationMaster(String stateTenant, String masterName, String jsonPath) {
+        try {
+            MdmsCriteriaReq req = getNotificationModuleRequest(new RequestInfo(), stateTenant, masterName);
+            Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), req);
+            List<Object> rows = JsonPath.read(result, jsonPath);
+            return rows != null ? rows : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to load notification master {} for tenant {} — there is NO legacy fallback "
+                    + "when pgr.notification.config.driven=true: notifications for this tenant will be "
+                    + "DROPPED (or served from a stale cache entry) until MDMS recovers or the tenant is seeded",
+                    masterName, stateTenant, e);
+            return Collections.emptyList();
+        }
+    }
+
+    private MdmsCriteriaReq getNotificationModuleRequest(RequestInfo requestInfo, String tenantId, String masterName) {
+        List<MasterDetail> masterDetails = new ArrayList<>();
+        masterDetails.add(MasterDetail.builder().name(masterName).build());
+        ModuleDetail moduleDetail = ModuleDetail.builder().masterDetails(masterDetails)
+                .moduleName(MDMS_MODULE_NAME).build();
+        MdmsCriteria mdmsCriteria = MdmsCriteria.builder()
+                .moduleDetails(Collections.singletonList(moduleDetail)).tenantId(tenantId).build();
+        return MdmsCriteriaReq.builder().mdmsCriteria(mdmsCriteria).requestInfo(requestInfo).build();
     }
 
 

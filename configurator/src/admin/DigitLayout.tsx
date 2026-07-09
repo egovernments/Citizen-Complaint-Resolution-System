@@ -26,6 +26,13 @@ import {
   History,
   FileCode,
   Workflow,
+  Bell,
+  Mail,
+  ScrollText,
+  Plug,
+  SlidersHorizontal,
+  MessageCircle,
+  UserCog,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +44,18 @@ import { THEMES } from '@/themes';
 
 /** Sidebar navigation groups — names are i18n keys resolved at render time */
 const navGroups = [
+  {
+    labelKey: 'app.nav.notifications',
+    items: [
+      { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
+      { id: 'notification-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notification-routing', icon: Bell },
+      { id: 'notification-template', nameKey: 'app.nav.notification_templates', path: '/manage/notification-template', icon: Mail },
+      { id: 'notification-provider-template', nameKey: 'app.nav.notification_provider_templates', path: '/manage/notification-provider-template', icon: MessageCircle },
+      { id: 'notification-log', nameKey: 'app.nav.notification_logs', path: '/manage/notification-log', icon: ScrollText },
+      { id: 'notification-provider', nameKey: 'app.nav.notification_providers', path: '/manage/notification-provider', icon: Plug },
+      { id: 'notification-preference', nameKey: 'app.nav.notification_preferences', path: '/manage/notification-preference', icon: UserCog },
+    ],
+  },
   {
     labelKey: 'app.nav.tenant_management',
     items: [
@@ -228,9 +247,13 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                           `}
                           title={sidebarCollapsed ? translate(item.nameKey) : undefined}
                         >
-                          <Icon className="w-4.5 h-4.5 flex-shrink-0" />
+                          {/* w-4.5 is not a Tailwind v3 utility (no CSS emitted) — the
+                              icon rendered at its intrinsic 24px and shrank the label box.
+                              text-left keeps a wrapped label on the shared left edge
+                              (buttons default to text-align:center). */}
+                          <Icon className="w-4 h-4 flex-shrink-0" />
                           {!sidebarCollapsed && (
-                            <span className="text-sm font-medium">{translate(item.nameKey)}</span>
+                            <span className="text-sm font-medium flex-1 min-w-0 text-left">{translate(item.nameKey)}</span>
                           )}
                         </button>
                       );

@@ -510,11 +510,33 @@
   background-color: var(--surface);
   padding-top: 0px;
   padding-bottom: 0px;
-  padding-left: 2rem;
+  /* A global digit-ui `input[type=...]:not(.a):not(.b)…` rule matches this
+     type=search input too, and its long :not() chain inflates specificity far
+     above this class — overriding the left padding down to ~12px so the text
+     slides under the search icon (~10–26px). !important is the scoped escape
+     hatch (matching that specificity with plain selectors isn't practical). */
+  padding-left: 2rem !important;
   padding-right: 0.75rem;
   font-size: 12px;
   line-height: 1;
   color: var(--foreground);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* The global digit-ui `input[type=...]:not(.a):not(.b)…` rule is !important and
+   its long :not(.class) chain inflates specificity above a plain class, so it
+   overrides this search input's left padding down to ~12px and the text renders
+   under the icon. A no-op `:not(#…)` lifts this selector into the ID-specificity
+   column (beating the class/attr chain) and, with !important, wins definitively. */
+.dashboard-header-search-input:not(#dashboard-search-noop){
+  padding-left: 2rem !important;
+}
+
+.dashboard-header-search-input::-webkit-search-decoration,
+.dashboard-header-search-input::-webkit-search-cancel-button{
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .dashboard-header-search-input::placeholder{

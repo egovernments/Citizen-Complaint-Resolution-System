@@ -331,7 +331,22 @@
   }
 
   .dashboard-header-search-input {
-    @apply tw-box-border tw-m-0 tw-block tw-h-8 tw-w-56 tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-pl-8 tw-pr-3 tw-text-[12px] tw-leading-none tw-text-foreground placeholder:tw-text-muted-foreground focus:tw-border-foreground focus:tw-outline-none;
+    @apply tw-box-border tw-m-0 tw-block tw-h-8 tw-w-56 tw-appearance-none tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-pl-8 tw-pr-3 tw-text-[12px] tw-leading-none tw-text-foreground placeholder:tw-text-muted-foreground focus:tw-border-foreground focus:tw-outline-none;
+    -webkit-appearance: none;
+  }
+
+  /* A global digit-ui input[type=...]:not(.a):not(.b)… rule is !important and its
+     long :not(.class) chain outranks this class, forcing the left padding to
+     ~12px so text slides under the search icon. A no-op :not(#…) lifts this into
+     the ID-specificity column and, with !important, wins. */
+  .dashboard-header-search-input:not(#dashboard-search-noop) {
+    padding-left: 2rem !important;
+  }
+
+  .dashboard-header-search-input::-webkit-search-decoration,
+  .dashboard-header-search-input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
   }
 
   .dashboard-header-search-input:focus {
