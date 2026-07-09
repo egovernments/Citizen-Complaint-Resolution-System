@@ -33,7 +33,24 @@ How digit-ui consumes it:
   registry; the module's routes mount under the same code.
 
 So: **no `citymodule` row (or `active:false`, or your tenant missing from `tenants[]`) = no home
-card and no mounted module**, regardless of roles.
+card**, regardless of roles.
+
+### 1a. Post-#1062 nuance: the dashboard route does NOT need a citymodule row
+
+The general rule above is the *card* rule. The dashboard is special because #1062 embedded it as a
+first-class product with an **always-on route fallback** (`70-esbuild-embedding.md` §3):
+
+- The **route** `/employee/dashboard` is mounted by `AppModules.js` from the registered
+  `DashboardModule` **whether or not** a `Dashboard` citymodule row exists — so the dashboard is
+  always reachable by **deep link**. Role-gating is inside `DashboardModule`
+  (`DASHBOARD_ROLES`, `70` §4).
+- The **home card** *does* follow the citymodule rule: the employee home renders one card per
+  entry in `initData.modules`, so the card appears only when a `Dashboard` citymodule row is
+  present **and** `"Dashboard"` is in the build's `enabledModules` (it is — `App.js`).
+
+Net: to give a role the dashboard **card**, add a `Dashboard` `tenant.citymodule` row (code
+`Dashboard`, tenant in `tenants[]`, `active:true`). The **deep link** already works without it.
+Neither depends on the sidebar (§2), which is a third, independent surface.
 
 ## 2. Actions + roleactions — the sidebar and role gating
 
@@ -80,6 +97,14 @@ builds its tree from each action's dot-`path` and labels every node with
 a fresh id — §5), (2) `_create` a roleactions row `{rolecode: R, actionid: <that id>, tenantId:
 <state root>}`, (3) bust the caches (§4). No restart.
 
+> **⚠ Live bomet caveat (2026-07-09): the sidebar is currently dead for *every* role.** An mdms-v2
+> JDK21 v1-compat regression makes the `moduleDetails` `_search` emit an empty `IN ()` →
+> `BadSqlGrammar` → `/access/v1/actions/mdms/_get` returns **0 actions**, so the sidebar tree
+> renders nothing regardless of roleactions config. No roleactions edit can add a dashboard
+> sidebar entry until that platform defect is fixed. It is **not** a dashboard-RBAC problem, and
+> the dashboard is unaffected — reach it via the home card + deep link (§1a). Full detail:
+> `80-live-bomet-state.md` §5.
+
 ## 3. Localization keys
 
 - **`ACTION_TEST_DASHBOARD`** — the sidebar/menu label for a node whose transformed path/name
@@ -87,11 +112,12 @@ a fresh id — §5), (2) `_create` a roleactions row `{rolecode: R, actionid: <t
   UPPER_SNAKE). Module: **`rainmaker-common`**. Upsert it via
   `/localization/messages/v1/_upsert` for every enabled locale (see
   `common-masters.StateInfo.languages` — that list is the only source of enabled locales).
-- **`DASHBOARD_CARD_HEADER`** — home-card header key used by card components.
-  TODO-verify: this key appears in operational runbooks but is not present anywhere in this
-  checkout (FE source, ansible seeds, or `local-setup/db/full-dump.sql`); confirm the exact key
-  your card component requests (the citizen home derives `ACTION_TEST_<code>` instead —
-  `Home.js`).
+- **`DASHBOARD_CARD_HEADER`** — home-card header key. **Confirmed** (post-#1062): the card
+  component `digit-ui-esbuild/products/dashboard/DashboardCard.js` requests it twice —
+  `t("DASHBOARD_CARD_HEADER")` for both the `EmployeeModuleCard` `moduleName` and its single
+  link label. Module scope: `rainmaker-common`. Upsert it for every enabled locale or the card
+  renders the raw `DASHBOARD_CARD_HEADER` string. (The citizen home derives `ACTION_TEST_<code>`
+  instead — `Home.js` — but the employee dashboard card uses this explicit key.)
 
 Missing keys render as the raw UPPER_SNAKE code in the UI — that is a localization gap, not a
 routing failure.

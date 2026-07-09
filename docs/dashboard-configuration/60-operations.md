@@ -57,7 +57,7 @@ Every `/v2/analytics/_query` response carries `asOf` = `SELECT max(facts_built_a
 complaint_facts` (`AnalyticsService.asOf()`), i.e. the epoch-ms wall-clock of the last successful
 facts build (each refresh stamps `facts_built_at = now()`). Consumers should treat it as "data
 current as of": with the default interval the dashboard lags reality by up to ~5 min. The FE
-shows it in the header/tile stamps (`frontend/micro-ui/web/src/dashboard/components/DashboardHeader.jsx`,
+shows it in the header/tile stamps (`digit-ui-esbuild/products/dashboard/src/components/DashboardHeader.jsx`,
 `CardUpdatedStamp.jsx`), and the server itself uses `asOf` as the clock authority for
 elapsed-time compose math.
 
@@ -108,14 +108,18 @@ patch on the box (source or bundle) has a lifespan of one night.
 Therefore:
 
 - FE dashboard changes (KpiTile kinds, filter bar, hooks) go through
-  `frontend/micro-ui/web/src/dashboard/` → PR → image/bundle. Never patch `/opt/*/build/`.
+  `digit-ui-esbuild/products/dashboard/src/` → PR → image/bundle. Never patch `/opt/*/build/`.
 - Backend/grain changes go through `backend/pgr-services` source + a Flyway migration → rebuilt
   image (never patch JARs in containers).
 - **MDMS-backed dashboard state survives redeploys** (it lives in the DB) — but keep the ansible
   seed files (`ansible/nairobi-mdms/mdms/dss/*.json`, `tenant/citymodule.json`,
   `ACCESSCONTROL-*/*.json`) in sync with what you upsert by hand, because fresh installs and
   repro environments are seeded from those files, and drift between DB and seed is how "works on
-  bomet, empty on the repro box" happens.
+  bomet, empty on the repro box" happens. **Sharpest form:** editing a `dss.KpiDefinition` seed
+  does **not** overwrite an already-existing live record — seeding `_create`s new ids but never
+  `_update`s existing ones, so a live catalog can silently lag the repo (the #1026 stale-record
+  no-op). Reconcile by `_update`ing the live record explicitly; verify with `/catalog/_search`.
+  Full detail: `80-live-bomet-state.md` §4.
 
 ## 5. Quick health checklist
 
