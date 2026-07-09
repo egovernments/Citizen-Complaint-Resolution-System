@@ -197,34 +197,6 @@ export const CreateComplaintConfig = {
                 name: "GeoLocationsPoint",
               },
             },
-            {
-              inline: true,
-              label: "CS_COMPLAINT_POSTALCODE__DETAILS",
-              type: "number",
-              disable: false,
-              populators: {
-                name: "postalCode",
-                // Postal code is optional in Nairobi — the boundary picker
-                // already pins the complaint to a Ward, and many citizens
-                // don't know the postal code (which is the post-office area
-                // code, not a residential identifier in KE). We still
-                // validate format if anything is entered.
-                required: false,
-                validation: {
-                  required: false,
-                  // Postal-code shape is per-country. Read the pattern from
-                  // globalConfigs CORE_POSTAL_CONFIGS (e.g. MZ = 4 digits)
-                  // instead of hardcoding 5, so this field rule matches the
-                  // config-driven check in createComplaintForm.js. Falls back
-                  // to the legacy 5-digit default when the host hasn't set it.
-                  pattern: new RegExp(
-                    window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS")?.postalCodePattern || "^[0-9]{5}$"
-                  ),
-                },
-                error: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR",
-              },
-            },
-
             // Boundary cascade — replaces the old City + Locality pair.
             // Renders N dropdowns derived from `boundaryHierarchyOrder`
             // (populated by `usePGRInitialization` on employee module

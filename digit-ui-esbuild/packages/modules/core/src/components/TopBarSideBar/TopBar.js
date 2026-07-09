@@ -30,6 +30,17 @@ const TopBar = ({
   React.useEffect(async () => {
     const tenant = Digit.Utils.getMultiRootTenant() ? Digit.ULBService.getStateId() : Digit.ULBService.getCurrentTenantId();
     const uuid = userDetails?.info?.uuid;
+    // CCSD-1971 (A9): prefer the photo the profile-save wrote into the session
+    // (UserService.setUser) — and RE-RESOLVE when it changes, so an updated
+    // picture shows on every page without a re-login. The server lookup stays
+    // as fallback for sessions predating the session-photo write. The old
+    // dependency ([profilePic !== null]) never re-fired after the first load.
+    const sessionPhoto = userDetails?.info?.photo;
+    if (sessionPhoto) {
+      const resolved = await resolveProfilePhoto(sessionPhoto, Digit.ULBService.getStateId());
+      setProfilePic(resolved);
+      return;
+    }
     if (uuid) {
       const usersResponse = await Digit.UserService.userSearch(tenant, { uuid: [uuid] }, {});
       if (usersResponse && usersResponse.user && usersResponse.user.length) {
@@ -41,7 +52,7 @@ const TopBar = ({
         setProfilePic(resolved);
       }
     }
-  }, [profilePic !== null, userDetails?.info?.uuid]);
+  }, [userDetails?.info?.uuid, userDetails?.info?.photo]);
 
   const CitizenHomePageTenantId = Digit.ULBService.getCitizenCurrentTenant(true);
 

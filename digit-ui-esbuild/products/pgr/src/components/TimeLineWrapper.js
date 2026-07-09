@@ -5,7 +5,22 @@ import { convertEpochFormateToDate } from '../utils';
 
 // NOTE: no useMyContext() here — the citizen route tree has no MyContext
 // provider, and this wrapper renders on BOTH citizen and employee details.
-const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", currentStateChildren = null }) => {
+// CCSD-1971 (B4): when a complaint is marked confidential, the CITIZEN's
+// identity must not surface in the employee timeline. Names show first char +
+// asterisks; contact numbers keep the last 4 digits (the backend already
+// masks the mobile, this covers the name and any unmasked residue).
+const maskName = (name) => {
+  if (!name || name.length < 2) return name;
+  return name.charAt(0) + "*".repeat(Math.max(2, name.length - 1));
+};
+const maskPhone = (phone) => {
+  if (!phone || phone.length < 4) return phone;
+  return "******" + phone.slice(-4);
+};
+const isCitizenActor = (person) =>
+  Array.isArray(person?.roles) && person.roles.some((r) => (r?.code || r) === "CITIZEN");
+
+const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", currentStateChildren = null, maskConfidential = false }) => {
     const { t } = useTranslation();
 
     const tenantId = Digit.ULBService.getCurrentTenantId();
@@ -65,9 +80,13 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
             const steps = workflowData.ProcessInstances.map((instance, index) => {
                 const assignee = instance?.assignes?.[0];
                 const personRecord = isAssigningAction(instance?.action) ? assignee : instance?.assigner;
-                const personLine = formatPerson(personRecord);
+                // Confidential complaints: mask the CITIZEN actor's identity
+                // (employees stay visible — accountability is intact).
+                const maskThis = maskConfidential && isCitizenActor(personRecord);
+                const personLine = maskThis ? maskName(formatPerson(personRecord)) : formatPerson(personRecord);
                 const mobile = isAssigningAction(instance?.action) ? assignee?.mobileNumber : instance?.assigner?.mobileNumber;
-                const contactLine = mobile ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${mobile}` : null;
+                const shownMobile = maskThis ? maskPhone(mobile) : mobile;
+                const contactLine = shownMobile ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${shownMobile}` : null;
 
                 // Workflow-driven label: try the localized key, else fall back to the
                 // raw action code so ANY workflow's actions (standard PGR + CMS) render

@@ -101,6 +101,14 @@ const StaticCitizenSideBar = ({ linkData, islinkDataLoading }) => {
   useEffect(() => {
     let cancelled = false;
     const fetchProfilePhoto = async () => {
+      // CCSD-1971 (A9): the session photo (written by the profile save) wins
+      // and re-resolves on change — no re-login needed to see the new avatar.
+      const sessionPhoto = user?.info?.photo;
+      if (sessionPhoto) {
+        const resolved = await resolveProfilePhoto(sessionPhoto, Digit.ULBService.getStateId());
+        if (!cancelled) setProfilePic(resolved);
+        return;
+      }
       const tenant = Digit.ULBService.getCurrentTenantId();
       const uuid = user?.info?.uuid;
       if (!uuid) return;
@@ -111,11 +119,11 @@ const StaticCitizenSideBar = ({ linkData, islinkDataLoading }) => {
         if (!cancelled) setProfilePic(resolved);
       }
     };
-    if (!profilePic) fetchProfilePhoto();
+    fetchProfilePhoto();
     return () => {
       cancelled = true;
     };
-  }, [user?.info?.uuid]);
+  }, [user?.info?.uuid, user?.info?.photo]);
 
   const handleLogout = () => {
     toggleSidebar(false);
