@@ -188,11 +188,14 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   // notification-preference -> GET /novu-bridge/novu-adapter/v1/preferences
   // (per-user consent per channel + preferredLanguage; same {data,total} envelope
   // as integrations). Keyed by the row's `userId`, which is always present, so
-  // react-admin gets a stable id straight from the response.
+  // react-admin gets a stable id straight from the response. Tenant-scoped like
+  // notification-log: the backend's tenantId query param is optional, but
+  // omitting it returns CROSS-TENANT rows (capped at 100), so the screen leaked
+  // other tenants' preferences and could miss the session tenant's own.
   'notification-preference': {
     type: 'custom', label: 'User Preferences', idField: 'userId', nameField: 'userId',
     descriptionField: 'preferredLanguage', dedicated: true,
-    customPath: '/novu-bridge/novu-adapter/v1/preferences', customTenantScoped: false,
+    customPath: '/novu-bridge/novu-adapter/v1/preferences', customTenantScoped: true,
   },
 };
 
