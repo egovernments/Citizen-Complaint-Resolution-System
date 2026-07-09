@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Filing Guide
+    url: https://github.com/egovernments/Citizen-Complaint-Resolution-System/blob/master/.github/CONTRIBUTING.md
+    about: Read this before filing an issue — covers labels, priorities, and conventions

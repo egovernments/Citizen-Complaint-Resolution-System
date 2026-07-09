@@ -138,6 +138,30 @@ services:
     paths:
     - /user-otp
     strip_path: false
+    # MOCK (default): request-termination short-circuits every /user-otp/*
+    # call with a canned success response, so login/register work using the
+    # fixed OTP (123456, see CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE in
+    # docker-compose.egov-digit.yaml) without the real egov-otp/user-otp/
+    # egov-notification-sms stack running or any SMS gateway integrated.
+    #
+    # TO ENABLE REAL OTP FOR PRODUCTION, before deploying:
+    #   1. Delete the `plugins:` block below (the request-termination mock).
+    #   2. Set enable_otp_services: true in the tenant's Ansible host_vars
+    #      (local-setup/ansible/inventory/host_vars/<tenant>.yml) so compose
+    #      starts the `otp` profile (egov-otp, user-otp, egov-notification-sms).
+    #   3. Configure a real SMS gateway: egov-notification-sms defaults to
+    #      SMS_PROVIDER_CLASS: Console (logs OTP SMS to container stdout only)
+    #      in docker-compose.egov-digit.yaml — point it at a real provider
+    #      class + credentials before relying on SMS delivery.
+    # Without all three, the first OTP request has nothing to answer it
+    # (real stack down or SMS not actually sent), and only the fixed
+    # 123456 fallback keeps working.
+    plugins:
+    - name: request-termination
+      config:
+        status_code: 200
+        content_type: application/json
+        body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":null,"ts":null,"resMsgId":"uief87324","msgId":null,"status":"successful"},"otp":{"identity":"","tenantId":"","type":"","otp":"","expiryTime":0}}'
 - name: enc-service
   url: http://egov-enc-service:1234
   tags:
@@ -357,6 +381,60 @@ services:
     config:
       replace:
         uri: /pgr-services/health
+# novu-bridge configurator proxy. Seven endpoints are routed: the three
+# read-only GETs (logs / integrations / preferences) plus the provider
+# management set (POST providers, GET providers/templates, POST
+# providers/verify, POST providers/test-send). The /dispatch/* diagnostics
+# trio stays unrouted on purpose. Auth happens INSIDE novu-bridge
+# (ProxyAuthFilter validates the DIGIT bearer token against egov-user
+# /user/_details) — Kong is a dumb router here. novu-bridge listens on 8080
+# with servlet context /novu-bridge, so strip_path:false with the
+# context-prefixed path is correct.
+- name: novu-bridge-proxy
+  url: http://novu-bridge:8080
+  routes:
+  - name: novu-bridge-logs-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/logs
+    strip_path: false
+  - name: novu-bridge-integrations-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/integrations
+    strip_path: false
+  - name: novu-bridge-preferences-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/preferences
+    strip_path: false
+  - name: novu-bridge-providers-create-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers
+    strip_path: false
+  - name: novu-bridge-providers-templates-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/templates
+    strip_path: false
+  - name: novu-bridge-providers-verify-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/verify
+    strip_path: false
+  - name: novu-bridge-providers-test-send-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/test-send
+    strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083
   tags:

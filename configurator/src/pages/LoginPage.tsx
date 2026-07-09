@@ -11,6 +11,13 @@ import { apiClient, getApiBaseUrl, ApiClientError } from '@/api';
 
 type AppMode = 'onboarding' | 'management';
 
+// Root (state-level) tenant most deployments authenticate against. Must be the
+// form's actual initial VALUE (not just a placeholder): a placeholder-only
+// "prefill" is never registered in form state, so submitting with it untouched
+// silently sends an empty tenantId and no /user/oauth/token call succeeds.
+// Keep in sync with the initial app state in App.tsx.
+const DEFAULT_TENANT_CODE = 'ke';
+
 export default function LoginPage() {
   const { login } = useApp();
   const navigate = useNavigate();
@@ -18,7 +25,7 @@ export default function LoginPage() {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    tenantCode: '',
+    tenantCode: DEFAULT_TENANT_CODE,
   });
   const [mode, setMode] = useState<AppMode>('onboarding');
   const [showPassword, setShowPassword] = useState(false);
@@ -215,7 +222,7 @@ export default function LoginPage() {
                   type="text"
                   value={formData.tenantCode}
                   onChange={(e) => setFormData({ ...formData, tenantCode: e.target.value })}
-                  placeholder="ke"
+                  placeholder={DEFAULT_TENANT_CODE}
                   className="border-input-border focus:border-primary focus:ring-primary"
                   autoComplete="off"
                   required

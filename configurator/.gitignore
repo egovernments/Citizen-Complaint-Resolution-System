@@ -25,6 +25,11 @@ dist-ssr
 
 # E2E test artifacts
 e2e/screenshots/
+e2e/report/
+e2e/results/
 e2e-onboarding/results/
 e2e-onboarding/report/
 e2e-onboarding/screenshots/
+
+# Generated i18n coverage report
+scripts/i18n-missing.json

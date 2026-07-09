@@ -4,24 +4,38 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
 import org.egov.novubridge.repository.DispatchLogRepository;
+import org.egov.novubridge.util.PiiMask;
 import org.egov.novubridge.web.models.*;
 import org.egov.tracer.model.CustomException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
-import java.util.regex.Pattern;
 import java.util.*;
 
+/**
+ * Pass-through delivery + tracking pipeline.
+ *
+ * <p>PGR now pre-renders ONE event per (recipient x channel): it has already
+ * resolved the recipient, picked + filled + localized the template, and put the
+ * final text in {@code renderedBody}. novu-bridge therefore does NOT resolve
+ * templates, providers, or localization. It only:
+ * <ol>
+ *   <li>upserts the Novu subscriber (identify, D6) with the carried profile,</li>
+ *   <li>delivers the rendered body via the per-channel Novu workflow for every ENABLED channel
+ *       (novu.bridge.channels.enabled); known-but-disabled channels (e.g. WHATSAPP with no
+ *       provider) persist an explicit SKIPPED/NB_NO_PROVIDER row, and</li>
+ *   <li>records the result in {@code nb_dispatch_log} keyed by transactionId.</li>
+ * </ol>
+ */
 @Service
 @Slf4j
 public class DispatchPipelineService {
-    private static final Pattern TWILIO_CONTENT_SID_PATTERN = Pattern.compile("^[Hh][Xx][a-fA-F0-9]{32}$");
+
+    private static final Set<String> KNOWN_CHANNELS = Set.of("SMS", "WHATSAPP", "EMAIL");
 
     private final EnvelopeValidator envelopeValidator;
     private final PreferenceServiceClient preferenceServiceClient;
-    private final UserServiceClient userServiceClient;
-    private final ConfigServiceClient configServiceClient;
     private final NovuClient novuClient;
     private final DispatchLogRepository dispatchLogRepository;
     private final NovuBridgeConfiguration config;
@@ -29,16 +43,12 @@ public class DispatchPipelineService {
 
     public DispatchPipelineService(EnvelopeValidator envelopeValidator,
                                    PreferenceServiceClient preferenceServiceClient,
-                                   UserServiceClient userServiceClient,
-                                   ConfigServiceClient configServiceClient,
                                    NovuClient novuClient,
                                    DispatchLogRepository dispatchLogRepository,
                                    NovuBridgeConfiguration config,
                                    MdmsServiceClient mdmsServiceClient) {
         this.envelopeValidator = envelopeValidator;
         this.preferenceServiceClient = preferenceServiceClient;
-        this.userServiceClient = userServiceClient;
-        this.configServiceClient = configServiceClient;
         this.novuClient = novuClient;
         this.dispatchLogRepository = dispatchLogRepository;
         this.config = config;
@@ -46,32 +56,39 @@ public class DispatchPipelineService {
     }
 
     public DispatchResult process(ComplaintsDomainEvent event, boolean send, RequestInfo requestInfo) {
-        log.info("Processing domain event: eventId={}, eventName={}, tenant={}, module={}, send={}",
-                event.getEventId(), event.getEventName(), event.getTenantId(), event.getModule(), send);
+        log.info("Processing pre-rendered domain event: eventId={}, eventName={}, tenant={}, channel={}, send={}",
+                event.getEventId(), event.getEventName(), event.getTenantId(), event.getChannel(), send);
 
         envelopeValidator.validate(event);
 
         DerivedContext context = deriveContext(event);
-        log.info("Derived context: eventId={}, audience={}, recipientMobile={}, recipientUserId={}, locale={}",
-                event.getEventId(), context.getAudience(), context.getRecipientMobile(),
-                context.getRecipientUserId(), context.getLocale());
-        String recipientUuid = userServiceClient.resolveUserUuid(
-                event.getTenantId(), context.getAudience(), context.getRecipientUserId(), context.getRecipientMobile());
-        if (!StringUtils.hasText(recipientUuid)) {
-            throw new CustomException("NB_RECIPIENT_UUID_MISSING", "Recipient user uuid could not be resolved");
+        String subscriberId = StringUtils.hasText(event.getSubscriberId())
+                ? event.getSubscriberId()
+                : context.getSubscriberId();
+        if (!StringUtils.hasText(subscriberId)) {
+            // Record the terminal status before throwing — every other branch in
+            // process() persists, and the class invariant is that every consumed
+            // event leaves an explicit status row in nb_dispatch_log.
+            persist(event, context, "FAILED", "NB_SUBSCRIBER_ID_MISSING",
+                    "subscriberId is required (PGR resolved it; null means a bad event)", null, 1);
+            throw new CustomException("NB_SUBSCRIBER_ID_MISSING",
+                    "subscriberId is required (PGR resolved it; null means a bad event)");
         }
-        context.setRecipientUserId(recipientUuid);
-        String subscriberId = event.getTenantId() + ":" + recipientUuid;
+        context.setSubscriberId(subscriberId);
 
-        // Get user's preferred locale from preferences and update context
-        String userPreferredLocale = preferenceServiceClient.getUserPreferredLocale(event.getTenantId(), recipientUuid, context.getLocale());
-        context.setLocale(userPreferredLocale);
-        log.info("Updated context locale from user preferences: eventId={}, userId={}, locale={}", 
-                event.getEventId(), recipientUuid, userPreferredLocale);
+        // subscriberId is masked too: when the recipient has no UUID it falls back
+        // to `tenantId:mobile`, so it can embed a raw phone number.
+        log.info("Derived context: eventId={}, channel={}, subscriberId={}, recipientPhone={}, email={}, locale={}",
+                event.getEventId(), context.getChannel(), PiiMask.mask(subscriberId),
+                PiiMask.mask(context.getRecipientMobile()), PiiMask.mask(context.getEmail()), context.getLocale());
 
-        boolean preferenceAllowed = preferenceServiceClient.isChannelAllowed(event.getTenantId(), recipientUuid, context.getRecipientMobile(), context.getChannel());
+        // Optional channel-preference gate (PGR owns locale; preferences only gate delivery).
+        String recipientUuid = context.getRecipientUserId();
+        boolean preferenceAllowed = preferenceServiceClient.isChannelAllowed(
+                event.getTenantId(), recipientUuid, context.getRecipientMobile(), context.getChannel());
         if (!preferenceAllowed) {
-            persist(event, context, null, "SKIPPED", "NB_PREFERENCE_DENIED", context.getChannel() + " preference denied", null, 1);
+            persist(event, context, "SKIPPED", "NB_PREFERENCE_DENIED",
+                    context.getChannel() + " preference denied", null, 1);
             return DispatchResult.builder()
                     .valid(true)
                     .preferenceAllowed(false)
@@ -81,169 +98,137 @@ public class DispatchPipelineService {
                     .build();
         }
 
-        ResolvedTemplate resolvedTemplate = configServiceClient.resolveTemplate(context, event.getEventName(), event.getModule(), event.getTenantId());
-        log.info("Resolved template: eventId={}, templateKey={}, contentSid={}, requiredVars={}, paramOrder={}",
-                event.getEventId(), resolvedTemplate.getTemplateKey(), resolvedTemplate.getContentSid(),
-                resolvedTemplate.getRequiredVars(), resolvedTemplate.getParamOrder());
-        validateTemplateConfig(resolvedTemplate);
-        
-        // Resolve providers by channel with priority=1, pick the first one
-        List<ResolvedProvider> availableProviders = configServiceClient.resolveProvidersByChannel(event.getTenantId(), context.getChannel());
-        if (availableProviders.isEmpty()) {
-            throw new CustomException("NB_NO_ACTIVE_PROVIDER",
-                    "No provider found with priority 1 for tenant=" + event.getTenantId() + " channel=" + context.getChannel());
-        }
-        ResolvedProvider resolvedProvider = availableProviders.get(0);
-
-        log.info("Resolved provider: eventId={}, provider={}, channel={}, isActive={}, priority={}, credentialKeys={}, senderNumber={}, availableCount={}",
-                event.getEventId(), resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
-                resolvedProvider.getIsActive(), resolvedProvider.getPriority(),
-                resolvedProvider.getCredentials() != null ? resolvedProvider.getCredentials().keySet() : "null",
-                resolvedProvider.getSenderNumber(), availableProviders.size());
-        
-        List<String> missingVars = findMissingRequiredVars(resolvedTemplate, event.getData());
-        if (!missingVars.isEmpty()) {
-            persist(event, context, resolvedTemplate, "FAILED", "NB_REQUIRED_VARS_MISSING", "Missing required vars", null, 1);
-            return DispatchResult.builder()
-                    .valid(false)
-                    .preferenceAllowed(true)
-                    .derivedContext(context)
-                    .resolvedTemplate(ResolvedTemplateResponse.fromInternal(resolvedTemplate))
-                    .resolvedProvider(ResolvedProviderResponse.fromInternal(resolvedProvider))
-                    .missingRequiredVars(missingVars)
-                    .novuTriggered(false)
-                    .diagnostics(Collections.singletonList("Missing required vars"))
-                    .build();
-        }
-
         if (!send) {
-            persist(event, context, resolvedTemplate, "RECEIVED", null, null, null, 1);
+            persist(event, context, "RECEIVED", null, null, null, 1);
             return DispatchResult.builder()
                     .valid(true)
                     .preferenceAllowed(true)
                     .derivedContext(context)
-                    .resolvedTemplate(ResolvedTemplateResponse.fromInternal(resolvedTemplate))
-                    .resolvedProvider(ResolvedProviderResponse.fromInternal(resolvedProvider))
-                    .missingRequiredVars(Collections.emptyList())
                     .novuTriggered(false)
                     .diagnostics(Collections.singletonList("Validation only mode"))
                     .build();
         }
 
-        String recipientPhone = formatRecipientPhone(context.getRecipientMobile(), event.getTenantId(), context.getChannel(), requestInfo);
-
-        log.info("Dispatching notification: eventId={}, eventName={}, tenant={}, complaintNo={}, " +
-                 "templateKey={}, subscriberId={}, provider={}, channel={}, senderNumber={}",
-                event.getEventId(), event.getEventName(), event.getTenantId(),
-                event.getData() != null ? event.getData().get("complaintNo") : "N/A",
-                resolvedTemplate.getTemplateKey(), subscriberId,
-                resolvedProvider.getProviderName(), resolvedProvider.getChannel(),
-                resolvedProvider.getSenderNumber());
-        log.info("Novu trigger payload: paramOrder={}, novuBaseUrl={}, providerCredentials={}",
-                resolvedTemplate.getParamOrder(), config.getNovuBaseUrl(), 
-                resolvedProvider.getCredentials() != null ? "[REDACTED]" : "null");
-
-        // Use provider-specific Novu API key if available and not blank, otherwise use template-specific key
-        String novuApiKey = StringUtils.hasText(resolvedProvider.getNovuApiKey()) ? 
-                resolvedProvider.getNovuApiKey() : resolvedTemplate.getNovuApiKey();
-
-        // Build ordered content variables for template if paramOrder is configured
-        Map<String, String> contentVariables = null;
-        if (!CollectionUtils.isEmpty(resolvedTemplate.getParamOrder()) && 
-            StringUtils.hasText(resolvedTemplate.getContentSid())) {
-            contentVariables = buildOrderedContentVariables(resolvedTemplate, event.getData());
-            log.info("Built ordered content variables from paramOrder: {}", contentVariables);
+        String channel = context.getChannel();
+        // Gate 1: unknown/null channel — never guess, never fall back to SMS.
+        if (!isKnownChannel(channel)) {
+            persist(event, context, "SKIPPED", "NB_UNSUPPORTED_CHANNEL",
+                    "Unknown channel: " + channel, null, 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).derivedContext(context)
+                    .novuTriggered(false)
+                    .diagnostics(Collections.singletonList("Unsupported channel " + channel + " skipped"))
+                    .build();
+        }
+        // Gate 2: known channel with no enabled provider (e.g. WHATSAPP pre-onboarding).
+        if (!config.isChannelEnabled(channel)) {
+            persist(event, context, "SKIPPED", "NB_NO_PROVIDER",
+                    "No provider enabled for channel " + channel, null, 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).derivedContext(context)
+                    .novuTriggered(false)
+                    .diagnostics(Collections.singletonList("Channel " + channel + " has no enabled provider; skipped"))
+                    .build();
         }
 
-        // Use provider-agnostic notification dispatch with automatic strategy selection
-        NovuClient.NovuResponse novuResponse = novuClient.triggerWithProviderConfig(
-                resolvedTemplate.getTemplateKey(),
-                subscriberId,
-                recipientPhone,
-                event.getData(),
-                event.getEventId(),
-                resolvedProvider,
-                resolvedTemplate,
-                contentVariables,
-                novuApiKey);
+        Contact contact = buildContact(event, context);
 
-        log.info("Novu trigger response: eventId={}, statusCode={}, response={}",
-                event.getEventId(), novuResponse.getStatusCode(), novuResponse.getResponse());
+        // Contact gate (bridge-side defense): an EMAIL event needs an email; SMS/WHATSAPP
+        // need a phone. The bridge consumes a shared topic and must defend independently of
+        // PGR's emission-side filter — a phone-only recipient on an EMAIL row would otherwise
+        // trigger complaints-email and phantom-SENT with no address.
+        boolean hasRequiredContact = "EMAIL".equalsIgnoreCase(channel)
+                ? StringUtils.hasText(contact.getEmail())
+                : StringUtils.hasText(contact.getPhone());
+        if (!hasRequiredContact) {
+            persist(event, context, "SKIPPED", "NB_CONTACT_MISSING",
+                    "Recipient has no " + ("EMAIL".equalsIgnoreCase(channel) ? "email" : "phone")
+                    + " for channel " + channel, null, 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).derivedContext(context)
+                    .novuTriggered(false)
+                    .diagnostics(Collections.singletonList("Missing contact for channel " + channel))
+                    .build();
+        }
 
-        persist(event, context, resolvedTemplate, "SENT", null, null, novuResponse.getResponse(), 1);
+        NovuClient.NovuResponse response;
+        try {
+            response = novuClient.identifyThenTrigger(
+                    subscriberId, contact, channel,
+                    context.getRenderedBody(), context.getRenderedSubject(),
+                    context.getTransactionId(), event.getData());
+        } catch (CustomException ce) {
+            persist(event, context, "FAILED", ce.getCode(), ce.getMessage(), null, 1);
+            throw ce;   // consumer logs + DLQs as before
+        } catch (Exception e) {
+            persist(event, context, "FAILED", "NB_DELIVERY_ERROR", e.getMessage(), null, 1);
+            throw e;
+        }
+
+        Integer sc = response != null ? response.getStatusCode() : null;
+        boolean delivered = sc != null && sc >= 200 && sc < 300;
+        if (!delivered) {
+            persist(event, context, "FAILED", "NB_NOVU_TRIGGER_FAILED",
+                    "Novu returned status " + sc, response != null ? response.getResponse() : null, 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).derivedContext(context)
+                    .novuTriggered(false).novuStatusCode(sc)
+                    .novuResponse(response != null ? response.getResponse() : null)
+                    .diagnostics(Collections.singletonList("Novu trigger failed: status " + sc))
+                    .build();
+        }
+
+        log.info("Dispatch response: eventId={}, channel={}, statusCode={}, txn={}",
+                event.getEventId(), channel, sc, PiiMask.mask(context.getTransactionId()));
+
+        persist(event, context, "SENT", null, null,
+                response != null ? response.getResponse() : null, 1);
         return DispatchResult.builder()
                 .valid(true)
                 .preferenceAllowed(true)
                 .derivedContext(context)
-                .resolvedTemplate(ResolvedTemplateResponse.fromInternal(resolvedTemplate))
-                .resolvedProvider(ResolvedProviderResponse.fromInternal(resolvedProvider))
-                .missingRequiredVars(Collections.emptyList())
                 .novuTriggered(true)
-                .novuStatusCode(novuResponse.getStatusCode())
-                .novuResponse(novuResponse.getResponse())
+                .novuStatusCode(sc)
+                .novuResponse(response != null ? response.getResponse() : null)
                 .diagnostics(Collections.singletonList("Dispatch successful"))
                 .build();
     }
 
-    public NovuClient.NovuResponse testTrigger(String templateKey, String subscriberId, String phone,
+    public NovuClient.NovuResponse testTrigger(String workflowId, String subscriberId, String phone,
                                                Map<String, Object> payload, String transactionId,
-                                               String contentSid, Map<String, String> contentVariables,RequestInfo requestInfo) {
-        // Backward compatibility method for testing with Twilio-specific overrides
+                                               String contentSid, Map<String, String> contentVariables,
+                                               RequestInfo requestInfo) {
+        // Pass-through test path: trigger Novu directly with the supplied payload.
+        // contentSid/contentVariables are accepted for backward-compatible request
+        // shape but no longer used (PGR owns rendering).
         return novuClient.trigger(
-                templateKey,
+                workflowId,
                 subscriberId,
                 formatRecipientPhone(phone, null, config.getChannel(), requestInfo),
+                null,
                 payload,
-                transactionId,
-                buildTemplateOverrides(contentSid, contentVariables));
+                transactionId);
     }
 
-    private Map<String, String> buildOrderedContentVariables(ResolvedTemplate template, Map<String, Object> data) {
-        List<String> orderedVars = template.getParamOrder();
-        if (CollectionUtils.isEmpty(orderedVars)) {
-            throw new CustomException("NB_PARAM_ORDER_REQUIRED",
-                    "paramOrder is required when template has ordered parameters");
-        }
-
-        Map<String, String> contentVariables = new LinkedHashMap<>();
-        int idx = 1;
-        for (String key : orderedVars) {
-            Object value = data != null ? data.get(key) : null;
-            contentVariables.put(String.valueOf(idx++), value == null ? "" : String.valueOf(value));
-        }
-        return contentVariables;
+    private boolean isKnownChannel(String channel) {
+        return channel != null && KNOWN_CHANNELS.contains(channel.toUpperCase());
     }
 
-
-    private Map<String, Object> buildTemplateOverrides(String contentSid, Map<String, String> contentVariables) {
-        if (!StringUtils.hasText(contentSid)) {
-            return null;
+    private Contact buildContact(ComplaintsDomainEvent event, DerivedContext context) {
+        Contact contact = event.getContact();
+        if (contact != null) {
+            return contact;
         }
-        validateContentSid(contentSid);
-
-        // Novu passthrough uses camelCase; contentVariables must be a JSON string for Twilio
-        Map<String, Object> body = new HashMap<>();
-        body.put("contentSid", contentSid);
-        try {
-            String cvJson = new com.fasterxml.jackson.databind.ObjectMapper()
-                    .writeValueAsString(contentVariables == null ? Collections.emptyMap() : contentVariables);
-            body.put("contentVariables", cvJson);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new CustomException("NB_CONTENT_VARS_SERIALIZE", "Failed to serialize contentVariables to JSON");
-        }
-
-        Map<String, Object> passthrough = new HashMap<>();
-        passthrough.put("body", body);
-
-        Map<String, Object> twilio = new HashMap<>();
-        twilio.put("_passthrough", passthrough);
-
-        Map<String, Object> providers = new HashMap<>();
-        providers.put("twilio", twilio);
-
-        Map<String, Object> overrides = new HashMap<>();
-        overrides.put("providers", providers);
-        return overrides;
+        // Fallback: assemble a Contact from the derived context (e.g. legacy
+        // stakeholders[] envelope or dry-run requests without a contact block).
+        return Contact.builder()
+                .userId(context.getRecipientUserId())
+                .type(context.getAudience())
+                .name(context.getName())
+                .phone(context.getRecipientMobile())
+                .email(context.getEmail())
+                .locale(context.getLocale())
+                .build();
     }
 
     private String formatRecipientPhone(String mobile, String tenantId, String channel, RequestInfo requestInfo) {
@@ -269,20 +254,38 @@ public class DispatchPipelineService {
             }
             MobileValidationConfig validationConfig = mdmsServiceClient.getMobileValidationConfig(tenantId, requestInfo);
             if (!normalized.matches(validationConfig.getMobileNumberRegex())) {
-                throw new CustomException("INVALID_MOBILE_NUMBER",
+                throw new CustomException("NB_INVALID_MOBILE_NUMBER",
                         "Mobile number does not match the configured pattern for tenantId=" + tenantId);
             }
             e164 = validationConfig.getCountryCode() + normalized;
         }
 
-        // Twilio Programmable WhatsApp requires the `whatsapp:` prefix on the
-        // recipient address; SMS / Vonage / Value-First / WhatsApp Business
-        // API all take raw E.164. Keying off the dispatch channel keeps SMS
-        // routes from being silently shunted into Twilio's WhatsApp pipeline.
+        // Twilio Programmable WhatsApp requires the "whatsapp:" prefix; SMS takes raw E.164.
         return isWhatsapp ? "whatsapp:" + e164 : e164;
     }
 
     private DerivedContext deriveContext(ComplaintsDomainEvent event) {
+        // Primary path: the pre-rendered per-recipient event carries everything flat.
+        if (event.getContact() != null || StringUtils.hasText(event.getRenderedBody())) {
+            Contact c = event.getContact();
+            return DerivedContext.builder()
+                    .channel(StringUtils.hasText(event.getChannel()) ? event.getChannel() : config.getChannel())
+                    .audience(c != null ? c.getType() : null)
+                    .locale(c != null && StringUtils.hasText(c.getLocale()) ? c.getLocale() : config.getDefaultLocale())
+                    .recipientMobile(c != null ? c.getPhone() : null)
+                    .recipientUserId(c != null ? c.getUserId() : null)
+                    .email(c != null ? c.getEmail() : null)
+                    .name(c != null ? c.getName() : null)
+                    .subscriberId(event.getSubscriberId())
+                    .renderedBody(event.getRenderedBody())
+                    .renderedSubject(event.getSubject())
+                    .transactionId(StringUtils.hasText(event.getTransactionId())
+                            ? event.getTransactionId()
+                            : event.getEventId() + ":" + event.getChannel())
+                    .build();
+        }
+
+        // Backward-compat fallback: legacy stakeholders[] envelope.
         Stakeholder stakeholder = null;
         if (!CollectionUtils.isEmpty(event.getStakeholders())) {
             stakeholder = event.getStakeholders().stream()
@@ -290,101 +293,40 @@ public class DispatchPipelineService {
                     .findFirst()
                     .orElse(event.getStakeholders().get(0));
         }
-
+        String locale = event.getContext() != null && StringUtils.hasText(event.getContext().getLocale())
+                ? event.getContext().getLocale() : config.getDefaultLocale();
         return DerivedContext.builder()
-                .channel(config.getChannel())
+                .channel(StringUtils.hasText(event.getChannel()) ? event.getChannel() : config.getChannel())
                 .audience(stakeholder != null ? stakeholder.getType() : null)
                 .workflowState(event.getWorkflow() != null ? event.getWorkflow().getToState() : null)
-                .locale(event.getContext() != null && StringUtils.hasText(event.getContext().getLocale()) ? event.getContext().getLocale() : config.getDefaultLocale())
+                .locale(stakeholder != null && StringUtils.hasText(stakeholder.getLocale())
+                        ? stakeholder.getLocale() : locale)
                 .recipientMobile(stakeholder != null ? stakeholder.getMobile() : null)
                 .recipientUserId(stakeholder != null ? stakeholder.getUserId() : null)
+                .email(stakeholder != null ? stakeholder.getEmail() : null)
+                .renderedBody(stakeholder != null ? stakeholder.getRenderedBody() : event.getRenderedBody())
+                .renderedSubject(stakeholder != null ? stakeholder.getRenderedSubject() : event.getSubject())
+                .subscriberId(event.getSubscriberId())
+                .transactionId(StringUtils.hasText(event.getTransactionId())
+                        ? event.getTransactionId()
+                        : event.getEventId() + ":" + event.getChannel())
                 .build();
     }
 
-    private List<String> findMissingRequiredVars(ResolvedTemplate template, Map<String, Object> data) {
-        List<String> missing = new ArrayList<>();
-        Set<String> requiredVars = new LinkedHashSet<>();
-        if (!CollectionUtils.isEmpty(template.getRequiredVars())) {
-            requiredVars.addAll(template.getRequiredVars());
-        }
-        String contentSid = resolveContentSid(template);
-        if (StringUtils.hasText(contentSid) && !CollectionUtils.isEmpty(template.getParamOrder())) {
-            requiredVars.addAll(template.getParamOrder());
-        }
-
-        log.info("Checking required vars: template={}, requiredVars={}, availableData={}", 
-                template.getTemplateKey(), requiredVars, data != null ? data.keySet() : "null");
-
-        for (String requiredVar : requiredVars) {
-            if (data == null || !data.containsKey(requiredVar) || data.get(requiredVar) == null) {
-                log.warn("Missing required variable: var={}, dataNull={}, containsKey={}, valueNull={}", 
-                        requiredVar, data == null, data != null && data.containsKey(requiredVar), 
-                        data != null && data.containsKey(requiredVar) ? data.get(requiredVar) == null : "N/A");
-                missing.add(requiredVar);
-            }
-        }
-        
-        if (!missing.isEmpty()) {
-            log.error("Missing required variables detected: missing={}, template={}, eventData={}", 
-                    missing, template.getTemplateKey(), data);
-        }
-        
-        return missing;
-    }
-
-    private void validateTemplateConfig(ResolvedTemplate template) {
-        String contentSid = resolveContentSid(template);
-        if (!StringUtils.hasText(contentSid)) {
-            return;
-        }
-        validateContentSid(contentSid);
-        if (CollectionUtils.isEmpty(template.getParamOrder())) {
-            throw new CustomException("NB_PARAM_ORDER_REQUIRED",
-                    "paramOrder is required when contentSid is configured");
-        }
-    }
-
-    private void validateContentSid(String contentSid) {
-        // Support Twilio format (HX + 32 hex chars) for backward compatibility
-        // Other providers can have different formats - just check it's not empty
-        if (!StringUtils.hasText(contentSid)) {
-            throw new CustomException("NB_CONTENT_SID_INVALID", "ContentSid cannot be empty");
-        }
-        // If it looks like Twilio format, validate accordingly
-        if (contentSid.startsWith("HX") || contentSid.startsWith("hx")) {
-            if (!TWILIO_CONTENT_SID_PATTERN.matcher(contentSid).matches()) {
-                throw new CustomException("NB_CONTENT_SID_INVALID",
-                        "Invalid Twilio contentSid format; expected HX followed by 32 hex chars");
-            }
-        }
-        // Other providers: accept any non-empty string as valid
-    }
-
-    private String resolveContentSid(ResolvedTemplate template) {
-        if (StringUtils.hasText(template.getContentSid())) {
-            return template.getContentSid();
-        }
-        // Backward compatibility for current config where templateVersion carries contentSid.
-        if (StringUtils.hasText(template.getTemplateVersion()) && 
-            (template.getTemplateVersion().startsWith("HX") || template.getTemplateVersion().startsWith("hx"))) {
-            return template.getTemplateVersion();
-        }
-        return null;
-    }
-
-    private void persist(ComplaintsDomainEvent event, DerivedContext context, ResolvedTemplate template,
+    private void persist(ComplaintsDomainEvent event, DerivedContext context,
                          String status, String errorCode, String errorMessage,
                          Map<String, Object> providerResponse, Integer attemptCount) {
         dispatchLogRepository.upsert(DispatchLogEntry.builder()
                 .eventId(event.getEventId())
+                .transactionId(context.getTransactionId())
                 .referenceNumber(event.getEntityId())
                 .module(event.getModule())
                 .eventName(event.getEventName())
                 .tenantId(event.getTenantId())
                 .channel(context.getChannel())
-                .recipientValue(context.getRecipientUserId())
-                .templateKey(template != null ? template.getTemplateKey() : null)
-                .templateVersion(template != null ? template.getTemplateVersion() : null)
+                .recipientValue(StringUtils.hasText(context.getSubscriberId())
+                        ? context.getSubscriberId() : context.getRecipientUserId())
+                .templateKey(resolveTemplateKey(event, context))
                 .status(status)
                 .attemptCount(attemptCount)
                 .lastErrorCode(errorCode)
@@ -393,5 +335,36 @@ public class DispatchPipelineService {
                 .createdTime(System.currentTimeMillis())
                 .lastModifiedTime(System.currentTimeMillis())
                 .build());
+    }
+
+    /**
+     * Best-available template identity for the dispatch-log row.
+     *
+     * <p>The authoritative value is the MDMS {@code RAINMAKER-PGR.NotificationTemplate}
+     * uid — {@code audience.action.toState.channel.locale} — that PGR's
+     * TemplateRenderer actually selected. pgr-services does NOT yet put it on the
+     * wire: {@code NotificationService.publishRenderedEvent} must add an explicit
+     * {@code templateKey} field to the pre-rendered event (carrying the locale it
+     * actually rendered with, i.e. after any default-locale fallback). Until then
+     * {@link ComplaintsDomainEvent#getTemplateKey()} is null and we reconstruct
+     * the ROUTING key from segments the event already carries verbatim — audience
+     * (contact.type), action/toState (event data block), channel and locale. This
+     * matches the template uid except when the renderer fell back to its default
+     * locale. Legacy envelopes without an action/toState fall back to the
+     * eventName. Nothing here is fabricated: every segment comes from the event.
+     */
+    private String resolveTemplateKey(ComplaintsDomainEvent event, DerivedContext context) {
+        if (StringUtils.hasText(event.getTemplateKey())) {
+            return event.getTemplateKey();   // explicit wire value wins once PGR emits it
+        }
+        Map<String, Object> data = event.getData();
+        Object action = data != null ? data.get("action") : null;
+        Object toState = data != null ? data.get("toState") : null;
+        if (action != null && toState != null
+                && StringUtils.hasText(context.getAudience()) && StringUtils.hasText(context.getChannel())) {
+            String key = context.getAudience() + "." + action + "." + toState + "." + context.getChannel();
+            return StringUtils.hasText(context.getLocale()) ? key + "." + context.getLocale() : key;
+        }
+        return event.getEventName();
     }
 }

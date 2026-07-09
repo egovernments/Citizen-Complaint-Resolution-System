@@ -1049,6 +1049,19 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const target = args.target_tenant as string;
       const source = (args.source_tenant as string) || 'pg';
 
+      // Register the target with egov-enc-service BEFORE anything below needs
+      // to encrypt/decrypt for it (Step 4's ADMIN user creation, in particular).
+      // egov-enc-service only knows tenants discovered via an MDMS search
+      // scoped to its own STATE_LEVEL_TENANT_ID — a brand-new root is invisible
+      // to it otherwise, and encrypt/decrypt throws "Tenant Id not found".
+      // Non-fatal: if enc-service is unreachable, let the rest of bootstrap
+      // proceed and surface the real error at whichever step needs it.
+      try {
+        await digitApi.generateEncKey(target);
+      } catch (e) {
+        console.error(`[tenant_bootstrap] enc-service key generation failed for "${target}": ${e instanceof Error ? e.message : String(e)}`);
+      }
+
       if (args.user_only) {
         const mobileRegex = (args.mobile_regex as string) || '^[6-9][0-9]{9}$';
         const stateTenantForEviction = target.includes('.') ? target.split('.')[0] : target;
@@ -1084,20 +1097,19 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
             roles: standardRoles,
             tenantId: target,
           };
-          try {
+          // user_only is only ever called after a full bootstrap already created
+          // this user (see the ansible "post-bootstrap — re-provision ADMIN"
+          // tasks) — it always exists here, so update in place to re-encrypt
+          // password/mobileNumber under whichever enc key is currently active,
+          // rather than attempting userCreate and string-matching the resulting
+          // error to detect the duplicate it will always be.
+          const existing = await digitApi.userSearch(target, { userName: currentUsername, limit: 1 });
+          if (existing[0]) {
+            await digitApi.userUpdate({ ...existing[0], ...newUser });
+          } else {
             await digitApi.userCreate(newUser, target);
-            userProvisioned = { username: currentUsername, tenantId: target, roles: standardRoles.map((r) => r.code) };
-          } catch (createErr) {
-            const createMsg = createErr instanceof Error ? createErr.message : String(createErr);
-            const isDuplicate =
-              createMsg.includes('DuplicateUserName') ||
-              createMsg.toLowerCase().includes('duplicate');
-            if (isDuplicate) {
-              userProvisioned = { username: currentUsername, tenantId: target, roles: [] };
-            } else {
-              throw createErr;
-            }
           }
+          userProvisioned = { username: currentUsername, tenantId: target, roles: standardRoles.map((r) => r.code) };
         } catch (error) {
           userProvisionError = error instanceof Error ? error.message : String(error);
         }
@@ -1314,6 +1326,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         'Workflow.AutoEscalationStatesToIgnore',
         // ── inbox ──
         'INBOX.InboxQueryConfiguration',
+        // ── dashboard analytics catalog ──
+        // KPI defs and packs are platform-level definitions (queries + viz +
+        // role visibility) with no tenant identity inside — without them a new
+        // root gets a working dashboard shell but an empty catalog ("no tiles
+        // in the catalog pack for this role"). Complaint-type–specific data
+        // (ServiceDefs/ComplaintHierarchy) stays operator-owned; these are not.
+        'dss.KpiDefinition',
+        'dss.DashboardPack',
         'ACCESSCONTROL-ROLEACTIONS.roleactions',
       ];
 
@@ -2523,6 +2543,17 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           error: `tenant_id "${tenantId}" must be a city-level ID containing a dot (e.g. "pg.newcity"). ` +
             'Use tenant_bootstrap for state-level root tenants.',
         }, null, 2);
+      }
+
+      // Register the city tenant with egov-enc-service before Step 3 creates its
+      // dual-scoped ADMIN user — each tenantId needs its own key (the root's key,
+      // provisioned by tenant_bootstrap, doesn't cover a distinct city tenantId).
+      // See tenant_bootstrap's identical call above for the full rationale.
+      // Non-fatal: if enc-service is unreachable, let Step 3 surface the real error.
+      try {
+        await digitApi.generateEncKey(tenantId);
+      } catch (e) {
+        console.error(`[city_setup] enc-service key generation failed for "${tenantId}": ${e instanceof Error ? e.message : String(e)}`);
       }
 
       const root = tenantId.split('.')[0];

@@ -88,12 +88,11 @@ boundary_type: "Ward"          # what the smallest selectable boundary is called
 
 # Mobile-number validation rules used by the citizen-side UI on signup.
 # Kenya: +254 prefix, 9-10 digits starting with 7 (Safaricom) or 1 (Airtel/Telkom).
+# Length + allowed leading digits are derived from mobileNumberRegex (see
+# filter_plugins/mobile.py) — no separate length/starting-character fields.
 core_mobile_configs:
-  mobilePrefix: "+254"
-  mobileNumberPattern: "^0?[17][0-9]{8}$"
-  mobileNumberLength: 9
-  mobileNumberAllowedStartingCharacters: ["1", "7"]
-  mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
+  countryCode: "+254"
+  mobileNumberRegex: "^0?[17][0-9]{8}$"
 
 # Postal-code validation. The SPA reads this via globalConfigs key
 # `CORE_POSTAL_CONFIGS` for submit-time pattern checks in the citizen +
@@ -208,11 +207,14 @@ enable_integration_tests_runner: false
 
 # Start the real OTP stack: egov-otp (stores OTPs), user-otp (orchestrates
 # send/validate), egov-notification-sms (delivers via SMS gateway).
-# Default true — real OTP services run by default.
-# Set false before deploying if you want to skip the OTP stack (lean/offline
-# environments); egov-user's fixed OTP (CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE=123456)
-# still allows login, but /user-otp/* requests will fail without a mock in kong.yml.
-enable_otp_services: true
+# Default false — local-setup/kong/kong.yml mocks /user-otp/* with a canned
+# 200 response so login/register work via the fixed OTP (123456, see
+# CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) without any SMS infra.
+# Set true for production, AND follow the "TO ENABLE REAL OTP FOR PRODUCTION"
+# steps in local-setup/kong/kong.yml (remove the mock plugin there, and wire
+# up a real SMS_PROVIDER_CLASS in docker-compose.egov-digit.yaml — it
+# defaults to Console, which only logs OTP SMS instead of sending it).
+enable_otp_services: false
 
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
 # extra). Off by default; only enable if you actually use the inbox.
@@ -289,6 +291,50 @@ novu_api_key: ""
 twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
+
+# ────────── Config-driven notifications (PGR + novu-bridge pass-through) ──────────
+# The new path (design D1/D4/D6/D7): PGR reads two MDMS masters
+# (PGR.NotificationRouting + PGR.NotificationTemplate), renders + localizes per
+# recipient, and publishes ONE pre-rendered event per (recipient × channel) to
+# complaints.domain.events. novu-bridge becomes a thin pass-through that
+# identifies the Novu subscriber and delivers renderedBody. Requires
+# enable_novu: true + the seeded MDMS masters + the pass-through
+# novu_bridge_image (below).
+
+# Flip PGR onto the config-driven path for THIS tenant. Default false keeps the
+# legacy hardcoded notification path. Cut over one tenant at a time after the
+# golden-output test + MDMS seed land. (docker-compose.<tenant>.yml may also
+# hard-set PGR_NOTIFICATION_CONFIG_DRIVEN — see docker-compose.bomet.yml.)
+pgr_notification_config_driven: false
+
+# Custom image pins (built+pushed to the VPC registry 10.0.0.4:5000 by CI).
+# Leave unset to keep the published preview / local-build defaults.
+# pgr_services_image:  "10.0.0.4:5000/egovio/pgr-services:notif-config-<sha>"
+# novu_bridge_image:   "10.0.0.4:5000/egovio/novu-bridge:passthrough-<sha>"
+
+# Build the pass-through novu-bridge from backend/novu-bridge on the box.
+build_novu_bridge: false
+# Build pgr-services from backend/pgr-services on the box (config-driven build).
+build_pgr_services: false
+
+# Channels the bridge actually delivers (comma-separated). WHATSAPP is
+# intentionally omitted until a legitimate provider is onboarded as a Novu
+# integration; then add it here. Default SMS,EMAIL.
+# novu_bridge_channels_enabled: "SMS,EMAIL"
+
+# novu-bridge dispatch channel (sms | whatsapp | email). SMS-first per the
+# Bomet phasing (§3): cut SMS over, then add WhatsApp/EMAIL as config-only
+# routing edits. Default sms.
+novu_bridge_channel: "sms"
+
+# Per-channel Novu workflow ids the bridge triggers (rendered body travels in
+# payload.body — the workflow is just the delivery shell). Defaults match the
+# CI bootstrap-created workflows.
+# novu_bridge_workflow_id_sms:      "complaints-sms"
+# novu_bridge_workflow_id_whatsapp: "complaints-whatsapp"
+# novu_bridge_workflow_id_email:    "complaints-email"
+# Subscriber-identify TTL cache (ms) — skip redundant POST /v1/subscribers.
+# novu_bridge_identify_cache_ttl_ms: 300000
 
 # ────────── Keycloak SSO (opt-in) ──────────
 # Adds 2 containers (keycloak + token-exchange-svc) plus the host

@@ -1,0 +1,103 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+early_access: false
+tone_instructions: >
+  Reviews are advisory for external contributors. Be constructive and
+  concise. Prioritize correctness, security, and API contract stability
+  over stylistic nits.
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  sequence_diagrams: true
+  changed_files_summary: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - develop
+      - master
+      - "release/.*"
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT REVIEW"
+    labels:
+      - "!skip-review"
+
+  path_filters:
+    - "!**/*.min.js"
+    - "!**/*.lock"
+    - "!**/package-lock.json"
+    - "!**/yarn.lock"
+    - "!**/target/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/node_modules/**"
+
+  path_instructions:
+    - path: "backend/**/*.java"
+      instructions: >
+        Spring Boot services. Flag missing null checks on request DTOs,
+        unbounded DB queries, N+1 patterns, and direct SQL string
+        concatenation. Verify @Transactional boundaries and that
+        exception handling doesn't swallow root causes.
+    - path: "backend/**/pom.xml"
+      instructions: >
+        Flag new dependencies without a version, SNAPSHOT versions,
+        and any dependency that isn't already used elsewhere in the repo.
+    - path: "frontend/**/*.{js,jsx,ts,tsx}"
+      instructions: >
+        React micro-UI. Flag missing key props in lists, direct DOM
+        manipulation, unsanitized dangerouslySetInnerHTML, and API
+        calls inside render. Check for accessibility (aria-*, alt text).
+    - path: "configs/**/*.{yaml,yml}"
+      instructions: >
+        Kubernetes/Helm configs. Flag hardcoded secrets, missing
+        resource requests/limits, latest image tags, and privileged
+        containers.
+    - path: "devops/**"
+      instructions: >
+        Deployment tooling. Flag credential exposure, missing input
+        validation in scripts, and destructive operations without
+        confirmation.
+    - path: "**/*.md"
+      instructions: >
+        Docs. Be lenient on style; flag only broken links, wrong
+        commands, or outdated version references.
+
+  tools:
+    ast-grep:
+      essential_rules: true
+    markdownlint:
+      enabled: true
+    yamllint:
+      enabled: true
+    languagetool:
+      enabled: true
+      level: default
+    gitleaks:
+      enabled: true
+    hadolint:
+      enabled: true
+    actionlint:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
