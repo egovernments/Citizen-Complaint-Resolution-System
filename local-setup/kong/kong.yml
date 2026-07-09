@@ -66,38 +66,47 @@ plugins:
         -- Mirrors the K8s Spring gateway's open / mixed-mode / protected buckets. OPEN and MIXED
         -- are auth-OPTIONAL (anonymous allowed and NOT action-RBAC'd); everything else is PROTECTED
         -- (a valid token is required). Phase 1 does NOT call egov-accesscontrol yet — action-level
-        -- RBAC is Phase 2. The AUTH_OPTIONAL set = open ∪ mixed, kept in sync with the Spring
-        -- gateway whitelists (env.yaml egov-open/-mixed-mode-endpoints-whitelist). See
-        -- docs/parity-item5-gateway-rbac-design.md.
+        -- RBAC is Phase 2.
+        --
+        -- EXACT match (set membership), mirroring the Spring gateway's
+        -- openEndpointsWhitelist.contains(getPath().value()) — NOT prefix (a prefix would over-open,
+        -- e.g. anonymous /localization/messages/v1/_upsert). AUTH_OPTIONAL = open ∪ mixed, kept
+        -- VERBATIM-in-sync with env.yaml egov-open/-mixed-mode-endpoints-whitelist (+ the
+        -- boundary-service search paths CCRS migrated to in #1); a CI check enforces the two match
+        -- (Phase 3). See docs/parity-item5-gateway-rbac-design.md.
         --
         -- Ships in AUDIT mode: unauthenticated hits on protected paths are LOGGED, not rejected.
         -- Flip ENFORCE_UNAUTH=true after an observation period (first confirm no RBAC-audit warning
-        -- is actually a legitimate anonymous call — if it is, add its path to AUTH_OPTIONAL).
+        -- is a legitimate anonymous call — if it is, add its EXACT path to AUTH_OPTIONAL AND env.yaml).
         local ENFORCE_UNAUTH = false
         local AUTH_OPTIONAL = {
-          "/user/oauth/token", "/user-otp/v1/_send", "/otp/v1/_validate", "/user/citizen/_create",
-          "/user/password/nologin/_update", "/localization/messages",
-          "/tenant/v1/tenant/_search", "/tenant-management/tenant",
-          "/egov-mdms-service/v1/_search", "/egov-mdms-service/v1/_get",
-          "/egov-mdms-service/v1/_reload", "/egov-mdms-service/v1/_reloadobj",
-          "/egov-mdms-service-test/v1/_search",
-          "/mdms-v2/v1/_search", "/mdms-v2/v2/_search", "/mdms-v2/schema/v1/_search",
-          "/egov-location/boundarys",
-          "/boundary-service/boundary-relationships/_search",
-          "/boundary-service/boundary-hierarchy-definition/_search",
-          "/boundary-service/boundary/_search",
-          "/pgr/services/v1/_search",
-          "/egov-indexer/index-operations/_index", "/egov-indexer/index-operations/_reload",
-          "/filestore/v1/file", "/egov-url-shortening", "/default-data-handler/tenant/new",
-          "/workflow/history/v1/_search", "/egov-idgen/id/_generate", "/user/_search",
-          "/access/v1/actions/mdms/_get", "/egov-location/location/v11/boundarys/_search",
+          ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
+          ["/user/citizen/_create"]=true, ["/user/password/nologin/_update"]=true,
+          ["/localization/messages"]=true, ["/localization/messages/v1/_search"]=true,
+          ["/tenant/v1/tenant/_search"]=true,
+          ["/egov-location/boundarys"]=true,
+          ["/egov-location/boundarys/boundariesByBndryTypeNameAndHierarchyTypeName"]=true,
+          ["/egov-location/boundarys/getLocationByLocationName"]=true,
+          ["/egov-location/boundarys/isshapefileexist"]=true,
+          ["/egov-location/boundarys/getshapefile"]=true,
+          ["/egov-location/location/v11/boundarys/_search"]=true,
+          ["/pgr/services/v1/_search"]=true,
+          ["/egov-mdms-service/v1/_search"]=true, ["/egov-mdms-service/v1/_get"]=true,
+          ["/egov-mdms-service/v1/_reload"]=true, ["/egov-mdms-service/v1/_reloadobj"]=true,
+          ["/egov-mdms-service-test/v1/_search"]=true,
+          ["/mdms-v2/v1/_search"]=true, ["/mdms-v2/v2/_search"]=true, ["/mdms-v2/schema/v1/_search"]=true,
+          ["/boundary-service/boundary-relationships/_search"]=true,
+          ["/boundary-service/boundary-hierarchy-definition/_search"]=true,
+          ["/boundary-service/boundary/_search"]=true,
+          ["/egov-indexer/index-operations/_index"]=true, ["/egov-indexer/index-operations/_reload"]=true,
+          ["/filestore/v1/file"]=true, ["/filestore/v1/files"]=true, ["/filestore/v1/files/url"]=true,
+          ["/filestore/v1/files/id"]=true, ["/filestore/v1/files/tag"]=true,
+          ["/egov-url-shortening"]=true, ["/default-data-handler/tenant/new"]=true,
+          ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
+          ["/user/_search"]=true, ["/access/v1/actions/mdms/_get"]=true,
         }
         local uri = kong.request.get_path()
-        local is_protected = true
-        for i = 1, #AUTH_OPTIONAL do
-          local p = AUTH_OPTIONAL[i]
-          if uri == p or uri:sub(1, #p) == p then is_protected = false; break end
-        end
+        local is_protected = not AUTH_OPTIONAL[uri]
         local function deny_unauth()
           if ENFORCE_UNAUTH then
             return kong.response.exit(401, cjson.encode({
