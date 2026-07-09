@@ -291,6 +291,19 @@ server {
     proxy_set_header Host $host;
     proxy_http_version 1.1;
   }
+
+  # React Router deep links — /env/<envId>/activity-feed, /env/<envId>/workflows,
+  # etc. Same class as /auth/ above: the dashboard is Vite base=/, so these are
+  # root-absolute. A direct load / hard-refresh must serve the container's
+  # index.html (the dashboard's http-server does SPA fallback) — otherwise it
+  # falls through `location /` to Kong and 404s ("no Route matched with those
+  # values"). Client-side nav from the dashboard home works either way; this is
+  # only needed for deep-link / refresh.
+  location /env/ {
+    proxy_pass http://127.0.0.1:14000;
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+  }
   # Manifest + favicons (referenced unprefixed by the dashboard HTML).
   location = /manifest.json {
     proxy_pass http://127.0.0.1:14000/manifest.json;
