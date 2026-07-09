@@ -305,6 +305,21 @@ const STEPS = [
 // key, which Module.js clears on every citizen-home mount.
 const CREATE_DRAFT_KEY = "PGR_CREATE_CITIZEN_DRAFT";
 
+// The saved step POSITION may only be restored when the document itself was
+// RELOADED (mid-flow F5) — and only by the first wizard mount after it. Any
+// other entry (SPA links, and sidebar items that hard-navigate like "Citizen
+// Complaint Resolution System") starts at step 1 with the answers kept. The
+// flag is consumed on first use so later SPA re-entries within the same
+// document also start at step 1.
+let RESTORE_STEP_ARMED = (() => {
+  try {
+    const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    return nav?.type === "reload";
+  } catch (e) {
+    return false;
+  }
+})();
+
 // ---------------------------------------------------------------------------
 // Helpers (kept identical to the legacy FormExplorer so the API payload
 // shape is preserved byte-for-byte)
@@ -1871,6 +1886,10 @@ const CreatePGRFlowV2: React.FC = () => {
         : {};
   }
   const [stepIndex, setStepIndex] = React.useState(() => {
+    // Position restores ONLY right after a document reload (see
+    // RESTORE_STEP_ARMED); every other entry starts on step 1.
+    if (!RESTORE_STEP_ARMED) return 0;
+    RESTORE_STEP_ARMED = false;
     const saved = Number(savedDraftRef.current.stepIndex);
     return Number.isInteger(saved) ? Math.min(Math.max(saved, 0), STEPS.length - 1) : 0;
   });
