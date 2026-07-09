@@ -234,6 +234,10 @@ public class PGRService {
 			restoreMaskedPlaceholders(updatedExt, updateService.getId(), tenantId, cfg);
 			extendedAttributesValidationService.validate(updatedExt, cfg, updateService);
 			plainExt = updatedExt.copy(); // snapshot before encrypt — avoids decrypt round-trip for response
+			// A restored value may be real confidential data the caller isn't cleared to see —
+			// persist it correctly either way, but don't leak it back in this response.
+			if (updatedExt.getIsConfidentialSafe() && !isAuthorizedForConfidential(request.getRequestInfo(), updateService, cfg))
+				encryptionDecryptionService.maskAll(plainExt);
 			updateService.setExtendedAttributes(
 					encryptionDecryptionService.encrypt(updatedExt, cfg, tenantId));
 			enrichmentService.enrichUserContactDetails(request);
@@ -371,13 +375,22 @@ public class PGRService {
         // back, otherwise validation runs on ciphertext and encrypt() double-encrypts it.
         encryptionDecryptionService.decrypt(existingExt, cfg);
 
-        new ArrayList<>(updatedExt.getDynamicFields().keySet()).forEach(key -> {
-            if (MASK_SENTINEL.equals(updatedExt.getField(key))) {
-                Object existingValue = existingExt.getField(key);
-                if (existingValue != null) updatedExt.putField(key, existingValue);
-                else updatedExt.removeField(key);
+        for (String key : new ArrayList<>(updatedExt.getDynamicFields().keySet())) {
+            if (!MASK_SENTINEL.equals(updatedExt.getField(key))) continue;
+            Object existingValue = existingExt.getField(key);
+            if (existingValue == null) {
+                updatedExt.removeField(key);
+            } else if (MASK_SENTINEL.equals(existingValue)) {
+                // decrypt() falls back to the sentinel on failure (e.g. enc-service down) —
+                // treating that as a real value would persist "****" as if it were genuine,
+                // the exact corruption this method exists to prevent. Fail closed instead.
+                throw new CustomException("MASK_RESTORE_FAILED",
+                        "Could not recover the original value for field '" + key
+                                + "'; rejecting update to avoid persisting a placeholder.");
+            } else {
+                updatedExt.putField(key, existingValue);
             }
-        });
+        }
     }
 
     /**
@@ -387,7 +400,6 @@ public class PGRService {
      */
     private void applyDecryptOrMask(List<ServiceWrapper> wrappers, RequestInfo requestInfo,
                                      Map<String, ComplaintTemplateTypeConfig> configCache) {
-        String callerUuid = requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getUuid() : null;
         for (ServiceWrapper wrapper : wrappers) {
             Service svc = wrapper.getService();
             if (svc.getExtendedAttributes() == null) continue;
@@ -397,16 +409,21 @@ public class PGRService {
                     encryptionDecryptionService.maskAll(svc.getExtendedAttributes());
                 continue;
             }
-            List<String> viewerRoles = !CollectionUtils.isEmpty(cfg.getAllowedViewerRoles())
-                    ? cfg.getAllowedViewerRoles() : List.of(ROLE_CONFIDENTIAL_VIEWER);
-            boolean isCreator = callerUuid != null && callerUuid.equals(svc.getAccountId());
-            if (svc.getExtendedAttributes().getIsConfidentialSafe() && !isCreator
-                    && !hasAnyRole(requestInfo, viewerRoles)) {
+            if (svc.getExtendedAttributes().getIsConfidentialSafe() && !isAuthorizedForConfidential(requestInfo, svc, cfg)) {
                 encryptionDecryptionService.maskAll(svc.getExtendedAttributes());
             } else {
                 encryptionDecryptionService.decrypt(svc.getExtendedAttributes(), cfg);
             }
         }
+    }
+
+    /** Creator always qualifies; otherwise the caller needs one of cfg's allowed viewer roles. */
+    private boolean isAuthorizedForConfidential(RequestInfo requestInfo, Service svc, ComplaintTemplateTypeConfig cfg) {
+        String callerUuid = requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getUuid() : null;
+        if (callerUuid != null && callerUuid.equals(svc.getAccountId())) return true;
+        List<String> viewerRoles = !CollectionUtils.isEmpty(cfg.getAllowedViewerRoles())
+                ? cfg.getAllowedViewerRoles() : List.of(ROLE_CONFIDENTIAL_VIEWER);
+        return hasAnyRole(requestInfo, viewerRoles);
     }
 
     private String getDepartmentFromMDMS(ServiceRequest request, Object mdmsData) {
