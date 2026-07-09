@@ -1884,6 +1884,21 @@ const CreatePGRFlowV2: React.FC = () => {
     Digit.SessionStorage.set(CREATE_DRAFT_KEY, { formData, stepIndex, tenant: baseTenant, user: draftUserUuid });
   }, [formData, stepIndex, baseTenant, draftUserUuid]);
 
+  // Leaving the wizard via IN-APP navigation (sidebar Home, back, links) resets
+  // the saved POSITION to step 1 while keeping the answers — re-entering from
+  // "File a Complaint" should read as a fresh start, not resume on page 3
+  // (user feedback on the draft-persistence feature). A hard refresh tears the
+  // page down without running this cleanup, so mid-flow F5 still restores the
+  // exact step. Successful create deletes the key before navigating, and the
+  // formData guard keeps this cleanup from resurrecting it.
+  React.useEffect(
+    () => () => {
+      const d = Digit.SessionStorage.get(CREATE_DRAFT_KEY);
+      if (d && d.formData) Digit.SessionStorage.set(CREATE_DRAFT_KEY, { ...d, stepIndex: 0 });
+    },
+    []
+  );
+
   // Authority dispatcher (RAINMAKER-PGR.ComplaintRelatedToMap @ state tenant).
   // Empty (the default for any tenant that hasn't seeded it) => the legacy flow:
   // no authority step, catalogue fetched at the base tenant, no extendedAttributes.
