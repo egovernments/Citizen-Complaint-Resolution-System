@@ -144,6 +144,11 @@ const EmployeeApp = ({
               logoUrl={logoUrl}
               logoUrlWhite={logoUrlWhite}
               modules={modules}
+              // CCSD-1971 (B1): no language selector on the employee surface.
+              // This is the MAIN employee wrapper — the prop defaulted to true
+              // here, which kept the dropdown alive despite the other wrapper
+              // passing false.
+              showLanguageChange={false}
             />}
             <div className={!noTopBar ? `${(isSuperUserWithMultipleRootTenant) ? "" : "main"} ${DSO ? "m-auto" : ""} digit-home-main` : ""}>
 
