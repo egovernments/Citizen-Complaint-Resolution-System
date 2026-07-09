@@ -21,6 +21,7 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../../../utils/complaintLabel";
+import PGRDatePicker from "../../../components/PGRDatePicker";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -1068,22 +1069,24 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
                   value={val}
                   onChange={(e) => setDyn(f.fieldKey, e.target.value)}
                 />
+              ) : f.dataType === "date" ? (
+                // CCSD-1952: SAME calendar as the employee form (PGRDatePicker,
+                // maxDate today) — future dates render greyed-out and unclickable
+                // on both surfaces. The native <input type="date"> was dropped
+                // here: its max attr enforcement varies by browser, and silently
+                // ignoring a future pick reads as broken.
+                <PGRDatePicker
+                  onSelect={(name: string, v: string) => setDyn(f.fieldKey, v)}
+                  config={{ key: f.fieldKey, populators: { name: f.fieldKey, maxDate: "today" } }}
+                  formData={dyn}
+                />
               ) : (
                 <Input
                   id={`xf-${f.fieldKey}`}
-                  className={f.dataType === "date" ? "pgr-date-input" : undefined}
-                  type={f.dataType === "date" ? "date" : f.dataType === "number" ? "number" : "text"}
-                  maxLength={f.dataType === "date" || f.dataType === "number" ? undefined : f.maxLength}
-                  // "Date of fact"-style fields record when something HAPPENED —
-                  // cap the picker at today (CCSD-1952); onChange guards typed
-                  // input too (the max attr only constrains the popup).
-                  max={f.dataType === "date" ? new Date().toISOString().slice(0, 10) : undefined}
+                  type={f.dataType === "number" ? "number" : "text"}
+                  maxLength={f.dataType === "number" ? undefined : f.maxLength}
                   value={val}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (f.dataType === "date" && v && v > new Date().toISOString().slice(0, 10)) return;
-                    setDyn(f.fieldKey, v);
-                  }}
+                  onChange={(e) => setDyn(f.fieldKey, e.target.value)}
                 />
               )}
             </Field>
