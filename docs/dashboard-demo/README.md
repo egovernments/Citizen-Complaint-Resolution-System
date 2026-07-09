@@ -12,11 +12,16 @@ bomet: `https://bometfeedbackhub.digit.org`.
 
 ## 0. Read this first — two things that will surprise you if you don't
 
-1. **The employee left SIDEBAR is dead for EVERYONE on bomet right now.** A separate
-   mdms-v2 (JDK21) v1-compat regression makes `/access/v1/actions/mdms/_get` return
-   **0 actions**, so the employee chrome renders no sidebar entries — for admins too.
-   **Do not tell the audience to "click Dashboard in the left menu."** You reach the
-   dashboard two ways instead:
+1. **The employee left sidebar works on bomet (fixed 2026-07-09).** It had been empty
+   for every role because `egov-accesscontrol` reads `ACCESSCONTROL-ACTIONS.actions`
+   but the `tenant_bootstrap` had only seeded the 254 actions under the non-standard
+   `ACCESSCONTROL-ACTIONS-TEST.actions-test` (the "ACTIONS bridge" step silently failed
+   on a schema-propagation race — see egovernments/CCRS#1106). The actions were bridged
+   to the standard module on bomet, so `/access/v1/actions/mdms/_get` now returns actions
+   for every role and the Dashboard nav entry renders. **Caveat for a *fresh* box:** the
+   durable bootstrap fix (`fix/mcp-actions-bridge-schema-wait`) is not merged yet, so a
+   newly-bootstrapped tenant would need the same bridge. On bomet you can demo via the
+   sidebar **and** these two entry points:
    - the **home card** that appears after login (gated by role), or
    - the **deep link**: `https://bometfeedbackhub.digit.org/digit-ui/employee/dashboard`.
 
@@ -175,9 +180,11 @@ Demo flow:
 
 ## 7. Known-issue call-outs (so nothing surprises you)
 
-- **Dead employee sidebar (all users).** Covered in §0 — mdms-v2 JDK21 v1-compat
-  regression, `/access/v1/actions/mdms/_get` returns 0 actions. Reach the dashboard by
-  the home card or deep link. **Never** demo a sidebar click.
+- **Employee sidebar (fixed 2026-07-09).** Covered in §0 — it had been empty because the
+  ACCESSCONTROL actions were seeded under `ACCESSCONTROL-ACTIONS-TEST` instead of the
+  standard module (CCRS#1106; **not** the mdms image). Bridged on bomet, so the sidebar +
+  Dashboard nav now render. The home card / deep link still work as alternates. A fresh
+  box still needs the bridge until `fix/mcp-actions-bridge-schema-wait` merges.
 - **#1026 — complaint-type table sub-type count.** History: the FE table was reported
   showing ~12 sub-types instead of the full set (a stale MDMS record). **Live check
   today:** the data endpoint (`cl_table_complaint_type_details`) returns **35

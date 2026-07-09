@@ -100,7 +100,7 @@ in `modules`. So:
 |---|---|---|
 | deep link `/employee/dashboard` | `DashboardModule` registered (always true) | — |
 | home **card** | `Dashboard` in `tenant.citymodule` **and** in `enabledModules` | no card; deep link still works |
-| left **sidebar** entry | ACCESSCONTROL actions/roleactions grant (`30-view-access.md` §2) | no sidebar entry (see `80-live-bomet-state.md` for the current bomet sidebar outage) |
+| left **sidebar** entry | ACCESSCONTROL actions/roleactions grant (`30-view-access.md` §2) | sidebar entry (bomet: fixed via the ACCESSCONTROL actions bridge — see `80-live-bomet-state.md` §5) |
 
 This is why the operational guidance is "reach the dashboard via the home card + deep link" — the
 card and route are self-contained in the dashboard product; the sidebar is a separate MDMS surface.

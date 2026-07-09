@@ -97,13 +97,14 @@ builds its tree from each action's dot-`path` and labels every node with
 a fresh id — §5), (2) `_create` a roleactions row `{rolecode: R, actionid: <that id>, tenantId:
 <state root>}`, (3) bust the caches (§4). No restart.
 
-> **⚠ Live bomet caveat (2026-07-09): the sidebar is currently dead for *every* role.** An mdms-v2
-> JDK21 v1-compat regression makes the `moduleDetails` `_search` emit an empty `IN ()` →
-> `BadSqlGrammar` → `/access/v1/actions/mdms/_get` returns **0 actions**, so the sidebar tree
-> renders nothing regardless of roleactions config. No roleactions edit can add a dashboard
-> sidebar entry until that platform defect is fixed. It is **not** a dashboard-RBAC problem, and
-> the dashboard is unaffected — reach it via the home card + deep link (§1a). Full detail:
-> `80-live-bomet-state.md` §5.
+> **ⓘ bomet sidebar note (fixed 2026-07-09).** The sidebar had been empty for every role because
+> `tenant_bootstrap` seeded the ACCESSCONTROL actions under `ACCESSCONTROL-ACTIONS-TEST.actions-test`
+> instead of the standard `ACCESSCONTROL-ACTIONS.actions` that `egov-accesscontrol` reads (the
+> ACTIONS-bridge step failed on a schema race — egovernments/CCRS#1106; **not** the mdms image, which
+> an early RCA wrongly blamed). The actions were bridged on bomet, so `/access/v1/actions/mdms/_get`
+> now returns actions and the sidebar renders. Durable bootstrap fix: `fix/mcp-actions-bridge-schema-wait`
+> (unmerged → a fresh box still needs the bridge). It was never a dashboard-RBAC problem; the home card
+> + deep link (§1a) remain valid. Full detail: `80-live-bomet-state.md` §5.
 
 ## 3. Localization keys
 

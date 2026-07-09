@@ -114,21 +114,25 @@ seed only affects *fresh* installs and repro boxes; it silently no-ops on an alr
 Keep the seed and the live records in sync by hand, or "works on bomet, wrong on the repro box"
 (and its inverse) is the result. See `60-operations.md` §4.
 
-## 5. The dead sidebar — a platform bug, not a dashboard-RBAC issue
+## 5. The sidebar outage — a seeding bug (fixed 2026-07-09), not a dashboard-RBAC issue
 
-On bomet the employee **left sidebar is currently empty for every role**. Root cause is unrelated
-to the dashboard: an mdms-v2 JDK21 v1-compat regression makes the `moduleDetails` `_search`
-produce an empty `IN ()` clause → `BadSqlGrammar` → `/access/v1/actions/mdms/_get` returns **0
-actions** → the sidebar tree (built from those actions, `30-view-access.md` §2) renders nothing.
+For a while the employee **left sidebar was empty for every role** on bomet. Root cause was
+unrelated to the dashboard, and — importantly — **not** the mdms image (an early RCA blamed a
+JDK21 mdms-v2 "empty `IN ()`" regression; that was disproven by reverting the image and by a
+corrected probe). The real cause: `egov-accesscontrol` reads `ACCESSCONTROL-ACTIONS.actions`, but
+`tenant_bootstrap` had only seeded the 254 actions under the non-standard
+`ACCESSCONTROL-ACTIONS-TEST.actions-test` — the "ACTIONS bridge" step (`digit-mcp` Step 3c) silently
+failed on a schema-propagation race, leaving the standard module empty →
+`/access/v1/actions/mdms/_get` → `PathNotFoundException` → **0 actions** → blank sidebar. Tracked in
+**egovernments/CCRS#1106**.
 
-Because the actions endpoint returns zero for everyone, **no** amount of roleactions config will
-add a dashboard sidebar entry until that regression is fixed. This does **not** affect the
-dashboard's own RBAC (packs/`visibleTo`/`DASHBOARD_ROLES` are all fine). The dashboard is
-therefore reached on bomet via the **home card + deep link** (`70-esbuild-embedding.md` §3), which
-are self-contained in the dashboard product and do not depend on the actions API.
-
-Do not "fix" this by loosening dashboard roles or packs — it is a separate `/access` /mdms-v2
-platform defect. Track it there.
+**Fixed on bomet:** the 254 actions were bridged to `ACCESSCONTROL-ACTIONS.actions`, so the endpoint
+now returns actions for every role and the Dashboard nav entry renders. Durable bootstrap fix (poll
+for schema readiness before bridging): branch `fix/mcp-actions-bridge-schema-wait` (not merged yet →
+a *fresh* box still needs the bridge). This never affected the dashboard's own RBAC
+(packs/`visibleTo`/`DASHBOARD_ROLES` were always fine); the home card + deep link
+(`70-esbuild-embedding.md` §3) remain valid alternate entry points. **Do not** "fix" a blank sidebar
+by loosening dashboard roles/packs — check the ACCESSCONTROL actions seeding first.
 
 ## 6. Empty-tile / empty-view triage (refines `60-operations.md` §5)
 
