@@ -117,30 +117,23 @@ export function deriveValidMobile(regex: string, length: number, preferred?: str
   const lengths = Array.from(new Set([...Array.from({ length: 10 }, (_, i) => i + 6), n, n + 1, n - 1]))
     .sort((a, b) => Math.abs(a - n) - Math.abs(b - n));
 
-  // If the caller's preferred number didn't match outright, first retry
-  // candidates that keep its fill digit (e.g. '9' for '9999999999', '8' for
-  // '8888888888') and only vary the lead digit. Bootstrap calls this for
+  // Within each length, try the caller's own fill digit first (e.g. '9' for
+  // '9999999999', '8' for '8888888888') before the rest of digitOrder, so
   // several distinct users on the same target tenant (ADMIN, HRMS employee,
-  // ...) with different `preferred` values — without this, two preferred
-  // values that both fail the regex fall through to the identical lead x
-  // fill sweep below and collide on the same derived mobile number.
+  // ...) with different `preferred` values diverge instead of both landing
+  // on the same lead x fill candidate. This must stay a single pass over
+  // `lengths` — trying preferredFill across *every* length before the
+  // fallback fill sweep gets a turn would let a farther length "win" over a
+  // closer one that only works with a different fill, breaking the
+  // closest-length-first guarantee documented above.
   const digitOrder = seededDigitOrder(preferred);
-
-  if (preferredFill) {
-    for (const len of lengths) {
-      if (len <= 0) continue;
-      for (const f of digitOrder) {
-        const cand = f + preferredFill.repeat(len - 1);
-        if (cand.length === len && matches(cand)) return cand;
-      }
-    }
-  }
+  const fills = [...(preferredFill ? [preferredFill] : []), ...digitOrder.split('').filter((d) => d !== preferredFill)];
 
   for (const len of lengths) {
     if (len <= 0) continue;
-    for (const f of digitOrder) {
+    for (const f of fills) {
       for (const d of digitOrder) {
-        const cand = f + d.repeat(len - 1);
+        const cand = d + f.repeat(len - 1);
         if (cand.length === len && matches(cand)) return cand;
       }
     }

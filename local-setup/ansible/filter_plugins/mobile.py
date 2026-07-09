@@ -50,30 +50,24 @@ def derive_valid_mobile(regex, length=10, preferred=None):
     # falling through to an unmatched placeholder.
     lengths = sorted(set(range(6, 16)) | {n, n + 1, n - 1}, key=lambda x: abs(x - n))
 
-    # If the caller's preferred number didn't match outright, first retry
-    # candidates that keep its fill digit (e.g. '9' for '9999999999', '8' for
-    # '8888888888') and only vary the lead digit. Two callers seeding
-    # different usernames with different `preferred` values (INTERNAL_USER
-    # vs ADMIN) must not collide on the same derived mobile number just
-    # because both preferred values failed the regex and fell through to an
-    # identical lead x fill sweep below.
+    # Within each length, try the caller's own fill digit first (e.g. '9' for
+    # '9999999999', '8' for '8888888888') before the rest of digit_order, so
+    # two callers seeding different usernames with different `preferred`
+    # values (INTERNAL_USER vs ADMIN) diverge instead of both landing on the
+    # same lead x fill candidate. This must stay a single pass over `lengths`
+    # — trying preferred_fill across *every* length before the fallback fill
+    # sweep gets a turn would let a farther length "win" over a closer one
+    # that only works with a different fill, breaking the closest-length-
+    # first guarantee documented above.
     digit_order = _seeded_digit_order(preferred)
-
     preferred_fill = preferred[-1] if preferred else None
-    if preferred_fill:
-        for try_len in lengths:
-            if try_len <= 0:
-                continue
-            for lead in digit_order:
-                candidate = lead + preferred_fill * (try_len - 1)
-                if len(candidate) == try_len and matches(candidate):
-                    return candidate
+    fills = ([preferred_fill] if preferred_fill else []) + [d for d in digit_order if d != preferred_fill]
 
     for try_len in lengths:
         if try_len <= 0:
             continue
-        for lead in digit_order:
-            for fill in digit_order:
+        for fill in fills:
+            for lead in digit_order:
                 candidate = lead + fill * (try_len - 1)
                 if len(candidate) == try_len and matches(candidate):
                     return candidate

@@ -126,12 +126,21 @@
     # by a live HRMS crash-loop. Fail fast instead.
     - name: "preflight — core_mobile_configs must use the current mobile-validation schema"
       vars:
-        _mobile_missing_keys: "{{ ['countryCode', 'mobileNumberRegex'] | reject('in', core_mobile_configs.keys() | list) | list }}"
+        # `| default(...)` in the mobile-number tasks below only substitutes
+        # when mobileNumberRegex is Jinja-Undefined, not when it's defined
+        # but empty. An empty regex makes derive_valid_mobile's `compiled`
+        # stay None, so matches() returns True unconditionally and the
+        # hardcoded `preferred` value is returned with zero regex validation
+        # — silently reintroducing the hardcoded-mobile bug this file fixes.
+        # Treat missing-or-empty the same way here so that case fails fast
+        # instead of at runtime.
+        _mobile_present_truthy_keys: "{{ core_mobile_configs | dict2items | selectattr('value') | map(attribute='key') | list }}"
+        _mobile_missing_keys: "{{ ['countryCode', 'mobileNumberRegex'] | reject('in', _mobile_present_truthy_keys) | list }}"
         _mobile_legacy_keys: "{{ core_mobile_configs.keys() | list | intersect(['mobilePrefix', 'mobileNumberPattern', 'mobileNumberLength', 'mobileNumberAllowedStartingCharacters', 'mobileNumberErrorMessage']) }}"
       ansible.builtin.fail:
         msg: |
           host_vars for {{ inventory_hostname }} sets an incomplete
-          core_mobile_configs — missing required field(s): {{ _mobile_missing_keys }}
+          core_mobile_configs — missing or empty required field(s): {{ _mobile_missing_keys }}
           {% if _mobile_legacy_keys | length > 0 %}
           (retired field names found instead: {{ _mobile_legacy_keys }})
           {% endif %}
@@ -148,7 +157,7 @@
       when:
         - core_mobile_configs is defined
         - core_mobile_configs
-        - not (core_mobile_configs.mobileNumberRegex is defined and core_mobile_configs.countryCode is defined)
+        - _mobile_missing_keys | length > 0
 
     # ==================== Docker host install + config ====================
     # Linux/Debian targets only. On macOS the operator already runs Docker
@@ -2298,8 +2307,14 @@
     # (the INTERNAL_USER seed above blocks until it is), so ensure ADMIN exists
     # with the expected password + SUPERUSER. Idempotent (DuplicateUserName ok);
     # distinct mobile (8s vs INTERNAL_USER's 9s, both derived via
-    # derive_valid_mobile — see the INTERNAL_USER seed task above) to avoid any
-    # collision.
+    # derive_valid_mobile — see the INTERNAL_USER seed task above) to avoid
+    # collisions where possible. NOT a guarantee: for a mobileNumberRegex with
+    # a fixed multi-character literal prefix (e.g. Djibouti's
+    # ^77[0-9]{6}$), derive_valid_mobile's preferred-fill sweep fails
+    # identically for both '9999999999' and '8888888888' (only the lead digit
+    # varies; the literal prefix can't be forced), and both calls fall
+    # through to the same deterministic candidate — see
+    # filter_plugins/mobile.py's `_seeded_digit_order` docstring.
     - name: "post-bootstrap — ensure ADMIN exists on state_root (MCP bootstrap may miss it in the validation window)"
       ansible.builtin.shell: |
         body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"{{ bootstrap_user | default('ADMIN') }}","name":"Admin","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='8888888888') }}","gender":"MALE","active":true,"type":"EMPLOYEE","tenantId":"{{ state_root }}","password":"{{ bootstrap_password | default('eGov@123') }}","roles":[{"code":"SUPERUSER","name":"Super User","tenantId":"{{ state_root }}"},{"code":"LOC_ADMIN","name":"Localisation Admin","tenantId":"{{ state_root }}"},{"code":"MDMS_ADMIN","name":"MDMS Admin","tenantId":"{{ state_root }}"},{"code":"EMPLOYEE","name":"Employee","tenantId":"{{ state_root }}"}]}}'
