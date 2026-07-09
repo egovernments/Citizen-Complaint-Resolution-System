@@ -79,10 +79,14 @@ public class DispatchLogController {
         // Mask recipient PII server-side so the full value never crosses the wire.
         // recipient_value is the subscriberId (tenantId:userUuid, or tenantId:mobile
         // when the uuid was missing) and transaction_id embeds the same subscriberId.
+        // providerResponse (the Novu delivery receipt) echoes the RAW transactionId —
+        // and thus a raw phone for uuid-less recipients — so it is deep-masked at
+        // read time (stored rows stay untouched; only this projection is masked).
         List<DispatchLogEntry> masked = data.stream()
                 .map(e -> e.toBuilder()
                         .recipientValue(PiiMask.mask(e.getRecipientValue()))
                         .transactionId(PiiMask.maskEmbedded(e.getTransactionId()))
+                        .providerResponse(PiiMask.maskDeep(e.getProviderResponse()))
                         .build())
                 .collect(Collectors.toList());
 

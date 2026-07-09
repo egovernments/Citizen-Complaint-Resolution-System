@@ -114,6 +114,34 @@ class DispatchPipelinePassThroughTest {
     }
 
     @Test
+    void sentRow_carriesTemplateKey_derivedFromEventRoutingSegments() {
+        // Fix: real dispatch rows previously persisted template_key = NULL (only the
+        // ProviderController test-send wrote "TEST"). Until pgr-services emits an
+        // explicit templateKey, the row carries the routing key reconstructed from
+        // event segments: audience.action.toState.channel.locale.
+        service.process(smsEvent(), true, null);
+
+        ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(dispatchLogRepository).upsert(captor.capture());
+        assertEquals("SENT", captor.getValue().getStatus());
+        assertEquals("CITIZEN.ASSIGN.PENDINGATLME.SMS.en_IN", captor.getValue().getTemplateKey());
+    }
+
+    @Test
+    void explicitTemplateKeyOnTheWire_winsOverDerivedRoutingKey() {
+        // Forward-compat: once pgr-services publishes the actual MDMS
+        // NotificationTemplate uid on the event, it is persisted verbatim.
+        ComplaintsDomainEvent event = smsEvent();
+        event.setTemplateKey("CITIZEN.ASSIGN.PENDINGATLME.SMS.sw_KE");
+
+        service.process(event, true, null);
+
+        ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(dispatchLogRepository).upsert(captor.capture());
+        assertEquals("CITIZEN.ASSIGN.PENDINGATLME.SMS.sw_KE", captor.getValue().getTemplateKey());
+    }
+
+    @Test
     void whatsappEvent_noEnabledProvider_persistsSkippedNoProvider_neverFallsBackToSms() {
         ComplaintsDomainEvent event = smsEvent();
         event.setChannel("WHATSAPP");

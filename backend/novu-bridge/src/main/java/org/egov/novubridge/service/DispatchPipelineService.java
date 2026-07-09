@@ -319,6 +319,7 @@ public class DispatchPipelineService {
                 .channel(context.getChannel())
                 .recipientValue(StringUtils.hasText(context.getSubscriberId())
                         ? context.getSubscriberId() : context.getRecipientUserId())
+                .templateKey(resolveTemplateKey(event, context))
                 .status(status)
                 .attemptCount(attemptCount)
                 .lastErrorCode(errorCode)
@@ -327,5 +328,36 @@ public class DispatchPipelineService {
                 .createdTime(System.currentTimeMillis())
                 .lastModifiedTime(System.currentTimeMillis())
                 .build());
+    }
+
+    /**
+     * Best-available template identity for the dispatch-log row.
+     *
+     * <p>The authoritative value is the MDMS {@code RAINMAKER-PGR.NotificationTemplate}
+     * uid — {@code audience.action.toState.channel.locale} — that PGR's
+     * TemplateRenderer actually selected. pgr-services does NOT yet put it on the
+     * wire: {@code NotificationService.publishRenderedEvent} must add an explicit
+     * {@code templateKey} field to the pre-rendered event (carrying the locale it
+     * actually rendered with, i.e. after any default-locale fallback). Until then
+     * {@link ComplaintsDomainEvent#getTemplateKey()} is null and we reconstruct
+     * the ROUTING key from segments the event already carries verbatim — audience
+     * (contact.type), action/toState (event data block), channel and locale. This
+     * matches the template uid except when the renderer fell back to its default
+     * locale. Legacy envelopes without an action/toState fall back to the
+     * eventName. Nothing here is fabricated: every segment comes from the event.
+     */
+    private String resolveTemplateKey(ComplaintsDomainEvent event, DerivedContext context) {
+        if (StringUtils.hasText(event.getTemplateKey())) {
+            return event.getTemplateKey();   // explicit wire value wins once PGR emits it
+        }
+        Map<String, Object> data = event.getData();
+        Object action = data != null ? data.get("action") : null;
+        Object toState = data != null ? data.get("toState") : null;
+        if (action != null && toState != null
+                && StringUtils.hasText(context.getAudience()) && StringUtils.hasText(context.getChannel())) {
+            String key = context.getAudience() + "." + action + "." + toState + "." + context.getChannel();
+            return StringUtils.hasText(context.getLocale()) ? key + "." + context.getLocale() : key;
+        }
+        return event.getEventName();
     }
 }

@@ -116,4 +116,55 @@ class DispatchLogControllerTest {
         org.junit.jupiter.api.Assertions.assertFalse(masked.getRecipientValue().contains("0712345678"),
                 "recipient_value must be masked; got " + masked.getRecipientValue());
     }
+
+    @Test
+    void providerResponsePiiIsDeepMasked_nonPiiFieldsKeepExactValues() {
+        // The Novu delivery receipt echoes the RAW transactionId (which embeds the
+        // subscriber segment — a raw phone for uuid-less recipients) and can carry
+        // the raw phone directly. Both must be masked in the /logs projection.
+        java.util.Map<String, Object> nested = new java.util.LinkedHashMap<>();
+        nested.put("transactionId", "PGR-001:ASSIGN:PENDINGATLME:ke.bomet:0712345678:SMS");
+        nested.put("to", "+254712345678");
+        nested.put("acknowledged", true);
+        java.util.Map<String, Object> providerResponse = new java.util.LinkedHashMap<>();
+        providerResponse.put("data", nested);
+        providerResponse.put("statusCode", 201);
+        providerResponse.put("novuStatus", 201);
+        providerResponse.put("test", false);
+        providerResponse.put("items", List.of("txn:0712345678", java.util.Map.of("phone", "0712345678")));
+
+        DispatchLogEntry row = DispatchLogEntry.builder()
+                .tenantId("ke.bomet").channel("SMS").status("SENT")
+                .recipientValue("ke.bomet:0712345678")
+                .transactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:0712345678:SMS")
+                .providerResponse(providerResponse)
+                .build();
+        when(repository.list(anyString(), any(), anyBoolean(), any(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(List.of(row));
+
+        ResponseEntity<DispatchLogListResponse> response =
+                controller.logs("ke.bomet", null, false, null, null, null, null, null);
+
+        DispatchLogEntry masked = response.getBody().getData().get(0);
+        String serialized = String.valueOf(masked.getProviderResponse());
+        org.junit.jupiter.api.Assertions.assertFalse(serialized.contains("0712345678"),
+                "raw phone must not appear anywhere inside providerResponse; got " + serialized);
+        org.junit.jupiter.api.Assertions.assertTrue(serialized.contains("***678"),
+                "masked shape ***678 expected inside providerResponse; got " + serialized);
+
+        // Non-PII leaves keep their exact values so the Logs screen keeps working.
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> maskedResponse = masked.getProviderResponse();
+        assertEquals(201, maskedResponse.get("statusCode"));
+        assertEquals(201, maskedResponse.get("novuStatus"));
+        assertEquals(false, maskedResponse.get("test"));
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> maskedNested = (java.util.Map<String, Object>) maskedResponse.get("data");
+        assertEquals(true, maskedNested.get("acknowledged"));
+
+        // Read-time masking only: the stored row object handed back by the
+        // repository must NOT have been mutated.
+        assertEquals("+254712345678",
+                ((java.util.Map<?, ?>) row.getProviderResponse().get("data")).get("to"));
+    }
 }

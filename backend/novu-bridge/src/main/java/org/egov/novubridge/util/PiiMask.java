@@ -1,5 +1,9 @@
 package org.egov.novubridge.util;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -61,6 +65,47 @@ public final class PiiMask {
             masked = sb.toString();
         }
         return masked;
+    }
+
+    /**
+     * Recursively mask PII in a JSON-shaped structure (maps / lists / strings) —
+     * e.g. the {@code providerResponse} delivery receipt echoed on each
+     * {@code /logs} row, whose Novu acknowledgment carries the raw transactionId
+     * (which embeds the subscriber segment: a raw phone number whenever the
+     * recipient had no uuid). Every String value goes through
+     * {@link #maskEmbedded}; non-string leaves (booleans like {@code test},
+     * numbers like {@code novuStatus} / HTTP status codes) pass through with
+     * their exact values, so consumers keyed on them keep working. Returns a
+     * new structure — the input is never mutated.
+     */
+    public static Map<String, Object> maskDeep(Map<String, Object> value) {
+        if (value == null) {
+            return null;
+        }
+        Map<String, Object> out = new LinkedHashMap<>(value.size());
+        for (Map.Entry<String, Object> e : value.entrySet()) {
+            out.put(e.getKey(), maskDeepValue(e.getValue()));
+        }
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object maskDeepValue(Object value) {
+        if (value instanceof String) {
+            return maskEmbedded((String) value);
+        }
+        if (value instanceof Map) {
+            return maskDeep((Map<String, Object>) value);
+        }
+        if (value instanceof List) {
+            List<Object> in = (List<Object>) value;
+            List<Object> out = new ArrayList<>(in.size());
+            for (Object item : in) {
+                out.add(maskDeepValue(item));
+            }
+            return out;
+        }
+        return value;   // numbers, booleans, nulls: not PII, keep exact
     }
 
     private static String maskEmail(String value) {
