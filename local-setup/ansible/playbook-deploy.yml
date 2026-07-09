@@ -126,12 +126,21 @@
     # by a live HRMS crash-loop. Fail fast instead.
     - name: "preflight — core_mobile_configs must use the current mobile-validation schema"
       vars:
-        _mobile_missing_keys: "{{ ['countryCode', 'mobileNumberRegex'] | reject('in', core_mobile_configs.keys() | list) | list }}"
+        # `| default(...)` in the mobile-number tasks below only substitutes
+        # when mobileNumberRegex is Jinja-Undefined, not when it's defined
+        # but empty. An empty regex makes derive_valid_mobile's `compiled`
+        # stay None, so matches() returns True unconditionally and the
+        # hardcoded `preferred` value is returned with zero regex validation
+        # — silently reintroducing the hardcoded-mobile bug this file fixes.
+        # Treat missing-or-empty the same way here so that case fails fast
+        # instead of at runtime.
+        _mobile_present_truthy_keys: "{{ core_mobile_configs | dict2items | selectattr('value') | map(attribute='key') | list }}"
+        _mobile_missing_keys: "{{ ['countryCode', 'mobileNumberRegex'] | reject('in', _mobile_present_truthy_keys) | list }}"
         _mobile_legacy_keys: "{{ core_mobile_configs.keys() | list | intersect(['mobilePrefix', 'mobileNumberPattern', 'mobileNumberLength', 'mobileNumberAllowedStartingCharacters', 'mobileNumberErrorMessage']) }}"
       ansible.builtin.fail:
         msg: |
           host_vars for {{ inventory_hostname }} sets an incomplete
-          core_mobile_configs — missing required field(s): {{ _mobile_missing_keys }}
+          core_mobile_configs — missing or empty required field(s): {{ _mobile_missing_keys }}
           {% if _mobile_legacy_keys | length > 0 %}
           (retired field names found instead: {{ _mobile_legacy_keys }})
           {% endif %}
@@ -148,7 +157,7 @@
       when:
         - core_mobile_configs is defined
         - core_mobile_configs
-        - not (core_mobile_configs.mobileNumberRegex is defined and core_mobile_configs.countryCode is defined)
+        - _mobile_missing_keys | length > 0
 
     # ==================== Docker host install + config ====================
     # Linux/Debian targets only. On macOS the operator already runs Docker
@@ -2248,8 +2257,13 @@
     # rejects HRMS's hardcoded 10-digit mobile on tenants with a stricter rule,
     # and HRMS crash-loops with "Service returned null while fetching user".
     #
-    # We seed it here with a mobile derived from the tenant's own rule (first
-    # allowed starting digit + 9s to the rule length). BUT: the fast-path base
+    # We seed it here with a mobile derived from the tenant's own
+    # mobileNumberRegex via the derive_valid_mobile filter (filter_plugins/
+    # mobile.py) — core_mobile_configs no longer carries the legacy
+    # mobileNumberAllowedStartingCharacters/mobileNumberLength fields (see the
+    # preflight check above), so deriving from those is a no-op that always
+    # falls back to a hardcoded 10-digit number and fails on tenants whose
+    # rule rejects it. BUT: the fast-path base
     # dump ships the India default UserValidation (^[6-9][0-9]{9}$), and the MCP
     # tenant bootstrap above reseeds the tenant's own rule (e.g. Kenya
     # ^0?[17][0-9]{8}$) into MDMS *asynchronously* (via the persister). For a
@@ -2262,7 +2276,7 @@
     # already exists. Idempotent; non-pg tenants only.
     - name: "post-bootstrap — seed INTERNAL_USER on state_root (retry until tenant UserValidation is live)"
       ansible.builtin.shell: |
-        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"INTERNAL_USER","name":"Internal Microservice User","mobileNumber":"{{ ((core_mobile_configs.mobileNumberAllowedStartingCharacters | first) ~ ('9' * ((core_mobile_configs.mobileNumberLength | int) - 1))) if (core_mobile_configs.mobileNumberAllowedStartingCharacters is defined and core_mobile_configs.mobileNumberLength is defined) else '9999999999' }}","gender":"MALE","active":true,"type":"SYSTEM","tenantId":"{{ state_root }}","password":"System@123","roles":[{"code":"INTERNAL_MICROSERVICE_ROLE","name":"Internal Microservice Role","tenantId":"{{ state_root }}"}]}}'
+        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"INTERNAL_USER","name":"Internal Microservice User","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='9999999999') }}","gender":"MALE","active":true,"type":"SYSTEM","tenantId":"{{ state_root }}","password":"System@123","roles":[{"code":"INTERNAL_MICROSERVICE_ROLE","name":"Internal Microservice Role","tenantId":"{{ state_root }}"}]}}'
         for i in $(seq 1 30); do
           docker exec {{ redis_container | default('digit-redis') }} redis-cli DEL validationRules >/dev/null 2>&1 || true
           resp=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
@@ -2292,10 +2306,18 @@
     # 400s "Invalid login credentials". The tenant rule is guaranteed live by now
     # (the INTERNAL_USER seed above blocks until it is), so ensure ADMIN exists
     # with the expected password + SUPERUSER. Idempotent (DuplicateUserName ok);
-    # distinct mobile (8s vs INTERNAL_USER's 9s) to avoid any collision.
+    # distinct mobile (8s vs INTERNAL_USER's 9s, both derived via
+    # derive_valid_mobile — see the INTERNAL_USER seed task above) to avoid
+    # collisions where possible. NOT a guarantee: for a mobileNumberRegex with
+    # a fixed multi-character literal prefix (e.g. Djibouti's
+    # ^77[0-9]{6}$), derive_valid_mobile's preferred-fill sweep fails
+    # identically for both '9999999999' and '8888888888' (only the lead digit
+    # varies; the literal prefix can't be forced), and both calls fall
+    # through to the same deterministic candidate — see
+    # filter_plugins/mobile.py's `_seeded_digit_order` docstring.
     - name: "post-bootstrap — ensure ADMIN exists on state_root (MCP bootstrap may miss it in the validation window)"
       ansible.builtin.shell: |
-        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"{{ bootstrap_user | default('ADMIN') }}","name":"Admin","mobileNumber":"{{ ((core_mobile_configs.mobileNumberAllowedStartingCharacters | first) ~ ('8' * ((core_mobile_configs.mobileNumberLength | int) - 1))) if (core_mobile_configs.mobileNumberAllowedStartingCharacters is defined and core_mobile_configs.mobileNumberLength is defined) else '8888888888' }}","gender":"MALE","active":true,"type":"EMPLOYEE","tenantId":"{{ state_root }}","password":"{{ bootstrap_password | default('eGov@123') }}","roles":[{"code":"SUPERUSER","name":"Super User","tenantId":"{{ state_root }}"},{"code":"LOC_ADMIN","name":"Localisation Admin","tenantId":"{{ state_root }}"},{"code":"MDMS_ADMIN","name":"MDMS Admin","tenantId":"{{ state_root }}"},{"code":"EMPLOYEE","name":"Employee","tenantId":"{{ state_root }}"}]}}'
+        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"{{ bootstrap_user | default('ADMIN') }}","name":"Admin","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='8888888888') }}","gender":"MALE","active":true,"type":"EMPLOYEE","tenantId":"{{ state_root }}","password":"{{ bootstrap_password | default('eGov@123') }}","roles":[{"code":"SUPERUSER","name":"Super User","tenantId":"{{ state_root }}"},{"code":"LOC_ADMIN","name":"Localisation Admin","tenantId":"{{ state_root }}"},{"code":"MDMS_ADMIN","name":"MDMS Admin","tenantId":"{{ state_root }}"},{"code":"EMPLOYEE","name":"Employee","tenantId":"{{ state_root }}"}]}}'
         for i in $(seq 1 6); do
           resp=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
           code=$(printf '%s' "$resp" | tail -n1)
