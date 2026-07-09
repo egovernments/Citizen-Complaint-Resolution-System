@@ -274,9 +274,13 @@ export const CreateComplaintConfig = {
                 maxLength: 1000,
                 validation: {
                   required: true,
-                  pattern: /^(?!\s*$).+/,
+                  // CCSD-1956: 20-1000 characters (and not all whitespace —
+                  // minLength alone would let 20 spaces pass). maxLength on the
+                  // textarea already caps typing at 1000.
+                  minLength: 20,
+                  pattern: /^(?=[\s\S]{20,1000}$)\s*\S[\s\S]*$/,
                 },
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
+                error: "CS_DESC_MIN_CHARS",
               },
             },
           ],

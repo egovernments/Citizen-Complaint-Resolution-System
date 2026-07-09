@@ -450,7 +450,8 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
       return false;
     }
     case "description":
-      return typeof data.description === "string" && data.description.trim().length > 0;
+      // CCSD-1956: 20–1000 characters (maxLength enforced by the textarea).
+      return typeof data.description === "string" && data.description.trim().length >= 20;
     case "SelectComplaintType":
       return data.SelectComplaintType != null;
     case "GeoLocationsPoint":
@@ -1034,8 +1035,15 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
             value={data.description ?? ""}
             onChange={(e) => patch({ description: e.target.value })}
           />
+          {/* CCSD-1956: 20–1000 chars. Counter turns into a min-length hint until valid. */}
           <div className="mt-1 text-xs text-muted-foreground text-right">
-            {(data.description ?? "").length} / 1000
+            {(data.description ?? "").trim().length > 0 && (data.description ?? "").trim().length < 20 ? (
+              <span style={{ color: "#b3261e" }}>
+                {tr(t, "CS_DESC_MIN_CHARS", "Minimum 20 characters")} · {(data.description ?? "").length} / 1000
+              </span>
+            ) : (
+              <>{(data.description ?? "").length} / 1000</>
+            )}
           </div>
         </Field>
 
@@ -1043,7 +1051,16 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
         {fields.map((f) => {
           const val = (dyn[f.fieldKey] as string) ?? "";
           return (
-            <Field key={f.fieldKey} label={f.labelKey ? tr(t, f.labelKey, f.label) : f.label} required={!!f.mandatory} htmlFor={`xf-${f.fieldKey}`}>
+            <Field
+              key={f.fieldKey}
+              // CCSD-1955: optional fields are explicitly labeled "(Optional)".
+              label={
+                (f.labelKey ? tr(t, f.labelKey, f.label) : f.label) +
+                (f.mandatory ? "" : " " + tr(t, "CS_OPTIONAL_SUFFIX", "(Optional)"))
+              }
+              required={!!f.mandatory}
+              htmlFor={`xf-${f.fieldKey}`}
+            >
               {f.dataType === "textarea" ? (
                 <Textarea
                   id={`xf-${f.fieldKey}`}
@@ -1057,8 +1074,16 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
                   className={f.dataType === "date" ? "pgr-date-input" : undefined}
                   type={f.dataType === "date" ? "date" : f.dataType === "number" ? "number" : "text"}
                   maxLength={f.dataType === "date" || f.dataType === "number" ? undefined : f.maxLength}
+                  // "Date of fact"-style fields record when something HAPPENED —
+                  // cap the picker at today (CCSD-1952); onChange guards typed
+                  // input too (the max attr only constrains the popup).
+                  max={f.dataType === "date" ? new Date().toISOString().slice(0, 10) : undefined}
                   value={val}
-                  onChange={(e) => setDyn(f.fieldKey, e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (f.dataType === "date" && v && v > new Date().toISOString().slice(0, 10)) return;
+                    setDyn(f.fieldKey, v);
+                  }}
                 />
               )}
             </Field>
