@@ -79,20 +79,67 @@ async function evictValidationCache(tenantId: string): Promise<void> {
  * Returns `preferred` if it already matches; else the first-valid-lead-digit +
  * a repeated tail padded to `length` that the regex accepts; else best-effort.
  */
+/**
+ * Rotate '0123456789' to start at seed's leading digit.
+ *
+ * Two calls deriving a fallback mobile for the same regex with different
+ * `preferred` values (e.g. ADMIN's '8888888888' vs an HRMS employee's
+ * '9999999999') should diverge instead of both walking the exhaustive lead x
+ * fill sweep in the same 0..9 order and returning the same first match.
+ * Seeding the order from `preferred` makes them diverge whenever the regex
+ * admits more than one lead/fill combination at a given length; regexes with
+ * a fixed multi-character literal prefix (e.g. `^77[0-9]{6}$`) admit exactly
+ * one combination regardless of search order, so those still collide.
+ */
+function seededDigitOrder(seed?: string): string {
+  const digits = '0123456789';
+  if (!seed || !digits.includes(seed[0])) return digits;
+  const i = digits.indexOf(seed[0]);
+  return digits.slice(i) + digits.slice(0, i);
+}
+
 export function deriveValidMobile(regex: string, length: number, preferred?: string): string {
   let re: RegExp | null = null;
   try { re = new RegExp(regex); } catch { re = null; }
   const matches = (s?: string): s is string => !!s && (!re || re.test(s));
+  const preferredFill = preferred ? preferred[preferred.length - 1] : undefined;
   if (matches(preferred)) return preferred;
   const n = length && length > 0 ? length : 10;
   // Try every lead digit x fill digit at length n (and n+1 / n-1, since
   // patterns like ^0?[17][0-9]{8}$ accept 9 OR 10 digits). Looping the lead
   // digit instead of parsing it handles optional prefixes like `0?` and
   // character classes uniformly.
-  for (const len of [n, n + 1, n - 1]) {
+  //
+  // Search a wide window around n, closest lengths first, so a tenant whose
+  // mobileNumberRegex requires a length far from the hinted default (e.g. 8
+  // for `^77[0-9]{6}$`, vs the default n=10) still derives a match instead of
+  // exhausting n-1/n/n+1 and falling through to an unmatched placeholder.
+  const lengths = Array.from(new Set([...Array.from({ length: 10 }, (_, i) => i + 6), n, n + 1, n - 1]))
+    .sort((a, b) => Math.abs(a - n) - Math.abs(b - n));
+
+  // If the caller's preferred number didn't match outright, first retry
+  // candidates that keep its fill digit (e.g. '9' for '9999999999', '8' for
+  // '8888888888') and only vary the lead digit. Bootstrap calls this for
+  // several distinct users on the same target tenant (ADMIN, HRMS employee,
+  // ...) with different `preferred` values — without this, two preferred
+  // values that both fail the regex fall through to the identical lead x
+  // fill sweep below and collide on the same derived mobile number.
+  const digitOrder = seededDigitOrder(preferred);
+
+  if (preferredFill) {
+    for (const len of lengths) {
+      if (len <= 0) continue;
+      for (const f of digitOrder) {
+        const cand = f + preferredFill.repeat(len - 1);
+        if (cand.length === len && matches(cand)) return cand;
+      }
+    }
+  }
+
+  for (const len of lengths) {
     if (len <= 0) continue;
-    for (const f of '0123456789') {
-      for (const d of '0123456789') {
+    for (const f of digitOrder) {
+      for (const d of digitOrder) {
         const cand = f + d.repeat(len - 1);
         if (cand.length === len && matches(cand)) return cand;
       }
