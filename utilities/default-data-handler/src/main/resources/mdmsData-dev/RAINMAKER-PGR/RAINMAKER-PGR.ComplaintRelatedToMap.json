@@ -1,7 +1,7 @@
 [
   {
     "code": "IGE",
-    "name": "Institutions of Governance and Education",
+    "name": "Serviços do Governo (Entidades Públicas)",
     "active": true,
     "shortName": "IGE",
     "displayOrder": 1,
@@ -9,7 +9,7 @@
   },
   {
     "code": "IGSAE",
-    "name": "Institutions of Governance, Services, and Economic Activity",
+    "name": "Empresas e Estabelecimentos Comerciais (Entidades Privadas)",
     "active": true,
     "shortName": "IGSAE",
     "displayOrder": 2,
