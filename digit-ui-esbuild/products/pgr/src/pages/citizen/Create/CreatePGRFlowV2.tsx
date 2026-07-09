@@ -1079,6 +1079,12 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
                   onSelect={(name: string, v: string) => setDyn(f.fieldKey, v)}
                   config={{ key: f.fieldKey, populators: { name: f.fieldKey, maxDate: "today" } }}
                   formData={dyn}
+                  // Match the v2 wizard's field metrics (full width, h-11,
+                  // rounded-md) — the picker's default caps at the employee
+                  // form's 37.5rem, which rendered narrower than every other
+                  // field on this step.
+                  style={{ maxWidth: "100%" }}
+                  fieldStyle={{ height: "2.75rem", borderRadius: "0.375rem" }}
                 />
               ) : (
                 <Input

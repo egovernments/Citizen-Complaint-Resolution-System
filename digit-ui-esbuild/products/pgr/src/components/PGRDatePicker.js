@@ -162,11 +162,13 @@ const PGRDatePicker = (props) => {
   };
 
   return (
-    <div className="pgr-datepicker" style={s.wrap} ref={ref}>
+    // Callers can override sizing: the employee form caps inputs at 37.5rem,
+    // while the citizen v2 wizard runs fields full-width (style/fieldStyle).
+    <div className="pgr-datepicker" style={{ ...s.wrap, ...(props?.style || {}) }} ref={ref}>
       <style>{FOCUS_CSS}</style>
       <div
         className="pgr-datepicker-field"
-        style={s.field}
+        style={{ ...s.field, ...(props?.fieldStyle || {}) }}
         onClick={toggle}
         role="button"
         tabIndex={disabled ? -1 : 0}
