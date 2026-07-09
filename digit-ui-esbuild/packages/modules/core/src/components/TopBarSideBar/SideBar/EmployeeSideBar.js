@@ -4,10 +4,43 @@ import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
 import MediaQuery from 'react-responsive';
 
+// CCSD-1947: the SideNav search input ships with NO styles — inside the dark
+// sidebar it inherits white text over the input's native white background, so
+// the placeholder and anything the user types are invisible. Scoped style
+// injection (same pattern as PGRDatePicker/PgrFileUpload).
+const SIDEBAR_STYLE_ID = "pgr-employee-sidebar-css";
+const SIDEBAR_CSS = `
+.digit-sidebar-search-container input,
+.digit-sidebar-search-container input[type="search"] {
+  color: #363636 !important;
+  background: #fff !important;
+  caret-color: #363636;
+}
+.digit-sidebar-search-container input::placeholder {
+  color: #787878 !important;
+  opacity: 1 !important;
+}
+`;
+const ensureSidebarStyles = () => {
+  if (typeof document === "undefined" || document.getElementById(SIDEBAR_STYLE_ID)) return;
+  const el = document.createElement("style");
+  el.id = SIDEBAR_STYLE_ID;
+  el.textContent = SIDEBAR_CSS;
+  document.head.appendChild(el);
+};
 
-
+// Sidebar actions seeded with the legacy "action:<name>" leftIcon format
+// (e.g. "action:home") don't resolve in the svg-components icon set (exports
+// are PascalCase: Home, HomeFilled, …) — iconRender warned "Icon not found"
+// and the row rendered iconless. Normalize the legacy form.
+const normalizeIcon = (icon) => {
+  if (typeof icon !== "string" || !icon.startsWith("action:")) return icon;
+  const name = icon.slice("action:".length);
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : icon;
+};
 
 const EmployeeSideBar = () => {
+  ensureSidebarStyles();
   const { isLoading, data } = Digit.Hooks.useAccessControl();
   const isMultiRootTenant = Digit.Utils.getMultiRootTenant();
   const { t } = useTranslation();
@@ -142,7 +175,7 @@ const EmployeeSideBar = () => {
       if (value.item) {
         return {
           label: t(value.item.displayName),
-          icon: { icon: value.item.leftIcon, width: "1.5rem", height: "1.5rem" },
+          icon: { icon: normalizeIcon(value.item.leftIcon), width: "1.5rem", height: "1.5rem" },
           navigationUrl: value.item.navigationURL,
           orderNumber:value.item.orderNumber,
         };
@@ -151,7 +184,7 @@ const EmployeeSideBar = () => {
       const iconKey = extractLeftIcon(value);
       return {
         label: t(key),
-        icon: { icon: iconKey, width: "1.5rem", height: "1.5rem" },
+        icon: { icon: normalizeIcon(iconKey), width: "1.5rem", height: "1.5rem" },
         children: children,
       };
     };
