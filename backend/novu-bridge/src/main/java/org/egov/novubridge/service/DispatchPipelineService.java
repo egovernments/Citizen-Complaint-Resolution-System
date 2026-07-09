@@ -66,13 +66,20 @@ public class DispatchPipelineService {
                 ? event.getSubscriberId()
                 : context.getSubscriberId();
         if (!StringUtils.hasText(subscriberId)) {
+            // Record the terminal status before throwing — every other branch in
+            // process() persists, and the class invariant is that every consumed
+            // event leaves an explicit status row in nb_dispatch_log.
+            persist(event, context, "FAILED", "NB_SUBSCRIBER_ID_MISSING",
+                    "subscriberId is required (PGR resolved it; null means a bad event)", null, 1);
             throw new CustomException("NB_SUBSCRIBER_ID_MISSING",
                     "subscriberId is required (PGR resolved it; null means a bad event)");
         }
         context.setSubscriberId(subscriberId);
 
+        // subscriberId is masked too: when the recipient has no UUID it falls back
+        // to `tenantId:mobile`, so it can embed a raw phone number.
         log.info("Derived context: eventId={}, channel={}, subscriberId={}, recipientPhone={}, email={}, locale={}",
-                event.getEventId(), context.getChannel(), subscriberId,
+                event.getEventId(), context.getChannel(), PiiMask.mask(subscriberId),
                 PiiMask.mask(context.getRecipientMobile()), PiiMask.mask(context.getEmail()), context.getLocale());
 
         // Optional channel-preference gate (PGR owns locale; preferences only gate delivery).
@@ -172,7 +179,7 @@ public class DispatchPipelineService {
         }
 
         log.info("Dispatch response: eventId={}, channel={}, statusCode={}, txn={}",
-                event.getEventId(), channel, sc, context.getTransactionId());
+                event.getEventId(), channel, sc, PiiMask.mask(context.getTransactionId()));
 
         persist(event, context, "SENT", null, null,
                 response != null ? response.getResponse() : null, 1);

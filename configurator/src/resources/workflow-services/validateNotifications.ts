@@ -71,6 +71,11 @@ export interface ValidationFinding {
 const ALLOWED_CHANNELS = ['SMS', 'WHATSAPP', 'EMAIL'];
 const NON_NOTIFIABLE_AUDIENCES = ['AUTO_ESCALATE', 'SYSTEM'];
 const CITIZEN = 'CITIZEN';
+// Backend pseudo-audience (PGRConstants.AUDIENCE_EMPLOYEE): resolves to the
+// complaint's assignee, not the pool of users holding an "EMPLOYEE" role. It is a
+// valid routing audience even when "EMPLOYEE" is absent from the role registry, so
+// R1 must not flag it as an unknown role code.
+const EMPLOYEE = 'EMPLOYEE';
 const DEFAULT_LOCALE = 'en_IN';
 
 /** Case-insensitive, whitespace-trimmed normalisation. Nullish -> ''. */
@@ -178,9 +183,10 @@ export function validateNotifications({
       });
     }
 
-    // R1: audience-role-exists (error). Skip CITIZEN (the filer) and the
+    // R1: audience-role-exists (error). Skip CITIZEN (the filer), the assignee
+    // pseudo-audience EMPLOYEE (resolved by the backend, not a role code), and the
     // non-notifiable pseudo-audiences (already flagged by R6).
-    if (audience && audience !== CITIZEN && !NON_NOTIFIABLE_AUDIENCES.includes(audience)) {
+    if (audience && audience !== CITIZEN && audience !== EMPLOYEE && !NON_NOTIFIABLE_AUDIENCES.includes(audience)) {
       if (!validRoles.has(audience)) {
         findings.push({
           level: 'error',

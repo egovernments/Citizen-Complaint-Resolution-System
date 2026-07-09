@@ -1172,14 +1172,20 @@ public class NotificationService {
             List<ResolvedRecipient> assignees = resolveByAudience(AUDIENCE_EMPLOYEE, false, request);
             ResolvedRecipient assignee = CollectionUtils.isEmpty(assignees) ? null : assignees.get(0);
             if (assignee != null && StringUtils.hasText(assignee.name)) put(v, "emp_name", assignee.name);
-        } catch (Exception ignore) { }
+        } catch (Exception e) {
+            // Expected when there is no assignee yet (e.g. APPLY); log at DEBUG so a
+            // real HRMS/MDMS regression is still visible without spamming WARN.
+            log.debug("Could not resolve assignee name for placeholders (may be no assignee yet): {}", e.getMessage());
+        }
         try {
             Map<String, String> hrms = getHRMSEmployee(request);
             if (hrms != null) {
                 put(v, "emp_department", hrms.get(DEPARTMENT));
                 put(v, "emp_designation", hrms.get(DESIGNATION));
             }
-        } catch (Exception ignore) { }
+        } catch (Exception e) {
+            log.debug("Could not resolve HRMS employee for placeholders (may be no assignee yet): {}", e.getMessage());
+        }
         return v;
     }
 

@@ -42,12 +42,19 @@ for k in sys.argv[1].split("."):
     else: cur=(cur or {}).get(k)
 print(cur if cur is not None else "")' "$1" 2>/dev/null; }
 
+# Build a JSON object from key=value args, safely escaping any value
+# (Novu passwords require a special char; a raw " or \ would break naive interpolation).
+_jbody() { python3 -c '
+import json, sys
+print(json.dumps(dict(a.split("=", 1) for a in sys.argv[1:])))
+' "$@"; }
+
 echo "novu-mint-key: API=$API email=$EMAIL env=$ENV_NAME" >&2
 
 # 1) register (fresh) → JWT; on 4xx (user exists) fall back to login.
 reg=$(curl -s -w '\n%{http_code}' -X POST "$API/v1/auth/register" \
   -H 'Content-Type: application/json' \
-  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\",\"firstName\":\"$FIRST\",\"lastName\":\"$LAST\",\"organizationName\":\"$ORG\"}")
+  -d "$(_jbody email="$EMAIL" password="$PASS" firstName="$FIRST" lastName="$LAST" organizationName="$ORG")")
 code=$(tail -n1 <<<"$reg"); body=$(sed '$d' <<<"$reg")
 
 if [[ "$code" == "201" || "$code" == "200" ]]; then
@@ -56,7 +63,7 @@ if [[ "$code" == "201" || "$code" == "200" ]]; then
 else
   echo "  register -> $code (user likely exists); logging in" >&2
   login=$(curl -s -X POST "$API/v1/auth/login" -H 'Content-Type: application/json' \
-    -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}")
+    -d "$(_jbody email="$EMAIL" password="$PASS")")
   jwt=$(_jget 'data.token' <<<"$login")
 fi
 

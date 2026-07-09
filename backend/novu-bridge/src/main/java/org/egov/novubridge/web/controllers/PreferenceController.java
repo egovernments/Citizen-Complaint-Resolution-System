@@ -60,7 +60,10 @@ public class PreferenceController {
             @RequestParam(name = "tenantId", required = false) String tenantId,
             @RequestParam(name = "limit", required = false, defaultValue = "100") int limit,
             @RequestParam(name = "offset", required = false, defaultValue = "0") int offset) {
-        List<Map<String, Object>> preferences = preferenceServiceClient.listPreferences(tenantId, limit, offset);
+        // Clamp the caller-supplied page size so a huge limit can't force an
+        // unbounded result set out of the preferences service.
+        int boundedLimit = Math.max(1, Math.min(limit, 500));
+        List<Map<String, Object>> preferences = preferenceServiceClient.listPreferences(tenantId, boundedLimit, offset);
         List<Map<String, Object>> projected = new ArrayList<>(preferences.size());
         for (Map<String, Object> preference : preferences) {
             projected.add(projectAllowedFields(preference));

@@ -2281,6 +2281,7 @@
         chdir: "{{ digit_dir }}"
       register: internal_user_seed
       changed_when: "'CHANGED' in (internal_user_seed.stdout | default(''))"
+      no_log: true
       when: state_root != 'pg'
 
     # The MCP tenant bootstrap is supposed to create an ADMIN eg_user on
@@ -2308,6 +2309,7 @@
         chdir: "{{ digit_dir }}"
       register: admin_state_seed
       changed_when: "'CHANGED' in (admin_state_seed.stdout | default(''))"
+      no_log: true
       when: state_root != 'pg'
 
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"

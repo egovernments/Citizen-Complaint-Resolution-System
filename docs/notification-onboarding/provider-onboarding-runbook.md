@@ -2,7 +2,7 @@
 This is the accurate content backbone for the screenshot-based operator TUTORIAL,
 which will be written after the self-service provider screens land (see
 docs/plans/2026-07-06-configurator-provider-management-design.md).
-The verify-pass corrections at the BOTTOM must be folded in before this is final. -->
+The verify-pass corrections have been folded into the body; one minor open note remains in the appendix. -->
 
 # Runbook: Onboarding a New Notification Provider (Config-Driven PGR Notifications)
 
@@ -139,7 +139,7 @@ The deploy playbook writes `NOVU_API_KEY=` into the compose `.env`, **force-recr
 
 ### 3.5 Verify
 - **Server-side list:** `GET ${NOVU_BASE_URL}/v1/integrations` (ApiKey) → confirm a `twilio` / `sms` / `active:true` row.
-- **Configurator (read-only):** *Notifications → Notification Providers* (`GET /novu-bridge/novu-adapter/v1/integrations`). Shows only the allowlist `_id, providerId, channel, name, identifier, active, primary, environmentId`; credential **values are redacted to `***`** (only which keys exist is shown). There is deliberately **no** endpoint returning the raw Novu key or any secret.
+- **Configurator (read-only):** *Notifications → Notification Providers* (`GET /novu-bridge/novu-adapter/v1/integrations`). Shows only the allowlist `_id, providerId, channel, name, identifier, active, primary, environmentId`; the response is an **allowlist projection** — the `credentials` object is **not copied at all** (no key names, no `***` placeholders — nothing outside the allowlist ever leaves the service). There is deliberately **no** endpoint returning the raw Novu key or any secret.
 - **End-to-end dry/real:**
   - `POST /novu-bridge/novu-adapter/v1/dispatch/_validate` — runs the pipeline, no send.
   - `POST /novu-bridge/novu-adapter/v1/dispatch/_dry-run?send=true` — optional real send.
@@ -361,10 +361,10 @@ Nav group **Notifications** (`app.nav.notifications`), 7 items in order:
 | Notification Templates | `notification-template` | mdms | **Editable** (CRUD; rich descriptor) | `RAINMAKER-PGR.NotificationTemplate` |
 | Provider Templates (WhatsApp) | `notification-provider-template` | mdms | **Editable** (CRUD; **no** descriptor → default widgets) | `RAINMAKER-PGR.NotificationProviderTemplate` |
 | Notification Logs | `notification-log` | custom | **Read-only** (`rowActions="none"`, tenant-scoped) | `GET /novu-bridge/novu-adapter/v1/logs` |
-| Notification Providers | `notification-provider` | custom | **Read-only** (allowlist projection, credentials `***`) | `GET /novu-bridge/novu-adapter/v1/integrations` |
+| Notification Providers | `notification-provider` | custom | **Read-only** (allowlist projection; no `credentials` key emitted at all) | `GET /novu-bridge/novu-adapter/v1/integrations` |
 | User Preferences | `notification-preference` | custom | **Read-only** | `GET /novu-bridge/novu-adapter/v1/preferences` |
 
-Notes: the ContentSid mapping screen is **editable** despite its name (generic MDMS master). The SPA is keyless — it never holds the Novu ApiKey; novu-bridge calls Novu server-side and redacts credentials. The Providers screen fetches the whole integration list and paginates client-side.
+Notes: the ContentSid mapping screen is **editable** despite its name (generic MDMS master). The SPA is keyless — it never holds the Novu ApiKey; novu-bridge calls Novu server-side and its allowlist projection omits the `credentials` object entirely. The Providers screen fetches the whole integration list and paginates client-side.
 
 ---
 
@@ -372,18 +372,18 @@ Notes: the ContentSid mapping screen is **editable** despite its name (generic M
 
 ### 7.1 Locale resolution order (per recipient, authoritative)
 1. **User's consented language** — `preferredLanguage` on the `USER_NOTIFICATION_PREFERENCES` record in `digit-user-preferences-service` (validated against `{en_IN, hi_IN, fr_IN, pt_IN}`), read via `PreferenceServiceClient` (same record/service used for per-channel consent — no new store).
-2. else **deployment default** — `config.notification.default.locale` (tenant-scoped).
+2. else **deployment default** — `pgr.notification.default.locale` (instance/deployment default, not tenant-scoped; default `en_IN`).
 3. else hard fallback **`"en"`**.
 
 One language per recipient. A role pool with mixed locales renders **per-member grouped by resolved locale**, never once for the whole pool.
 
 ### 7.2 How an approved/localized template is chosen (by channel)
-- **WHATSAPP (strict, approval-gated):** `approved(provider, routingKey K, locale L)` → use its Twilio ContentSid + ordered vars; else `approved(provider, K, defaultLocale)`; else **SKIP** with `NB_TEMPLATE_NOT_APPROVED` — **never** free-form WhatsApp, never fall back to another channel.
+- **WHATSAPP (strict, approval-gated):** `approved(provider, routingKey K, locale L)` → use its Twilio ContentSid + ordered vars; else `approved(provider, K, defaultLocale)`; else **SKIP** (fail-safe) — **never** free-form WhatsApp, never fall back to another channel. (This approval-aware selection is the forward design; it is not yet implemented — see §7.3.)
 - **SMS / EMAIL (content-only, no approval concept):** localized body/subject in `L` (via egov-localization) → default-locale body/subject → free-form always allowed. Do **not** apply WhatsApp approval logic here.
 - Provider language codes are the **short** form (`en`/`hi`); the ProviderTemplate `locale` field maps `en_IN`↔`en`. Mismatch → selection won't line up.
 
 ### 7.3 Reality check (interim behavior)
-The full locale+approval-aware layer is **not implemented today**. The emitter renders **once in `config.notification.default.locale` for everyone** (the "W2.9 single-locale" limitation); it does not yet read per-recipient consented locale, and EMAIL stays `en` for now. The template `locale` dimension is effectively dead for per-recipient localization until (1) egov-localization-backed body/subject resolution and (2) the fallback chain in `TemplateRenderer`/emitter are built. Also: `en_IN` is **hardcoded** in the configurator checker/Configure tab while the backend default locale is a config property — flipping the deployment default can produce false checker (R2) errors and edits that miss the locale the runtime actually reads.
+The full locale+approval-aware layer is **not implemented today**. The emitter renders **once in `pgr.notification.default.locale` for everyone** (the "W2.9 single-locale" limitation); it does not yet read per-recipient consented locale, and EMAIL stays `en` for now. The template `locale` dimension is effectively dead for per-recipient localization until (1) egov-localization-backed body/subject resolution and (2) the fallback chain in `TemplateRenderer`/emitter are built. Also: `en_IN` is **hardcoded** in the configurator checker/Configure tab while the backend default locale is a config property — flipping the deployment default can produce false checker (R2) errors and edits that miss the locale the runtime actually reads.
 
 ---
 
@@ -407,7 +407,6 @@ Three sources of truth, in order of increasing authority:
 | `NB_UNSUPPORTED_CHANNEL` | Channel not in `KNOWN_CHANNELS {SMS,WHATSAPP,EMAIL}` (e.g. a typo/`PIGEON`). Never reaches Novu; "never guess, never fall back to SMS". |
 | `NB_CONTACT_MISSING` | EMAIL row with no email, or SMS/WhatsApp row with no phone. Bridge-side defense against phantom-SENT. |
 | `NB_PREFERENCE_DENIED` | Preference gate denied the channel (only when `NOVU_BRIDGE_PREFERENCE_ENABLED=true`). |
-| `NB_TEMPLATE_NOT_APPROVED` | WhatsApp leg with no approved provider template for the locale/default-locale — fail-safe SKIP instead of a Twilio 400. |
 
 `FAILED` codes: `NB_NOVU_TRIGGER_FAILED` (Novu returned non-2xx, e.g. missing workflow or 401), `NB_DELIVERY_ERROR` (other exception), plus `CustomException` codes (which DLQ the message).
 
@@ -438,19 +437,18 @@ Three sources of truth, in order of increasing authority:
 
 ---
 
-## Appendix: verify-pass corrections to fold in (code-grounded)
+## Appendix: verify-pass corrections (code-grounded)
 
-I have completed verification. Here are my findings.
+Verification complete. The corrections below have been **folded into the body** above; one minor note remains open.
 
-**CORRECTIONS**
+**FOLDED IN** (no longer present in the body):
+- Removed the invented error code `NB_TEMPLATE_NOT_APPROVED` from §7.2 and §8 — the pipeline only ever writes the four SKIPPED `lastErrorCode`s `NB_PREFERENCE_DENIED`, `NB_UNSUPPORTED_CHANNEL`, `NB_NO_PROVIDER`, `NB_CONTACT_MISSING` (`backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java`).
+- Corrected the config property to `pgr.notification.default.locale` (default `en_IN`) in §7.1/§7.3, and noted it is an instance/deployment default rather than tenant-scoped (`backend/pgr-services/src/main/resources/application.properties:102`, `PGRConfiguration.java:253`, `NotificationService.java:861`).
+- Fixed the credential-projection wording in §3.5/§6.3: the read-only integrations projection is a pure allowlist (`_id, providerId, channel, name, identifier, active, primary, environmentId`) and never copies `credentials` at all — no key names, no `***` placeholders (`IntegrationController.java`, `IntegrationProjection.java`).
 
-- **Invented error code `NB_TEMPLATE_NOT_APPROVED`** (§7.2 and the §8 "What SKIPPED means" table): this code exists nowhere in the codebase. The only SKIPPED `lastErrorCode`s that the pipeline ever writes are exactly four — `NB_PREFERENCE_DENIED`, `NB_UNSUPPORTED_CHANNEL`, `NB_NO_PROVIDER`, `NB_CONTACT_MISSING` (`backend/novu-bridge/src/main/java/org/egov/novubridge/service/DispatchPipelineService.java:83,108,118,137`). The runbook's own §8 sentence says "SKIPPED is reused for **four** distinct lastErrorCodes" but then lists five — the fifth is the invented one. WhatsApp legs with no approved template are NOT gated by any such code (the approval-aware layer is not implemented; §7.3 even admits this). → Remove `NB_TEMPLATE_NOT_APPROVED`.
+Note on the §3.2 bootstrap-workflow claim: re-verification against `backend/novu-bridge/config/bootstrap-novu-whatsapp.sh` shows the script **does** create `complaints-sms` (and `complaints-email`) channel workflows (see `NOVU_SMS_WORKFLOW_ID`/`ensure_channel_workflow` near lines 75-76, 358-359), in addition to `complaints-whatsapp-v1`. The §3.2 body is therefore accurate and was left unchanged; the earlier appendix note flagging it was stale.
 
-- **Wrong config-property name `config.notification.default.locale`** (§7.1 step 2 and §7.3): the real property is **`pgr.notification.default.locale`** (default `en_IN`) — `backend/pgr-services/src/main/resources/application.properties:102` and `backend/pgr-services/src/main/java/org/egov/pgr/config/PGRConfiguration.java:253`. No property named `config.notification.default.locale` exists. It is also an instance/deployment default, not "tenant-scoped" as §7.1 states (`NotificationService.java:861` calls it the "instance default locale").
-
-- **Bootstrap script does NOT create workflow id `complaints-sms`** (§3.2 code block "…creates the workflow via the Novu v2 API … `workflowId: complaints-sms`"): the script's default workflow id is **`complaints-whatsapp-v1`** (`backend/novu-bridge/config/bootstrap-novu-whatsapp.sh:62`, created at lines 271-290), plus the event-convention workflows `COMPLAINTS.WORKFLOW.APPLY,COMPLAINTS.WORKFLOW.ASSIGN` (`:67`). It never creates `complaints-sms`. The runbook's own §3.2 "workflow-id gotcha" states this correctly, contradicting its code block. → The `complaints-sms`/`complaints-email` workflows are created by some other means, not this script.
-
-- **Credentials are omitted, not "redacted to `***` / only which keys exist is shown"** (§3.5 and §6.3): the read-only integrations projection is a pure ALLOWLIST of exactly `_id, providerId, channel, name, identifier, active, primary, environmentId` and never copies the `credentials` object at all — no key names, no `***` placeholders are emitted (`backend/novu-bridge/src/main/java/org/egov/novubridge/web/controllers/IntegrationController.java:42-44`, and controller javadoc `:23-29` "no credentials key, masked or [unmasked]"). The no-secret-leak outcome the runbook stresses is correct, but the described mechanism ("which keys exist is shown", "redacted to `***`") is wrong. (Note: the DTO javadoc `IntegrationListResponse.java:14` still mentions masking to `***`, but the controller's allowlist governs the actual response.)
+**STILL OPEN**
 
 - **Minor — env var `NOVU_BRIDGE_PREFERENCE_SEARCH_PATH` is not wired** (§6.1 table): there is no `${NOVU_BRIDGE_PREFERENCE_SEARCH_PATH:...}` binding in `application.properties`; only the Spring property `novu.bridge.preference.search.path` (default `/user-preference/v1/_search`) exists, defined solely in `NovuBridgeConfiguration.java:55`. The table already leaves its Spring-property/default cells as "—", so the impact is small, but that env name does not override anything.
 

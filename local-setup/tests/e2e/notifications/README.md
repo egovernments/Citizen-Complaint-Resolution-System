@@ -18,7 +18,8 @@ Run **on the DIGIT host** (the harness shells out to `docker exec <pg> psql` and
 ```bash
 E2E_EMP_USER=<employee> E2E_EMP_PASS=<pass> \
   ./run-notif-suite.sh --target=bomet          # all areas
-./run-notif-suite.sh --only=A,C                # a subset
+E2E_EMP_USER=<employee> E2E_EMP_PASS=<pass> \
+  ./run-notif-suite.sh --only=A,C              # a subset
 ```
 
 Env (full list in [`notif-harness.js`](./notif-harness.js)): `BASE`, `DIGIT_TENANT`, `SERVICE_CODE`, `SERVICE_NAME`, `LOCALITY`, `TEST_PHONE`, `TEST_EMAIL`, `E2E_EMP_USER`, `E2E_EMP_PASS`, `NOVU_API_KEY` (auto-resolved from the `novu-bridge` container if unset), `PG_CONTAINER`.

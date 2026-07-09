@@ -570,8 +570,10 @@ public class DataHandlerService {
             emitNotificationRouting(targetTenantId, requestInfo, routingNotifications);
             emitNotificationTemplates(targetTenantId, requestInfo, notificationTemplates);
         } catch (IOException e) {
-            log.error("Error reading or mapping JSON file: {}", e.getMessage());
-//            throw new CustomException("IO_EXCEPTION", "Error reading or mapping JSON file: " + e.getMessage());
+            // Unreadable/corrupt bundled config is a genuine setup failure — fail
+            // loudly rather than leaving the caller believing setup succeeded.
+            log.error("Error reading or mapping PGR workflow/notification config JSON for tenant {}", targetTenantId, e);
+            throw new CustomException("IO_EXCEPTION", "Error reading or mapping JSON file: " + e.getMessage());
         } catch (RuntimeException e) {
             log.error("PGR workflow/notification seed emission failed part-way for tenant {} — "
                     + "workflow may already be POSTed; MDMS emission is idempotent and safe to re-run",

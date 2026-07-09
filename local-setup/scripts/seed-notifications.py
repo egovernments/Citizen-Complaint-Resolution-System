@@ -159,7 +159,6 @@ def main():
         note = "  WARNING: failures in %s" % ", ".join(m.split(".")[-1] for m in failed_masters)
     print("DONE: %d created, %d already-present.%s" % (total_created, total_dup, note))
     sys.exit(2 if core_failed else 0)
-    sys.exit(0 if ok else 2)
 
 
 if __name__ == "__main__":

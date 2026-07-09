@@ -44,11 +44,13 @@ Where a step says "optionally verify live", the only contact details authorized 
 
 | Audience | Phone | Email |
 |----------|-------|-------|
-| CITIZEN  | +919415787824 | contact@theflywheel.in |
+| CITIZEN  | `<CITIZEN_PHONE>` | `<CITIZEN_EMAIL>` |
 | PGR_LME  | `<LME_PHONE>` | `<LME_EMAIL>` |
 | GRO      | `<GRO_PHONE>` | `<GRO_EMAIL>` |
 
-The LME and GRO values are placeholders — **the owner will supply them**; do not invent numbers.
+All values are placeholders — **the owner will supply the real owner-authorized
+contacts out-of-band** (private runbook / secrets manager / ticket); do not
+commit real phone numbers or emails to this repo, and do not invent numbers.
 
 ### Finding IDs used below
 

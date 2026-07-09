@@ -50,6 +50,11 @@ public class IntegrationController {
     @GetMapping("/integrations")
     public ResponseEntity<IntegrationListResponse> integrations() {
         NovuClient.NovuResponse novuResponse = novuClient.listIntegrations();
+        // Surface upstream failures instead of returning 200 with an empty list.
+        if (novuResponse == null || novuResponse.getStatusCode() == null
+                || novuResponse.getStatusCode() < 200 || novuResponse.getStatusCode() >= 300) {
+            return new ResponseEntity<>(HttpStatus.BAD_GATEWAY);
+        }
         List<Map<String, Object>> integrations = IntegrationProjection.extractList(novuResponse.getResponse());
         List<Map<String, Object>> projected = new ArrayList<>(integrations.size());
         for (Map<String, Object> integration : integrations) {
