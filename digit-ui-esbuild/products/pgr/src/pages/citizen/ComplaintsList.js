@@ -82,7 +82,7 @@ function StatusPill({ status, t }) {
   );
 }
 
-function ComplaintRow({ data, onClick, t, typeCode, typeName }) {
+function ComplaintRow({ data, onClick, t, typeName }) {
   const { serviceRequestId, applicationStatus, auditDetails } = data;
   // The list aggregates complaints across authority tenants (mz.ige/mz.igsae/…)
   // while the list-level serviceDefs are fetched at the CITIZEN's tenant — so
@@ -105,18 +105,16 @@ function ComplaintRow({ data, onClick, t, typeCode, typeName }) {
   const own = React.useMemo(() => {
     const rows = Array.isArray(ownRows) ? ownRows : [];
     const self = rows.find((n) => n?.code === data.serviceCode);
-    if (!self) return null;
-    const parent = self.parentCode ? rows.find((n) => n?.code === self.parentCode) : null;
-    // Card shows the complaint TYPE (parent group); a root/parentless node is
-    // its own group.
-    return parent
-      ? { code: parent.code, name: parent.name }
-      : { code: self.code, name: self.name };
+    return self ? { code: self.code, name: self.name } : null;
   }, [ownRows, data.serviceCode]);
-  // Complaint Type label = key-based (COMPLAINT_HIERARCHY.<code>) like every
-  // other service, falling back to the node name; OTHERS for no resolvable group.
+  // Card title = the LEAF complaint type (what the citizen actually filed —
+  // "Operating without a licence"), not a hierarchy ancestor: on a personal
+  // list the specific type is how people recognize their complaint, while the
+  // 1st level ("Business") would render near-identical cards. Key-based
+  // localization (COMPLAINT_HIERARCHY.<code>) with the node name as fallback;
+  // OTHERS when nothing resolves.
   const title =
-    complaintLabel(t, own?.code || typeCode, own?.name || typeName) || t("CS_COMPLAINT_TYPE_OTHERS");
+    complaintLabel(t, own?.code || data.serviceCode, own?.name || typeName) || t("CS_COMPLAINT_TYPE_OTHERS");
   const dateStr = auditDetails?.createdTime
     ? Digit.DateUtils.ConvertTimestampToDate(auditDetails.createdTime)
     : "";
@@ -261,16 +259,14 @@ export const ComplaintsList = () => {
     mobileNumber
   );
 
-  // Service defs give us serviceCode -> menuPath so each card can show the
-  // Complaint Type (category) rather than the sub-type. Cached via MDMS.
+  // serviceCode → the LEAF's own name, as a mount-time fallback while each
+  // row's own-tenant hierarchy fetch resolves (only helps complaints filed at
+  // the citizen's tenant; foreign-tenant rows resolve via the row fetch).
   const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
-  // serviceCode → the complaint TYPE label (parent node name) straight from the
-  // hierarchy adapter (def.menuPathName); for an interior-node complaint not in
-  // the leaf set, fall back to the full code→name map cached by the adapter.
   const typeBySvcCode = React.useMemo(() => {
     const map = {};
     (serviceDefs || []).forEach((def) => {
-      if (def?.serviceCode) map[def.serviceCode] = { code: def.menuPath, name: def.menuPathName || def.name };
+      if (def?.serviceCode) map[def.serviceCode] = { name: def.name };
     });
     return map;
   }, [serviceDefs]);
@@ -371,7 +367,6 @@ export const ComplaintsList = () => {
                 key={service.serviceRequestId}
                 data={service}
                 t={t}
-                typeCode={typeBySvcCode[service.serviceCode]?.code || service.serviceCode}
                 typeName={typeBySvcCode[service.serviceCode]?.name || (Digit.SessionStorage.get("complaintHierarchyNameByCode") || {})[service.serviceCode]}
                 onClick={() => history.push(`${path}/${service.serviceRequestId}`)}
               />
