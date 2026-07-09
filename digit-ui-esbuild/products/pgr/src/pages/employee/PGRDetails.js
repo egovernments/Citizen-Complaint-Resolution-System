@@ -67,16 +67,19 @@ const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false,
       populators: { name: "SelectedAssignee" },
     });
   }
-  if (docUploadRequired) {
-    body.push({
-      type: "component",
-      isMandatory: true,
-      component: "PGRVerificationDocsComponent",
-      key: "SelectedDocuments",
-      label: "CS_UPLOAD_DOCUMENTS",
-      populators: { name: "SelectedDocuments" },
-    });
-  }
+  // Attachments on EVERY workflow action (CCSD-1965): the uploader always
+  // renders; it is MANDATORY only when the action's target state is flagged
+  // docUploadRequired on the BusinessService (previously that flag also gated
+  // visibility, so most actions had no way to attach evidence). The backend
+  // persists workflow.verificationDocuments per transition unconditionally.
+  body.push({
+    type: "component",
+    isMandatory: !!docUploadRequired,
+    component: "PGRActionUploadComponent",
+    key: "SelectedDocuments",
+    label: "CS_COMMON_ATTACHMENTS",
+    populators: { name: "SelectedDocuments" },
+  });
   body.push({
     type: "textarea",
     isMandatory: true,
@@ -363,6 +366,10 @@ const PGRDetails = () => {
             roles,
             department,
             allDepartments,
+            // Filestore is tenant-scoped — the uploader must write to the
+            // COMPLAINT's tenant so the attachment renders later (the display
+            // side fetches at service.tenantId).
+            tenantId: complaintTenantId,
             props: { ...bodyItem.populators.props, department, allDepartments },
           },
         })),
@@ -595,7 +602,7 @@ const PGRDetails = () => {
                     inline: false,
                     type: "custom",
                     renderCustomContent: () => (
-                      <TimelineWrapper isWorkFlowLoading={isWorkflowLoading} workflowData={workflowData} businessId={id} labelPrefix="WF_PGR_" />
+                      <TimelineWrapper isWorkFlowLoading={isWorkflowLoading} workflowData={workflowData} businessId={id} labelPrefix="WF_PGR_" tenantId={complaintTenantId} />
                     ),
                   },
                 ],
@@ -624,6 +631,19 @@ const PGRDetails = () => {
               key="action-button"
               label={t("ES_COMMON_TAKE_ACTION")}
               onOptionSelect={(selected) => {
+                // The modal's form values persist in the GLOBAL "COMPLAINT_UPDATE"
+                // session key — without scoping, values from a previous modal
+                // (a canceled attempt, a DIFFERENT action, or even a different
+                // complaint) silently restore into this one: stale attachments/
+                // comments would submit with the new action. Stamp the session
+                // with complaint+action and start clean on any mismatch; the
+                // restore convenience is kept for reopening the SAME action on
+                // the SAME complaint.
+                const sessionFor = `${id}:${selected?.action}`;
+                if (sessionFormData?.__for !== sessionFor) {
+                  clearSessionFormData();
+                  setSessionFormData({ __for: sessionFor });
+                }
                 setSelectedAction(selected);
                 setOpenModal(true);
               }}
