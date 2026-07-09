@@ -1,0 +1,30 @@
+name: Gateway whitelist parity
+
+# Deployment-parity item #5, Phase 3: the compose Kong gateway's auth-optional
+# whitelist and the K8s Spring gateway's open+mixed whitelists must stay identical
+# (both classify by exact path membership). Drift = an endpoint anonymous on one
+# stack but protected on the other, so this guards against it on every PR.
+
+on:
+  pull_request:
+    paths:
+      - 'local-setup/kong/kong.yml'
+      - 'devops/deploy-as-code/charts/environments/env.yaml'
+      - '.github/scripts/check-gateway-whitelist-parity.py'
+      - '.github/workflows/gateway-whitelist-parity.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'local-setup/kong/kong.yml'
+      - 'devops/deploy-as-code/charts/environments/env.yaml'
+
+jobs:
+  whitelist-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Check Kong ↔ Spring gateway whitelist parity
+        run: python3 .github/scripts/check-gateway-whitelist-parity.py
