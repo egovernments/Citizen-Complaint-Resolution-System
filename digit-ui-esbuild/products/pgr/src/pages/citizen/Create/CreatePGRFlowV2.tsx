@@ -21,6 +21,7 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../../../utils/complaintLabel";
+import PGRDatePicker from "../../../components/PGRDatePicker";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -450,7 +451,8 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
       return false;
     }
     case "description":
-      return typeof data.description === "string" && data.description.trim().length > 0;
+      // CCSD-1956: 20–1000 characters (maxLength enforced by the textarea).
+      return typeof data.description === "string" && data.description.trim().length >= 20;
     case "SelectComplaintType":
       return data.SelectComplaintType != null;
     case "GeoLocationsPoint":
@@ -1034,8 +1036,15 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
             value={data.description ?? ""}
             onChange={(e) => patch({ description: e.target.value })}
           />
+          {/* CCSD-1956: 20–1000 chars. Counter turns into a min-length hint until valid. */}
           <div className="mt-1 text-xs text-muted-foreground text-right">
-            {(data.description ?? "").length} / 1000
+            {(data.description ?? "").trim().length > 0 && (data.description ?? "").trim().length < 20 ? (
+              <span style={{ color: "#b3261e" }}>
+                {tr(t, "CS_DESC_MIN_CHARS", "Minimum 20 characters")} · {(data.description ?? "").length} / 1000
+              </span>
+            ) : (
+              <>{(data.description ?? "").length} / 1000</>
+            )}
           </div>
         </Field>
 
@@ -1043,7 +1052,16 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
         {fields.map((f) => {
           const val = (dyn[f.fieldKey] as string) ?? "";
           return (
-            <Field key={f.fieldKey} label={f.labelKey ? tr(t, f.labelKey, f.label) : f.label} required={!!f.mandatory} htmlFor={`xf-${f.fieldKey}`}>
+            <Field
+              key={f.fieldKey}
+              // CCSD-1955: optional fields are explicitly labeled "(Optional)".
+              label={
+                (f.labelKey ? tr(t, f.labelKey, f.label) : f.label) +
+                (f.mandatory ? "" : " " + tr(t, "CS_OPTIONAL_SUFFIX", "(Optional)"))
+              }
+              required={!!f.mandatory}
+              htmlFor={`xf-${f.fieldKey}`}
+            >
               {f.dataType === "textarea" ? (
                 <Textarea
                   id={`xf-${f.fieldKey}`}
@@ -1051,12 +1069,28 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
                   value={val}
                   onChange={(e) => setDyn(f.fieldKey, e.target.value)}
                 />
+              ) : f.dataType === "date" ? (
+                // CCSD-1952: SAME calendar as the employee form (PGRDatePicker,
+                // maxDate today) — future dates render greyed-out and unclickable
+                // on both surfaces. The native <input type="date"> was dropped
+                // here: its max attr enforcement varies by browser, and silently
+                // ignoring a future pick reads as broken.
+                <PGRDatePicker
+                  onSelect={(name: string, v: string) => setDyn(f.fieldKey, v)}
+                  config={{ key: f.fieldKey, populators: { name: f.fieldKey, maxDate: "today" } }}
+                  formData={dyn}
+                  // Match the v2 wizard's field metrics (full width, h-11,
+                  // rounded-md) — the picker's default caps at the employee
+                  // form's 37.5rem, which rendered narrower than every other
+                  // field on this step.
+                  style={{ maxWidth: "100%" }}
+                  fieldStyle={{ height: "2.75rem", borderRadius: "0.375rem" }}
+                />
               ) : (
                 <Input
                   id={`xf-${f.fieldKey}`}
-                  className={f.dataType === "date" ? "pgr-date-input" : undefined}
-                  type={f.dataType === "date" ? "date" : f.dataType === "number" ? "number" : "text"}
-                  maxLength={f.dataType === "date" || f.dataType === "number" ? undefined : f.maxLength}
+                  type={f.dataType === "number" ? "number" : "text"}
+                  maxLength={f.dataType === "number" ? undefined : f.maxLength}
                   value={val}
                   onChange={(e) => setDyn(f.fieldKey, e.target.value)}
                 />

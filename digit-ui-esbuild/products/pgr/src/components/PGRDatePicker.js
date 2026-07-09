@@ -76,6 +76,18 @@ const PGRDatePicker = (props) => {
   const [view, setView] = React.useState(() =>
     selected ? { y: selected.y, mo: selected.mo } : { y: today.getFullYear(), mo: today.getMonth() + 1 }
   );
+  // Optional upper bound (CCSD-1952): populators.maxDate === "today" caps
+  // selection at the current date — used by "Date of fact"-style extended
+  // attributes, where a future date is meaningless. Future cells render
+  // greyed-out and unclickable; month navigation stays free.
+  const maxDate =
+    (config?.populators?.maxDate || props?.props?.populators?.maxDate) === "today" ? today : null;
+  const isAfterMax = (d) => {
+    if (!maxDate) return false;
+    const cell = new Date(view.y, view.mo - 1, d);
+    const cap = new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate());
+    return cell.getTime() > cap.getTime();
+  };
   const ref = React.useRef(null);
 
   React.useEffect(() => {
@@ -103,6 +115,7 @@ const PGRDatePicker = (props) => {
   const nextMonth = () => setView((v) => (v.mo === 12 ? { y: v.y + 1, mo: 1 } : { y: v.y, mo: v.mo + 1 }));
   const pick = (d) => {
     if (!d || !setValue || !name) return;
+    if (isAfterMax(d)) return; // future date blocked (CCSD-1952)
     setValue(name, `${view.y}-${pad(view.mo)}-${pad(d)}`);
     setOpen(false);
   };
@@ -149,11 +162,13 @@ const PGRDatePicker = (props) => {
   };
 
   return (
-    <div className="pgr-datepicker" style={s.wrap} ref={ref}>
+    // Callers can override sizing: the employee form caps inputs at 37.5rem,
+    // while the citizen v2 wizard runs fields full-width (style/fieldStyle).
+    <div className="pgr-datepicker" style={{ ...s.wrap, ...(props?.style || {}) }} ref={ref}>
       <style>{FOCUS_CSS}</style>
       <div
         className="pgr-datepicker-field"
-        style={s.field}
+        style={{ ...s.field, ...(props?.fieldStyle || {}) }}
         onClick={toggle}
         role="button"
         tabIndex={disabled ? -1 : 0}
@@ -183,13 +198,15 @@ const PGRDatePicker = (props) => {
                 <div
                   key={d}
                   role="button"
-                  tabIndex={0}
+                  tabIndex={isAfterMax(d) ? -1 : 0}
+                  aria-disabled={isAfterMax(d) || undefined}
                   onClick={() => pick(d)}
                   onKeyDown={keyActivate(() => pick(d))}
                   style={{
                     ...s.cell,
                     ...(isSel(d) ? { background: PRIMARY, color: "#fff", fontWeight: 700, borderColor: PRIMARY } : {}),
                     ...(!isSel(d) && isToday(d) ? { borderColor: PRIMARY } : {}),
+                    ...(isAfterMax(d) ? { color: "#c3c7cc", cursor: "not-allowed", background: "transparent" } : {}),
                   }}
                 >
                   {d}

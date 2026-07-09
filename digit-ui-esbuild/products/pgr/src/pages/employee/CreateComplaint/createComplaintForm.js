@@ -268,7 +268,9 @@ const CreateComplaintForm = ({
           isMandatory: !!f.mandatory,
           type: "component",
           component: "PGRDatePicker",
-          populators: { name: f.fieldKey },
+          // "Date of fact"-style fields record when something HAPPENED —
+          // future dates are meaningless and now blocked (CCSD-1952).
+          populators: { name: f.fieldKey, maxDate: "today" },
         };
       }
       const type = toType(f.dataType);
@@ -357,7 +359,24 @@ const CreateComplaintForm = ({
         : section
     );
 
-    return { ...baseConfig, form: withExt };
+    // CCSD-1955: every NON-mandatory field's label gets an "(Optional)" suffix.
+    // Labels are localization keys the composer t()s — so pre-translate here and
+    // append the localized suffix; t() on an already-translated string is a
+    // pass-through, so the composer renders it verbatim.
+    const optionalSuffix = (() => {
+      const v = t("CS_OPTIONAL_SUFFIX");
+      return v === "CS_OPTIONAL_SUFFIX" ? "(Optional)" : v;
+    })();
+    const withOptional = withExt.map((section) => ({
+      ...section,
+      body: (section.body || []).map((field) =>
+        field?.label && field.isMandatory !== true
+          ? { ...field, label: `${t(field.label)} ${optionalSuffix}` }
+          : field
+      ),
+    }));
+
+    return { ...baseConfig, form: withOptional };
   }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, hasHierarchy, departmentGate, extFieldConfigs]);
 
 
