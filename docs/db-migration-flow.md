@@ -20,9 +20,19 @@ it; the flow is:
 1. **Authoring (upstream, once).** A developer adds `V…__*.sql` to the service's
    repo (`.../db/migration/main/`). This is the only manual step, and it happens in
    the product repo — *not* per environment.
-2. **Packaging.** CI rebuilds that service's **`<service>-db` image** (`FROM
-   flyway/flyway` + `COPY migration/main /flyway/sql`) and publishes a **new image
-   tag** to `egovio` on Docker Hub.
+2. **Packaging (automatic).** The `-db` image is a **separate image from the app
+   image**, but nobody builds it by hand. Each service's CI builds **both** — the
+   service image *and* its `<service>-db` Flyway image (`FROM flyway/flyway` + `COPY
+   migration/main /flyway/sql`) — and publishes a **new tag** to `egovio` on Docker
+   Hub. This split is declared in **`build/build-config.yml`** (entries whose
+   `image-name` ends in `-db`) and driven by `.github/workflows/build.yml`, which
+   detects a service's `db/` folder and builds the `-db` target alongside the app.
+
+   > **New service?** Whoever adds it must add its **`<service>-db` entry to
+   > `build/build-config.yml`** (next to the app-image entry), the same way K8s
+   > needs a `-db` image. Without it, the service's migrations have no image to
+   > propagate through — CI won't build one, and there's nothing for the migrator
+   > to pull.
 3. **Propagation (the compose step).** Bump the service's image tag in
    `local-setup/docker-compose.migrations.yml`:
    ```yaml
