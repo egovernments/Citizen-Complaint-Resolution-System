@@ -235,9 +235,11 @@ plugins:
             body = cjson.encode({
               RequestInfo = { apiId = "Rainmaker", authToken = token },
               AuthorizationRequest = {
-                roles = resolved["roles"] or {},
+                -- cjson.empty_array so empty roles/tenantIds serialize as JSON [] (not {}),
+                -- which egov-accesscontrol expects for these fields.
+                roles = resolved["roles"] or cjson.empty_array,
                 uri = uri,
-                tenantIds = tid and { tid } or {},
+                tenantIds = tid and { tid } or cjson.empty_array,
               },
             }),
           })
