@@ -22,13 +22,11 @@ import os from 'node:os';
 import fs from 'node:fs';
 import ExcelJS from 'exceljs';
 import { getDigitToken } from '../utils/auth';
+import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-const ROOT = process.env.ROOT_TENANT || 'ke';
-const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
-const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'eGov@123';
-const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
+const ROOT = ROOT_TENANT;
 
 // 1×1 transparent PNG — minimal valid image-typed payload.
 const PNG_1x1 = Buffer.from(

@@ -17,7 +17,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL, ROOT_TENANT } from '../utils/env';
+import { BASE_URL, PGR_CREATE_UNSUPPORTED, PGR_ID_PREFIX } from '../utils/env';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
 
 test.describe('Citizen file-complaint wizard', () => {
@@ -185,14 +185,20 @@ test.describe('Citizen file-complaint wizard', () => {
       await expect(pincodeToast).toHaveCount(0);
     }
 
-    // ── Step 3: Location Details — pick County → SubCounty → Ward ──
-    // The modern wizard collapses the old separate "location cascade"
-    // (was Step 4) into Step 3: the County dropdown appears immediately;
-    // SubCounty and Ward appear progressively as parents get picked.
+    // ── Step 3: Location Details — fill EVERY cascade level to the leaf ──
+    // The map pin auto-resolves the boundary cascade only as deep as the
+    // deployment has boundary geometry (geojson). On tenants whose tree is
+    // deeper than the geometry (e.g. Maputo: geometry stops at Bairro but the
+    // hierarchy has a Quarteirão leaf below it), the deepest level(s) render
+    // EMPTY after the pin auto-fill and must be picked manually — the form's
+    // mandatory leaf gate won't enable NEXT until the true leaf is selected.
+    // Loop up to 8 levels (was 3 — Kenya's County→SubCounty→Ward) so any
+    // number of cascade levels is filled; already-auto-filled levels are
+    // skipped, empty ones (the leaf) get selected.
     await page.waitForTimeout(2000);
     await onAfterStep?.('Step 3 – Location Details initial render');
 
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 8; i++) {
       const dd = cascadeDropdowns.nth(i);
       // Wait briefly — the cascade child may not have rendered yet.
       const visible = await dd.isVisible({ timeout: 5000 }).catch(() => false);
@@ -254,7 +260,7 @@ Steps:
 7. Step 5 (Description): fill the required description, click Next.
 8. Step 6 (Photo): skip the optional dropzone, click SUBMIT.
 9. Assert the URL flips to /pgr/response and a complaint id matching ^<PGR_ID_PREFIX>-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+$ is rendered.
-   PGR_ID_PREFIX defaults to "NCCG" (Nairobi); set PGR_ID_PREFIX=PG for Ethiopia.
+   The prefix is discovered live from egov-idgen (citizen.setup.ts); PGR_ID_PREFIX env is the fallback ("PG" stock, "NCCG" on Nairobi).
 
 Test timeout is 180s — six steps plus DOM settles plus the final POST regularly exceeds 90s.`,
     },
@@ -274,22 +280,22 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     await walkWizard(page, { assertPincodeToast: true });
 
     // ── Confirmation page contract ─────────────────────────────────
-    // On ke (Bomet) the PGR service returns HTTP 400 (JsonMappingException)
-    // for every complaint-create call — lifecycle-fixtures.json confirms this.
-    // Skip the success-state assertions on ke; the wizard navigation (Steps
-    // 1-6) is validated by the "no raw localization keys" test which passes.
-    if (ROOT_TENANT === 'ke') {
-      test.skip(true, 'ke PGR backend rejects complaint creation (HTTP 400 / JsonMappingException) — wizard navigation is verified by the raw-keys test');
+    // Escape hatch for deployments whose PGR backend rejects complaint-create
+    // (e.g. the bomet ke HTTP 400 / JsonMappingException). Defaults false via
+    // env so mz.maputo — where the boundary cascade now reaches the selectable
+    // Bairro leaf — asserts a real successful submission. Wizard navigation
+    // (Steps 1-6) is still validated by the "no raw localization keys" test.
+    if (PGR_CREATE_UNSUPPORTED) {
+      test.skip(true, 'PGR_CREATE_UNSUPPORTED set — this deployment\'s PGR backend rejects complaint creation; wizard navigation is verified by the raw-keys test');
       return;
     }
     await expect(page).toHaveURL(/\/citizen\/pgr\/response/);
     const body = page.locator('body');
     await expect(body).toContainText('Complaint Submitted');
-    // Deployment-specific complaint-ID prefix (NCCG on Nairobi, PG on
-    // Ethiopia + ke.etoebeta) is discovered by citizen.setup.ts via the
-    // egov-idgen pgr.servicerequestid format and persisted on the
-    // provisioned citizen.
-    const pgrIdPrefix = readProvisionedCitizen()?.pgrIdPrefix ?? 'NCCG';
+    // Deployment-specific complaint-ID prefix is discovered live by
+    // citizen.setup.ts (egov-idgen pgr.servicerequestid) and persisted on the
+    // provisioned citizen; PGR_ID_PREFIX (env) is the fallback.
+    const pgrIdPrefix = readProvisionedCitizen()?.pgrIdPrefix ?? PGR_ID_PREFIX;
     await expect(body).toContainText(new RegExp(`${pgrIdPrefix}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+`));
     await expect(body).toContainText(/Go back to home page/i);
 

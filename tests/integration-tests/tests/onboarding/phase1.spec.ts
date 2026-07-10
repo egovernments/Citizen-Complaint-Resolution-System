@@ -23,20 +23,17 @@ import os from 'node:os';
 import fs from 'node:fs';
 import ExcelJS from 'exceljs';
 import { getDigitToken } from '../utils/auth';
+import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
 // Override the suite-level storageState so this spec starts unauthenticated
 // and walks the login form like a real first-time onboarder.
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const SUFFIX = Date.now().toString().slice(-8);
-const ROOT = process.env.ROOT_TENANT || 'ke';
+const ROOT = ROOT_TENANT;
 const TENANT_CODE = `${ROOT}.pwt${SUFFIX}`;
 const TENANT_NAME = `Playwright Test ${SUFFIX}`;
 const FIXTURE_PATH = path.join(os.tmpdir(), `tenant-master-${SUFFIX}.xlsx`);
-
-const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
-const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'eGov@123';
-const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
 
 async function generateTenantFixture(): Promise<void> {
   const wb = new ExcelJS.Workbook();

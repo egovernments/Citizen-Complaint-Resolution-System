@@ -20,8 +20,9 @@
  */
 import { test, expect } from '@playwright/test';
 
-import { BASE_URL, TENANT } from '../utils/env';
+import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 import { getMobileValidationRule } from '../utils/mdms-mobile';
+import { loginViaApi } from '../utils/auth';
 
 // Expected dial code. Prefer an explicit override, else derive it from
 // the tenant's MDMS mobile rule (rule.prefix === the countryCode, e.g.
@@ -51,6 +52,18 @@ Deliberately stops short of submitting the form — ADMIN is a shared principal 
     const rule = await getMobileValidationRule(TENANT).catch(() => null);
     const expectedPrefix = MOBILE_PREFIX_OVERRIDE || rule?.prefix || null;
 
+    // The profile route is behind PrivateRoute in the digit-ui EMPLOYEE shell,
+    // which reads its own `Employee.token` from localStorage — the suite-wide
+    // auth.json only carries the *configurator* session, so a bare navigation
+    // lands on the shell's login / language-selection gate and #profile-mobile
+    // never mounts. Inject an employee session (ADMIN — always present after
+    // bootstrap) via the tenant-agnostic loginViaApi helper first.
+    await loginViaApi(page, {
+      tenant: TENANT,
+      username: ADMIN_USER,
+      password: ADMIN_PASS,
+    });
+
     await page.goto(`${BASE_URL}/digit-ui/employee/user/profile`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
@@ -67,17 +80,22 @@ Deliberately stops short of submitting the form — ADMIN is a shared principal 
     const prefix = mobileInput.locator('xpath=preceding-sibling::span[1]');
     await expect(prefix).toBeVisible({ timeout: 10_000 });
 
+    // The chip first renders DEFAULT_MOBILE_PREFIX (+91) and then updates to
+    // the tenant's countryCode once the async MDMS mobile-rule fetch
+    // (common-masters.MobileNumberValidation) resolves. Poll for the settled
+    // value rather than reading innerText once (which races the update).
+    if (expectedPrefix) {
+      await expect(prefix).toHaveText(expectedPrefix, { timeout: 15_000 });
+    } else {
+      await expect(prefix).toHaveText(/^\+\d+$/, { timeout: 15_000 });
+    }
     const prefixText = (await prefix.innerText()).trim();
-    // Must be a "+"-prefixed numeric dial code (e.g. +254), never a raw
+    // Must be a "+"-prefixed numeric dial code (e.g. +258), never a raw
     // enum or empty. Guards the historical +91 regression except where
     // the deployment genuinely uses +91.
     expect(prefixText).toMatch(/^\+\d+$/);
     if (expectedPrefix !== '+91') {
       expect(prefixText).not.toBe('+91');
-    }
-    // When we know the tenant's configured dial code, pin to it exactly.
-    if (expectedPrefix) {
-      expect(prefixText).toBe(expectedPrefix);
     }
   });
 });

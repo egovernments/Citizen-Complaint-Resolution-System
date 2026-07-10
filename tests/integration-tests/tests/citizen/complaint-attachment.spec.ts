@@ -14,8 +14,17 @@
  */
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import { BASE_URL, ROOT_TENANT } from '../utils/env';
+import { BASE_URL, BASE_HOST, ATTACHMENT_DETAIL_UNSUPPORTED } from '../utils/env';
 import { citizenOtpLogin } from '../utils/citizen-login';
+
+// Match an uploaded image by the generic filestore path or the deployment's own
+// host (BASE_HOST, derived from BASE_URL) — never a hardcoded demo hostname.
+const previewImgSelector =
+  `img[src*="filestore"], img[src*="file-store"], img[src*="${BASE_HOST}"], ` +
+  'img[alt*="upload" i], img[alt*="thumbnail" i], img[alt*="issue" i]';
+const detailImgSelector =
+  `img[src*="filestore"], img[src*="file-store"], img[src*="${BASE_HOST}"], ` +
+  'img[alt*="thumbnail" i], img[alt*="attachment" i], img[alt*="issue" i]';
 
 const CITIZEN_HOME_URL = '/digit-ui/citizen/pgr-home';
 const COMPLAINT_TYPE_URL = '/digit-ui/citizen/pgr/complaint-type';
@@ -109,9 +118,7 @@ test.describe('citizen complaint — attachment lifecycle #555', () => {
       .setInputFiles(path.resolve(__dirname, '../fixtures/avatar.png'));
     await page.waitForTimeout(3_500);
 
-    const previewImgs = page.locator(
-      'img[src*="file-store"], img[src*="bometfeedbackhub"], img[src*="naipepea"], img[src*="digitlab.in"], img[alt*="upload" i], img[alt*="thumbnail" i], img[alt*="issue" i]',
-    );
+    const previewImgs = page.locator(previewImgSelector);
     expect(
       await previewImgs.count(),
       '#555 — preview <img> must appear with a filestore/public URL after upload',
@@ -160,12 +167,12 @@ test.describe('citizen complaint — attachment lifecycle #555', () => {
     expect(complaintNumber, '_create response must include a serviceRequestId').toBeTruthy();
 
     // ============ Detail page — Attachments img renders ============
-    // On ke (Bomet) the complaint detail page does not render the attachment
-    // image — this was an UNRESOLVED issue as of the 2026-05-20 retest by
-    // Gurjeet. Skip the detail-page assertion on ke; the upload-preview half
-    // of #555 (above) still runs and validates the ComplaintPhotos.js parser fix.
-    if (ROOT_TENANT === 'ke') {
-      test.skip(true, 'ke detail page does not render attachment img (CCRS#555 detail half — unresolved on bomet ke as of 2026-05-20)');
+    // Escape hatch for the #555 detail-half regression (the complaint detail
+    // page not rendering the uploaded attachment <img> — unresolved on bomet
+    // ke). Defaults false via env so the detail assertion runs for real; the
+    // upload-preview half above always validates the ComplaintPhotos.js parser.
+    if (ATTACHMENT_DETAIL_UNSUPPORTED) {
+      test.skip(true, 'ATTACHMENT_DETAIL_UNSUPPORTED set — this deployment\'s detail page does not render the attachment img (CCRS#555 detail half)');
       return;
     }
     await page.goto(
@@ -174,9 +181,7 @@ test.describe('citizen complaint — attachment lifecycle #555', () => {
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(5_000);
 
-    const detailImgs = page.locator(
-      'img[src*="file-store"], img[src*="bometfeedbackhub"], img[src*="naipepea"], img[src*="digitlab.in"], img[alt*="thumbnail" i], img[alt*="attachment" i], img[alt*="issue" i]',
-    );
+    const detailImgs = page.locator(detailImgSelector);
     await expect(
       detailImgs.first(),
       '#555 — Attachments section on the citizen detail page must surface an <img>',

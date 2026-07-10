@@ -20,7 +20,7 @@
  */
 import { test, expect } from '@playwright/test';
 
-import { BASE_URL } from '../utils/env';
+import { BASE_URL, TENANT } from '../utils/env';
 import { getMobileValidationRule, generateInvalidMobile } from '../utils/mdms-mobile';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
 
@@ -52,8 +52,7 @@ Catches a regression where the citizen login regresses to the hardcoded Indian v
     // rule isn't seeded in MDMS v2. In that case we fall back to the
     // provisioned citizen's actual mobile length, which reflects the
     // server-side rule (9-digit for Ethiopia / +251).
-    const tenant = process.env.DIGIT_TENANT || 'ke.nairobi';
-    const rule = await getMobileValidationRule(tenant);
+    const rule = await getMobileValidationRule(TENANT);
 
     // If MDMS returned the generic 10-digit FALLBACK, try to infer the
     // real minLength from the provisioned citizen's mobile number. The

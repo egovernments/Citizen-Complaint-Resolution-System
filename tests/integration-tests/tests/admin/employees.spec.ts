@@ -22,18 +22,21 @@ import { test, expect } from '@playwright/test';
 import ExcelJS from 'exceljs';
 import { loadAuth, employeeSearch, type AuthInfo } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
-import { TENANT } from '../utils/env';
+import { TENANT, ROOT_TENANT } from '../utils/env';
 import {
   getMobileValidationRule,
   generateInvalidMobile,
+  generateValidMobile,
   type MobileRule,
 } from '../utils/mdms-mobile';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+// Root (state) tenant from env — no hardcoded 'ke'.
+const TENANT_CODE = ROOT_TENANT;
 
 let mobileRule: MobileRule;
 test.beforeAll(async () => {
   mobileRule = await getMobileValidationRule(TENANT);
+  await resolveSeedFks();
 });
 
 function escapeRegex(s: string): string {
@@ -43,13 +46,40 @@ const LIST_PATH = '/configurator/manage/employees';
 
 // Seed FKs for HRMS employee creates. HRMS validates these against the
 // tenant's real boundary / department / designation masters, so they must be
-// live codes. Defaults are the Kenya (ke / ke.nairobi) seed; override per
-// deployment via env. TODO: derive from live lookups once a helper exists in
-// ../utils/manage/ (there is none today — api.ts has no boundary/designation
-// search), then drop the hardcoded fallbacks.
-const SEED_BOUNDARY = process.env.SEED_BOUNDARY || 'NAIROBI_CITY';
-const SEED_DEPT = process.env.SEED_DEPT || 'DEPT_7';
-const SEED_DESIG = process.env.SEED_DESIG || 'DESIG_58';
+// live codes. We derive them from an EXISTING employee on the deployment
+// (resolveSeedFks, called in beforeAll) so the API-seed tests are portable to
+// any tenant. An explicit env override still wins; the final fallback is the
+// Kenya seed, used only when neither a live employee nor an override exists.
+let SEED_BOUNDARY = process.env.SEED_BOUNDARY || 'NAIROBI_CITY';
+let SEED_DEPT = process.env.SEED_DEPT || 'DEPT_7';
+let SEED_DESIG = process.env.SEED_DESIG || 'DESIG_58';
+
+/**
+ * Derive boundary / department / designation FKs from a real employee on the
+ * deployment so HRMS _create seeds validate. Env overrides take precedence;
+ * live values only fill the gaps left by unset env vars.
+ */
+async function resolveSeedFks(): Promise<void> {
+  try {
+    const auth = loadAuth();
+    const employees = await employeeSearch(auth, TENANT_CODE, { limit: 25 });
+    for (const e of employees) {
+      const jur = (e.jurisdictions as Array<Record<string, unknown>> | undefined)?.[0];
+      const asg = (e.assignments as Array<Record<string, unknown>> | undefined)?.[0];
+      const boundary = jur?.boundary as string | undefined;
+      const dept = asg?.department as string | undefined;
+      const desig = asg?.designation as string | undefined;
+      if (boundary && dept && desig) {
+        if (!process.env.SEED_BOUNDARY) SEED_BOUNDARY = boundary;
+        if (!process.env.SEED_DEPT) SEED_DEPT = dept;
+        if (!process.env.SEED_DESIG) SEED_DESIG = desig;
+        return;
+      }
+    }
+  } catch {
+    // Fall back to env / Kenya defaults if the lookup fails.
+  }
+}
 
 // HRMS endpoints — the configurator's DigitApiClient hits these verbatim.
 const HRMS_SEARCH = '/egov-hrms/employees/_search';
@@ -233,8 +263,11 @@ Cleanup uses the inline softDeleteEmployee helper because HRMS has no DELETE end
   }, testInfo) => {
     const code = testCode(testInfo, 'EMP_CREATE');
     const uniq = code.split('_').pop() || '00000';
-    // Kenya-valid mobile: 10 digits, prefix 07, passes ^0?[17][0-9]{8}$.
-    const mobile = `07${String(uniq).padStart(8, '0')}`.slice(0, 10);
+    // Mobile valid for THIS tenant's live MDMS rule (Kenya starts 7/1,
+    // Maputo starts 8). A hardcoded 07-prefix number blocks submit on a
+    // non-Kenya tenant via the EmployeeCreate form's live useMobileValidator,
+    // so the create never fires and the nav wait times out.
+    const mobile = generateValidMobile(mobileRule);
     createdCodes.add(code);
 
     await page.goto(`${LIST_PATH}/create`);
@@ -364,7 +397,7 @@ Code and Username are write-once because HRMS doesn't allow mutating either afte
     // Create one via UI then re-enter Edit.
     const code = testCode(testInfo, 'EMP_EDIT');
     const uniq = code.split('_').pop() || '11111';
-    const mobile = `07${String(uniq).padStart(8, '0')}`.slice(0, 10);
+    const mobile = generateValidMobile(mobileRule);
     createdCodes.add(code);
 
     await page.goto(`${LIST_PATH}/create`);
@@ -436,7 +469,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
     // on fishing a suitable victim out of the shared tenant.
     const code = testCode(testInfo, 'EMP_ROLE');
     const uniq = code.split('_').pop() || '44444';
-    const mobile = `07${String(uniq).padStart(8, '0')}`.slice(0, 10);
+    const mobile = generateValidMobile(mobileRule);
     createdCodes.add(code);
 
     const auth = loadAuth();
@@ -535,7 +568,7 @@ The MDMS reason source is asserted indirectly — if the dropdown has no options
   }, testInfo) => {
     const code = testCode(testInfo, 'EMP_DEACT');
     const uniq = code.split('_').pop() || '22222';
-    const mobile = `07${String(uniq).padStart(8, '0')}`.slice(0, 10);
+    const mobile = generateValidMobile(mobileRule);
     createdCodes.add(code);
 
     // Create via API (faster than clicking through) then flip via UI.
@@ -629,7 +662,7 @@ Affirms the safety contract — admins must explicitly opt-in to password rotati
   }, testInfo) => {
     const code = testCode(testInfo, 'EMP_PWD');
     const uniq = code.split('_').pop() || '33333';
-    const mobile = `07${String(uniq).padStart(8, '0')}`.slice(0, 10);
+    const mobile = generateValidMobile(mobileRule);
     createdCodes.add(code);
 
     const auth = loadAuth();
@@ -715,7 +748,8 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         employeeCode: c,
         name: `PW Bulk ${i + 1}`,
         userName: '',
-        mobileNumber: `07111222${String(i).padStart(2, '0')}`,
+        // Valid for THIS tenant's MDMS mobile rule — no hardcoded '07…'.
+        mobileNumber: generateValidMobile(mobileRule),
         emailId: `${c.toLowerCase()}@example.com`,
         gender: 'FEMALE',
         dob: '1992-03-15',
@@ -745,7 +779,8 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         employeeCode: invalidCodes[1],
         name: 'PW Bulk Bad2',
         userName: '',
-        mobileNumber: '0712345699',
+        // Valid mobile so the ONLY validation errors are the unknown dept/role.
+        mobileNumber: generateValidMobile(mobileRule),
         emailId: '',
         gender: 'MALE',
         dob: '1990-01-01',

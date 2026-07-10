@@ -3,8 +3,22 @@
 // All calls go through the public Kong gateway at naipepea.digit.org so
 // they exercise the same path the browser uses.
 
-const BASE = process.env.NAIPEPEA_BASE ?? 'https://naipepea.digit.org';
-const KONG_BASIC = 'Basic ZWdvdi11c2VyLWNsaWVudDo='; // egov-user-client: (no secret) — naipepea convention
+// Deployment target. Prefer the suite-wide BASE_URL (set from the active
+// deploy's .env) so these helpers exercise the SAME stack every other spec
+// does. NAIPEPEA_BASE remains an explicit override for the (now-legacy)
+// naipepea demo host. Falls back to localhost, which exists on every
+// freshly-bootstrapped deployment.
+const BASE = process.env.NAIPEPEA_BASE ?? process.env.BASE_URL ?? 'http://localhost';
+const KONG_BASIC = 'Basic ZWdvdi11c2VyLWNsaWVudDo='; // egov-user-client: (no secret) — Kong convention
+
+// Root (state-level) tenant for auth + RequestInfo.userInfo. Derived from the
+// same env vars env.ts reads, so a Kenya run authenticates against `ke` and a
+// Mozambique run against `mz` without any code change.
+const DEFAULT_TENANT =
+  process.env.DIGIT_TENANT ?? 'ke.nairobi';
+const ROOT_TENANT =
+  process.env.ROOT_TENANT ??
+  (DEFAULT_TENANT.includes('.') ? DEFAULT_TENANT.split('.')[0] : DEFAULT_TENANT);
 
 export type EmployeeAuth = {
   token: string;
@@ -12,7 +26,7 @@ export type EmployeeAuth = {
   type: 'EMPLOYEE';
 };
 
-export async function loginEmployee(username = 'ADMIN', password = 'eGov@123', tenantId = 'ke'): Promise<EmployeeAuth> {
+export async function loginEmployee(username = 'ADMIN', password = 'eGov@123', tenantId = ROOT_TENANT): Promise<EmployeeAuth> {
   const body = new URLSearchParams({
     username,
     password,
@@ -39,8 +53,8 @@ export function requestInfo(auth: EmployeeAuth) {
       id: 1,
       uuid: auth.uuid,
       type: auth.type,
-      tenantId: 'ke',
-      roles: [{ code: 'SUPERUSER', tenantId: 'ke' }],
+      tenantId: ROOT_TENANT,
+      roles: [{ code: 'SUPERUSER', tenantId: ROOT_TENANT }],
     },
   };
 }

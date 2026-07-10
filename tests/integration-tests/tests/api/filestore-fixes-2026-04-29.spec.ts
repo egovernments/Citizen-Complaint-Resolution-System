@@ -1,6 +1,7 @@
 // #474 filestore upload. Deterministic repro via direct API.
 import { test, expect } from '@playwright/test';
 import { loginEmployee, uploadFile } from '../utils/launch-fixes/api.js';
+import { ROOT_TENANT } from '../utils/env';
 
 // 517-byte synthetic JPEG that triggers EG_FILESTORE_INPUT_ERROR.
 const TINY_JPEG_HEX =
@@ -22,7 +23,7 @@ test.describe('05-filestore (#474)', () => {
 Steps:
 1. Log in as the test employee.
 2. Build a 517-byte synthetic JPEG buffer from the hardcoded hex.
-3. uploadFile(auth, 'ke.nairobi', 'tiny.jpg', buf, 'image/jpeg', 'PGR').
+3. uploadFile(auth, ROOT_TENANT, 'tiny.jpg', buf, 'image/jpeg', 'PGR').
 4. If response.body.Errors is present, assert Errors[0].code === 'EG_FILESTORE_INPUT_ERROR' and annotate "pre-fix: bug confirmed".
 5. Otherwise assert response.body.files[0].fileStoreId is truthy and annotate "post-fix: upload succeeds".
 
@@ -30,7 +31,7 @@ Self-flipping by design: the same spec lives across the fix landing without need
     },
     tag: ['@area:pgr', '@ccrs:474', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async () => {
     const auth = await loginEmployee();
-    const r = await uploadFile(auth, 'ke.nairobi', 'tiny.jpg', tinyJpegBuffer(), 'image/jpeg', 'PGR');
+    const r = await uploadFile(auth, ROOT_TENANT, 'tiny.jpg', tinyJpegBuffer(), 'image/jpeg', 'PGR');
     // After the fix, this assertion will flip — the same payload should
     // succeed and yield a fileStoreId.
     if (r.body?.Errors) {
@@ -50,7 +51,7 @@ Self-flipping by design: the same spec lives across the fix landing without need
 Steps:
 1. Log in as the test employee.
 2. Build a 1×1 PNG buffer from the embedded base64 constant.
-3. uploadFile(auth, 'ke.nairobi', 'one.png', png, 'image/png', 'PGR').
+3. uploadFile(auth, ROOT_TENANT, 'one.png', png, 'image/png', 'PGR').
 4. Assert response.body.files[0].fileStoreId is truthy.
 
 Pairs with the REPRO test to discriminate "filestore is down" from "tiny-image bug is back".`,
@@ -62,7 +63,7 @@ Pairs with the REPRO test to discriminate "filestore is down" from "tiny-image b
     const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAeImBZsAAAAASUVORK5CYII=';
     const png = Buffer.from(PNG_BASE64, 'base64');
     const auth = await loginEmployee();
-    const r = await uploadFile(auth, 'ke.nairobi', 'one.png', png, 'image/png', 'PGR');
+    const r = await uploadFile(auth, ROOT_TENANT, 'one.png', png, 'image/png', 'PGR');
     expect(r.body.files?.[0]?.fileStoreId).toBeTruthy();
   });
 });

@@ -12,6 +12,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { getDigitToken } from '../utils/auth';
+import { getPrincipal } from '../utils/employee-ui';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
   ADMIN_USER, ADMIN_PASS, FIXED_OTP,
@@ -138,16 +139,19 @@ First link in a serial chain — every later step skips if this fails.`,
     adminToken = adminResp.access_token;
     adminUserInfo = adminResp.UserRequest as Record<string, unknown>;
 
-    // GRO performs ASSIGN; PGR_LME performs RESOLVE.
-    const groResp = await getDigitToken({ tenant: ROOT_TENANT, username: GRO_USER, password: GRO_PASS });
-    expect(groResp.access_token, `GRO user ${GRO_USER} must log in`).toBeTruthy();
-    groToken = groResp.access_token;
-    groUserInfo = groResp.UserRequest as Record<string, unknown>;
+    // GRO performs ASSIGN; PGR_LME performs RESOLVE. These employee personas
+    // may live at the CITY tenant (e.g. EMP001 on mz.maputo), not the root
+    // where ADMIN lives — so authenticate via getPrincipal, which probes
+    // CITY→ROOT and returns null only when neither tenant accepts them.
+    const gro = await getPrincipal(GRO_USER, GRO_PASS);
+    expect(gro, `GRO user ${GRO_USER} must log in (tried CITY + ROOT tenants)`).toBeTruthy();
+    groToken = gro!.token;
+    groUserInfo = gro!.userInfo;
 
-    const lmeResp = await getDigitToken({ tenant: ROOT_TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
-    expect(lmeResp.access_token, `LME user ${EMPLOYEE_USER} must log in`).toBeTruthy();
-    lmeToken = lmeResp.access_token;
-    lmeUserInfo = lmeResp.UserRequest as Record<string, unknown>;
+    const lme = await getPrincipal(EMPLOYEE_USER, EMPLOYEE_PASS);
+    expect(lme, `LME user ${EMPLOYEE_USER} must log in (tried CITY + ROOT tenants)`).toBeTruthy();
+    lmeToken = lme!.token;
+    lmeUserInfo = lme!.userInfo;
 
     const citizenResp = await registerCitizen(CITIZEN_PHONE);
     expect(citizenResp.token).toBeTruthy();
@@ -206,7 +210,7 @@ geoLocation is intentionally set to {0,0} — non-null is the contract; the actu
 
 Steps:
 1. fetchComplaint() — search PGR by serviceRequestId and pull data.ServiceWrappers[0].service.
-2. POST /pgr-services/v2/request/_update?tenantId=ke.nairobi with admin token.
+2. POST /pgr-services/v2/request/_update?tenantId=<TENANT> with admin token.
 3. Body: full service object + workflow { action: 'ASSIGN', comments: 'Assigned by API E2E test' }.
 4. Assert response is ok and applicationStatus === 'PENDINGATLME'.
 
@@ -239,7 +243,7 @@ Catches a regression where _update silently rejects payloads missing source/id (
 
 Steps:
 1. fetchComplaint() to pull the full service object as it currently sits in PGR.
-2. POST /pgr-services/v2/request/_update?tenantId=ke.nairobi with admin token.
+2. POST /pgr-services/v2/request/_update?tenantId=<TENANT> with admin token.
 3. Body: full service object + workflow { action: 'RESOLVE', comments: 'Resolved by API E2E test' }.
 4. Assert response is ok and applicationStatus === 'RESOLVED'.
 

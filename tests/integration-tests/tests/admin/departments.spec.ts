@@ -17,8 +17,11 @@ import {
 } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
 import { cleanupMdms } from '../utils/manage/teardown';
+import { ROOT_TENANT } from '../utils/env';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+// Root (state) tenant, sourced from env (ROOT_TENANT / DIGIT_TENANT) so the
+// suite is deployment-portable — no hardcoded 'ke'.
+const TENANT_CODE = ROOT_TENANT;
 const SCHEMA = 'common-masters.Department';
 const LIST_PATH = '/configurator/manage/departments';
 
@@ -158,8 +161,9 @@ Guard banner check is loose because exact wording depends on dependency type and
     await expect(row).toBeVisible();
     await row.click();
 
-    // Show page — verify the name we created.
-    await expect(page.getByText(name)).toBeVisible();
+    // Show page — verify the name we created. The list row that led us here
+    // stays mounted, so the name can resolve to >1 node; assert on the first.
+    await expect(page.getByText(name).first()).toBeVisible();
 
     // --- Edit the name (the only editable free-text field) ---
     const editedName = `${name} edited`;
@@ -168,7 +172,7 @@ Guard banner check is loose because exact wording depends on dependency type and
     await nameInput.fill(editedName);
 
     await page.getByRole('button', { name: /^Save$/i }).click();
-    await expect(page.getByText(editedName)).toBeVisible();
+    await expect(page.getByText(editedName).first()).toBeVisible();
 
     // --- Deactivate ---
     await page.getByRole('button', { name: /^Edit$/i }).click();

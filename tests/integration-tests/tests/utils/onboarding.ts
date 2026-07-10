@@ -34,9 +34,14 @@ export interface OnboardingIds {
 
 /** Mint a unique tenant + master codes for one disposable onboarding run. */
 export function freshOnboardingIds(): OnboardingIds {
+  // egov-user validates `user.tenantId` against `^[a-zA-Z. ]*$` (letters/dot/space,
+  // NO digits) on employee-create. The fresh tenant code below is used verbatim as
+  // that tenantId in Phase 4, so a numeric suffix (e.g. `mz.pwt608494659`) makes
+  // employee-create 400 while tenant/boundary/master creates accept it. Map the
+  // digits → letters (0→a … 9→j) so the code stays unique but is letters-only.
   const SUFFIX = `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000)
     .toString()
-    .padStart(3, '0')}`;
+    .padStart(3, '0')}`.replace(/[0-9]/g, (d) => String.fromCharCode(97 + Number(d)));
   return {
     SUFFIX,
     TENANT_CODE: `${ROOT}.pwt${SUFFIX}`,
@@ -82,8 +87,16 @@ export async function writeBoundaryFixture(file: string, ids: OnboardingIds): Pr
     { header: 'boundaryType', key: 'boundaryType' }, { header: 'parentCode', key: 'parentCode' },
     { header: 'latitude', key: 'latitude' }, { header: 'longitude', key: 'longitude' },
   ];
+  // boundaryType must be a DIRECT descendant of its parent's type in the
+  // Phase-2 hierarchy definition. Phase 2 (createHierarchyOption1) creates the
+  // wizard's default chain Country → State → City → Ward, so the child here has
+  // to be `State` (Country's direct child). Using `City` skipped `State` and
+  // boundary-service rejected the child relationship with HIERARCHY_ERROR
+  // ("child should be the direct descendant of parent's boundary hierarchy
+  // type") — the entity landed but the relationship never persisted, so the
+  // wizard's verify-retry loop spun until the spec's 60s timeout.
   sheet.addRow({ code: ids.BOUNDARY_ROOT, name: `Country ${ids.SUFFIX}`, boundaryType: 'Country', parentCode: '', latitude: 0.1, longitude: 0.1 });
-  sheet.addRow({ code: ids.BOUNDARY_CHILD, name: `City ${ids.SUFFIX}`, boundaryType: 'City', parentCode: ids.BOUNDARY_ROOT, latitude: 0.1, longitude: 0.1 });
+  sheet.addRow({ code: ids.BOUNDARY_CHILD, name: `State ${ids.SUFFIX}`, boundaryType: 'State', parentCode: ids.BOUNDARY_ROOT, latitude: 0.1, longitude: 0.1 });
   await wb.xlsx.writeFile(file);
 }
 

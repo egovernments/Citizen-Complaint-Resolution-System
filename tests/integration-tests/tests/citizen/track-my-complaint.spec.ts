@@ -21,6 +21,7 @@ import {
   DEFAULT_PASSWORD,
   SERVICE_CODE,
   LOCALITY_CODE,
+  PGR_ID_PREFIX,
   generateCitizenPhone,
 } from '../utils/env';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
@@ -224,10 +225,10 @@ If the SPA ever redirects plural → singular (or 404s), this test catches the c
     await page.waitForTimeout(4000);
 
     const url = page.url();
-    // Deployment-specific complaint-ID prefix (NCCG on Nairobi, PG on
-    // Ethiopia + ke.etoebeta) is discovered by citizen.setup.ts via
-    // egov-idgen and persisted on the provisioned citizen.
-    const pgrIdPrefix = readProvisionedCitizen()?.pgrIdPrefix ?? 'NCCG';
+    // Deployment-specific complaint-ID prefix is discovered live by
+    // citizen.setup.ts (egov-idgen) and persisted on the provisioned citizen;
+    // PGR_ID_PREFIX (env) is the fallback.
+    const pgrIdPrefix = readProvisionedCitizen()?.pgrIdPrefix ?? PGR_ID_PREFIX;
     const detailUrlRe = new RegExp(
       `/digit-ui/citizen/pgr/complaints/${pgrIdPrefix}-PGR-\\d{4}-\\d{2}-\\d{2}-\\d+`,
     );

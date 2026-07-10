@@ -38,6 +38,30 @@ async function adminToken(): Promise<string> {
   return t.access_token;
 }
 
+/**
+ * True when the CCRS Kenya-rollout locale (sw_KE) is seeded on this deployment.
+ * The #42 (SERVICEDEFS/COMPLAINT_HIERARCHY categories) and #44 (sw_KE rows)
+ * blocks are tier-3 / deployment-pinned — on a non-Kenya deployment the sw_KE
+ * bundle isn't loaded, so those tests self-skip rather than fail on the
+ * missing seed.
+ */
+async function swKeSeeded(): Promise<boolean> {
+  try {
+    const r = await fetch(
+      `${LOC_SEARCH}?module=rainmaker-common&locale=sw_KE&tenantId=${ROOT_TENANT}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ RequestInfo: { authToken: '' } }),
+      },
+    );
+    const json = await r.json();
+    return (json.messages ?? []).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function adminRequestInfo(token: string) {
   return {
     apiId: 'Rainmaker',
@@ -292,6 +316,7 @@ Steps:
 Tests 5 representative codes across the 19 category (parentCode) values — fewer assertions but covers the full breadth via locale × multiple codes.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:42', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
+    test.skip(!(await swKeSeeded()), 'sw_KE (CCRS Kenya rollout) locale not seeded on this deployment');
     // Complaint-type labels moved off the legacy SERVICEDEFS.* namespace to
     // key-based COMPLAINT_HIERARCHY.<categoryCode> (seeded for every node).
     const codes = [
@@ -338,6 +363,7 @@ Steps:
 Threshold of 100 is far above the empty-result case but below any realistic message count, so it cleanly distinguishes "broken" from "working".`,
     },
     tag: ['@area:configurator-manage', '@ccrs:44', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
+    test.skip(!(await swKeSeeded()), 'sw_KE (CCRS Kenya rollout) locale not seeded on this deployment');
     const r = await fetch(
       `${LOC_SEARCH}?module=rainmaker-common&locale=sw_KE&tenantId=${ROOT_TENANT}`,
       {

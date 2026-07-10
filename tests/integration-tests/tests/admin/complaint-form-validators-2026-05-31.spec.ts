@@ -20,17 +20,27 @@
  * combobox no longer exist.
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL } from '../utils/env';
+import { BASE_URL, TENANT } from '../utils/env';
+import { getMobileValidationRule, generateValidMobile } from '../utils/mdms-mobile';
 
 const USERS_URL = '/configurator/manage/users';
 const EMPLOYEES_URL = '/configurator/manage/employees';
 const COMPLAINT_CREATE_URL = '/configurator/manage/complaints/create';
 
 const POSTAL_ERR = /Enter a valid 5-digit postal code/i;
-const MOBILE_ERR = /Enter a valid Kenyan mobile starting with 7 or 1|valid mobile/i;
+// Tenant-agnostic: the complaint create form validates mobile via the
+// MDMS-driven `useMobileValidator` hook, whose message is "Please enter a
+// valid mobile number (…)" on every tenant. Match the stable substring
+// rather than pinning the (Kenya-only) copy the old test asserted.
+const MOBILE_ERR = /valid mobile/i;
 
 test.describe('admin complaint create — validator bundle 2026-05-30', () => {
   test('users + edit + create + validators bidirectional', async ({ page }) => {
+    // A mobile number valid for THIS tenant's MDMS rule (Kenya: 07…, Maputo:
+    // 8…). Derived from `common-masters.MobileNumberValidation` so the POS
+    // assertion below isn't pinned to a Kenya-only literal.
+    const validMobile = generateValidMobile(await getMobileValidationRule(TENANT));
+
     // ============ Users list — #445 side-check ============
     await page.goto(`${BASE_URL}${USERS_URL}?cb=${Date.now()}`);
     await page.waitForLoadState('domcontentloaded');
@@ -130,7 +140,7 @@ test.describe('admin complaint create — validator bundle 2026-05-30', () => {
     await page.waitForTimeout(800);
     await mobile.click({ clickCount: 3 });
     await page.keyboard.press('Backspace');
-    await mobile.pressSequentially('0712345678', { delay: 120 });
+    await mobile.pressSequentially(validMobile, { delay: 120 });
     await page.waitForTimeout(800);
     await createBtn.click();
     await page.waitForTimeout(2_500);
@@ -141,7 +151,7 @@ test.describe('admin complaint create — validator bundle 2026-05-30', () => {
     ).toHaveCount(0);
     await expect(
       page.locator('[role="alert"]').filter({ hasText: MOBILE_ERR }),
-      '#447 — mobile error must clear on valid 0712345678',
+      `#447 — mobile error must clear on tenant-valid mobile ${validMobile}`,
     ).toHaveCount(0);
   });
 });

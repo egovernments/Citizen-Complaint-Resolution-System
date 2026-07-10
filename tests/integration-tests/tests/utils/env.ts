@@ -38,6 +38,17 @@ export const EMPLOYEE_USER = process.env.EMPLOYEE_USER || ADMIN_USER;
 export const EMPLOYEE_PASS = process.env.EMPLOYEE_PASSWORD || ADMIN_PASS;
 
 /**
+ * Tenant the employee personas authenticate against. ADMIN lives at
+ * ROOT_TENANT, but a real onboarded employee (e.g. EMP001 on mz.maputo)
+ * lives at the CITY tenant and 400s ("Invalid login credentials") when the
+ * OAuth call targets the root. Defaults to ROOT_TENANT — correct for the
+ * stock case where the employee persona *is* ADMIN. The portable login
+ * helpers (employee-ui.ts getPrincipal) probe CITY→ROOT regardless; this var
+ * is the explicit override for specs that don't go through that helper.
+ */
+export const EMPLOYEE_TENANT = process.env.EMPLOYEE_TENANT || ROOT_TENANT;
+
+/**
  * GRO employee — the role the PGR workflow requires for the ASSIGN action
  * (PENDINGFORASSIGNMENT → PENDINGATLME). The bootstrap grants ADMIN the GRO
  * role, so ADMIN is a valid default; override on role-strict tenants.
@@ -83,6 +94,64 @@ export const KC_CLIENT_ID = process.env.KC_CLIENT_ID || 'digit-ui';
 export const KC_BASE = process.env.KC_BASE || `${BASE_URL}/auth`;
 export const TOKEN_EXCHANGE_BASE = process.env.TOKEN_EXCHANGE_BASE || `${BASE_URL}/token-exchange`;
 export const CITIZEN_BASENAME = process.env.CITIZEN_BASENAME || '/citizen';
+
+// ── Citizen-spec deployment parameters ──────────────────────────────────────
+// Additive vars owned by the citizen suite. Each defaults to a stock value so a
+// bare run stays coherent; a deployment supplies its own via .env. No
+// location-specific literal should live inside a citizen spec — it reads here.
+
+/**
+ * Fallback PGR complaint-ID prefix (segment before `-PGR-`). The suite
+ * discovers the real prefix live from egov-idgen at setup time (pgr-idgen.ts)
+ * and persists it on the provisioned citizen; this only load-bears when that
+ * discovery didn't run. Default 'NCCG' (Nairobi) to match pgr-idgen.ts's
+ * DEFAULT_FALLBACK; override with PGR_ID_PREFIX='PG' for Ethiopia/mz.maputo.
+ */
+export const PGR_ID_PREFIX = process.env.PGR_ID_PREFIX || 'NCCG';
+
+/**
+ * Localization locales seeded on the deployment, comma-separated. The timeline
+ * localization-completeness spec unions message codes across these. mz.maputo
+ * seeds only en_IN (pt_MZ needs a separate upload); Kenya seeded en_IN + sw_KE.
+ */
+export const LOCALES = (process.env.LOCALES || 'en_IN')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+
+/**
+ * Postal-code validation pattern + a known-valid sample for this deployment,
+ * mirroring the app's globalConfigs CORE_POSTAL_CONFIGS.postalCodePattern.
+ * Stock default is the 5-digit rule; mz.maputo pins '^[0-9]{4}(-[0-9]{2})?$'
+ * with a '0101-03' sample. Kept in .env so the pure-regex contract test stays
+ * deployment-portable rather than hardcoding a country's format.
+ */
+export const POSTAL_CODE_PATTERN = process.env.POSTAL_CODE_PATTERN || '^[0-9]{5}$';
+export const POSTAL_CODE_VALID = process.env.POSTAL_CODE_VALID || '00100';
+
+/**
+ * Escape hatch: set true on a deployment whose PGR backend rejects
+ * complaint-create (e.g. the bomet ke JsonMappingException 400). Defaults
+ * false so the file-complaint wizard asserts a real successful submission —
+ * which mz.maputo should now do once the boundary cascade reaches the Bairro
+ * leaf. Never fake a pass: only flip this on a genuinely broken backend.
+ */
+export const PGR_CREATE_UNSUPPORTED = (process.env.PGR_CREATE_UNSUPPORTED || 'false') === 'true';
+
+/**
+ * Escape hatch for CCRS#555's detail-page half: set true on a deployment whose
+ * complaint detail page doesn't render the uploaded attachment <img> (the
+ * unresolved bomet ke regression). Defaults false so the detail assertion runs
+ * for real.
+ */
+export const ATTACHMENT_DETAIL_UNSUPPORTED = (process.env.ATTACHMENT_DETAIL_UNSUPPORTED || 'false') === 'true';
+
+/**
+ * Host substring used to match the deployment's own filestore/image URLs in
+ * <img src> selectors — derived from BASE_URL so the attachment spec doesn't
+ * hardcode dead demo hostnames. e.g. 'localhost' for the local stack.
+ */
+export const BASE_HOST = (() => {
+  try { return new URL(BASE_URL).host; } catch { return 'localhost'; }
+})();
 
 /**
  * Decode a JWT payload without verifying its signature — for assertion only.

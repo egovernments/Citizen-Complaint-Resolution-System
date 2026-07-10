@@ -11,7 +11,10 @@
  *
  * The fix lives in the citizen FormExplorer + BoundaryComponent. We
  * exercise the wizard end-to-end against the configured deployment
- * (BASE_URL env var — defaults to https://naipepea.digit.org via env.ts).
+ * (BASE_URL env var — see env.ts; local default http://localhost).
+ * The cascade walk is boundary-tree agnostic: it steps through however
+ * many levels the tenant's hierarchy exposes down to the selectable leaf
+ * (e.g. County → … → Bairro on mz.maputo).
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
@@ -127,8 +130,8 @@ Long-running with explicit DOM count assertions to lock in the cascade gating co
 
     // Post-fix: only the top-level dropdown (Region/County) is visible
     // initially. Pre-fix this was already ≥2 because every level rendered
-    // eagerly. The exact depth varies by tenant boundary tree (Ethiopia =
-    // 2 levels: Region → Ward; Kenya = 3 levels: County → Sub-County → Ward).
+    // eagerly. The exact depth varies by tenant boundary tree (e.g. 2
+    // levels Region → Ward, or deeper County → … → Bairro on mz.maputo).
     const initialCount = await cascadeDropdowns.count();
     expect(
       initialCount,

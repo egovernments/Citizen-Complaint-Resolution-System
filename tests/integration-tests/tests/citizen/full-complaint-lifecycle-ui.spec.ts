@@ -37,7 +37,7 @@ async function snap(page: Page, name: string) {
 const CITIZEN_PHONE = generateCitizenPhone();
 const CITIZEN_NAME = 'E2E UI Citizen';
 
-// City-level admin for UI tests (getCurrentTenantId returns ke.nairobi)
+// City-level admin for UI tests (getCurrentTenantId returns the TENANT env)
 const CITY_ADMIN_USER = process.env.CITY_ADMIN_USER || ADMIN_USER;
 const CITY_ADMIN_PASS = process.env.CITY_ADMIN_PASS || DEFAULT_PASSWORD;
 
@@ -298,11 +298,11 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
   test('3 — admin sees complaint in PGR inbox (UI)', {
     annotation: {
       type: 'description',
-      description: `Logs in as the city-level admin (tenant ke.nairobi) and confirms the PGR inbox page renders. Whether the freshly-created complaint is actually visible is logged but not asserted — boundary filters can legitimately hide it from the configured admin's scope, so the assertion stays at "the inbox page itself rendered".
+      description: `Logs in as the city-level admin (tenant = TENANT env) and confirms the PGR inbox page renders. Whether the freshly-created complaint is actually visible is logged but not asserted — boundary filters can legitimately hide it from the configured admin's scope, so the assertion stays at "the inbox page itself rendered".
 
 Steps:
 1. test.skip if !complaintCreated.
-2. loginViaApi as CITY_ADMIN_USER on tenant ke.nairobi.
+2. loginViaApi as CITY_ADMIN_USER on tenant = TENANT env.
 3. Navigate to /digit-ui/employee/pgr/inbox and wait 15s for hydration.
 4. Snap screenshot 03-pgr-inbox.
 5. Assert the "Inbox" breadcrumb is visible (page rendered).
@@ -362,7 +362,7 @@ Status verification is API-only because there's no good DOM signal that the assi
     test.skip(!complaintCreated, 'complaint not created');
     test.setTimeout(120_000);
 
-    // Login as city-level admin (tenantId = ke.nairobi)
+    // Login as city-level admin (tenantId = TENANT env)
     await loginViaApi(page, {
       tenant: TENANT,
       authTenant: TENANT,

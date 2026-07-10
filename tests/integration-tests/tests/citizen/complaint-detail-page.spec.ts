@@ -1,56 +1,122 @@
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL } from '../utils/env';
+import { pgrCreate, resolveServiceCode, resolveLocalityCode } from '../utils/launch-fixes/api';
+import {
+  BASE_URL,
+  TENANT,
+  ROOT_TENANT,
+  FIXED_OTP,
+  DEFAULT_PASSWORD,
+  SERVICE_CODE,
+  LOCALITY_CODE,
+} from '../utils/env';
+import { readProvisionedCitizen } from '../utils/citizen-provision';
 
-test('complaint details page loads without crashing for any service code', {
+// Disable trace/video so the spec runs cleanly with --no-deps (the
+// .playwright-artifacts-0 dir is only created by the full setup DAG).
+test.use({ trace: 'off', video: 'off' });
+
+interface CitizenAuth {
+  token: string;
+  userInfo: Record<string, unknown>;
+}
+
+/**
+ * Obtain a fresh {token, userInfo} for the suite-wide provisioned citizen by
+ * exchanging their mobile for an access token. `pgrCreate` needs the full
+ * UserRequest as RequestInfo.userInfo (accountId is derived from it), which
+ * the persisted fixture doesn't carry, so we re-exchange here.
+ */
+async function loginProvisionedCitizen(phone: string): Promise<CitizenAuth> {
+  await fetch(`${BASE_URL}/user-otp/v1/_send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      otp: { mobileNumber: phone, tenantId: ROOT_TENANT, type: 'login', userType: 'CITIZEN' },
+    }),
+  }).catch(() => {});
+
+  const oauth = async (password: string) =>
+    fetch(`${BASE_URL}/user/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+      },
+      body: new URLSearchParams({
+        grant_type: 'password',
+        username: phone,
+        password,
+        tenantId: ROOT_TENANT,
+        scope: 'read',
+        userType: 'CITIZEN',
+      }).toString(),
+    });
+
+  let resp = await oauth(FIXED_OTP);
+  if (!resp.ok) resp = await oauth(DEFAULT_PASSWORD);
+  if (!resp.ok) {
+    throw new Error(`citizen token exchange failed (${resp.status}): ${(await resp.text()).slice(0, 200)}`);
+  }
+  const data = (await resp.json()) as { access_token: string; UserRequest: Record<string, unknown> };
+  return { token: data.access_token, userInfo: data.UserRequest };
+}
+
+test('complaint details page loads without crashing for a freshly-filed complaint', {
   annotation: {
     type: 'description',
-    description: `Robustness check for the citizen complaint detail page. Picks an arbitrary existing complaint via a search-from-the-browser API call (so the test isn't tied to a specific seeded ID), navigates to its detail page, and asserts both that the Complaint Summary renders and that no "Cannot read properties of undefined" JS errors fire.
+    description: `Robustness check for the citizen complaint detail page. API-seeds a complaint for the suite-wide provisioned citizen (so the test is tenant-agnostic and never depends on a specific seeded ID or a hardcoded phone), navigates to its detail page, and asserts both that the Complaint Summary renders and that no "Cannot read properties of undefined" JS errors fire.
 
 Steps:
 1. setTimeout 120s; attach a pageerror listener to capture uncaught JS errors.
-2. citizenOtpLogin with a fixed phone (711111111).
-3. From the page context, call PGR _search via the in-page Digit token to grab any existing serviceRequestId; skip if zero results.
+2. API-seed a complaint for the provisioned citizen via pgrCreate (resolving a valid service/locality code for the deployment). Skip cleanly if create is blocked (e.g. the ASSIGN department bug prevents create on some tenants).
+3. citizenOtpLogin as the provisioned citizen.
 4. Navigate to /digit-ui/citizen/pgr/complaints/{id}, wait 12s for hydration.
 5. Assert "Complaint Summary" heading is visible and the complaint ID appears in the body.
 6. Filter pageErrors for "Cannot read properties of undefined" matches and assert length === 0.
 
-Skips gracefully if no complaints exist at all — useful for fresh deployments. Catches the class of regressions where a service code has missing fields and the detail page deref-crashes.`,
+Catches the class of regressions where a service code has missing fields and the detail page deref-crashes.`,
   },
   tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
   test.setTimeout(120_000);
+
+  const provisioned = readProvisionedCitizen();
+  if (!provisioned) {
+    test.skip(true, 'citizen-fixture.json missing — citizen-setup project did not run');
+    return;
+  }
 
   // Track JS errors
   const pageErrors: string[] = [];
   page.on('pageerror', err => pageErrors.push(err.message));
 
-  await citizenOtpLogin(page, '711111111');
-
-  // Search for complaints via API to find one to test
-  const complaintId = await page.evaluate(async (baseUrl) => {
-    const tenantId = (window as any).Digit?.ULBService?.getCurrentTenantId?.() || 'ke.nairobi';
-    const userInfo = (window as any).Digit?.UserService?.getUser?.()?.info || {};
-    const token = (window as any).Digit?.UserService?.getUser?.()?.access_token || '';
-    try {
-      const res = await fetch(`${baseUrl}/pgr-services/v2/request/_search?tenantId=${tenantId}&_=` + Date.now(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'auth-token': token },
-        body: JSON.stringify({ RequestInfo: { authToken: token } }),
-      });
-      const data = await res.json();
-      const wrappers = data?.ServiceWrappers || [];
-      if (wrappers.length > 0) return wrappers[0].service.serviceRequestId;
-    } catch (e) {}
-    return null;
-  }, BASE_URL);
-
-  if (!complaintId) {
-    console.log('No complaints found, skipping detail page test');
-    test.skip();
+  // API-seed a complaint owned by the provisioned citizen. A freshly-created
+  // PENDINGFORASSIGNMENT complaint is enough to render the detail page — no
+  // workflow transition (which needs a PGR_LME/dept) is required here.
+  let complaintId: string;
+  try {
+    const auth = await loginProvisionedCitizen(provisioned.mobile);
+    const serviceCode = await resolveServiceCode(BASE_URL, auth.token, TENANT, SERVICE_CODE);
+    const localityCode = await resolveLocalityCode(BASE_URL, auth.token, TENANT, LOCALITY_CODE);
+    const created = await pgrCreate({
+      baseUrl: BASE_URL,
+      auth,
+      tenantId: TENANT,
+      serviceCode,
+      localityCode,
+      description: 'PW detail-page test — auto-filed',
+      citizenName: provisioned.name,
+      citizenPhone: provisioned.mobile,
+    });
+    complaintId = created.serviceRequestId;
+  } catch (e) {
+    test.skip(true, `complaint create blocked on this deployment: ${(e as Error).message.slice(0, 200)}`);
     return;
   }
 
   console.log(`Testing complaint: ${complaintId}`);
+
+  await citizenOtpLogin(page);
 
   // Navigate to the complaint details page
   await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints/${complaintId}`, {

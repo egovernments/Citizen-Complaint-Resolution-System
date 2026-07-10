@@ -31,7 +31,12 @@ const DEPT_SCHEMA = 'common-masters.Department';
 const LEAF_PARENT_CODE = 'Complaint';
 const LEAF_LEVEL_CODE = 'SUB_TYPE';
 const HIERARCHY_TYPE = 'PGR';
-const LIST_PATH = '/configurator/manage/complaint-types';
+// The complaint-type resource is registered in the configurator as
+// `complaint-hierarchy` (App.tsx <Resource name="complaint-hierarchy">, nav
+// DigitLayout links "Complaint Types" → /manage/complaint-hierarchy). The
+// legacy `/manage/complaint-types` path matches no react-admin resource and
+// renders a blank content pane, so drive the real route.
+const LIST_PATH = '/configurator/manage/complaint-hierarchy';
 
 const createdCodes = new Set<string>();
 
@@ -246,7 +251,7 @@ Loose label-match — works whether the row renders the dept code, dept name, or
     }
   });
 
-  test('5. tenant parity — api create at ke is visible at ke.nairobi', {
+  test('5. tenant parity — api create at root is visible at city tenant', {
     annotation: {
       type: 'description',
       description: `Pure-API check guarding TASKS.md §2.5: complaint types registered at root tenant must surface at city level via MDMS v2 inheritance. Skips the UI entirely so the test catches inheritance regressions even when the form is half-wired.

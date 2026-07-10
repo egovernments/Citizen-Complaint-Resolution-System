@@ -203,7 +203,7 @@ test.describe('employee — manual Escalate action #521', () => {
 
     // ============ Verify workflow state via process-search ============
     const wfResp = await page.request.post(
-      `${BASE_URL}/egov-workflow-v2/egov-wf/process/_search?businessIds=${COMPLAINT_ID}&tenantId=${process.env.DIGIT_TENANT || 'ke'}`,
+      `${BASE_URL}/egov-workflow-v2/egov-wf/process/_search?businessIds=${COMPLAINT_ID}&tenantId=${ROOT_TENANT}`,
       {
         headers: { 'Content-Type': 'application/json' },
         data: { RequestInfo: {} },
