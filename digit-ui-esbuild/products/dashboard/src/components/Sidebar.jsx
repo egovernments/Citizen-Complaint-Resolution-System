@@ -1,8 +1,15 @@
 import React, { useMemo } from "react";
 import { getProductLabel, getStateLabel } from "../config/dashboardConfig";
+import useDashboardT from "../i18n/useDashboardT";
 
+// Labels are functions of t so they resolve at render time (never frozen at import).
 const NAV_ITEMS = [
-  { id: "dashboard", label: "Dashboard", href: "/digit-ui/employee/dashboard", active: true },
+  {
+    id: "dashboard",
+    label: (t) => t("DASHBOARD_SIDEBAR_DASHBOARD", "Dashboard"),
+    href: "/digit-ui/employee/dashboard",
+    active: true,
+  },
 ];
 
 /** Signed-in employee's username + significant (non-EMPLOYEE) role, for the footer. */
@@ -26,6 +33,7 @@ function getSignedInLabel() {
 }
 
 const Sidebar = ({ onSignOut }) => {
+  const { t } = useDashboardT();
   const stateLabel = useMemo(() => getStateLabel(), []);
   const productLabel = useMemo(() => getProductLabel(), []);
   const signedInLabel = useMemo(() => getSignedInLabel(), []);
@@ -51,20 +59,20 @@ const Sidebar = ({ onSignOut }) => {
                 : "tw-text-chrome-foreground hover:tw-bg-[color-mix(in_srgb,var(--chrome-foreground)_12%,transparent)]"
             }`}
           >
-            {item.label}
+            {item.label(t)}
           </a>
         ))}
       </nav>
       <div className="tw-flex-1" />
       <div className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-border-t tw-border-[color-mix(in_srgb,var(--chrome-foreground)_15%,transparent)] tw-p-4 tw-text-xs tw-text-chrome-muted">
         <span className="tw-min-w-0 tw-truncate" title={signedInLabel || undefined}>
-          {signedInLabel || "Not signed in"}
+          {signedInLabel || t("DASHBOARD_SIDEBAR_NOT_SIGNED_IN", "Not signed in")}
         </span>
         {onSignOut ? (
           <button
             type="button"
             onClick={onSignOut}
-            title="Sign out"
+            title={t("DASHBOARD_SIDEBAR_SIGN_OUT", "Sign out")}
             className="tw-flex-shrink-0 tw-rounded-md tw-px-2.5 tw-py-1 tw-text-[11px] tw-font-medium tw-text-chrome-foreground hover:tw-bg-[color-mix(in_srgb,var(--chrome-foreground)_22%,transparent)]"
             style={{
               // Explicit subtle fill: without it the browser's default light
@@ -76,7 +84,7 @@ const Sidebar = ({ onSignOut }) => {
                 "1px solid color-mix(in srgb, var(--chrome-foreground) 35%, transparent)",
             }}
           >
-            Sign out
+            {t("DASHBOARD_SIDEBAR_SIGN_OUT", "Sign out")}
           </button>
         ) : null}
       </div>

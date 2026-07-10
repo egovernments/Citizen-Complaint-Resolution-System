@@ -1,7 +1,8 @@
 import React, { useMemo, useRef, useState } from "react";
 import { getProductLabel } from "../config/dashboardConfig";
 import { GEOGRAPHY_OPTIONS } from "../config/globalFilterGroups";
-import { formatDimensionLabel } from "../config/labelFormat";
+import { dimensionLabel } from "../i18n/dimensionLabel";
+import useDashboardT from "../i18n/useDashboardT";
 import AddKpiDropdown from "./AddKpiDropdown";
 
 /**
@@ -25,12 +26,13 @@ function buildRowScope(scope) {
   if (departments.length === 0 && !boundaryPrefix) return null;
 
   const deptLabel = departments
-    .map((code) => formatDimensionLabel(code))
+    .map((code) => dimensionLabel(code, "department"))
     .join(", ");
   // Last segment of a dotted/slashed boundary code, e.g. "ke.bomet.CENTRAL" → "CENTRAL".
-  const areaLabel = boundaryPrefix
+  const areaSegment = boundaryPrefix
     ? boundaryPrefix.split(/[./]/).filter(Boolean).pop() || boundaryPrefix
     : null;
+  const areaLabel = areaSegment ? dimensionLabel(areaSegment, "boundary", areaSegment) : null;
 
   return { deptLabel, areaLabel, hasDepartments: departments.length > 0 };
 }
@@ -42,12 +44,18 @@ function formatDisplayDate(iso) {
   return `${m}/${d}/${y}`;
 }
 
-function buildSubtitle(filters, filterOptions) {
+function buildSubtitle(filters, filterOptions, t) {
   const geoOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
+  const geoId = filters?.geography;
+  const geoFallback =
+    geoOptions.find((o) => o.id === geoId)?.label ??
+    t("DASHBOARD_HEADER_ALL_LOCALITIES", "All Localities");
+  // The geography chip is a raw boundary code — route it through the
+  // dimension-label seam (falls back to the option label when unseeded).
   const geo =
-    geoOptions.find((o) => o.id === filters?.geography)?.label ?? "All Localities";
+    geoId && geoId !== "all" ? dimensionLabel(geoId, "boundary", geoFallback) : geoFallback;
 
-  let period = "Last 7 days";
+  let period = t("DASHBOARD_HEADER_LAST_7_DAYS", "Last 7 days");
   if (filters?.dateRangeActive && filters?.dateFrom && filters?.dateTo) {
     period = `${formatDisplayDate(filters.dateFrom)} – ${formatDisplayDate(filters.dateTo)}`;
   } else if (filters?.dateFrom && filters?.dateTo) {
@@ -93,15 +101,17 @@ const DashboardHeader = ({
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
   const addKpiRef = useRef(null);
+  const { t, language } = useDashboardT();
   const productLabel = useMemo(() => getProductLabel(), []);
-  const rowScope = useMemo(() => buildRowScope(scope), [scope]);
+  // `language` re-keys the memos on language switch (t itself is stable).
+  const rowScope = useMemo(() => buildRowScope(scope), [scope, language]);
   const subtitle = useMemo(
-    () => buildSubtitle(filters, filterOptions),
-    [filters, filterOptions]
+    () => buildSubtitle(filters, filterOptions, t),
+    [filters, filterOptions, t, language]
   );
   const title = productLabel.toLowerCase().includes("pgr")
-    ? "PGR Operations"
-    : `${productLabel} Operations`;
+    ? t("DASHBOARD_HEADER_PGR_OPERATIONS", "PGR Operations")
+    : `${productLabel} ${t("DASHBOARD_HEADER_OPERATIONS", "Operations")}`;
 
   return (
     <header className="dashboard-header tw-flex-shrink-0 tw-bg-background">
@@ -114,22 +124,31 @@ const DashboardHeader = ({
             <p className="tw-text-[11px] tw-text-muted-foreground">{subtitle}</p>
             {scopedRole ? (
               <span
-                title="Dashboard tiles are scoped to your role by the analytics catalog"
+                title={t(
+                  "DASHBOARD_HEADER_ROLE_SCOPE_TOOLTIP",
+                  "Dashboard tiles are scoped to your role by the analytics catalog"
+                )}
                 className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-border tw-bg-surface-2 tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-medium tw-uppercase tw-tracking-wide tw-text-muted-foreground"
               >
                 <span
                   className="tw-h-1.5 tw-w-1.5 tw-rounded-full tw-bg-primary"
                   aria-hidden
                 />
-                Scoped to: {scopedRole}
+                {t("DASHBOARD_HEADER_SCOPED_TO", "Scoped to")}: {scopedRole}
               </span>
             ) : null}
             {scopedRole && officerAccess != null ? (
               <span
                 title={
                   officerAccess
-                    ? "Your role can see officer-level (per-employee) KPIs"
-                    : "Officer-level (per-employee) KPIs are hidden from your role"
+                    ? t(
+                        "DASHBOARD_HEADER_OFFICER_KPIS_VISIBLE_TOOLTIP",
+                        "Your role can see officer-level (per-employee) KPIs"
+                      )
+                    : t(
+                        "DASHBOARD_HEADER_OFFICER_KPIS_HIDDEN_TOOLTIP",
+                        "Officer-level (per-employee) KPIs are hidden from your role"
+                      )
                 }
                 className={
                   "tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-medium " +
@@ -138,25 +157,34 @@ const DashboardHeader = ({
                     : "tw-bg-status-breach-bg tw-text-destructive")
                 }
               >
-                {officerAccess ? "Officer KPIs: visible" : "Officer KPIs: hidden"}
+                {officerAccess
+                  ? t("DASHBOARD_HEADER_OFFICER_KPIS_VISIBLE", "Officer KPIs: visible")
+                  : t("DASHBOARD_HEADER_OFFICER_KPIS_HIDDEN", "Officer KPIs: hidden")}
               </span>
             ) : null}
             {scopedRole && visibleKpiCount != null ? (
               <span className="tw-text-[10px] tw-text-muted-foreground">
-                {visibleKpiCount} KPIs available to your role
+                {visibleKpiCount} {t("DASHBOARD_HEADER_KPIS_AVAILABLE", "KPIs available to your role")}
               </span>
             ) : null}
             {rowScope ? (
               <span
-                title="Dashboard data is row-scoped to your department(s)"
+                title={t(
+                  "DASHBOARD_HEADER_ROW_SCOPE_TOOLTIP",
+                  "Dashboard data is row-scoped to your department(s)"
+                )}
                 className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-bg-status-assigned-bg tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-medium tw-text-status-assigned"
               >
                 <span
                   className="tw-h-1.5 tw-w-1.5 tw-rounded-full tw-bg-status-assigned"
                   aria-hidden
                 />
-                {rowScope.hasDepartments ? `Showing: ${rowScope.deptLabel}` : "Area-scoped"}
-                {rowScope.areaLabel ? ` · Area: ${rowScope.areaLabel}` : ""}
+                {rowScope.hasDepartments
+                  ? `${t("DASHBOARD_HEADER_SHOWING", "Showing")}: ${rowScope.deptLabel}`
+                  : t("DASHBOARD_HEADER_AREA_SCOPED", "Area-scoped")}
+                {rowScope.areaLabel
+                  ? ` · ${t("DASHBOARD_HEADER_AREA", "Area")}: ${rowScope.areaLabel}`
+                  : ""}
               </span>
             ) : null}
           </div>
@@ -171,7 +199,10 @@ const DashboardHeader = ({
               type="search"
               value={searchQuery}
               onChange={(e) => onSearchQueryChange(e.target.value)}
-              placeholder="Search complaints, wards, citizens."
+              placeholder={t(
+                "DASHBOARD_HEADER_SEARCH_PLACEHOLDER",
+                "Search complaints, wards, citizens."
+              )}
               className="dashboard-header-search-input"
             />
           </label>
@@ -185,7 +216,7 @@ const DashboardHeader = ({
               aria-haspopup="menu"
               className="dashboard-header-btn dashboard-add-kpi-trigger"
             >
-              + Add KPI
+              + {t("DASHBOARD_HEADER_ADD_KPI", "Add KPI")}
             </button>
             <AddKpiDropdown
               visibleLayoutIds={visibleLayoutIds}
@@ -205,19 +236,19 @@ const DashboardHeader = ({
             type="button"
             onClick={onResetLayout}
             className="dashboard-header-btn dashboard-header-reset"
-            title="Reset layout"
+            title={t("DASHBOARD_HEADER_RESET_LAYOUT", "Reset layout")}
           >
-            Reset
+            {t("DASHBOARD_HEADER_RESET", "Reset")}
           </button>
 
           <button
             type="button"
             onClick={onExport}
             className="dashboard-header-btn dashboard-header-export"
-            title="Export dashboard"
+            title={t("DASHBOARD_HEADER_EXPORT_DASHBOARD", "Export dashboard")}
           >
             <ExportIcon />
-            <span>Export</span>
+            <span>{t("DASHBOARD_HEADER_EXPORT", "Export")}</span>
           </button>
         </div>
       </div>

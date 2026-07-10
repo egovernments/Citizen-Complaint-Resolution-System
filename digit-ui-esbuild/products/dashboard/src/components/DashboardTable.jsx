@@ -5,7 +5,10 @@ import {
   getDataTableThClass,
 } from "../config/visualizationStyles";
 import { buildRedSeverityStyle } from "../config/tablePresentation";
-import { formatOfficerLabel } from "../config/kpiDisplay";
+import { formatOfficerLabel, dimensionKindForName } from "../config/kpiDisplay";
+import useDashboardT from "../i18n/useDashboardT";
+import { dimensionLabel } from "../i18n/dimensionLabel";
+import { translate as t, exists } from "../i18n/localeRuntime";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
 
@@ -50,12 +53,12 @@ const formatHoursDays = (ms) => {
   if (hours < 48) {
     const rounded = Math.round(hours * 10) / 10;
     const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-    return `${formatted} ${rounded === 1 ? "hr" : "hrs"}`;
+    return `${formatted} ${rounded === 1 ? t("DASHBOARD_UNIT_HR", "hr") : t("DASHBOARD_UNIT_HRS", "hrs")}`;
   }
   const days = ms / MS_PER_DAY;
   const rounded = Math.round(days * 10) / 10;
   const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-  return `${formatted} ${rounded === 1 ? "day" : "days"}`;
+  return `${formatted} ${rounded === 1 ? t("DASHBOARD_UNIT_DAY", "day") : t("DASHBOARD_UNIT_DAYS", "days")}`;
 };
 
 const formatRating = (value) => {
@@ -67,6 +70,11 @@ const formatInteger = (value) => {
   if (value == null || !Number.isFinite(value)) return "—";
   return String(Math.round(value));
 };
+
+// Legacy humaniser — retained verbatim as the dimensionLabel fallback so
+// unseeded environments render exactly what they render today.
+const humanizeCellCode = (value) =>
+  String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase());
 
 const CELL_RENDERERS = {
   text: (value) => value ?? "—",
@@ -81,11 +89,14 @@ const CELL_RENDERERS = {
   department: (value) =>
     !value || value === "null" || value === "undefined"
       ? "—"
-      : String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase()),
-  dimension: (value) =>
-    !value || value === "null" || value === "undefined"
-      ? "—"
-      : String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase()),
+      : dimensionLabel(String(value), "department", humanizeCellCode(value)),
+  dimension: (value, col) => {
+    if (!value || value === "null" || value === "undefined") return "—";
+    const kind = dimensionKindForName(col?.dimension ?? col?.id);
+    return kind
+      ? dimensionLabel(String(value), kind, humanizeCellCode(value))
+      : humanizeCellCode(value);
+  },
 };
 
 function resolveToneClass(tone, styles) {
@@ -166,22 +177,32 @@ function annotateRowsFromThresholds(rows, columns) {
       const tone = evaluateThresholdTone(row[c.id], c.threshold);
       if (!tone) continue;
       cellTones[c.id] = tone;
-      const label = c.threshold.tag?.[tone];
+      // threshold.tagKey.{watch,breach} (DASHBOARD_BADGE_*) wins when seeded,
+      // else the descriptor's literal threshold.tag.{watch,breach}.
+      const labelKey = c.threshold.tagKey?.[tone];
+      const label = labelKey && exists(labelKey) ? t(labelKey) : c.threshold.tag?.[tone];
       if (label) tags.push({ label, tone });
     }
     if (!Object.keys(cellTones).length && !hasTagsCol) return row;
     const next = { ...row, cellTones };
-    if (hasTagsCol) next.statusTagItems = tags.length ? tags : [{ label: "On track", tone: null }];
+    if (hasTagsCol) {
+      next.statusTagItems = tags.length
+        ? tags
+        : [{ label: t("DASHBOARD_BADGE_ON_TRACK", "On track"), tone: null }];
+    }
     return next;
   });
 }
 
-const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
+const DashboardTable = ({ columns, rows, emptyMessage }) => {
+  // Subscribes to language/bundle changes; `language` also invalidates the
+  // annotation memo so translated tag labels re-resolve on a language switch.
+  const { language } = useDashboardT();
   const styles = DATA_TABLE_STYLES;
   const safeRows = rows ?? [];
   const annotatedRows = useMemo(
     () => annotateRowsFromThresholds(safeRows, columns),
-    [safeRows, columns]
+    [safeRows, columns, language]
   );
   const { sortState, handleSort, sortRows } = useTableSort(columns);
   const sortedRows = useMemo(() => sortRows(annotatedRows), [annotatedRows, sortRows]);
@@ -210,7 +231,7 @@ const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
         {sortedRows.length === 0 ? (
           <tr>
             <td colSpan={columns.length} className={styles.empty}>
-              {emptyMessage}
+              {emptyMessage ?? t("DASHBOARD_COMMON_NO_DATA", "No data")}
             </td>
           </tr>
         ) : (
@@ -238,7 +259,7 @@ const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
                   ? renderStatusTags(row, styles)
                   : col.type === "trend"
                     ? render(raw)
-                    : render(raw);
+                    : render(raw, col);
               const labelText = typeof raw === "string" ? raw : String(raw ?? "");
               const toneKey = col.thresholdKey ?? col.id;
               const tone = row.cellTones?.[toneKey];

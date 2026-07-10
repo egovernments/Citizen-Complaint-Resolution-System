@@ -1,3 +1,5 @@
+import { translate } from "../i18n/localeRuntime";
+
 function todayISO() {
   const d = new Date();
   const y = d.getFullYear();
@@ -15,12 +17,26 @@ function oneMonthAgoISO() {
   return `${y}-${m}-${day}`;
 }
 
+// Labels resolve lazily (getters call translate() at property-access time) so
+// they react to language switches while keeping the flat {id,label} contract
+// intact — useFilterOptions array-spreads these sentinel objects by reference,
+// so the getters survive into the server-scoped option lists too.
 export const GEOGRAPHY_OPTIONS = [
-  { id: "all", label: "All wards" },
+  {
+    id: "all",
+    get label() {
+      return translate("DASHBOARD_FILTERS_ALL_WARDS", "All wards");
+    },
+  },
 ];
 
 export const COMPLAINT_TYPE_OPTIONS = [
-  { id: "all", label: "All types" },
+  {
+    id: "all",
+    get label() {
+      return translate("DASHBOARD_FILTERS_ALL_TYPES", "All types");
+    },
+  },
 ];
 
 /**
@@ -28,19 +44,37 @@ export const COMPLAINT_TYPE_OPTIONS = [
  * timeWindow is retained for volume KPI sub-metric resolution until date-range API wiring.
  */
 export const GLOBAL_FILTER_FIELDS = [
-  { id: "dateFrom", type: "date", label: "From", defaultValue: oneMonthAgoISO() },
-  { id: "dateTo", type: "date", label: "To", defaultValue: todayISO() },
+  {
+    id: "dateFrom",
+    type: "date",
+    get label() {
+      return translate("DASHBOARD_FILTERS_FROM", "From");
+    },
+    defaultValue: oneMonthAgoISO(),
+  },
+  {
+    id: "dateTo",
+    type: "date",
+    get label() {
+      return translate("DASHBOARD_FILTERS_TO", "To");
+    },
+    defaultValue: todayISO(),
+  },
   {
     id: "geography",
     type: "select",
-    label: "Geography",
+    get label() {
+      return translate("DASHBOARD_FILTERS_GEOGRAPHY", "Geography");
+    },
     defaultValue: "all",
     options: GEOGRAPHY_OPTIONS,
   },
   {
     id: "complaintType",
     type: "select",
-    label: "Complaint type",
+    get label() {
+      return translate("DASHBOARD_FILTERS_COMPLAINT_TYPE", "Complaint type");
+    },
     defaultValue: "all",
     options: COMPLAINT_TYPE_OPTIONS,
   },

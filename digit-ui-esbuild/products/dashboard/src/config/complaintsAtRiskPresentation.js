@@ -1,6 +1,11 @@
+import { translate as t } from "../i18n/localeRuntime";
+import { dimensionLabel } from "../i18n/dimensionLabel";
+
 const MS_PER_HOUR = 3600000;
 const MS_PER_DAY = 86400000;
 
+// English fallbacks — display resolution routes through dimensionLabel
+// (kinds slaState / workflowStatus) so seeded locales translate.
 export const SLA_STATUS_LABELS = {
   breached: "Breached",
   nearing: "Nearing breach",
@@ -23,20 +28,26 @@ export function formatBreachDurationCompact(ms) {
   if (hours < 48) {
     const rounded = Math.round(hours * 10) / 10;
     const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-    return `+${formatted}${rounded === 1 ? "hr" : "hrs"}`;
+    return `+${formatted}${rounded === 1 ? t("DASHBOARD_UNIT_HR", "hr") : t("DASHBOARD_UNIT_HRS", "hrs")}`;
   }
   const days = n / MS_PER_DAY;
   const rounded = Math.round(days * 10) / 10;
   const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-  return `+${formatted}${rounded === 1 ? "d" : "d"}`;
+  return `+${formatted}${t("DASHBOARD_UNIT_D", "d")}`;
 }
 
 export function resolveSlaRiskPresentation(bucket) {
   const normalized = String(bucket ?? "").toLowerCase();
   if (normalized === "approaching") {
-    return { slaLabel: SLA_STATUS_LABELS.nearing, slaLevel: "nearing" };
+    return {
+      slaLabel: dimensionLabel("NEARING", "slaState", SLA_STATUS_LABELS.nearing),
+      slaLevel: "nearing",
+    };
   }
-  return { slaLabel: SLA_STATUS_LABELS.breached, slaLevel: "breached" };
+  return {
+    slaLabel: dimensionLabel("BREACHED", "slaState", SLA_STATUS_LABELS.breached),
+    slaLevel: "breached",
+  };
 }
 
 export function computeBreachDurationMs(openAgeMs, slaTargetMs, slaBucket) {
@@ -55,7 +66,8 @@ export function complaintDetailHref(serviceRequestId) {
 
 export function formatWorkflowStatusLabel(status) {
   const key = normalizeWorkflowStatusKey(status);
-  return WORKFLOW_STATUS_LABELS[key] ?? WORKFLOW_STATUS_LABELS.in_progress;
+  const fallback = WORKFLOW_STATUS_LABELS[key] ?? WORKFLOW_STATUS_LABELS.in_progress;
+  return dimensionLabel(key, "workflowStatus", fallback);
 }
 
 export function normalizeWorkflowStatusKey(status) {

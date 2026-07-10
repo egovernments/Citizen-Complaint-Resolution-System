@@ -3,6 +3,8 @@
  */
 
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "./visualizationStyles";
+import { translate as t } from "../i18n/localeRuntime";
+import { dimensionLabel } from "../i18n/dimensionLabel";
 
 export const KPI_STATUS = {
   ON_TRACK: "on_track",
@@ -10,69 +12,76 @@ export const KPI_STATUS = {
   BREACHING: "breaching",
 };
 
-/** @type {Record<string, object>} */
+/**
+ * displayTitle entries are FUNCTIONS of t so the literal stays the unseeded
+ * fallback while seeded locales translate at call time (module-level constants
+ * must never call translate eagerly). displayTitles OVERRIDE catalog titles in
+ * some paths — getKpiDisplayTitle preserves that precedence.
+ *
+ * @type {Record<string, object>}
+ */
 export const KPI_DISPLAY = {
   "rs-metric-sla-compliance": {
-    displayTitle: "On-time resolution rate",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_RS_METRIC_SLA_COMPLIANCE", "On-time resolution rate"),
     threshold: { kind: "percent", higherIsBetter: true, onTrack: 85, breaching: 60 },
     context: { type: "breachOpen" },
   },
   "rs-metric-breach-count": {
-    displayTitle: "Breached SLA (open)",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_RS_METRIC_BREACH_COUNT", "Breached SLA (open)"),
     threshold: { kind: "count", higherIsBetter: false, onTrack: 5, breaching: 20 },
     context: { type: "outOfOpen" },
   },
   "cl-metric-total-resolved": {
-    displayTitle: "Resolved complaints",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_TOTAL_RESOLVED", "Resolved complaints"),
     threshold: { kind: "count", higherIsBetter: true, onTrack: 10, breaching: 0 },
   },
   "cl-metric-total-open": {
-    displayTitle: "Open complaints",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_TOTAL_OPEN", "Open complaints"),
     threshold: { kind: "count", higherIsBetter: false, onTrack: 20, breaching: 50 },
   },
   "cl-metric-new-created": {
-    displayTitle: "New complaints created",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_NEW_CREATED", "New complaints created"),
   },
   "cl-metric-created-today": {
-    displayTitle: "Complaints created today",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_CREATED_TODAY", "Complaints created today"),
   },
   "cl-metric-resolution-rate": {
-    displayTitle: "Resolution rate",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_RESOLUTION_RATE", "Resolution rate"),
     threshold: { kind: "percent", higherIsBetter: true, onTrack: 70, breaching: 40 },
   },
   "cl-metric-reopen-rate": {
-    displayTitle: "Reopen rate",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_REOPEN_RATE", "Reopen rate"),
     threshold: { kind: "percent", higherIsBetter: false, onTrack: 10, breaching: 25 },
   },
   "cl-metric-csat": {
-    displayTitle: "Citizen satisfaction",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_CSAT", "Citizen satisfaction"),
     threshold: { kind: "rating", higherIsBetter: true, onTrack: 4, breaching: 3 },
   },
   "cl-metric-first-assignment-rate": {
-    displayTitle: "First-assignment rate",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_FIRST_ASSIGNMENT_RATE", "First-assignment rate"),
     threshold: { kind: "percent", higherIsBetter: true, onTrack: 90, breaching: 70 },
   },
   "cl-metric-sla-compliance-rate": {
-    displayTitle: "SLA compliance rate",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_SLA_COMPLIANCE_RATE", "SLA compliance rate"),
     threshold: { kind: "percent", higherIsBetter: true, onTrack: 85, breaching: 60 },
   },
   "cl-metric-sla-non-compliance-rate": {
-    displayTitle: "SLA non-compliance rate",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_SLA_NON_COMPLIANCE_RATE", "SLA non-compliance rate"),
     threshold: { kind: "percent", higherIsBetter: false, onTrack: 15, breaching: 40 },
   },
   "cl-metric-resolved-on-time-rate": {
-    displayTitle: "Resolved on time rate",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_RESOLVED_ON_TIME_RATE", "Resolved on time rate"),
     threshold: { kind: "percent", higherIsBetter: true, onTrack: 85, breaching: 60 },
   },
   "cl-metric-oldest-open": {
-    displayTitle: "Oldest complaint",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_OLDEST_OPEN", "Oldest complaint"),
     threshold: { kind: "count", higherIsBetter: false, onTrack: 7, breaching: 30 },
   },
   "cl-metric-avg-resolution-time": {
-    displayTitle: "Average resolution time",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CL_METRIC_AVG_RESOLUTION_TIME", "Average resolution time"),
   },
   "ce-metric-reopen-rate": {
-    displayTitle: "Reopen rate",
+    displayTitle: (t) => t("DASHBOARD_KPI_DISPLAY_CE_METRIC_REOPEN_RATE", "Reopen rate"),
     threshold: { kind: "percent", higherIsBetter: false, onTrack: 10, breaching: 25 },
     context: { type: "csatSnapshot" },
   },
@@ -88,7 +97,28 @@ export function isKpiListMetric(metricId) {
 
 export function getKpiDisplayTitle(metric) {
   const config = getKpiDisplayConfig(metric.id);
-  return config.displayTitle || metric.metric;
+  const displayTitle =
+    typeof config.displayTitle === "function" ? config.displayTitle(t) : config.displayTitle;
+  return displayTitle || metric.metric;
+}
+
+/**
+ * Map a generic query dimension name onto a dimensionLabel() kind — the bridge
+ * between viz descriptors / result columns and the i18n seam. Unknown names
+ * return null and callers fall back to the legacy humanisers. Order matters:
+ * sla_status_bucket must resolve to slaState before the "status" check.
+ */
+export function dimensionKindForName(name) {
+  const n = String(name ?? "").toLowerCase();
+  if (!n) return null;
+  if (n.includes("service") || n.includes("subtype") || n.includes("complaint_type")) return "complaintType";
+  if (n.includes("ward") || n.includes("boundary") || n.includes("locality")) return "boundary";
+  if (n.includes("department") || n === "dept") return "department";
+  if (n.includes("sla")) return "slaState";
+  if (n.includes("status") || n.includes("stage")) return "workflowStatus";
+  if (n === "source" || n.includes("channel")) return "channel";
+  if (n.includes("age") && n.includes("bucket")) return "ageBucket";
+  return null;
 }
 
 export function parseNumericValue(displayValue) {
@@ -206,7 +236,9 @@ const OFFICER_LAST_NAMES = [
 
 export function formatOfficerLabel(uuid) {
   const id = String(uuid ?? "");
-  if (!id || id === "Unknown" || id === "null" || id === "undefined") return "Unassigned";
+  if (!id || id === "Unknown" || id === "null" || id === "undefined") {
+    return t("DASHBOARD_COMMON_UNASSIGNED", "Unassigned");
+  }
   let h = 0;
   for (let i = 0; i < id.length; i += 1) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   const first = OFFICER_FIRST_NAMES[h % OFFICER_FIRST_NAMES.length];
@@ -215,13 +247,13 @@ export function formatOfficerLabel(uuid) {
 }
 
 function formatListLabel(labelKey, raw) {
-  if (labelKey === "service_code") return formatServiceCode(raw);
+  if (labelKey === "service_code") return dimensionLabel(raw, "complaintType", formatServiceCode(raw));
   if (labelKey === "current_assignee_uuid") return formatOfficerLabel(raw);
   if (labelKey === "account_id") {
-    const id = String(raw ?? "Unknown");
+    const id = String(raw ?? t("DASHBOARD_COMMON_UNKNOWN", "Unknown"));
     return id.length > 10 ? `…${id.slice(-8)}` : id;
   }
-  return String(raw ?? "Unknown");
+  return String(raw ?? t("DASHBOARD_COMMON_UNKNOWN", "Unknown"));
 }
 
 function formatListMeasureValue(raw, format) {
@@ -278,25 +310,25 @@ export function buildKpiContextText(metricId, results, subMetricLabel) {
   switch (config.type) {
     case "breachOpen": {
       const n = readCount(results, "rs_breach_total");
-      return n == null ? null : `Breached open: ${n}`;
+      return n == null ? null : `${t("DASHBOARD_TILE_CTX_BREACHED_OPEN", "Breached open")}: ${n}`;
     }
     case "outOfOpen": {
       const open = readCount(results, "cl_open_weekly");
       const breach = readCount(results, "rs_breach_total");
       if (open == null || breach == null) return null;
-      return `Out of ${open} open complaints`;
+      return `${t("DASHBOARD_TILE_CTX_OUT_OF", "Out of")} ${open} ${t("DASHBOARD_TILE_CTX_OPEN_COMPLAINTS", "open complaints")}`;
     }
     case "outOfRegistered": {
       const total = readCount(results, "cl_reg_weekly");
       if (total == null) return null;
-      return `Out of ${total} complaints`;
+      return `${t("DASHBOARD_TILE_CTX_OUT_OF", "Out of")} ${total} ${t("DASHBOARD_TILE_CTX_COMPLAINTS", "complaints")}`;
     }
     case "csatSnapshot": {
       const csat = readPercentOneDecimal(results, "ce_csat_avg_week", "avg");
-      return csat == null ? null : `CSAT ${csat}/5`;
+      return csat == null ? null : `${t("DASHBOARD_TILE_CTX_CSAT", "CSAT")} ${csat}/5`;
     }
     case "acrossResolved":
-      return "Across resolved";
+      return t("DASHBOARD_TILE_CTX_ACROSS_RESOLVED", "Across resolved");
     case "timeWindow":
       return subMetricLabel || null;
     default:

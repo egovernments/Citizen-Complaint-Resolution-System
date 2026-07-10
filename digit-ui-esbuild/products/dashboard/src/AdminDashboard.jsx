@@ -21,6 +21,7 @@ import DashboardLogin, {
   clearDashboardSession,
 } from "./components/DashboardLogin";
 
+import useDashboardT from "./i18n/useDashboardT";
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useFilterOptions } from "./hooks/useFilterOptions";
 import { useCatalog } from "./hooks/useCatalog";
@@ -68,18 +69,21 @@ const RemoveIcon = () => (
   </svg>
 );
 
-const WidgetRemoveButton = ({ label, onClick }) => (
-  <button
-    type="button"
-    title="Remove from dashboard"
-    onMouseDown={(e) => e.stopPropagation()}
-    onClick={onClick}
-    className="dashboard-widget-remove-btn"
-    aria-label={label}
-  >
-    <RemoveIcon />
-  </button>
-);
+const WidgetRemoveButton = ({ label, onClick }) => {
+  const { t } = useDashboardT();
+  return (
+    <button
+      type="button"
+      title={t("DASHBOARD_COMMON_REMOVE_FROM_DASHBOARD", "Remove from dashboard")}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={onClick}
+      className="dashboard-widget-remove-btn"
+      aria-label={label}
+    >
+      <RemoveIcon />
+    </button>
+  );
+};
 
 /**
  * AdminDashboard — a PARALLEL, pure-engine dashboard.
@@ -329,6 +333,7 @@ function seriesToPoints(rows, viz, valueKey, columns) {
 /* -------------------------------------------------------------------------- */
 
 const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
+  const { t, language } = useDashboardT();
   const { filters, setFilter, clearFilters, applyFilterOptions } =
     useDashboardFilters();
   const { options: filterOptions, loading: filterOptionsLoading } =
@@ -432,7 +437,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         setBatch({
           loading: false,
           results: {},
-          errors: { __batch: err?.message || "Batch query failed" },
+          errors: { __batch: err?.message || t("DASHBOARD_COMMON_BATCH_FAILED", "Batch query failed") },
           partial: true,
         });
       });
@@ -442,13 +447,13 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
 
   const lastUpdatedLabel = useMemo(
     () =>
-      new Date().toLocaleString(undefined, {
+      new Date().toLocaleString(language?.replace("_", "-"), {
         day: "numeric",
         month: "short",
         hour: "numeric",
         minute: "2-digit",
       }),
-    [batch.results]
+    [batch.results, language]
   );
 
   // RGL reads min/max W/H straight off each layout item (the hook bakes in the
@@ -533,7 +538,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     >
       {catalogError && (
         <div className="tw-mb-4 tw-rounded-md tw-border tw-border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] tw-bg-status-breach-bg tw-px-4 tw-py-3 tw-text-sm tw-text-destructive">
-          Catalog unavailable: {catalogError}
+          {t("DASHBOARD_COMMON_CATALOG_UNAVAILABLE", "Catalog unavailable")}: {catalogError}
         </div>
       )}
       {batch.errors && batch.errors.__batch && (
@@ -545,7 +550,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       {showEmpty ? (
         <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface tw-py-16 tw-text-center">
           <p className="tw-text-[12px] tw-text-muted-foreground">
-            No tiles in the catalog pack for this role.
+            {t("DASHBOARD_COMMON_NO_TILES_FOR_ROLE", "No tiles in the catalog pack for this role.")}
           </p>
         </div>
       ) : (
@@ -568,7 +573,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
             const removeBtn = (
               <WidgetRemoveButton
-                label={`Remove ${kpis[item.i]?.viz?.title || item.i}`}
+                label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${kpis[item.i]?.viz?.title || item.i}`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();

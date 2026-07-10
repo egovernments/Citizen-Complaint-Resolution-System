@@ -6,8 +6,10 @@ import {
   PIE_CHART_VIEWBOX,
 } from "../config/pieChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE, SHARED_CHROME } from "../config/visualizationStyles";
+import useDashboardT from "../i18n/useDashboardT";
 
 const PieChart = ({ data = [] }) => {
+  const { t } = useDashboardT();
   const [activeIndex, setActiveIndex] = useState(null);
 
   const slices = useMemo(() => normalizePieChartData(data), [data]);
@@ -28,7 +30,7 @@ const PieChart = ({ data = [] }) => {
           viewBox={`0 0 ${PIE_CHART_VIEWBOX.width} ${PIE_CHART_VIEWBOX.height}`}
           className="tw-h-full tw-w-full"
           role="img"
-          aria-label="Donut chart"
+          aria-label={t("DASHBOARD_TILE_ARIA_DONUT", "Donut chart")}
         >
           {slices.map((slice) => {
             const fill =
@@ -95,7 +97,7 @@ const PieChart = ({ data = [] }) => {
               className={SHARED_CHROME.chartTooltipRow}
               style={{ color: active.color }}
             >
-              Count : {active.count} ({active.pct}%)
+              {t("DASHBOARD_COMMON_COUNT", "Count")} : {active.count} ({active.pct}%)
             </div>
           </div>
         ) : null}
