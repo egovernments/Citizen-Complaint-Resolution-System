@@ -1236,7 +1236,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     label: t(g.i18nKey),
   }));
   const countryCode =
-    mdmsValidationData?.countryCode ||
+    mdmsValidationData?.prefix ||
     window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.countryCode ||
     DEFAULT_MOBILE_PREFIX;
   const isMultiRoot = Digit.Utils.getMultiRootTenant();
