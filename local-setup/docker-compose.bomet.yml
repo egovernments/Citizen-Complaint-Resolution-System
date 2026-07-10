@@ -31,4 +31,10 @@ services:
     environment:
       PGR_NOTIFICATION_CONFIG_DRIVEN: "true"
       KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: complaints.domain.events
+      # System user the PGR EscalationScheduler runs as (not in the shared
+      # egov-digit base compose). Kept in this same pgr-services block so the
+      # bomet overlay is a single source of truth — previously injected by the
+      # on-box redeploy wrapper, which appended a *second* pgr-services key here
+      # and broke `docker compose config` once this block existed (see #1131).
+      EGOV_INTERNAL_MICROSERVICE_USER_UUID: a6966a30-947d-46d9-8226-7d94b67de581
 
