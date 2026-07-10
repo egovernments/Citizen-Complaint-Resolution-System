@@ -1,0 +1,23 @@
+# Deployment-parity item #10 — per-service Flyway init containers (pilot).
+# Mirrors the K8s db-migration init container: a one-shot Flyway run per
+# service, from the same in-repo <service>-db image, writing history to the
+# K8s <service>_schema table, connected DIRECTLY to postgres-db (never the
+# pgbouncer 'postgres' alias, which runs in transaction mode and breaks Flyway).
+services:
+  pgr-services-migration:
+    build:
+      context: ../backend/pgr-services/src/main/resources/db
+    container_name: pgr-services-migration
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_TABLE: pgr_services_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks:
+      - egov-network
