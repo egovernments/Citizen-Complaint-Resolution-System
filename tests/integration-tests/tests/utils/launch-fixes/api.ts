@@ -3,8 +3,22 @@
 // All calls go through the public Kong gateway at naipepea.digit.org so
 // they exercise the same path the browser uses.
 
-const BASE = process.env.NAIPEPEA_BASE ?? 'https://naipepea.digit.org';
-const KONG_BASIC = 'Basic ZWdvdi11c2VyLWNsaWVudDo='; // egov-user-client: (no secret) — naipepea convention
+// Deployment target. Prefer the suite-wide BASE_URL (set from the active
+// deploy's .env) so these helpers exercise the SAME stack every other spec
+// does. NAIPEPEA_BASE remains an explicit override for the (now-legacy)
+// naipepea demo host. Falls back to localhost, which exists on every
+// freshly-bootstrapped deployment.
+const BASE = process.env.NAIPEPEA_BASE ?? process.env.BASE_URL ?? 'http://localhost';
+const KONG_BASIC = 'Basic ZWdvdi11c2VyLWNsaWVudDo='; // egov-user-client: (no secret) — Kong convention
+
+// Root (state-level) tenant for auth + RequestInfo.userInfo. Derived from the
+// same env vars env.ts reads, so a Kenya run authenticates against `ke` and a
+// Mozambique run against `mz` without any code change.
+const DEFAULT_TENANT =
+  process.env.DIGIT_TENANT ?? 'ke.nairobi';
+const ROOT_TENANT =
+  process.env.ROOT_TENANT ??
+  (DEFAULT_TENANT.includes('.') ? DEFAULT_TENANT.split('.')[0] : DEFAULT_TENANT);
 
 export type EmployeeAuth = {
   token: string;
@@ -12,7 +26,7 @@ export type EmployeeAuth = {
   type: 'EMPLOYEE';
 };
 
-export async function loginEmployee(username = 'ADMIN', password = 'eGov@123', tenantId = 'ke'): Promise<EmployeeAuth> {
+export async function loginEmployee(username = 'ADMIN', password = 'eGov@123', tenantId = ROOT_TENANT): Promise<EmployeeAuth> {
   const body = new URLSearchParams({
     username,
     password,
@@ -39,8 +53,8 @@ export function requestInfo(auth: EmployeeAuth) {
       id: 1,
       uuid: auth.uuid,
       type: auth.type,
-      tenantId: 'ke',
-      roles: [{ code: 'SUPERUSER', tenantId: 'ke' }],
+      tenantId: ROOT_TENANT,
+      roles: [{ code: 'SUPERUSER', tenantId: ROOT_TENANT }],
     },
   };
 }
@@ -109,7 +123,7 @@ export async function uploadFile(auth: EmployeeAuth, tenantId: string, fileName:
   const fd = new FormData();
   fd.append('tenantId', tenantId);
   fd.append('module', module);
-  const blob = new Blob([fileBuffer], { type: contentType });
+  const blob = new Blob([new Uint8Array(fileBuffer)], { type: contentType });
   fd.append('file', blob, fileName);
   const r = await fetch(`${BASE}/filestore/v1/files`, {
     method: 'POST',
@@ -117,4 +131,218 @@ export async function uploadFile(auth: EmployeeAuth, tenantId: string, fileName:
     body: fd,
   });
   return { status: r.status, body: await r.json() };
+}
+
+// ── PGR _create helper — CRS-compatible across tenants ───────────────────────
+//
+// The legacy RAINMAKER-PGR schema (Ethiopia) and the new CRS schema (ke/Bomet)
+// both accept the same minimal payload EXCEPT for `verificationDocuments`:
+//   • Legacy (Ethiopia): accepts `verificationDocuments: []` in workflow (but
+//     omitting it also works fine).
+//   • CRS (ke/Bomet): `verificationDocuments: []` triggers JsonMappingException
+//     because the CRS Workflow model declares the field as a different type.
+//
+// Fix: omit `verificationDocuments` entirely — both deployments accept the
+// `workflow: { action: 'APPLY' }` shape without it.
+//
+// SERVICE_CODE: the caller supplies the code.  Use `resolveServiceCode` to
+// pick the first active code from MDMS when the configured SERVICE_CODE is
+// unknown on the target tenant.
+
+export interface CitizenAuthSimple {
+  token: string;
+  userInfo: Record<string, unknown>;
+}
+
+export interface PgrCreateParams {
+  baseUrl: string;
+  auth: CitizenAuthSimple;
+  tenantId: string;
+  serviceCode: string;
+  localityCode: string;
+  description: string;
+  citizenName: string;
+  citizenPhone: string;
+  /** Optional: override the workflow action (default: 'APPLY'). */
+  workflowAction?: string;
+  /** Optional: send extended_attributes in service body. Per user direction:
+   *  content must stay empty {}. Defaults to undefined (omitted). */
+  extendedAttributes?: Record<string, unknown>;
+}
+
+export interface PgrCreateResult {
+  serviceRequestId: string;
+  applicationStatus: string;
+  rawWrapper: Record<string, unknown>;
+}
+
+/**
+ * POST /pgr-services/v2/request/_create in a way that works on both:
+ *   - Legacy RAINMAKER-PGR deployments (Ethiopia).
+ *   - CRS-schema deployments (ke / Bomet).
+ *
+ * Key difference from the old inline calls: `verificationDocuments` is
+ * intentionally omitted from the workflow object. Sending `[]` causes a
+ * JsonMappingException on CRS deployments.
+ */
+export async function pgrCreate(params: PgrCreateParams): Promise<PgrCreateResult> {
+  const {
+    baseUrl,
+    auth,
+    tenantId,
+    serviceCode,
+    localityCode,
+    description,
+    citizenName,
+    citizenPhone,
+    workflowAction = 'APPLY',
+    extendedAttributes,
+  } = params;
+
+  const serviceBody: Record<string, unknown> = {
+    tenantId,
+    serviceCode,
+    description,
+    source: 'web',
+    address: {
+      city: tenantId,
+      locality: { code: localityCode },
+      geoLocation: { latitude: 0, longitude: 0 },
+    },
+    citizen: { name: citizenName, mobileNumber: citizenPhone },
+  };
+
+  // Per user direction: extended_attributes content stays empty {}.
+  // Only include the key if the caller explicitly passes it.
+  if (extendedAttributes !== undefined) {
+    serviceBody.extended_attributes = extendedAttributes;
+  }
+
+  const body: Record<string, unknown> = {
+    RequestInfo: {
+      apiId: 'Rainmaker',
+      authToken: auth.token,
+      userInfo: auth.userInfo,
+    },
+    service: serviceBody,
+    // CRS-compatible workflow: omit verificationDocuments entirely.
+    // Legacy deployments also accept this shape.
+    workflow: { action: workflowAction },
+  };
+
+  const r = await fetch(`${baseUrl}/pgr-services/v2/request/_create`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${auth.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = (await r.json()) as {
+    ServiceWrappers?: Array<{ service: { serviceRequestId: string; applicationStatus: string } }>;
+    Errors?: Array<{ code: string; message: string }>;
+  };
+
+  if (!r.ok || !data.ServiceWrappers?.length) {
+    const errMsg = data.Errors?.map((e) => `${e.code}: ${e.message}`).join('; ') ?? `HTTP ${r.status}`;
+    throw new Error(`pgrCreate failed: ${errMsg}`);
+  }
+
+  const svc = data.ServiceWrappers[0].service;
+  return {
+    serviceRequestId: svc.serviceRequestId,
+    applicationStatus: svc.applicationStatus,
+    rawWrapper: data.ServiceWrappers[0] as Record<string, unknown>,
+  };
+}
+
+/**
+ * Resolve a locality (boundary) code against the deployment's
+ * boundary-service. Returns `preferred` if it exists in the boundary list for
+ * `tenantId`; otherwise returns the first ward-level boundary code found.
+ *
+ * Ward-level codes are identified by having three or more underscore-separated
+ * segments (e.g. `BOMET_BOMET_CENTRAL_CHESOEN`) and not starting with `ZZ_`
+ * (test-only boundaries). Falls back to `preferred` on any network error so
+ * the _create call surfaces the original error.
+ *
+ * Useful when `LOCALITY_CODE` env var holds a Nairobi code
+ * (`NAIROBI_CITY_VIWANDANI`) but the deployment is Bomet ke.
+ */
+export async function resolveLocalityCode(
+  baseUrl: string,
+  authToken: string,
+  tenantId: string,
+  preferred: string,
+): Promise<string> {
+  try {
+    const r = await fetch(
+      `${baseUrl}/boundary-service/boundary/_search?tenantId=${encodeURIComponent(tenantId)}&hierarchyType=REVENUE&offset=0&limit=100`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ RequestInfo: { authToken } }),
+      },
+    );
+    const data = (await r.json()) as { Boundary?: Array<{ code: string }> };
+    const codes = (data.Boundary || []).map((b) => b.code);
+
+    // Return preferred if the deployment knows about it
+    if (codes.includes(preferred)) return preferred;
+
+    // Pick the first ward-level code: 3+ underscore-delimited segments,
+    // not a synthetic test boundary (ZZ_ prefix), not WARD_ORD.
+    const wardCode = codes.find(
+      (c) => c.split('_').length >= 4 && !c.startsWith('ZZ_') && c !== 'WARD_ORD',
+    );
+    if (wardCode) return wardCode;
+  } catch {
+    // Network or parse failure — return preferred and let _create surface the error
+  }
+  return preferred;
+}
+
+/**
+ * Resolve a service code against the deployment's RAINMAKER-PGR.ServiceDefs
+ * MDMS schema. Returns `preferred` if it is active on `tenantId`; otherwise
+ * returns the first active code found.
+ *
+ * Useful when the env-configured SERVICE_CODE (e.g. `IllegalConstruction`)
+ * doesn't exist on the target tenant (e.g. ke/Bomet uses
+ * `GarbageMissedGarbageCollection`).
+ */
+export async function resolveServiceCode(
+  baseUrl: string,
+  authToken: string,
+  tenantId: string,
+  preferred: string,
+): Promise<string> {
+  try {
+    const r = await fetch(`${baseUrl}/mdms-v2/v2/_search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        RequestInfo: { authToken },
+        MdmsCriteria: { tenantId, schemaCode: 'RAINMAKER-PGR.ServiceDefs', limit: 50 },
+      }),
+    });
+    const data = (await r.json()) as {
+      mdms?: Array<{ uniqueIdentifier: string; isActive: boolean; data: { active: boolean; serviceCode: string } }>;
+    };
+    const records = data.mdms || [];
+
+    // Check if preferred code is active
+    const preferredRecord = records.find(
+      (rec) => rec.uniqueIdentifier === preferred && rec.isActive && rec.data?.active,
+    );
+    if (preferredRecord) return preferred;
+
+    // Fall back to first active record
+    const firstActive = records.find((rec) => rec.isActive && rec.data?.active);
+    if (firstActive) return firstActive.data.serviceCode || firstActive.uniqueIdentifier;
+  } catch {
+    // Network or parse failure — return preferred and let _create surface the error
+  }
+  return preferred;
 }

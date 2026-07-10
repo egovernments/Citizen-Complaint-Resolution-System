@@ -5,7 +5,7 @@
  * No API calls in the body of the test — only the post-test teardown,
  * which is API because the configurator has no UI affordance for tenant
  * deactivation today (`src/resources/tenants/` ships TenantList +
- * TenantShow only). Track in #21.
+ * TenantShow + TenantEdit — but no delete). Track in #21.
  *
  * What the test asserts:
  *   1. Onboarding-mode login from the configurator login form lands on
@@ -23,20 +23,17 @@ import os from 'node:os';
 import fs from 'node:fs';
 import ExcelJS from 'exceljs';
 import { getDigitToken } from '../utils/auth';
+import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
 // Override the suite-level storageState so this spec starts unauthenticated
 // and walks the login form like a real first-time onboarder.
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const SUFFIX = Date.now().toString().slice(-8);
-const ROOT = process.env.ROOT_TENANT || 'ke';
+const ROOT = ROOT_TENANT;
 const TENANT_CODE = `${ROOT}.pwt${SUFFIX}`;
 const TENANT_NAME = `Playwright Test ${SUFFIX}`;
 const FIXTURE_PATH = path.join(os.tmpdir(), `tenant-master-${SUFFIX}.xlsx`);
-
-const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
-const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'eGov@123';
-const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
 
 async function generateTenantFixture(): Promise<void> {
   const wb = new ExcelJS.Workbook();
@@ -66,7 +63,8 @@ async function generateTenantFixture(): Promise<void> {
 
 async function deactivateTenantViaApi(code: string): Promise<void> {
   // NOTE: API teardown — no UI delete affordance for tenants in the
-  // configurator today (TenantList + TenantShow only). Track in #21.
+  // configurator today (TenantList + TenantShow + TenantEdit, no delete).
+  // Track in #21.
   const token = await getDigitToken({ tenant: ROOT, username: ADMIN_USER, password: ADMIN_PASS });
   const ri = {
     apiId: 'Rainmaker',
@@ -119,7 +117,7 @@ Steps:
 6. Click "Upload to DIGIT" — wizard advances to Step 1.2 (branding).
 7. Navigate to /configurator/manage/tenants and assert the new tenant code is visible in the list.
 
-Teardown is API-only because tenants have no UI delete affordance today (TenantList + TenantShow only — see #21). The teardown sets isActive=false via mdms-v2 _update.`,
+Teardown is API-only because tenants have no UI delete affordance today (TenantList + TenantShow + TenantEdit, but no delete — see #21). The teardown sets isActive=false via mdms-v2 _update.`,
     },
     tag: ['@area:onboarding', '@kind:regression', '@layer:ui', '@persona:admin'],
   }, async ({ page }) => {

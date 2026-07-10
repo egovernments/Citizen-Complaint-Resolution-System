@@ -22,8 +22,11 @@
 import { test, expect } from '@playwright/test';
 import { loadAuth } from '../utils/manage/api';
 import { testCode } from '../utils/manage/codes';
+import { ROOT_TENANT } from '../utils/env';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+// Root (state) tenant, sourced from env (ROOT_TENANT / DIGIT_TENANT) so the
+// suite is deployment-portable — no hardcoded 'ke'.
+const TENANT_CODE = ROOT_TENANT;
 const LIST_PATH = '/configurator/manage/boundary-hierarchies';
 
 const BH_SEARCH = '/boundary-service/boundary-hierarchy-definition/_search';
@@ -169,7 +172,9 @@ Teardown is logging-only — boundary service has no _delete endpoint. PW_<hash>
 
     await page.goto(`${LIST_PATH}/create`);
 
-    await page.getByLabel(/^Hierarchy Type$/i).fill(hierarchyType);
+    // Start-anchored only: the label's accessible name carries the required
+    // " *" marker, so an end-anchored /^Hierarchy Type$/ matches nothing.
+    await page.getByLabel(/^Hierarchy Type/i).fill(hierarchyType);
 
     // First level is rendered by default — fill its boundaryType.
     const firstBoundary = page.getByPlaceholder(/e\.g\. County/i).first();
