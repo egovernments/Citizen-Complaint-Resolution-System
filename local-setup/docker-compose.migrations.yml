@@ -97,3 +97,217 @@ services:
     depends_on:
       digit-config-service-migration:
         condition: service_completed_successfully
+
+  # ── Phase 3 · core services ─────────────────────────────────────────────────
+  # Pull the EXACT egovio/<service>-db:<tag> images K8s pins (image-level parity).
+  # The dump is re-baked so its Flyway history carries these images' real
+  # migration rows under the K8s <service>_schema names → the migrators no-op on
+  # the fast path. Env matches the -db images' migrate.sh contract.
+
+  boundary-service-migration:
+    image: egovio/boundary-service-db:v2.9.2-4a60f20
+    container_name: boundary-service-migration
+    depends_on: { postgres-db: { condition: service_healthy } }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: boundary_service_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  boundary-service:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { boundary-service-migration: { condition: service_completed_successfully } }
+
+  egov-user-migration:
+    image: egovio/egov-user-db:master-d69ce29
+    container_name: egov-user-migration
+    depends_on: { postgres-db: { condition: service_healthy } }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: egov_user_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  egov-user:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { egov-user-migration: { condition: service_completed_successfully } }
+
+  mdms-backend-migration:
+    image: egovio/mdms-v2-db:v2.9.2-4a60f20
+    container_name: mdms-backend-migration
+    depends_on: { postgres-db: { condition: service_healthy } }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: mdms_v2_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  mdms-backend:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { mdms-backend-migration: { condition: service_completed_successfully } }
+
+  egov-idgen-migration:
+    image: egovio/egov-idgen-db:v2.9.2-4a60f20
+    container_name: egov-idgen-migration
+    depends_on: { postgres-db: { condition: service_healthy } }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: egov_idgen_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  egov-idgen:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { egov-idgen-migration: { condition: service_completed_successfully } }
+
+  egov-localization-migration:
+    image: egovio/egov-localization-db:v2.9.2-4a60f20
+    container_name: egov-localization-migration
+    depends_on: { postgres-db: { condition: service_healthy } }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: egov_localization_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  egov-localization:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { egov-localization-migration: { condition: service_completed_successfully } }
+
+  egov-enc-service-migration:
+    image: egovio/egov-enc-service-db:v2.9.2-4a60f20
+    container_name: egov-enc-service-migration
+    depends_on: { postgres-db: { condition: service_healthy } }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: egov_enc_service_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  egov-enc-service:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { egov-enc-service-migration: { condition: service_completed_successfully } }
+
+  egov-filestore-migration:
+    image: egovio/egov-filestore-db:v2.9.2-4a60f20
+    container_name: egov-filestore-migration
+    depends_on: { postgres-db: { condition: service_healthy } }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: egov_filestore_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  egov-filestore:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { egov-filestore-migration: { condition: service_completed_successfully } }
+
+  egov-workflow-v2-migration:
+    image: egovio/egov-workflow-v2-db:v2.9.2-4a60f20
+    container_name: egov-workflow-v2-migration
+    depends_on: { postgres-db: { condition: service_healthy } }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: egov_workflow_v2_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  egov-workflow-v2:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { egov-workflow-v2-migration: { condition: service_completed_successfully } }
+
+  egov-hrms-migration:
+    image: egovio/egov-hrms-db:hrms-boundary-0a4e737
+    container_name: egov-hrms-migration
+    depends_on: { postgres-db: { condition: service_healthy } }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: egov_hrms_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  egov-hrms:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { egov-hrms-migration: { condition: service_completed_successfully } }
+
+  egov-url-shortening-migration:
+    image: egovio/egov-url-shortening-db:v2.9.2-4a60f20
+    container_name: egov-url-shortening-migration
+    depends_on: { postgres-db: { condition: service_healthy } }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: egov-url-shortening_schema   # hyphenated, as in the K8s chart
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  egov-url-shortening:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { egov-url-shortening-migration: { condition: service_completed_successfully } }
+
+  # otp is [otp]-profile-gated; its migrator carries the same profile.
+  egov-otp-migration:
+    image: egovio/egov-otp-db:v2.9.2-4a60f20
+    container_name: egov-otp-migration
+    profiles: ["otp"]
+    depends_on: { postgres-db: { condition: service_healthy } }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: egov_otp_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  egov-otp:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { egov-otp-migration: { condition: service_completed_successfully } }
+
+  # Retire the consolidated db-migrations container. Its migrate-all.sh looks for
+  # the OLD *_schema_version tables, which the re-bake renamed to K8s names — it
+  # would 42P07 and block its dependents (idgen/user/localization), which now have
+  # their own migrators. No-op it so its unremovable service_completed_successfully
+  # gate is satisfied.
+  db-migrations:
+    entrypoint: ["true"]

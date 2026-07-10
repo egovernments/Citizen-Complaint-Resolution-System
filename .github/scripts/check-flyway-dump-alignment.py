@@ -60,17 +60,18 @@ BASELINE_FRESH = {
 # History tables the dump ships whose owning service currently has Flyway OFF
 # (item #10 decision #2 backlog). When you enable one, set its SPRING_FLYWAY_TABLE
 # to exactly this name and delete the entry here — the check then enforces it.
-PENDING_ENABLE = {
-    "egov_idgen_schema_version",        # egov-idgen        — SPRING_FLYWAY_ENABLED:false
-    "egov_localization_schema_version", # egov-localization — SPRING_FLYWAY_ENABLED:false
-    "egov_user_schema_version",         # egov-user         — FLYWAY_ENABLED:false
-}
+# Emptied in Phase 3: the dump was re-baked to the K8s <service>_schema names and
+# every core service (incl. idgen/localization/user/otp) now has a per-service
+# migration init container claiming its table, so nothing is pending-enable.
+PENDING_ENABLE = set()
 
 _FALSE = {"false", "0", "no", "off"}
 
 # CREATE TABLE public.<name> ( ... \n);  — non-greedy body up to the closing line.
+# The name may be double-quoted and contain hyphens (e.g. K8s's
+# "egov-url-shortening_schema"), so allow '-' inside the identifier.
 _CREATE = re.compile(
-    r'CREATE TABLE\s+(?:public\.)?"?([A-Za-z0-9_]+)"?\s*\((.*?)\n\);',
+    r'CREATE TABLE\s+(?:public\.)?"?([A-Za-z0-9_-]+)"?\s*\((.*?)\n\);',
     re.DOTALL,
 )
 
