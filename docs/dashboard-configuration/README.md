@@ -32,6 +32,7 @@ frontend. Two audiences:
 | SLA precedence / grain shape | Flyway migration (append-only; reproduce the MVs) | **Yes** | [50](50-sla-and-hierarchies.md) |
 | new `viz.kind` / render behavior | `KpiTile.jsx` + dashboard components | **Yes** (FE bundle) | [10](10-kpi-catalog.md) §3 |
 | scope-resolution policy (HRMS → policy engine) | `PrincipalScopeResolver` ("the seam") | **Yes** | [20](20-packs-and-rbac.md) layer 1 |
+| any on-screen text / new language | localization `_upsert` (module `rainmaker-dashboard` + platform families) + cache bust | **No** | [90-localization.md](90-localization.md) |
 
 Rule of thumb: **tenant-specific values live in MDMS, never in code.** If you find yourself
 wanting to hardcode a deployment's ward list, SLA, or role name in the FE or a service — stop
@@ -49,6 +50,7 @@ and find the master.
 | [60-operations.md](60-operations.md) | MV refresh scheduler + manual REFRESH commands, the `asOf` staleness signal, tenant-bootstrap coverage (and the `dss.*` gap), what a redeploy wipes |
 | [70-esbuild-embedding.md](70-esbuild-embedding.md) | **The frontend architecture (PR #1062).** How the dashboard embeds into digit-ui: module registry, `App.js` `enabledModules`, the always-on route fallback vs the citymodule-gated card, `roles.js` `DASHBOARD_ROLES`, embedded mode, the analytics API client + MDMS context-path resolution, and the catalog→tile render pipeline (`useCatalog`/`useCatalogLayout`/`KpiTile`) |
 | [80-live-bomet-state.md](80-live-bomet-state.md) | **Live-verified snapshot (2026-07-09).** A reproducible bomet probe: 37 published defs / 10 PUBLIC tiles, the two-pack first-match (`executive-default` vs `supervisor-default`), the anonymous inline lock, the **catalog-divergence trap** (repo seed vs mdms-v2 store vs served catalog; the #1026 stale-record no-op), the sidebar seeding bug (ACCESSCONTROL actions under `-TEST`; fixed via the actions bridge, CCRS#1106), and an empty-tile triage flow |
+| [90-localization.md](90-localization.md) | **Localizing the dashboard.** The no-fallback rule (missing message ⇒ raw key/code on screen), the three bundles the module loads, every dashboard-owned key family (`DASHBOARD_*`, KPI `titleKey`/`subtitleKey`, series/column `labelKey`s, geo-tier vocabulary), the reused platform families (`COMPLAINT_HIERARCHY.*`, boundary codes, departments), the gap-triage table, the generated en_IN pack + tenant_bootstrap floor, and the add-a-language cookbook |
 
 ## Primary sources (cross-linked throughout)
 
