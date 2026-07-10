@@ -3,7 +3,7 @@ import React from "react";
 // Shared PGR file uploader — the SAME component/UX as the citizen create
 // wizard's Step-4 uploader (CreatePGRFlowV2 PgrFileUpload): dashed drop-zone
 // with cloud icon + "Choose files", preview-card grid (image thumb or doc
-// icon, check badge, ✕ remove, name + size), drag-and-drop, 2MB/file,
+// icon, check badge, ✕ remove, name + size), drag-and-drop, 5MB/file,
 // keyboard accessible. Extracted here so the employee workflow-action modal
 // (CCSD-1965) reuses it verbatim; the citizen wizard keeps its inline copy
 // with identical markup/classes (unifying that import is a follow-up).

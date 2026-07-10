@@ -306,12 +306,14 @@ const STEPS = [
 // key, which Module.js clears on every citizen-home mount.
 const CREATE_DRAFT_KEY = "PGR_CREATE_CITIZEN_DRAFT";
 
-// The saved step POSITION may only be restored when the document itself was
-// RELOADED (mid-flow F5) — and only by the first wizard mount after it. Any
-// other entry (SPA links, and sidebar items that hard-navigate like "Citizen
-// Complaint Resolution System") starts at step 1 with the answers kept. The
-// flag is consumed on first use so later SPA re-entries within the same
-// document also start at step 1.
+// The saved draft (answers AND step position) may only be restored when the
+// document itself was RELOADED (mid-flow F5) — and only by the first wizard
+// mount after it. Any other entry (SPA links, and sidebar items that
+// hard-navigate like "Citizen Complaint Resolution System") is a FRESH start:
+// the stored draft is discarded entirely — answers included (user feedback:
+// re-entering via "File a Complaint" with pre-filled fields reads as stale
+// state, matching the pre-draft behaviour). The flag is consumed on first use
+// so later SPA re-entries within the same document also start clean.
 let RESTORE_STEP_ARMED = (() => {
   try {
     const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
@@ -751,10 +753,14 @@ function RelatedToStepBody({ data, patch, relatedToOptions, t }: StepBodyProps) 
             });
           }}
           placeholder={tr(t, "CS_COMPLAINT_PICK_ONE", "Select…")}
-          options={options.map((o) => ({ value: o.code, label: o.name }))}
+          // MDMS `name` carries a localization KEY on newer data
+          // (PGR_RELATEDTO_NAME_<CODE>, prod convention) — t() resolves it per
+          // locale. Older data ships display TEXT in `name`; t() passes any
+          // non-key string through unchanged, so both conventions render.
+          options={options.map((o) => ({ value: o.code, label: t(o.name) }))}
         />
         {data.caseRelatedToName ? (
-          <FieldHelp ok>{data.caseRelatedToName}</FieldHelp>
+          <FieldHelp ok>{t(data.caseRelatedToName)}</FieldHelp>
         ) : (
           <FieldHelp>{tr(t, "CS_RELATED_TO_HELP", "Choose the organization or entity responsible for the issue.")}</FieldHelp>
         )}
@@ -1538,19 +1544,26 @@ const CreatePGRFlowV2: React.FC = () => {
     (baseTenant ? String(baseTenant).split(".")[0] : baseTenant);
   const tenants: any = Digit.Hooks.pgr.useTenants();
 
-  // Seed from the session draft (if any) so refresh / re-entry restores both
-  // the answers and the step the citizen was on. The draft is stamped with the
-  // tenant + user it was written under and DISCARDED on mismatch — a home-city
-  // switch or a re-login must never restore another tenant's serviceCode /
-  // boundary (they would submit under the new tenant with blank pickers).
+  // Seed from the session draft ONLY on a document reload (mid-flow F5) so the
+  // citizen doesn't lose their answers to an accidental refresh. Every other
+  // entry ("File a Complaint", sidebar, deep link) starts completely clean and
+  // deletes the stored draft. The draft is also stamped with the tenant + user
+  // it was written under and DISCARDED on mismatch — a home-city switch or a
+  // re-login must never restore another tenant's serviceCode / boundary (they
+  // would submit under the new tenant with blank pickers).
   const draftUserUuid = Digit.UserService.getUser()?.info?.uuid;
   const savedDraftRef = React.useRef<any>(null);
   if (savedDraftRef.current === null) {
-    const d = Digit.SessionStorage.get(CREATE_DRAFT_KEY) || {};
-    savedDraftRef.current =
-      d.formData && typeof d.formData === "object" && d.tenant === baseTenant && d.user === draftUserUuid
-        ? d
-        : {};
+    if (RESTORE_STEP_ARMED) {
+      const d = Digit.SessionStorage.get(CREATE_DRAFT_KEY) || {};
+      savedDraftRef.current =
+        d.formData && typeof d.formData === "object" && d.tenant === baseTenant && d.user === draftUserUuid
+          ? d
+          : {};
+    } else {
+      Digit.SessionStorage.del(CREATE_DRAFT_KEY);
+      savedDraftRef.current = {};
+    }
   }
   const [stepIndex, setStepIndex] = React.useState(() => {
     // Position restores ONLY right after a document reload (see
@@ -1570,20 +1583,8 @@ const CreatePGRFlowV2: React.FC = () => {
     Digit.SessionStorage.set(CREATE_DRAFT_KEY, { formData, stepIndex, tenant: baseTenant, user: draftUserUuid });
   }, [formData, stepIndex, baseTenant, draftUserUuid]);
 
-  // Leaving the wizard via IN-APP navigation (sidebar Home, back, links) resets
-  // the saved POSITION to step 1 while keeping the answers — re-entering from
-  // "File a Complaint" should read as a fresh start, not resume on page 3
-  // (user feedback on the draft-persistence feature). A hard refresh tears the
-  // page down without running this cleanup, so mid-flow F5 still restores the
-  // exact step. Successful create deletes the key before navigating, and the
-  // formData guard keeps this cleanup from resurrecting it.
-  React.useEffect(
-    () => () => {
-      const d = Digit.SessionStorage.get(CREATE_DRAFT_KEY);
-      if (d && d.formData) Digit.SessionStorage.set(CREATE_DRAFT_KEY, { ...d, stepIndex: 0 });
-    },
-    []
-  );
+  // (No unmount cleanup needed: any non-reload mount deletes the draft up
+  // front, so in-app re-entry can never see stale answers or position.)
 
   // Authority dispatcher (RAINMAKER-PGR.ComplaintRelatedToMap @ state tenant).
   // Empty (the default for any tenant that hasn't seeded it) => the legacy flow:
