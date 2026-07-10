@@ -80,10 +80,10 @@ const EmployeeApp = ({
               logoUrl={logoUrl}
               logoUrlWhite={logoUrlWhite}
               showSidebar={isUserProfile ? true : false}
-              // CCSD-1971 (Moz feedback B1): the language selector is removed
-              // from the EMPLOYEE surface entirely (was hidden only on the
-              // language-selection route before). Citizen keeps its selector.
-              showLanguageChange={false}
+              // Language selector restored on the employee surface (reverts
+              // CCSD-1971 B1 per user request) — hidden only on the
+              // language-selection route, as before the feedback batch.
+              showLanguageChange={!showLanguageChange}
             />
           )}
           <div
@@ -144,11 +144,10 @@ const EmployeeApp = ({
               logoUrl={logoUrl}
               logoUrlWhite={logoUrlWhite}
               modules={modules}
-              // CCSD-1971 (B1): no language selector on the employee surface.
-              // This is the MAIN employee wrapper — the prop defaulted to true
-              // here, which kept the dropdown alive despite the other wrapper
-              // passing false.
-              showLanguageChange={false}
+              // Language selector restored on the employee surface (reverts
+              // CCSD-1971 B1 per user request). This is the MAIN employee
+              // wrapper — the prop defaults to true here.
+              showLanguageChange={true}
             />}
             <div className={!noTopBar ? `${(isSuperUserWithMultipleRootTenant) ? "" : "main"} ${DSO ? "m-auto" : ""} digit-home-main` : ""}>
 
