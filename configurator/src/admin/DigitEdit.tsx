@@ -130,7 +130,10 @@ function DigitEditContent({
       {/* Form card */}
       <DigitCard className="max-w-none">
         <MutationErrorBanner info={errorInfo} onDismiss={onDismissError} />
-        <Form>
+        {/* mode="onChange": see matching note in DigitCreate.tsx — without
+            it, fieldState.invalid stays unset (no red/error styling) until
+            the first submit attempt. */}
+        <Form mode="onChange">
           <div className="space-y-4">
             {children}
           </div>

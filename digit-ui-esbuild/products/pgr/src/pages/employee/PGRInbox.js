@@ -65,6 +65,16 @@ const PGRSearchInbox = () => {
   // Inject mobile validation rules from MDMS into the search config
   if (configs && validationRules && configs.sections?.search?.uiConfig?.fields) {
     const { min, max } = getMinMaxValues();
+    // react-hook-form@6's pattern rule only runs when `pattern.value` (or
+    // `pattern` itself) is an actual RegExp instance — a plain string is
+    // silently skipped with no error and no console warning, so the field
+    // never validates. `validationRules.pattern` is always a string here.
+    let compiledPattern = null;
+    try {
+      compiledPattern = new RegExp(validationRules.pattern);
+    } catch {
+      compiledPattern = null;
+    }
     configs = {
       ...configs,
       sections: {
@@ -85,7 +95,7 @@ const PGRSearchInbox = () => {
                       maxlength: validationRules.maxLength,
                       min: min,
                       max: max,
-                      pattern: validationRules.pattern,
+                      pattern: compiledPattern,
                     },
                     error: validationRules.errorMessage || field.populators.error,
                   },
