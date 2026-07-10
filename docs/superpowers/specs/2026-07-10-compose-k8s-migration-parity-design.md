@@ -78,20 +78,23 @@ service (the init-container equivalent):
 
 ```yaml
 <service>-migration:
-  image: <service>-db:<tag>          # see §5 for sourcing
+  build:                              # repo-local: build from the in-repo db/Dockerfile
+    context: ../backend/<service>/src/main/resources/db
+  # image: <service>-db:<tag>         # core services: pull instead (see §5)
   depends_on:
     postgres-db: { condition: service_healthy }
   environment:
-    FLYWAY_URL: jdbc:postgresql://postgres:5432/egov   # DIRECT to postgres, NOT pgbouncer
+    # Contract expected by the -db image's migrate.sh (verified in
+    # backend/pgr-services/src/main/resources/db/migrate.sh):
+    #   flyway -url=$DB_URL -table=$SCHEMA_TABLE -user=$FLYWAY_USER
+    #     -password=$FLYWAY_PASSWORD -locations=$FLYWAY_LOCATIONS
+    #     -baselineOnMigrate=true -outOfOrder=true migrate
+    DB_URL: jdbc:postgresql://postgres-db:5432/egov    # REAL postgres — see note below
+    SCHEMA_TABLE: <service>_schema                      # the K8s name
     FLYWAY_USER: egov
     FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-    FLYWAY_SCHEMAS: public
-    FLYWAY_TABLE: <service>_schema                      # the K8s name
     FLYWAY_LOCATIONS: filesystem:/flyway/sql
-    FLYWAY_BASELINE_ON_MIGRATE: "true"
     FLYWAY_VALIDATE_ON_MIGRATE: "false"                 # lenient — see §8
-    FLYWAY_OUT_OF_ORDER: "true"
-  command: migrate
   restart: "no"
 
 <service>:                            # the app
@@ -100,6 +103,16 @@ service (the init-container equivalent):
   depends_on:
     <service>-migration: { condition: service_completed_successfully }
 ```
+
+**Host note — `postgres` is NOT the database.** In compose, the hostname
+`postgres` is a network **alias for pgbouncer**, which runs in `POOL_MODE:
+transaction`. The real Postgres is the `postgres-db` service (container
+`docker-postgres`). Flyway needs session-scoped connections (advisory locks,
+multi-statement DDL), which transaction pooling breaks — *this is the actual
+root of the `egov-otp` "Flyway incompatible with pgbouncer" exception.* Every
+migrator therefore connects to **`postgres-db:5432` directly**, bypassing
+pgbouncer, which both mirrors K8s (its init containers hit the DB directly) and
+dissolves the otp exception.
 
 **Removed** at the end of rollout:
 - The consolidated `db-migrations` container and its `migrate-all.sh`.
