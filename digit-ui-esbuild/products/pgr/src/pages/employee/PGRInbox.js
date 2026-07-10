@@ -72,7 +72,10 @@ const PGRSearchInbox = () => {
     let compiledPattern = null;
     try {
       compiledPattern = new RegExp(validationRules.pattern);
-    } catch {
+    } catch (e) {
+      // A misconfigured MDMS regex disables pattern validation with no other
+      // signal (RHF just skips a null pattern) — surface it so it gets fixed.
+      console.warn("PGRInbox: invalid mobile validation regex from MDMS, pattern validation disabled:", validationRules.pattern, e);
       compiledPattern = null;
     }
     configs = {
