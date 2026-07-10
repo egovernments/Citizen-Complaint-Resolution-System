@@ -223,6 +223,10 @@ plugins:
         -- docs/parity-item5-gateway-rbac-design.md. (Perf: one accesscontrol call per protected
         -- request; response caching keyed by roles+uri+tenant is a documented follow-up.)
         if is_protected and resolved then
+          -- Guard tenantIds: a principal without a tenantId (e.g. a freshly-created citizen
+          -- before city selection) must NOT serialize as tenantIds:[null], which accesscontrol
+          -- would reject as malformed — send an empty array instead.
+          local tid = resolved["tenantId"]
           local az = http.new()
           az:set_timeout(5000)
           local ares = az:request_uri("http://egov-accesscontrol:8090/access/v1/actions/_authorize", {
@@ -233,21 +237,27 @@ plugins:
               AuthorizationRequest = {
                 roles = resolved["roles"] or {},
                 uri = uri,
-                tenantIds = { resolved["tenantId"] },
+                tenantIds = tid and { tid } or {},
               },
             }),
           })
           if not (ares and ares.status == 200) then
-            local why = ares and ("accesscontrol status " .. ares.status) or "accesscontrol unreachable"
             if ENFORCE_RBAC then
+              -- fail CLOSED: deny on an explicit non-200 AND on an unreachable accesscontrol.
               return kong.response.exit(403, cjson.encode({
                 ResponseInfo = cjson.null,
                 Errors = {{ code = "AccessDeniedException", message = "AccessDeniedException",
                             description = "You are not authorized to perform this action" }},
               }), { ["Content-Type"] = "application/json" })
             end
-            kong.log.warn("RBAC-audit(#5 p2): would 403 (", why, ") uri=", uri,
-                          " roles=", cjson.encode(resolved["roles"] or {}))
+            -- AUDIT: separate a legitimate DENY (accesscontrol answered non-200) from a transient
+            -- infra failure (accesscontrol UNREACHABLE) so operators know which alerts to act on.
+            if ares then
+              kong.log.warn("RBAC-audit(#5 p2): would 403 — accesscontrol DENY (status ", ares.status,
+                            ") uri=", uri, " roles=", cjson.encode(resolved["roles"] or {}))
+            else
+              kong.log.err("RBAC-audit(#5 p2): would 403 (fail-closed) — accesscontrol UNREACHABLE uri=", uri)
+            end
           end
         end
 services:
