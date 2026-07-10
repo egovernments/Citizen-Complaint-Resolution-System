@@ -33,7 +33,7 @@ const enrichBoundaryNodes = (nodes) => {
 };
 
 const reshapeToTenantBoundary = (response, hierarchyType) => {
-  const tenantBoundaries = response?.TenantBoundary || [];
+  const tenantBoundaries = Array.isArray(response?.TenantBoundary) ? response.TenantBoundary : [];
   for (const tb of tenantBoundaries) {
     if (typeof tb.hierarchyType === "string") {
       tb.hierarchyType = { code: tb.hierarchyType, name: tb.hierarchyType };
@@ -46,7 +46,11 @@ const reshapeToTenantBoundary = (response, hierarchyType) => {
       enrichBoundaryNodes(tb.boundary);
     }
   }
-  return response;
+  // Always return a stable envelope with TenantBoundary as an array, so callers that
+  // index TenantBoundary[0] never break on a missing/malformed upstream response.
+  const out = (response && typeof response === "object") ? response : {};
+  out.TenantBoundary = tenantBoundaries;
+  return out;
 };
 
 const fetchTenantBoundary = async (tenantId, hierarchyType) => {

@@ -86,7 +86,8 @@ export function registerIdgenLocationTools(registry: ToolRegistry): void {
         },
         boundary_type: {
           type: 'string',
-          description: 'Boundary type filter (e.g. "City", "Ward", "Block")',
+          description:
+            'Ignored (kept for backward compatibility). The full boundary tree for the tenant is always returned — the underlying boundary-service search does not filter by boundary type.',
         },
         hierarchy_type: {
           type: 'string',
