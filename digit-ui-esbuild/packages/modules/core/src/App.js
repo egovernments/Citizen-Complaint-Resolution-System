@@ -72,6 +72,9 @@ export const DigitApp = ({ stateCode, modules, appTenants, logoUrl, logoUrlWhite
   };
 
   const mobileView = innerWidth <= 640;
+  // Public PGR landing page — mounted shell-free (no topbar/sidebar) below.
+  // Registered by the PGR module; absent when PGR isn't an enabled module.
+  const PGRLandingPage = Digit?.ComponentRegistryService?.getComponent?.("PGRLandingPage");
   let sourceUrl = `${window.location.origin}/citizen`;
   const commonProps = {
     stateInfo,
@@ -92,6 +95,11 @@ export const DigitApp = ({ stateCode, modules, appTenants, logoUrl, logoUrlWhite
   };
   return (
     <Switch>
+      {PGRLandingPage && (
+        <Route exact path={`/${window?.contextPath}/landing`}>
+          <PGRLandingPage />
+        </Route>
+      )}
      {allowedUserTypes?.some(userType=>userType=="employee")&& <Route path={`/${window?.contextPath}/employee`}>
         <EmployeeApp {...commonProps} />
       </Route>}
