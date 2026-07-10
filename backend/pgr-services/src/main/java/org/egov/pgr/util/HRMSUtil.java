@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.egov.pgr.util.PGRConstants.HRMS_DEPARTMENT_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.HRMS_CURRENT_DEPARTMENT_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.HRMS_REPORTING_TO_JSONPATH;
 
 @Component
@@ -63,6 +64,35 @@ public class HRMSUtil {
 
         return departments;
 
+    }
+
+    /**
+     * Departments from the employee's CURRENT assignment(s) only (isCurrentAssignment==true) —
+     * unlike {@link #getDepartment}, which returns every assignment's department, past or
+     * present. Used for department-scoped search, where an ended assignment must not widen
+     * access. Returns an empty list (never throws) if the employee has no current assignment
+     * with a department, or the HRMS response can't be parsed.
+     */
+    public List<String> getCurrentDepartment(String uuid, RequestInfo requestInfo, String tenantId) {
+
+        StringBuilder url = getHRMSURI(Collections.singletonList(uuid), tenantId);
+
+        RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
+
+        Object res = serviceRequestRepository.fetchResult(url, requestInfoWrapper);
+
+        if (res == null) {
+            log.warn("HRMS returned null for employee UUID: {}", uuid);
+            return Collections.emptyList();
+        }
+
+        try {
+            List<String> departments = JsonPath.read(res, HRMS_CURRENT_DEPARTMENT_JSONPATH);
+            return departments == null ? Collections.emptyList() : departments;
+        } catch (Exception e) {
+            log.warn("Failed to parse HRMS current-assignment department for uuid: {}", uuid, e);
+            return Collections.emptyList();
+        }
     }
 
     /**
