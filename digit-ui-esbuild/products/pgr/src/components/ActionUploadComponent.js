@@ -4,7 +4,7 @@ import PgrFileUpload from "./PgrFileUpload";
 
 // Workflow-action attachment field (CCSD-1965) — thin FormComposerV2 adapter
 // around the SAME enhanced uploader the citizen create wizard uses
-// (PgrFileUpload: drag-drop zone, preview cards, remove, 2MB/file).
+// (PgrFileUpload: drag-drop zone, preview cards, remove, 5MB/file).
 //
 // Contract: renders in the generic action modal for EVERY workflow action;
 // emits the ALREADY-SHAPED document array handleActionSubmit forwards as

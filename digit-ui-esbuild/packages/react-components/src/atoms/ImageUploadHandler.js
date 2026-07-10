@@ -36,7 +36,9 @@ export const ImageUploadHandler = (props) => {
   }, [uploadedImagesIds]);
 
   useEffect(() => {
-    if (imageFile && imageFile.size > 2097152) {
+    // 5 MB per file (CCSD-1971 A7) — aligned with PgrFileUpload and the
+    // profile-picture drawer; CS_FILE_TOO_LARGE message text says 5 MB.
+    if (imageFile && imageFile.size > 5 * 1024 * 1024) {
       setError(t("CS_FILE_TOO_LARGE") || "File is too large");
     } else {
       setImage(imageFile);
