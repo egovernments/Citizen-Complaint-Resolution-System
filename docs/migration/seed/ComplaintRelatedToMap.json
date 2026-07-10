@@ -1,4 +1,20 @@
 [
-  { "code": "IGE",   "name": "Inspeccão Geral do Estado",                                "shortName": "IGE",   "tenantCode": "mz.ige",   "tenantId": "mz", "displayOrder": 1, "active": true },
-  { "code": "IGSAE", "name": "Inspecção-Geral dos Serviços de Administração do Estado", "shortName": "IGSAE", "tenantCode": "mz.igsae", "tenantId": "mz", "displayOrder": 2, "active": true }
+  {
+    "code": "IGE",
+    "name": "PGR_RELATEDTO_NAME_IGE",
+    "shortName": "IGE",
+    "tenantCode": "mz.ige",
+    "tenantId": "mz",
+    "displayOrder": 1,
+    "active": true
+  },
+  {
+    "code": "IGSAE",
+    "name": "PGR_RELATEDTO_NAME_IGSAE",
+    "shortName": "IGSAE",
+    "tenantCode": "mz.igsae",
+    "tenantId": "mz",
+    "displayOrder": 2,
+    "active": true
+  }
 ]

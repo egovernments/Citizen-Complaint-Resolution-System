@@ -751,10 +751,14 @@ function RelatedToStepBody({ data, patch, relatedToOptions, t }: StepBodyProps) 
             });
           }}
           placeholder={tr(t, "CS_COMPLAINT_PICK_ONE", "Select…")}
-          options={options.map((o) => ({ value: o.code, label: o.name }))}
+          // MDMS `name` carries a localization KEY on newer data
+          // (PGR_RELATEDTO_NAME_<CODE>, prod convention) — t() resolves it per
+          // locale. Older data ships display TEXT in `name`; t() passes any
+          // non-key string through unchanged, so both conventions render.
+          options={options.map((o) => ({ value: o.code, label: t(o.name) }))}
         />
         {data.caseRelatedToName ? (
-          <FieldHelp ok>{data.caseRelatedToName}</FieldHelp>
+          <FieldHelp ok>{t(data.caseRelatedToName)}</FieldHelp>
         ) : (
           <FieldHelp>{tr(t, "CS_RELATED_TO_HELP", "Choose the organization or entity responsible for the issue.")}</FieldHelp>
         )}
