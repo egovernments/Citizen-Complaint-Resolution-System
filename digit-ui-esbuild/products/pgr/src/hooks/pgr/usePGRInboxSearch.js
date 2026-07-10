@@ -46,39 +46,17 @@ const usePGRInboxSearch = (reqCriteria) => {
     ]);
     const wrappers = pgrResponse?.ServiceWrappers || [];
     const totalCount = countResponse?.count ?? wrappers.length;
-
-    if (wrappers.length === 0) {
-      return { items: [], totalCount: totalCount, statusMap: [] };
-    }
-
-    // 2. Batch-fetch workflow data
-    const businessIds = wrappers
-      .map((sw) => sw.service?.serviceRequestId)
-      .filter(Boolean)
-      .join(",");
     const tenantId = params.tenantId || Digit.ULBService.getCurrentTenantId();
 
-    let wfMap = {};
-    if (businessIds) {
-      try {
-        const wfResponse = await Digit.WorkflowService.getByBusinessId(
-          tenantId,
-          businessIds,
-          {},
-          false
-        );
-        (wfResponse?.ProcessInstances || []).forEach((pi) => {
-          wfMap[pi.businessId] = pi;
-        });
-      } catch (e) {
-        console.error("PGR inbox: workflow fetch failed", e);
-      }
-    }
-
-    // 3. Build a statusMap from the PGR workflow business service so the
-    // inbox's WorkflowStatusFilter renders a non-empty list of toggleable
-    // states. Previously this returned `[]`, so the Status filter card in
-    // the inbox showed only its label and no checkboxes.
+    // Build a statusMap from the PGR workflow business service so the inbox's
+    // WorkflowStatusFilter renders a non-empty list of toggleable states.
+    //
+    // Built up front — BEFORE the empty-result early return — so the Status
+    // filter card keeps its checkboxes even when the CURRENT filter matches
+    // zero rows. Previously this was computed only on the non-empty path, so
+    // selecting a status that momentarily returned nothing also wiped the
+    // filter's own options (the "status filter shows no fields below" half of
+    // issue #432), stranding the operator with no way to change the filter.
     let statusMap = [];
     try {
       const wfBs = await Request({
@@ -108,10 +86,54 @@ const usePGRInboxSearch = (reqCriteria) => {
       console.error("PGR inbox: failed to fetch workflow states", e);
     }
 
-    // Per-complaint-type SLA budget (hours) from MDMS ServiceDefs — the inbox filter
-    // caches these in SessionStorage on mount. Used to show "SLA days remaining" per
-    // type, matching the server-side sortBy=sla ordering (issue #432).
-    const serviceDefs = Digit.SessionStorage.get("serviceDefs") || [];
+    if (wrappers.length === 0) {
+      return { items: [], totalCount, statusMap };
+    }
+
+    // 2. Batch-fetch workflow data
+    const businessIds = wrappers
+      .map((sw) => sw.service?.serviceRequestId)
+      .filter(Boolean)
+      .join(",");
+
+    let wfMap = {};
+    if (businessIds) {
+      try {
+        const wfResponse = await Digit.WorkflowService.getByBusinessId(
+          tenantId,
+          businessIds,
+          {},
+          false
+        );
+        (wfResponse?.ProcessInstances || []).forEach((pi) => {
+          wfMap[pi.businessId] = pi;
+        });
+      } catch (e) {
+        console.error("PGR inbox: workflow fetch failed", e);
+      }
+    }
+
+    // Per-complaint-type SLA budget (hours) from MDMS RAINMAKER-PGR.ComplaintHierarchy
+    // leaves — the SAME master and `slaHours` field pgr-services reads to order the
+    // inbox by SLA remaining (issue #432), so the number shown matches the server sort.
+    //
+    // Load them here rather than relying solely on the SessionStorage cache the inbox
+    // filter fills on mount: the inbox search can resolve BEFORE that cache is
+    // populated, and the react-query result is keyed only on the search params — it
+    // never recomputes when serviceDefs land later. Without this, every fresh-load row
+    // fell through to the fallback below and showed the wrong SLA.
+    let serviceDefs = Digit.SessionStorage.get("serviceDefs");
+    if (!Array.isArray(serviceDefs) || serviceDefs.length === 0) {
+      try {
+        serviceDefs = await Digit.MDMSService.getServiceDefs(tenantId, "PGR");
+        if (Array.isArray(serviceDefs) && serviceDefs.length > 0) {
+          Digit.SessionStorage.set("serviceDefs", serviceDefs);
+        }
+      } catch (e) {
+        console.error("PGR inbox: serviceDefs fetch failed", e);
+        serviceDefs = [];
+      }
+    }
     const slaHoursByCode = {};
     if (Array.isArray(serviceDefs)) {
       serviceDefs.forEach((d) => {
@@ -119,21 +141,29 @@ const usePGRInboxSearch = (reqCriteria) => {
       });
     }
     const DAY_MS = 24 * 60 * 60 * 1000;
+    const HOUR_MS = 60 * 60 * 1000;
+    // Uniform business-level SLA fallback for complaint types with no per-type
+    // slaHours = pgr.business.level.sla (432000000 ms / 5 days) — the SAME default
+    // pgr-services' SLA ORDER BY uses (PGRQueryBuilder.addOrderByClause →
+    // config.getBusinessLevelSla), so display and server sort stay consistent.
+    // The previous fallback read the workflow ProcessInstance's business-service
+    // SLA (pi.businesssServiceSla) instead — a DIFFERENT, larger budget that
+    // showed e.g. 14 days for a 5-day complaint (issue #432).
+    const DEFAULT_SLA_MS = 432000000;
 
     return {
       items: wrappers.map((sw) => {
         const pi = wfMap[sw.service?.serviceRequestId] || {};
-        // SLA days remaining = per-type SLA budget (ServiceDefs.slaHours) − elapsed
-        // since creation. Falls back to the workflow's uniform businesssServiceSla
-        // when slaHours isn't available (serviceDefs not yet cached, or a type with
-        // no slaHours) so the column never goes blank.
+        // SLA days remaining = per-complaint-type SLA budget − elapsed since creation
+        // (option 1 in the #432 thread: whole-complaint SLA, per type, from creation).
+        // Falls back to the uniform business-level SLA when a type has no slaHours, so
+        // the column never goes blank and stays consistent with the server-side sort.
         const slaHours = slaHoursByCode[sw.service?.serviceCode];
         const createdTime = sw.service?.auditDetails?.createdTime;
         let slaDays = null;
-        if (slaHours != null && createdTime != null) {
-          slaDays = Math.round((slaHours * 60 * 60 * 1000 - (Date.now() - createdTime)) / DAY_MS);
-        } else if (pi.businesssServiceSla != null) {
-          slaDays = Math.round(pi.businesssServiceSla / DAY_MS);
+        if (createdTime != null) {
+          const budgetMs = slaHours != null ? slaHours * HOUR_MS : DEFAULT_SLA_MS;
+          slaDays = Math.round((budgetMs - (Date.now() - createdTime)) / DAY_MS);
         }
         return {
           businessObject: { service: sw.service, serviceSla: slaDays },
