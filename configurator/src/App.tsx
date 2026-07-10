@@ -173,6 +173,10 @@ function ManagementAdmin() {
 // Storage key for persisting auth state
 const AUTH_STORAGE_KEY = 'crs-auth-state';
 
+// One-shot flag (sessionStorage) set when a request is rejected for an expired
+// session, read by LoginPage to explain why the operator was sent back.
+export const SESSION_EXPIRED_KEY = 'crs-session-expired';
+
 // Helper to restore apiClient from localStorage
 function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppState['user']; environment: string; tenant: string; targetTenant: string; mode: AppMode; currentPhase: number; completedPhases: number[] } | null {
   const saved = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -253,6 +257,23 @@ function App() {
       showHelp: false,
     };
   });
+
+  // Drop the session and bounce to /login when any request reports the token
+  // is no longer valid (e.g. it expired while the operator was partway through
+  // a long flow like the Phase 2 OSM boundary fetch). Without this, an expired
+  // token surfaces only on the first write, as a cryptic downstream NPE, with
+  // the UI still pretending to be logged in.
+  useEffect(() => {
+    apiClient.setSessionExpiredHandler(() => {
+      try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1'); } catch { /* ignore */ }
+      clearUser();
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      apiClient.logout();
+      digitClient.clearAuth();
+      resetProviders();
+      setState(s => ({ ...s, isAuthenticated: false, user: null }));
+    });
+  }, []);
 
   // Re-sync apiClient on every render if authenticated (handles HMR)
   useEffect(() => {
