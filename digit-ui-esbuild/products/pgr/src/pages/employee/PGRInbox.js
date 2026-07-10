@@ -5,6 +5,22 @@ import _ from "lodash";
 import PGRSearchInboxConfig from "../../configs/PGRSearchInboxConfig";
 import { useLocation } from "react-router-dom";
 
+// Defense-in-depth against a misconfigured MDMS regex causing catastrophic
+// backtracking (ReDoS, CWE-1333) when compiled below. Mobile-number patterns
+// are always short and simple (e.g. `^66[0-9]{6}$`), so a generous length cap
+// plus a check for the classic nested-quantifier shape (e.g. `(a+)+`) catches
+// realistic failure modes without a full regex-safety analyzer.
+const MOBILE_PATTERN_MAX_LENGTH = 100;
+const NESTED_QUANTIFIER_RE = /\([^()]*[+*][^()]*\)[+*]/;
+function isSafeMobilePattern(pattern) {
+  return (
+    typeof pattern === "string" &&
+    pattern.length > 0 &&
+    pattern.length <= MOBILE_PATTERN_MAX_LENGTH &&
+    !NESTED_QUANTIFIER_RE.test(pattern)
+  );
+}
+
 /**
  * PGRSearchInbox - Complaint Search Inbox Screen
  * 
@@ -70,13 +86,17 @@ const PGRSearchInbox = () => {
     // silently skipped with no error and no console warning, so the field
     // never validates. `validationRules.pattern` is always a string here.
     let compiledPattern = null;
-    try {
-      compiledPattern = new RegExp(validationRules.pattern);
-    } catch (e) {
-      // A misconfigured MDMS regex disables pattern validation with no other
-      // signal (RHF just skips a null pattern) — surface it so it gets fixed.
-      console.warn("PGRInbox: invalid mobile validation regex from MDMS, pattern validation disabled:", validationRules.pattern, e);
-      compiledPattern = null;
+    if (isSafeMobilePattern(validationRules.pattern)) {
+      try {
+        compiledPattern = new RegExp(validationRules.pattern);
+      } catch (e) {
+        // A misconfigured MDMS regex disables pattern validation with no other
+        // signal (RHF just skips a null pattern) — surface it so it gets fixed.
+        console.warn("PGRInbox: invalid mobile validation regex from MDMS, pattern validation disabled:", validationRules.pattern, e);
+        compiledPattern = null;
+      }
+    } else {
+      console.warn("PGRInbox: mobile validation regex from MDMS rejected as unsafe or oversized, pattern validation disabled:", validationRules.pattern);
     }
     configs = {
       ...configs,
