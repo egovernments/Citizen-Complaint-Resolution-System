@@ -44,6 +44,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 DUMP = ROOT / "local-setup/db/full-dump.sql"
 COMPOSE = ROOT / "local-setup/docker-compose.egov-digit.yaml"
 FAST_PATH = ROOT / "local-setup/docker-compose.fast-path.yml"
+MIGRATIONS = ROOT / "local-setup/docker-compose.migrations.yml"
 
 # ── Transitional allowlists (drive these to empty as item #10 lands) ──────────
 # Enabled services that legitimately create their history fresh: they claim a
@@ -107,24 +108,31 @@ def _env(spec) -> dict:
     return {}
 
 
-def merged_services(compose_text: str, fast_path_text: str) -> dict:
-    """Per-service env from the base compose with the fast-path env overlaid."""
-    base = yaml.safe_load(compose_text) or {}
-    over = yaml.safe_load(fast_path_text) or {}
-    services = {n: _env(s) for n, s in (base.get("services") or {}).items()}
-    for name, spec in (over.get("services") or {}).items():
-        services.setdefault(name, {}).update(_env(spec))
+def merged_services(*compose_texts: str) -> dict:
+    """Per-service env from the base compose with each overlay merged in order."""
+    services = {}
+    for text in compose_texts:
+        data = yaml.safe_load(text) or {}
+        for name, spec in (data.get("services") or {}).items():
+            services.setdefault(name, {}).update(_env(spec))
     return services
 
 
 def claimed_tables(services: dict) -> set:
-    """SPRING_FLYWAY_TABLE of every Flyway-enabled service that pins one.
+    """Tables claimed by (a) a per-service migration init container via SCHEMA_TABLE,
+    or (b) a Flyway-enabled app via SPRING_FLYWAY_TABLE.
 
     A service is Flyway-relevant if it carries any SPRING_FLYWAY_* / FLYWAY_ENABLED
     key; enabled unless that flag is explicitly false (the image default is on).
     """
     claimed = set()
     for env in services.values():
+        # (a) init-container migrator: SCHEMA_TABLE is the authoritative name.
+        schema_table = env.get("SCHEMA_TABLE")
+        if schema_table:
+            claimed.add(schema_table.strip())
+            continue
+        # (b) app with embedded Flyway still enabled.
         relevant = any(k.startswith("SPRING_FLYWAY") for k in env) or "FLYWAY_ENABLED" in env
         if not relevant:
             continue
@@ -221,8 +229,17 @@ def self_test() -> int:
     stale2 = analyze(dump, {"pgr_services_schema", "hrms_schema_version"})
     assert "hrms_schema_version" in stale2["stale_baseline_fresh"], stale2
 
+    # A service migrated to an init container claims its table via SCHEMA_TABLE,
+    # not SPRING_FLYWAY_TABLE. That must still count as claimed.
+    PENDING_ENABLE, BASELINE_FRESH = set(), set()
+    migrated = claimed_tables({
+        "pgr-services": {"SPRING_FLYWAY_ENABLED": "false"},
+        "pgr-services-migration": {"SCHEMA_TABLE": "pgr_services_schema"},
+    })
+    assert migrated == {"pgr_services_schema"}, f"migrator SCHEMA_TABLE not claimed: {migrated}"
+
     PENDING_ENABLE, BASELINE_FRESH = saved_p, saved_b
-    print("self-test OK: alignment, mismatch, orphan, and stale-allowlist all detected.")
+    print("self-test OK: alignment, mismatch, orphan, migrator-claim, and stale-allowlist all detected.")
     return 0
 
 
@@ -230,7 +247,8 @@ def main() -> int:
     if "--self-test" in sys.argv:
         return self_test()
     dump = dump_history_tables(DUMP.read_text())
-    claimed = claimed_tables(merged_services(COMPOSE.read_text(), FAST_PATH.read_text()))
+    claimed = claimed_tables(merged_services(
+        COMPOSE.read_text(), FAST_PATH.read_text(), MIGRATIONS.read_text()))
     return report(dump, claimed)
 
 

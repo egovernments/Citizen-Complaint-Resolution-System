@@ -12,6 +12,7 @@ on:
       - 'local-setup/db/full-dump.sql'
       - 'local-setup/docker-compose.egov-digit.yaml'
       - 'local-setup/docker-compose.fast-path.yml'
+      - 'local-setup/docker-compose.migrations.yml'
       - '.github/scripts/check-flyway-dump-alignment.py'
       - '.github/workflows/flyway-dump-alignment.yml'
   push:
@@ -20,6 +21,7 @@ on:
       - 'local-setup/db/full-dump.sql'
       - 'local-setup/docker-compose.egov-digit.yaml'
       - 'local-setup/docker-compose.fast-path.yml'
+      - 'local-setup/docker-compose.migrations.yml'
 
 permissions:
   contents: read
