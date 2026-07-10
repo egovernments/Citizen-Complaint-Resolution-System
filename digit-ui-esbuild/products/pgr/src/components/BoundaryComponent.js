@@ -214,8 +214,11 @@ useEffect(() => {
     // locality validation was firing only when children happened to
     // be attached, so County-level selections silently passed).
     const deepest = path[path.length - 1];
+    // Childless node = branch ends here in the data → leaf (same rule as
+    // handleSelection below; don't hold NEXT hostage to unseeded levels).
     const isDeepestLevel =
-      deepest?.boundaryType === hierarchy[hierarchy.length - 1];
+      deepest?.boundaryType === hierarchy[hierarchy.length - 1] ||
+      !(Array.isArray(deepest?.children) && deepest.children.length > 0);
     processedHintRef.current = hintKey;
     onSelect(config.key, { ...deepest, isLeaf: isDeepestLevel });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -302,7 +305,15 @@ useEffect(() => {
     // `isLeaf` so validators can trust hierarchy depth instead of the
     // `.children` array (which isn't reliably preserved on the picked
     // node and let County-level selections pass — egovernments/CCRS#478).
-    const isDeepestLevel = index === boundaryHierarchy.length - 1;
+    // A branch may also END above the deepest configured level (data simply
+    // not seeded that deep — prod Tete→Tsangano has no Municípios): the last
+    // node that exists IS the finest answer for that branch, so a childless
+    // pick counts as leaf too. Safe against #478 because `selectedBoundary`
+    // here is the live tree node (children intact) — only downstream
+    // form-state copies lose `.children`, and those never reach this emit.
+    const isDeepestLevel =
+      index === boundaryHierarchy.length - 1 ||
+      !(Array.isArray(selectedBoundary.children) && selectedBoundary.children.length > 0);
     onSelect(config.key, { ...selectedBoundary, isLeaf: isDeepestLevel });
 
     // Load child boundaries
