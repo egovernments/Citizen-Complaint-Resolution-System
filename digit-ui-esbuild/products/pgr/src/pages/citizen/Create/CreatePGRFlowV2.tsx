@@ -751,10 +751,13 @@ function RelatedToStepBody({ data, patch, relatedToOptions, t }: StepBodyProps) 
             });
           }}
           placeholder={tr(t, "CS_COMPLAINT_PICK_ONE", "Select…")}
-          options={options.map((o) => ({ value: o.code, label: o.name }))}
+          // Localization-aware: PGR_RELATEDTO_<CODE> wins when seeded for the
+          // active locale (lets en/pt show different names); the MDMS `name`
+          // stays the fallback — behavior unchanged where keys aren't seeded.
+          options={options.map((o) => ({ value: o.code, label: tr(t, `PGR_RELATEDTO_${o.code}`, o.name) }))}
         />
         {data.caseRelatedToName ? (
-          <FieldHelp ok>{data.caseRelatedToName}</FieldHelp>
+          <FieldHelp ok>{tr(t, `PGR_RELATEDTO_${data.caseRelatedTo}`, data.caseRelatedToName)}</FieldHelp>
         ) : (
           <FieldHelp>{tr(t, "CS_RELATED_TO_HELP", "Choose the organization or entity responsible for the issue.")}</FieldHelp>
         )}
