@@ -21,7 +21,7 @@ import {
 import useDashboardT from '../i18n/useDashboardT';
 import { dimensionLabel } from '../i18n/dimensionLabel';
 import { translate as t } from '../i18n/localeRuntime';
-import { resolveTitle, resolveSubtitle, seriesEntryLabel } from '../i18n/textResolver';
+import { resolveTitle, resolveSubtitle, seriesEntryLabel, resolveSeriesLabel } from '../i18n/textResolver';
 
 /**
  * Generic viz-kind-driven tile renderer (the dashboard RENDERING ENGINE).
@@ -537,7 +537,7 @@ function adaptStacked(ctx) {
     if (viz.limit) rows = rows.slice(0, viz.limit);
     return {
       categories: rows.map((r) => r.label),
-      series: [{ name: viz.seriesLabel || t("DASHBOARD_COMMON_COUNT", "Count"), data: rows.map((r) => r.value) }],
+      series: [{ name: resolveSeriesLabel(viz, viz.seriesLabel || t("DASHBOARD_COMMON_COUNT", "Count")), data: rows.map((r) => r.value) }],
       colors: viz.colors || ['var(--chart-1)'],
     };
   }
