@@ -7,6 +7,27 @@ export function getApiBaseUrl(): string {
   return 'https://localhost';
 }
 
+// Root (state-level) tenant the deployment is configured for.
+//
+// The configurator is a STANDALONE Vite app — it does NOT expose digit-ui's
+// `window.globalConfigs` global (nothing injects a globalConfigs.js <script>
+// into this app's index.html), so reading `window.globalConfigs` here always
+// misses. The real config channel for a Vite build is a build-time env var:
+// the ansible deploy renders `VITE_STATE_TENANT_ID` from host_vars
+// `state_tenant_id` and passes it to `vite build` (see
+// local-setup/ansible/files/configurator-build.sh). A city tenant like
+// "mz.maputo" collapses to its root segment "mz". Empty when unset
+// (dev/standalone) — callers fall back to a neutral hint.
+export const STATE_TENANT_ID: string =
+  (import.meta.env.VITE_STATE_TENANT_ID as string | undefined)?.trim() || '';
+
+/** Root (state) tenant code for this deployment, e.g. "mz". Derived from the
+ *  build-time `VITE_STATE_TENANT_ID` (a city code collapses to its root
+ *  segment). Empty string when the build wasn't given one. */
+export function getConfiguredRootTenant(): string {
+  return STATE_TENANT_ID.split('.')[0];
+}
+
 // Service endpoints
 export const ENDPOINTS = {
   // Authentication

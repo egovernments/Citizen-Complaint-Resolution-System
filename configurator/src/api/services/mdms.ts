@@ -256,7 +256,13 @@ export const mdmsService = {
       name: tenant.name,
       type: tenant.city?.ulbGrade || 'CITY',
       description: tenant.description || tenant.name,
-      logoId: tenant.logoId || null,
+      // Schema note (tenant.tenants): `logoId` is an OPTIONAL non-nullable
+      // String — sending `logoId: null` fails validation with
+      // "expected type: String, found: Null", which blocked every Phase 1
+      // "Upload to DIGIT". Omit it entirely when the wizard has no logo yet
+      // (the branding step patches it in later). `imageId` is REQUIRED but
+      // nullable (["string","null"]), so `null` is the correct placeholder.
+      ...(tenant.logoId ? { logoId: tenant.logoId } : {}),
       imageId: tenant.logoId || null,
       emailId: tenant.emailId || `info@${tenant.code.toLowerCase().replace(/\./g, '-')}.gov.in`,
       address: tenant.address || `${tenant.city?.name || tenant.name}, ${tenant.city?.districtName || 'District'}`,
