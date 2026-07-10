@@ -1,5 +1,4 @@
 import { getTenantId, hasAuth } from "./analyticsService";
-import { formatDimensionLabel } from "../config/labelFormat";
 
 /**
  * MDMS context path from globalConfigs (deployments serve MDMS under
@@ -51,14 +50,14 @@ function buildRequestInfo() {
 /**
  * Display name for a hierarchy node. Live masters carry real display names on
  * leaves ("Ambulance breakdown / Crew unresponsive") but category records often
- * have name === code ("MedicalServices", "complaints.categories.X") — those go
- * through the shared code humanizer instead.
+ * have name === code ("MedicalServices", "complaints.categories.X") — those
+ * return undefined so the dimension-label seam surfaces the raw code as a
+ * localisation gap instead of a humanised pseudo-name.
  */
 function displayName(record) {
   const code = String(record?.code ?? "").trim();
   const name = String(record?.name ?? "").trim();
-  if (name && name !== code) return name;
-  return formatDimensionLabel(code);
+  return name && name !== code ? name : undefined;
 }
 
 /**

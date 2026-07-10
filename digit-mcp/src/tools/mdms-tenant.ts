@@ -12,6 +12,7 @@ import { applyFieldMask } from '../utils/field-mask.js';
 import { probeServices } from '../utils/probe.js';
 import type { ProbeReport } from '../utils/probe.js';
 import { loadFromXlsx } from '../utils/xlsx-loader.js';
+import { DASHBOARD_L10N_MESSAGES, DASHBOARD_L10N_LOCALE } from './dashboard-l10n-seed.js';
 
 /**
  * True for error messages that indicate a record already exists (duplicate / unique
@@ -2010,6 +2011,17 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               }
             } catch {
               // Tenant may not have this locale — that's expected. Skip.
+            }
+          }
+          // Static floor: the dashboard's repo-shipped message pack. Fresh
+          // installs have no source tenant carrying rainmaker-dashboard yet
+          // (the module was introduced with the dashboard localization work),
+          // so without this a from-scratch bootstrap renders raw DASHBOARD_*
+          // keys. Live-tenant copies win (first-writer-wins, same as above).
+          if (locale === DASHBOARD_L10N_LOCALE) {
+            for (const m of DASHBOARD_L10N_MESSAGES) {
+              const key = `${m.module}::${m.code}`;
+              if (!byKey.has(key)) byKey.set(key, m);
             }
           }
           const messages = Array.from(byKey.values());

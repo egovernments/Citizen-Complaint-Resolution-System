@@ -2,6 +2,8 @@
  * Shared table presentation — threshold highlighting for dashboard data tables.
  */
 
+import { translate as t } from "../i18n/localeRuntime";
+
 /** @typedef {'breach' | 'watch' | 'good'} MetricTone */
 /** @typedef {{ higherIsBetter: boolean, watch: number, breach: number }} MetricThresholdConfig */
 /** @typedef {{ column: string, extremum?: 'min' | 'max', badge?: string }} TableThresholdConfig */
@@ -126,6 +128,13 @@ export function getTableThreshold(widgetId) {
   return TABLE_THRESHOLDS[widgetId] ?? null;
 }
 
+/** Badge literals resolve lazily (at annotate time) so seeded locales translate. */
+function resolveBadgeLabel(badge) {
+  if (badge === "BOTTLENECK") return t("DASHBOARD_BADGE_BOTTLENECK", "BOTTLENECK");
+  if (badge === "LOW") return t("DASHBOARD_BADGE_LOW", "LOW");
+  return badge;
+}
+
 /**
  * Highlight a single row at the min or max of `column` (needs at least 2 finite values).
  * When multiple rows tie, only the first extremum row is flagged.
@@ -149,6 +158,6 @@ export function annotateTableThresholds(rows, threshold) {
   return rows.map((row, index) => ({
     ...row,
     highlight: index === highlightIndex,
-    badge: index === highlightIndex && badge ? badge : null,
+    badge: index === highlightIndex && badge ? resolveBadgeLabel(badge) : null,
   }));
 }
