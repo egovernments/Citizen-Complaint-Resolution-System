@@ -9,9 +9,16 @@ import { convertEpochFormateToDate } from '../utils';
 // identity must not surface in the employee timeline. Names show first char +
 // asterisks; contact numbers keep the last 4 digits (the backend already
 // masks the mobile, this covers the name and any unmasked residue).
+// Fixed-shape mask, mirroring the number convention (*****0104): first letter
+// of each word + exactly three stars — "CMS Case Manager" → "C*** C*** M***".
+// Fixed star count so the mask doesn't leak the real name's length.
 const maskName = (name) => {
   if (!name || name.length < 2) return name;
-  return name.charAt(0) + "*".repeat(Math.max(2, name.length - 1));
+  return String(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0) + "***")
+    .join(" ");
 };
 const maskPhone = (phone) => {
   if (!phone || phone.length < 4) return phone;
@@ -83,8 +90,14 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                 // Confidential complaints: mask the CITIZEN actor's identity
                 // (employees stay visible — accountability is intact).
                 const maskThis = maskConfidential && isCitizenActor(personRecord);
-                const personLine = maskThis ? maskName(formatPerson(personRecord)) : formatPerson(personRecord);
                 const mobile = isAssigningAction(instance?.action) ? assignee?.mobileNumber : instance?.assigner?.mobileNumber;
+                // The backend already masks the mobile per viewer privilege
+                // ("Contact Details: *****0104"). Mirror that decision onto the
+                // NAME: a viewer the backend won't show the number to shouldn't
+                // see the person's identity either.
+                const backendMasked = typeof mobile === "string" && mobile.includes("*");
+                const personLine =
+                  maskThis || backendMasked ? maskName(formatPerson(personRecord)) : formatPerson(personRecord);
                 const shownMobile = maskThis ? maskPhone(mobile) : mobile;
                 const contactLine = shownMobile ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${shownMobile}` : null;
 
