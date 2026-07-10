@@ -21,3 +21,11 @@ services:
     restart: "no"
     networks:
       - egov-network
+
+  # The app no longer self-migrates; the init container above owns it.
+  pgr-services:
+    environment:
+      SPRING_FLYWAY_ENABLED: "false"
+    depends_on:
+      pgr-services-migration:
+        condition: service_completed_successfully
