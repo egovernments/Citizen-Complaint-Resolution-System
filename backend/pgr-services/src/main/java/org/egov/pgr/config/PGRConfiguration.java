@@ -192,6 +192,11 @@ public class PGRConfiguration {
     @Value("${employee.allowed.search.params}")
     private String allowedEmployeeSearchParameters;
 
+    // Department scope — roles that bypass employee department-based scoping (complaint search
+    // AND the analytics row-scope, see PrincipalScopeResolver) and may see every department.
+    @Value("${pgr.department.scope.bypass.roles:PGR_ADMIN,SUPERUSER,MDMS_ADMIN,HRMS_ADMIN,STADMIN,SUPERVISOR,PGR_SUPERVISOR}")
+    private List<String> departmentScopeBypassRoles;
+
     //Sources
     @Value("${allowed.source}")
     private String allowedSource;

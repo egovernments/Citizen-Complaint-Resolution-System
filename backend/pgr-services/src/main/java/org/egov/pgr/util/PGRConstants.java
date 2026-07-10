@@ -43,6 +43,11 @@ public class PGRConstants {
 
     public static final String HRMS_DEPARTMENT_JSONPATH = "$.Employees.*.assignments.*.department";
 
+    // Only the ACTIVE assignment's department — used for department-scoped employee search
+    // (EmployeeDepartmentScopeService), where a past/ended assignment must not widen access.
+    public static final String HRMS_CURRENT_DEPARTMENT_JSONPATH =
+            "$.Employees[0].assignments[?(@.isCurrentAssignment==true)].department";
+
     public static final String HRMS_DESIGNATION_JSONPATH = "$.Employees.*.assignments[?(@.department=='{department}')].designation";
 
     public static final String HRMS_EMP_NAME_JSONPATH = "$.Employees.*.user.name";

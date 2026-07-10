@@ -137,6 +137,16 @@ public class PGRQueryBuilder {
             addToPreparedStatement(preparedStmtList, serviceRequestIds);
         }
 
+        // Server-resolved department scope (see EmployeeDepartmentScopeService) — never bound
+        // from the request body. additionaldetails.department is populated with the raw MDMS
+        // department code (see PGRService#getDepartmentFromMDMS), matching HRMS's code directly.
+        Set<String> departmentCodes = criteria.getDepartmentCodes();
+        if (!CollectionUtils.isEmpty(departmentCodes)) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ser.additionaldetails->>'department' IN (").append(createQuery(departmentCodes)).append(")");
+            addToPreparedStatement(preparedStmtList, departmentCodes);
+        }
+
 
         Set<String> localities = criteria.getLocality();
         if(!CollectionUtils.isEmpty(localities)){
