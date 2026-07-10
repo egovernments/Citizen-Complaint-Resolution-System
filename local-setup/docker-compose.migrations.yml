@@ -11,6 +11,19 @@ services:
     depends_on:
       postgres-db:
         condition: service_healthy
+      # pgr's analytics migrations build materialized views that read other
+      # services' tables (boundary_relationship/_hierarchy, eg_user, eg_mdms_data,
+      # eg_wf_*). Gate on those services being healthy so their schemas exist
+      # before this migrator runs — deterministic ordering, unlike K8s which
+      # relies on init-container retry. (See docs/superpowers/specs item #10.)
+      boundary-service:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+      mdms-backend:
+        condition: service_healthy
+      egov-workflow-v2:
+        condition: service_healthy
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_TABLE: pgr_services_schema
