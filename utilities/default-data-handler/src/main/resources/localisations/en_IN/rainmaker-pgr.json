@@ -6958,5 +6958,17 @@
         "message": "Awaiting information from citizen",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "PGR_RELATEDTO_NAME_IGE",
+        "message": "Government Services (Public Entities)",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_RELATEDTO_NAME_IGSAE",
+        "message": "Companies and Commercial Establishments (Private Entities)",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]
