@@ -5,8 +5,9 @@
  * workstream: every entry is either a two-arg t("KEY", "English") literal in
  * digit-ui-esbuild/products/dashboard/, a titleKey/subtitleKey/labelKey ↔
  * title/subtitle/label pair in ansible/nairobi-mdms/mdms/dss/KpiDefinition.json,
- * or a seam-implied dimensionLabel key. DASHBOARD_GEO_LEVEL_* keys are
- * deliberately NOT seeded (per-call-site English variants; see #1111).
+ * or a seam-implied dimensionLabel key. DASHBOARD_GEO_LEVEL_* keys ARE
+ * seeded below with one canonical English message per level (#1111's
+ * per-call-site English variants were canonicalised when they landed).
  */
 export const DASHBOARD_L10N_MODULE = 'rainmaker-dashboard';
 export const DASHBOARD_L10N_LOCALE = 'en_IN';
@@ -962,6 +963,36 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_SERIES_CREATED",
+    "message": "Created",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SERIES_FILED",
+    "message": "Filed",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SERIES_OPEN",
+    "message": "Open",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SERIES_RESOLUTION_RATE",
+    "message": "Resolution rate",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SERIES_RESOLVED",
+    "message": "Resolved",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_SERIES_SLA_COMPLIANCE_RATE",
+    "message": "SLA compliance rate",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_SIDEBAR_DASHBOARD",
     "message": "Dashboard",
     "module": "rainmaker-dashboard"
@@ -1192,6 +1223,26 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME",
+    "message": "Complaints over time",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME_SUBTITLE",
+    "message": "Created, resolved and open per day",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER",
+    "message": "Breach rate vs caseload by department",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER_SUBTITLE",
+    "message": "Open caseload vs breach rate at period end",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO",
     "message": "Flow ratio by department",
     "module": "rainmaker-dashboard"
@@ -1262,6 +1313,21 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
+    "message": "Open complaints over time (daily)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA",
+    "message": "Complaints by Wards",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA_SUBTITLE",
+    "message": "All complaints by SLA state — per ward",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
     "message": "Complaints created today",
     "module": "rainmaker-dashboard"
@@ -1284,6 +1350,16 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT_SUBTITLE",
     "message": "Never reassigned ÷ assigned",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
+    "message": "Flow ratio",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT_SUBTITLE",
+    "message": "Resolved in period ÷ created in period",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1379,6 +1455,61 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK_SUBTITLE",
     "message": "Open complaints nearing or past SLA",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
+    "message": "Recurring complaints by ward & sub-type",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
+    "message": "Ward × subtype pairs with ≥ 3 complaints in period",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL",
+    "message": "Service quality by channel",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL_SUBTITLE",
+    "message": "Volume, resolution rate and CSAT by intake channel",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE",
+    "message": "Complaint sub-type performance",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE_SUBTITLE",
+    "message": "Share, resolution time and SLA by subtype",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
+    "message": "Open complaints by ward (daily)",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE",
+    "message": "Ward performance",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE_SUBTITLE",
+    "message": "Created, open, reopen, on-time and CSAT by ward",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT",
+    "message": "Total complaints",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT_SUBTITLE",
+    "message": "Complaints filed in period",
     "module": "rainmaker-dashboard"
   },
   {
