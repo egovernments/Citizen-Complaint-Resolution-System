@@ -223,7 +223,8 @@
         },
         "deltaLabel": "vs prior period",
         "title": "Reopen rate",
-        "subtitle": "Reopened ÷ resolved"
+        "subtitle": "Reopened ÷ resolved",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT_SUBTITLE"
       },
       "params": [
         {
@@ -277,6 +278,7 @@
         "pii": false,
         "title": "Citizen satisfaction",
         "subtitle": "Avg. rating on resolved complaints",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG_SUBTITLE",
         "threshold": {
           "kind": "rating",
           "higherIsBetter": true,
@@ -350,6 +352,7 @@
         "pii": false,
         "title": "First-assignment rate",
         "subtitle": "Never reassigned ÷ assigned",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": true,
@@ -417,6 +420,7 @@
         "pii": false,
         "title": "SLA compliance rate",
         "subtitle": "Resolved within SLA ÷ all filed",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": true,
@@ -669,6 +673,7 @@
         "pii": false,
         "title": "Oldest complaint",
         "subtitle": "Earliest open complaint",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE_SUBTITLE",
         "threshold": {
           "kind": "count",
           "higherIsBetter": false,
@@ -730,6 +735,7 @@
         "pii": false,
         "title": "Average resolution time",
         "subtitle": "Avg. time to resolve",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME_SUBTITLE",
         "delta": {
           "mode": "duration",
           "compare": "prior"
@@ -803,6 +809,7 @@
         "seriesLabel": "Filed",
         "limit": 8,
         "subtitle": "Complaints filed, by type",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
         "labelFormat": "dimension"
       },
       "params": [
@@ -933,7 +940,8 @@
         "compose": null,
         "pii": false,
         "title": "Department-wise resolution rate",
-        "subtitle": "Resolved ÷ filed per department"
+        "subtitle": "Resolved ÷ filed per department",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE_SUBTITLE"
       },
       "params": [
         {
@@ -997,16 +1005,19 @@
           {
             "key": "within",
             "label": "On track",
+            "labelKey": "DASHBOARD_SLA_WITHIN",
             "color": "var(--chart-1)"
           },
           {
             "key": "approaching",
             "label": "Nearing breach",
+            "labelKey": "DASHBOARD_SLA_APPROACHING",
             "color": "var(--chart-2)"
           },
           {
             "key": "breached",
             "label": "Breached",
+            "labelKey": "DASHBOARD_SLA_BREACHED",
             "color": "var(--status-breach)"
           }
         ],
@@ -1018,7 +1029,8 @@
           "dimension": "current_assignee_uuid"
         },
         "title": "Employees with most open complaints",
-        "subtitle": "Open complaints by SLA state per officer"
+        "subtitle": "Open complaints by SLA state per officer",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OFFICER_SLA_SUBTITLE"
       },
       "params": [
         {
@@ -1088,26 +1100,31 @@
           {
             "key": "PENDINGFORASSIGNMENT",
             "label": "Pending assignment",
+            "labelKey": "DASHBOARD_WF_STAGE_PENDINGFORASSIGNMENT",
             "color": "var(--chart-1)"
           },
           {
             "key": "PENDINGATLME",
             "label": "Assigned",
+            "labelKey": "DASHBOARD_WF_STAGE_PENDINGATLME",
             "color": "var(--chart-2)"
           },
           {
             "key": "PENDINGFORREASSIGNMENT",
             "label": "Pending reassignment",
+            "labelKey": "DASHBOARD_WF_STAGE_PENDINGFORREASSIGNMENT",
             "color": "var(--chart-3)"
           },
           {
             "key": "PENDINGATSUPERVISOR",
             "label": "Pending at supervisor",
+            "labelKey": "DASHBOARD_WF_STAGE_PENDINGATSUPERVISOR",
             "color": "var(--chart-4)"
           }
         ],
         "limit": 8,
         "subtitle": "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in.",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
         "labelFormat": "dimension"
       },
       "params": [
@@ -1173,10 +1190,12 @@
         "title": "Complaints by channel",
         "measureKey": "total",
         "subtitle": "Open complaints by intake channel",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL_SUBTITLE",
         "channelMap": [
           {
             "id": "web",
             "label": "Web",
+            "labelKey": "DASHBOARD_CHANNEL_WEB",
             "sources": [
               "web",
               "online",
@@ -1187,6 +1206,7 @@
           {
             "id": "mobile",
             "label": "Mobile",
+            "labelKey": "DASHBOARD_CHANNEL_MOBILE",
             "sources": [
               "app",
               "mobile",
@@ -1198,6 +1218,7 @@
           {
             "id": "ivr",
             "label": "IVR",
+            "labelKey": "DASHBOARD_CHANNEL_IVR",
             "sources": [
               "phone",
               "ivr"
@@ -1207,6 +1228,7 @@
           {
             "id": "walk_in",
             "label": "Walk-in",
+            "labelKey": "DASHBOARD_CHANNEL_WALK_IN",
             "sources": [
               "walk_in",
               "walk-in",
@@ -1219,6 +1241,7 @@
           {
             "id": "sms",
             "label": "SMS",
+            "labelKey": "DASHBOARD_CHANNEL_SMS",
             "sources": [
               "sms"
             ],
@@ -1227,6 +1250,7 @@
           {
             "id": "email",
             "label": "Email",
+            "labelKey": "DASHBOARD_CHANNEL_EMAIL",
             "sources": [
               "email"
             ],
@@ -1235,6 +1259,7 @@
           {
             "id": "whatsapp",
             "label": "WhatsApp",
+            "labelKey": "DASHBOARD_CHANNEL_WHATSAPP",
             "sources": [
               "whatsapp"
             ],
@@ -1243,6 +1268,7 @@
           {
             "id": "other",
             "label": "Other",
+            "labelKey": "DASHBOARD_CHANNEL_OTHER",
             "sources": [],
             "color": "var(--muted-foreground)"
           }
@@ -1309,7 +1335,8 @@
           "3-7d",
           ">7d"
         ],
-        "subtitle": "Open complaints by age bucket"
+        "subtitle": "Open complaints by age bucket",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE_SUBTITLE"
       },
       "params": [
         {
@@ -1510,30 +1537,35 @@
           {
             "id": "service_code",
             "label": "Subtype",
+            "labelKey": "DASHBOARD_COL_SUBTYPE",
             "align": "left",
             "type": "dimension"
           },
           {
             "id": "service_group",
             "label": "Type",
+            "labelKey": "DASHBOARD_COL_TYPE",
             "align": "left",
             "type": "dimension"
           },
           {
             "id": "avg_resolution_ms",
             "label": "Avg resolution time",
+            "labelKey": "DASHBOARD_COL_AVG_RESOLUTION_TIME",
             "align": "left",
             "type": "hoursDays"
           },
           {
             "id": "ideal_sla_ms",
             "label": "SLA",
+            "labelKey": "DASHBOARD_COL_SLA",
             "align": "left",
             "type": "hoursDays"
           },
           {
             "id": "reopen_rate",
             "label": "Reopen rate",
+            "labelKey": "DASHBOARD_COL_REOPEN_RATE",
             "align": "left",
             "type": "percent",
             "threshold": {
@@ -1545,6 +1577,7 @@
           {
             "id": "oldest_open_ms",
             "label": "Oldest complaint",
+            "labelKey": "DASHBOARD_COL_OLDEST_COMPLAINT",
             "align": "left",
             "type": "hoursDays",
             "threshold": {
@@ -1556,6 +1589,7 @@
           {
             "id": "ontime_rate",
             "label": "Resolved on-time rate",
+            "labelKey": "DASHBOARD_COL_RESOLVED_ON_TIME_RATE",
             "align": "left",
             "type": "percent",
             "threshold": {
@@ -1567,6 +1601,7 @@
           {
             "id": "avg_csat",
             "label": "CSAT",
+            "labelKey": "DASHBOARD_COL_CSAT",
             "align": "left",
             "type": "rating",
             "threshold": {
@@ -1576,7 +1611,8 @@
             }
           }
         ],
-        "subtitle": "Resolution, SLA and reopen metrics per complaint type - all complaints, narrowed by the date filter"
+        "subtitle": "Resolution, SLA and reopen metrics per complaint type - all complaints, narrowed by the date filter",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS_SUBTITLE"
       },
       "params": [
         {
@@ -1651,7 +1687,8 @@
         "compose": null,
         "pii": false,
         "title": "Complaints at risk",
-        "subtitle": "Open complaints nearing or past SLA"
+        "subtitle": "Open complaints nearing or past SLA",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK_SUBTITLE"
       },
       "params": [
         {
@@ -1899,30 +1936,35 @@
           {
             "id": "current_assignee_uuid",
             "label": "Name",
+            "labelKey": "DASHBOARD_COL_NAME",
             "align": "left",
             "type": "officer"
           },
           {
             "id": "role",
             "label": "Role",
+            "labelKey": "DASHBOARD_COL_ROLE",
             "align": "left",
             "type": "text"
           },
           {
             "id": "department_code",
             "label": "Dept",
+            "labelKey": "DASHBOARD_COL_DEPT",
             "align": "left",
             "type": "department"
           },
           {
             "id": "assigned",
             "label": "Assigned",
+            "labelKey": "DASHBOARD_COL_ASSIGNED",
             "align": "left",
             "type": "integer"
           },
           {
             "id": "open",
             "label": "Open",
+            "labelKey": "DASHBOARD_COL_OPEN",
             "align": "left",
             "type": "integer",
             "threshold": {
@@ -1934,12 +1976,14 @@
           {
             "id": "resolved",
             "label": "Resolved",
+            "labelKey": "DASHBOARD_COL_RESOLVED",
             "align": "left",
             "type": "integer"
           },
           {
             "id": "reopen_rate",
             "label": "Reopen rate",
+            "labelKey": "DASHBOARD_COL_REOPEN_RATE",
             "align": "left",
             "type": "percent",
             "threshold": {
@@ -1951,6 +1995,7 @@
           {
             "id": "avg_csat",
             "label": "CSAT",
+            "labelKey": "DASHBOARD_COL_CSAT",
             "align": "left",
             "type": "rating",
             "threshold": {
@@ -1962,6 +2007,7 @@
           {
             "id": "escalation_rate",
             "label": "Escalation rate",
+            "labelKey": "DASHBOARD_COL_ESCALATION_RATE",
             "align": "left",
             "type": "percent",
             "threshold": {
@@ -1972,7 +2018,8 @@
           }
         ],
         "labelFormat": "officer",
-        "subtitle": "Workload and quality metrics per officer"
+        "subtitle": "Workload and quality metrics per officer",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE_SUBTITLE"
       },
       "params": [
         {
@@ -2163,6 +2210,7 @@
         "valueKey": "resolved",
         "accent": "green",
         "group": "complaint-landscape",
+        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO",
         "dimensionKey": "department_code",
         "measureKeys": [
           "filed",
@@ -2174,6 +2222,7 @@
         "pii": false,
         "title": "Flow ratio by department",
         "subtitle": "Resolved ÷ created",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO_SUBTITLE",
         "numeratorKey": "resolved",
         "denominatorKey": "filed",
         "breakEven": 1
@@ -2233,6 +2282,7 @@
         "pii": false,
         "title": "SLA non-compliance rate",
         "subtitle": "Breached SLA ÷ all complaints",
+        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": false,
