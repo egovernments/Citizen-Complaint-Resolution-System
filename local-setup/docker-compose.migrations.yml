@@ -1,8 +1,11 @@
-# Deployment-parity item #10 — per-service Flyway init containers (pilot).
+# Deployment-parity item #10 — per-service Flyway init containers.
 # Mirrors the K8s db-migration init container: a one-shot Flyway run per
-# service, from the same in-repo <service>-db image, writing history to the
-# K8s <service>_schema table, connected DIRECTLY to postgres-db (never the
+# service, from the same <service>-db image, writing history to the K8s
+# <service>_schema table, connected DIRECTLY to postgres-db (never the
 # pgbouncer 'postgres' alias, which runs in transaction mode and breaks Flyway).
+#
+# How future migrations flow, conditions, testing & troubleshooting:
+#   docs/db-migration-flow.md
 services:
   pgr-services-migration:
     build:
