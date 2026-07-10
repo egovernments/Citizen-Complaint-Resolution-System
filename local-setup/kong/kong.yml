@@ -140,36 +140,74 @@ plugins:
           headers = { ["Content-Type"] = "application/json" },
         })
         local resolved = nil
-        local token_rejected = false
+        local token_rejected = false   -- explicit auth rejection (401/403): invalid / expired token
+        local resolve_failed = false   -- transient: /user/_details unreachable, 5xx, or unparseable
         if res and res.status == 200 then
           local ok2, user = pcall(cjson.decode, res.body)
           if ok2 and type(user) == "table" and (user["uuid"] or user["userName"]) then
             resolved = user
           else
-            token_rejected = true  -- 200 but no resolvable user
+            resolve_failed = true      -- 200 but no resolvable user -> transient, not a token reject
+            kong.log.err("auth-enrichment: /user/_details 200 with no resolvable user")
           end
+        elseif res and (res.status == 401 or res.status == 403
+                        or (res.body and res.body:find("InvalidAccessTokenException", 1, true))) then
+          -- egov-user signals an invalid/expired token via InvalidAccessTokenException (HTTP 400 on
+          -- this stack, 401/403 on others) — treat any of those as a genuine token rejection, and
+          -- everything else (5xx / other) as a transient failure below.
+          token_rejected = true
         elseif res then
-          token_rejected = true    -- /user/_details rejected the token (invalid / expired)
+          resolve_failed = true        -- other non-200 (5xx, etc.) -> transient, NOT a token reject
+          kong.log.err("auth-enrichment: /user/_details status ", res.status)
         else
-          -- /user/_details unreachable (network/timeout): a transient upstream error, NOT an
-          -- invalid token — do not force logout; forward with client userInfo stripped.
-          kong.log.err("auth-enrichment: /user/_details unreachable; stripping client userInfo")
+          resolve_failed = true        -- unreachable (network / timeout)
+          kong.log.err("auth-enrichment: /user/_details unreachable: ", err or "")
         end
+
+        local function strip_userinfo()
+          if ri["userInfo"] ~= nil then ri["userInfo"] = nil; body["RequestInfo"] = ri; kong.service.request.set_raw_body(cjson.encode(body)) end
+        end
+
         if token_rejected then
-          -- Session-expiry parity (#4): a token was PRESENT but could not be validated. Return the
-          -- egov InvalidAccessTokenException envelope the Spring Cloud Gateway emits, so digit-ui
-          -- redirects to login instead of rendering blank/error screens on an expired session.
-          -- Guarded by "token present" above (the no-token branch returns early), so open/anonymous
-          -- endpoints are unaffected.
-          return kong.response.exit(401, cjson.encode({
-            ResponseInfo = cjson.null,
-            Errors = {{
-              code = "InvalidAccessTokenException",
-              message = "InvalidAccessTokenException",
-              description = "Invalid access token or access token expired for the request",
-            }},
-          }), { ["Content-Type"] = "application/json" })
+          -- Invalid / expired token. Reject ONLY on protected paths — the egov
+          -- InvalidAccessTokenException envelope makes digit-ui redirect to login (session-expiry, #4).
+          -- On auth-OPTIONAL endpoints the token is ignored and the request falls through anonymously
+          -- (matches the K8s gateway, which never validates tokens on open/mixed paths).
+          if is_protected then
+            return kong.response.exit(401, cjson.encode({
+              ResponseInfo = cjson.null,
+              Errors = {{
+                code = "InvalidAccessTokenException",
+                message = "InvalidAccessTokenException",
+                description = "Invalid access token or access token expired for the request",
+              }},
+            }), { ["Content-Type"] = "application/json" })
+          end
+          strip_userinfo()
+          return
         end
+
+        if resolve_failed then
+          -- Transient failure resolving the token (auth service unreachable / erroring). Fail CLOSED
+          -- on protected paths when enforcing — never forward a protected request without a
+          -- server-vouched principal. Optional paths (and audit mode) fall through anonymously.
+          if is_protected and ENFORCE_UNAUTH then
+            return kong.response.exit(503, cjson.encode({
+              ResponseInfo = cjson.null,
+              Errors = {{
+                code = "AuthServiceUnavailable",
+                message = "AuthServiceUnavailable",
+                description = "Could not verify authentication for the request; please retry",
+              }},
+            }), { ["Content-Type"] = "application/json" })
+          end
+          if is_protected then
+            kong.log.warn("RBAC-audit(#5): would fail-closed 503 (auth unverifiable) on protected: ", uri)
+          end
+          strip_userinfo()
+          return
+        end
+
         ri["userInfo"] = resolved
         body["RequestInfo"] = ri
         kong.service.request.set_raw_body(cjson.encode(body))
