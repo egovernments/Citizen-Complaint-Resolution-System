@@ -2,11 +2,12 @@ import { useEffect, useReducer } from "react";
 import { translate, exists, getLanguage, subscribe, ensureMessages } from "./localeRuntime";
 
 /**
- * The dashboard's t() hook. `t(key, enFallback)` translates against the host
+ * The dashboard's t() hook. `t(key, seedEnglish)` translates against the host
  * i18next when embedded (or the standalone store on the dev harness) and
- * echoes the fallback when the key is unseeded. `language` is included so
- * imperatively-drawn surfaces (Leaflet layers, ApexCharts instances) can
- * re-key on it — the #882 ward-tooltip pattern.
+ * echoes the KEY when unseeded — gaps surface, never the inline English
+ * (which exists only as the seed pack's extraction source). `language` is
+ * included so imperatively-drawn surfaces (Leaflet layers, ApexCharts
+ * instances) can re-key on it — the #882 ward-tooltip pattern.
  */
 export default function useDashboardT() {
   const [, bump] = useReducer((x) => x + 1, 0);

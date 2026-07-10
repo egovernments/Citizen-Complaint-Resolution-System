@@ -1,25 +1,10 @@
-import { formatWorkflowStatusLabel } from "./complaintsAtRiskPresentation";
 // Not a component — translate lazily inside render-time functions only (never
-// at module level), so language switches pick up fresh strings.
+// at module level), so language switches pick up fresh strings. Pin field
+// values (channel / SLA / status) resolve through dimensionLabel against
+// DASHBOARD_CHANNEL_* / DASHBOARD_SLA_* / DASHBOARD_WF_STAGE_* messages; no
+// code-owned fallbacks — unseeded values surface their raw code.
 import { translate as t, getLanguage } from "../i18n/localeRuntime";
 import { dimensionLabel } from "../i18n/dimensionLabel";
-
-const PIN_SLA_LABELS = {
-  within: "Within SLA",
-  approaching: "Nearing breach",
-  breached: "Breached",
-};
-const PIN_CHANNEL_LABELS = {
-  web: "Web",
-  mobile: "Mobile app",
-  csc: "Counter (CSC)",
-  ivr: "IVR",
-  whatsapp: "WhatsApp",
-  sms: "SMS",
-  email: "Email",
-};
-const titleCaseWord = (v) =>
-  String(v ?? "").replace(/\b\w/g, (c) => c.toUpperCase());
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -93,25 +78,11 @@ export function buildComplaintPinTooltipHtml(pin = {}) {
   const title = pin.serviceCode
     ? dimensionLabel(pin.serviceCode, "complaintType")
     : t("DASHBOARD_MAP_PIN_COMPLAINT", "Complaint");
-  const status = pin.status
-    ? dimensionLabel(pin.status, "workflowStatus", formatWorkflowStatusLabel(pin.status))
-    : "—";
+  const status = pin.status ? dimensionLabel(pin.status, "workflowStatus") : "—";
   const ward = pin.wardCode ? dimensionLabel(pin.wardCode, "boundary") : null;
   const filed = formatPinDate(pin.createdDate);
-  const channel = pin.source
-    ? dimensionLabel(
-        pin.source,
-        "channel",
-        PIN_CHANNEL_LABELS[String(pin.source).toLowerCase()] || titleCaseWord(pin.source)
-      )
-    : null;
-  const sla = pin.slaStatus
-    ? dimensionLabel(
-        pin.slaStatus,
-        "slaState",
-        PIN_SLA_LABELS[String(pin.slaStatus).toLowerCase()] || titleCaseWord(pin.slaStatus)
-      )
-    : null;
+  const channel = pin.source ? dimensionLabel(pin.source, "channel") : null;
+  const sla = pin.slaStatus ? dimensionLabel(pin.slaStatus, "slaState") : null;
 
   return `
     <div class="dashboard-map-hover-card dashboard-map-hover-card--pin">

@@ -213,12 +213,6 @@ export function statusValueToCssColor(statusClass) {
   }
 }
 
-function formatServiceCode(code) {
-  return String(code ?? "Unknown")
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 // The analytics grain carries assignee UUIDs, not names (and many don't resolve to a
 // live user record). For a human-readable dashboard we derive a STABLE display name
 // from the UUID: a deterministic hash picks a first + last name, so the same officer
@@ -247,7 +241,7 @@ export function formatOfficerLabel(uuid) {
 }
 
 function formatListLabel(labelKey, raw) {
-  if (labelKey === "service_code") return dimensionLabel(raw, "complaintType", formatServiceCode(raw));
+  if (labelKey === "service_code") return dimensionLabel(raw, "complaintType");
   if (labelKey === "current_assignee_uuid") return formatOfficerLabel(raw);
   if (labelKey === "account_id") {
     const id = String(raw ?? t("DASHBOARD_COMMON_UNKNOWN", "Unknown"));

@@ -55,21 +55,26 @@ export function exists(key) {
 }
 
 /**
- * Translate `key`, else return `fallback` (else the key itself, matching
- * DIGIT's echo-the-key behavior). Pass the current English literal as
- * `fallback` so unseeded environments render exactly what they render today.
+ * Translate `key`, else echo the KEY — DIGIT's platform-wide behavior, so a
+ * missing message surfaces as a visible localisation gap instead of being
+ * papered over.
+ *
+ * `seedEnglish` is NEVER rendered: it is the canonical English message for
+ * the key, kept inline as the single source the generated en_IN seed pack
+ * (digit-mcp dashboard-l10n-seed.ts) is script-extracted from. Keep it in
+ * sync when changing copy, then regenerate the pack.
  */
-export function translate(key, fallback) {
-  if (key == null || key === "") return fallback !== undefined ? fallback : "";
+// eslint-disable-next-line no-unused-vars -- seedEnglish is extraction source, not runtime input
+export function translate(key, seedEnglish) {
+  if (key == null || key === "") return "";
   const k = String(key);
   const host = hostI18next();
   if (host) {
-    if (host.exists(k)) return host.t(k);
-    return fallback !== undefined ? fallback : k;
+    return host.exists(k) ? host.t(k) : k;
   }
   const map = standalone.messages[getLanguage()];
   if (map && Object.prototype.hasOwnProperty.call(map, k)) return map[k];
-  return fallback !== undefined ? fallback : k;
+  return k;
 }
 
 const notifyStandalone = () => standalone.listeners.forEach((cb) => cb());

@@ -32,7 +32,7 @@ function buildRowScope(scope) {
   const areaSegment = boundaryPrefix
     ? boundaryPrefix.split(/[./]/).filter(Boolean).pop() || boundaryPrefix
     : null;
-  const areaLabel = areaSegment ? dimensionLabel(areaSegment, "boundary", areaSegment) : null;
+  const areaLabel = areaSegment ? dimensionLabel(areaSegment, "boundary") : null;
 
   return { deptLabel, areaLabel, hasDepartments: departments.length > 0 };
 }
@@ -47,13 +47,13 @@ function formatDisplayDate(iso) {
 function buildSubtitle(filters, filterOptions, t) {
   const geoOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
   const geoId = filters?.geography;
-  const geoFallback =
-    geoOptions.find((o) => o.id === geoId)?.label ??
-    t("DASHBOARD_HEADER_ALL_LOCALITIES", "All Localities");
   // The geography chip is a raw boundary code — route it through the
-  // dimension-label seam (falls back to the option label when unseeded).
+  // dimension-label seam; the "all" sentinel renders its localized label.
   const geo =
-    geoId && geoId !== "all" ? dimensionLabel(geoId, "boundary", geoFallback) : geoFallback;
+    geoId && geoId !== "all"
+      ? dimensionLabel(geoId, "boundary")
+      : geoOptions.find((o) => o.id === geoId)?.label ??
+        t("DASHBOARD_HEADER_ALL_LOCALITIES", "All Localities");
 
   let period = t("DASHBOARD_HEADER_LAST_7_DAYS", "Last 7 days");
   if (filters?.dateRangeActive && filters?.dateFrom && filters?.dateTo) {

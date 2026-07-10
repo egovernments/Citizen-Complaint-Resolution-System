@@ -4,20 +4,9 @@ import { dimensionLabel } from "../i18n/dimensionLabel";
 const MS_PER_HOUR = 3600000;
 const MS_PER_DAY = 86400000;
 
-// English fallbacks — display resolution routes through dimensionLabel
-// (kinds slaState / workflowStatus) so seeded locales translate.
-export const SLA_STATUS_LABELS = {
-  breached: "Breached",
-  nearing: "Nearing breach",
-};
-
-export const WORKFLOW_STATUS_LABELS = {
-  reopened: "Reopened",
-  in_progress: "In progress",
-  assigned: "Assigned",
-  open: "Open",
-};
-
+// Display text resolves through dimensionLabel (kinds slaState /
+// workflowStatus) against DASHBOARD_SLA_* / DASHBOARD_WF_STAGE_* messages —
+// no code-owned fallbacks; unseeded states surface their raw code.
 const OPEN_STATUS_KEYS = new Set(["PENDINGFORASSIGNMENT", "OPEN"]);
 const ASSIGNED_STATUS_KEYS = new Set(["PENDINGATLME", "ASSIGNED"]);
 
@@ -40,12 +29,12 @@ export function resolveSlaRiskPresentation(bucket) {
   const normalized = String(bucket ?? "").toLowerCase();
   if (normalized === "approaching") {
     return {
-      slaLabel: dimensionLabel("NEARING", "slaState", SLA_STATUS_LABELS.nearing),
+      slaLabel: dimensionLabel("NEARING", "slaState"),
       slaLevel: "nearing",
     };
   }
   return {
-    slaLabel: dimensionLabel("BREACHED", "slaState", SLA_STATUS_LABELS.breached),
+    slaLabel: dimensionLabel("BREACHED", "slaState"),
     slaLevel: "breached",
   };
 }
@@ -65,9 +54,7 @@ export function complaintDetailHref(serviceRequestId) {
 }
 
 export function formatWorkflowStatusLabel(status) {
-  const key = normalizeWorkflowStatusKey(status);
-  const fallback = WORKFLOW_STATUS_LABELS[key] ?? WORKFLOW_STATUS_LABELS.in_progress;
-  return dimensionLabel(key, "workflowStatus", fallback);
+  return dimensionLabel(normalizeWorkflowStatusKey(status), "workflowStatus");
 }
 
 export function normalizeWorkflowStatusKey(status) {

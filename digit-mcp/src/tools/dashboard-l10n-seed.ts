@@ -347,6 +347,26 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_GEO_LEVEL_0",
+    "message": "District",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GEO_LEVEL_1",
+    "message": "Subdistrict",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GEO_LEVEL_2",
+    "message": "Locality",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GEO_LEVEL_3",
+    "message": "Complaints",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_ADD",
     "message": "Add",
     "module": "rainmaker-dashboard"

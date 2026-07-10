@@ -804,9 +804,9 @@ function adaptSlaRiskRows(ctx) {
 
       return {
         id: complaintId,
-        typeLabel: typeKey ? dimensionLabel(typeKey, 'complaintType', formatDimensionLabel(typeKey)) : '—',
-        subtypeLabel: subtypeKey ? dimensionLabel(subtypeKey, 'complaintType', formatDimensionLabel(subtypeKey)) : '—',
-        locality: row.ward_code ? dimensionLabel(String(row.ward_code), 'boundary', formatDimensionLabel(String(row.ward_code))) : '—',
+        typeLabel: typeKey ? dimensionLabel(typeKey, 'complaintType') : '—',
+        subtypeLabel: subtypeKey ? dimensionLabel(subtypeKey, 'complaintType') : '—',
+        locality: row.ward_code ? dimensionLabel(String(row.ward_code), 'boundary') : '—',
         ownerName: formatOfficerLabel(row.current_assignee_uuid),
         ownerRole: '—',
         status: normalizeWorkflowStatusKey(applicationStatus),
@@ -860,7 +860,7 @@ function adaptMapLayers(ctx) {
       const resolved = Number(row.resolved) || 0;
       return {
         wardCode,
-        label: dimensionLabel(wardCode, 'boundary', formatLabel(wardCode)),
+        label: dimensionLabel(wardCode, 'boundary'),
         count: filed,
         total: filed,
         // named counts so the choropleth hover tooltip (reads created/open/resolved) has values
@@ -1043,11 +1043,9 @@ function formatDimLabel(value, viz, dim, locale) {
   switch (viz?.labelFormat) {
     case 'dimension': {
       const kind = dimensionKindForName(dim);
-      return kind
-        ? dimensionLabel(value, kind, formatDimensionLabel(value))
-        : formatDimensionLabel(value);
+      return kind ? dimensionLabel(value, kind) : String(value);
     }
-    case 'department': return dimensionLabel(value, 'department', formatDepartmentLabel(value));
+    case 'department': return dimensionLabel(value, 'department');
     case 'officer':    return formatOfficerLabel(value);
     case 'date-dow':   return formatDateDow(value, locale);
     default:           return formatLabel(value);
@@ -1072,30 +1070,6 @@ function epochOrIsoToDateKey(value) {
   if (/^\d{13}$/.test(s)) return new Date(Number(s)).toISOString().slice(0, 10);
   const iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
   return iso ? iso[1] : s;
-}
-
-// Port of complaintTypeDepartmentConfig.formatDepartmentLabel.
-function formatDepartmentLabel(code) {
-  const c = String(code ?? '').trim();
-  if (!c || c === 'Unknown' || c === 'Unmapped' || c === 'null' || c === 'undefined') {
-    return t("DASHBOARD_COMMON_UNKNOWN", "Unknown");
-  }
-  return c.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (ch) => ch.toUpperCase());
-}
-
-// Port of kpiQueries.formatDimensionLabel (humanise service/ward/dept codes).
-function formatDimensionLabel(code) {
-  const humanized = String(code ?? '').replace(/([a-z])([A-Z])/g, '$1 $2');
-  const wardMatch = humanized.match(/ward[_\s-]?(\d+)/i);
-  if (wardMatch) return `Ward ${wardMatch[1]}`;
-  const dot = humanized.lastIndexOf('.');
-  if (dot >= 0) {
-    return humanized.slice(dot + 1).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-  const parts = humanized.split('_').filter(Boolean);
-  if (parts.length > 2) return parts.slice(-2).join(' ').replace(/_/g, ' ');
-  const out = humanized.replace(/_/g, ' ');
-  return out || t("DASHBOARD_COMMON_UNKNOWN", "Unknown");
 }
 
 function normalizeSeg(value) {

@@ -1,10 +1,15 @@
-import { formatDimensionLabel } from "../config/labelFormat";
 import { translate, exists } from "./localeRuntime";
 
 /**
  * THE single seam between raw dimension codes and display text. Every place
  * the dashboard renders a data value as a label must route through here with
- * the right `kind` — never call formatDimensionLabel directly elsewhere.
+ * the right `kind`.
+ *
+ * NO code-owned fallbacks: when no localization message exists, the raw code
+ * renders — a localisation gap is surfaced, not papered over with a regex
+ * humaniser. `fallbackText` is reserved for DATA-OWNED names only (boundary
+ * service `localname`, MDMS ComplaintHierarchy display names — text an
+ * operator authored), never for hardcoded English.
  *
  * Key conventions per kind mirror what the configurator seeds:
  *   complaintType  → COMPLAINT_HIERARCHY.<code> (SERVICEDEFS.<CODE> legacy)
@@ -38,9 +43,9 @@ const CANDIDATES = {
 
 /**
  * @param code raw dimension value (service code, boundary code, dept code, …)
- * @param kind one of the CANDIDATES keys; unknown kinds go straight to fallback
- * @param fallbackText preferred fallback (e.g. an API-supplied localname) —
- *   when omitted, the legacy regex humaniser is used
+ * @param kind one of the CANDIDATES keys; unknown kinds surface the raw code
+ * @param fallbackText DATA-OWNED display name (API localname / MDMS name)
+ *   only — omit everywhere else so unlocalized codes surface verbatim
  */
 export function dimensionLabel(code, kind, fallbackText) {
   if (code == null || code === "") return fallbackText !== undefined ? fallbackText : "";
@@ -49,8 +54,5 @@ export function dimensionLabel(code, kind, fallbackText) {
     if (exists(key)) return translate(key);
   }
   if (fallbackText !== undefined) return fallbackText;
-  // Legacy fallback — comment out the next line (returning String(code)
-  // instead) to surface every dimension still rendering unlocalized codes.
-  return formatDimensionLabel(code);
-  // return String(code);
+  return String(code);
 }
