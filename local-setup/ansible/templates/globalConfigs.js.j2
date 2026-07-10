@@ -45,7 +45,7 @@ var globalConfigs = (function () {
   var pgrBoundaryLowestLevel = {{ pgr_boundary_lowest_level | to_json }};
   var boundaryType = {{ boundary_type | to_json }};
   var hierarchyType = {{ hierarchy_type | default('ADMIN') | to_json }};
-  var mapCenter = {{ map_center | to_json }};
+  var mapCenter = {{ map_center | default({'lat': 0, 'lng': 0}) | to_json }};
   // Tenant whose boundary tree the SPA's map/boundary code resolves
   // against (Turbopass/OSM boundary resolution). Mirrors the build-time
   // REACT_APP_MAP_TENANT env on the playbook's digit-ui build task — this
