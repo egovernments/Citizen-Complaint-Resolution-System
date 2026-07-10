@@ -42,3 +42,58 @@ services:
     depends_on:
       pgr-services-migration:
         condition: service_completed_successfully
+
+  # ── Phase 2 · repo-local, self-contained services ───────────────────────────
+  novu-bridge-migration:
+    build:
+      context: ../backend/novu-bridge/src/main/resources/db
+    container_name: novu-bridge-migration
+    profiles: ["notifications"]   # active exactly when novu-bridge is
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_TABLE: novu_bridge_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks:
+      - egov-network
+
+  novu-bridge:
+    environment:
+      SPRING_FLYWAY_ENABLED: "false"
+    depends_on:
+      novu-bridge-migration:
+        condition: service_completed_successfully
+
+  digit-config-service-migration:
+    build:
+      context: ../backend/digit-config-service/src/main/resources/db
+    container_name: digit-config-service-migration
+    profiles: ["notifications"]   # active exactly when digit-config-service is
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      # digit-config-service's migrate.sh sets currentSchema per SCHEMA_NAME.
+      SCHEMA_NAME: public
+      SCHEMA_TABLE: digit_config_service_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks:
+      - egov-network
+
+  digit-config-service:
+    environment:
+      SPRING_FLYWAY_ENABLED: "false"
+    depends_on:
+      digit-config-service-migration:
+        condition: service_completed_successfully
