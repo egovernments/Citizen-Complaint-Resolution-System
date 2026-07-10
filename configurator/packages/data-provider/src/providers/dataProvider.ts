@@ -1064,6 +1064,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const { id: _stringId, ...rest } = data;
         void _stringId;
         const merged: Record<string, unknown> = { ...base, ...rest };
+        // No form input ever edits reActivateEmployee (EmployeeEdit.tsx has no
+        // field for it), so any value present in `rest` is a stale artifact of
+        // the form's initial defaultValues (e.g. a create-response cache that
+        // never set it) rather than an intentional edit. egov-hrms/employees/
+        // _update NPEs on Employee.getReActivateEmployee().booleanValue() when
+        // this is null, so `rest`'s value silently overriding the freshly
+        // re-fetched `base` — the same failure mode `id` is guarded against
+        // above — breaks editing (closes #813). Always trust the fresh fetch.
+        merged.reActivateEmployee = base.reActivateEmployee ?? false;
         const [employee] = await client.employeeUpdate(targetTenantId, [merged]);
         return { data: normalizeRecord(employee, config) };
       }

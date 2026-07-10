@@ -133,4 +133,44 @@ describe('createDigitDataProvider', () => {
     assert.equal((captured as { name: string }).name, 'New Name');
     assert.equal((captured as { active: boolean }).active, false);
   });
+
+  it('does not let a stale reActivateEmployee in the form payload override the fresh fetch (closes #813)', async () => {
+    // EmployeeEdit.tsx has no input bound to reActivateEmployee, so any value
+    // present in the submitted form data is a stale leftover from whatever
+    // populated the form's initial defaultValues (e.g. a just-created
+    // employee's cached create-response, which never sets this field) —
+    // not an intentional edit. egov-hrms/employees/_update NPEs on
+    // Employee.getReActivateEmployee().booleanValue() when it's null, so this
+    // silently broke editing any newly created employee.
+    mock.method(client, 'employeeSearch', async () => [
+      {
+        id: 42,
+        uuid: 'emp-uuid-1',
+        code: 'LOKI3',
+        tenantId: 'ke',
+        reActivateEmployee: false, // fresh fetch: correct, non-null value
+      },
+    ]);
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'employeeUpdate', async (_t: string, employees: Record<string, unknown>[]) => {
+      captured = employees[0];
+      return employees;
+    });
+
+    const dp = createDigitDataProvider(client, 'ke');
+    await dp.update('employees', {
+      id: 'emp-uuid-1',
+      data: {
+        id: 'emp-uuid-1',
+        uuid: 'emp-uuid-1',
+        code: 'LOKI3',
+        tenantId: 'ke',
+        reActivateEmployee: null, // stale form payload — must not win
+      },
+      previousData: {} as never,
+    });
+
+    assert.ok(captured, 'employeeUpdate should have been called');
+    assert.equal((captured as { reActivateEmployee: unknown }).reActivateEmployee, false);
+  });
 });
