@@ -1,7 +1,6 @@
 import { FormComposer, Toast, Loader } from "@egovernments/digit-ui-react-components";
 import {
-  DEFAULT_MOBILE_MAX_LENGTH,
-  DEFAULT_MOBILE_MIN_LENGTH,
+  computeMobileLengths,
   DEFAULT_MOBILE_PATTERN,
   DEFAULT_MOBILE_PREFIX,
 } from "@egovernments/digit-ui-libraries";
@@ -32,27 +31,28 @@ const EditForm = ({ tenantId, data }) => {
     enable: false,
   });
 
-  // Fetch mobile validation config from MDMS. See createEmployee.js for
-  // the full rationale — same `ValidationConfigs.mobileNumberValidation`
-  // read + HRMS 10-digit clamp (closes egovernments/CCRS#415, #420).
+  // Fetch mobile validation config from common-masters.MobileNumberValidation —
+  // the single source of truth for mobile validation across all frontends and backends.
   const stateLvlTenantId = window?.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID");
-  const HRMS_MIN_MOBILE_DIGITS = 10;
   const { data: validationConfig, isLoading: isValidationLoading } = Digit.Hooks.useCustomMDMS(
     stateLvlTenantId,
-    "ValidationConfigs",
-    [{ name: "mobileNumberValidation" }],
+    "common-masters",
+    [{ name: "MobileNumberValidation" }],
     {
       select: (data) => {
-        const validationData = data?.ValidationConfigs?.mobileNumberValidation?.find(
-          (x) => x.validationName === "defaultMobileValidation"
-        );
-        const rules = validationData?.rules;
+        const list = data?.["common-masters"]?.MobileNumberValidation || [];
+        const record =
+          list.find((x) => x.default === true && x.isActive !== false) ||
+          list.find((x) => x.isActive !== false) ||
+          null;
+        if (!record) return null;
+        const gc = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS");
+        const pattern = record.mobileNumberRegex || gc?.mobileNumberRegex || DEFAULT_MOBILE_PATTERN;
+        const { max } = computeMobileLengths(pattern);
         return {
-          prefix: rules?.prefix || DEFAULT_MOBILE_PREFIX,
-          pattern: rules?.pattern || DEFAULT_MOBILE_PATTERN,
-          maxLength: rules?.maxLength || DEFAULT_MOBILE_MAX_LENGTH,
-          minLength: Math.max(rules?.minLength || DEFAULT_MOBILE_MIN_LENGTH, HRMS_MIN_MOBILE_DIGITS),
-          errorMessage: rules?.errorMessage || "CORE_COMMON_MOBILE_ERROR",
+          countryCode: record.countryCode || gc?.countryCode || DEFAULT_MOBILE_PREFIX,
+          pattern,
+          maxLength: max > 0 ? max : 15,
         };
       },
       staleTime: 300000,
@@ -81,13 +81,11 @@ const EditForm = ({ tenantId, data }) => {
   }, []);
 
   useEffect(() => {
-    const maxLength = validationConfig?.maxLength || 10;
-    const minLength = validationConfig?.minLength || 10;
     const pattern = validationConfig?.pattern
-      ? new RegExp(validationConfig.pattern, 'i')
+      ? new RegExp(validationConfig.pattern)
       : Digit.Utils.getPattern('MobileNo');
 
-    if (mobileNumber && mobileNumber.length >= minLength && mobileNumber.length <= maxLength && mobileNumber.match(pattern)) {
+    if (mobileNumber && pattern.test(mobileNumber)) {
       setShowToast(null);
       if (data.user.mobileNumber == mobileNumber) {
         setPhonecheck(true);
@@ -221,27 +219,13 @@ const EditForm = ({ tenantId, data }) => {
     const mobileNum = input?.SelectEmployeePhoneNumber?.mobileNumber;
 
     if (mobileNum) {
-      // Get validation parameters from MDMS or use defaults
-      const maxLength = validationConfig?.maxLength || 10;
-      const minLength = validationConfig?.minLength || 10;
       const pattern = validationConfig?.pattern
-        ? new RegExp(validationConfig.pattern, 'i')
+        ? new RegExp(validationConfig.pattern)
         : Digit.Utils.getPattern('MobileNo');
-
-      // Check length
-      if (mobileNum.length < minLength || mobileNum.length > maxLength) {
+      if (!pattern.test(mobileNum)) {
         setShowToast({
           key: true,
-          label: validationConfig?.errorMessage || "CORE_COMMON_MOBILE_ERROR"
-        });
-        return;
-      }
-
-      // Check pattern
-      if (!mobileNum.match(pattern)) {
-        setShowToast({
-          key: true,
-          label: validationConfig?.errorMessage || "CORE_COMMON_MOBILE_ERROR"
+          label: validationConfig?.errorMessage || "CORE_COMMON_MOBILE_ERROR",
         });
         return;
       }
@@ -294,6 +278,9 @@ const EditForm = ({ tenantId, data }) => {
     requestdata["user"]["name"] = input?.SelectEmployeeName?.employeeName;
     requestdata.user.correspondenceAddress = input?.SelectEmployeeCorrespondenceAddress?.correspondenceAddress;
     requestdata.user.roles = roles.filter((role) => role && role.name);
+    // egov-hrms/employees/_update NPEs on Employee.getReActivateEmployee().booleanValue()
+    // when this field is null — carry over the value the _search response gave us.
+    requestdata.reActivateEmployee = data?.reActivateEmployee ?? false;
     let Employees = [requestdata];
 
     /* use customiseUpdateFormData hook to make some chnages to the Employee object */

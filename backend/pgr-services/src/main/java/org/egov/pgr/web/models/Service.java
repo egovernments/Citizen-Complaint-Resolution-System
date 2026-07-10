@@ -96,5 +96,8 @@ public class Service   {
         @JsonProperty("processInstance")
         private ProcessInstance processInstance;
 
+        @JsonProperty("extendedAttributes")
+        private ExtendedAttributes extendedAttributes;
+
 }
 

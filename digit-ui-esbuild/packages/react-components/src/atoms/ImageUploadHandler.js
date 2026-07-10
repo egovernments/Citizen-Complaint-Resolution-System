@@ -43,6 +43,15 @@ export const ImageUploadHandler = (props) => {
     }
   }, [imageFile]);
 
+  // Auto-dismiss the upload error toast so a rejected file (too large /
+  // unsupported) doesn't leave a banner stuck on screen forever (CCRS#923).
+  // The toast also gets a manual close button (isDleteBtn below).
+  useEffect(() => {
+    if (!error) return undefined;
+    const timer = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
   const addUploadedImageIds = useCallback(
     (imageIdData) => {
       if (uploadedImagesIds === null) {
@@ -118,7 +127,7 @@ export const ImageUploadHandler = (props) => {
 
   return (
     <React.Fragment>
-      {error && <Toast error={true} label={error} onClose={() => setError(null)} />}
+      {error && <Toast error={true} label={error} isDleteBtn={true} onClose={() => setError(null)} />}
       <UploadImages onUpload={getImage} onDelete={deleteImage} thumbnails={uploadedImagesThumbs ? uploadedImagesThumbs.map((o) => o.image) : []} />
     </React.Fragment>
   );

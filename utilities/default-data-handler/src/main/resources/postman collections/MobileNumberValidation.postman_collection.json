@@ -1,0 +1,308 @@
+{
+  "info": {
+    "name": "MobileNumberValidation — MDMS Config",
+    "_postman_id": "mobile-number-validation-mdms-v1",
+    "description": "Create and manage common-masters.MobileNumberValidation schema and data in MDMS v2.\n\nFlow:\n1. Set collection variables: url, username, password, userLoginTenant, stateTenant.\n2. Run '1. Authentication / Get Auth Token' — stores authToken + userReqInfo automatically.\n3. Run '2. Schema / Create Schema' once per environment.\n4. Run the '3. Data / Create Data' requests for the countries you need.\n5. Use 'Search Data' to verify, 'Update Data' to activate/deactivate records.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "url",
+      "value": "http://localhost",
+      "description": "Base URL — no trailing slash. Change to your deployment host."
+    },
+    {
+      "key": "username",
+      "value": "MDMS_ADMIN",
+      "description": "MDMS admin username (must have MDMS_ADMIN or SUPERUSER role)"
+    },
+    {
+      "key": "password",
+      "value": "eGov@123",
+      "description": "Login password"
+    },
+    {
+      "key": "userLoginTenant",
+      "value": "statea",
+      "description": "Tenant used for login (usually state tenant)"
+    },
+    {
+      "key": "stateTenant",
+      "value": "statea",
+      "description": "State-level tenant — schemas and MobileNumberValidation data live here"
+    },
+    {
+      "key": "cityTenant",
+      "value": "statea.citya",
+      "description": "City-level tenant (not needed for MobileNumberValidation, kept for reference)"
+    },
+    {
+      "key": "userType",
+      "value": "EMPLOYEE",
+      "description": "User type for auth"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "description": "Auto-populated by Get Auth Token"
+    },
+    {
+      "key": "userReqInfo",
+      "value": "{}",
+      "description": "Auto-populated by Get Auth Token"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "description": "Run this first. Stores authToken and userReqInfo as collection variables for all subsequent requests.",
+      "item": [
+        {
+          "name": "Get Auth Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "",
+                  "pm.test('Status 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Auth token received', function() {",
+                  "    pm.expect(jsonData.access_token).to.not.be.empty;",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('authToken', jsonData.access_token);",
+                  "",
+                  "var userInfo;",
+                  "for (var key in jsonData) {",
+                  "    if (key.includes('UserRequest')) {",
+                  "        userInfo = JSON.stringify(jsonData[key]);",
+                  "    }",
+                  "}",
+                  "pm.collectionVariables.set('userReqInfo', userInfo);",
+                  "console.log('authToken and userReqInfo stored in collection variables.');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic ZWdvdi11c2VyLWNsaWVudDo=",
+                "description": "egov-user-client: (no secret)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {"key": "username",   "value": "{{username}}",        "type": "text"},
+                {"key": "password",   "value": "{{password}}",        "type": "text"},
+                {"key": "grant_type", "value": "password",             "type": "text"},
+                {"key": "scope",      "value": "read",                 "type": "text"},
+                {"key": "tenantId",   "value": "{{userLoginTenant}}", "type": "text"},
+                {"key": "userType",   "value": "{{userType}}",        "type": "text"}
+              ]
+            },
+            "url": {
+              "raw": "{{url}}/user/oauth/token",
+              "host": ["{{url}}"],
+              "path": ["user", "oauth", "token"]
+            },
+            "description": "Authenticates and stores authToken + userReqInfo as collection variables.\n\nOn success the test script captures access_token and UserRequest from the response and saves them. All subsequent MDMS requests use {{authToken}} and {{userReqInfo}}."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Schema",
+      "description": "Register the schema definition in MDMS v2. Run 'Create Schema' once per environment. If the schema already exists you will get a conflict — safe to ignore, verify with 'Search Schema'.",
+      "item": [
+        {
+          "name": "Create Schema",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"mobile-validation-config\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"SchemaDefinition\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"code\": \"common-masters.MobileNumberValidation\",\n        \"description\": \"Mobile Number Validation — single source of truth for mobile number regex and country code prefix. Keyed by countryCode. Consumed by useMobileValidation hooks in digit-ui and the configurator.\",\n        \"isActive\": true,\n        \"definition\": {\n            \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n            \"title\": \"Mobile Number Validation\",\n            \"type\": \"object\",\n            \"required\": [\n                \"countryCode\",\n                \"mobileNumberRegex\"\n            ],\n            \"x-unique\": [\n                \"countryCode\"\n            ],\n            \"properties\": {\n                \"tenantId\": {\n                    \"type\": \"string\"\n                },\n                \"countryCode\": {\n                    \"type\": \"string\",\n                    \"description\": \"Country dial code shown as prefix in the UI, e.g. +251 (Ethiopia), +91 (India), +254 (Kenya). Serves as the unique key — only one record per country code.\"\n                },\n                \"mobileNumberRegex\": {\n                    \"type\": \"string\",\n                    \"description\": \"Full-anchor regex for the national number portion (digits only, without the country code), e.g. ^[79][0-9]{8}$ for Ethiopia (9 digits starting with 7 or 9).\"\n                },\n                \"default\": {\n                    \"type\": \"boolean\",\n                    \"default\": false,\n                    \"description\": \"Whether this is the default validation rule for the deployment. Only one record should have default: true at a time.\"\n                },\n                \"isActive\": {\n                    \"type\": \"boolean\",\n                    \"default\": true,\n                    \"description\": \"Whether this rule is active. Inactive records (isActive: false) are ignored by the validation hooks and shown as disabled in the configurator.\"\n                }\n            },\n            \"x-ref-schema\": [],\n            \"additionalProperties\": false\n        }\n    }\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{url}}/mdms-v2/schema/v1/_create",
+              "host": ["{{url}}"],
+              "path": ["mdms-v2", "schema", "v1", "_create"]
+            },
+            "description": "Register the common-masters.MobileNumberValidation schema.\n\nFields:\n- countryCode (string, required, unique key) — e.g. '+251'\n- mobileNumberRegex (string, required) — full-anchor regex, e.g. '^[79][0-9]{8}$'\n- default (boolean) — true for the active deployment config\n- isActive (boolean) — false to hide a record from validation hooks\n\nRun once per environment. A conflict error means the schema already exists — verify with 'Search Schema'."
+          },
+          "response": []
+        },
+        {
+          "name": "Search Schema",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"mobile-validation-config\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"SchemaDefSearchCriteria\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"codes\": [\"common-masters.MobileNumberValidation\"],\n        \"limit\": 10,\n        \"offset\": 0\n    }\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{url}}/mdms-v2/schema/v1/_search",
+              "host": ["{{url}}"],
+              "path": ["mdms-v2", "schema", "v1", "_search"]
+            },
+            "description": "Verify the schema exists and inspect its field definitions."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Data",
+      "description": "Create and manage MobileNumberValidation records. Each record is one country's config. Only one record should have default: true at a time.",
+      "item": [
+        {
+          "name": "Create Data — Ethiopia (+251)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"mobile-validation-config\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"Mdms\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"schemaCode\": \"common-masters.MobileNumberValidation\",\n        \"data\": {\n            \"countryCode\": \"+251\",\n            \"mobileNumberRegex\": \"^[79][0-9]{8}$\",\n            \"default\": true,\n            \"isActive\": true\n        },\n        \"isActive\": true\n    }\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{url}}/mdms-v2/v2/_create/common-masters.MobileNumberValidation",
+              "host": ["{{url}}"],
+              "path": ["mdms-v2", "v2", "_create", "common-masters.MobileNumberValidation"]
+            },
+            "description": "Seed Ethiopia mobile config.\n\nCountry code: +251\nPattern: ^[79][0-9]{8}$ (9 digits, starting with 7 = Safaricom ET, 9 = Ethiotelecom)\ndefault: true — this is the active config for the deployment\nisActive: true"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Data — India (+91)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"mobile-validation-config\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"Mdms\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"schemaCode\": \"common-masters.MobileNumberValidation\",\n        \"data\": {\n            \"countryCode\": \"+91\",\n            \"mobileNumberRegex\": \"^[6-9][0-9]{9}$\",\n            \"default\": false,\n            \"isActive\": false\n        },\n        \"isActive\": false\n    }\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{url}}/mdms-v2/v2/_create/common-masters.MobileNumberValidation",
+              "host": ["{{url}}"],
+              "path": ["mdms-v2", "v2", "_create", "common-masters.MobileNumberValidation"]
+            },
+            "description": "Seed India mobile config.\n\nCountry code: +91\nPattern: ^[6-9][0-9]{9}$ (10 digits, starting with 6-9)\ndefault: false, isActive: false — inactive unless this deployment uses Indian numbers.\n\nTo activate: run 'Update Data', set isActive: true and default: true (and update the previously active record to default: false)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Data — Kenya (+254)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"mobile-validation-config\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"Mdms\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"schemaCode\": \"common-masters.MobileNumberValidation\",\n        \"data\": {\n            \"countryCode\": \"+254\",\n            \"mobileNumberRegex\": \"^[17][0-9]{8}$\",\n            \"default\": false,\n            \"isActive\": false\n        },\n        \"isActive\": false\n    }\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{url}}/mdms-v2/v2/_create/common-masters.MobileNumberValidation",
+              "host": ["{{url}}"],
+              "path": ["mdms-v2", "v2", "_create", "common-masters.MobileNumberValidation"]
+            },
+            "description": "Seed Kenya mobile config.\n\nCountry code: +254\nPattern: ^[17][0-9]{8}$ (9 digits, starting with 1 = Airtel, 7 = Safaricom)\ndefault: false, isActive: false — inactive unless this deployment uses Kenyan numbers."
+          },
+          "response": []
+        },
+        {
+          "name": "Search Data (MDMS v2)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"mobile-validation-config\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"MdmsCriteria\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"schemaCode\": \"common-masters.MobileNumberValidation\",\n        \"limit\": 20,\n        \"offset\": 0\n    }\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{url}}/mdms-v2/v2/_search",
+              "host": ["{{url}}"],
+              "path": ["mdms-v2", "v2", "_search"]
+            },
+            "description": "List all MobileNumberValidation records.\n\nThe response contains full records including id, uniqueIdentifier, and auditDetails — copy these values into 'Update Data' when you need to modify a record."
+          },
+          "response": []
+        },
+        {
+          "name": "Search Data (MDMS v1 format)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"mobile-validation-config\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"MdmsCriteria\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"moduleDetails\": [\n            {\n                \"moduleName\": \"common-masters\",\n                \"masterDetails\": [\n                    {\"name\": \"MobileNumberValidation\"}\n                ]\n            }\n        ]\n    }\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{url}}/mdms-v2/v1/_search",
+              "host": ["{{url}}"],
+              "path": ["mdms-v2", "v1", "_search"]
+            },
+            "description": "Search using MDMS v1 format — the same format used by digit-ui-esbuild's useCustomMDMS hook.\n\nResponse path: MdmsRes[\"common-masters\"].MobileNumberValidation[]\n\nThis is useful to verify exactly what the frontend hooks receive."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Data",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"RequestInfo\": {\n        \"apiId\": \"asset-services\",\n        \"ver\": null,\n        \"ts\": null,\n        \"action\": null,\n        \"did\": null,\n        \"key\": null,\n        \"msgId\": \"mobile-validation-config\",\n        \"authToken\": \"{{authToken}}\",\n        \"correlationId\": null,\n        \"userInfo\": {{userReqInfo}}\n    },\n    \"Mdms\": {\n        \"tenantId\": \"{{stateTenant}}\",\n        \"schemaCode\": \"common-masters.MobileNumberValidation\",\n        \"id\": \"<uuid from Search Data response>\",\n        \"uniqueIdentifier\": \"<countryCode value, e.g. +251>\",\n        \"data\": {\n            \"countryCode\": \"+251\",\n            \"mobileNumberRegex\": \"^[79][0-9]{8}$\",\n            \"default\": true,\n            \"isActive\": true\n        },\n        \"isActive\": true,\n        \"auditDetails\": {\n            \"createdBy\": \"<createdBy UUID from Search Data response>\",\n            \"lastModifiedBy\": \"<createdBy UUID from Search Data response>\",\n            \"createdTime\": 0,\n            \"lastModifiedTime\": 0\n        }\n    }\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{url}}/mdms-v2/v2/_update/common-masters.MobileNumberValidation",
+              "host": ["{{url}}"],
+              "path": ["mdms-v2", "v2", "_update", "common-masters.MobileNumberValidation"]
+            },
+            "description": "Update an existing MobileNumberValidation record.\n\nSteps:\n1. Run 'Search Data (MDMS v2)' first.\n2. From the response, copy:\n   - id (UUID of the record)\n   - uniqueIdentifier (the countryCode value, e.g. \"+251\")\n   - auditDetails (createdBy, createdTime, lastModifiedBy, lastModifiedTime)\n3. Edit the data object with your changes.\n4. Replace the placeholder values in this request and send.\n\nCommon use cases:\n- Activate a country: set data.isActive: true, Mdms.isActive: true\n- Deactivate a country: set data.isActive: false, Mdms.isActive: false\n- Change default: set data.default: true on the new default, then update old default to data.default: false\n- Fix regex: update data.mobileNumberRegex to new pattern\n\nNote: auditDetails is mandatory for updates — the request will be rejected without it."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

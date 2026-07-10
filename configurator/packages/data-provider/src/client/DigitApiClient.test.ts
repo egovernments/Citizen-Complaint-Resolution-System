@@ -76,3 +76,16 @@ describe('DigitApiClient', () => {
     assert.equal(client.endpoint('LOCALIZATION_DELETE'), '/localization/messages/v1/_delete');
   });
 });
+
+describe('DigitApiClient.mdmsCreate phantom-200', () => {
+  it('throws MDMS_DUPLICATE when MDMS returns 200 with an empty mdms array', async () => {
+    const client = new DigitApiClient({ url: 'https://test.example.com' });
+    // MDMS v2 duplicate creates return HTTP 200 with an empty `mdms` array.
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async () => ({ mdms: [] });
+    await assert.rejects(
+      () => client.mdmsCreate('pg', 'RAINMAKER-PGR.NotificationRouting', 'PGR.ASSIGN.PENDINGATLME.CITIZEN.SMS', {}),
+      /MDMS_DUPLICATE/,
+    );
+  });
+});
