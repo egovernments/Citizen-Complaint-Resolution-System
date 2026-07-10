@@ -35,8 +35,14 @@ releases:
     installed: true
     <<: *default
 
+  # Disabled: the audit *query* API is unused by CCRS. Its only UI consumer is the
+  # Utilities "Audit History" page, reachable only via a link from the Workbench
+  # module's MDMS view — and CCRS intentionally omits Workbench (see digit-ui
+  # App.js: enabledModules = ["Utilities","PGR"]). Audit *capture* is unaffected —
+  # audit-service-persister still runs on both stacks, so records keep persisting.
+  # (Deployment-parity item #13. Re-enable if a direct/compliance API consumer surfaces.)
   - name: audit-service
-    installed: true
+    installed: false
     <<: *default
 
   - name: egov-enc-service
