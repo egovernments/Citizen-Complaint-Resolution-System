@@ -8,7 +8,8 @@ import { buildRedSeverityStyle } from "../config/tablePresentation";
 import { formatOfficerLabel, dimensionKindForName } from "../config/kpiDisplay";
 import useDashboardT from "../i18n/useDashboardT";
 import { dimensionLabel } from "../i18n/dimensionLabel";
-import { translate as t, exists } from "../i18n/localeRuntime";
+import { translate as t } from "../i18n/localeRuntime";
+import { seriesEntryLabel } from "../i18n/textResolver";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
 
@@ -179,8 +180,10 @@ function annotateRowsFromThresholds(rows, columns) {
       cellTones[c.id] = tone;
       // threshold.tagKey.{watch,breach} (DASHBOARD_BADGE_*) wins when seeded,
       // else the descriptor's literal threshold.tag.{watch,breach}.
-      const labelKey = c.threshold.tagKey?.[tone];
-      const label = labelKey && exists(labelKey) ? t(labelKey) : c.threshold.tag?.[tone];
+      const label = seriesEntryLabel(
+        { labelKey: c.threshold.tagKey?.[tone] },
+        c.threshold.tag?.[tone]
+      );
       if (label) tags.push({ label, tone });
     }
     if (!Object.keys(cellTones).length && !hasTagsCol) return row;
