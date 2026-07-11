@@ -1,0 +1,42 @@
+name: Flyway dump alignment
+
+# Deployment-parity item #10: the compose stack boots from a prebuilt dump and
+# then runs Flyway incrementally on top. Each Flyway-enabled service must point
+# SPRING_FLYWAY_TABLE at the history table the dump actually shipped — otherwise
+# Flyway re-runs its migrations and crashes on `relation already exists` (42P07).
+# This guards that alignment on every PR that touches the dump or Flyway config.
+
+on:
+  pull_request:
+    paths:
+      - 'local-setup/db/full-dump.sql'
+      - 'local-setup/docker-compose.egov-digit.yaml'
+      - 'local-setup/docker-compose.fast-path.yml'
+      - 'local-setup/docker-compose.migrations.yml'
+      - '.github/scripts/check-flyway-dump-alignment.py'
+      - '.github/workflows/flyway-dump-alignment.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'local-setup/db/full-dump.sql'
+      - 'local-setup/docker-compose.egov-digit.yaml'
+      - 'local-setup/docker-compose.fast-path.yml'
+      - 'local-setup/docker-compose.migrations.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  flyway-dump-alignment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install deps
+        run: pip install pyyaml
+      - name: Self-test the alignment check
+        run: python3 .github/scripts/check-flyway-dump-alignment.py --self-test
+      - name: Check Flyway ↔ dump history-table alignment
+        run: python3 .github/scripts/check-flyway-dump-alignment.py
