@@ -334,7 +334,7 @@ function seriesToPoints(rows, viz, valueKey, columns) {
 /* -------------------------------------------------------------------------- */
 
 const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
-  const { t, language } = useDashboardT();
+  const { t, language, i18nTick } = useDashboardT();
   const { filters, setFilter, clearFilters, applyFilterOptions } =
     useDashboardFilters();
   const { options: filterOptions, loading: filterOptionsLoading } =
@@ -383,12 +383,16 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       const title = (resolveTitle(kpis[kpiId]) || kpiId).toLowerCase();
       return title.includes(q);
     },
-    [searchQuery, kpis]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nTick re-resolves titles on late bundle arrival
+    [searchQuery, kpis, i18nTick]
   );
 
   // Add-KPI picker source: every role-visible catalog tile (already filtered
   // server-side), shaped to the picker's { id, metric, type, itemType } contract.
-  // `language` is a dep so the resolved metric names re-localize on a language switch.
+  // `language` re-localizes the resolved names on a language switch; `i18nTick`
+  // covers the async gap behind it — the host fires i18next.changeLanguage
+  // BEFORE the new locale's bundles finish fetching, so the names must also
+  // re-resolve when the messages actually land ("added" store event).
   const catalogItems = useMemo(
     () =>
       Object.values(kpis)
@@ -399,7 +403,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           type: def.viz?.kind,
           itemType: isCardKind(def.viz?.kind) ? "kpi" : "widget",
         })),
-    [kpis, language]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nTick re-resolves titles on late bundle arrival
+    [kpis, language, i18nTick]
   );
 
   // Re-run the batch whenever the catalog resolves or the filters change.

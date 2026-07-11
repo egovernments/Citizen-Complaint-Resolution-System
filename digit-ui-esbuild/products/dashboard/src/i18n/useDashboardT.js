@@ -8,12 +8,19 @@ import { translate, exists, getLanguage, subscribe, ensureMessages } from "./loc
  * (which exists only as the seed pack's extraction source). `language` is
  * included so imperatively-drawn surfaces (Leaflet layers, ApexCharts
  * instances) can re-key on it — the #882 ward-tooltip pattern.
+ *
+ * `i18nTick` increments on EVERY store event (language change AND late bundle
+ * arrival). The host's ChangeLanguage fires i18next.changeLanguage without
+ * awaiting the new locale's bundle fetch, so `language` alone is not a safe
+ * memo dep for derivations that bake resolved strings (the Add-KPI picker's
+ * catalogItems): they'd compute against a half-loaded store and never refresh
+ * when the messages land. Dep on `i18nTick` wherever resolve* output is memoized.
  */
 export default function useDashboardT() {
-  const [, bump] = useReducer((x) => x + 1, 0);
+  const [tick, bump] = useReducer((x) => x + 1, 0);
   useEffect(() => {
     ensureMessages();
     return subscribe(bump);
   }, []);
-  return { t: translate, exists, language: getLanguage() };
+  return { t: translate, exists, language: getLanguage(), i18nTick: tick };
 }
