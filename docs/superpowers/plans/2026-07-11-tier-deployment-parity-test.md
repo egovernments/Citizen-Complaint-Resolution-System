@@ -26,6 +26,8 @@
 - **G1 — Configurator seed data** (team still to share): the exact complaint types / `SERVICE_CODE`, `LOCALITY_CODE`, departments, employees (`PGR_LME`, `GRO`, city-admin) the tests require. **Gates every test run (Phases 2–4).** Capture it as a repeatable onboarding script so all tiers get identical data.
 - **G2 — IAM permissions** for `cms-one-click` to create ECR + EKS/RDS/VPC/S3/IAM. A `terraform plan` (Phase 4a) reveals gaps at zero cost. **Gates Tier 3.**
 
+> ⚠ **Before executing, read the [Gap-review addenda](#gap-review-addenda-2026-07-11) at the bottom** — it adds required steps to Phases 1–4 (esp. **N1: the configurator is compose-only and must be served on k3s/EKS**, or ~half the suite + the seed can't run there) and flags the one **open unknown (U1: a truly clean pre-onboarding compose base is unsolved / item #10 territory)**.
+
 ---
 
 ## Phase 0 — Integration branch (once)
@@ -123,9 +125,11 @@
 - [ ] **4.8 Run tests:** `BASE_URL=<EKS ingress URL>`; `source deploy/eks.env`; `./runner/run-cycle.sh`. Record results.
 - **GATE 4:** suite completes; results captured.
 
-### 4c. Teardown (immediately)
-- [ ] **4.9** `helmfile destroy` (or skip — terraform will nuke the cluster); **`terraform destroy`** — confirm 0 resources remain (`terraform state list` empty). Double-check the AWS console for stray EBS/ELB/NAT/RDS snapshots.
-- [ ] **4.10** Delete the throwaway ECR repos (`aws ecr delete-repository --force`).
+### 4c. Teardown (immediately — ORDER MATTERS for cost)
+- [ ] **4.9** **`helmfile destroy` FIRST — do NOT skip.** K8s Services (`type=LoadBalancer`) and PVCs create **ELBs + EBS volumes that terraform does NOT track**; if you jump straight to `terraform destroy`, those survive and keep billing. So: `helmfile -f digit-helmfile.yaml destroy`, then `kubectl get svc -A | grep LoadBalancer` and `kubectl get pvc -A` → confirm none remain (delete leftovers).
+- [ ] **4.10** `terraform destroy` → `terraform state list` empty.
+- [ ] **4.11** **Manual stray-resource sweep** (the usual orphans that keep billing): in the AWS console/CLI check for lingering **ELB/NLB, EBS volumes, NAT gateways, Elastic IPs, RDS instances + RDS snapshots** tagged `parity-test`. `aws ec2 describe-volumes --filters Name=status,Values=available` etc.
+- [ ] **4.12** Delete the throwaway ECR repos (`aws ecr delete-repository --force`).
 
 ---
 
@@ -139,10 +143,35 @@
 
 - EKS is entered only after Gate 3. A pre-written `terraform destroy` is ready before `apply`. Time-box the Tier-3 window; keep the deploy+seed+test steps scripted so nothing is improvised while billing. Verify teardown left nothing (EBS volumes, ELBs, NAT gateways, RDS, snapshots are the usual stragglers).
 
-## Open risks / to confirm during execution
+## Gap-review addenda (2026-07-11)
 
-- **G1 data shape** — the onboarding script can't be finalized until the team shares it; it's the critical path for every test run.
-- **DDH onboarding bugs (#1090, parked)** — seeding a *clean* k3s/EKS via configurator/DDH may hit the known onboarding issues; if so, seed via the configurator UI/API path the tests actually use, or via direct MDMS/DB seeding as a fallback (document which, to keep tiers identical).
-- **k3s ingress** — Traefik-vs-ingress-nginx: the charts assume ingress-nginx; reconcile in Phase 3.2.
-- **image build fidelity** — ensure the ECR `digit-ui`/`pgr-services` images are built from the integration branch HEAD (not stale local state).
-- **helmfile plugins/secrets** — SOPS/KMS wiring for EKS secrets; on k3s use plain values to avoid KMS.
+Extra required steps surfaced by reviewing the plan. Split into: **NEW** (execution
+mechanics the parity analysis never exercised — must add), **KNOWN** (already
+established in the parity work / tracker — just apply, don't re-derive), and the
+one **OPEN UNKNOWN**.
+
+### NEW — must be added to the phases
+
+- **N1 · Configurator serving on k8s (Phases 1 + 3 + 4) — the biggest gap.** The Playwright suite drives the **configurator UI** (`tests/admin/departments|complaints|users`, `tests/specs/configurator/*`) *and* the seed is "onboard on configurator." The configurator is **compose-only — it is NOT in the k8s helmfile.** So: **build the configurator `dist` once** (Phase 1, e.g. `npx vite build --base=/configurator/` from a `digit-configurator` clone) and on **k3s/EKS serve it behind ingress-nginx** (a tiny nginx Deployment + Ingress at `/configurator/`, mirroring how compose/host-nginx serves it). Without this, ~half the suite + the seed cannot run on k3s/EKS.
+- **N2 · EKS teardown ordering** — handled inline in Phase 4c (helmfile destroy before terraform destroy; stray-resource sweep).
+- **N3 · k3s ingress exposure (Phase 3.2)** — k3s ships **Traefik**; charts assume **ingress-nginx** → install k3s with `--disable traefik`, install ingress-nginx, expose via klipper-lb/nodePort; set `BASE_URL=http://<host-ip>:<port>` (or an `/etc/hosts` alias). No public DNS.
+- **N4 · EKS BASE_URL / TLS (Phase 4.8)** — a fresh cluster yields an **ELB hostname over http**, but the suite defaults to `https://…digit.org`. Run with `BASE_URL=http://<elb-hostname>` and confirm the specs tolerate http + a non-`digit.org` host (check any hardcoded host/https assumptions), or attach a quick cert-manager self-signed cert. Avoid needing real DNS.
+- **N5 · Resource sizing on k3s (Phase 3)** — elasticsearch + kafka + postgres + minio + ~24 services on one host is heavy. Verify host RAM ≥ what the compose stack used; add swap/limits; ES needs `sysctl -w vm.max_map_count=262144`.
+- **N6 · ECR token expiry** — the ECR `docker login` token lasts ~12h; re-run `aws ecr get-login-password | docker login …` if a tier's build/pull spans longer.
+- **N7 · Concrete build commands** — Phase 1.2 placeholders must be filled from `build/build-config.yml` + each service's Dockerfile; the **digit-ui esbuild bundle build is finicky** (see [[digit-ui-onhost-build-fails-ubuntu]] — use the bundle-image path, not on-host). Tag images with the integration-branch commit SHA for fidelity.
+
+### KNOWN — apply the established handling (cite the tracker, don't re-solve)
+
+- **K1 · RBAC enforce alignment (Phase 2)** — the integration Kong ships **audit-mode** (`ENFORCE_UNAUTH`/`ENFORCE_RBAC=false`) while the k8s Spring gateway **enforces**; that asymmetry would bias auth-gated tests. For an unbiased run, **set compose Kong to ENFORCE** so all tiers enforce identically. *(tracker item #5 — the toggles exist by design.)*
+- **K2 · digit-ui for compose (Phase 2)** — #1098 is a frontend change; compose serves digit-ui from a **bundle image** → rebuild the bundle from the integration branch for compose (in addition to the ECR image for k8s). *(see [[digit-ui-onhost-build-fails-ubuntu]].)*
+- **K3 · Secrets** — k3s: plain values (no KMS). EKS: SOPS/AWS-KMS as the helmfile expects. *(tracker "Secrets model" row.)*
+- **K4 · Seed must traverse both gateways** — the onboarding script hits Kong (compose) vs Spring gw (k8s); keep it gateway-agnostic (auth + path classification differ). *(tracker items #4/#5.)*
+
+### OPEN UNKNOWN
+
+- **U1 · Truly clean pre-onboarding base for compose (Phase 2.1)** — the fast-path dump is a **post-onboarding** snapshot; slow-path hits the **DDH onboarding bugs (#1090, parked)**. So a genuinely clean, identically-seeded compose base is **not currently solved** (it's exactly item #10's unresolved half). **Decision required at execution:** (i) accept compose starts from the dump and enforce no-bias by having the suite touch only freshly-onboarded fixtures (partial), or (ii) build a minimal pre-onboarding dump. This is the one real unknown — resolve before trusting Tier-1 as the reference vector.
+
+## Gates (unchanged)
+
+- **G1 — Configurator seed data** (team-pending): the exact complaint types/`SERVICE_CODE`, `LOCALITY_CODE`, departments, employees the tests need. Critical path for every run.
+- **G2 — IAM permissions** for `cms-one-click` (ECR + EKS/RDS/VPC/S3/IAM) — a `terraform plan` reveals gaps at $0.
