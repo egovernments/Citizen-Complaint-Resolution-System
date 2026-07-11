@@ -22,6 +22,7 @@ import DashboardLogin, {
 } from "./components/DashboardLogin";
 
 import useDashboardT from "./i18n/useDashboardT";
+import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useFilterOptions } from "./hooks/useFilterOptions";
 import { useCatalog } from "./hooks/useCatalog";
@@ -374,11 +375,12 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   );
 
   // Title-based tile search: dim tiles whose title doesn't match the query.
+  // Matches against the LOCALIZED title (what the user sees on the tile).
   const matchesSearch = useCallback(
     (kpiId) => {
       const q = searchQuery.trim().toLowerCase();
       if (!q) return true;
-      const title = (kpis[kpiId]?.viz?.title || kpiId).toLowerCase();
+      const title = (resolveTitle(kpis[kpiId]) || kpiId).toLowerCase();
       return title.includes(q);
     },
     [searchQuery, kpis]
@@ -386,17 +388,18 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
 
   // Add-KPI picker source: every role-visible catalog tile (already filtered
   // server-side), shaped to the picker's { id, metric, type, itemType } contract.
+  // `language` is a dep so the resolved metric names re-localize on a language switch.
   const catalogItems = useMemo(
     () =>
       Object.values(kpis)
         .filter((def) => !def.viz?.internal) // hide internal companion sources (e.g. map pins)
         .map((def) => ({
           id: def.kpiId,
-          metric: def.viz?.title || def.kpiId,
+          metric: resolveTitle(def) || def.kpiId,
           type: def.viz?.kind,
           itemType: isCardKind(def.viz?.kind) ? "kpi" : "widget",
         })),
-    [kpis]
+    [kpis, language]
   );
 
   // Re-run the batch whenever the catalog resolves or the filters change.
@@ -496,7 +499,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           : assembled?.rows
           ? `${assembled.rows.length} rows`
           : "";
-      return [def?.viz?.title || item.i, item.i, value];
+      return [resolveTitle(def) || item.i, item.i, value];
     });
     const csv = ["Title,KPI,Value", ...rows.map((r) => r.map(csvEscape).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -573,7 +576,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
             const removeBtn = (
               <WidgetRemoveButton
-                label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${kpis[item.i]?.viz?.title || item.i}`}
+                label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${resolveTitle(kpis[item.i]) || item.i}`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -602,6 +605,11 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             const vizType = KIND_TO_VIZTYPE[kind] || kind;
             const isTable = TABLE_KINDS.has(kind);
             const selfHeaders = kind === "map" || kind === "choropleth-map";
+            // Header text resolves through the i18n seam (titleKey/subtitleKey
+            // win when seeded, else the catalog's English) — same pipeline as
+            // the card tiles' KpiTile resolvers.
+            const headerTitle = resolveTitle(kpis[item.i]) || item.i;
+            const headerSubtitle = resolveSubtitle(viz);
             return (
               <section
                 key={item.i}
@@ -612,10 +620,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                   <header className={`${buildWidgetHeaderClassName(vizType)} tw-min-w-0`}>
                     <div className="tw-min-w-0 tw-flex-1">
                       <h2 className={`${SHARED_CHROME.dragHandleTitle} tw-truncate`}>
-                        {viz.title || item.i}
+                        {headerTitle}
                       </h2>
-                      {viz.subtitle && (
-                        <p className={SHARED_CHROME.dragHandleSubtitle}>{viz.subtitle}</p>
+                      {headerSubtitle && (
+                        <p className={SHARED_CHROME.dragHandleSubtitle}>{headerSubtitle}</p>
                       )}
                     </div>
                   </header>
