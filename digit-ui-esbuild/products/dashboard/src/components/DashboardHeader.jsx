@@ -113,13 +113,14 @@ const DashboardHeader = ({
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
   const addKpiRef = useRef(null);
-  const { t, exists, language } = useDashboardT();
+  const { t, exists, language, i18nTick } = useDashboardT();
   const productLabel = useMemo(() => getProductLabel(), []);
-  // `language` re-keys the memos on language switch (t itself is stable).
-  const rowScope = useMemo(() => buildRowScope(scope), [scope, language]);
+  // `language` re-keys the memos on language switch; `i18nTick` re-keys them
+  // when a locale bundle arrives asynchronously after the switch (t is stable).
+  const rowScope = useMemo(() => buildRowScope(scope), [scope, language, i18nTick]);
   const subtitle = useMemo(
     () => buildSubtitle(filters, filterOptions, t, language),
-    [filters, filterOptions, t, language]
+    [filters, filterOptions, t, language, i18nTick]
   );
   // ONE full-phrase key wins when seeded — splicing the DASHBOARD_PRODUCT_LABEL
   // globalConfig onto a translated "Operations" produced mixed-language titles
