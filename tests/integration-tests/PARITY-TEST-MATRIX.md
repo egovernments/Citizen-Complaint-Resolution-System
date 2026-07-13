@@ -5,12 +5,14 @@ One row per test (272 unique). **Kept updated** as fixes land; referenced from i
 Columns:
 - **k3s (base)** — our Maputo / Kubernetes at the *baseline* (before any §-fix)
 - **k3s (now)** — our Maputo / Kubernetes *currently* (after the §-fixes applied so far). `✅` = flipped to pass since baseline · `⚠️` = regressed · `◐` = changed, still not passing
-- **compose** — our Maputo / Docker Compose (Kong), **re-run at the same time as k3s (now)** and confirmed byte-identical to baseline (stable reference; the deployment was never changed — only k3s was fixed)
+- **compose** — our Maputo / Docker Compose (Kong). Initially treated as the stable reference, but it had its **own** gap: the `PGR` businessservice was seeded only at the root tenant (`mz`), not the city (`mz.maputo`) where complaints run — so the complaint pipeline failed on compose while passing on k3s. After seeding PGR@`mz.maputo` (§1.9), the api+smoke + citizen+employee suites were re-run; **17 tests flipped to pass, 0 regressions**, bringing compose level with k3s.
 - **bomet** — the suite's native **Kenya** tenant, full Compose stack (reference)
 
 > **Reading it:** `compose` vs `k3s` (identical Maputo data) is the clean parity control; `bomet` adds the *"is this test meaningful on Maputo"* axis. Categories below are computed from **current** state, so a fixed test moves into *Clean parity* with a `✅` showing where it came from.
 
-> **Data currency:** k3s(now) = latest post-fix run per area. Fixes reflected: §1.2 (configurator/MCP), §1.6 (egov-user), §1.7 (filestore), §1.8 (digit-ui config), §2.4 (RBAC grant), §2.5 (egov-hrms).
+> **Parity status:** compose and k3s now both pass **113** tests and agree on **268/272** rows. The 4 non-agreements: 1 is the intentional fail-closed `/user/_search` on k3s (§2.6b — k3s is correct), 1 is a stale admin-suite snapshot on compose (would flip on a re-run after the §1.9 PGR seed), and 2 are minor compose-fail/k3s-skip edge rows.
+
+> **Data currency:** k3s(now) = latest post-fix run per area. compose(now) includes the §1.9 PGR-workflow seed for api+smoke + citizen+employee. Fixes reflected: §1.2 (configurator/MCP), §1.6 (egov-user), §1.7 (filestore), §1.8 (digit-ui config), §1.9 (PGR businessservice @ city), §2.4 (RBAC grant), §2.5 (egov-hrms). _(admin compose = pre-§1.9 snapshot)_
 
 ## Summary
 
@@ -19,12 +21,12 @@ Columns:
 | Category | Count | What it means |
 |---|---:|---|
 | k8s-specific gap | 1 | Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open. |
-| Maputo-data gap | 35 | Pass on bomet, fail on BOTH our stacks → the suite's Kenya/Bomet data-coupling, not the deployment. |
+| Maputo-data gap | 28 | Pass on bomet, fail on BOTH our stacks → the suite's Kenya/Bomet data-coupling, not the deployment. |
 | Suite / app bug | 30 | Fails on bomet too (its native tenant) → a genuine suite/app bug or flake, unrelated to parity. |
 | Tenant-coupled skip | 25 | Runs on bomet, skipped on both our stacks → hidden signal; needs tenant-portable fixtures. |
 | Ours better | 3 | Fails on bomet, passes on ours. |
-| Other / mixed | 13 |  |
-| Clean parity | 91 | Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column). |
+| Other / mixed | 10 |  |
+| Clean parity | 101 | Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column). |
 | Inherent N/A | 74 | Skipped everywhere (@local-only, no-keycloak, structural). |
 | **Total** | **272** | |
 
@@ -43,8 +45,8 @@ The `Fix` column in the tables below points here. **Exact reproducible steps per
 | §2.6 · Harness **role-string** fix | 5 | The manage-API test helpers sent `RequestInfo.userInfo.roles` as bare code strings; expand to Role objects (`tests/utils/manage/api.ts`, `tests/admin/users.spec.ts`) so the strict k8s gateway deserializes them. Test-code fix. |
 | §1.6b · **OTP mock** on k3s | 3 | Deploy the nginx OTP mock (`tests/integration-tests/deploy/otp-mock.k8s.yaml`) that rubber-stamps the fixed 123456 for `_validate`/`_send`, and repoint user-otp+egov-otp to it — matching Compose's default OTP-mock mode. Unblocks citizen register/login (and any citizen-gated flow, e.g. the photo-upload tests, which also need filestore §1.7). Pairs with the egov-user OTP-flag alignment (§1.6). |
 | §1.7 · Real **minio** object store | 1 | Install minio; chart-template the egov-ns `minio` secret (accesskey/secretkey from the minio release); set `egov-filestore minio-enabled:true`, correct `minio-url` (no trailing slash), fixed bucket. |
-| §1.4 · Right-size **pgr-services** memory | 1 | Set `memory_limits >= Xmx + ~50%` (or `-XX:MaxRAMPercentage`) so pgr-services doesn't cgroup-OOM and stays up. |
 | §1.2 · Add **configurator + digit-mcp** charts | 1 | Add `configurator` + `digit-mcp` charts to the k8s helmfile (Service + Ingress at `/configurator`, `/mcp`, `/v1`; MCP session DB). |
+| §1.4 · Right-size **pgr-services** memory | 1 | Set `memory_limits >= Xmx + ~50%` (or `-XX:MaxRAMPercentage`) so pgr-services doesn't cgroup-OOM and stays up. |
 
 > Attribution is best-effort (primary fix per test); some flips have more than one contributing fix. Total flipped since baseline: **51**.
 
@@ -56,7 +58,7 @@ Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deploymen
 |---|---|:--:|:--:|:--:|:--:|---|
 | admin | 2. create — citizen user lands and is retrievable via API | **fail** | **fail** | pass | pass | — |
 
-## Maputo-data gap (35)
+## Maputo-data gap (28)
 
 Pass on bomet, fail on BOTH our stacks → the suite's Kenya/Bomet data-coupling, not the deployment.
 
@@ -75,13 +77,6 @@ Pass on bomet, fail on BOTH our stacks → the suite's Kenya/Bomet data-coupling
 | admin | overview card shows 3 KPI metrics | **fail** | **fail** | **fail** | pass | — |
 | admin | targetTenant persists in localStorage and survives reload | **fail** | **fail** | **fail** | pass | — |
 | admin | username, password, tenant inputs render empty on initial load | **fail** | **fail** | **fail** | pass | — |
-| api+smoke | 2 — citizen creates complaint | skip | pass ✅ | **fail** | pass | §1.6 — Pin **egov-user** mobile-validation image |
-| api+smoke | 2 — ensure PGR workflow config is correct (ESCALATE, role grants, nextState fix) | skip | pass ✅ | **fail** | pass | §1.6 — Pin **egov-user** mobile-validation image |
-| api+smoke | PGR business service is present | pass | pass | **fail** | pass | — |
-| citizen+employee | My Complaints list shows the seeded complaint with OPEN badge | **fail** | pass ✅ | **fail** | pass | §1.8 — Local **digit-ui globalConfigs** |
-| citizen+employee | PGR business service: PENDINGFORASSIGNMENT.ASSIGN forward-state is PENDINGATLME, not a sel | pass | pass | **fail** | pass | — |
-| citizen+employee | rate page renders 5 stars + 4 feedback checkboxes + Comments textarea | **fail** | pass ✅ | **fail** | pass | §1.8 — Local **digit-ui globalConfigs** |
-| citizen+employee | reopen step 0 renders title + 4 reason radios + Next button | **fail** | pass ✅ | **fail** | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | walks 6 steps + submits + lands on /pgr/response with PGR ID | **fail** | **fail** | **fail** | pass | — |
 | onboarding | 3 valid + 2 invalid → preview reports 5 total / 3 valid / 2 errors and Create button reads | **fail** | **fail** | **fail** | pass | — |
 | onboarding | add + remove level + submit advances to Boundary Data Upload | **fail** | **fail** | **fail** | pass | — |
@@ -174,27 +169,24 @@ Fails on bomet, passes on ours.
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
 | admin | 3. show page renders Code / Name / City / District for a known tenant | **fail** | pass ✅ | pass | **fail** | §2.6 — Harness **role-string** fix |
-| api+smoke | 3 — admin assigns complaint | skip | pass ✅ | skip | **fail** | §1.6 — Pin **egov-user** mobile-validation image |
+| api+smoke | 3 — admin assigns complaint | skip | pass ✅ | pass | **fail** | §1.6 — Pin **egov-user** mobile-validation image |
 | specs | form has all expected sections | pass | pass | pass | **fail** | — |
 
-## Other / mixed (13)
+## Other / mixed (10)
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
 | admin | 4. API shape — search returns records with code / name / city | skip | pass ✅ | pass | skip | §2.6 — Harness **role-string** fix |
 | admin | 5. QUIRK — city tenant object may lack districtName, list tolerates it | skip | pass ✅ | pass | skip | §2.6 — Harness **role-string** fix |
 | admin | Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME | skip | pass ✅ | skip | pass | §2.6 — Harness **role-string** fix |
-| api+smoke | 4 — admin resolves complaint | skip | **fail** ◐ | skip | skip | — |
-| citizen+employee | ASSIGN (GRO) → PENDINGATLME, then RESOLVE (LME) → RESOLVED @p0 | skip | pass ✅ | skip | skip | §2.5 — Deploy **egov-hrms** |
-| citizen+employee | complaint details page loads without crashing for a freshly-filed complaint | skip | pass ✅ | skip | pass | §1.8 — Local **digit-ui globalConfigs** |
-| citizen+employee | complaint-type filter → only rows of the chosen serviceCode @p0 | skip | pass ✅ | skip | skip | §1.6 — Pin **egov-user** mobile-validation image |
-| citizen+employee | Detail page renders Summary / Details / Map / Timeline sections | skip | pass ✅ | skip | pass | §1.8 — Local **digit-ui globalConfigs** |
-| citizen+employee | Detail URL uses /complaints/:id (PLURAL) — Routes.js export diverges | skip | pass ✅ | skip | pass | §1.6 — Pin **egov-user** mobile-validation image |
-| citizen+employee | search by complaint number returns exactly that complaint @p1 | skip | pass ✅ | skip | skip | §1.6 — Pin **egov-user** mobile-validation image |
-| citizen+employee | search by mobile number returns the matching complaint @p1 | skip | pass ✅ | skip | skip | §1.6 — Pin **egov-user** mobile-validation image |
-| citizen+employee | search for a well-formed but non-existent complaint number returns nothing @p1 | skip | pass ✅ | skip | skip | §1.6 — Pin **egov-user** mobile-validation image |
-| citizen+employee | status filter → only rows in the chosen workflow state @p0 | skip | pass ✅ | skip | skip | §1.6 — Pin **egov-user** mobile-validation image |
+| api+smoke | 4 — admin resolves complaint | skip | **fail** ◐ | **fail** | skip | — |
+| citizen+employee | ASSIGN (GRO) → PENDINGATLME, then RESOLVE (LME) → RESOLVED @p0 | skip | pass ✅ | pass | skip | §2.5 — Deploy **egov-hrms** |
+| citizen+employee | complaint-type filter → only rows of the chosen serviceCode @p0 | skip | pass ✅ | pass | skip | §1.6 — Pin **egov-user** mobile-validation image |
+| citizen+employee | search by complaint number returns exactly that complaint @p1 | skip | pass ✅ | pass | skip | §1.6 — Pin **egov-user** mobile-validation image |
+| citizen+employee | search by mobile number returns the matching complaint @p1 | skip | pass ✅ | pass | skip | §1.6 — Pin **egov-user** mobile-validation image |
+| citizen+employee | search for a well-formed but non-existent complaint number returns nothing @p1 | skip | pass ✅ | pass | skip | §1.6 — Pin **egov-user** mobile-validation image |
+| citizen+employee | status filter → only rows in the chosen workflow state @p0 | skip | pass ✅ | pass | skip | §1.6 — Pin **egov-user** mobile-validation image |
 
-## Clean parity (91)
+## Clean parity (101)
 
 Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column).
 
@@ -234,6 +226,8 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | admin | UI: no UndoToast container is mounted after navigating into the configurator | pass | pass | pass | pass | — |
 | admin | valid mobile clears aria-invalid | pass | pass | pass | pass | — |
 | api+smoke | 1 — acquire admin and citizen tokens | **fail** | pass ✅ | pass | pass | §1.6 — Pin **egov-user** mobile-validation image |
+| api+smoke | 2 — citizen creates complaint | skip | pass ✅ | pass | pass | §1.6 — Pin **egov-user** mobile-validation image |
+| api+smoke | 2 — ensure PGR workflow config is correct (ESCALATE, role grants, nextState fix) | skip | pass ✅ | pass | pass | §1.6 — Pin **egov-user** mobile-validation image |
 | api+smoke | ADMIN can oauth/token (post-bootstrap enc-key guard) | pass | pass | pass | pass | — |
 | api+smoke | all API calls carry JWT through proxy (no 401s after login) | **fail** | pass ✅ | pass | pass | §2.4 — Seed **RBAC** write grant |
 | api+smoke | all employee flow APIs return valid responses through proxy | pass | pass | pass | pass | — |
@@ -244,6 +238,7 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | api+smoke | login returns token | pass | pass | pass | pass | — |
 | api+smoke | mdms search returns Department schema records | pass | pass | pass | pass | — |
 | api+smoke | MDMS, localization, and access APIs work with JWT auth | pass | pass | pass | pass | — |
+| api+smoke | PGR business service is present | pass | pass | pass | pass | — |
 | api+smoke | REPRO: tiny synthetic JPEG triggers EG_FILESTORE_INPUT_ERROR (pre-fix) | pass | pass | pass | pass | — |
 | citizen+employee | #421 — landing ServicesSection top padding matches side padding | pass | pass | pass | pass | — |
 | citizen+employee | #422 — navigating into Create New Complaint lands at top of page | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
@@ -258,16 +253,23 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | citizen+employee | Change Password button styling check | pass | pass | pass | pass | — |
 | citizen+employee | citizen can log in with OTP and reach home page | pass | pass | pass | pass | — |
 | citizen+employee | citizen logout redirects to login page | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
+| citizen+employee | complaint details page loads without crashing for a freshly-filed complaint | skip | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | complaint type dropdown shows human-readable translated names | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
+| citizen+employee | Detail page renders Summary / Details / Map / Timeline sections | skip | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
+| citizen+employee | Detail URL uses /complaints/:id (PLURAL) — Routes.js export diverges | skip | pass ✅ | pass | pass | §1.6 — Pin **egov-user** mobile-validation image |
 | citizen+employee | digit-ui bundle declares AddressOne + AddressTwo populators (PR-C re-enabled) | pass | pass | pass | pass | — |
 | citizen+employee | fresh phone → OTP → name+email → /all-services | **fail** | pass ✅ | pass | pass | §1.6b — **OTP mock** on k3s |
 | citizen+employee | header language pill renders the current locale | pass | pass | pass | pass | — |
 | citizen+employee | Localization keys for the timeline rendering are seeded across the deployment locales (rai | pass | pass | pass | pass | — |
 | citizen+employee | login page renders with mobile input | pass | pass | pass | pass | — |
 | citizen+employee | mobile prefix chip renders the tenant dial code (not hardcoded +91) | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
+| citizen+employee | My Complaints list shows the seeded complaint with OPEN badge | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | only Name + Gender + Email + photo render (no password/language/mobile/notifications) | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
+| citizen+employee | PGR business service: PENDINGFORASSIGNMENT.ASSIGN forward-state is PENDINGATLME, not a sel | pass | pass | pass | pass | — |
 | citizen+employee | PGR_LME-only role filter returns LMEs (not all-of-HRMS) | **fail** | pass ✅ | pass | pass | §2.5 — Deploy **egov-hrms** |
 | citizen+employee | post-auth UserProfile mount + onChange do not throw | pass | pass | pass | pass | — |
+| citizen+employee | rate page renders 5 stars + 4 feedback checkboxes + Comments textarea | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
+| citizen+employee | reopen step 0 renders title + 4 reason radios + Next button | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | smoke: lands on a usable citizen page | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | the deployment postal-code pattern accepts this tenant's valid sample and rejects malforme | pass | pass | pass | pass | — |
 | citizen+employee | the legacy Indian pattern would have rejected this tenant's valid postal code | pass | pass | pass | pass | — |

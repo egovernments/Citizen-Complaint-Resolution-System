@@ -204,3 +204,27 @@ kubectl patch svc egov-otp -n egov --type json -p '[{"op":"replace","path":"/spe
 - **In-files (committed):** egov-user OTP flags aligned to Compose — `charts/core-services/egov-user/values.yaml` + `env.yaml`: `otp-validation`, `citizen-otp-enabled`, `citizen-registration-withlogin` set **empty** (not emitted), keeping only `citizen-otp-fixed=123456`/`-enabled`. (Drops the earlier `OTP_VALIDATION_REGISTER_MANDATORY=false`/`withlogin=true` workarounds — the mock makes them unnecessary.)
 **Verified:** citizen provisioning + all 3 UI tests (`fresh phone → OTP → name+email`, `upload JPEG/photo`) pass on k8s.
 **Permanent fix:** wire the OTP mock into the k8s helmfile (deploy `otp-mock` and point the `user-otp`/`egov-otp` Services at it — or a gateway short-circuit for `/user-otp/*`+`/otp/v1/_validate`), matching Compose's default. *(Or `enable_otp_services:true` on both + fix the `user-otp` `MobileNumberValidation` match — the production-like path.)*
+
+## §1.9 · PGR businessservice missing at the city tenant on **Compose**  🔀 Mixed (fix verified)
+**Symptom (Compose-side, not k8s):** the complaint pipeline fails on Compose while passing on k3s+bomet — `PGR business service is present` → `undefined`, `citizen creates complaint` → false, and ~15 downstream tests (My Complaints, detail page, rate, reopen, assign→resolve, the `@p0`/`@p1` search tests) fail or skip. This is the one gap where **Compose was behind k3s** — the reverse of every other finding here.
+**Root cause:** egov-workflow-v2's `PGR` businessservice was seeded only at the **root** tenant (`mz`), not the **city** tenant (`mz.maputo`) where complaints actually run. The workflow lookup for a `mz.maputo` complaint does **not** fall back to the root, so `APPLY` finds no businessservice and creation fails. k3s had PGR registered at *both* `mz` and `mz.maputo`; the Compose Maputo onboarding created only the root one.
+**Fix (verified) — seed PGR@`mz.maputo` on Compose from k3s's exact config:**
+```bash
+# 1. Pull the working businessservice from k3s (search returns states/actions linked by UUID):
+#    POST /egov-workflow-v2/egov-wf/businessservice/_search?tenantId=mz.maputo&businessServices=PGR
+# 2. Rebuild a _create payload: REMAP each action currentState/nextState from k3s state-UUID → state NAME
+#    (the format _create relinks by), keeping ONLY the null start-state placeholder UUID and the single
+#    benign FORWARD phantom (04752227…) that k3s itself carries. Do NOT re-post the raw _search output —
+#    _create mints fresh state UUIDs, so UUID-linked actions become dangling (21 broken refs).
+# 3. POST the remapped payload to Compose:
+#    POST /egov-workflow-v2/egov-wf/businessservice/_create   (tenantId=mz.maputo, ADMIN@mz token)
+# Verify: search returns 11 states, exactly ONE dangling nextState (the FORWARD phantom, == k3s).
+```
+If a prior broken attempt exists, delete it first (FK order: actions → states → businessservice; `docker exec` needs `-i` for heredoc SQL):
+```bash
+docker exec docker-postgres psql -U egov -d egov -c "DELETE FROM eg_wf_action_v2 WHERE tenantid='mz.maputo';"
+docker exec docker-postgres psql -U egov -d egov -c "DELETE FROM eg_wf_state_v2 WHERE businessserviceid='<bs-uuid>';"
+docker exec docker-postgres psql -U egov -d egov -c "DELETE FROM eg_wf_businessservice_v2 WHERE uuid='<bs-uuid>';"
+```
+**Verified:** re-ran api+smoke + citizen+employee on Compose → **17 tests flipped fail/skip → pass, 0 regressions**; Compose reaches **113 pass, level with k3s**.
+**Permanent fix:** the city-tenant onboarding (`digit-xlsx-onboard` / `tenant_bootstrap`) must register the `PGR` businessservice at the **city** tenant, not only the root — *or* configure egov-workflow-v2 to fall back to the root-tenant businessservice when a city has none. (The admin suite on Compose still shows a pre-§1.9 snapshot — one test, `Workflow Action select … ESCALATE`, would flip on a re-run.)
