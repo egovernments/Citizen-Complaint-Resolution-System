@@ -200,7 +200,16 @@ Flips 4 of the 5 cluster tests on k8s. **§2.6b (the 5th, `users create`):** `/u
 2. **No-action RBAC.** For a URI with **no** accesscontrol action defined (e.g. `common-masters.Department` write), k3s **allows** (accesscontrol returns allow → pass); Kong's Lua reads the same response as **deny** → would-403, so under enforcement Kong 403s a write k3s allows. Fix: align Kong's `/access/v1/actions/_authorize` call to k3s's exact payload so results agree — **verifiable only in-cluster** (accesscontrol's authorize isn't faithfully callable externally; all external calls 401).
 
 **Excluded from parity:** the bodyless-GET row (Kong 200 / k3s 500) is the **§1.10 k3s bug** — Kong is correctly better; do NOT match it.
-**Status:** flip proven live then reverted (leaving compose enforcing with drift #1/#2 would regress). Full parity = a reviewed gateway PR: fix the two Lua drifts, flip both flags, keep the behavior-probe green. Not a config-only change.
+
+**EMPIRICAL VERDICT (ran the full suite on compose with Kong flipped to ENFORCE, diffed vs k3s):**
+| Kong mode | compose-vs-k3s divergences |
+|---|---|
+| **AUDIT** (item-5 default) | **7** |
+| **ENFORCE** (both flags flipped) | **18** |
+
+**Flipping enforcement makes test parity WORSE**, not better. It broke **10 tests that passed in audit** — 5 configurator writes (`Department create/update`, `mdmsCreate`, tenant-scope) and 5 citizen searches — because Kong's Lua **over-enforces RBAC on no-action paths that k3s allows** (drift #2). k3s's own RBAC effectively *allows* these (no accesscontrol action → allow), and Kong's **audit mode also allows them** → audit-Kong ≈ k3s for the real suite. So the item-5 decision to ship Kong in AUDIT was correct for parity.
+
+**Conclusion:** the gateway is **not** the source of the meaningful compose↔k3s divergences. The 7 audit-mode divergences are: **5 = §1.10** (k3s bodyless-GET bug — k3s fails, compose passes; fix upstream, don't match), **1 = §2.6b** (harness role-less token — fix in the harness), **1 = edit-username edge**. **Do NOT flip Kong to enforce** — keep audit. Enforcing both gateways is only worth doing as a *security-posture* goal (defence in depth), and even then it needs the drift #1/#2 Lua fixes first and yields **no test-parity improvement** (best case = audit's 7). Verified with `deploy/parity/gateway-behavior-parity.py` + full-suite runs; Kong left in audit (known-good).
 
 ---
 
