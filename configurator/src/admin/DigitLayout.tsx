@@ -26,6 +26,7 @@ import {
   History,
   FileCode,
   Workflow,
+  LayoutTemplate,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +54,15 @@ const navGroups = [
       { id: 'complaint-hierarchy', nameKey: 'app.nav.complaint_types', path: '/manage/complaint-hierarchy', icon: AlertTriangle },
       { id: 'complaints', nameKey: 'app.nav.complaints', path: '/manage/complaints', icon: MessageSquare },
       { id: 'localization', nameKey: 'app.nav.localization', path: '/manage/localization', icon: Globe },
+    ],
+  },
+  {
+    // CCSD-2008: config-driven public landing (RAINMAKER-PGR.LandingSection /
+    // LandingPageConfig) — generic CRUD in P3, Builder editor lands in P4.
+    labelKey: 'app.nav.landing_page',
+    items: [
+      { id: 'landing-sections', nameKey: 'app.nav.landing_sections', path: '/manage/landing-sections', icon: LayoutTemplate },
+      { id: 'landing-page-config', nameKey: 'app.nav.landing_page_config', path: '/manage/landing-page-config', icon: Settings },
     ],
   },
   {
