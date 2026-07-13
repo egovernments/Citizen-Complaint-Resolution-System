@@ -21,6 +21,9 @@ const SKIP_KEYS = new Set([
   "hierarchyLevel2",
   "complainantAddress",
   "email",
+  // Moz QA (CCSD-1988): consents are an internal acceptance record, not a
+  // user-facing data row — never show them on the view screens.
+  "consents",
 ]);
 
 function formatValue(v) {

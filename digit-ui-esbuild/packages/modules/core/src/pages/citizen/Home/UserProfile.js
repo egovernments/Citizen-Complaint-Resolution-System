@@ -459,11 +459,16 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     }
   };
 
+  // Same rule as the complaint form (CCSD-1978): blank is fine, a typed value
+  // must be a well-formed address. The old check (has "@" AND has ".") passed
+  // shapes like "a@b." which then failed the SAVE round-trip with an
+  // unlocalized backend error (CCSD-1989).
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const setUserEmailAddress = (value) => {
     if (userInfo?.userName !== value) {
       setEmail(value);
 
-      if (value.length && !(value.includes("@") && value.includes("."))) {
+      if (value.length && !EMAIL_RE.test(value.trim())) {
         setErrors({
           ...errors,
           emailAddress: {
@@ -586,7 +591,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         });
       }
 
-      if (email.length && !(email.includes("@") && email.includes("."))) {
+      if (email.length && !EMAIL_RE.test(email.trim())) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_EMAIL_INVALID"),
