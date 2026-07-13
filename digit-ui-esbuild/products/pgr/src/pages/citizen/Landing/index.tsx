@@ -21,6 +21,7 @@ import { LandingRoutes } from "./routes";
 import { LandingTokens } from "./tokens";
 import { NewsItem } from "./content";
 import { LanguageOption } from "./components/UtilityBar";
+import { useLandingCopy } from "./useLandingCopy";
 import { useLandingConfig } from "./config/useLandingConfig";
 import { usePreviewBridge, PreviewBridge } from "./config/usePreviewBridge";
 import { LandingRenderer } from "./LandingRenderer";
@@ -71,7 +72,39 @@ export function PGRLandingPage(props: PGRLandingPageProps) {
 
 function ConfiguredLanding(props: PGRLandingPageProps) {
   const config = useLandingConfig();
-  return <LandingRenderer config={config} {...props} />;
+  const { i18n } = useLandingCopy();
+
+  // Language switching must go through the platform's localization service:
+  // it FETCHES the target locale's message bundles (LocalizationService
+  // .changeLanguage -> getLocale -> addResources) and records the choice in
+  // Digit's store before switching i18next. A bare i18n.changeLanguage()
+  // switches to a locale with no resources loaded and the page stays put —
+  // which is exactly the EN/PT-toggle-does-nothing bug this fixes.
+  const defaultLanguageChange = React.useCallback(
+    (code: string) => {
+      try {
+        const D = typeof window !== "undefined" ? (window as unknown as { Digit?: any }).Digit : undefined;
+        const stateCode = D?.ULBService?.getStateId?.();
+        if (D?.LocalizationService?.changeLanguage) {
+          D.LocalizationService.changeLanguage(code, stateCode);
+          return;
+        }
+      } catch {
+        /* fall through to the standalone path */
+      }
+      // No DIGIT shell (standalone embed): deck strings still switch.
+      i18n?.changeLanguage?.(code);
+    },
+    [i18n]
+  );
+
+  return (
+    <LandingRenderer
+      config={config}
+      {...props}
+      onLanguageChange={props.onLanguageChange ?? defaultLanguageChange}
+    />
+  );
 }
 
 function PreviewedLanding({ bridge, ...props }: PGRLandingPageProps & { bridge: PreviewBridge }) {

@@ -6,7 +6,7 @@
  * draft store only; the preview updates immediately.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { GripVertical, Languages, Plus, Trash2 } from 'lucide-react';
+import { GripVertical, Languages, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,14 +71,20 @@ function LocTextField({ def, sectionCode, draft }: { def: BuilderFieldDef; secti
       ) : (
         <Input value={value} disabled={!key} onChange={(e) => onChange(e.target.value)} className="h-9 text-sm" />
       )}
-      <div className="flex items-center justify-between">
-        <span className="truncate text-[10px] text-muted-foreground" title={key}>{key ?? 'No localization key set (Advanced tab)'}</span>
-        {key && (
-          <button type="button" onClick={() => setDrawerOpen(true)} className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-primary hover:underline">
-            <Languages className="h-3 w-3" /> Edit Translations
-          </button>
-        )}
-      </div>
+      {/* Technical keys stay hidden here (Advanced tab shows them); admins
+          think in content. */}
+      {key ? (
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          title={key}
+          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-1.5 text-[11px] font-medium text-emerald-700 hover:border-emerald-500 hover:bg-emerald-50"
+        >
+          <Languages className="h-3.5 w-3.5" /> Edit Translations
+        </button>
+      ) : (
+        <p className="m-0 text-[10px] text-muted-foreground">No localization key set (see Advanced tab).</p>
+      )}
       {key && <LocalizationDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} locKey={key} title={def.label} />}
       {def.help && <p className="m-0 text-[10px] text-muted-foreground">{def.help}</p>}
       {sectionCode ? null : null}
@@ -127,7 +133,11 @@ function ThemeField({ def, code, draft }: { def: BuilderFieldDef; code: string; 
 
 function ItemsEditor({ cfg, code, draft }: { cfg: ItemsEditorConfig; code: string; draft: LandingSectionData }) {
   const { state, dispatch } = useBuilder();
-  const items = (draft.items ?? []) as LandingItemData[];
+  const [editing, setEditing] = useState<number | null>(null);
+  // Copy-on-write inheritance: with no explicit items[], show the built-in
+  // defaults as rows; the first mutation materialises them into the config.
+  const explicit = (draft.items ?? []) as LandingItemData[];
+  const items: LandingItemData[] = explicit.length ? explicit : (cfg.inherited?.() ?? []);
   const patch = (next: LandingItemData[]) =>
     dispatch({ type: 'patchSection', code, patch: { items: next.length ? next : undefined } });
   const setItem = (i: number, p: Partial<LandingItemData>) =>
@@ -136,48 +146,63 @@ function ItemsEditor({ cfg, code, draft }: { cfg: ItemsEditorConfig; code: strin
   return (
     <div className="space-y-2" data-field="items">
       <div className="flex items-center gap-2">
-        <Label className="text-xs font-medium">{cfg.label} ({items.length})</Label>
+        <Label className="text-xs font-semibold">{cfg.label} ({items.length})</Label>
       </div>
       {cfg.help && <p className="m-0 text-[10px] text-muted-foreground">{cfg.help}</p>}
       {items.map((it, i) => (
-        <div key={it.code ?? i} className="space-y-1.5 rounded-md border border-border p-2">
+        <div key={it.code ?? i} className="rounded-md border border-border bg-background px-2 py-1.5">
           <div className="flex items-center gap-1.5">
-            <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50" />
-            <Input
-              value={resolveText(it.labelKey, state.displayLocale, state.locEdits) ?? ''}
-              placeholder="Label"
-              onChange={(e) => it.labelKey && dispatch({ type: 'patchLoc', locale: state.displayLocale, key: it.labelKey, text: e.target.value, coalesce: `loc:${it.labelKey}` })}
-              className="h-7 flex-1 text-xs"
-            />
-            {cfg.withIcons && (
-              <Select value={it.iconId ?? 'none'} onValueChange={(v) => setItem(i, { iconId: v === 'none' ? undefined : v })}>
-                <SelectTrigger className="h-7 w-24 text-[10px]"><SelectValue placeholder="Icon" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No icon</SelectItem>
-                  {ICON_CHOICES.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            )}
+            <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+            <span className="min-w-0 flex-1 truncate text-xs">
+              {resolveText(it.labelKey, state.displayLocale, state.locEdits) ?? it.labelKey ?? '(untitled)'}
+            </span>
+            <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Edit item"
+              onClick={() => setEditing(editing === i ? null : i)}>
+              <Pencil className="h-3 w-3" />
+            </Button>
             <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Remove item"
-              onClick={() => patch(items.filter((_, n) => n !== i))}>
+              onClick={() => { setEditing(null); patch(items.filter((_, n) => n !== i)); }}>
               <Trash2 className="h-3 w-3" />
             </Button>
           </div>
-          {cfg.withDesc && it.descKey && (
-            <Input
-              value={resolveText(it.descKey, state.displayLocale, state.locEdits) ?? ''}
-              placeholder="Description"
-              onChange={(e) => dispatch({ type: 'patchLoc', locale: state.displayLocale, key: it.descKey!, text: e.target.value, coalesce: `loc:${it.descKey}` })}
-              className="h-7 text-xs"
-            />
-          )}
-          {cfg.withUrl && (
-            <Input
-              value={it.navigationUrl ?? ''}
-              placeholder="URL or route key (optional)"
-              onChange={(e) => setItem(i, { navigationUrl: e.target.value || undefined })}
-              className="h-7 text-xs"
-            />
+          {editing === i && (
+            <div className="mt-1.5 space-y-1.5 border-t border-border pt-1.5">
+              <Input
+                value={resolveText(it.labelKey, state.displayLocale, state.locEdits) ?? ''}
+                placeholder="Label"
+                autoFocus
+                onChange={(e) => {
+                  if (!explicit.length) patch(items); // materialise inherited first
+                  if (it.labelKey) dispatch({ type: 'patchLoc', locale: state.displayLocale, key: it.labelKey, text: e.target.value, coalesce: `loc:${it.labelKey}` });
+                }}
+                className="h-7 text-xs"
+              />
+              {cfg.withIcons && (
+                <Select value={it.iconId ?? 'none'} onValueChange={(v) => setItem(i, { iconId: v === 'none' ? undefined : v })}>
+                  <SelectTrigger className="h-7 text-[10px]"><SelectValue placeholder="Icon" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No icon</SelectItem>
+                    {ICON_CHOICES.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              {cfg.withDesc && it.descKey && (
+                <Input
+                  value={resolveText(it.descKey, state.displayLocale, state.locEdits) ?? ''}
+                  placeholder="Description"
+                  onChange={(e) => dispatch({ type: 'patchLoc', locale: state.displayLocale, key: it.descKey!, text: e.target.value, coalesce: `loc:${it.descKey}` })}
+                  className="h-7 text-xs"
+                />
+              )}
+              {cfg.withUrl && (
+                <Input
+                  value={it.navigationUrl ?? ''}
+                  placeholder="URL or route key (optional)"
+                  onChange={(e) => setItem(i, { navigationUrl: e.target.value || undefined })}
+                  className="h-7 text-xs"
+                />
+              )}
+            </div>
           )}
         </div>
       ))}
@@ -385,7 +410,7 @@ export function Inspector() {
             <TabsTrigger
               key={t.id}
               value={t.id}
-              className="rounded-none border-b-2 border-transparent px-2 pb-1.5 text-[11px] data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              className="rounded-none border-b-2 border-transparent px-2 pb-1.5 text-[11px] data-[state=active]:border-emerald-600 data-[state=active]:text-emerald-700 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
             >
               {t.label}
             </TabsTrigger>

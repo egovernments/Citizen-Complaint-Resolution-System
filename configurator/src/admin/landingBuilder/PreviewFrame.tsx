@@ -96,6 +96,20 @@ export function PreviewFrame() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, state.selected]);
 
+  // Hover a section card -> auto-scroll the preview to it (debounced so a
+  // quick sweep across the list doesn't thrash the page).
+  const hoverScrollRef = useRef<number>();
+  useEffect(() => {
+    if (!ready || !state.hovered) return;
+    window.clearTimeout(hoverScrollRef.current);
+    hoverScrollRef.current = window.setTimeout(
+      () => post({ type: 'pgrl-preview-scroll', code: state.hovered! }),
+      250,
+    );
+    return () => window.clearTimeout(hoverScrollRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, state.hovered]);
+
   const width = VIEWPORT_WIDTH[state.viewport] ?? 1280;
   const dirty = isDirty(state);
 
