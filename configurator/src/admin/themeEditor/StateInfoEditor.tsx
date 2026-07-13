@@ -216,12 +216,12 @@ export function StateInfoEditor() {
         record.isActive,
       );
       toast({
-        title: 'State Info updated',
+        title: 'Branding updated',
         description: data.name ?? record.uniqueIdentifier,
       });
       navigate('/manage/state-info');
     } catch (e) {
-      const msg = (e as Error)?.message || 'Failed to save State Info.';
+      const msg = (e as Error)?.message || 'Failed to save Branding.';
       setSaveError(msg);
     } finally {
       setSaving(false);
@@ -235,7 +235,7 @@ export function StateInfoEditor() {
           <ArrowLeft className="w-4 h-4" /> Back
         </Button>
         <DigitCard className="p-8 text-center text-muted-foreground">
-          <RefreshCw className="w-5 h-5 animate-spin inline-block mr-2" /> Loading State Info…
+          <RefreshCw className="w-5 h-5 animate-spin inline-block mr-2" /> Loading Branding…
         </DigitCard>
       </div>
     );
@@ -261,7 +261,7 @@ export function StateInfoEditor() {
           <ArrowLeft className="w-4 h-4" /> Back
         </Button>
         <h1 className="text-2xl sm:text-3xl font-bold font-condensed text-foreground">
-          Edit State Info: {record.uniqueIdentifier}
+          Edit Branding: {record.uniqueIdentifier}
         </h1>
         {saving && <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />}
       </div>
