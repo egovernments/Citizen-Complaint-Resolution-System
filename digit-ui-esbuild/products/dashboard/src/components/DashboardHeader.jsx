@@ -37,14 +37,28 @@ function buildRowScope(scope) {
   return { deptLabel, areaLabel, hasDepartments: departments.length > 0 };
 }
 
-function formatDisplayDate(iso) {
+/**
+ * Render a filter ISO date (yyyy-mm-dd) in the ACTIVE locale's numeric order —
+ * hardcoding `${m}/${d}/${y}` printed US dates under every locale (06/13/2026
+ * where French expects 13/06/2026). `language` is the DIGIT locale
+ * (en_IN / fr_FR); underscore→hyphen makes it a BCP 47 tag.
+ */
+function formatDisplayDate(iso, language) {
   if (!iso) return "";
   const [y, m, d] = iso.split("-");
   if (!y || !m || !d) return iso;
-  return `${m}/${d}/${y}`;
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  if (Number.isNaN(date.getTime())) return iso;
+  const opts = { day: "2-digit", month: "2-digit", year: "numeric" };
+  try {
+    return date.toLocaleDateString(language?.replace("_", "-"), opts);
+  } catch (e) {
+    // Malformed stored locale tag — let the browser default decide.
+    return date.toLocaleDateString(undefined, opts);
+  }
 }
 
-function buildSubtitle(filters, filterOptions, t) {
+function buildSubtitle(filters, filterOptions, t, language) {
   const geoOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
   const geoId = filters?.geography;
   // The geography chip is a raw boundary code — route it through the
@@ -56,10 +70,8 @@ function buildSubtitle(filters, filterOptions, t) {
         t("DASHBOARD_HEADER_ALL_LOCALITIES", "All Localities");
 
   let period = t("DASHBOARD_HEADER_LAST_7_DAYS", "Last 7 days");
-  if (filters?.dateRangeActive && filters?.dateFrom && filters?.dateTo) {
-    period = `${formatDisplayDate(filters.dateFrom)} – ${formatDisplayDate(filters.dateTo)}`;
-  } else if (filters?.dateFrom && filters?.dateTo) {
-    period = `${formatDisplayDate(filters.dateFrom)} – ${formatDisplayDate(filters.dateTo)}`;
+  if (filters?.dateFrom && filters?.dateTo) {
+    period = `${formatDisplayDate(filters.dateFrom, language)} – ${formatDisplayDate(filters.dateTo, language)}`;
   }
 
   return `${geo} · ${period}`;
@@ -106,7 +118,7 @@ const DashboardHeader = ({
   // `language` re-keys the memos on language switch (t itself is stable).
   const rowScope = useMemo(() => buildRowScope(scope), [scope, language]);
   const subtitle = useMemo(
-    () => buildSubtitle(filters, filterOptions, t),
+    () => buildSubtitle(filters, filterOptions, t, language),
     [filters, filterOptions, t, language]
   );
   // ONE full-phrase key wins when seeded — splicing the DASHBOARD_PRODUCT_LABEL
