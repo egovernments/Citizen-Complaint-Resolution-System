@@ -6865,7 +6865,13 @@
     },
     {
         "code": "CS_DESC_MIN_CHARS",
-        "message": "Description must be 20–1000 characters",
+        "message": "Please describe the issue in 20-1000 characters (use words, not only numbers).",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_DESC_NEEDS_WORDS",
+        "message": "Please describe the issue in words, not only numbers.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

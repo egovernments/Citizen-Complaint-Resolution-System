@@ -332,6 +332,28 @@ function validateString(v: unknown): string {
   return typeof v === "string" && v.trim().length > 0 ? v : "";
 }
 
+// Email is OPTIONAL: blank is fine, but a value the citizen typed must be a
+// well-formed address (single @, a dot in the domain, no whitespace). Kept
+// deliberately permissive — matches the HTML5 email spirit without rejecting
+// valid-but-unusual real addresses.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function isEmailAcceptable(v: unknown): boolean {
+  const s = String(v ?? "").trim();
+  return s.length === 0 || EMAIL_RE.test(s);
+}
+
+// Description must be a real description, not padding. 20-1000 chars AND at
+// least 3 letters — so "00000000000000000000" (20 digits) is rejected.
+// \p{L} counts any-language letters (Portuguese accents included).
+const DESC_MIN = 20;
+function descriptionLetters(v: unknown): number {
+  return (String(v ?? "").match(/\p{L}/gu) || []).length;
+}
+function isDescriptionValid(v: unknown): boolean {
+  const s = String(v ?? "").trim();
+  return s.length >= DESC_MIN && descriptionLetters(s) >= 3;
+}
+
 function validateGeoLocation(v: { latitude?: number | null; longitude?: number | null }) {
   if (
     v &&
@@ -385,7 +407,9 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any, d
       ...(formData.complainantName ? { complainantName: formData.complainantName } : {}),
       ...(formData.complainantAddress ? { complainantAddress: formData.complainantAddress } : {}),
       ...(formData.email ? { email: formData.email } : {}),
-      consents: formData.consents || [],
+      // Consent UI removed (QA) — submitting the complaint is implicit
+      // acceptance, so the codes are always sent to keep the backend contract.
+      consents: REQUIRED_CONSENTS.map((c) => c.code),
       ...(formData.dynamicFields || {}),
     };
   }
@@ -469,8 +493,9 @@ function isFieldValid(data: FormData, fieldKey: keyof FormData | string): boolea
       return false;
     }
     case "description":
-      // CCSD-1956: 20–1000 characters (maxLength enforced by the textarea).
-      return typeof data.description === "string" && data.description.trim().length >= 20;
+      // CCSD-1956: 20–1000 characters, and must contain real words (not only
+      // digits — QA: "000000..." was accepted). maxLength enforced by textarea.
+      return isDescriptionValid(data.description);
     case "SelectComplaintType":
       return data.SelectComplaintType != null;
     case "GeoLocationsPoint":
@@ -1030,11 +1055,8 @@ function Step2Location({ data, patch, resolvedTenant, t }: StepBodyProps) {
 function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
   const fields = templateFields || [];
   const dyn = data.dynamicFields || {};
-  const consents = data.consents || [];
   const extended = !!data.caseRelatedTo; // dispatcher flow active
   const setDyn = (key: string, value: unknown) => patch({ dynamicFields: { ...dyn, [key]: value } });
-  const toggleConsent = (code: string, on: boolean) =>
-    patch({ consents: on ? [...consents, code] : consents.filter((c) => c !== code) });
 
   return (
     <StepShell
@@ -1058,15 +1080,28 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
             value={data.description ?? ""}
             onChange={(e) => patch({ description: e.target.value })}
           />
-          {/* CCSD-1956: 20–1000 chars. Counter turns into a min-length hint until valid. */}
+          {/* CCSD-1956: 20–1000 chars + must be real words (not digits-only).
+              Counter turns into the relevant hint until valid. */}
           <div className="mt-1 text-xs text-muted-foreground text-right">
-            {(data.description ?? "").trim().length > 0 && (data.description ?? "").trim().length < 20 ? (
-              <span style={{ color: "#b3261e" }}>
-                {tr(t, "CS_DESC_MIN_CHARS", "Minimum 20 characters")} · {(data.description ?? "").length} / 1000
-              </span>
-            ) : (
-              <>{(data.description ?? "").length} / 1000</>
-            )}
+            {(() => {
+              const raw = data.description ?? "";
+              const trimmed = raw.trim();
+              if (trimmed.length > 0 && trimmed.length < DESC_MIN) {
+                return (
+                  <span style={{ color: "#b3261e" }}>
+                    {tr(t, "CS_DESC_MIN_CHARS", "Minimum 20 characters")} · {raw.length} / 1000
+                  </span>
+                );
+              }
+              if (trimmed.length >= DESC_MIN && descriptionLetters(trimmed) < 3) {
+                return (
+                  <span style={{ color: "#b3261e" }}>
+                    {tr(t, "CS_DESC_NEEDS_WORDS", "Please describe the issue in words, not only numbers")} · {raw.length} / 1000
+                  </span>
+                );
+              }
+              return <>{raw.length} / 1000</>;
+            })()}
           </div>
         </Field>
 
@@ -1125,24 +1160,11 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
 
         {extended ? (
           <div className="space-y-2">
-            {REQUIRED_CONSENTS.map((c) => (
-              <label key={c.code} className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  style={CHECKBOX_STYLE}
-                  checked={consents.includes(c.code)}
-                  onChange={(e) => toggleConsent(c.code, e.target.checked)}
-                />
-                <span>
-                  {c.label}
-                  {/* Same required marker the design-system Label renders. */}
-                  <span className="ml-0.5 text-destructive" style={{ color: "var(--color-error, #d4351c)" }} aria-hidden>
-                    *
-                  </span>
-                </span>
-              </label>
-            ))}
-            <label className="flex items-start gap-2 text-sm pt-2 border-t border-border">
+            {/* QA (Moz): the TRUTHFULNESS / DATA_PROCESSING consent checkboxes
+                are hidden — submitting the complaint carries them as implicitly
+                accepted (see mapFormDataToRequest). Only the confidential toggle
+                remains a visible choice. */}
+            <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
                 style={CHECKBOX_STYLE}
@@ -1248,10 +1270,11 @@ function TipBox({ title, body }: { title?: string; body: string }) {
 }
 
 // Small helper / confirmation line under a field (ⓘ hint, or ✓ when satisfied).
-function FieldHelp({ children, ok }: { children: React.ReactNode; ok?: boolean }) {
+function FieldHelp({ children, ok, error }: { children: React.ReactNode; ok?: boolean; error?: boolean }) {
+  const color = error ? "#dc2626" : ok ? PRIMARY : "var(--color-text-secondary, #64748b)";
   return (
-    <div className="mt-1 text-xs" style={{ display: "flex", gap: "0.35rem", alignItems: "flex-start", color: ok ? PRIMARY : "var(--color-text-secondary, #64748b)" }}>
-      <span aria-hidden style={{ flexShrink: 0 }}>{ok ? "✓" : "ⓘ"}</span>
+    <div className="mt-1 text-xs" style={{ display: "flex", gap: "0.35rem", alignItems: "flex-start", color }}>
+      <span aria-hidden style={{ flexShrink: 0 }}>{error ? "⚠" : ok ? "✓" : "ⓘ"}</span>
       <span style={{ minWidth: 0 }}>{children}</span>
     </div>
   );
@@ -1384,7 +1407,11 @@ function ReporterDetailsCard({ data, patch, t }: StepBodyProps) {
           value={data.email ?? ""}
           onChange={(e) => patch({ email: e.target.value })}
         />
-        <FieldHelp>{tr(t, "CS_COMMON_OPTIONAL", "Optional")}</FieldHelp>
+        {isEmailAcceptable(data.email) ? (
+          <FieldHelp>{tr(t, "CS_COMMON_OPTIONAL", "Optional")}</FieldHelp>
+        ) : (
+          <FieldHelp error>{tr(t, "CS_EMAIL_INVALID", "Please enter a valid email address")}</FieldHelp>
+        )}
       </Field>
     </Card>
   );
@@ -1754,6 +1781,9 @@ const CreatePGRFlowV2: React.FC = () => {
           (s: ServiceDef) => s.menuPath === mainPath
         );
         if (subTypeOptions.length > 1 && !formData.SelectSubComplaintType) return false;
+        // Optional email, but if typed it must be well-formed (reporter card is
+        // on this step). Blank passes.
+        if (!isEmailAcceptable(formData.email)) return false;
         return true;
       }
       case "where":
@@ -1769,10 +1799,8 @@ const CreatePGRFlowV2: React.FC = () => {
         for (const f of templateFields) {
           if (f.mandatory && !String((formData.dynamicFields || {})[f.fieldKey] ?? "").trim()) return false;
         }
-        // Both consents are required once an authority/template is in play.
-        if (formData.caseRelatedTo && REQUIRED_CONSENTS.some((c) => !(formData.consents || []).includes(c.code))) {
-          return false;
-        }
+        // Consent checkboxes are hidden (QA) — acceptance is implicit on
+        // submit, so there is no consent gate here anymore.
         return true;
       }
       default:
