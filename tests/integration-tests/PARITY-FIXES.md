@@ -173,3 +173,17 @@ kubectl rollout restart deploy gateway -n egov   # gateway-kubernetes-discovery 
 
 ## (minor) mdms-v2 image drift  ✅ Permanent
 `core-services/mdms-v2/values.yaml`: `tag v2.9.2-4a60f20 → maven-jdk21-9f83afb` + `pullPolicy: IfNotPresent` (align k8s with the Compose-baked image; behaves identically — parity cleanliness, not a bug).
+
+---
+
+## §2.6 · Test harness sends string roles → 500 on k8s gateway  ✅ Permanent (test code)
+**Symptom:** configurator-manage tests (`complaint-types` list, `tenants` show/search, `users` create) fail on k8s at their API-sanity call — `500/401 Cannot construct Role from String ('DGRO')` — while passing on Compose.
+**Cause:** the harness copies `auth.user` (whose `roles` are code strings from the configurator storageState) straight into `RequestInfo.userInfo`. Kong re-resolves userInfo from the token (tolerates strings); the stock k8s gateway forwards them verbatim → the service can't deserialize `Role` from a string. The real SPA is unaffected (it sends objects).
+**Fix (committed):** in both harness builders — `tests/integration-tests/tests/utils/manage/api.ts` (`buildRequestInfo`) and `tests/integration-tests/tests/admin/users.spec.ts` (`requestInfo`) — expand string roles to Role objects:
+```ts
+userInfo: auth.user
+  ? { ...auth.user, roles: (auth.user.roles ?? []).map(r =>
+        typeof r === 'string' ? { code: r, name: r, tenantId: auth.user.tenantId } : r) }
+  : undefined,
+```
+Flips 4 of the 5 cluster tests on k8s. **§2.6b (the 5th, `users create`):** `/user/_search` is open on Compose but RBAC-enforced on k8s → 401; fix by **granting** the `/user/_search` action to the config-admin role (a §2.4-family seed) — do **not** open the endpoint on k8s (that copies Compose's fail-open PII search).
