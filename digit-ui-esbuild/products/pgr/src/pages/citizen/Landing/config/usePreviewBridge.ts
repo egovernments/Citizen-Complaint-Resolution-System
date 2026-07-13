@@ -124,13 +124,13 @@ export function usePreviewBridge(): PreviewBridge {
       if (!code) return;
       const el = sectionRoot(code);
       if (!el) return;
-      el.style.outline = "2px solid #7c3aed";
+      el.style.outline = "2px solid #059669";
       el.style.outlineOffset = "-2px";
       const label = document.createElement("div");
       label.textContent = code.toUpperCase();
       label.setAttribute("aria-hidden", "true");
       label.style.cssText =
-        "position:absolute;z-index:70;background:#7c3aed;color:#fff;font:600 10px/1.7 sans-serif;" +
+        "position:absolute;z-index:70;background:#059669;color:#fff;font:600 10px/1.7 sans-serif;" +
         "padding:0 7px;border-radius:0 0 4px 0;pointer-events:none;letter-spacing:.08em;";
       const rect = el.getBoundingClientRect();
       label.style.top = `${rect.top + window.scrollY}px`;

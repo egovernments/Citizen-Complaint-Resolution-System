@@ -48,7 +48,7 @@ export interface BuilderFieldDef {
 }
 
 export interface ItemsEditorConfig {
-  /** Inspector card title, e.g. "Features", "Channels". */
+  /** Inspector card title, e.g. "Highlights", "Channels". */
   label: string;
   tab: InspectorTab;
   withIcons: boolean;
@@ -57,6 +57,9 @@ export interface ItemsEditorConfig {
   help?: string;
   /** New-item template. */
   newItem: () => { code: string; labelKey: string };
+  /** Built-in defaults shown as editable rows when the section carries no
+   *  items[] yet (copy-on-write: first edit materialises them into config). */
+  inherited?: () => Array<{ code: string; labelKey: string; iconId?: string; enabled?: boolean; order?: number }>;
 }
 
 export interface SectionEditorEntry {
@@ -161,7 +164,7 @@ export const SECTION_EDITOR_REGISTRY: Record<string, SectionEditorEntry> = {
   hero: entry('hero', 'Hero', Image,
     'Title banner with the primary calls to action.',
     [
-      loc('bodyKey', 'Badge / Eyebrow'),
+      loc('bodyKey', 'Eyebrow / Badge'),
       loc('titleKey', 'Title', { required: true }),
       loc('subtitleKey', 'Subtitle', { multiline: true }),
       mediaField(),
@@ -173,8 +176,13 @@ export const SECTION_EDITOR_REGISTRY: Record<string, SectionEditorEntry> = {
     ],
     {
       items: {
-        label: 'Features', tab: 'content', withIcons: true, withDesc: false, withUrl: false,
-        help: 'Trust markers under the CTAs. Empty = the built-in three.', newItem: newItem('trust'),
+        label: 'Highlights', tab: 'content', withIcons: true, withDesc: false, withUrl: false,
+        help: 'Trust markers under the CTAs.', newItem: newItem('trust'),
+        inherited: () => [
+          { code: 'trust-confidential', labelKey: 'PGR_LANDING_HERO_TRUST_CONFIDENTIAL', iconId: 'Lock', enabled: true, order: 10 },
+          { code: 'trust-case-number', labelKey: 'PGR_LANDING_HERO_TRUST_CASE_NUMBER', iconId: 'Hash', enabled: true, order: 20 },
+          { code: 'trust-notifications', labelKey: 'PGR_LANDING_HERO_TRUST_NOTIFICATIONS', iconId: 'Bell', enabled: true, order: 30 },
+        ],
       },
     }),
   types: entry('types', 'Submission types', LayoutGrid,

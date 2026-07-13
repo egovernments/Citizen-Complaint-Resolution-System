@@ -5,8 +5,8 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  CheckCircle2, ChevronDown, Download, Monitor, Redo2, Save, Smartphone,
-  Tablet, Undo2, UploadCloud,
+  CheckCircle2, ChevronDown, Download, ExternalLink, Monitor, MoreVertical,
+  Redo2, Save, Smartphone, Tablet, Undo2, UploadCloud,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -93,7 +93,7 @@ export function BuilderToolbar({
             type="button"
             title={label}
             onClick={() => dispatch({ type: 'setViewport', viewport: id })}
-            className={`flex items-center gap-1 px-2 py-1 text-xs ${state.viewport === id ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+            className={`flex items-center gap-1 px-2 py-1 text-xs ${state.viewport === id ? 'bg-emerald-600 text-white' : 'hover:bg-accent'}`}
           >
             <Icon className="h-3.5 w-3.5" /> {label}
           </button>
@@ -116,7 +116,7 @@ export function BuilderToolbar({
         <button
           type="button"
           onClick={() => dispatch({ type: 'setPreviewMode', mode: 'draft' })}
-          className={`px-2.5 py-1 ${state.previewMode === 'draft' ? 'bg-amber-500 text-white' : 'hover:bg-accent'}`}
+          className={`px-2.5 py-1 ${state.previewMode === 'draft' ? 'bg-emerald-600 text-white' : 'hover:bg-accent'}`}
         >Draft</button>
         <button
           type="button"
@@ -150,6 +150,21 @@ export function BuilderToolbar({
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={onPublish}>
             <UploadCloud className="mr-2 h-3.5 w-3.5" /> Publish to site
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={exportConfig}>
+            <Download className="mr-2 h-3.5 w-3.5" /> Export config (JSON)
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="More actions">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => window.open('/digit-ui/landing', '_blank', 'noopener')}>
+            <ExternalLink className="mr-2 h-3.5 w-3.5" /> Open public page
           </DropdownMenuItem>
           <DropdownMenuItem onClick={exportConfig}>
             <Download className="mr-2 h-3.5 w-3.5" /> Export config (JSON)

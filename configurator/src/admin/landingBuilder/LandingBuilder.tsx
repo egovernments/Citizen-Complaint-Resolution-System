@@ -139,7 +139,7 @@ function BuilderInner() {
           {showRight && <Inspector />}
 
           {/* Right icon rail (mockup): Inspector / Structure / Theme / History / Help */}
-          <div className="flex w-12 shrink-0 flex-col items-center gap-1 border-l border-border bg-card py-2">
+          <div className="flex w-14 shrink-0 flex-col items-center gap-1.5 border-l border-border bg-card py-2">
             <RailButton
               label="Inspector"
               active={showRight}
@@ -201,11 +201,12 @@ function RailButton({ label, icon, onClick, active, disabled }: {
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className={`flex h-9 w-9 flex-col items-center justify-center rounded-md text-muted-foreground transition-colors ${
+      className={`flex h-12 w-11 flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground transition-colors ${
         disabled ? 'opacity-40' : 'hover:bg-accent hover:text-foreground'
-      } ${active ? 'bg-accent text-primary' : ''}`}
+      } ${active ? 'bg-emerald-50 text-emerald-700' : ''}`}
     >
       {icon}
+      <span className="text-[8px] leading-none">{label.replace(' (P5)', '')}</span>
     </button>
   );
 }
