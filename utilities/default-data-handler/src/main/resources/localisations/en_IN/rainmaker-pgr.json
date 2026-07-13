@@ -6970,5 +6970,11 @@
         "message": "Companies and Commercial Establishments (Private Entities)",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "ROWS_PER_PAGE",
+        "message": "Rows per page",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]
