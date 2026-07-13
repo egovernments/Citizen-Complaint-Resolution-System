@@ -14,18 +14,18 @@ Columns:
 
 ## Summary
 
-**Since baseline: 43 tests flipped fail/skip → pass** (the ✅ rows); 2 regressed.
+**Since baseline: 48 tests flipped fail/skip → pass** (the ✅ rows); 2 regressed.
 
 | Category | Count | What it means |
 |---|---:|---|
-| k8s-specific gap | 5 | Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open. |
+| k8s-specific gap | 4 | Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open. |
 | Maputo-data gap | 35 | Pass on bomet, fail on BOTH our stacks → the suite's Kenya/Bomet data-coupling, not the deployment. |
 | Suite / app bug | 30 | Fails on bomet too (its native tenant) → a genuine suite/app bug or flake, unrelated to parity. |
-| Tenant-coupled skip | 26 | Runs on bomet, skipped on both our stacks → hidden signal; needs tenant-portable fixtures. |
+| Tenant-coupled skip | 25 | Runs on bomet, skipped on both our stacks → hidden signal; needs tenant-portable fixtures. |
 | Ours better | 3 | Fails on bomet, passes on ours. |
 | Other / mixed | 13 |  |
-| Clean parity | 87 | Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column). |
-| Inherent N/A | 73 | Skipped everywhere (@local-only, no-keycloak, structural). |
+| Clean parity | 88 | Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column). |
+| Inherent N/A | 74 | Skipped everywhere (@local-only, no-keycloak, structural). |
 | **Total** | **272** | |
 
 Status legend: `pass` · `**fail**` · `skip` (includes did-not-run).
@@ -38,21 +38,20 @@ The `Fix` column in the tables below points here. **Exact reproducible steps per
 |---|---:|---|
 | §1.8 · Local **digit-ui globalConfigs** | 17 | Render digit-ui `globalConfigs.js` locally from the tenant config (like Compose) instead of the external-S3 injection; at minimum fail-loud on a missing/unreachable config instead of silently falling back to India defaults. |
 | §1.6 · Pin **egov-user** mobile-validation image | 12 | Pin the `mobilevalidation` egov-user image on k8s (reads the per-tenant MDMS mobile rule); align `OTP_VALIDATION_REGISTER_MANDATORY` with Compose. Unblocks citizen register/OTP/provisioning. |
-| §2.4 · Seed **RBAC** write grant | 6 | Seed the mdms-v2 write actions' roleaction grants to the configurator-operator role (a dedicated config-admin / `MDMS_ADMIN`) in the access-control MDMS; add a CI check that drives one create with RBAC enforced. |
-| §2.5 · Deploy **egov-hrms** | 5 | Wire `common-services-helmfile.yaml` (egov-hrms + peers) into the k8s deploy sequence; the Spring gateway auto-discovers the service on (re)start. Restore-safe: `initContainers.dbMigration.enabled:false`. |
+| §2.4 · Seed **RBAC** write grant | 9 | Seed the mdms-v2 write actions' roleaction grants to the configurator-operator role (a dedicated config-admin / `MDMS_ADMIN`) in the access-control MDMS; add a CI check that drives one create with RBAC enforced. |
+| §2.5 · Deploy **egov-hrms** | 6 | Wire `common-services-helmfile.yaml` (egov-hrms + peers) into the k8s deploy sequence; the Spring gateway auto-discovers the service on (re)start. Restore-safe: `initContainers.dbMigration.enabled:false`. |
+| §1.2 · Add **configurator + digit-mcp** charts | 2 | Add `configurator` + `digit-mcp` charts to the k8s helmfile (Service + Ingress at `/configurator`, `/mcp`, `/v1`; MCP session DB). |
 | §1.7 · Real **minio** object store | 1 | Install minio; chart-template the egov-ns `minio` secret (accesskey/secretkey from the minio release); set `egov-filestore minio-enabled:true`, correct `minio-url` (no trailing slash), fixed bucket. |
-| §1.2 · Add **configurator + digit-mcp** charts | 1 | Add `configurator` + `digit-mcp` charts to the k8s helmfile (Service + Ingress at `/configurator`, `/mcp`, `/v1`; MCP session DB). |
 | §1.4 · Right-size **pgr-services** memory | 1 | Set `memory_limits >= Xmx + ~50%` (or `-XX:MaxRAMPercentage`) so pgr-services doesn't cgroup-OOM and stays up. |
 
-> Attribution is best-effort (primary fix per test); some flips have more than one contributing fix. Total flipped since baseline: **43**.
+> Attribution is best-effort (primary fix per test); some flips have more than one contributing fix. Total flipped since baseline: **48**.
 
-## k8s-specific gap (5)
+## k8s-specific gap (4)
 
 Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open.
 
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
-| admin | 1. list renders with Service Code / Name / Department / SLA / Status columns | **fail** | **fail** | pass | pass | — |
 | admin | 2. create — citizen user lands and is retrievable via API | **fail** | **fail** | pass | pass | — |
 | citizen+employee | fresh phone → OTP → name+email → /all-services | **fail** | **fail** | pass | pass | — |
 | citizen+employee | upload JPEG photo, _update returns 2xx, no hard reload | **fail** | **fail** | pass | pass | — |
@@ -106,8 +105,8 @@ Fails on bomet too (its native tenant) → a genuine suite/app bug or flake, unr
 
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
-| admin | 1. file complaint — citizen, locality, required landmark | skip | skip | **fail** | **fail** | — |
-| admin | 2. create → edit → deactivate round-trip; visible at city tenant | skip | skip | **fail** | **fail** | — |
+| admin | 1. file complaint — citizen, locality, required landmark | skip | **fail** ◐ | **fail** | **fail** | — |
+| admin | 2. create → edit → deactivate round-trip; visible at city tenant | skip | **fail** ◐ | **fail** | **fail** | — |
 | admin | 2. single create — happy path derives code + username, employee lands | skip | **fail** ◐ | **fail** | **fail** | — |
 | admin | 2. single create → edit → deactivate round-trip | **fail** | **fail** | **fail** | **fail** | — |
 | admin | 3. edit — username disabled, name updates round-trip | skip | skip | **fail** | **fail** | — |
@@ -137,7 +136,7 @@ Fails on bomet too (its native tenant) → a genuine suite/app bug or flake, unr
 | citizen+employee | upload preview renders, then detail page surfaces the same image | **fail** | **fail** | **fail** | **fail** | — |
 | keycloak | mobile + OTP (existing citizen) authenticates via overlay and lands at dashboard with KC t | skip | skip | skip | **fail** | — |
 
-## Tenant-coupled skip (26)
+## Tenant-coupled skip (25)
 
 Runs on bomet, skipped on both our stacks → hidden signal; needs tenant-portable fixtures.
 
@@ -156,7 +155,6 @@ Runs on bomet, skipped on both our stacks → hidden signal; needs tenant-portab
 | admin | 5c. API soft-delete (isActive=false) removes row from active list | skip | skip | skip | pass | — |
 | admin | 5d. HRMS probe returns assignments.designation for guard counter | skip | skip | skip | pass | — |
 | admin | 6. API response shape — BoundaryHierarchy comes back as an array | skip | skip | skip | pass | — |
-| admin | Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME | skip | skip | skip | pass | — |
 | api+smoke | 3 — ensure 2-level employee hierarchy (reportingTo) in HRMS | skip | skip | skip | pass | — |
 | api+smoke | 4 — citizen creates complaint | skip | skip | skip | pass | — |
 | keycloak | Authorize URL with PKCE + kc_idp_hint=google does not 400 at KC (realm allows the SPA clie | skip | skip | skip | pass | — |
@@ -176,16 +174,16 @@ Fails on bomet, passes on ours.
 
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
-| admin | 3. show page renders Code / Name / City / District for a known tenant | **fail** | **fail** | pass | **fail** | — |
+| admin | 3. show page renders Code / Name / City / District for a known tenant | **fail** | pass ✅ | pass | **fail** | §2.4 — Seed **RBAC** write grant |
 | api+smoke | 3 — admin assigns complaint | skip | pass ✅ | skip | **fail** | §1.6 — Pin **egov-user** mobile-validation image |
 | specs | form has all expected sections | pass | pass | pass | **fail** | — |
 
 ## Other / mixed (13)
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
-| admin | 4. API shape — search returns records with code / name / city | skip | skip | pass | skip | — |
-| admin | 5. list footer count matches /pgr-services/v2/request/_count | **fail** | **fail** | skip | skip | — |
-| admin | 5. QUIRK — city tenant object may lack districtName, list tolerates it | skip | skip | pass | skip | — |
+| admin | 4. API shape — search returns records with code / name / city | skip | pass ✅ | pass | skip | §2.4 — Seed **RBAC** write grant |
+| admin | 5. QUIRK — city tenant object may lack districtName, list tolerates it | skip | pass ✅ | pass | skip | §2.4 — Seed **RBAC** write grant |
+| admin | Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME | skip | pass ✅ | skip | pass | §2.5 — Deploy **egov-hrms** |
 | api+smoke | 4 — admin resolves complaint | skip | **fail** ◐ | skip | skip | — |
 | citizen+employee | ASSIGN (GRO) → PENDINGATLME, then RESOLVE (LME) → RESOLVED @p0 | skip | pass ✅ | skip | skip | §2.5 — Deploy **egov-hrms** |
 | citizen+employee | complaint details page loads without crashing for a freshly-filed complaint | skip | pass ✅ | skip | pass | §1.8 — Local **digit-ui globalConfigs** |
@@ -197,7 +195,7 @@ Fails on bomet, passes on ours.
 | citizen+employee | search for a well-formed but non-existent complaint number returns nothing @p1 | skip | pass ✅ | skip | skip | §1.6 — Pin **egov-user** mobile-validation image |
 | citizen+employee | status filter → only rows in the chosen workflow state @p0 | skip | pass ✅ | skip | skip | §1.6 — Pin **egov-user** mobile-validation image |
 
-## Clean parity (87)
+## Clean parity (88)
 
 Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column).
 
@@ -207,6 +205,7 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | admin | 1. list renders with header columns and filter narrows results | pass | pass | pass | pass | — |
 | admin | 1. list renders with hierarchy type + levels columns | pass | pass | pass | pass | — |
 | admin | 1. list renders with profile columns + at least one citizen row | pass | pass | pass | pass | — |
+| admin | 1. list renders with Service Code / Name / Department / SLA / Status columns | **fail** | pass ✅ | pass | pass | §1.2 — Add **configurator + digit-mcp** charts |
 | admin | 1. list renders, search narrows, status filter applies | **fail** | pass ✅ | pass | pass | §1.2 — Add **configurator + digit-mcp** charts |
 | admin | 2. employee create payload contains no literal "pg" | pass | pass | pass | pass | — |
 | admin | 2. search filter narrows to a known tenant code | pass | pass | pass | pass | — |
@@ -291,7 +290,7 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | specs | valid postal code (deployment format) is accepted | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | specs | valid tenant mobile does not show validation error | pass | pass | pass | pass | — |
 
-## Inherent N/A (73)
+## Inherent N/A (74)
 
 Skipped everywhere (@local-only, no-keycloak, structural).
 
@@ -315,6 +314,7 @@ Skipped everywhere (@local-only, no-keycloak, structural).
 | admin | 4a. edit — add CITIZEN role round-trips without JsonMappingException (CCRS#439) | skip | skip | skip | skip | — |
 | admin | 5. deactivate — INACTIVE + deactivation reason applied | skip | skip | skip | skip | — |
 | admin | 5. inline edit — UI save round-trips via localizationUpsert + cache-bust | skip | skip | skip | skip | — |
+| admin | 5. list footer count matches /pgr-services/v2/request/_count | **fail** | skip ◐ | skip | skip | — |
 | admin | 5. tenant parity — api create at root is visible at city tenant | skip | skip | skip | skip | — |
 | admin | 5a. Show page renders "Related" reverse references (complaint-types + employees) | skip | skip | skip | skip | — |
 | admin | 5b. deactivation guard probes designation + employee APIs | skip | skip | skip | skip | — |
