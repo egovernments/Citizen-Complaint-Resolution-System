@@ -6021,3 +6021,21 @@ header.digit-header .digit-dropdown-master {
   background: #fff;
   box-shadow: 0 8px 10px 1px rgba(0,0,0,.14), 0 3px 14px 2px rgba(0,0,0,.12), 0 5px 5px -3px rgba(0,0,0,.2);
 }
+
+/* ============================================================================
+   CCSD-1985 — unify all primary buttons to the Moz brand ORANGE (#c84c0e).
+   The v2 buttons paint inline from var(--color-button-primary-bg-default, …),
+   which the tenant theme had set to yellow (#FEC931), while orange leaked
+   through the legacy paths — two shades on one screen. Force the brand button
+   vars to orange with !important so every path (v2 inline-var buttons, legacy
+   --color-primary-main buttons, submit bars) resolves to one shade. !important
+   on these custom properties beats applyTheme's runtime (non-important) :root
+   values. Text stays dark via --color-text-primary.
+   ========================================================================= */
+:root {
+  --color-button-primary-bg-default: #c84c0e !important;
+  --color-button-primary-bg-hover: #a83d0b !important;
+  --color-button-primary-bg-pressed: #8f340a !important;
+  --color-primary-2: #c84c0e !important;
+  --color-primary-main: #c84c0e !important;
+}
