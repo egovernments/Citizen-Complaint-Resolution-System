@@ -14,17 +14,17 @@ Columns:
 
 ## Summary
 
-**Since baseline: 48 tests flipped fail/skip → pass** (the ✅ rows); 2 regressed.
+**Since baseline: 51 tests flipped fail/skip → pass** (the ✅ rows); 2 regressed.
 
 | Category | Count | What it means |
 |---|---:|---|
-| k8s-specific gap | 4 | Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open. |
+| k8s-specific gap | 1 | Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open. |
 | Maputo-data gap | 35 | Pass on bomet, fail on BOTH our stacks → the suite's Kenya/Bomet data-coupling, not the deployment. |
 | Suite / app bug | 30 | Fails on bomet too (its native tenant) → a genuine suite/app bug or flake, unrelated to parity. |
 | Tenant-coupled skip | 25 | Runs on bomet, skipped on both our stacks → hidden signal; needs tenant-portable fixtures. |
 | Ours better | 3 | Fails on bomet, passes on ours. |
 | Other / mixed | 13 |  |
-| Clean parity | 88 | Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column). |
+| Clean parity | 91 | Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column). |
 | Inherent N/A | 74 | Skipped everywhere (@local-only, no-keycloak, structural). |
 | **Total** | **272** | |
 
@@ -36,26 +36,23 @@ The `Fix` column in the tables below points here. **Exact reproducible steps per
 
 | Fix | Flips | Permanent fix (the PR) |
 |---|---:|---|
-| §1.8 · Local **digit-ui globalConfigs** | 17 | Render digit-ui `globalConfigs.js` locally from the tenant config (like Compose) instead of the external-S3 injection; at minimum fail-loud on a missing/unreachable config instead of silently falling back to India defaults. |
+| §1.8 · Local **digit-ui globalConfigs** | 18 | Render digit-ui `globalConfigs.js` locally from the tenant config (like Compose) instead of the external-S3 injection; at minimum fail-loud on a missing/unreachable config instead of silently falling back to India defaults. |
 | §1.6 · Pin **egov-user** mobile-validation image | 12 | Pin the `mobilevalidation` egov-user image on k8s (reads the per-tenant MDMS mobile rule); align `OTP_VALIDATION_REGISTER_MANDATORY` with Compose. Unblocks citizen register/OTP/provisioning. |
 | §2.4 · Seed **RBAC** write grant | 9 | Seed the mdms-v2 write actions' roleaction grants to the configurator-operator role (a dedicated config-admin / `MDMS_ADMIN`) in the access-control MDMS; add a CI check that drives one create with RBAC enforced. |
 | §2.5 · Deploy **egov-hrms** | 6 | Wire `common-services-helmfile.yaml` (egov-hrms + peers) into the k8s deploy sequence; the Spring gateway auto-discovers the service on (re)start. Restore-safe: `initContainers.dbMigration.enabled:false`. |
+| §1.7 · Real **minio** object store | 3 | Install minio; chart-template the egov-ns `minio` secret (accesskey/secretkey from the minio release); set `egov-filestore minio-enabled:true`, correct `minio-url` (no trailing slash), fixed bucket. |
 | §1.2 · Add **configurator + digit-mcp** charts | 2 | Add `configurator` + `digit-mcp` charts to the k8s helmfile (Service + Ingress at `/configurator`, `/mcp`, `/v1`; MCP session DB). |
-| §1.7 · Real **minio** object store | 1 | Install minio; chart-template the egov-ns `minio` secret (accesskey/secretkey from the minio release); set `egov-filestore minio-enabled:true`, correct `minio-url` (no trailing slash), fixed bucket. |
 | §1.4 · Right-size **pgr-services** memory | 1 | Set `memory_limits >= Xmx + ~50%` (or `-XX:MaxRAMPercentage`) so pgr-services doesn't cgroup-OOM and stays up. |
 
-> Attribution is best-effort (primary fix per test); some flips have more than one contributing fix. Total flipped since baseline: **48**.
+> Attribution is best-effort (primary fix per test); some flips have more than one contributing fix. Total flipped since baseline: **51**.
 
-## k8s-specific gap (4)
+## k8s-specific gap (1)
 
 Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open.
 
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
 | admin | 2. create — citizen user lands and is retrievable via API | **fail** | **fail** | pass | pass | — |
-| citizen+employee | fresh phone → OTP → name+email → /all-services | **fail** | **fail** | pass | pass | — |
-| citizen+employee | upload JPEG photo, _update returns 2xx, no hard reload | **fail** | **fail** | pass | pass | — |
-| citizen+employee | upload photo, _update returns 2xx, no hard reload | **fail** | **fail** | pass | pass | — |
 
 ## Maputo-data gap (35)
 
@@ -195,7 +192,7 @@ Fails on bomet, passes on ours.
 | citizen+employee | search for a well-formed but non-existent complaint number returns nothing @p1 | skip | pass ✅ | skip | skip | §1.6 — Pin **egov-user** mobile-validation image |
 | citizen+employee | status filter → only rows in the chosen workflow state @p0 | skip | pass ✅ | skip | skip | §1.6 — Pin **egov-user** mobile-validation image |
 
-## Clean parity (88)
+## Clean parity (91)
 
 Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column).
 
@@ -261,6 +258,7 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | citizen+employee | citizen logout redirects to login page | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | complaint type dropdown shows human-readable translated names | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | digit-ui bundle declares AddressOne + AddressTwo populators (PR-C re-enabled) | pass | pass | pass | pass | — |
+| citizen+employee | fresh phone → OTP → name+email → /all-services | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | header language pill renders the current locale | pass | pass | pass | pass | — |
 | citizen+employee | Localization keys for the timeline rendering are seeded across the deployment locales (rai | pass | pass | pass | pass | — |
 | citizen+employee | login page renders with mobile input | pass | pass | pass | pass | — |
@@ -271,6 +269,8 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | citizen+employee | smoke: lands on a usable citizen page | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | the deployment postal-code pattern accepts this tenant's valid sample and rejects malforme | pass | pass | pass | pass | — |
 | citizen+employee | the legacy Indian pattern would have rejected this tenant's valid postal code | pass | pass | pass | pass | — |
+| citizen+employee | upload JPEG photo, _update returns 2xx, no hard reload | **fail** | pass ✅ | pass | pass | §1.7 — Real **minio** object store |
+| citizen+employee | upload photo, _update returns 2xx, no hard reload | **fail** | pass ✅ | pass | pass | §1.7 — Real **minio** object store |
 | citizen+employee | valid credentials return access token | pass | pass | pass | pass | — |
 | lifecycle | authenticate | pass | pass | pass | pass | — |
 | lifecycle | provision a fresh citizen (suite-wide) | pass | pass | pass | pass | — |
