@@ -87,9 +87,15 @@ function V2ModuleHomePage({ code, bannerImage, mdmsDataObj, stateInfoBannerUrl, 
               style={{
                 display: "block",
                 width: "100%",
-                height: "auto",
-                maxHeight: "260px",
+                // Design review iterations (CCSD-1959): cover@260 cropped the
+                // emblem/title; contain letterboxed; natural aspect was ~610px
+                // tall and dominated the page. Final: full width with a
+                // responsive height cap, cover-cropped toward the UPPER band
+                // (30%) where banner assets carry their emblem + title, so the
+                // key content always stays in frame at a sane strip height.
+                height: "clamp(180px, 24vw, 360px)",
                 objectFit: "cover",
+                objectPosition: "center 30%",
               }}
             />
           </V2Card>
