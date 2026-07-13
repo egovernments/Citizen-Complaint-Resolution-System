@@ -205,29 +205,22 @@ kubectl patch svc egov-otp -n egov --type json -p '[{"op":"replace","path":"/spe
 **Verified:** citizen provisioning + all 3 UI tests (`fresh phone → OTP → name+email`, `upload JPEG/photo`) pass on k8s.
 **Permanent fix:** wire the OTP mock into the k8s helmfile (deploy `otp-mock` and point the `user-otp`/`egov-otp` Services at it — or a gateway short-circuit for `/user-otp/*`+`/otp/v1/_validate`), matching Compose's default. *(Or `enable_otp_services:true` on both + fix the `user-otp` `MobileNumberValidation` match — the production-like path.)*
 
-## §1.9 · PGR businessservice missing at the city tenant on **Compose**  🔀 Mixed (fix verified)
-**Symptom (Compose-side, not k8s):** the complaint pipeline fails on Compose while passing on k3s+bomet — `PGR business service is present` → `undefined`, `citizen creates complaint` → false, and ~15 downstream tests (My Complaints, detail page, rate, reopen, assign→resolve, the `@p0`/`@p1` search tests) fail or skip. This is the one gap where **Compose was behind k3s** — the reverse of every other finding here.
-**Root cause:** egov-workflow-v2's `PGR` businessservice was seeded only at the **root** tenant (`mz`), not the **city** tenant (`mz.maputo`) where complaints actually run. The workflow lookup for a `mz.maputo` complaint does **not** fall back to the root, so `APPLY` finds no businessservice and creation fails. k3s had PGR registered at *both* `mz` and `mz.maputo`; the Compose Maputo onboarding created only the root one.
-**Fix (verified) — seed PGR@`mz.maputo` on Compose from k3s's exact config:**
-```bash
-# 1. Pull the working businessservice from k3s (search returns states/actions linked by UUID):
-#    POST /egov-workflow-v2/egov-wf/businessservice/_search?tenantId=mz.maputo&businessServices=PGR
-# 2. Rebuild a _create payload: REMAP each action currentState/nextState from k3s state-UUID → state NAME
-#    (the format _create relinks by), keeping ONLY the null start-state placeholder UUID and the single
-#    benign FORWARD phantom (04752227…) that k3s itself carries. Do NOT re-post the raw _search output —
-#    _create mints fresh state UUIDs, so UUID-linked actions become dangling (21 broken refs).
-# 3. POST the remapped payload to Compose:
-#    POST /egov-workflow-v2/egov-wf/businessservice/_create   (tenantId=mz.maputo, ADMIN@mz token)
-# Verify: search returns 11 states, exactly ONE dangling nextState (the FORWARD phantom, == k3s).
-```
-If a prior broken attempt exists, delete it first (FK order: actions → states → businessservice; `docker exec` needs `-i` for heredoc SQL):
-```bash
-docker exec docker-postgres psql -U egov -d egov -c "DELETE FROM eg_wf_action_v2 WHERE tenantid='mz.maputo';"
-docker exec docker-postgres psql -U egov -d egov -c "DELETE FROM eg_wf_state_v2 WHERE businessserviceid='<bs-uuid>';"
-docker exec docker-postgres psql -U egov -d egov -c "DELETE FROM eg_wf_businessservice_v2 WHERE uuid='<bs-uuid>';"
-```
-**Verified:** re-ran api+smoke + citizen+employee on Compose → **17 tests flipped fail/skip → pass, 0 regressions**; Compose reaches **113 pass, level with k3s**.
-**Permanent fix:** the city-tenant onboarding (`digit-xlsx-onboard` / `tenant_bootstrap`) must register the `PGR` businessservice at the **city** tenant, not only the root — *or* configure egov-workflow-v2 to fall back to the root-tenant businessservice when a city has none.
+## §1.9 · egov-workflow-v2 mis-tenanted on **Compose** — `STATE_LEVEL_TENANT_ID` pointed at the city, not the state root  ✅ Permanent (fixed + verified)
+**Symptom (Compose-side, not k8s):** the complaint pipeline fails on Compose while passing on k3s+bomet — `PGR business service is present` → `undefined`, `citizen creates complaint` → false, and ~18 downstream tests (My Complaints, detail page, rate, reopen, assign→resolve, the `@p0`/`@p1` search tests) fail or skip.
+
+> **Correction (this finding was originally misdiagnosed).** An earlier version claimed the *seed data* differed — that Compose's onboarding registered PGR only at the root while k3s registered it at the city — and "fixed" it by seeding a city-level businessservice on Compose. **That was wrong.** The DB audit proves the seed was **identical**: both stacks have PGR at the state root `mz`, same `createdby` (`8155a8e1…`) and same timestamp (2026-07-11 13:50:59). k3s has **no** `mz.maputo` businessservice at all — it creates `mz.maputo` complaints against the **root** `mz` businessservice and works fine. The city-level businessservice that briefly existed on Compose was a **workaround I created**, masking the real bug. It has been removed.
+
+**Root cause (corrected + verified):** a single wrong env var. `egov-workflow-v2` resolves the PGR businessservice at its `STATE_LEVEL_TENANT_ID`, and PGR is seeded at the state **root** (`mz`). The two stacks configured that var differently:
+- **k3s (helmfile):** `STATE_LEVEL_TENANT_ID=mz` (state root) → resolves PGR at `mz` → works.
+- **Compose (ansible):** `STATE_LEVEL_TENANT_ID=mz.maputo` (city) → looks for PGR at `mz.maputo` → finds nothing → every complaint `APPLY` fails.
+
+Why Compose got the city value: `local-setup/docker-compose.egov-digit.yaml` gives `egov-workflow-v2` the **`pg.citya`** (city-tier) placeholder for `STATE_LEVEL_TENANT_ID` — the *same group as `egov-enc-service`* — and the Maputo ansible post-bootstrap step (`playbook-deploy.yml`, "city tier — enc-service + workflow") rewrites `pg.citya` → `tenant_id` (`mz.maputo`). **enc-service legitimately belongs on the city tier** (its master keys are city-scoped); **workflow does not** — it must be on the state-root group so it can find the state-level businessservice.
+
+**Permanent fix (committed):** in `local-setup/docker-compose.egov-digit.yaml`, move `egov-workflow-v2`'s `STATE_LEVEL_TENANT_ID` from the `pg.citya` (city) group to `pg` (state-root) — so the existing `pg → state_root` rewrite sets it to `mz`, matching k3s. One line + a guard comment. Only `egov-enc-service` remains on `pg.citya`.
+
+**Verified (definitive):** on the live Compose stack, set workflow's `STATE_LEVEL_TENANT_ID=mz`, **deleted the workaround city businessservice** so the *only* PGR was at root `mz`, recreated the workflow container, and created a complaint at `mz.maputo` → **`PG-PGR-2026-07-13-003058`, status `PENDINGFORASSIGNMENT`**. The root businessservice resolves correctly, exactly like k3s. Compose is now in the same (correct) state as k3s, workaround removed.
+
+**Lesson:** identical seed data + divergent behavior ⇒ suspect *config*, not data. The DB `createdby`/timestamp audit is what caught it.
 
 ## §1.10 · Configurator DSS / PGR dashboard doesn't render on **k3s** — Spring gateway NPEs on bodyless GET  🅿️ DEFERRED (root-caused; needs upstream gateway image rebuild)
 **Status:** parked as a known, accepted k3s-only gap (5 dashboard tests). Fully root-caused below; not fixable via CCRS chart/env/config — needs an upstream `egovernments/Digit-Core` gateway fix + image rebuild. Compose/bomet unaffected. Revisit when the gateway image is rebuilt or an upstream issue is filed.

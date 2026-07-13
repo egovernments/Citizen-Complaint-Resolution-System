@@ -5,7 +5,7 @@ One row per test (272 unique). **Kept updated** as fixes land; referenced from i
 Columns:
 - **k3s (base)** — our Maputo / Kubernetes at the *baseline* (before any §-fix)
 - **k3s (now)** — our Maputo / Kubernetes *currently* (after the §-fixes applied so far). `✅` = flipped to pass since baseline · `⚠️` = regressed · `◐` = changed, still not passing
-- **compose** — our Maputo / Docker Compose (Kong). Initially treated as the stable reference, but it had its **own** gap: the `PGR` businessservice was seeded only at the root tenant (`mz`), not the city (`mz.maputo`) where complaints run — so the complaint pipeline failed on compose while passing on k3s. After seeding PGR@`mz.maputo` (§1.9), all three affected suites (api+smoke, citizen+employee, admin) were re-run; **23 tests flipped to pass, 0 regressions**, lifting compose to **119 pass**.
+- **compose** — our Maputo / Docker Compose (Kong). Initially treated as the stable reference, but it had its **own** gap: `egov-workflow-v2` was mis-tenanted — the compose file grouped it with `enc-service` on the city-tier `STATE_LEVEL_TENANT_ID` (`mz.maputo`), so it looked for the PGR businessservice at the city and found nothing (PGR is seeded at the state root `mz`, identically on both stacks). Every complaint failed. Fixing the env to the state root (§1.9 — one line, matching k3s) unblocked the pipeline; the three affected suites re-run → **23 tests flipped to pass, 0 regressions**, lifting compose to **119 pass**.
 - **bomet** — the suite's native **Kenya** tenant, full Compose stack (reference)
 
 > **Reading it:** `compose` vs `k3s` (identical Maputo data) is the clean parity control; `bomet` adds the *"is this test meaningful on Maputo"* axis. Categories below are computed from **current** state, so a fixed test moves into *Clean parity* with a `✅` showing where it came from.
@@ -45,8 +45,8 @@ The `Fix` column in the tables below points here. **Exact reproducible steps per
 | §2.6 · Harness **role-string** fix | 5 | The manage-API test helpers sent `RequestInfo.userInfo.roles` as bare code strings; expand to Role objects (`tests/utils/manage/api.ts`, `tests/admin/users.spec.ts`) so the strict k8s gateway deserializes them. Test-code fix. |
 | §1.6b · **OTP mock** on k3s | 3 | Deploy the nginx OTP mock (`tests/integration-tests/deploy/otp-mock.k8s.yaml`) that rubber-stamps the fixed 123456 for `_validate`/`_send`, and repoint user-otp+egov-otp to it — matching Compose's default OTP-mock mode. Unblocks citizen register/login (and any citizen-gated flow, e.g. the photo-upload tests, which also need filestore §1.7). Pairs with the egov-user OTP-flag alignment (§1.6). |
 | §1.7 · Real **minio** object store | 1 | Install minio; chart-template the egov-ns `minio` secret (accesskey/secretkey from the minio release); set `egov-filestore minio-enabled:true`, correct `minio-url` (no trailing slash), fixed bucket. |
-| §1.4 · Right-size **pgr-services** memory | 1 | Set `memory_limits >= Xmx + ~50%` (or `-XX:MaxRAMPercentage`) so pgr-services doesn't cgroup-OOM and stays up. |
 | §1.2 · Add **configurator + digit-mcp** charts | 1 | Add `configurator` + `digit-mcp` charts to the k8s helmfile (Service + Ingress at `/configurator`, `/mcp`, `/v1`; MCP session DB). |
+| §1.4 · Right-size **pgr-services** memory | 1 | Set `memory_limits >= Xmx + ~50%` (or `-XX:MaxRAMPercentage`) so pgr-services doesn't cgroup-OOM and stays up. |
 
 > Attribution is best-effort (primary fix per test); some flips have more than one contributing fix. Total flipped since baseline: **51**.
 
