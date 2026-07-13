@@ -2,7 +2,7 @@
   {
     "tenantId": "{tenantid}",
     "code": "RAINMAKER-PGR.LandingSection",
-    "description": "One row per configurable public-landing section (config-driven landing, CCSD-2005). type is the frozen v1 catalog; order sorts; enabled toggles; status gates DRAFT vs PUBLISHED (runtime renders PUBLISHED). Text is carried as PGR_LANDING_* localization keys (never inline translated text); media is a filestore id; items are cards/links/steps for the section. Consumed by the runtime LandingRenderer via a type->component registry.",
+    "description": "One row per configurable public-landing section (config-driven landing, CCSD-2005). type selects the section component (v1 catalog: hero, navigation, types, steps, channels, privacy, news, institutions, cta, footer) — intentionally NOT enum-constrained here so new types can be added later without a schema recreation (MDMS schema _update is unsupported); the catalog is enforced by the runtime LandingRenderer type->component registry and the Configurator type picker. order sorts; enabled toggles; status gates DRAFT vs PUBLISHED (runtime renders PUBLISHED). Text is carried as PGR_LANDING_* localization keys (never inline translated text); media is a filestore id; items are cards/links/steps for the section. WhatsApp FAB and the utility bar are page-level toggles on LandingPageConfig, not section types.",
     "isActive": true,
     "definition": {
       "type": "object",
@@ -23,18 +23,7 @@
         },
         "type": {
           "type": "string",
-          "enum": [
-            "hero",
-            "navigation",
-            "types",
-            "steps",
-            "channels",
-            "privacy",
-            "news",
-            "institutions",
-            "cta",
-            "footer"
-          ]
+          "description": "Section component key. v1 catalog: hero | navigation | types | steps | channels | privacy | news | institutions | cta | footer. Not enum-constrained (schema _update is unsupported); enforced by the LandingRenderer registry + Configurator picker so new types are addable without recreating the schema."
         },
         "order": {
           "type": "number"
@@ -155,6 +144,9 @@
           "type": "string"
         },
         "showWhatsAppFab": {
+          "type": "boolean"
+        },
+        "showUtilityBar": {
           "type": "boolean"
         },
         "sectionOrder": {

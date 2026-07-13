@@ -324,6 +324,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "PGR_LANDING_HERO_LEDE",
+        "message": "Canal nacional para reclamações, queixas, petições e denúncias sobre serviços públicos, administração pública e actividades económicas — com acompanhamento simples, seguro e transparente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_LANDING_HERO_CTA_SUBMIT",
         "message": "Submeter Manifestação",
         "module": "rainmaker-pgr",
@@ -384,8 +390,20 @@
         "locale": "pt_PT"
     },
     {
+        "code": "PGR_LANDING_TYPES_INTRO",
+        "message": "Escolha o tipo que melhor descreve a sua situação. Em caso de dúvida, seleccione o mais próximo — os serviços encaminham a manifestação correctamente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_LANDING_TYPE_COMPLAINT_TITLE",
         "message": "Reclamações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_COMPLAINT_DESC",
+        "message": "Insatisfação com a qualidade, disponibilidade ou atendimento dos serviços prestados por órgãos e instituições da Administração Pública.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -396,14 +414,32 @@
         "locale": "pt_PT"
     },
     {
+        "code": "PGR_LANDING_TYPE_GRIEVANCE_DESC",
+        "message": "Comunicação de má conduta, negligência, abuso de poder ou incumprimento de deveres por funcionários, agentes ou instituições públicas.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_LANDING_TYPE_PETITION_TITLE",
         "message": "Petições",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
     {
+        "code": "PGR_LANDING_TYPE_PETITION_DESC",
+        "message": "Pedidos formais dirigidos ao Estado para apreciação, intervenção, revisão de decisões ou adopção de medidas de interesse público.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_LANDING_TYPE_REPORT_TITLE",
         "message": "Denúncias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_REPORT_DESC",
+        "message": "Comunicação de factos ligados a actividades económicas, defesa do consumidor, segurança alimentar ou infracções de operadores económicos.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -468,8 +504,32 @@
         "locale": "pt_PT"
     },
     {
+        "code": "PGR_LANDING_HOW_NOTE_NOTIFY",
+        "message": "Recebe notificações por SMS ou WhatsApp sempre que o estado do processo muda.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_RECORD",
+        "message": "Todo o processo fica registado digitalmente, garantindo transparência, rastreabilidade e responsabilização.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_CHANNELS",
+        "message": "Qualquer canal — Portal, Aplicação ou WhatsApp — gera um número único de processo para acompanhamento.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_LANDING_CHANNELS_TITLE",
         "message": "Canais de Atendimento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNELS_INTRO",
+        "message": "Use o Portal Web para a experiência completa de submissão e acompanhamento, ou escolha o canal mais conveniente para si.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -558,6 +618,18 @@
         "locale": "pt_PT"
     },
     {
+        "code": "PGR_LANDING_PRIVACY_P1",
+        "message": "O portal protege os dados pessoais dos cidadãos de acordo com a legislação aplicável.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_P2",
+        "message": "Ao submeter uma manifestação, pode solicitar tratamento confidencial dos seus dados. Nesses casos, a sua identidade não fica visível aos utilizadores responsáveis pela gestão e tramitação do processo, excepto quando exigido por lei.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_LANDING_PRIVACY_LINK",
         "message": "Ler a Política de Privacidade",
         "module": "rainmaker-pgr",
@@ -594,14 +666,32 @@
         "locale": "pt_PT"
     },
     {
+        "code": "PGR_LANDING_INST_IGE_DESC",
+        "message": "Órgão central de controlo interno da Administração Pública, responsável pela auditoria, fiscalização e inspecção da legalidade, regularidade, eficiência e eficácia da utilização dos recursos públicos.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_LANDING_INST_IGSAE_TITLE",
         "message": "Inspecção-Geral de Segurança Alimentar e Económica (IGSAE)",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
     {
+        "code": "PGR_LANDING_INST_IGSAE_DESC",
+        "message": "Órgão responsável pela fiscalização das actividades económicas, defesa do consumidor e segurança alimentar, promovendo o cumprimento da legislação aplicável e a protecção do interesse público.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_LANDING_FINAL_TITLE",
         "message": "Tem uma Reclamação, Queixa, Petição ou Denúncia?",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FINAL_TEXT",
+        "message": "Participe na melhoria dos serviços públicos e da actividade económica. Submeta a sua manifestação e acompanhe o tratamento através do portal.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -692,6 +782,12 @@
     {
         "code": "PGR_LANDING_FOOTER_ACCESSIBILITY",
         "message": "Acessibilidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_COPYRIGHT",
+        "message": "Portal de Reclamações e Denúncias · República de Moçambique. Todos os direitos reservados.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },

@@ -7122,6 +7122,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_HERO_LEDE",
+        "message": "The national channel for complaints, grievances, petitions and reports about public services, public administration and economic activities — with simple, secure and transparent tracking.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_HERO_CTA_SUBMIT",
         "message": "Submit a Case",
         "module": "rainmaker-pgr",
@@ -7182,8 +7188,20 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_TYPES_INTRO",
+        "message": "Choose the type that best describes your situation. If unsure, pick the closest — our services will route it correctly.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_TYPE_COMPLAINT_TITLE",
         "message": "Complaints",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_COMPLAINT_DESC",
+        "message": "Dissatisfaction with the quality, availability or service provided by public administration bodies and institutions.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7194,14 +7212,32 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_TYPE_GRIEVANCE_DESC",
+        "message": "Reporting misconduct, negligence, abuse of power or failure to perform duties by public officials, agents or institutions.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_TYPE_PETITION_TITLE",
         "message": "Petitions",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_TYPE_PETITION_DESC",
+        "message": "Formal requests addressed to the State for consideration, intervention, review of decisions or adoption of public-interest measures.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_TYPE_REPORT_TITLE",
         "message": "Reports",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_REPORT_DESC",
+        "message": "Reporting facts related to economic activities, consumer protection, food safety or infractions by economic operators.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7266,8 +7302,32 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_HOW_NOTE_NOTIFY",
+        "message": "You receive an SMS or WhatsApp notification every time the case status changes.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_RECORD",
+        "message": "The entire process is digitally recorded, ensuring transparency, traceability and accountability.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_CHANNELS",
+        "message": "Every channel — Portal, App or WhatsApp — issues a unique case number for tracking.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_CHANNELS_TITLE",
         "message": "Service Channels",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNELS_INTRO",
+        "message": "Use the Web Portal for the full submission and tracking experience, or pick the channel that suits you best.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7356,6 +7416,18 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_PRIVACY_P1",
+        "message": "The portal protects citizens' personal data in accordance with applicable legislation.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_P2",
+        "message": "When submitting a case you may request confidential treatment of your data. Your identity is then hidden from the users managing and processing the case, except where required by law.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_PRIVACY_LINK",
         "message": "Read the Privacy Policy",
         "module": "rainmaker-pgr",
@@ -7392,14 +7464,32 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_INST_IGE_DESC",
+        "message": "Central internal-control body of the public administration, responsible for auditing, oversight and inspection of the legality, regularity, efficiency and effectiveness of the use of public resources.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_INST_IGSAE_TITLE",
         "message": "General Inspectorate of Food and Economic Safety (IGSAE)",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_INST_IGSAE_DESC",
+        "message": "Body responsible for overseeing economic activities, consumer protection and food safety, promoting compliance with applicable legislation and the protection of the public interest.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_FINAL_TITLE",
         "message": "Have a Complaint, Grievance, Petition or Report?",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FINAL_TEXT",
+        "message": "Help improve public services and economic activity. Submit your case and follow its handling through the portal.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7490,6 +7580,12 @@
     {
         "code": "PGR_LANDING_FOOTER_ACCESSIBILITY",
         "message": "Accessibility",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_COPYRIGHT",
+        "message": "Complaints and Reports Portal · Republic of Mozambique. All rights reserved.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
