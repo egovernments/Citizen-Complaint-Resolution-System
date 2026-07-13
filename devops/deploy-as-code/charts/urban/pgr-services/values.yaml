@@ -48,8 +48,9 @@ initContainers:
 
 # Container Configs
 image:
-  repository: "pgr-services"
-  tag: "v2.11-a520687"
+  repository: "docker.io/library/pgr-services"
+  tag: "integration"
+  pullPolicy: "IfNotPresent"
 replicas: "1"
 healthChecks:
   enabled: true

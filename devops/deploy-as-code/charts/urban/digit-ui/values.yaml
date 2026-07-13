@@ -13,8 +13,9 @@ initContainers: {}
 
 # Container Configs
 image:
-  repository: "digit-ui"
-  tag: "v2.11-a520687"
+  repository: "docker.io/library/digit-ui"
+  tag: "integration"
+  pullPolicy: "IfNotPresent"
 replicas: "1"
 httpPort: 80
 healthChecks:

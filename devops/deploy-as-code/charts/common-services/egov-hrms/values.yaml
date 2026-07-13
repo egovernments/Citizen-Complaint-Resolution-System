@@ -12,16 +12,18 @@ ingress:
 # Init Containers Configs
 initContainers:
   dbMigration:
-    enabled: true
+    enabled: false   # restore-based deploy: hrms schema+data already present (9 eg_hrms* tables)
     schemaTable: "egov_hrms_schema"
     image:
       repository: "egov-hrms-db"
       tag: "hrms-boundary-0a4e737"
 
 # Container Configs
+# Parity: match the image Compose runs (the restored DB was seeded by it).
 image:
-  repository: "egov-hrms"
-  tag: "hrms-boundary-0a4e737"
+  repository: "registry.preview.egov.theflywheel.in/egovio/egov-hrms"
+  tag: "800-preview"
+  pullPolicy: "IfNotPresent"
 replicas: "1"
 healthChecks:
   enabled: true
