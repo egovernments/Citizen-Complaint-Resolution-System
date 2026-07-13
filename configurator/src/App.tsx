@@ -138,6 +138,12 @@ function ManagementAdmin() {
         <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />
         <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} create={BoundaryHierarchyCreate} />
         <Resource name="complaint-hierarchies" list={ComplaintHierarchyList} show={ComplaintHierarchyShow} create={ComplaintHierarchyCreate} />
+        {/* CCSD-2008: config-driven landing masters — full generic CRUD (the
+            P4 Builder replaces only the edit surface via customEditor; same
+            resource, routes and MDMS APIs). dedicated:true keeps them out of
+            the auto-loop below, so routes are declared explicitly here. */}
+        <Resource name="landing-sections" list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
+        <Resource name="landing-page-config" list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
 
         {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above) */}
         {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions').map((name) => (
