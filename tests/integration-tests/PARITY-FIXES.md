@@ -190,6 +190,20 @@ Flips 4 of the 5 cluster tests on k8s. **§2.6b (the 5th, `users create`):** `/u
 
 ---
 
+## §2.7 · Gateway enforcement parity — Kong (audit) vs k3s (enforce)  🔍 Root-caused (scoped follow-up)
+**Finding:** the compose↔k3s test divergences in the RBAC/auth family (`users create`, configurator writes, `/user/_search`) are **not** data or missing grants — they are an **enforcement-posture difference** between the two gateways. The whitelist **rules are identical** (`.github/scripts/check-gateway-whitelist-parity.py` → "OK, 39 entries"); what differs is enforcement.
+- **k3s Spring gateway** always enforces (no audit toggle): no/role-less token on a protected path → **401**; accesscontrol DENY → **401** (`RbacFilterHelper` fails closed).
+- **Compose Kong** ships in **AUDIT mode** (`local ENFORCE_UNAUTH = false` / `ENFORCE_RBAC = false` in `local-setup/kong/kong.yml`) — the item-5 rollout deferred the flip "after an observation period." So Kong logs `RBAC-audit(#5): would 401/403` and **passes**.
+
+**Verified (probe harness `tests/integration-tests/deploy/parity/gateway-behavior-parity.py`):** flipping both flags true + `docker restart kong-gateway` converges the authentication class (no-token protected requests → 401 on both). But it surfaces **two Lua-vs-Java drifts** that must be fixed for *full* parity (the Lua is a re-implementation, not the same code):
+1. **Mixed-mode semantics.** k3s treats mixed-mode endpoints (`/user/_search`, `/egov-idgen/id/_generate`, …) as **auth-required, RBAC-skipped**; Kong puts them in `AUTH_OPTIONAL` (auth-*optional*) → Kong passes a no-token request k3s 401s. Fix: split Kong's `AUTH_OPTIONAL` into truly-open (no auth) vs mixed (auth required, RBAC skipped) — this also changes the `check-gateway-whitelist-parity.py` contract.
+2. **No-action RBAC.** For a URI with **no** accesscontrol action defined (e.g. `common-masters.Department` write), k3s **allows** (accesscontrol returns allow → pass); Kong's Lua reads the same response as **deny** → would-403, so under enforcement Kong 403s a write k3s allows. Fix: align Kong's `/access/v1/actions/_authorize` call to k3s's exact payload so results agree — **verifiable only in-cluster** (accesscontrol's authorize isn't faithfully callable externally; all external calls 401).
+
+**Excluded from parity:** the bodyless-GET row (Kong 200 / k3s 500) is the **§1.10 k3s bug** — Kong is correctly better; do NOT match it.
+**Status:** flip proven live then reverted (leaving compose enforcing with drift #1/#2 would regress). Full parity = a reviewed gateway PR: fix the two Lua drifts, flip both flags, keep the behavior-probe green. Not a config-only change.
+
+---
+
 ## §1.6b · OTP mode — mock OTP on k8s to match Compose  🔀 Mixed (fix verified)
 **Symptom:** citizen register-OTP fails on k8s (3 citizen-UI tests) — the tests hardcode `FIXED_OTP=123456` and expect the OTP screen; k8s runs *real* OTP which rejects it.
 **Root cause:** Compose default **mocks** OTP (services behind `profiles:["otp"]`, unstarted; Kong request-termination rubber-stamps `123456`); the k8s helmfile brings up **real** `user-otp`+`egov-otp`, which 400 on `MobileNumberValidation`. The tests target the mock (no test reads a real OTP).
