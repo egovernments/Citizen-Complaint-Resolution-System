@@ -1,41 +1,48 @@
-/** Builder draft store (P4a, CCSD-2009).
+/** Builder draft store v2 (P4, CCSD-2009).
  *
  * One useReducer + context — no extra state library. All IO goes through the
- * existing DigitApiClient (same MDMS APIs as the P3 generic CRUD). Edits stay
- * client-side until Save; the preview adapter assembles a plain
- * ResolvedLandingConfig from draft state, so the production LandingRenderer
- * receives exactly what it receives in production — never Builder internals.
+ * existing DigitApiClient (same MDMS + localization APIs the rest of the
+ * Configurator uses). Draft rows AND staged localization edits stay
+ * client-side until Save Draft; Publish additionally promotes enabled
+ * sections to PUBLISHED. Undo/redo snapshots {sections, page, locEdits}.
  */
 import { createContext, useContext, useMemo, useReducer, type ReactNode } from 'react';
 import { digitClient } from '@/providers/bridge';
 import { getEditorEntry } from './sectionEditorRegistry';
+import { persistLocEdits } from './localization';
 import type {
-  BuilderState,
-  LandingPageData,
-  LandingSectionData,
-  MdmsRow,
-  PreviewConfig,
-  SectionEntry,
-  ValidationIssue,
+  BuilderState, HistorySnap, InspectorTab, LandingPageData, LandingSectionData,
+  LocEdits, MdmsRow, PreviewConfig, SectionEntry, ValidationIssue,
 } from './types';
 
 export const SECTION_SCHEMA = 'RAINMAKER-PGR.LandingSection';
 export const PAGE_SCHEMA = 'RAINMAKER-PGR.LandingPageConfig';
+const HISTORY_MAX = 60;
 
 // ---------------------------------------------------------------------------
-// Reducer
+// Actions
 // ---------------------------------------------------------------------------
 
 type Action =
   | { type: 'loadStart' }
   | { type: 'loadError'; error: string }
   | { type: 'hydrate'; sections: MdmsRow[]; page?: MdmsRow; select?: string }
-  | { type: 'select'; id: string }
-  | { type: 'patchSection'; code: string; patch: Partial<LandingSectionData> }
-  | { type: 'patchPage'; patch: Partial<LandingPageData> }
-  | { type: 'move'; code: string; dir: -1 | 1 }
+  | { type: 'select'; id: string; tab?: InspectorTab; focusField?: string | null }
+  | { type: 'hover'; code: string | null }
+  | { type: 'setTab'; tab: InspectorTab }
+  | { type: 'patchSection'; code: string; patch: Partial<LandingSectionData>; coalesce?: string }
+  | { type: 'patchPage'; patch: Partial<LandingPageData>; coalesce?: string }
+  | { type: 'patchLoc'; locale: string; key: string; text: string; coalesce?: string }
+  | { type: 'move'; code: string; toIndex: number }
+  | { type: 'duplicate'; code: string }
+  | { type: 'remove'; code: string }
+  | { type: 'addSection'; sectionType: string; code: string }
+  | { type: 'undo' }
+  | { type: 'redo' }
   | { type: 'setPreviewMode'; mode: 'draft' | 'published' }
   | { type: 'setViewport'; viewport: BuilderState['viewport'] }
+  | { type: 'setZoom'; zoom: number }
+  | { type: 'setDisplayLocale'; locale: string }
   | { type: 'saveStart' }
   | { type: 'saveDone'; sections: MdmsRow[]; page?: MdmsRow }
   | { type: 'saveError'; error: string }
@@ -45,15 +52,23 @@ export const initialState: BuilderState = {
   loading: true,
   page: null,
   sections: [],
+  locEdits: {},
   selected: 'page',
+  hovered: null,
+  inspectorTab: 'content',
+  focusField: null,
   previewMode: 'draft',
   viewport: 'desktop',
+  zoom: 1,
+  displayLocale: 'pt_PT',
   saving: false,
+  lastSavedAt: null,
   validation: null,
+  past: [],
+  future: [],
 };
 
-const byOrder = (a: SectionEntry, b: SectionEntry) =>
-  (a.draft.order ?? 0) - (b.draft.order ?? 0);
+const byOrder = (a: SectionEntry, b: SectionEntry) => (a.draft.order ?? 0) - (b.draft.order ?? 0);
 
 function hydrateSections(rows: MdmsRow[]): SectionEntry[] {
   return rows
@@ -62,18 +77,27 @@ function hydrateSections(rows: MdmsRow[]): SectionEntry[] {
     .sort(byOrder);
 }
 
-/** Rewrite order as (index+1)*10 over the given visual order. Marks rows whose
- *  order changed as dirty. */
 function renumber(sections: SectionEntry[]): SectionEntry[] {
   return sections.map((s, i) => {
     const order = (i + 1) * 10;
     if (s.draft.order === order) return s;
-    return {
-      ...s,
-      draft: { ...s.draft, order },
-      state: s.state === 'clean' ? 'dirty' : s.state,
-    };
+    return { ...s, draft: { ...s.draft, order }, state: s.state === 'clean' ? 'dirty' : s.state };
   });
+}
+
+const snap = (s: BuilderState): HistorySnap => ({
+  sections: s.sections, page: s.page, locEdits: s.locEdits,
+});
+
+/** Push a history snapshot; `coalesce` collapses rapid edits to one entry
+ *  (e.g. typing) — same tag replaces the previous push instead of stacking. */
+let lastCoalesce: string | undefined;
+function withHistory(state: BuilderState, coalesce?: string): Pick<BuilderState, 'past' | 'future'> {
+  if (coalesce && coalesce === lastCoalesce && state.past.length > 0) {
+    return { past: state.past, future: [] };
+  }
+  lastCoalesce = coalesce;
+  return { past: [...state.past.slice(-HISTORY_MAX + 1), snap(state)], future: [] };
 }
 
 export function reducer(state: BuilderState, action: Action): BuilderState {
@@ -84,14 +108,17 @@ export function reducer(state: BuilderState, action: Action): BuilderState {
       return { ...state, loading: false, error: action.error };
     case 'hydrate': {
       const sections = hydrateSections(action.sections);
-      const pageRow = action.page;
+      lastCoalesce = undefined;
       return {
         ...state,
         loading: false,
         error: undefined,
         sections,
-        page: pageRow
-          ? { record: pageRow, draft: { ...(pageRow.data as LandingPageData) }, dirty: false }
+        locEdits: {},
+        past: [],
+        future: [],
+        page: action.page
+          ? { record: action.page, draft: { ...(action.page.data as LandingPageData) }, dirty: false }
           : { draft: { code: 'default', enabled: true }, dirty: false },
         selected:
           action.select && sections.some((s) => s.draft.code === action.select)
@@ -101,49 +128,139 @@ export function reducer(state: BuilderState, action: Action): BuilderState {
       };
     }
     case 'select':
-      return { ...state, selected: action.id };
+      return {
+        ...state,
+        selected: action.id,
+        inspectorTab: action.tab ?? (action.id === state.selected ? state.inspectorTab : 'content'),
+        focusField: action.focusField ?? null,
+      };
+    case 'hover':
+      return state.hovered === action.code ? state : { ...state, hovered: action.code };
+    case 'setTab':
+      return { ...state, inspectorTab: action.tab, focusField: null };
     case 'patchSection': {
-      const sections = state.sections.map((s) => {
-        if (s.draft.code !== action.code) return s;
-        return {
-          ...s,
-          draft: { ...s.draft, ...action.patch },
-          state: s.state === 'clean' ? ('dirty' as const) : s.state,
-        };
-      });
-      return { ...state, sections, validation: null };
+      const hist = withHistory(state, action.coalesce);
+      const sections = state.sections.map((s) =>
+        s.draft.code !== action.code
+          ? s
+          : { ...s, draft: { ...s.draft, ...action.patch }, state: s.state === 'clean' ? ('dirty' as const) : s.state },
+      );
+      return { ...state, ...hist, sections, validation: null };
     }
     case 'patchPage': {
       if (!state.page) return state;
+      const hist = withHistory(state, action.coalesce);
       return {
-        ...state,
+        ...state, ...hist,
         page: { ...state.page, draft: { ...state.page.draft, ...action.patch }, dirty: true },
         validation: null,
       };
     }
+    case 'patchLoc': {
+      const hist = withHistory(state, action.coalesce);
+      const locale = { ...(state.locEdits[action.locale] ?? {}) };
+      locale[action.key] = action.text;
+      return { ...state, ...hist, locEdits: { ...state.locEdits, [action.locale]: locale } };
+    }
     case 'move': {
       const ordered = [...state.sections].sort(byOrder);
+      const from = ordered.findIndex((s) => s.draft.code === action.code);
+      if (from < 0) return state;
+      const to = Math.max(0, Math.min(ordered.length - 1, action.toIndex));
+      if (from === to) return state;
+      const hist = withHistory(state);
+      const [moved] = ordered.splice(from, 1);
+      ordered.splice(to, 0, moved);
+      return { ...state, ...hist, sections: renumber(ordered), validation: null };
+    }
+    case 'duplicate': {
+      const src = state.sections.find((s) => s.draft.code === action.code);
+      if (!src) return state;
+      const hist = withHistory(state);
+      let n = 1;
+      let code = `${action.code}-copy`;
+      const codes = new Set(state.sections.map((s) => s.draft.code));
+      while (codes.has(code)) code = `${action.code}-copy-${++n}`;
+      const ordered = [...state.sections].sort(byOrder);
       const idx = ordered.findIndex((s) => s.draft.code === action.code);
-      const target = idx + action.dir;
-      if (idx < 0 || target < 0 || target >= ordered.length) return state;
-      [ordered[idx], ordered[target]] = [ordered[target], ordered[idx]];
-      return { ...state, sections: renumber(ordered), validation: null };
+      const copy: SectionEntry = {
+        draft: { ...JSON.parse(JSON.stringify(src.draft)), code, status: 'DRAFT' },
+        state: 'created',
+      };
+      ordered.splice(idx + 1, 0, copy);
+      return { ...state, ...hist, sections: renumber(ordered), selected: code, validation: null };
+    }
+    case 'remove': {
+      const hist = withHistory(state);
+      const sections = state.sections
+        .map((s) => {
+          if (s.draft.code !== action.code) return s;
+          // created-in-session rows vanish outright; persisted rows soft-delete
+          return s.state === 'created' ? null : { ...s, state: 'deleted' as const };
+        })
+        .filter(Boolean) as SectionEntry[];
+      return {
+        ...state, ...hist, sections,
+        selected: state.selected === action.code ? 'page' : state.selected,
+        validation: null,
+      };
+    }
+    case 'addSection': {
+      const entryDef = getEditorEntry(action.sectionType);
+      if (!entryDef) return state;
+      const hist = withHistory(state);
+      const ordered = [...state.sections].sort(byOrder);
+      ordered.push({ draft: { ...entryDef.defaults(), code: action.code }, state: 'created' });
+      return { ...state, ...hist, sections: renumber(ordered), selected: action.code, validation: null };
+    }
+    case 'undo': {
+      const prev = state.past[state.past.length - 1];
+      if (!prev) return state;
+      lastCoalesce = undefined;
+      return {
+        ...state,
+        sections: prev.sections, page: prev.page, locEdits: prev.locEdits,
+        past: state.past.slice(0, -1),
+        future: [snap(state), ...state.future].slice(0, HISTORY_MAX),
+        validation: null,
+      };
+    }
+    case 'redo': {
+      const next = state.future[0];
+      if (!next) return state;
+      lastCoalesce = undefined;
+      return {
+        ...state,
+        sections: next.sections, page: next.page, locEdits: next.locEdits,
+        past: [...state.past, snap(state)].slice(-HISTORY_MAX),
+        future: state.future.slice(1),
+        validation: null,
+      };
     }
     case 'setPreviewMode':
       return { ...state, previewMode: action.mode };
     case 'setViewport':
       return { ...state, viewport: action.viewport };
+    case 'setZoom':
+      return { ...state, zoom: action.zoom };
+    case 'setDisplayLocale':
+      return { ...state, displayLocale: action.locale };
     case 'saveStart':
       return { ...state, saving: true };
     case 'saveDone': {
       const sections = hydrateSections(action.sections);
+      lastCoalesce = undefined;
       return {
         ...state,
         saving: false,
         sections,
+        locEdits: {},
+        past: [], future: [],
+        lastSavedAt: Date.now(),
         page: action.page
           ? { record: action.page, draft: { ...(action.page.data as LandingPageData) }, dirty: false }
           : state.page,
+        selected: sections.some((s) => s.draft.code === state.selected) ? state.selected : 'page',
         validation: null,
       };
     }
@@ -157,30 +274,28 @@ export function reducer(state: BuilderState, action: Action): BuilderState {
 }
 
 // ---------------------------------------------------------------------------
-// Derived: preview adapter + dirty check + validation
+// Derived
 // ---------------------------------------------------------------------------
 
-/** Draft state -> the plain config the production renderer consumes. The
- *  ordering/visibility semantics mirror the runtime's useLandingConfig. */
 export function buildPreviewConfig(state: BuilderState): PreviewConfig {
   const sections = [...state.sections]
     .filter((s) => s.state !== 'deleted')
     .filter((s) => s.draft.enabled !== false)
     .filter((s) => (state.previewMode === 'published' ? s.draft.status === 'PUBLISHED' : true))
     .sort(byOrder)
-    .map((s) => {
-      const adapter = getEditorEntry(s.draft.type)?.previewAdapter;
-      return adapter ? adapter(s.draft) : s.draft;
-    });
+    .map((s) => s.draft);
   return { page: state.page?.draft ?? {}, sections };
 }
 
 export function isDirty(state: BuilderState): boolean {
   return (
     !!state.page?.dirty ||
-    state.sections.some((s) => s.state !== 'clean')
+    state.sections.some((s) => s.state !== 'clean') ||
+    Object.values(state.locEdits).some((m) => Object.keys(m).length > 0)
   );
 }
+
+const URL_OK = /^(\/|#$|#\w|https?:|tel:|mailto:)/i;
 
 export function validateAll(state: BuilderState): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -196,34 +311,41 @@ export function validateAll(state: BuilderState): ValidationIssue[] {
         issues.push({ level: 'error', section: code, message: `Duplicate code "${code}".` });
       seenCodes.add(code);
       if (!d.type || !getEditorEntry(d.type))
-        issues.push({ level: 'error', section: code, message: `Unknown section type "${d.type ?? ''}" — the page would skip it.` });
+        issues.push({ level: 'error', section: code, message: `Unknown section type "${d.type ?? ''}".` });
       const order = d.order ?? 0;
       if (seenOrders.has(order))
-        issues.push({ level: 'error', section: code, message: `Order ${order} duplicates section "${seenOrders.get(order)}".` });
+        issues.push({ level: 'error', section: code, message: `Order ${order} duplicates "${seenOrders.get(order)}".` });
       seenOrders.set(order, code);
       if (d.status && d.status !== 'DRAFT' && d.status !== 'PUBLISHED')
         issues.push({ level: 'error', section: code, message: `Invalid status "${d.status}".` });
-      const entry = getEditorEntry(d.type);
-      if (entry) issues.push(...entry.validate(d));
+      (d.items ?? []).forEach((it) => {
+        if (it.navigationUrl && !URL_OK.test(it.navigationUrl))
+          issues.push({ level: 'error', section: code, message: `Invalid URL on item "${it.code ?? it.labelKey}".` });
+      });
+      const entryDef = getEditorEntry(d.type);
+      if (entryDef) issues.push(...entryDef.validate(d));
     });
   return issues;
 }
 
 // ---------------------------------------------------------------------------
-// Save pipeline — same MDMS APIs as the P3 generic CRUD
+// Persistence — same MDMS + localization APIs as the rest of the Configurator
 // ---------------------------------------------------------------------------
 
-export async function persist(state: BuilderState, tenantId: string): Promise<void> {
-  // Sections: created -> _create, dirty -> _update, deleted -> _update(isActive:false)
+async function persistRows(state: BuilderState, tenantId: string, promote: boolean): Promise<void> {
   for (const s of state.sections) {
-    const entry = getEditorEntry(s.draft.type);
-    const data = entry ? entry.normalize(s.draft) : s.draft;
+    const entryDef = getEditorEntry(s.draft.type);
+    let data = entryDef ? entryDef.normalize(s.draft) : s.draft;
+    if (promote && s.state !== 'deleted' && data.enabled !== false && data.status !== 'PUBLISHED') {
+      data = { ...data, status: 'PUBLISHED' };
+    }
+    const changed = s.state !== 'clean' || (promote && data.status !== s.draft.status);
     if (s.state === 'created') {
       await digitClient.mdmsCreate(tenantId, SECTION_SCHEMA, String(data.code), data as Record<string, unknown>);
-    } else if (s.state === 'dirty' && s.record) {
-      await digitClient.mdmsUpdate({ ...s.record, data: data as Record<string, unknown> }, true);
     } else if (s.state === 'deleted' && s.record) {
-      await digitClient.mdmsUpdate(s.record, false); // soft delete, as in P3
+      await digitClient.mdmsUpdate(s.record, false);
+    } else if (changed && s.record) {
+      await digitClient.mdmsUpdate({ ...s.record, data: data as Record<string, unknown> }, true);
     }
   }
   if (state.page?.dirty && state.page.record) {
@@ -232,6 +354,13 @@ export async function persist(state: BuilderState, tenantId: string): Promise<vo
       true,
     );
   }
+}
+
+/** Save Draft: rows as-is + staged localization. Publish: also promote
+ *  enabled sections to PUBLISHED. */
+export async function persist(state: BuilderState, tenantId: string, opts: { publish?: boolean } = {}): Promise<void> {
+  await persistLocEdits(tenantId, state.locEdits);
+  await persistRows(state, tenantId, !!opts.publish);
 }
 
 export async function fetchAll(tenantId: string): Promise<{ sections: MdmsRow[]; page?: MdmsRow }> {
