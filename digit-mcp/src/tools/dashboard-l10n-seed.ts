@@ -493,6 +493,11 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_HEADER_TITLE",
+    "message": "Complaint Resolution Operations",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_TYPE_CHART",
     "message": "CHART",
     "module": "rainmaker-dashboard"

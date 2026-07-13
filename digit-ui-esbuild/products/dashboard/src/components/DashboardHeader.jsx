@@ -101,7 +101,7 @@ const DashboardHeader = ({
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
   const addKpiRef = useRef(null);
-  const { t, language } = useDashboardT();
+  const { t, exists, language } = useDashboardT();
   const productLabel = useMemo(() => getProductLabel(), []);
   // `language` re-keys the memos on language switch (t itself is stable).
   const rowScope = useMemo(() => buildRowScope(scope), [scope, language]);
@@ -109,7 +109,16 @@ const DashboardHeader = ({
     () => buildSubtitle(filters, filterOptions, t),
     [filters, filterOptions, t, language]
   );
-  const title = productLabel.toLowerCase().includes("pgr")
+  // ONE full-phrase key wins when seeded — splicing the DASHBOARD_PRODUCT_LABEL
+  // globalConfig onto a translated "Operations" produced mixed-language titles
+  // ("Complaint Resolution Opérations"); word order/agreement can't survive
+  // per-word translation. The legacy composition stays as the unseeded fallback,
+  // so tenants that brand via DASHBOARD_PRODUCT_LABEL and don't seed
+  // DASHBOARD_HEADER_TITLE keep their branded English title; branded tenants
+  // that localize should carry the brand inside the seeded message itself.
+  const title = exists("DASHBOARD_HEADER_TITLE")
+    ? t("DASHBOARD_HEADER_TITLE", "Complaint Resolution Operations")
+    : productLabel.toLowerCase().includes("pgr")
     ? t("DASHBOARD_HEADER_PGR_OPERATIONS", "PGR Operations")
     : `${productLabel} ${t("DASHBOARD_HEADER_OPERATIONS", "Operations")}`;
 
