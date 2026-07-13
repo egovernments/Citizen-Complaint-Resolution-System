@@ -98,6 +98,17 @@ export function V2LoginShell({ children, withCarousel, bannerImages }) {
           justifyContent: "center",
           minHeight: "100vh",
           padding: "24px",
+          // FULL WIDTH: .banner is a flex container that centers its children,
+          // so without an explicit width this wrapper shrink-wraps to the
+          // card's min-content (~539px) and the card never reaches its
+          // designed maxWidth — it rendered ~491px ("white box smaller
+          // overall"). width:100% lets the card size itself properly.
+          width: "100%",
+          // TRANSPARENT so the <Background> banner (StateInfo bannerUrl behind
+          // the teal overlay) shows edge-to-edge with the card floating over it.
+          // Without this the v2-scope's default page-bg (#f5f5f5) painted a
+          // full-height grey column that hid the background image (Moz login-bg).
+          backgroundColor: "transparent",
         }}
       >
         {children}
@@ -346,19 +357,42 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased }) => {
       <V2Card
         style={{
           width: "100%",
-          maxWidth: "680px",
+          // Moz prototype proportions — tuned in design review:
+          // 680 → 480 (≈half) → 408 (−15%).
+          maxWidth: "408px",
           padding: "32px 32px 32px 32px",
           display: "flex",
           flexDirection: "column",
           gap: "18px",
         }}
       >
-        {/* Top logos — same Header the legacy login.js renders inline,
-            so the tenant + DIGIT secondary wordmark show above the form
-            exactly like v1. */}
-        <div className="v2-employee-login-top-logos" style={{ display: "flex", justifyContent: "center" }}>
-          {storeData?.stateInfo?.code ? <Header /> : <Header showTenant={false} />}
-        </div>
+        {/* Top logos. When the deployment seeds the portal-title localization
+            (CS_LOGIN_PORTAL_TITLE — Moz prototype), render the emblem +
+            two-line portal branding. Otherwise keep the legacy Header
+            (tenant + DIGIT wordmark) byte-identical for other deployments. */}
+        {t("CS_LOGIN_PORTAL_TITLE") !== "CS_LOGIN_PORTAL_TITLE" ? (
+          <div className="v2-employee-login-top-logos" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <ImageComponent
+              src={storeData?.stateInfo?.logoUrl}
+              alt=""
+              style={{ height: "56px", width: "56px", objectFit: "contain", flexShrink: 0 }}
+            />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: "1.125rem", lineHeight: 1.3, color: "var(--color-text-primary, #0B0C0C)" }}>
+                {t("CS_LOGIN_PORTAL_TITLE")}
+              </div>
+              {t("CS_LOGIN_PORTAL_SUBTITLE") !== "CS_LOGIN_PORTAL_SUBTITLE" && (
+                <div style={{ fontSize: "0.875rem", color: "var(--color-text-secondary, #505A5F)" }}>
+                  {t("CS_LOGIN_PORTAL_SUBTITLE")}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="v2-employee-login-top-logos" style={{ display: "flex", justifyContent: "center" }}>
+            {storeData?.stateInfo?.code ? <Header /> : <Header showTenant={false} />}
+          </div>
+        )}
         <header>
           <h1
             style={{
