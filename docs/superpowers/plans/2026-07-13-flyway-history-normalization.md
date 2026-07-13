@@ -998,7 +998,12 @@ ok: renamed 10, rebuilt 1, already-aligned 3, skipped 2
 ALL PASS
 ```
 
-Note `egov-otp` now reaches `exit=0 noop`: the normalizer drops the empty orphan `eg_token`, so its migrator builds the table cleanly instead of hitting 42P07.
+**`egov-otp` is expected to APPLY, not no-op.** The normalizer drops its empty orphan
+`eg_token`, so its migrator necessarily rebuilds the table — it exits 0 having applied
+its migrations, instead of hitting 42P07. Demanding a no-op from a service that took
+the rebuild path would be wrong, so the test asserts per path: services named in the
+normalizer's `rebuilt` lines must apply; every other migrator must report
+`No migration necessary`. Both must exit 0.
 
 - [ ] **Step 3: Commit**
 

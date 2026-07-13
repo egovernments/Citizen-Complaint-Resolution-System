@@ -156,7 +156,7 @@ def count_rows(tables: Iterable[str]) -> Dict[str, int]:
 def apply(d: Decision) -> None:
     if d.action == RENAME:
         psql(f'ALTER TABLE public."{d.alias}" RENAME TO "{d.canonical}";')
-        print(f"  renamed  {d.alias} -> {d.canonical}")
+        print(f"  renamed  {d.service}: {d.alias} -> {d.canonical}")
 
     elif d.action == DROP:
         # The only destructive operation here. Take an ACCESS EXCLUSIVE lock, then
@@ -184,7 +184,10 @@ END $$;
 {drops}
 COMMIT;
 """)
-        print(f"  rebuilt  dropped empty {', '.join(d.tables)} (migrator will recreate)")
+        # NOTE: a rebuilt service's migrator will APPLY its migrations (it has to —
+        # we just dropped its tables). It will NOT report "No migration necessary".
+        # That is correct, and the integration test asserts it per path.
+        print(f"  rebuilt  {d.service}: dropped empty {', '.join(d.tables)} (migrator will recreate)")
 
 
 def main() -> int:
