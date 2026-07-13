@@ -31,6 +31,9 @@
         "module": {
           "type": "string"
         },
+        "bannerImage": {
+          "type": "string"
+        },
         "tenants": {
           "type": "array",
           "items": {
