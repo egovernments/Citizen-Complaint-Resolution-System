@@ -83,7 +83,25 @@ function buildRequestInfo(auth: AuthInfo, action?: string): Record<string, unkno
     action,
     msgId: `${Date.now()}|en_IN`,
     authToken: auth.token,
-    userInfo: auth.user || undefined,
+    // The configurator storageState stores roles as bare code strings; services
+    // deserialize RequestInfo.userInfo.roles into Role objects. Compose's Kong
+    // re-resolves userInfo from the token so string roles are tolerated, but the
+    // stock k8s gateway forwards the body verbatim → mdms/tenant/user 500
+    // ("Cannot construct Role from String"). Expand to Role objects so the harness
+    // sends a well-formed request to either gateway.
+    userInfo: auth.user
+      ? {
+          ...auth.user,
+          roles: (Array.isArray((auth.user as { roles?: unknown }).roles)
+            ? ((auth.user as { roles: unknown[] }).roles)
+            : []
+          ).map((r) =>
+            typeof r === 'string'
+              ? { code: r, name: r, tenantId: (auth.user as { tenantId?: string }).tenantId }
+              : r,
+          ),
+        }
+      : undefined,
   };
 }
 

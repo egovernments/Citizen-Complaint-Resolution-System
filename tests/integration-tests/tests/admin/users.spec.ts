@@ -51,7 +51,23 @@ function requestInfo(auth: AuthInfo, action = '_search'): Record<string, unknown
     action,
     msgId: `${Date.now()}|en_IN`,
     authToken: auth.token,
-    userInfo: auth.user || undefined,
+    // Roles come from the configurator storageState as bare code strings; expand
+    // to Role objects so services can deserialize them. Kong (compose) re-resolves
+    // userInfo from the token and tolerates strings; the stock k8s gateway forwards
+    // them verbatim → 401/500 "Cannot construct Role from String". See manage/api.ts.
+    userInfo: auth.user
+      ? {
+          ...auth.user,
+          roles: (Array.isArray((auth.user as { roles?: unknown }).roles)
+            ? ((auth.user as { roles: unknown[] }).roles)
+            : []
+          ).map((r) =>
+            typeof r === 'string'
+              ? { code: r, name: r, tenantId: (auth.user as { tenantId?: string }).tenantId }
+              : r,
+          ),
+        }
+      : undefined,
   };
 }
 
