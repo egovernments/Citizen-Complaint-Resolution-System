@@ -27,6 +27,7 @@ import {
   FileCode,
   Workflow,
   LayoutTemplate,
+  Paintbrush,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -61,6 +62,7 @@ const navGroups = [
     // LandingPageConfig) — generic CRUD in P3, Builder editor lands in P4.
     labelKey: 'app.nav.landing_page',
     items: [
+      { id: 'landing-builder', nameKey: 'app.nav.landing_builder', path: '/manage/landing-builder', icon: Paintbrush },
       { id: 'landing-sections', nameKey: 'app.nav.landing_sections', path: '/manage/landing-sections', icon: LayoutTemplate },
       { id: 'landing-page-config', nameKey: 'app.nav.landing_page_config', path: '/manage/landing-page-config', icon: Settings },
     ],

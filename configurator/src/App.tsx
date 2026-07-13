@@ -10,6 +10,7 @@ import CompletePage from './pages/CompletePage';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
 import { QueryClient } from '@tanstack/react-query';
 import { DigitLayout, DigitDashboard, MdmsResourcePage, MdmsResourceShow, MdmsResourceEdit, MdmsResourceCreate } from '@/admin';
+import { LandingBuilder } from '@/admin/landingBuilder';
 import {
   DepartmentList, DepartmentShow, DepartmentEdit, DepartmentCreate, DepartmentBulkImport,
   DesignationList, DesignationShow, DesignationEdit, DesignationCreate, DesignationBulkImport,
@@ -154,6 +155,8 @@ function ManagementAdmin() {
         <CustomRoutes>
           <Route path="/advanced" element={<AdvancedPage />} />
           <Route path="/pgr-dashboard" element={<PgrDashboard />} />
+          {/* CCSD-2009: visual Landing Page Builder over the P3 resources */}
+          <Route path="/landing-builder" element={<LandingBuilder />} />
           <Route path="/employees/bulk" element={<EmployeeBulkImport />} />
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
           <Route path="/designations/bulk" element={<DesignationBulkImport />} />
