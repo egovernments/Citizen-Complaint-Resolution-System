@@ -33,10 +33,11 @@ export default defineConfig({
   ],
   use: {
     baseURL: BASE_URL,
+    ignoreHTTPSErrors: true,
     headless: true,
-    screenshot: 'on',
-    trace: 'on',
-    video: 'on',
+    screenshot: 'off',
+    trace: 'off',
+    video: 'off',
   },
   projects: [
     {
