@@ -32,7 +32,7 @@ Status legend: `pass` · `**fail**` · `skip` (includes did-not-run).
 
 ## Fix reference — to raise fix PRs
 
-The `Fix` column in the tables below points here. Each fix is currently applied **live-only** (demonstrated, not shipped — see the `Status:` lines in the findings doc / issue #1160); productionizing it is the fix-PR work. Ranked by number of tests it flips.
+The `Fix` column in the tables below points here. **Exact reproducible steps per fix (chart diffs + the live commands/manifests/SQL) are in [`PARITY-FIXES.md`](./PARITY-FIXES.md).** Ranked by number of tests it flips.
 
 | Fix | Flips | Permanent fix (the PR) |
 |---|---:|---|
