@@ -451,7 +451,7 @@ def decide(
 cd local-setup && python3 -m pytest tests/test_flyway_history_normalize.py -v
 ```
 
-Expected: **13 passed.**
+Expected: **12 passed.**
 
 - [ ] **Step 6: Commit**
 
@@ -631,7 +631,7 @@ if __name__ == "__main__":
 cd local-setup && python3 -m pytest tests/test_flyway_history_normalize.py -v
 ```
 
-Expected: **13 passed.** (The DB layer imports cleanly; `decide()` is unchanged.)
+Expected: **12 passed.** (The DB layer imports cleanly; `decide()` is unchanged.)
 
 - [ ] **Step 3: Write the Dockerfile**
 
@@ -1192,7 +1192,7 @@ python3 .github/scripts/check-flyway-dump-alignment.py
 ./local-setup/db/normalize/test-integration.sh /home/ubuntu/egov_backup_20260709_082159.sql
 ```
 
-Expected: 13 unit tests pass, both CI checks pass, and the integration script ends `ALL PASS`.
+Expected: 12 unit tests pass, both CI checks pass, and the integration script ends `ALL PASS`.
 
 - [ ] **Step 3: Commit and open the PR**
 
