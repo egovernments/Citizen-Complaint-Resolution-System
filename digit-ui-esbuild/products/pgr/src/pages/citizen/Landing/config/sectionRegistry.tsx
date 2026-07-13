@@ -80,10 +80,13 @@ export const SECTION_REGISTRY: Record<string, SectionEntry> = {
   hero: {
     Component: HeroSection,
     slot: "main",
+    // P4 (approved adapter tweak): hero trust "features" are items-driven when
+    // config provides items[]; icons resolve through the whitelist. CTAs stay
+    // application behavior (fixed destinations).
     buildProps: (s, ctx) => ({
       routes: ctx.routes,
       imageUrl: mediaUrl(s.media) ?? ctx.heroImageUrl,
-      section: s,
+      section: withItems(s, [], ctx.routes),
     }),
   },
   types: {
