@@ -54,10 +54,13 @@ export const CreateComplaintConfig = {
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
                 validation: {
                   required: true,
-                  // CCRS#437: Allow 4-character names (e.g. "John"). The
-                  // quantifier counts characters AFTER the leading letter,
-                  // so {3,29} = total length 4–30, not 5–30.
-                  pattern: /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{3,29}$)^.*$/,
+                  // Moz QA (CCSD-1990): minimum length must be 1, not 4 — a
+                  // single-character name (e.g. "A") is valid. The quantifier
+                  // counts chars AFTER the leading letter, so {0,29} = total
+                  // length 1–30. The rest of the hygiene is kept: must start
+                  // with a letter, no leading/trailing separator, no doubled
+                  // space/underscore/hyphen.
+                  pattern: /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{0,29}$)^.*$/,
                 }
               },
             },
