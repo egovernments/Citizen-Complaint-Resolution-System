@@ -135,7 +135,10 @@ function ManagementAdmin() {
         {/* Read-only entities with List/Show */}
         <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} />
         <Resource name="access-actions" list={AccessActionList} show={AccessActionShow} />
-        <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} />
+        {/* CCSD-1996: role-actions had list/show only. Add the schema-driven
+            generic Edit/Create so a Role-Action mapping can be created/edited
+            from the UI (dedicated List/Show kept). */}
+        <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
         <Resource name="workflow-business-services" list={WorkflowServiceList} show={WorkflowServiceShow} />
         <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />
         <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />

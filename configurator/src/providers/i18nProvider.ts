@@ -103,6 +103,8 @@ const customEnglishMessages: TranslationMessages = {
       workflow_processes: 'Workflow Processes',
       mdms_schemas: 'MDMS Schemas',
       boundary_hierarchies: 'Boundary Hierarchies',
+      // CCSD-1997: StateInfo master is surfaced as "Branding".
+      state_info: 'Branding',
     },
     fields: {
       code: 'Code',
