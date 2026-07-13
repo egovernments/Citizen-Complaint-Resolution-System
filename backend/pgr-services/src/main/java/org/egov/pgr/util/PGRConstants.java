@@ -173,9 +173,17 @@ public class PGRConstants {
 
     // Extended attributes — complaint category config and field schemas
     public static final String MDMS_COMPLAINT_RELATED_TO_MAP = "ComplaintRelatedToMap";
+    
     public static final String MDMS_COMPLAINT_TEMPLATE_TYPE  = "ComplaintTemplateType";
+
     public static final String MDMS_COMPLAINT_SCHEMA         = "ComplaintSchema";
 
     public static final String ROLE_CONFIDENTIAL_VIEWER = "CONFIDENTIAL_COMPLAINT_VIEWER";
 
+    // Extended attributes - search by department
+    public static final String MDMS_SERVICEDEF_MASTER = "ComplaintHierarchy";
+
+    public static final String MDMS_SERVICEDEFS_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy";
+
+    public static final String MDMS_SERVICE_CODE_KEY     = "code";
 }

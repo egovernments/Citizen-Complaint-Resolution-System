@@ -30,6 +30,15 @@ paths:
           items:
             type: string
             maxItems: 5
+      - name: department
+        in: query
+        description: >
+          Search by department code(s) - comma separated. Resolved to the department's
+          service codes via MDMS (employee search only); intersected with serviceCode if both are given.
+        schema:
+          type: array
+          items:
+            type: string
       - name: ids
         in: query
         description: Search by list of UUID

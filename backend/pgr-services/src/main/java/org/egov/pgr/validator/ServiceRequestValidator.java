@@ -234,7 +234,7 @@ public class ServiceRequestValidator {
         * */
         if( (criteria.getMobileNumber()!=null 
                 || criteria.getServiceRequestId()!=null || criteria.getIds()!=null
-                || criteria.getServiceCode()!=null )
+                || criteria.getServiceCode()!=null || criteria.getDepartment()!=null)
                 && criteria.getTenantId()==null)
             throw new CustomException("INVALID_SEARCH","TenantId is mandatory search param");
 
@@ -271,6 +271,12 @@ public class ServiceRequestValidator {
         if(criteria.getServiceCode()!=null && !allowedParams.contains("serviceCode"))
             throw new CustomException("INVALID SEARCH","Search on serviceCode is not allowed");
 
+        if(criteria.getDepartment()!=null && !allowedParams.contains("department"))
+            throw new CustomException("INVALID SEARCH","Search on department is not allowed");
+        
+        if(criteria.getAssignee()!=null && !allowedParams.contains("assignee"))
+            throw new CustomException("INVALID SEARCH","Search on assignee is not allowed");
+            
         if(criteria.getServiceRequestId()!=null && !allowedParams.contains("serviceRequestId"))
             throw new CustomException("INVALID SEARCH","Search on serviceRequestId is not allowed");
 
