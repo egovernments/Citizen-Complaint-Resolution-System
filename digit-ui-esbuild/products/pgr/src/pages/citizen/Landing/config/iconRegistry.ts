@@ -8,6 +8,9 @@
 // default renders the identical glyph.
 
 import {
+  Lock,
+  Hash,
+  Bell,
   FileText,
   Megaphone,
   Scale,
@@ -28,6 +31,9 @@ import {
 import type { IconComponent } from "../content";
 
 export const ICON_REGISTRY: Record<string, IconComponent> = {
+  Lock,
+  Hash,
+  Bell,
   FileText,
   Megaphone,
   Scale,

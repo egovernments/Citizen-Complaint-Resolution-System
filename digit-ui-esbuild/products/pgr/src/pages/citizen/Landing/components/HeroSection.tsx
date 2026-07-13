@@ -31,11 +31,16 @@ export interface HeroSectionProps {
 export function HeroSection({ routes, imageUrl, section }: HeroSectionProps) {
   const { c } = useLandingCopy();
 
-  const trust = [
-    { icon: Lock, label: c("HERO_TRUST_CONFIDENTIAL") },
-    { icon: Hash, label: c("HERO_TRUST_CASE_NUMBER") },
-    { icon: Bell, label: c("HERO_TRUST_NOTIFICATIONS") },
-  ];
+  // Config-driven trust "features" (P4): items[] when provided, else the
+  // built-in three — byte-identical when config is absent.
+  const configItems = (section?.items as any[]) || [];
+  const trust = configItems.length
+    ? configItems.map((it) => ({ icon: it.icon ?? Lock, label: c(it.labelKey) }))
+    : [
+        { icon: Lock, label: c("HERO_TRUST_CONFIDENTIAL") },
+        { icon: Hash, label: c("HERO_TRUST_CASE_NUMBER") },
+        { icon: Bell, label: c("HERO_TRUST_NOTIFICATIONS") },
+      ];
 
   const chips = [
     { icon: Smartphone, label: c("HERO_CHANNEL_APP"), to: routes.ANDROID_APP, external: true },
