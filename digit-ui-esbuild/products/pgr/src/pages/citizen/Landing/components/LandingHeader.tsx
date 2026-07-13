@@ -33,11 +33,14 @@ export interface LandingHeaderProps {
   routes: LandingRoutes;
   /** Emblem/crest image URL; falls back to a Landmark glyph when absent. */
   emblemUrl?: string;
+  /** Config-driven nav items; absent => the built-in NAV_ITEMS (unchanged). */
+  navItems?: any[];
 }
 
 const MENU_ID = "pgr-landing-nav-menu";
 
-export function LandingHeader({ routes, emblemUrl }: LandingHeaderProps) {
+export function LandingHeader({ routes, emblemUrl, navItems }: LandingHeaderProps) {
+  const items: any[] = navItems ?? NAV_ITEMS;
   const { c } = useLandingCopy();
   const router = React.useContext(__RouterContext as React.Context<any>);
   const [open, setOpen] = React.useState(false);
@@ -135,11 +138,11 @@ export function LandingHeader({ routes, emblemUrl }: LandingHeaderProps) {
             open ? "flex" : "hidden"
           )}
         >
-          {NAV_ITEMS.map((item) => {
-            const to = routes[item.route];
+          {items.map((item) => {
+            const to = item.href ?? routes[item.route];
             const active = isActive(to);
             return (
-              <li key={item.labelKey} className="m-0 p-0">
+              <li key={item.code ?? item.labelKey} className="m-0 p-0">
                 <LandingLink
                   to={to}
                   aria-current={active ? "page" : undefined}

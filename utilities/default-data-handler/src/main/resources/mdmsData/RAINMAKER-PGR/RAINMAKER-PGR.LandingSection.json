@@ -1,0 +1,88 @@
+[
+  {
+    "code": "navigation",
+    "type": "navigation",
+    "order": 10,
+    "status": "PUBLISHED",
+    "enabled": true,
+    "titleKey": "PGR_LANDING_PORTAL_NAME"
+  },
+  {
+    "code": "hero",
+    "type": "hero",
+    "media": {
+      "altKey": "PGR_LANDING_HERO_TITLE",
+      "imageId": ""
+    },
+    "order": 30,
+    "status": "PUBLISHED",
+    "enabled": true,
+    "titleKey": "PGR_LANDING_HERO_TITLE",
+    "subtitleKey": "PGR_LANDING_HERO_LEDE"
+  },
+  {
+    "code": "types",
+    "type": "types",
+    "order": 40,
+    "status": "PUBLISHED",
+    "enabled": true,
+    "titleKey": "PGR_LANDING_TYPES_TITLE",
+    "subtitleKey": "PGR_LANDING_TYPES_INTRO"
+  },
+  {
+    "code": "steps",
+    "type": "steps",
+    "order": 50,
+    "status": "PUBLISHED",
+    "enabled": true,
+    "titleKey": "PGR_LANDING_HOW_TITLE"
+  },
+  {
+    "code": "channels",
+    "type": "channels",
+    "order": 60,
+    "status": "PUBLISHED",
+    "enabled": true,
+    "titleKey": "PGR_LANDING_CHANNELS_TITLE"
+  },
+  {
+    "code": "privacy",
+    "type": "privacy",
+    "order": 70,
+    "status": "PUBLISHED",
+    "enabled": true,
+    "titleKey": "PGR_LANDING_PRIVACY_TITLE"
+  },
+  {
+    "code": "news",
+    "type": "news",
+    "order": 80,
+    "status": "PUBLISHED",
+    "enabled": true,
+    "titleKey": "PGR_LANDING_NEWS_TITLE"
+  },
+  {
+    "code": "institutions",
+    "type": "institutions",
+    "order": 90,
+    "status": "PUBLISHED",
+    "enabled": true,
+    "titleKey": "PGR_LANDING_INSTITUTIONS_TITLE"
+  },
+  {
+    "code": "cta",
+    "type": "cta",
+    "order": 100,
+    "status": "PUBLISHED",
+    "enabled": true,
+    "titleKey": "PGR_LANDING_FINAL_CTA_TITLE"
+  },
+  {
+    "code": "footer",
+    "type": "footer",
+    "order": 110,
+    "status": "PUBLISHED",
+    "enabled": true,
+    "titleKey": "PGR_LANDING_PORTAL_NAME"
+  }
+]

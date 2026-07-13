@@ -12,20 +12,29 @@ import { CtaLink } from "./CtaLink";
 import { CHANNELS } from "../content";
 import { useLandingCopy } from "../useLandingCopy";
 import { LandingRoutes } from "../routes";
+import type { LandingSectionConfig } from "../config/types";
 
 export interface ChannelsSectionProps {
   routes: LandingRoutes;
+  /** Config-driven overrides; absent => the built-in deck (unchanged). */
+  section?: LandingSectionConfig;
 }
 
-export function ChannelsSection({ routes }: ChannelsSectionProps) {
+export function ChannelsSection({ routes, section }: ChannelsSectionProps) {
   const { c } = useLandingCopy();
+  const items: any[] = (section?.items as any[]) ?? CHANNELS;
 
   return (
-    <Section id="pgr-landing-channels" title={c("CHANNELS_TITLE")} intro={c("CHANNELS_INTRO")} tone="page">
+    <Section
+      id="pgr-landing-channels"
+      title={c(section?.titleKey, "CHANNELS_TITLE")}
+      intro={c(section?.subtitleKey, "CHANNELS_INTRO")}
+      tone="page"
+    >
       <ul className="m-0 grid list-none grid-cols-1 gap-5 p-0 sm:grid-cols-2 xl:grid-cols-4">
-        {CHANNELS.map((channel) => {
+        {items.map((channel) => {
           const Icon = channel.icon;
-          const to = routes[channel.route];
+          const to = channel.href ?? routes[channel.route];
           const external = Boolean(channel.external) && to !== "#";
           return (
             <li key={channel.id} className="m-0 p-0">
