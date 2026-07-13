@@ -5,7 +5,7 @@ One row per test (272 unique). **Kept updated** as fixes land; referenced from i
 Columns:
 - **k3s (base)** — our Maputo / Kubernetes at the *baseline* (before any §-fix)
 - **k3s (now)** — our Maputo / Kubernetes *currently* (after the §-fixes applied so far). `✅` = flipped to pass since baseline · `⚠️` = regressed · `◐` = changed, still not passing
-- **compose** — our Maputo / Docker Compose (Kong)
+- **compose** — our Maputo / Docker Compose (Kong), **re-run at the same time as k3s (now)** and confirmed byte-identical to baseline (stable reference; the deployment was never changed — only k3s was fixed)
 - **bomet** — the suite's native **Kenya** tenant, full Compose stack (reference)
 
 > **Reading it:** `compose` vs `k3s` (identical Maputo data) is the clean parity control; `bomet` adds the *"is this test meaningful on Maputo"* axis. Categories below are computed from **current** state, so a fixed test moves into *Clean parity* with a `✅` showing where it came from.
