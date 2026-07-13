@@ -240,7 +240,21 @@ java.lang.NullPointerException: value
   at com.example.gateway.filters.pre.helpers.CorrelationIdFilterHelper.apply(CorrelationIdFilterHelper.java:77)
   at ...ModifyRequestBodyGatewayFilterFactory$1.lambda$filter$1(ModifyRequestBodyGatewayFilterFactory.java:74)
 ```
-The gateway's custom `CorrelationIdFilterHelper` runs inside a **ModifyRequestBody** filter and does `Mono.just(body)` on the request body — which is **null for a bodyless GET**. So *any* bodyless GET routed through this gateway 500s; `/pgr-services/v2/dashboard` is just the first the suite exercises. Kong (Compose) does no body rewrite → forwards the GET → pgr-services returns the JSON (`kpi.total:16`).
-**Ruled out (with evidence):** not data (MVs `pgr_mv_kpi/monthly/dimension` identical + no nulls on both); not image drift (same digest `sha256:66dbe74ba0fe`, same `pgr-services-3.0.0.jar`); not a missing MV; not the `state.level.tenantid.length` config (=1 on both).
-**Whitelist does NOT fix it (tested):** adding the endpoint to `EGOV_OPEN_ENDPOINTS_WHITELIST` + gateway restart → still 500. The whitelist governs auth enforcement; the correlation-id body-modify runs globally, pre-auth.
-**Permanent fix:** make `CorrelationIdFilterHelper` null-safe for empty/absent bodies (e.g. `body == null → Mono.empty()`/pass-through instead of `Mono.just(body)`), or scope the ModifyRequestBody filter to methods that carry a body (POST/PUT), so bodyless GETs route unmodified — matching Kong. Requires a gateway image rebuild (custom `com.example.gateway` build); can't be done via chart/env config alone.
+The gateway (`egovio/gateway:v2.9.2-4a60f20`, `gateway-1.0.1-SNAPSHOT.jar`) has a `CorrelationIdFilter` **GlobalFilter** that rewrites every request body to inject the correlation id into `RequestInfo`. Decompiled dispatch (`CorrelationIdFilter.filter()`):
+```java
+String contentType = headers.getFirst("Content-Type");
+if (path.contains("/filestore"))          return chain.filter(exchange);   // hardcoded skip
+if (contentType != null && (contentType.contains("multipart/form-data")
+                         || contentType.contains("x-www-form-urlencoded")))
+      → CorrIdFormDataFilterHelper (MultiValueMap);
+else  → CorrelationIdFilterHelper (JSON, inClass=Map);   // ← null Content-Type lands HERE
+```
+`CorrelationIdFilterHelper.apply(exchange, Map body)` ends (line 77) with `return Mono.just(body)`. For a bodyless request `body` is **null** → `Mono.just(null)` → `Objects.requireNonNull` NPE with message `"value"`.
+**Trigger is body-presence, NOT the HTTP verb (proven):** `POST` with a JSON body → 200; the *same* `POST` with **no** body → 500; `GET` with `Content-Type: application/json` and no body → 500. Any request that reaches the JSON helper with an absent body NPEs.
+**Blast radius — much wider than the dashboard:** *every* bodyless GET through the k3s gateway 500s. Probed live on k3s: `/pgr-services/v2/dashboard`, `/egov-workflow-v2/...` (as GET), `/egov-hrms/...` (as GET) → all 500; `/filestore/...` → 200 (the hardcoded carve-out). All `@GetMapping` endpoints are affected (also `novu-bridge`'s `/integrations`,`/logs`,`/preferences`,`/providers/templates`). The suite only *surfaces* the dashboard because DIGIT is ~99% POST-based — the dashboard is the one GET the UI tests drive. **The hardcoded `/filestore` skip is evidence the bug was known upstream but patched only for the one case they hit, never generalized.**
+**Ruled out (with evidence):** not data (MVs `pgr_mv_kpi/monthly/dimension` identical + no nulls on both); not image drift (pgr-services same digest `sha256:66dbe74ba0fe`, same jar); not a missing MV; not `state.level.tenantid.length` (=1 on both); not the service at all (request never reaches pgr-services — no TracerFilter log; the trace is in the gateway pod).
+**No config mitigation exists (verified):** the gateway's `ApplicationProperties` exposes only `openEndpointsWhitelist` / `mixedModeEndpointsWhitelist` / `encryptedUrlSet` (all auth-scoped) — none gate the body-modify. The `/filestore` skip is a compiled-in string literal, not configurable. Adding the endpoint to `EGOV_OPEN_ENDPOINTS_WHITELIST` + restart was tested → still 500 (whitelist governs auth; the body-modify runs globally, pre-auth). So this **cannot** be fixed by chart/env/whitelist.
+**Permanent fix — upstream gateway image rebuild (`egovio/gateway`):**
+1. *Dispatch (preferred):* in `CorrelationIdFilter.filter()`, generalize the `/filestore` carve-out — skip the ModifyRequestBody when the request carries no body (e.g. `GET`/`DELETE`/`HEAD`, or `Content-Length == 0`): `return chain.filter(exchange);`. The correlation id is body-only enrichment (into `RequestInfo` + MDC), so bodyless requests need no rewrite.
+2. *Defensive (also):* in `CorrelationIdFilterHelper.apply` **and** `CorrIdFormDataFilterHelper.apply`, return `Mono.justOrEmpty(body)` instead of `Mono.just(body)` so a null body can never NPE.
+This is an upstream DIGIT platform bug (any bodyless GET 500s), not a CCRS/config issue. Until the image is rebuilt, the DSS dashboard cannot render on k3s; Kong-fronted deployments (Compose) are unaffected because Kong does no body rewrite.
