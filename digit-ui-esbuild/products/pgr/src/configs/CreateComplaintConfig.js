@@ -246,11 +246,13 @@ export const CreateComplaintConfig = {
                 maxLength: 1000,
                 validation: {
                   required: true,
-                  // CCSD-1956: 20-1000 characters (and not all whitespace —
-                  // minLength alone would let 20 spaces pass). maxLength on the
-                  // textarea already caps typing at 1000.
+                  // CCSD-1956 + Moz QA: 20-1000 chars AND at least 3 letters, so
+                  // "00000000000000000000" (20 digits) and all-whitespace are
+                  // both rejected. The single `error` message below is worded to
+                  // cover both the length and the words requirement so a short or
+                  // numeric-only entry never reads as a bare "required" error.
                   minLength: 20,
-                  pattern: /^(?=[\s\S]{20,1000}$)\s*\S[\s\S]*$/,
+                  pattern: /^(?=[\s\S]{20,1000}$)(?=(?:[\s\S]*?\p{L}){3})[\s\S]*$/u,
                 },
                 error: "CS_DESC_MIN_CHARS",
               },
