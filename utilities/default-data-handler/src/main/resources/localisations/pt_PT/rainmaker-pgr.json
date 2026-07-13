@@ -184,5 +184,533 @@
         "message": "Empresas e Estabelecimentos Comerciais (Entidades Privadas)",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_GOV_NAME",
+        "message": "República de Moçambique",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_PORTAL_NAME",
+        "message": "Portal de Reclamações e Denúncias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_ORG_NAMES",
+        "message": "IGE e IGSAE",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TAGLINE",
+        "message": "O cidadão fala. O Estado responde.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_MOTTO_VALUES",
+        "message": "Transparência · Integridade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_SKIP_LINK",
+        "message": "Saltar para o conteúdo principal",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_UTILITY_PHONE_LABEL",
+        "message": "+258 21 490 000",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_UTILITY_GREEN_LINE",
+        "message": "Linha Verde 1490",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_UTILITY_GREEN_LINE_FREE",
+        "message": "gratuita",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_LOGIN",
+        "message": "Entrar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_ARIA_LANGUAGE",
+        "message": "Idioma",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_ARIA_UTILITY",
+        "message": "Informação de serviço",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_ARIA_MAIN_NAV",
+        "message": "Navegação principal",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_MENU_OPEN",
+        "message": "Abrir menu",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_MENU_CLOSE",
+        "message": "Fechar menu",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_HOME",
+        "message": "Início",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_SUBMIT",
+        "message": "Submeter Manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_TRACK",
+        "message": "Acompanhar Processo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_TRAINING",
+        "message": "Formação e Ajuda",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_ABOUT",
+        "message": "Sobre o Portal",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_CONTACTS",
+        "message": "Contactos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_EYEBROW",
+        "message": "República de Moçambique · IGE · IGSAE",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TITLE",
+        "message": "Portal de Reclamações e Denúncias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CTA_SUBMIT",
+        "message": "Submeter Manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CTA_TRACK",
+        "message": "Acompanhar Processo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TRUST_CONFIDENTIAL",
+        "message": "Tratamento confidencial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TRUST_CASE_NUMBER",
+        "message": "Número de processo único",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TRUST_NOTIFICATIONS",
+        "message": "Notificações por SMS e WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNELS_LABEL",
+        "message": "Também disponível em:",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNEL_APP",
+        "message": "Aplicação Android",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNEL_WA",
+        "message": "WhatsApp Oficial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNEL_LINE",
+        "message": "Linha Verde 1490",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPES_TITLE",
+        "message": "Tipos de Manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_COMPLAINT_TITLE",
+        "message": "Reclamações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_GRIEVANCE_TITLE",
+        "message": "Queixas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_PETITION_TITLE",
+        "message": "Petições",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_REPORT_TITLE",
+        "message": "Denúncias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_CTA",
+        "message": "Submeter",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_TITLE",
+        "message": "Como Funciona",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_LABEL",
+        "message": "Passo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_1",
+        "message": "Submeta a sua manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_2",
+        "message": "Receba o número de processo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_3",
+        "message": "A manifestação é analisada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_4",
+        "message": "A entidade competente é accionada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_5",
+        "message": "Acompanhe o estado do processo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_6",
+        "message": "Receba a decisão final",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_TITLE",
+        "message": "Acompanhamento garantido",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNELS_TITLE",
+        "message": "Canais de Atendimento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_TITLE",
+        "message": "Portal Web",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_DESC",
+        "message": "Submissão e acompanhamento completos, com histórico do processo.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_CTA",
+        "message": "Submeter agora",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_BADGE",
+        "message": "Está aqui",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_APP_TITLE",
+        "message": "Aplicação Android",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_APP_DESC",
+        "message": "Submeta e acompanhe manifestações a partir do telemóvel.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_APP_CTA",
+        "message": "Obter no Google Play",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WA_TITLE",
+        "message": "WhatsApp Oficial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WA_DESC",
+        "message": "Submeta manifestações e receba apoio pela conversa oficial.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WA_CTA",
+        "message": "Conversar no WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_LINE_TITLE",
+        "message": "Linha Verde 1490",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_LINE_DESC",
+        "message": "Chamada gratuita para apoio, orientação e submissão assistida.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_LINE_CTA",
+        "message": "Ligar 1490",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_TITLE",
+        "message": "Confidencialidade e Protecção de Dados",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_LINK",
+        "message": "Ler a Política de Privacidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NEWS_TITLE",
+        "message": "Últimas Actualizações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NEWS_READ_MORE",
+        "message": "Ler mais",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NEWS_VIEW_ALL",
+        "message": "Ver todas as actualizações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_INST_TITLE",
+        "message": "IGE e IGSAE ao serviço do cidadão",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_INST_IGE_TITLE",
+        "message": "Inspecção-Geral do Estado (IGE)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_INST_IGSAE_TITLE",
+        "message": "Inspecção-Geral de Segurança Alimentar e Económica (IGSAE)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FINAL_TITLE",
+        "message": "Tem uma Reclamação, Queixa, Petição ou Denúncia?",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FINAL_CTA",
+        "message": "Submeter Manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_CHANNELS",
+        "message": "Canais Oficiais",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_LINKS",
+        "message": "Links Úteis",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_ACCESS",
+        "message": "Acesso",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_LEGAL",
+        "message": "Informação Legal",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_PORTAL_WEB",
+        "message": "Portal Web",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_ANDROID",
+        "message": "Aplicação Android",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_WHATSAPP",
+        "message": "WhatsApp Oficial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_GREEN_LINE",
+        "message": "Linha Verde 1490",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_FAQ",
+        "message": "Perguntas Frequentes",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_CITIZEN_LOGIN",
+        "message": "Entrar como Cidadão",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_EMPLOYEE_LOGIN",
+        "message": "Acesso de Funcionário",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_PRIVACY",
+        "message": "Política de Privacidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_TERMS",
+        "message": "Termos de Utilização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_ACCESSIBILITY",
+        "message": "Acessibilidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FAB_LABEL",
+        "message": "Falar connosco no WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_PLACEHOLDER_PENDING",
+        "message": "Página em configuração",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_EXTERNAL_LINK_NOTE",
+        "message": "abre numa nova janela",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
     }
 ]
