@@ -502,11 +502,19 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         assembled?.value != null
           ? assembled.value
           : assembled?.rows
-          ? `${assembled.rows.length} rows`
+          ? `${assembled.rows.length} ${t("DASHBOARD_EXPORT_ROWS", "rows")}`
           : "";
       return [resolveTitle(def) || item.i, item.i, value];
     });
-    const csv = ["Title,KPI,Value", ...rows.map((r) => r.map(csvEscape).join(","))].join("\n");
+    // Column headers go through t() like the tile titles (resolveTitle above);
+    // the filename stays ASCII-English on purpose — a stable machine-facing
+    // identifier, not display copy.
+    const header = [
+      t("DASHBOARD_EXPORT_COL_TITLE", "Title"),
+      t("DASHBOARD_EXPORT_COL_KPI", "KPI"),
+      t("DASHBOARD_EXPORT_COL_VALUE", "Value"),
+    ];
+    const csv = [header, ...rows].map((r) => r.map(csvEscape).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -514,7 +522,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     a.download = "dashboard-export.csv";
     a.click();
     URL.revokeObjectURL(url);
-  }, [layout, kpis, batch.results]);
+  }, [layout, kpis, batch.results, t]);
 
   const showEmpty = !catalogLoading && pack && layout.length === 0;
 
