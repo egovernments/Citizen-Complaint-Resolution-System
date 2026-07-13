@@ -6039,3 +6039,13 @@ header.digit-header .digit-dropdown-master {
   --color-primary-2: #c84c0e !important;
   --color-primary-main: #c84c0e !important;
 }
+
+/* CCSD-1995 — pre-login background: lighten the .banner overlay (0.8 -> 0.55,
+   same teal family) so the StateInfo bannerUrl image (Maputo hero) reads
+   through while the floating card keeps contrast. Scoped to employee. */
+.employee .banner,
+.employee .banner-container {
+  background:
+    linear-gradient(rgba(11, 75, 102, 0.55), rgba(11, 75, 102, 0.55)),
+    var(--banner-url) no-repeat center center / cover !important;
+}
