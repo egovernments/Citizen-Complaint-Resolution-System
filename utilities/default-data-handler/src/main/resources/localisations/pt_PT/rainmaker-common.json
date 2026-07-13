@@ -1,0 +1,38 @@
+[
+    {
+        "code": "EVENTS_DATERANGE_LABEL",
+        "message": "Intervalo de Datas",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_COMMON_APPLY",
+        "message": "Aplicar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_CLEAR_ALL",
+        "message": "Limpar Tudo",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_EMAIL_INVALID",
+        "message": "Endereço de email inválido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_CITY",
+        "message": "Instituição",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_SELECT_CITY",
+        "message": "Selecionar instituição",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    }
+]

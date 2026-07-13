@@ -1,0 +1,188 @@
+[
+    {
+        "code": "CS_COMMON_COMPLAINT_NO",
+        "message": "N.º da Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_MOBILE_NO",
+        "message": "N.º de Telemóvel",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_SEARCH",
+        "message": "Pesquisar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_HOME",
+        "message": "Início",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_INBOX",
+        "message": "Caixa de Reclamações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ASSIGNED_TO_ME",
+        "message": "Atribuídas a mim",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ASSIGNED_TO_ALL",
+        "message": "Todas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_FILTER_STATUS",
+        "message": "Estado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",
+        "message": "Subtipo de Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_INBOX_HEADER_LOCALITY",
+        "message": "Localidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_INBOX_HEADER_CURRENT_OWNER",
+        "message": "Responsável Atual",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ROWS_PER_PAGE",
+        "message": "Linhas por página",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGFORASSIGNMENT",
+        "message": "Pendente de Atribuição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_REFERRED",
+        "message": "Encaminhada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_INVESTIGATION",
+        "message": "Em Investigação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_INFOFROMCITIZEN",
+        "message": "Aguarda Informação do Cidadão",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGFORREASSIGNMENT",
+        "message": "Pendente de Reatribuição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_REJECTED",
+        "message": "Rejeitada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_RESOLVED",
+        "message": "Resolvida",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_CLOSEDAFTERREJECTION",
+        "message": "Fechada após Rejeição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_CLOSEDAFTERRESOLUTION",
+        "message": "Fechada após Resolução",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_CANCELLED",
+        "message": "Cancelada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PENDINGFORASSIGNMENT",
+        "message": "Pendente de Atribuição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_INVESTIGATION",
+        "message": "Em Investigação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_AWAITINGINFORMATION",
+        "message": "Aguarda Informação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_RESOLVED",
+        "message": "Resolvida",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_REJECTED",
+        "message": "Rejeitada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_DESC_MIN_CHARS",
+        "message": "Descreva o problema em 20 a 1000 caracteres (use palavras, nao apenas numeros).",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_DESC_NEEDS_WORDS",
+        "message": "Descreva o problema por palavras, nao apenas numeros.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_RELATEDTO_NAME_IGE",
+        "message": "Serviços do Governo (Entidades Públicas)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_RELATEDTO_NAME_IGSAE",
+        "message": "Empresas e Estabelecimentos Comerciais (Entidades Privadas)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    }
+]
