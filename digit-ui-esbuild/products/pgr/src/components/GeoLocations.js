@@ -136,7 +136,16 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     // the raw code rather than blank, and the label re-localizes on language
     // switch (i18n.language is in the dep list).
     const label = (code && trans(code)) || feature?.properties?.name || code;
-    if (label) layer.bindTooltip(label, { sticky: true, direction: "top", className: "ward-tooltip" });
+    // Leaflet bindTooltip renders its content as HTML. `label` derives from
+    // tenant-controlled data (boundary code, localization message, or GeoJSON
+    // `name`), so escape it before binding — otherwise a crafted ward
+    // name/localization value could inject markup/script (CCSD, HTML-escape
+    // audit). Escaped text still displays correctly.
+    if (label) {
+      const safeLabel = String(label).replace(/[&<>"']/g, (ch) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+      layer.bindTooltip(safeLabel, { sticky: true, direction: "top", className: "ward-tooltip" });
+    }
     layer.on({
       mouseover: () => { if (selectedWard !== code) setHoveredWard(code); },
       mouseout:  () => setHoveredWard((c) => (c === code ? null : c)),
