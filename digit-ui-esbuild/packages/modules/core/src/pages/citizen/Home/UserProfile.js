@@ -91,7 +91,13 @@ const defaultValidationConfig = {
       // an unmodified Edit Profile (CCRS#556). Real-world names can also
       // contain "O'Brien" / "Mary-Anne" / "John Jr." which the
       // alpha-only regex rejected too.
-      name: "/^[a-zA-Z0-9 .'\\-]+$/i",
+      // Moz QA (CCSD-1992): a name of just "-" (or any leading separator)
+      // passed this regex but the backend rejected it with an unhandled
+      // UserProfileUpdateDeniedException and NO client-side error. The leading
+      // negative lookahead forbids starting with space/period/apostrophe/hyphen
+      // so "-" / "-John" / " x" fail HERE with the localized name error, while
+      // "O'Brien" / "Mary-Anne" / "John Jr." / a mobile-number name still pass.
+      name: "/^(?![ .'\\-])[a-zA-Z0-9 .'\\-]+$/i",
       // Fallback mobile pattern for when the MDMS ValidationConfigs master
       // isn't seeded for the tenant. Pull the tenant's pattern from
       // globalConfigs.CORE_MOBILE_CONFIGS (e.g. Mozambique "^8[0-9]{8}$")
@@ -459,11 +465,16 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     }
   };
 
+  // Same rule as the complaint form (CCSD-1978): blank is fine, a typed value
+  // must be a well-formed address. The old check (has "@" AND has ".") passed
+  // shapes like "a@b." which then failed the SAVE round-trip with an
+  // unlocalized backend error (CCSD-1989).
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const setUserEmailAddress = (value) => {
     if (userInfo?.userName !== value) {
       setEmail(value);
 
-      if (value.length && !(value.includes("@") && value.includes("."))) {
+      if (value.length && !EMAIL_RE.test(value.trim())) {
         setErrors({
           ...errors,
           emailAddress: {
@@ -586,7 +597,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         });
       }
 
-      if (email.length && !(email.includes("@") && email.includes("."))) {
+      if (email.length && !EMAIL_RE.test(email.trim())) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_EMAIL_INVALID"),
