@@ -65,7 +65,7 @@ export function BuilderToolbar({
   };
 
   return (
-    <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-1.5">
+    <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
       {/* Breadcrumb */}
       <div className="flex min-w-0 items-center gap-1 text-sm">
         <span className="font-semibold">Landing Page Builder</span>
@@ -80,8 +80,8 @@ export function BuilderToolbar({
         {state.selected === 'page' && <span className="text-muted-foreground">/ Page Settings</span>}
       </div>
       {dirty
-        ? <Badge variant="outline" className="border-amber-500 text-amber-600">Unsaved changes</Badge>
-        : <Badge variant="outline" className="border-emerald-600 text-emerald-700">All changes saved</Badge>}
+        ? <span className="whitespace-nowrap rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-medium text-amber-700">● Unsaved changes</span>
+        : <span className="whitespace-nowrap rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">✓ All changes saved</span>}
 
       <div className="mx-2 flex-1" />
 
@@ -111,16 +111,17 @@ export function BuilderToolbar({
       </Select>
 
       {/* Draft / Published preview */}
-      <div className="flex overflow-hidden rounded-md border border-border text-xs">
+      <span className="text-[11px] text-muted-foreground">Preview:</span>
+      <div className="flex overflow-hidden rounded-full border border-border text-xs">
         <button
           type="button"
           onClick={() => dispatch({ type: 'setPreviewMode', mode: 'draft' })}
-          className={`px-2 py-1 ${state.previewMode === 'draft' ? 'bg-amber-500 text-white' : 'hover:bg-accent'}`}
+          className={`px-2.5 py-1 ${state.previewMode === 'draft' ? 'bg-amber-500 text-white' : 'hover:bg-accent'}`}
         >Draft</button>
         <button
           type="button"
           onClick={() => dispatch({ type: 'setPreviewMode', mode: 'published' })}
-          className={`px-2 py-1 ${state.previewMode === 'published' ? 'bg-emerald-600 text-white' : 'hover:bg-accent'}`}
+          className={`px-2.5 py-1 ${state.previewMode === 'published' ? 'bg-emerald-600 text-white' : 'hover:bg-accent'}`}
         >Published</button>
       </div>
 
@@ -142,7 +143,7 @@ export function BuilderToolbar({
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="sm" className="h-7" disabled={state.saving}>
+          <Button size="sm" className="h-7 bg-emerald-600 text-white hover:bg-emerald-700" disabled={state.saving}>
             <UploadCloud className="mr-1 h-3.5 w-3.5" /> Publish <ChevronDown className="ml-1 h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>

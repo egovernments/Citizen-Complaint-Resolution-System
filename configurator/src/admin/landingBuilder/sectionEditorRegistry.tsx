@@ -23,7 +23,8 @@ export type BuilderWidget =
   | 'select'
   | 'media'     // media.imageId via the media library
   | 'theme'     // theme token selects
-  | 'action';   // CTA row: editable label (loctext) + fixed destination
+  | 'action'    // CTA row: editable label (loctext) + fixed destination
+  | 'pagetoggle'; // boolean living on LandingPageConfig (e.g. showUtilityBar)
 
 export interface BuilderFieldDef {
   /** dot-path into LandingSectionData; for fixedKey loctext fields the path is
@@ -42,6 +43,8 @@ export interface BuilderFieldDef {
   fixedKey?: string;
   /** for widget 'action': human description of the fixed destination. */
   destination?: string;
+  /** Optional group heading rendered above this field (e.g. "Top Bar Settings"). */
+  group?: string;
 }
 
 export interface ItemsEditorConfig {
@@ -135,7 +138,20 @@ const newItem = (prefix: string) => () => {
 export const SECTION_EDITOR_REGISTRY: Record<string, SectionEditorEntry> = {
   navigation: entry('navigation', 'Navigation', Navigation,
     'Masthead + sticky primary navigation.',
-    [mediaField('Emblem image'), themeField],
+    [
+      mediaField('Emblem image'),
+      // Top bar (utility strip) — texts are fixed deck keys; the visibility
+      // toggle lives on LandingPageConfig (surfaced here for convenience).
+      { path: 'showUtilityBar', label: 'Show top bar', tab: 'content', widget: 'pagetoggle',
+        group: 'Top Bar Settings' },
+      { path: 'topbar.left', label: 'Top bar text (Left)', tab: 'content', widget: 'loctext',
+        fixedKey: 'PGR_LANDING_GOV_NAME', group: 'Top Bar Settings' },
+      { path: 'topbar.center', label: 'Top bar text (Center)', tab: 'content', widget: 'loctext',
+        fixedKey: 'PGR_LANDING_UTILITY_GREEN_LINE', group: 'Top Bar Settings' },
+      { path: 'topbar.right', label: 'Login link text (Right)', tab: 'content', widget: 'loctext',
+        fixedKey: 'PGR_LANDING_LOGIN', group: 'Top Bar Settings' },
+      themeField,
+    ],
     {
       items: {
         label: 'Menu items', tab: 'content', withIcons: false, withDesc: false, withUrl: true,

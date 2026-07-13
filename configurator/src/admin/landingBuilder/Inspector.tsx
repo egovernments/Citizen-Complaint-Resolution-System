@@ -69,7 +69,7 @@ function LocTextField({ def, sectionCode, draft }: { def: BuilderFieldDef; secti
           className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
         />
       ) : (
-        <Input value={value} disabled={!key} onChange={(e) => onChange(e.target.value)} className="h-8 text-sm" />
+        <Input value={value} disabled={!key} onChange={(e) => onChange(e.target.value)} className="h-9 text-sm" />
       )}
       <div className="flex items-center justify-between">
         <span className="truncate text-[10px] text-muted-foreground" title={key}>{key ?? 'No localization key set (Advanced tab)'}</span>
@@ -213,7 +213,7 @@ function GenericField({ def, code, draft }: { def: BuilderFieldDef; code: string
       <div className="space-y-1" data-field={def.path}>
         <Label className="text-xs font-medium">{def.label}</Label>
         <Select value={(value as string) ?? ''} onValueChange={patch}>
-          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
+          <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
           <SelectContent>{(def.options ?? []).map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
         </Select>
         {def.help && <p className="m-0 text-[10px] text-muted-foreground">{def.help}</p>}
@@ -231,7 +231,7 @@ function GenericField({ def, code, draft }: { def: BuilderFieldDef; code: string
             const roles = e.target.value.split(',').map((r) => r.trim()).filter(Boolean);
             dispatch({ type: 'patchSection', code, patch: { roles: roles.length ? roles : undefined }, coalesce: `f:${code}:roles` });
           }}
-          className="h-8 text-sm"
+          className="h-9 text-sm"
         />
         {def.help && <p className="m-0 text-[10px] text-muted-foreground">{def.help}</p>}
       </div>
@@ -249,6 +249,27 @@ function GenericField({ def, code, draft }: { def: BuilderFieldDef; code: string
       />
       {def.help && <p className="m-0 text-[10px] text-muted-foreground">{def.help}</p>}
     </div>
+  );
+}
+
+/** Boolean that lives on LandingPageConfig, surfaced inside a section tab
+ *  (e.g. the Navigation section's "Show top bar"). */
+function PageToggleField({ def }: { def: BuilderFieldDef }) {
+  const { state, dispatch } = useBuilder();
+  const value = (state.page?.draft as Record<string, unknown> | undefined)?.[def.path];
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-2 text-sm" data-field={def.path}>
+      {def.label}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={value !== false}
+        onClick={(e) => { e.preventDefault(); dispatch({ type: 'patchPage', patch: { [def.path]: value === false } }); }}
+        className={`relative h-5 w-9 rounded-full transition-colors ${value === false ? 'bg-muted-foreground/30' : 'bg-emerald-500'}`}
+      >
+        <span className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all" style={{ left: value === false ? 2 : 18 }} />
+      </button>
+    </label>
   );
 }
 
@@ -306,7 +327,7 @@ export function Inspector() {
                   <Input
                     value={((draft as Record<string, unknown>)[def.path] as string) ?? ''}
                     onChange={(e) => dispatch({ type: 'patchPage', patch: { [def.path]: e.target.value }, coalesce: `p:${def.path}` })}
-                    className="h-8 text-sm"
+                    className="h-9 text-sm"
                   />
                   {def.help && <p className="m-0 text-[10px] text-muted-foreground">{def.help}</p>}
                 </div>
@@ -333,6 +354,7 @@ export function Inspector() {
   return (
     <Pane
       title={entry.label}
+      meta={`Section ID: ${code} · Version: ${section.draft.status === 'PUBLISHED' ? 'Published' : 'Draft'}`}
       subtitle={entry.description}
       header={
         <div className="flex items-center gap-2">
@@ -358,21 +380,38 @@ export function Inspector() {
       }
     >
       <Tabs value={tab} onValueChange={(v) => dispatch({ type: 'setTab', tab: v as InspectorTab })} className="flex min-h-0 flex-1 flex-col">
-        <TabsList className="mx-3 mt-2 grid h-8 grid-cols-6">
+        <TabsList className="h-9 w-full justify-start gap-1 rounded-none border-b border-border bg-transparent px-2">
           {INSPECTOR_TABS.map((t) => (
-            <TabsTrigger key={t.id} value={t.id} className="px-1 text-[10px]">{t.label}</TabsTrigger>
+            <TabsTrigger
+              key={t.id}
+              value={t.id}
+              className="rounded-none border-b-2 border-transparent px-2 pb-1.5 text-[11px] data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+            >
+              {t.label}
+            </TabsTrigger>
           ))}
         </TabsList>
         <div ref={paneRef} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
           {tabFields.length === 0 && !itemsHere && (
             <p className="m-0 text-xs text-muted-foreground">Nothing to configure in this tab for {entry.label}.</p>
           )}
-          {tabFields.map((def) => {
-            if (def.widget === 'loctext') return <LocTextField key={def.path} def={def} sectionCode={code} draft={section.draft} />;
-            if (def.widget === 'action') return <ActionField key={def.path} def={def} />;
-            if (def.widget === 'theme') return <ThemeField key={def.path} def={def} code={code} draft={section.draft} />;
-            if (def.widget === 'media') return <MediaLibraryDialog key={def.path} def={def} code={code} draft={section.draft} />;
-            return <GenericField key={def.path} def={def} code={code} draft={section.draft} />;
+          {tabFields.map((def, i) => {
+            const groupHeader = def.group && def.group !== tabFields[i - 1]?.group ? (
+              <h3 className="mb-0 mt-2 border-t border-border pt-3 text-xs font-semibold">{def.group}</h3>
+            ) : null;
+            let field: React.ReactNode;
+            if (def.widget === 'loctext') field = <LocTextField def={def} sectionCode={code} draft={section.draft} />;
+            else if (def.widget === 'action') field = <ActionField def={def} />;
+            else if (def.widget === 'theme') field = <ThemeField def={def} code={code} draft={section.draft} />;
+            else if (def.widget === 'media') field = <MediaLibraryDialog def={def} code={code} draft={section.draft} />;
+            else if (def.widget === 'pagetoggle') field = <PageToggleField def={def} />;
+            else field = <GenericField def={def} code={code} draft={section.draft} />;
+            return (
+              <div key={def.path} className="contents">
+                {groupHeader}
+                {field}
+              </div>
+            );
           })}
           {itemsHere && <ItemsEditor cfg={itemsHere} code={code} draft={section.draft} />}
         </div>
@@ -381,12 +420,13 @@ export function Inspector() {
   );
 }
 
-function Pane({ title, subtitle, header, children }: { title: string; subtitle?: string; header?: React.ReactNode; children: React.ReactNode }) {
+function Pane({ title, subtitle, meta, header, children }: { title: string; subtitle?: string; meta?: string; header?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex h-full w-80 shrink-0 flex-col border-l border-border bg-card">
       <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
         <div className="min-w-0">
           <h2 className="m-0 truncate text-sm font-semibold">{title}</h2>
+          {meta && <p className="mb-0 mt-0.5 text-[10px] text-muted-foreground">{meta}</p>}
           {subtitle && <p className="mb-0 mt-0.5 line-clamp-2 text-[10px] leading-snug text-muted-foreground">{subtitle}</p>}
         </div>
         {header}
