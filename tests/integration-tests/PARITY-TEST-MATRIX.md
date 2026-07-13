@@ -38,11 +38,12 @@ The `Fix` column in the tables below points here. **Exact reproducible steps per
 |---|---:|---|
 | §1.8 · Local **digit-ui globalConfigs** | 18 | Render digit-ui `globalConfigs.js` locally from the tenant config (like Compose) instead of the external-S3 injection; at minimum fail-loud on a missing/unreachable config instead of silently falling back to India defaults. |
 | §1.6 · Pin **egov-user** mobile-validation image | 12 | Pin the `mobilevalidation` egov-user image on k8s (reads the per-tenant MDMS mobile rule); align `OTP_VALIDATION_REGISTER_MANDATORY` with Compose. Unblocks citizen register/OTP/provisioning. |
-| §2.4 · Seed **RBAC** write grant | 9 | Seed the mdms-v2 write actions' roleaction grants to the configurator-operator role (a dedicated config-admin / `MDMS_ADMIN`) in the access-control MDMS; add a CI check that drives one create with RBAC enforced. |
-| §2.5 · Deploy **egov-hrms** | 6 | Wire `common-services-helmfile.yaml` (egov-hrms + peers) into the k8s deploy sequence; the Spring gateway auto-discovers the service on (re)start. Restore-safe: `initContainers.dbMigration.enabled:false`. |
+| §2.4 · Seed **RBAC** write grant | 6 | Seed the mdms-v2 write actions' roleaction grants to the configurator-operator role (a dedicated config-admin / `MDMS_ADMIN`) in the access-control MDMS; add a CI check that drives one create with RBAC enforced. |
+| §2.5 · Deploy **egov-hrms** | 5 | Wire `common-services-helmfile.yaml` (egov-hrms + peers) into the k8s deploy sequence; the Spring gateway auto-discovers the service on (re)start. Restore-safe: `initContainers.dbMigration.enabled:false`. |
+| §2.6 · Harness **role-string** fix | 5 | The manage-API test helpers sent `RequestInfo.userInfo.roles` as bare code strings; expand to Role objects (`tests/utils/manage/api.ts`, `tests/admin/users.spec.ts`) so the strict k8s gateway deserializes them. Test-code fix. |
 | §1.7 · Real **minio** object store | 3 | Install minio; chart-template the egov-ns `minio` secret (accesskey/secretkey from the minio release); set `egov-filestore minio-enabled:true`, correct `minio-url` (no trailing slash), fixed bucket. |
-| §1.2 · Add **configurator + digit-mcp** charts | 2 | Add `configurator` + `digit-mcp` charts to the k8s helmfile (Service + Ingress at `/configurator`, `/mcp`, `/v1`; MCP session DB). |
 | §1.4 · Right-size **pgr-services** memory | 1 | Set `memory_limits >= Xmx + ~50%` (or `-XX:MaxRAMPercentage`) so pgr-services doesn't cgroup-OOM and stays up. |
+| §1.2 · Add **configurator + digit-mcp** charts | 1 | Add `configurator` + `digit-mcp` charts to the k8s helmfile (Service + Ingress at `/configurator`, `/mcp`, `/v1`; MCP session DB). |
 
 > Attribution is best-effort (primary fix per test); some flips have more than one contributing fix. Total flipped since baseline: **51**.
 
@@ -171,16 +172,16 @@ Fails on bomet, passes on ours.
 
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
-| admin | 3. show page renders Code / Name / City / District for a known tenant | **fail** | pass ✅ | pass | **fail** | §2.4 — Seed **RBAC** write grant |
+| admin | 3. show page renders Code / Name / City / District for a known tenant | **fail** | pass ✅ | pass | **fail** | §2.6 — Harness **role-string** fix |
 | api+smoke | 3 — admin assigns complaint | skip | pass ✅ | skip | **fail** | §1.6 — Pin **egov-user** mobile-validation image |
 | specs | form has all expected sections | pass | pass | pass | **fail** | — |
 
 ## Other / mixed (13)
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
-| admin | 4. API shape — search returns records with code / name / city | skip | pass ✅ | pass | skip | §2.4 — Seed **RBAC** write grant |
-| admin | 5. QUIRK — city tenant object may lack districtName, list tolerates it | skip | pass ✅ | pass | skip | §2.4 — Seed **RBAC** write grant |
-| admin | Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME | skip | pass ✅ | skip | pass | §2.5 — Deploy **egov-hrms** |
+| admin | 4. API shape — search returns records with code / name / city | skip | pass ✅ | pass | skip | §2.6 — Harness **role-string** fix |
+| admin | 5. QUIRK — city tenant object may lack districtName, list tolerates it | skip | pass ✅ | pass | skip | §2.6 — Harness **role-string** fix |
+| admin | Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME | skip | pass ✅ | skip | pass | §2.6 — Harness **role-string** fix |
 | api+smoke | 4 — admin resolves complaint | skip | **fail** ◐ | skip | skip | — |
 | citizen+employee | ASSIGN (GRO) → PENDINGATLME, then RESOLVE (LME) → RESOLVED @p0 | skip | pass ✅ | skip | skip | §2.5 — Deploy **egov-hrms** |
 | citizen+employee | complaint details page loads without crashing for a freshly-filed complaint | skip | pass ✅ | skip | pass | §1.8 — Local **digit-ui globalConfigs** |
@@ -202,7 +203,7 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | admin | 1. list renders with header columns and filter narrows results | pass | pass | pass | pass | — |
 | admin | 1. list renders with hierarchy type + levels columns | pass | pass | pass | pass | — |
 | admin | 1. list renders with profile columns + at least one citizen row | pass | pass | pass | pass | — |
-| admin | 1. list renders with Service Code / Name / Department / SLA / Status columns | **fail** | pass ✅ | pass | pass | §1.2 — Add **configurator + digit-mcp** charts |
+| admin | 1. list renders with Service Code / Name / Department / SLA / Status columns | **fail** | pass ✅ | pass | pass | §2.6 — Harness **role-string** fix |
 | admin | 1. list renders, search narrows, status filter applies | **fail** | pass ✅ | pass | pass | §1.2 — Add **configurator + digit-mcp** charts |
 | admin | 2. employee create payload contains no literal "pg" | pass | pass | pass | pass | — |
 | admin | 2. search filter narrows to a known tenant code | pass | pass | pass | pass | — |
