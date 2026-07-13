@@ -104,6 +104,20 @@ export const REGISTRY: Record<string, ResourceConfig> = {
     idField: 'hierarchyType', nameField: 'hierarchyType', dedicated: true,
   },
 
+  // Config-driven public landing (CCSD-2008). P3 = generic CRUD through the
+  // standard MdmsResource pages; the P4 Landing Page Builder will swap only the
+  // edit surface via the descriptor customEditor key — same resource, routes,
+  // MDMS APIs and schema, so there is no migration between P3 and P4.
+  // dedicated:true places them in a curated sidebar group instead of Advanced.
+  'landing-sections': {
+    type: 'mdms', label: 'Landing Sections', schema: 'RAINMAKER-PGR.LandingSection',
+    idField: 'code', nameField: 'code', descriptionField: 'type', dedicated: true,
+  },
+  'landing-page-config': {
+    type: 'mdms', label: 'Landing Page Settings', schema: 'RAINMAKER-PGR.LandingPageConfig',
+    idField: 'code', nameField: 'code', dedicated: true,
+  },
+
   // Generic MDMS Resources
   // (RAINMAKER-PGR.ClassificationNode is gone — interior nodes now live in the
   // ComplaintHierarchy master alongside the leaves; cascade pickers read it
