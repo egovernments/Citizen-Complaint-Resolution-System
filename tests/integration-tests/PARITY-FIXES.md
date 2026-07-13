@@ -187,3 +187,20 @@ userInfo: auth.user
   : undefined,
 ```
 Flips 4 of the 5 cluster tests on k8s. **§2.6b (the 5th, `users create`):** `/user/_search` is open on Compose but RBAC-enforced on k8s → 401; fix by **granting** the `/user/_search` action to the config-admin role (a §2.4-family seed) — do **not** open the endpoint on k8s (that copies Compose's fail-open PII search).
+
+---
+
+## §1.6b · OTP mode — mock OTP on k8s to match Compose  🔀 Mixed (fix verified)
+**Symptom:** citizen register-OTP fails on k8s (3 citizen-UI tests) — the tests hardcode `FIXED_OTP=123456` and expect the OTP screen; k8s runs *real* OTP which rejects it.
+**Root cause:** Compose default **mocks** OTP (services behind `profiles:["otp"]`, unstarted; Kong request-termination rubber-stamps `123456`); the k8s helmfile brings up **real** `user-otp`+`egov-otp`, which 400 on `MobileNumberValidation`. The tests target the mock (no test reads a real OTP).
+**Fix (verified) — replicate Compose's mock on k8s:**
+```bash
+# 1. deploy an nginx that returns the exact Kong mock bodies (send-success + validate-success):
+kubectl apply -f tests/integration-tests/deploy/otp-mock.k8s.yaml   # ConfigMap + Deployment (app=otp-mock)
+# 2. repoint the OTP Services at it (replace selector wholesale — a merge keeps `group:` and breaks matching):
+kubectl patch svc user-otp -n egov --type json -p '[{"op":"replace","path":"/spec/selector","value":{"app":"otp-mock"}}]'
+kubectl patch svc egov-otp -n egov --type json -p '[{"op":"replace","path":"/spec/selector","value":{"app":"otp-mock"}}]'
+```
+- **In-files (committed):** egov-user OTP flags aligned to Compose — `charts/core-services/egov-user/values.yaml` + `env.yaml`: `otp-validation`, `citizen-otp-enabled`, `citizen-registration-withlogin` set **empty** (not emitted), keeping only `citizen-otp-fixed=123456`/`-enabled`. (Drops the earlier `OTP_VALIDATION_REGISTER_MANDATORY=false`/`withlogin=true` workarounds — the mock makes them unnecessary.)
+**Verified:** citizen provisioning + all 3 UI tests (`fresh phone → OTP → name+email`, `upload JPEG/photo`) pass on k8s.
+**Permanent fix:** wire the OTP mock into the k8s helmfile (deploy `otp-mock` and point the `user-otp`/`egov-otp` Services at it — or a gateway short-circuit for `/user-otp/*`+`/otp/v1/_validate`), matching Compose's default. *(Or `enable_otp_services:true` on both + fix the `user-otp` `MobileNumberValidation` match — the production-like path.)*
