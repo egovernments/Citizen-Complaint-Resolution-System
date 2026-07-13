@@ -5,14 +5,14 @@ One row per test (272 unique). **Kept updated** as fixes land; referenced from i
 Columns:
 - **k3s (base)** — our Maputo / Kubernetes at the *baseline* (before any §-fix)
 - **k3s (now)** — our Maputo / Kubernetes *currently* (after the §-fixes applied so far). `✅` = flipped to pass since baseline · `⚠️` = regressed · `◐` = changed, still not passing
-- **compose** — our Maputo / Docker Compose (Kong). Initially treated as the stable reference, but it had its **own** gap: the `PGR` businessservice was seeded only at the root tenant (`mz`), not the city (`mz.maputo`) where complaints run — so the complaint pipeline failed on compose while passing on k3s. After seeding PGR@`mz.maputo` (§1.9), the api+smoke + citizen+employee suites were re-run; **17 tests flipped to pass, 0 regressions**, bringing compose level with k3s.
+- **compose** — our Maputo / Docker Compose (Kong). Initially treated as the stable reference, but it had its **own** gap: the `PGR` businessservice was seeded only at the root tenant (`mz`), not the city (`mz.maputo`) where complaints run — so the complaint pipeline failed on compose while passing on k3s. After seeding PGR@`mz.maputo` (§1.9), all three affected suites (api+smoke, citizen+employee, admin) were re-run; **23 tests flipped to pass, 0 regressions**, lifting compose to **119 pass**.
 - **bomet** — the suite's native **Kenya** tenant, full Compose stack (reference)
 
 > **Reading it:** `compose` vs `k3s` (identical Maputo data) is the clean parity control; `bomet` adds the *"is this test meaningful on Maputo"* axis. Categories below are computed from **current** state, so a fixed test moves into *Clean parity* with a `✅` showing where it came from.
 
-> **Parity status:** compose and k3s now both pass **113** tests and agree on **268/272** rows. The 4 non-agreements: 1 is the intentional fail-closed `/user/_search` on k3s (§2.6b — k3s is correct), 1 is a stale admin-suite snapshot on compose (would flip on a re-run after the §1.9 PGR seed), and 2 are minor compose-fail/k3s-skip edge rows.
+> **Parity status:** compose passes **119**, k3s **113**; they agree on **264/272** rows. Of the 8 disagreements: **5** are a newly-surfaced **k3s-only gap** — the configurator DSS/PGR dashboard (`/manage/pgr-dashboard`, Chart.js) renders on compose+bomet but not k3s even with complaint data present (**§1.10**, open); **1** is the intentional fail-closed `/user/_search` on k3s (§2.6b — k3s is the correct side); **2** are edge rows that also fail/skip on bomet (suite issues, not parity). Seeding PGR on compose (§1.9) is what exposed the DSS gap — the complaint pipeline had to work before the dashboard tests could even reach it.
 
-> **Data currency:** k3s(now) = latest post-fix run per area. compose(now) includes the §1.9 PGR-workflow seed for api+smoke + citizen+employee. Fixes reflected: §1.2 (configurator/MCP), §1.6 (egov-user), §1.7 (filestore), §1.8 (digit-ui config), §1.9 (PGR businessservice @ city), §2.4 (RBAC grant), §2.5 (egov-hrms). _(admin compose = pre-§1.9 snapshot)_
+> **Data currency:** all four re-run areas are post-§1.9 and fresh like-for-like (compose + k3s admin both re-run with PGR complaints present). Fixes reflected: §1.2 (configurator/MCP), §1.6 (egov-user), §1.7 (filestore), §1.8 (digit-ui config), §1.9 (PGR businessservice @ city), §2.4 (RBAC grant), §2.5 (egov-hrms). Open: §1.10 (DSS dashboard on k3s).
 
 ## Summary
 
@@ -20,13 +20,13 @@ Columns:
 
 | Category | Count | What it means |
 |---|---:|---|
-| k8s-specific gap | 1 | Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open. |
-| Maputo-data gap | 28 | Pass on bomet, fail on BOTH our stacks → the suite's Kenya/Bomet data-coupling, not the deployment. |
+| k8s-specific gap | 6 | Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open. |
+| Maputo-data gap | 23 | Pass on bomet, fail on BOTH our stacks → the suite's Kenya/Bomet data-coupling, not the deployment. |
 | Suite / app bug | 30 | Fails on bomet too (its native tenant) → a genuine suite/app bug or flake, unrelated to parity. |
 | Tenant-coupled skip | 25 | Runs on bomet, skipped on both our stacks → hidden signal; needs tenant-portable fixtures. |
 | Ours better | 3 | Fails on bomet, passes on ours. |
-| Other / mixed | 10 |  |
-| Clean parity | 101 | Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column). |
+| Other / mixed | 9 |  |
+| Clean parity | 102 | Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column). |
 | Inherent N/A | 74 | Skipped everywhere (@local-only, no-keycloak, structural). |
 | **Total** | **272** | |
 
@@ -50,15 +50,20 @@ The `Fix` column in the tables below points here. **Exact reproducible steps per
 
 > Attribution is best-effort (primary fix per test); some flips have more than one contributing fix. Total flipped since baseline: **51**.
 
-## k8s-specific gap (1)
+## k8s-specific gap (6)
 
 Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open.
 
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
 | admin | 2. create — citizen user lands and is retrievable via API | **fail** | **fail** | pass | pass | — |
+| admin | all chart canvases render | **fail** | **fail** | pass | pass | — |
+| admin | breakdown table with 4 tabs | **fail** | **fail** | pass | pass | — |
+| admin | chart section titles are visible | **fail** | **fail** | pass | pass | — |
+| admin | KPI values show numbers | **fail** | **fail** | pass | pass | — |
+| admin | overview card shows 3 KPI metrics | **fail** | **fail** | pass | pass | — |
 
-## Maputo-data gap (28)
+## Maputo-data gap (23)
 
 Pass on bomet, fail on BOTH our stacks → the suite's Kenya/Bomet data-coupling, not the deployment.
 
@@ -68,13 +73,8 @@ Pass on bomet, fail on BOTH our stacks → the suite's Kenya/Bomet data-coupling
 | admin | 1. login tenant placeholder uses configured tenant, not "pg" | **fail** | **fail** | **fail** | pass | — |
 | admin | 1. tenant parity — both ke and ke.nairobi return the same rainmaker-common en_IN count | **fail** | **fail** | **fail** | pass | — |
 | admin | 2. UI create happy path — chain of 2 levels shows up in list + API | **fail** | **fail** | **fail** | pass | — |
-| admin | all chart canvases render | **fail** | **fail** | **fail** | pass | — |
 | admin | API smoke — ThemeConfig record exists on the expected tenant | **fail** | **fail** | **fail** | pass | — |
 | admin | API: rainmaker-pgr en_IN has sentence-cased labels for ESCALATE/ASSIGN/etc | **fail** | **fail** | **fail** | pass | — |
-| admin | breakdown table with 4 tabs | **fail** | **fail** | **fail** | pass | — |
-| admin | chart section titles are visible | **fail** | **fail** | **fail** | pass | — |
-| admin | KPI values show numbers | **fail** | **fail** | **fail** | pass | — |
-| admin | overview card shows 3 KPI metrics | **fail** | **fail** | **fail** | pass | — |
 | admin | targetTenant persists in localStorage and survives reload | **fail** | **fail** | **fail** | pass | — |
 | admin | username, password, tenant inputs render empty on initial load | **fail** | **fail** | **fail** | pass | — |
 | citizen+employee | walks 6 steps + submits + lands on /pgr/response with PGR ID | **fail** | **fail** | **fail** | pass | — |
@@ -172,12 +172,11 @@ Fails on bomet, passes on ours.
 | api+smoke | 3 — admin assigns complaint | skip | pass ✅ | pass | **fail** | §1.6 — Pin **egov-user** mobile-validation image |
 | specs | form has all expected sections | pass | pass | pass | **fail** | — |
 
-## Other / mixed (10)
+## Other / mixed (9)
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
 | admin | 4. API shape — search returns records with code / name / city | skip | pass ✅ | pass | skip | §2.6 — Harness **role-string** fix |
 | admin | 5. QUIRK — city tenant object may lack districtName, list tolerates it | skip | pass ✅ | pass | skip | §2.6 — Harness **role-string** fix |
-| admin | Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME | skip | pass ✅ | skip | pass | §2.6 — Harness **role-string** fix |
 | api+smoke | 4 — admin resolves complaint | skip | **fail** ◐ | **fail** | skip | — |
 | citizen+employee | ASSIGN (GRO) → PENDINGATLME, then RESOLVE (LME) → RESOLVED @p0 | skip | pass ✅ | pass | skip | §2.5 — Deploy **egov-hrms** |
 | citizen+employee | complaint-type filter → only rows of the chosen serviceCode @p0 | skip | pass ✅ | pass | skip | §1.6 — Pin **egov-user** mobile-validation image |
@@ -186,7 +185,7 @@ Fails on bomet, passes on ours.
 | citizen+employee | search for a well-formed but non-existent complaint number returns nothing @p1 | skip | pass ✅ | pass | skip | §1.6 — Pin **egov-user** mobile-validation image |
 | citizen+employee | status filter → only rows in the chosen workflow state @p0 | skip | pass ✅ | pass | skip | §1.6 — Pin **egov-user** mobile-validation image |
 
-## Clean parity (101)
+## Clean parity (102)
 
 Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column).
 
@@ -216,6 +215,7 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | admin | Department update with leaked `_isActive` / `_uniqueIdentifier` / `id` is REJECTED by MDMS | **fail** | pass ✅ | pass | pass | §2.4 — Seed **RBAC** write grant |
 | admin | dept is scoped to child tenant, does not leak to root | **fail** | pass ✅ | pass | pass | §2.4 — Seed **RBAC** write grant |
 | admin | designation localizations are in rainmaker-common, not rainmaker-common-masters | pass | pass | pass | pass | — |
+| admin | Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME | skip | pass ✅ | pass | pass | §2.6 — Harness **role-string** fix |
 | admin | form + password input carry autocomplete-off attributes | pass | pass | pass | pass | — |
 | admin | invalid mobile surfaces help text and aria-invalid | pass | pass | pass | pass | — |
 | admin | MDMS ThemeConfig is fetched and applied as CSS variables | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
