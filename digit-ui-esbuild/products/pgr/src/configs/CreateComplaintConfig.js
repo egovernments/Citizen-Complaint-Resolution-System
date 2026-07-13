@@ -54,10 +54,13 @@ export const CreateComplaintConfig = {
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
                 validation: {
                   required: true,
-                  // CCRS#437: Allow 4-character names (e.g. "John"). The
-                  // quantifier counts characters AFTER the leading letter,
-                  // so {3,29} = total length 4–30, not 5–30.
-                  pattern: /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{3,29}$)^.*$/,
+                  // Moz QA (CCSD-1990): minimum length must be 1, not 4 — a
+                  // single-character name (e.g. "A") is valid. The quantifier
+                  // counts chars AFTER the leading letter, so {0,29} = total
+                  // length 1–30. The rest of the hygiene is kept: must start
+                  // with a letter, no leading/trailing separator, no doubled
+                  // space/underscore/hyphen.
+                  pattern: /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{0,29}$)^.*$/,
                 }
               },
             },
@@ -246,11 +249,13 @@ export const CreateComplaintConfig = {
                 maxLength: 1000,
                 validation: {
                   required: true,
-                  // CCSD-1956: 20-1000 characters (and not all whitespace —
-                  // minLength alone would let 20 spaces pass). maxLength on the
-                  // textarea already caps typing at 1000.
+                  // CCSD-1956 + Moz QA: 20-1000 chars AND at least 3 letters, so
+                  // "00000000000000000000" (20 digits) and all-whitespace are
+                  // both rejected. The single `error` message below is worded to
+                  // cover both the length and the words requirement so a short or
+                  // numeric-only entry never reads as a bare "required" error.
                   minLength: 20,
-                  pattern: /^(?=[\s\S]{20,1000}$)\s*\S[\s\S]*$/,
+                  pattern: /^(?=[\s\S]{20,1000}$)(?=(?:[\s\S]*?\p{L}){3})[\s\S]*$/u,
                 },
                 error: "CS_DESC_MIN_CHARS",
               },
