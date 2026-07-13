@@ -36,12 +36,13 @@ The `Fix` column in the tables below points here. **Exact reproducible steps per
 
 | Fix | Flips | Permanent fix (the PR) |
 |---|---:|---|
-| §1.8 · Local **digit-ui globalConfigs** | 18 | Render digit-ui `globalConfigs.js` locally from the tenant config (like Compose) instead of the external-S3 injection; at minimum fail-loud on a missing/unreachable config instead of silently falling back to India defaults. |
+| §1.8 · Local **digit-ui globalConfigs** | 17 | Render digit-ui `globalConfigs.js` locally from the tenant config (like Compose) instead of the external-S3 injection; at minimum fail-loud on a missing/unreachable config instead of silently falling back to India defaults. |
 | §1.6 · Pin **egov-user** mobile-validation image | 12 | Pin the `mobilevalidation` egov-user image on k8s (reads the per-tenant MDMS mobile rule); align `OTP_VALIDATION_REGISTER_MANDATORY` with Compose. Unblocks citizen register/OTP/provisioning. |
 | §2.4 · Seed **RBAC** write grant | 6 | Seed the mdms-v2 write actions' roleaction grants to the configurator-operator role (a dedicated config-admin / `MDMS_ADMIN`) in the access-control MDMS; add a CI check that drives one create with RBAC enforced. |
 | §2.5 · Deploy **egov-hrms** | 5 | Wire `common-services-helmfile.yaml` (egov-hrms + peers) into the k8s deploy sequence; the Spring gateway auto-discovers the service on (re)start. Restore-safe: `initContainers.dbMigration.enabled:false`. |
 | §2.6 · Harness **role-string** fix | 5 | The manage-API test helpers sent `RequestInfo.userInfo.roles` as bare code strings; expand to Role objects (`tests/utils/manage/api.ts`, `tests/admin/users.spec.ts`) so the strict k8s gateway deserializes them. Test-code fix. |
-| §1.7 · Real **minio** object store | 3 | Install minio; chart-template the egov-ns `minio` secret (accesskey/secretkey from the minio release); set `egov-filestore minio-enabled:true`, correct `minio-url` (no trailing slash), fixed bucket. |
+| §1.6b · **OTP mock** on k3s | 3 | Deploy the nginx OTP mock (`tests/integration-tests/deploy/otp-mock.k8s.yaml`) that rubber-stamps the fixed 123456 for `_validate`/`_send`, and repoint user-otp+egov-otp to it — matching Compose's default OTP-mock mode. Unblocks citizen register/login (and any citizen-gated flow, e.g. the photo-upload tests, which also need filestore §1.7). Pairs with the egov-user OTP-flag alignment (§1.6). |
+| §1.7 · Real **minio** object store | 1 | Install minio; chart-template the egov-ns `minio` secret (accesskey/secretkey from the minio release); set `egov-filestore minio-enabled:true`, correct `minio-url` (no trailing slash), fixed bucket. |
 | §1.4 · Right-size **pgr-services** memory | 1 | Set `memory_limits >= Xmx + ~50%` (or `-XX:MaxRAMPercentage`) so pgr-services doesn't cgroup-OOM and stays up. |
 | §1.2 · Add **configurator + digit-mcp** charts | 1 | Add `configurator` + `digit-mcp` charts to the k8s helmfile (Service + Ingress at `/configurator`, `/mcp`, `/v1`; MCP session DB). |
 
@@ -259,7 +260,7 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | citizen+employee | citizen logout redirects to login page | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | complaint type dropdown shows human-readable translated names | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | digit-ui bundle declares AddressOne + AddressTwo populators (PR-C re-enabled) | pass | pass | pass | pass | — |
-| citizen+employee | fresh phone → OTP → name+email → /all-services | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
+| citizen+employee | fresh phone → OTP → name+email → /all-services | **fail** | pass ✅ | pass | pass | §1.6b — **OTP mock** on k3s |
 | citizen+employee | header language pill renders the current locale | pass | pass | pass | pass | — |
 | citizen+employee | Localization keys for the timeline rendering are seeded across the deployment locales (rai | pass | pass | pass | pass | — |
 | citizen+employee | login page renders with mobile input | pass | pass | pass | pass | — |
@@ -270,8 +271,8 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | citizen+employee | smoke: lands on a usable citizen page | **fail** | pass ✅ | pass | pass | §1.8 — Local **digit-ui globalConfigs** |
 | citizen+employee | the deployment postal-code pattern accepts this tenant's valid sample and rejects malforme | pass | pass | pass | pass | — |
 | citizen+employee | the legacy Indian pattern would have rejected this tenant's valid postal code | pass | pass | pass | pass | — |
-| citizen+employee | upload JPEG photo, _update returns 2xx, no hard reload | **fail** | pass ✅ | pass | pass | §1.7 — Real **minio** object store |
-| citizen+employee | upload photo, _update returns 2xx, no hard reload | **fail** | pass ✅ | pass | pass | §1.7 — Real **minio** object store |
+| citizen+employee | upload JPEG photo, _update returns 2xx, no hard reload | **fail** | pass ✅ | pass | pass | §1.6b — **OTP mock** on k3s |
+| citizen+employee | upload photo, _update returns 2xx, no hard reload | **fail** | pass ✅ | pass | pass | §1.6b — **OTP mock** on k3s |
 | citizen+employee | valid credentials return access token | pass | pass | pass | pass | — |
 | lifecycle | authenticate | pass | pass | pass | pass | — |
 | lifecycle | provision a fresh citizen (suite-wide) | pass | pass | pass | pass | — |
