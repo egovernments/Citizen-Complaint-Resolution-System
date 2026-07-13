@@ -1,0 +1,9 @@
+[
+  {
+    "code": "default",
+    "enabled": true,
+    "defaultLocale": "pt_PT",
+    "showWhatsAppFab": true,
+    "showUtilityBar": true
+  }
+]
