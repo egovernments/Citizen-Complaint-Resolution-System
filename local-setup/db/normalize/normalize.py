@@ -92,3 +92,140 @@ def decide(
         DROP, service, canonical, tables=data_present,
         reason="tables exist but are empty and have no history; migrator will rebuild",
     )
+
+
+# ── database layer ────────────────────────────────────────────────────────────
+import os
+import subprocess
+import sys
+from typing import Iterable, List
+
+MAP_PATH = os.environ.get("MAP_PATH", "/map.yml")
+
+# Flyway history tables are identified by their column signature, not their name —
+# that is the whole point, since the name is what we cannot trust.
+_HISTORY_SIG = """
+SELECT c.relname
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relkind = 'r'
+  AND EXISTS (SELECT 1 FROM information_schema.columns col
+              WHERE col.table_schema = 'public' AND col.table_name = c.relname
+                AND col.column_name = 'installed_rank')
+  AND EXISTS (SELECT 1 FROM information_schema.columns col
+              WHERE col.table_schema = 'public' AND col.table_name = c.relname
+                AND col.column_name = 'checksum')
+  AND EXISTS (SELECT 1 FROM information_schema.columns col
+              WHERE col.table_schema = 'public' AND col.table_name = c.relname
+                AND col.column_name = 'installed_on');
+"""
+
+
+def psql(sql: str, *, capture: bool = True) -> str:
+    """Run SQL. ON_ERROR_STOP=1 so a failure is a non-zero exit, not a warning.
+
+    (psql prints errors as `psql:<file>:<line>: ERROR: ...` — never grep for a
+    line-anchored ^ERROR to detect failure; check the exit code.)
+    """
+    proc = subprocess.run(
+        ["psql", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", sql],
+        capture_output=capture, text=True,
+    )
+    if proc.returncode != 0:
+        sys.stderr.write(proc.stderr or "")
+        raise subprocess.CalledProcessError(proc.returncode, "psql", proc.stdout, proc.stderr)
+    return (proc.stdout or "").strip()
+
+
+def list_tables() -> Set[str]:
+    out = psql("SELECT tablename FROM pg_tables WHERE schemaname = 'public';")
+    return {line.strip() for line in out.splitlines() if line.strip()}
+
+
+def history_tables() -> Set[str]:
+    out = psql(_HISTORY_SIG)
+    return {line.strip() for line in out.splitlines() if line.strip()}
+
+
+def count_rows(tables: Iterable[str]) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for t in tables:
+        counts[t] = int(psql(f'SELECT count(*) FROM public."{t}";') or 0)
+    return counts
+
+
+def apply(d: Decision) -> None:
+    if d.action == RENAME:
+        psql(f'ALTER TABLE public."{d.alias}" RENAME TO "{d.canonical}";')
+        print(f"  renamed  {d.alias} -> {d.canonical}")
+
+    elif d.action == DROP:
+        # The only destructive operation here. Take an ACCESS EXCLUSIVE lock, then
+        # re-count INSIDE the transaction: a table that gained a row between the
+        # decision and now raises and rolls back rather than losing data.
+        #
+        # NB: '%' is plpgsql's RAISE placeholder. Python f-strings do not treat '%'
+        # specially, so write exactly one — '%%' would emit a literal '%%' and
+        # plpgsql would try to substitute twice against a single argument.
+        guards = "\n".join(
+            f'  LOCK TABLE public."{t}" IN ACCESS EXCLUSIVE MODE;\n'
+            f'  SELECT count(*) INTO n FROM public."{t}";\n'
+            f"  IF n > 0 THEN RAISE EXCEPTION "
+            f"'{t} gained % rows since the check; refusing to drop', n; END IF;"
+            for t in d.tables
+        )
+        drops = "\n".join(f'DROP TABLE public."{t}" CASCADE;' for t in d.tables)
+        psql(f"""
+BEGIN;
+DO $$
+DECLARE n bigint;
+BEGIN
+{guards}
+END $$;
+{drops}
+COMMIT;
+""")
+        print(f"  rebuilt  dropped empty {', '.join(d.tables)} (migrator will recreate)")
+
+
+def main() -> int:
+    services = load_map(MAP_PATH)
+    present = list_tables()
+
+    # Decide everything first, so an abort happens BEFORE anything is modified.
+    decisions: List[Decision] = []
+    for service, spec in services.items():
+        data_tables = [t for t in (spec.get("data_tables") or []) if t in present]
+        counts = count_rows(data_tables) if data_tables else {}
+        decisions.append(decide(service, spec, present, counts))
+
+    aborts = [d for d in decisions if d.action == ABORT]
+    if aborts:
+        print("\ndb-history-normalize: ABORT\n", file=sys.stderr)
+        for d in aborts:
+            print(f"  {d.service}: {d.reason}\n", file=sys.stderr)
+        print("Refusing to start migrators. No data was modified.", file=sys.stderr)
+        return 1
+
+    print("db-history-normalize: normalizing Flyway history")
+    for d in decisions:
+        apply(d)
+
+    # A history table we do not recognise is harmless: no migrator exists for it,
+    # so nothing would replay against it. Say so, but do not fail.
+    known = set()
+    for spec in services.values():
+        known.add(spec["canonical"])
+        known.update(spec.get("aliases") or [])
+    for orphan in sorted(history_tables() - known):
+        print(f"  warning  unrecognised history table {orphan!r} — no migrator owns it, skipping")
+
+    tally = {a: sum(1 for d in decisions if d.action == a) for a in (NOOP, RENAME, DROP, SKIP)}
+    print(
+        f"ok: renamed {tally[RENAME]}, rebuilt {tally[DROP]}, "
+        f"already-aligned {tally[NOOP]}, skipped {tally[SKIP]}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
