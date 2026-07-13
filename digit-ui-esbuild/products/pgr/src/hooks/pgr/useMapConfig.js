@@ -30,34 +30,88 @@ export const BASE_MAP_THEMES = {
 
 export const DEFAULT_BASE_MAP_THEME = "voyager";
 
+// Zero Mile Stone, Nagpur — the geographical centre of India, and the legacy
+// last-resort centre from when this was an India-only product. Kept only so a
+// tenant that configures nothing behaves exactly as it did before.
+export const DEFAULT_CENTER = { lat: 21.1498, lng: 79.0806 };
+export const DEFAULT_ZOOM = 13;
+export const DEFAULT_MIN_ZOOM = 0;
+export const DEFAULT_MAX_ZOOM = 19;
+export const DEFAULT_HIERARCHY_TYPE = "ADMIN";
+
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
-// Resolves the complaint-location maps' theming from MDMS so it can be set
-// per tenant without a code change. Reads `RAINMAKER-PGR.MapConfig[0]` and
-// returns a normalised `{ tileUrl, tileAttribution, wardHighlightColor }`.
+const getGlobalConfig = (key) => window?.globalConfigs?.getConfig?.(key);
+
+const inRange = (n, min, max) => Number.isFinite(n) && n >= min && n <= max;
+
+// Both halves must be usable: a half-filled record (lat set, lng missing) would
+// otherwise drop the map at the equator instead of falling through to the next
+// config tier.
+const asLatLng = (v) => {
+  const lat = Number(v?.lat);
+  const lng = Number(v?.lng);
+  return inRange(lat, -90, 90) && inRange(lng, -180, 180) ? { lat, lng } : undefined;
+};
+
+const asZoom = (v) => {
+  const z = Number(v);
+  return inRange(z, 0, 22) ? Math.round(z) : undefined;
+};
+
+const asNonEmptyString = (v) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+
+// Nominatim only honours `viewbox` alongside `bounded=1`, which DISCARDS every
+// result outside the box. A partial or inverted box is therefore worse than no
+// box at all — it silently hides every valid address — so require all four
+// edges and a non-degenerate extent.
+const asViewbox = (v) => {
+  const minLon = Number(v?.minLon);
+  const minLat = Number(v?.minLat);
+  const maxLon = Number(v?.maxLon);
+  const maxLat = Number(v?.maxLat);
+  const usable =
+    inRange(minLon, -180, 180) &&
+    inRange(maxLon, -180, 180) &&
+    inRange(minLat, -90, 90) &&
+    inRange(maxLat, -90, 90) &&
+    minLon < maxLon &&
+    minLat < maxLat;
+  return usable ? { minLon, minLat, maxLon, maxLat } : undefined;
+};
+
+// Resolves the complaint-location maps' theming, starting position, boundary
+// source and geocoding scope from MDMS so they can be set per tenant without a
+// code change. Reads `RAINMAKER-PGR.MapConfig[0]`.
+//
+// Every field resolves MDMS -> globalConfigs -> built-in default. A tenant with
+// no MapConfig record (or a partial one) keeps exactly the behaviour it had
+// before this master existed: the globalConfigs tier is the deploy-time Ansible
+// layer (MAP_CENTER / MAP_TENANT / HIERARCHY_TYPE) and stays in place, so
+// existing installations need no migration.
 //
 // Supported MapConfig fields (all optional):
-//   baseMapTheme       one of BASE_MAP_THEMES keys ("voyager" | "light" |
-//                      "dark" | "osm"). Picks a known tile URL + attribution.
-//                      Defaults to "voyager" (light) so the map never falls
-//                      back to the legacy black `dark_all` theme.
-//   tileUrl            raw Leaflet tile-URL template ({s}/{z}/{x}/{y}). When
-//                      present it overrides baseMapTheme, letting an operator
-//                      point at any provider.
-//   tileAttribution    HTML attribution string paired with a raw tileUrl.
-//   wardHighlightColor hex colour for the ward overlay (legacy field).
+//   baseMapTheme        one of BASE_MAP_THEMES keys. Defaults to "voyager" so
+//                       the map never falls back to the legacy black theme.
+//   tileUrl             raw Leaflet tile-URL template. Overrides baseMapTheme.
+//   tileAttribution     HTML attribution paired with a raw tileUrl.
+//   wardHighlightColor  hex colour for the ward overlay.
+//   center              { lat, lng } the map opens at.
+//   defaultZoom         zoom the map opens at once a location is known.
+//   minZoom / maxZoom   zoom bounds.
+//   boundaryTenantId    tenant whose boundary tree supplies the ward polygons.
+//   hierarchyType       boundary hierarchy the ward overlay is read from.
+//   geocodeCountryCodes ISO codes the address search is restricted to.
+//   searchViewbox       bounding box the address search is confined to.
 //
-// MDMS errors (master not registered for this tenant) must not break the map
-// — they are swallowed and every field falls through to its default.
-//
-// FOLLOW-UP: expose these fields in the DIGIT Studio configurator so operators
-// can set them from the UI instead of seeding MDMS by hand.
+// MDMS errors (master not registered for this tenant) must not break the map —
+// they are swallowed and every field falls through to its next tier.
 const useMapConfig = () => {
   const tenantId =
     Digit?.SessionStorage?.get?.("CITIZEN.COMMON.HOME.CITY")?.code ||
     Digit?.ULBService?.getCurrentTenantId?.();
 
-  const { data } = Digit.Hooks.useCustomMDMS(
+  const { data, isLoading } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
     [{ name: "MapConfig" }],
@@ -69,6 +123,13 @@ const useMapConfig = () => {
     },
     { schemaCode: "RAINMAKER-PGR.MapConfig" }
   );
+
+  // The MDMS read is async, so on the first render every field still holds its
+  // fallback. Callers that latch a value once (seeding map state, firing a
+  // one-shot effect) must wait for this before reading `center` etc., or they
+  // would pin themselves to the fallback and silently ignore the tenant's
+  // configured position. With no tenant there is nothing to wait for.
+  const isReady = !tenantId || !isLoading;
 
   return useMemo(() => {
     const cfg = Array.isArray(data) ? data[0] : undefined;
@@ -94,8 +155,41 @@ const useMapConfig = () => {
     // Pair a custom attribution with a raw URL; named presets carry their own.
     const tileAttribution = rawUrl ? rawAttr || preset.tileAttribution : preset.tileAttribution;
 
-    return { tileUrl, tileAttribution, wardHighlightColor };
-  }, [data]);
+    const center = asLatLng(cfg?.center) || asLatLng(getGlobalConfig("MAP_CENTER")) || DEFAULT_CENTER;
+    const defaultZoom = asZoom(cfg?.defaultZoom) ?? DEFAULT_ZOOM;
+    const minZoom = asZoom(cfg?.minZoom) ?? DEFAULT_MIN_ZOOM;
+    const maxZoom = asZoom(cfg?.maxZoom) ?? DEFAULT_MAX_ZOOM;
+
+    const boundaryTenantId =
+      asNonEmptyString(cfg?.boundaryTenantId) ||
+      asNonEmptyString(getGlobalConfig("MAP_TENANT")) ||
+      asNonEmptyString(process.env.REACT_APP_MAP_TENANT);
+    const hierarchyType =
+      asNonEmptyString(cfg?.hierarchyType) ||
+      asNonEmptyString(getGlobalConfig("HIERARCHY_TYPE")) ||
+      DEFAULT_HIERARCHY_TYPE;
+
+    // Deliberately no default country or viewbox. An unset geocoding scope means
+    // a worldwide search, which is merely broad; a wrong one hides every valid
+    // address (see asViewbox).
+    const geocodeCountryCodes = asNonEmptyString(cfg?.geocodeCountryCodes);
+    const searchViewbox = asViewbox(cfg?.searchViewbox);
+
+    return {
+      isReady,
+      tileUrl,
+      tileAttribution,
+      wardHighlightColor,
+      center,
+      defaultZoom,
+      minZoom,
+      maxZoom,
+      boundaryTenantId,
+      hierarchyType,
+      geocodeCountryCodes,
+      searchViewbox,
+    };
+  }, [data, isReady]);
 };
 
 export default useMapConfig;
