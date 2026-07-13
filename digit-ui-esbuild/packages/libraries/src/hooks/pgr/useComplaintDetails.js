@@ -20,10 +20,12 @@ const getDetailsRow = ({ id, service, complaintType }) => ({
   CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE: `COMPLAINT_HIERARCHY.${service.serviceCode.toUpperCase()}`,
   CS_COMPLAINT_ADDTIONAL_DETAILS: service.description,
   CS_COMPLAINT_FILED_DATE: Digit.DateUtils.ConvertTimestampToDate(service.auditDetails.createdTime),
+  // Address = real location parts only. The tenant/city token
+  // (TENANT_TENANTS_<tenantId>) used to be appended here and printed as part of
+  // the address (e.g. "…, Namaacha Sede, IGE") — wrong at Moz level; removed.
   ES_CREATECOMPLAINT_ADDRESS: [
     service.address.landmark,
     Digit.Utils.getMultiRootTenant() ? `ADMIN_${service.address.locality.code}` : Digit.Utils.locale.getLocalityCode(service.address.locality, service.tenantId),
-    `TENANT_TENANTS_${service?.tenantId?.toUpperCase?.()?.replace(".", "_")}`,
     service.address.pincode,
   ],
 });

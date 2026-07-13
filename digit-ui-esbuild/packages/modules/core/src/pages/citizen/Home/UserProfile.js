@@ -91,7 +91,11 @@ const defaultValidationConfig = {
       // an unmodified Edit Profile (CCRS#556). Real-world names can also
       // contain "O'Brien" / "Mary-Anne" / "John Jr." which the
       // alpha-only regex rejected too.
-      name: "/^[a-zA-Z0-9 .'\\-]+$/i",
+      // CCSD-1992: forbid a leading separator so a name of just "-" fails
+      // client-side with the localized name error instead of an unhandled
+      // backend UserProfileUpdateDeniedException; O'Brien / Mary-Anne / John Jr.
+      // / mobile-number names still pass.
+      name: "/^(?![ .'\\-])[a-zA-Z0-9 .'\\-]+$/i",
       // Fallback mobile pattern for when the MDMS ValidationConfigs master
       // isn't seeded for the tenant. Pull the tenant's pattern from
       // globalConfigs.CORE_MOBILE_CONFIGS (e.g. Mozambique "^8[0-9]{8}$")
@@ -462,11 +466,14 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     }
   };
 
+  // CCSD-1989: strict email shape (blank ok) so "a@b." fails client-side
+  // with a localized error instead of the unlocalized backend save failure.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const setUserEmailAddress = (value) => {
     if (userInfo?.userName !== value) {
       setEmail(value);
 
-      if (value.length && !(value.includes("@") && value.includes("."))) {
+      if (value.length && !EMAIL_RE.test(value.trim())) {
         setErrors({
           ...errors,
           emailAddress: {
@@ -589,7 +596,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         });
       }
 
-      if (email.length && !(email.includes("@") && email.includes("."))) {
+      if (email.length && !EMAIL_RE.test(email.trim())) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_EMAIL_INVALID"),
