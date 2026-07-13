@@ -1,24 +1,32 @@
 import { useTranslation } from "react-i18next";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Dropdown, Loader } from "@egovernments/digit-ui-components";
 
-const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
+const AssigneeComponent = ({ config, onSelect, formData }) => {
   const { t } = useTranslation();
   const [assignees, setAssignees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const tenantId = Digit.ULBService.getCurrentTenantId();
   const hrmsContext = window?.globalConfigs?.getConfig("HRMS_CONTEXT_PATH") || "egov-hrms";
 
-  // Get roles from config populators. `allDepartments` is true only for a
-  // CMS_SCREENING_OFFICER, who routes across EVERY department in the tenant;
-  // everyone else stays scoped to the single primary `department`.
-  const { roles = [], department, allDepartments } = config?.populators || {};
+  // Config populators. `department`/`allDepartments` drive the static
+  // (create/assign flow) scoping. `dependsOnKey` opts into DEPENDENT mode used
+  // by the search screen: the department is chosen live in another field
+  // (formData[dependsOnKey]); the dropdown stays disabled until it's set, and
+  // the employee list is scoped to that chosen department.
+  const { roles = [], department: staticDepartment, allDepartments, dependsOnKey } = config?.populators || {};
 
-  // Fetch employee data based on roles
-  const { 
-    isLoading: isEmployeeDataLoading, 
-    data: employeeData, 
-    error 
+  const isDependent = !!dependsOnKey;
+  const selectedDepartment = isDependent ? (formData?.[dependsOnKey]?.code || null) : staticDepartment;
+  const waitingForDept = isDependent && !selectedDepartment;
+
+  // Fetch employee data based on roles (all matching employees; scoping to the
+  // department is done client-side below so a dependent department change needs
+  // no refetch).
+  const {
+    isLoading: isEmployeeDataLoading,
+    data: employeeData,
+    error
   } = Digit.Hooks.useCustomAPIHook({
     url: `/${hrmsContext}/employees/_search`,
     params: {
@@ -59,58 +67,80 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
           mobileNumber: employee.user?.mobileNumber,
           department: department
         });
-  
+
         return acc;
       }, {}) || {}
     );
   }
-  
-  
 
-  // Update assignees when employee data changes
+  // Update assignees when employee data OR the (dependent) selected department
+  // changes.
   useEffect(() => {
-    if (employeeData?.Employees?.length > 0) {
-      // Screening officer (allDepartments): NO department filter — list every
-      // department's assignable employees (transformData groups them by
-      // department). Every other actor stays scoped to the single primary dept.
-      // Unmapped complaint type (department "NA" or absent in the hierarchy):
-      // pgr-services skips its department validation for these, so the actor may
-      // route to ANY department — filtering by "NA" would empty the dropdown.
-      const unscoped = allDepartments || !department || department === "NA";
-      const filtered = employeeData.Employees.filter((e) => {
-        const d = e?.assignments?.[0]?.department;
-        if (!d || !e?.user?.uuid) return false;
-        return unscoped ? true : d === department;
-      });
-      setAssignees(transformData(filtered));
+    if (waitingForDept || !(employeeData?.Employees?.length > 0)) {
+      setAssignees([]);
+      return;
     }
-  }, [employeeData]);
+    // Screening officer (allDepartments): NO department filter — list every
+    // department's assignable employees (transformData groups them by
+    // department). Every other actor stays scoped to the single department.
+    // Unmapped complaint type (department "NA" or absent): pgr-services skips
+    // its department validation, so the actor may route to ANY department —
+    // filtering by "NA" would empty the dropdown.
+    const unscoped = !isDependent && (allDepartments || !selectedDepartment || selectedDepartment === "NA");
+    const filtered = employeeData.Employees.filter((e) => {
+      const d = e?.assignments?.[0]?.department;
+      if (!d || !e?.user?.uuid) return false;
+      return unscoped ? true : d === selectedDepartment;
+    });
+    setAssignees(transformData(filtered));
+  }, [employeeData, selectedDepartment, waitingForDept, isDependent, allDepartments]);
+
+  // Dependent mode: when the department changes, drop any stale assignee so the
+  // filter never sends an employee that no longer matches the chosen department.
+  const prevDeptRef = useRef(selectedDepartment);
+  useEffect(() => {
+    if (!isDependent) return; // create/assign flow: never auto-clear
+    if (prevDeptRef.current !== selectedDepartment) {
+      prevDeptRef.current = selectedDepartment;
+      if (selectedEmployee) {
+        setSelectedEmployee(null);
+        if (config?.key) onSelect(config.key, undefined);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDepartment]);
 
   // Handle employee selection
   const handleEmployeeSelect = (employee) => {
     setSelectedEmployee(employee);
-    if (employee && config?.key) {
-      onSelect(config.key, employee);
+    if (config?.key) {
+      onSelect(config.key, employee || undefined);
     }
   };
-  
 
   if (error) return <div>{t("CS_COMMON_EMPLOYEE_FETCH_ERROR")}</div>;
   if (isEmployeeDataLoading) return <Loader />;
+
+  const placeholder = waitingForDept
+    ? (t("PGR_SELECT_DEPARTMENT_FIRST") === "PGR_SELECT_DEPARTMENT_FIRST"
+        ? "Select a department first"
+        : t("PGR_SELECT_DEPARTMENT_FIRST"))
+    : t("CS_COMMON_SELECT_EMPLOYEE");
 
   return (
     <div className="assignee-dropdown-container">
       <Dropdown
         t={t}
-        option={assignees}
+        option={waitingForDept ? [] : assignees}
         optionKey="name"
         selected={selectedEmployee}
         select={(value) => {
           handleEmployeeSelect(value);
         }}
-        placeholder={t("CS_COMMON_SELECT_EMPLOYEE")}
+        placeholder={placeholder}
         label={t(config.label)}
         variant="nesteddropdown"
+        disable={waitingForDept}
       />
     </div>
   );

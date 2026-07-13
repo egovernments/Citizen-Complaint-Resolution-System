@@ -1,6 +1,6 @@
 import { Loader } from "@egovernments/digit-ui-components";
 import { Field as V2Field, Select as V2Select } from "@egovernments/digit-ui-components-v2";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../utils/complaintLabel";
 
@@ -24,8 +24,14 @@ import { complaintLabel } from "../utils/complaintLabel";
  * list holding both interior classification nodes and leaf complaint types.
  * Leaf rows carry department/slaHours; interior nodes omit them.
  */
-const ComplaintHierarchyComponent = ({ onSelect, formData }) => {
+const ComplaintHierarchyComponent = ({ onSelect, formData, config }) => {
   const { t } = useTranslation();
+  // Search screens set this so a PARTIAL (non-leaf) selection still leaves a
+  // truthy marker in the bound field — otherwise a partial pick writes nothing
+  // to the form and the "Clear All" reset below can't detect it. The marker
+  // carries no serviceCode/code, so the search preProcess ignores it. OFF by
+  // default → the create/assign flow's SelectComplaintType gating is untouched.
+  const emitPartial = config?.populators?.emitPartialSelection;
   const tenantId =
     Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
     Digit.ULBService.getCurrentTenantId();
@@ -72,6 +78,13 @@ const ComplaintHierarchyComponent = ({ onSelect, formData }) => {
   );
   const [sel, setSel] = useState([]);
 
+  // handleChange (below) legitimately writes `undefined` to the bound form
+  // fields while the user is drilling into a non-leaf level. We must NOT treat
+  // that self-inflicted "empty" as an external reset — only the filter panel's
+  // "Clear All" should wipe the visible cascade. This ref flags an in-flight
+  // internal change so the reset effect can skip it.
+  const suppressResetRef = useRef(false);
+
   // Draft-restore repaint: the per-level selection is private state, so a
   // session-restored form has a valid SelectComplaintType while the dropdowns
   // render blank. While the picker is untouched, rebuild the visible chain by
@@ -94,6 +107,23 @@ const ComplaintHierarchyComponent = ({ onSelect, formData }) => {
     setSel(levels.map((_, i) => chain[i] ?? null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restoreCode, nodes, serviceDefs, levels.length]);
+
+  // Clear All / external reset: the visible cascade lives in local `sel`, so a
+  // form reset (the filter panel's "Clear All") clears the bound form fields
+  // but leaves the dropdowns showing stale picks. Watch the bound leaf field
+  // and, when it goes empty for a reason OTHER than our own mid-cascade
+  // onSelect(undefined), reset the cascade. `suppressResetRef` (consumed at the
+  // top of every run) makes an in-flight internal change immune, so drilling
+  // into a non-leaf level doesn't wipe the selection the user just made.
+  const boundValue = formData?.SelectSubComplaintType ?? formData?.SelectComplaintType;
+  useEffect(() => {
+    const wasInternal = suppressResetRef.current;
+    suppressResetRef.current = false;
+    if (boundValue) return; // form still holds a selection
+    if (wasInternal) return; // our own onSelect(undefined) — not a Clear All
+    if (sel.some((s) => s != null)) setSel([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boundValue]);
 
   if (loadingHier || loadingDefs) return <Loader />;
   if (!def || levels.length === 0) {
@@ -150,13 +180,22 @@ const ComplaintHierarchyComponent = ({ onSelect, formData }) => {
   };
 
   const handleChange = (i, value) => {
+    // Flag this as an internal change so the reset effect above doesn't mistake
+    // the resulting (possibly empty) form value for an external Clear All.
+    suppressResetRef.current = true;
     const next = sel.slice();
     next[i] = value || null;
     for (let j = i + 1; j < next.length; j++) next[j] = null;
     setSel(next);
+    // Deepest level still selected after this change (for the partial marker).
+    const deepest = next.reduce((acc, v, idx) => (v != null ? idx : acc), -1);
+    // Marker for the bound field when there's a selection but no real leaf yet,
+    // so "Clear All" can detect and reset a partial cascade (search only).
+    const partialMarker = emitPartial && deepest >= 0 ? { __partial: next[deepest] } : undefined;
+
     if (!value) {
       onSelect("SelectComplaintType", undefined);
-      onSelect("SelectSubComplaintType", undefined);
+      onSelect("SelectSubComplaintType", partialMarker);
       return;
     }
     let picked;
@@ -169,10 +208,11 @@ const ComplaintHierarchyComponent = ({ onSelect, formData }) => {
         i + 1 < levels.length && optionsForLevelWith(next, i + 1).length > 0;
       picked = hasDeeper ? undefined : interiorAsServiceDef(i, value);
     }
-    // Write BOTH fields the payload util + submit gating read. Same value in
-    // both makes getEffectiveServiceCode return this code.
+    // SelectComplaintType keeps the real gating semantics (leaf/terminal only).
+    // SelectSubComplaintType gets the real pick, or the partial marker so the
+    // bound field is truthy whenever anything is selected (search only).
     onSelect("SelectComplaintType", picked);
-    onSelect("SelectSubComplaintType", picked);
+    onSelect("SelectSubComplaintType", picked || partialMarker);
   };
 
   // Deepest selected level + whether it is terminal (next level has no options).

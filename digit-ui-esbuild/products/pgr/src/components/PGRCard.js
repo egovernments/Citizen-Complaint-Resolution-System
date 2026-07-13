@@ -36,7 +36,8 @@ const PGRCard = () => {
 
   let links = [
     generateLink("ACTION_TEST_CREATE_COMPLAINT", "create-complaint", ["CSR", "CMS_RECEPTION_OFFICER"]),
-    generateLink("ACTION_TEST_SEARCH_COMPLAINT", "inbox-v2"),
+    generateLink("PGR_INBOX", "inbox-v2"),
+    generateLink("ACTION_TEST_SEARCH_COMPLAINT", "search"),
   ];
   const hasRequiredRoles = (link) => { 
     if (!link?.roles?.length) return true;

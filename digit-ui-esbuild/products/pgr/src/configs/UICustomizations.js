@@ -1730,6 +1730,133 @@ export const UICustomizations = {
       return `/${window.contextPath}/employee/pgr/complaint-details/${complaintNo}`;
     },
   },
+  // Employee "Search Citizen Complaint" screen (/employee/pgr/search). Mirrors
+  // PGRInboxConfig's row rendering, but maps the search-page filter set
+  // (Department / Complaint Type / Assigned / Província / Status) to pgr-services
+  // `_search` params. Unlike the inbox, Status has NO open-states default — an
+  // empty Status filter returns every matching complaint, so the operator sees
+  // exactly what their filters describe.
+  PGRComplaintSearchConfig: {
+    preProcess: (data) => {
+      const clonedData = _.cloneDeep(data);
+      const searchForm = clonedData?.state?.searchForm || {};
+      const filterForm = clonedData?.state?.filterForm || {};
+
+      const params = {
+        tenantId: Digit.ULBService.getCurrentTenantId(),
+        limit: clonedData?.state?.tableForm?.limit || 10,
+        offset: clonedData?.state?.tableForm?.offset ?? 0,
+        // Order by SLA remaining (most urgent first) server-side — consistent
+        // across the full paginated result set (see PGRInboxConfig for why).
+        sortBy: "sla",
+        sortOrder: "ASC",
+      };
+
+      // Search form fields.
+      if (searchForm.complaintNumber) {
+        params.serviceRequestId = searchForm.complaintNumber;
+      }
+      if (searchForm.mobileNumber) {
+        params.mobileNumber = searchForm.mobileNumber;
+      }
+
+      // Date range.
+      const requestDate = searchForm?.range?.requestDate;
+      if (requestDate?.startDate && requestDate?.endDate) {
+        params.fromDate = new Date(requestDate.startDate).getTime();
+        params.toDate = new Date(requestDate.endDate).getTime();
+      }
+
+      // Filter: department (DepartmentComponent emits {code, name}). Resolved
+      // to the department's serviceCodes server-side (MDMSUtils).
+      const dept = filterForm.department;
+      if (dept?.code) {
+        params.department = [dept.code];
+      }
+
+      // Filter: complaint type — the hierarchy cascade writes the chosen leaf
+      // ServiceDef into SelectSubComplaintType ({serviceCode, code, ...}).
+      const complaintType = filterForm.SelectSubComplaintType;
+      const chosenServiceCode = complaintType?.serviceCode || complaintType?.code;
+      if (chosenServiceCode) {
+        params.serviceCode = [chosenServiceCode];
+      }
+
+      // Filter: assignee (AssigneeComponent emits an employee {uuid, ...}).
+      const assignee = filterForm.assignee;
+      if (assignee?.uuid) {
+        params.assignee = [assignee.uuid];
+      }
+
+      // Filter: locality/província (BoundaryComponent returns array or single).
+      let rawLocality = filterForm.locality;
+      if (rawLocality) {
+        let localityArray = [];
+        if (Array.isArray(rawLocality)) {
+          localityArray = rawLocality.map((loc) => loc?.code).filter(Boolean);
+        } else if (rawLocality.code) {
+          localityArray = [rawLocality.code];
+        }
+        if (localityArray.length > 0) {
+          params.locality = localityArray;
+        }
+      }
+
+      // Filter: application status (workflowstatesfilter returns {STATE: bool}).
+      // Search semantics: no selection => no status constraint (all complaints).
+      const rawStatuses = filterForm.status || {};
+      const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
+      if (statuses.length > 0) {
+        params.applicationStatus = statuses;
+      }
+
+      clonedData.params = params;
+      return clonedData;
+    },
+    additionalCustomizations: (row, key, column, value, t, searchResult) => {
+      switch (key) {
+        case "CS_COMMON_COMPLAINT_NO":
+          return (
+            <div style={{ display: "grid" }}>
+              <span className="link" style={{ display: "grid" }}>
+                <Link to={`/${window.contextPath}/employee/pgr/complaint-details/${value}`}>
+                  {String(value ? (column.translate ? t(column.prefix ? `${column.prefix}${value}` : value) : value) : t("ES_COMMON_NA"))}
+                </Link>
+              </span>
+              {(() => {
+                const sc = row?.businessObject?.service?.serviceCode;
+                const defs = Digit.SessionStorage.get("serviceDefs") || [];
+                const def = Array.isArray(defs) ? defs.find((d) => d?.serviceCode === sc) : null;
+                const nameByCode = Digit.SessionStorage.get("complaintHierarchyNameByCode") || {};
+                const parentCode = def?.menuPath || sc;
+                const fallback = def?.menuPathName || nameByCode[parentCode] || nameByCode[sc] || sc;
+                return <span>{complaintLabel(t, parentCode, fallback)}</span>;
+              })()}
+            </div>
+          );
+
+        case "WF_INBOX_HEADER_LOCALITY":
+          return value ? <span>{t(`${value}`)}</span> : <span>{t("NA")}</span>;
+
+        case "CS_COMPLAINT_DETAILS_CURRENT_STATUS":
+          return <span>{t(`CS_COMMON_${value}`)}</span>;
+
+        case "WF_INBOX_HEADER_CURRENT_OWNER":
+          return value ? <span>{value?.[0]?.name}</span> : <span>{t("NA")}</span>;
+
+        case "WF_INBOX_HEADER_SLA_DAYS_REMAINING":
+          return value > 0 ? <Tag label={value} showIcon={false} type="success" /> : <Tag label={value} showIcon={false} type="error" />;
+
+        default:
+          return t("ES_COMMON_NA");
+      }
+    },
+    MobileDetailsOnClick: (row, tenantId) => {
+      const complaintNo = row?.["CS_COMMON_COMPLAINT_NO"];
+      if (!complaintNo) return `/${window.contextPath}/employee/pgr/search`;
+      return `/${window.contextPath}/employee/pgr/complaint-details/${complaintNo}`;
+    },
+  },
   CampaignsInboxConfig: {
     preProcess: (data, additionalDetails) => {
       data.body.ProjectStaff = {};

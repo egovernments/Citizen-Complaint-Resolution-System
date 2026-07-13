@@ -6049,3 +6049,39 @@ header.digit-header .digit-dropdown-master {
     linear-gradient(rgba(11, 75, 102, 0.55), rgba(11, 75, 102, 0.55)),
     var(--banner-url) no-repeat center center / cover !important;
 }
+
+/* --------------------------------------------------------------------
+ * PGR "Search Citizen Complaint" (/employee/pgr/search) — page layout.
+ *
+ * The vendor inbox grid (`.digit-sections-parent.inbox` = `20% 1fr`)
+ * auto-places THIS screen's three sections — search, filter, results —
+ * as [search | filter] on row 1 and [results | ·] on row 2, because
+ * (unlike /inbox-v2) this screen has no `links` section to occupy the
+ * left column. That squeezes the search bar + results into the 20%
+ * track and drops the filter into the wide track.
+ *
+ * Re-place them into the intended search layout with explicit grid
+ * areas: search bar full-width on top, then filter (left) + results
+ * (right). Scoped to `.pgr-complaint-search` so /inbox-v2 is untouched.
+ * -------------------------------------------------------------------- */
+.pgr-complaint-search .digit-sections-parent.inbox {
+  grid-template-columns: 320px minmax(0, 1fr) !important;
+  grid-template-areas:
+    "search search"
+    "filter results" !important;
+  align-items: start !important;
+}
+.pgr-complaint-search .digit-sections-parent.inbox > .digit-section.search {
+  grid-area: search !important;
+  width: 100% !important;
+}
+.pgr-complaint-search .digit-sections-parent.inbox > .digit-section.filter {
+  grid-area: filter !important;
+  width: 100% !important;
+}
+.pgr-complaint-search .digit-sections-parent.inbox > .digit-results-table-wrapper {
+  grid-area: results !important;
+  /* let the results table shrink to its grid track instead of forcing
+   * the track wider (min-width:auto on grid items defaults to content). */
+  min-width: 0 !important;
+}

@@ -184,5 +184,41 @@
         "message": "Empresas e Estabelecimentos Comerciais (Entidades Privadas)",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_SEARCH_COMPLAINT",
+        "message": "Pesquisar Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_FILTER_DEPARTMENT",
+        "message": "Departamento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_SELECT_DEPARTMENT",
+        "message": "Seleccione o Departamento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_FILTER_ASSIGNEE",
+        "message": "Atribuído",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_TYPE",
+        "message": "Tipo de Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_SELECT_DEPARTMENT_FIRST",
+        "message": "Seleccione primeiro um departamento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
     }
 ]

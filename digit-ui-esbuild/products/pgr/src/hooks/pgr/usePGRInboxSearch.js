@@ -9,6 +9,41 @@ import { Request } from "@egovernments/digit-ui-libraries";
  * and merges them into the shape the inbox table columns expect
  * ({businessObject: {service}, ProcessInstance, serviceSla}).
  */
+/**
+ * Build the Status-filter's checkbox list from the PGR workflow BusinessService.
+ * Derived from the workflow definition (NOT the search results), so the Status
+ * filter shows the full set of toggleable states even when a search returns zero
+ * rows. Returns [] only if the BusinessService lookup fails.
+ */
+const buildPgrStatusMap = async (tenantId) => {
+  try {
+    const wfBs = await Request({
+      url: "/egov-workflow-v2/egov-wf/businessservice/_search",
+      method: "POST",
+      auth: true,
+      userService: true,
+      useCache: true,
+      params: { tenantId, businessServices: "PGR" },
+    });
+    const states = wfBs?.BusinessServices?.[0]?.states || [];
+    return states
+      .filter((s) => s.state)
+      .map((s) => ({
+        // WorkflowStatusFilter uses `statusid` as each checkbox's value, and
+        // preProcess feeds the checked keys straight into the pgr-services
+        // `applicationStatus` filter. pgr-services matches that against the
+        // state CODE (e.g. PENDINGFORASSIGNMENT), not the workflow state UUID —
+        // so the identifier must be the state code for a selection to filter.
+        statusid: s.state,
+        state: s.state,
+        businessservice: "PGR",
+      }));
+  } catch (e) {
+    console.error("PGR inbox: failed to fetch workflow states", e);
+    return [];
+  }
+};
+
 const usePGRInboxSearch = (reqCriteria) => {
   const client = useQueryClient();
   const { url, params = {}, body = {}, config = {} } = reqCriteria;
@@ -39,9 +74,18 @@ const usePGRInboxSearch = (reqCriteria) => {
     ]);
     const wrappers = pgrResponse?.ServiceWrappers || [];
     const totalCount = countResponse?.count ?? wrappers.length;
+    const tenantId = params.tenantId || Digit.ULBService.getCurrentTenantId();
+
+    // Build the statusMap from the PGR workflow BusinessService UP-FRONT, so the
+    // Status filter's checkboxes render regardless of how many rows the search
+    // returns. WorkflowStatusFilter derives its checkbox list solely from
+    // statusMap; the previous early `return {... statusMap: []}` on an empty
+    // result set wiped the Status filter entirely (e.g. searching a province
+    // with no complaints made every status checkbox disappear).
+    const statusMap = await buildPgrStatusMap(tenantId);
 
     if (wrappers.length === 0) {
-      return { items: [], totalCount: totalCount, statusMap: [] };
+      return { items: [], totalCount, statusMap };
     }
 
     // 2. Batch-fetch workflow data
@@ -49,7 +93,6 @@ const usePGRInboxSearch = (reqCriteria) => {
       .map((sw) => sw.service?.serviceRequestId)
       .filter(Boolean)
       .join(",");
-    const tenantId = params.tenantId || Digit.ULBService.getCurrentTenantId();
 
     let wfMap = {};
     if (businessIds) {
@@ -66,39 +109,6 @@ const usePGRInboxSearch = (reqCriteria) => {
       } catch (e) {
         console.error("PGR inbox: workflow fetch failed", e);
       }
-    }
-
-    // 3. Build a statusMap from the PGR workflow business service so the
-    // inbox's WorkflowStatusFilter renders a non-empty list of toggleable
-    // states. Previously this returned `[]`, so the Status filter card in
-    // the inbox showed only its label and no checkboxes.
-    let statusMap = [];
-    try {
-      const wfBs = await Request({
-        url: "/egov-workflow-v2/egov-wf/businessservice/_search",
-        method: "POST",
-        auth: true,
-        userService: true,
-        useCache: true,
-        params: { tenantId, businessServices: "PGR" },
-      });
-      const states = wfBs?.BusinessServices?.[0]?.states || [];
-      statusMap = states
-        .filter((s) => s.state)
-        .map((s) => ({
-          // WorkflowStatusFilter uses `statusid` as each checkbox's value, and
-          // PGRInboxConfig.preProcess feeds the checked keys straight into the
-          // pgr-services `applicationStatus` filter. pgr-services matches that
-          // against the state CODE (e.g. PENDINGFORASSIGNMENT), not the workflow
-          // state UUID — so emitting `s.uuid` here made every status selection
-          // return zero rows and the inbox list vanished (issue #432). Use the
-          // state code as the identifier so a selection actually filters.
-          statusid: s.state,
-          state: s.state,
-          businessservice: "PGR",
-        }));
-    } catch (e) {
-      console.error("PGR inbox: failed to fetch workflow states", e);
     }
 
     // Per-complaint-type SLA budget (hours) from MDMS ServiceDefs — the inbox filter

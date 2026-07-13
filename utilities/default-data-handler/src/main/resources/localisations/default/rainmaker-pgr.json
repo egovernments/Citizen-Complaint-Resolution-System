@@ -7450,5 +7450,41 @@
         "message": "Describe the issue and attach any photos as evidence.",
         "module": "rainmaker-pgr",
         "locale": "default"
+    },
+    {
+        "code": "PGR_SEARCH_COMPLAINT",
+        "message": "Search Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "ES_PGR_FILTER_DEPARTMENT",
+        "message": "Department",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_SELECT_DEPARTMENT",
+        "message": "Select Department",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_FILTER_ASSIGNEE",
+        "message": "Assigned",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_COMPLAINT_TYPE",
+        "message": "Complaint Type",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_SELECT_DEPARTMENT_FIRST",
+        "message": "Select a department first",
+        "module": "rainmaker-pgr",
+        "locale": "default"
     }
 ]
