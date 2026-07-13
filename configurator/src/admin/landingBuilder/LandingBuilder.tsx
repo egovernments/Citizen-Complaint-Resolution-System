@@ -7,9 +7,11 @@
  * enabled sections to PUBLISHED. Keyboard: Ctrl+S save · Ctrl+Z / Ctrl+Y
  * undo/redo. Live validation runs on every change.
  */
-import { useCallback, useEffect, useMemo } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { HelpCircle, History, LayoutList, Palette, PanelRight, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { useApp } from '../../App';
 import {
@@ -24,6 +26,11 @@ import { Inspector } from './Inspector';
 function BuilderInner() {
   const { state, dispatch } = useBuilder();
   const { state: app } = useApp();
+  const navigate = useNavigate();
+  // Workspace pane toggles (right icon rail): more canvas on demand.
+  const [showLeft, setShowLeft] = useState(true);
+  const [showRight, setShowRight] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
   const params = useParams<{ id?: string }>();
   const [search] = useSearchParams();
   const tenantId = app.tenant ?? '';
@@ -126,13 +133,80 @@ function BuilderInner() {
       {state.loading ? (
         <p className="p-6 text-sm text-muted-foreground">Loading landing configuration…</p>
       ) : (
-        <div className="flex min-h-0 flex-1">
-          <SectionListPane />
+        <div className="relative flex min-h-0 flex-1">
+          {showLeft && <SectionListPane />}
           <PreviewFrame />
-          <Inspector />
+          {showRight && <Inspector />}
+
+          {/* Right icon rail (mockup): Inspector / Structure / Theme / History / Help */}
+          <div className="flex w-12 shrink-0 flex-col items-center gap-1 border-l border-border bg-card py-2">
+            <RailButton
+              label="Inspector"
+              active={showRight}
+              icon={<PanelRight className="h-4 w-4" />}
+              onClick={() => setShowRight((v) => !v)}
+            />
+            <RailButton
+              label="Structure"
+              active={showLeft}
+              icon={<LayoutList className="h-4 w-4" />}
+              onClick={() => setShowLeft((v) => !v)}
+            />
+            <RailButton
+              label="Theme"
+              icon={<Palette className="h-4 w-4" />}
+              onClick={() => navigate('/manage/theme-config')}
+            />
+            <RailButton label="History (P5)" disabled icon={<History className="h-4 w-4" />} />
+            <RailButton
+              label="Help"
+              active={showHelp}
+              icon={<HelpCircle className="h-4 w-4" />}
+              onClick={() => setShowHelp((v) => !v)}
+            />
+          </div>
+
+          {showHelp && (
+            <div className="absolute bottom-4 right-14 z-40 w-64 rounded-lg border border-border bg-card p-4 shadow-xl">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="m-0 text-xs font-semibold">Tips & Shortcuts</h3>
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setShowHelp(false)} aria-label="Close help">
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <p className="m-0 mb-3 text-[11px] leading-snug text-muted-foreground">
+                Use localization keys to manage content in multiple languages. Click any element in
+                the preview to edit it. Drag section cards to reorder.
+              </p>
+              <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">
+                <dt className="font-mono text-muted-foreground">Ctrl+S</dt><dd className="m-0">Save Draft</dd>
+                <dt className="font-mono text-muted-foreground">Ctrl+Z</dt><dd className="m-0">Undo</dd>
+                <dt className="font-mono text-muted-foreground">Ctrl+Y</dt><dd className="m-0">Redo</dd>
+              </dl>
+            </div>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+function RailButton({ label, icon, onClick, active, disabled }: {
+  label: string; icon: React.ReactNode; onClick?: () => void; active?: boolean; disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex h-9 w-9 flex-col items-center justify-center rounded-md text-muted-foreground transition-colors ${
+        disabled ? 'opacity-40' : 'hover:bg-accent hover:text-foreground'
+      } ${active ? 'bg-accent text-primary' : ''}`}
+    >
+      {icon}
+    </button>
   );
 }
 

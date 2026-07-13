@@ -39,7 +39,7 @@ export function SectionListPane() {
   };
 
   return (
-    <div className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-card">
+    <div className="flex h-full w-72 shrink-0 flex-col border-r border-border bg-card">
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <span className="flex-1 text-sm font-semibold">Sections</span>
         <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setAddOpen(true)}>
@@ -48,7 +48,7 @@ export function SectionListPane() {
       </div>
       <p className="m-0 px-3 py-1.5 text-[10px] text-muted-foreground">Drag to reorder sections</p>
 
-      <ul className="m-0 flex-1 list-none overflow-y-auto p-2 pt-0">
+      <ul className="m-0 flex-1 list-none overflow-y-auto p-3 pt-0">
         {ordered.map((s, i) => {
           const entry = getEditorEntry(s.draft.type);
           const Icon = entry?.icon ?? Settings;
@@ -78,8 +78,12 @@ export function SectionListPane() {
                 onMouseLeave={() => dispatch({ type: 'hover', code: null })}
                 onClick={() => dispatch({ type: 'select', id: code })}
                 onKeyDown={(e) => e.key === 'Enter' && dispatch({ type: 'select', id: code })}
-                className={`group mb-1.5 cursor-pointer rounded-md border px-2 py-2 text-sm transition-colors ${
-                  selected ? 'border-primary bg-accent' : hovered ? 'border-primary/50 bg-accent/60' : 'border-border bg-background hover:bg-accent/40'
+                className={`group mb-2 cursor-pointer rounded-lg border px-3 py-2.5 text-sm shadow-sm transition-all ${
+                  selected
+                    ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500/30'
+                    : hovered
+                      ? 'border-emerald-400/60 bg-accent/60'
+                      : 'border-border bg-background hover:border-emerald-300/60 hover:shadow'
                 } ${off ? 'opacity-55' : ''}`}
               >
                 <div className="flex items-center gap-1.5">

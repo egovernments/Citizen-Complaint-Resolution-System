@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLocaleState, useLocales, useTranslate } from 'ra-core';
 import { useApp } from '../App';
@@ -99,6 +99,21 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
   const location = useLocation();
   const translate = useTranslate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // CCSD-2009 (Builder v2 polish): the Builder is a full-canvas workspace —
+  // auto-collapse the nav sidebar and hide the docs pane while it's open,
+  // restoring the user's previous state on leave.
+  const isBuilderRoute = location.pathname.includes('/landing-builder');
+  const preBuilderCollapsed = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (isBuilderRoute) {
+      if (preBuilderCollapsed.current === null) preBuilderCollapsed.current = sidebarCollapsed;
+      setSidebarCollapsed(true);
+    } else if (preBuilderCollapsed.current !== null) {
+      setSidebarCollapsed(preBuilderCollapsed.current);
+      preBuilderCollapsed.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBuilderRoute]);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
     // Auto-expand groups that contain the active route, collapse others
     const initial: Record<string, boolean> = {};
@@ -402,7 +417,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
       </div>
 
       {/* Documentation Pane */}
-      <DocsPane />
+      {!isBuilderRoute && <DocsPane />}
     </div>
   );
 }
