@@ -15,6 +15,8 @@ import type { SchemaDescriptor } from './types';
 
 export const landingSectionDescriptor: SchemaDescriptor = {
   schema: 'RAINMAKER-PGR.LandingSection',
+  // P4 (CCSD-2009): row edit opens the visual Builder (same data model/APIs).
+  customEditor: 'landing-builder',
   groups: [
     { title: 'Identity', fields: ['code', 'type'] },
     { title: 'Visibility & ordering', fields: ['order', 'enabled', 'status', 'roles'] },

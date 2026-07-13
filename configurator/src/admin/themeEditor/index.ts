@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { ThemeConfigEditor } from './ThemeConfigEditor';
 import { StateInfoEditor } from './StateInfoEditor';
+import { LandingBuilder } from '../landingBuilder';
 
 /**
  * Registry of custom editors keyed by the `customEditor` field on
@@ -20,6 +21,10 @@ export const customEditors: Record<string, ComponentType> = {
   // resource (filed separately). The custom editor calls mdmsUpdate
   // directly so save is reliable.
   'state-info': StateInfoEditor,
+  // P4 (CCSD-2009): row edit on landing-sections opens the visual Builder
+  // pre-selected on that section — same resource, routes and MDMS APIs as the
+  // P3 generic CRUD (which stays available for list/show/audit).
+  'landing-builder': LandingBuilder,
 };
 
 export { ThemeConfigEditor, StateInfoEditor };

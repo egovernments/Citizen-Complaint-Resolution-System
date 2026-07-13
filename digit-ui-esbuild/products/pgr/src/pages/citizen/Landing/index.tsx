@@ -22,6 +22,7 @@ import { LandingTokens } from "./tokens";
 import { NewsItem } from "./content";
 import { LanguageOption } from "./components/UtilityBar";
 import { useLandingConfig } from "./config/useLandingConfig";
+import { usePreviewBridge, PreviewBridge } from "./config/usePreviewBridge";
 import { LandingRenderer } from "./LandingRenderer";
 
 export interface PGRLandingPageProps {
@@ -54,10 +55,29 @@ export interface PGRLandingPageProps {
  * that reproduces the previous static layout, then renders it generically via
  * LandingRenderer. Props remain as integrator overrides layered on top of the
  * config. Backward-compatible: with no/empty config the page is unchanged.
+ *
+ * Preview mode (P4 Builder): when embedded with ?builderPreview=1 the config
+ * comes from the Configurator via postMessage instead of MDMS. The branch
+ * happens HERE, at the entry — LandingRenderer is Builder-unaware and always
+ * receives a plain config, from either source.
  */
 export function PGRLandingPage(props: PGRLandingPageProps) {
+  const bridge = usePreviewBridge();
+  // `bridge.active` is constant for the page's lifetime (URL + embedding), so
+  // choosing between the two child components never reorders hooks.
+  if (bridge.active) return <PreviewedLanding bridge={bridge} {...props} />;
+  return <ConfiguredLanding {...props} />;
+}
+
+function ConfiguredLanding(props: PGRLandingPageProps) {
   const config = useLandingConfig();
   return <LandingRenderer config={config} {...props} />;
+}
+
+function PreviewedLanding({ bridge, ...props }: PGRLandingPageProps & { bridge: PreviewBridge }) {
+  // Render nothing until the Builder pushes the first draft config.
+  if (!bridge.config) return null;
+  return <LandingRenderer config={bridge.config} {...props} />;
 }
 
 export default PGRLandingPage;

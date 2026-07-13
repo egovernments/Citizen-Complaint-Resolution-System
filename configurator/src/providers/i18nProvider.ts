@@ -51,6 +51,7 @@ const customEnglishMessages: TranslationMessages = {
       complaints: 'Complaints',
       localization: 'Localization',
       landing_page: 'Landing Page',
+      landing_builder: 'Page Builder',
       landing_sections: 'Landing Sections',
       landing_page_config: 'Page Settings',
       people: 'People',
