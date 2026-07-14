@@ -13,8 +13,10 @@ import { LANDING_COPY, LandingCopyKey } from "./content";
 export const LANDING_KEY_PREFIX = "PGR_LANDING_";
 
 export interface LandingCopyApi {
-  /** Resolve a landing copy key to display text. */
-  c: (key: LandingCopyKey) => string;
+  /** Resolve a landing copy key to display text. Accepts the built-in short
+   *  keys and fully-qualified PGR_LANDING_* config keys alike; the optional
+   *  second arg is the fallback key used when the first is empty/unresolved. */
+  c: (key?: LandingCopyKey | string, fallbackKey?: LandingCopyKey | string) => string;
   /** "pt" | "en" — resolved from the active i18n language. */
   lang: "pt" | "en";
   /** Raw i18n handle for integrators (language switching etc.). */
@@ -30,11 +32,29 @@ export function useLandingCopy(): LandingCopyApi {
     : "pt";
 
   const c = React.useCallback(
-    (key: LandingCopyKey): string => {
-      const fullKey = LANDING_KEY_PREFIX + key;
-      const translated = t(fullKey);
-      if (translated && translated !== fullKey) return translated;
-      return LANDING_COPY[key]?.[lang] ?? key;
+    // Resolve a copy key to text. Accepts BOTH the built-in short keys
+    // ("HERO_TITLE") and fully-qualified config/MDMS keys
+    // ("PGR_LANDING_HERO_TITLE") — config rows carry the prefixed form, so
+    // re-prefixing would double it. The optional `fallbackKey` is the component's
+    // canonical default: when the primary key is empty OR unresolved (missing
+    // from both the i18n store and the built-in deck — e.g. a bad/typo'd config
+    // key), we resolve the fallback instead, so untrusted/incomplete config
+    // never surfaces a raw key.
+    (key?: LandingCopyKey | string, fallbackKey?: LandingCopyKey | string): string => {
+      const resolveOne = (k?: string): string | undefined => {
+        if (!k) return undefined;
+        const hasPrefix = k.startsWith(LANDING_KEY_PREFIX);
+        const fullKey = hasPrefix ? k : LANDING_KEY_PREFIX + k;
+        const shortKey = hasPrefix ? k.slice(LANDING_KEY_PREFIX.length) : k;
+        const translated = t(fullKey);
+        if (translated && translated !== fullKey) return translated;
+        return (LANDING_COPY as Record<string, { pt: string; en: string }>)[shortKey]?.[lang];
+      };
+      return (
+        resolveOne(key as string) ??
+        resolveOne(fallbackKey as string) ??
+        String(key ?? fallbackKey ?? "")
+      );
     },
     [t, lang]
   );

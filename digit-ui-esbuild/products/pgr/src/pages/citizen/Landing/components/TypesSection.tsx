@@ -13,18 +13,27 @@ import { MANIFESTATION_TYPES } from "../content";
 import { useLandingCopy } from "../useLandingCopy";
 import { LandingRoutes } from "../routes";
 import { FOCUS_RING } from "../tokens";
+import type { LandingSectionConfig } from "../config/types";
 
 export interface TypesSectionProps {
   routes: LandingRoutes;
+  /** Config-driven overrides; absent => the built-in deck (unchanged). */
+  section?: LandingSectionConfig;
 }
 
-export function TypesSection({ routes }: TypesSectionProps) {
+export function TypesSection({ routes, section }: TypesSectionProps) {
   const { c } = useLandingCopy();
+  const items: any[] = (section?.items as any[]) ?? MANIFESTATION_TYPES;
 
   return (
-    <Section id="pgr-landing-types" title={c("TYPES_TITLE")} intro={c("TYPES_INTRO")} tone="page">
+    <Section
+      id="pgr-landing-types"
+      title={c(section?.titleKey, "TYPES_TITLE")}
+      intro={c(section?.subtitleKey, "TYPES_INTRO")}
+      tone="page"
+    >
       <ul className="m-0 grid list-none grid-cols-1 gap-5 p-0 sm:grid-cols-2 xl:grid-cols-4">
-        {MANIFESTATION_TYPES.map((type) => {
+        {items.map((type) => {
           const Icon = type.icon;
           const accent = `hsl(var(${type.accentVar}))`;
           return (
@@ -44,7 +53,7 @@ export function TypesSection({ routes }: TypesSectionProps) {
                 <h3 className="mb-0 mt-4 text-lg font-bold text-[hsl(var(--pgrl-ink))]">
                   {/* Stretched link: one big click target, single tab stop. */}
                   <LandingLink
-                    to={routes[type.route]}
+                    to={type.href ?? routes[type.route]}
                     className={
                       "!text-inherit no-underline after:absolute after:inset-0 after:content-[''] " +
                       "rounded-[var(--pgrl-radius)] " +

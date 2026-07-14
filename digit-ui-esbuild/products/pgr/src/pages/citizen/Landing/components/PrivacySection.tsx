@@ -7,16 +7,19 @@ import { Section } from "./Section";
 import { CtaLink } from "./CtaLink";
 import { useLandingCopy } from "../useLandingCopy";
 import { LandingRoutes } from "../routes";
+import type { LandingSectionConfig } from "../config/types";
 
 export interface PrivacySectionProps {
   routes: LandingRoutes;
+  /** Config-driven overrides; absent => the built-in deck (unchanged). */
+  section?: LandingSectionConfig;
 }
 
-export function PrivacySection({ routes }: PrivacySectionProps) {
+export function PrivacySection({ routes, section }: PrivacySectionProps) {
   const { c } = useLandingCopy();
 
   return (
-    <Section id="pgr-landing-privacy" title={c("PRIVACY_TITLE")} tone="surface">
+    <Section id="pgr-landing-privacy" title={c(section?.titleKey, "PRIVACY_TITLE")} tone="surface">
       <div className="flex flex-col gap-6 rounded-[var(--pgrl-radius)] border border-solid border-[hsl(var(--pgrl-line))] border-l-4 border-l-[hsl(var(--pgrl-primary))] bg-[hsl(var(--pgrl-page))] p-6 sm:flex-row sm:items-start md:p-8">
         <span
           aria-hidden
@@ -25,8 +28,8 @@ export function PrivacySection({ routes }: PrivacySectionProps) {
           <Lock className="h-7 w-7" />
         </span>
         <div className="max-w-3xl">
-          <p className="m-0 text-base font-semibold leading-relaxed text-[hsl(var(--pgrl-ink))]">{c("PRIVACY_P1")}</p>
-          <p className="mb-0 mt-3 text-sm leading-relaxed text-[hsl(var(--pgrl-ink-soft))]">{c("PRIVACY_P2")}</p>
+          <p className="m-0 text-base font-semibold leading-relaxed text-[hsl(var(--pgrl-ink))]">{c(section?.bodyKey, "PRIVACY_P1")}</p>
+          <p className="mb-0 mt-3 text-sm leading-relaxed text-[hsl(var(--pgrl-ink-soft))]">{c(section?.subtitleKey, "PRIVACY_P2")}</p>
           <CtaLink
             to={routes.PRIVACY}
             variant="subtle"

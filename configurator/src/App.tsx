@@ -10,6 +10,7 @@ import CompletePage from './pages/CompletePage';
 import { CoreAdminContext, CoreAdminUI, Resource, CustomRoutes } from 'ra-core';
 import { QueryClient } from '@tanstack/react-query';
 import { DigitLayout, DigitDashboard, MdmsResourcePage, MdmsResourceShow, MdmsResourceEdit, MdmsResourceCreate } from '@/admin';
+import { LandingBuilder } from '@/admin/landingBuilder';
 import {
   DepartmentList, DepartmentShow, DepartmentEdit, DepartmentCreate, DepartmentBulkImport,
   DesignationList, DesignationShow, DesignationEdit, DesignationCreate, DesignationBulkImport,
@@ -144,6 +145,12 @@ function ManagementAdmin() {
         <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />
         <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} create={BoundaryHierarchyCreate} />
         <Resource name="complaint-hierarchies" list={ComplaintHierarchyList} show={ComplaintHierarchyShow} create={ComplaintHierarchyCreate} />
+        {/* CCSD-2008: config-driven landing masters — full generic CRUD (the
+            P4 Builder replaces only the edit surface via customEditor; same
+            resource, routes and MDMS APIs). dedicated:true keeps them out of
+            the auto-loop below, so routes are declared explicitly here. */}
+        <Resource name="landing-sections" list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
+        <Resource name="landing-page-config" list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
 
         {/* Novu-into-configurator: read-only notification surfaces served by the
             novu-bridge proxy (not egov-mdms). Names match the 'custom' registry
@@ -163,6 +170,8 @@ function ManagementAdmin() {
           <Route path="/notification-configure" element={<NotificationConfigure />} />
           <Route path="/advanced" element={<AdvancedPage />} />
           <Route path="/pgr-dashboard" element={<PgrDashboard />} />
+          {/* CCSD-2009: visual Landing Page Builder over the P3 resources */}
+          <Route path="/landing-builder" element={<LandingBuilder />} />
           <Route path="/employees/bulk" element={<EmployeeBulkImport />} />
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
           <Route path="/designations/bulk" element={<DesignationBulkImport />} />

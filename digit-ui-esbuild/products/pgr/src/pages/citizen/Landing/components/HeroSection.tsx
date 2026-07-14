@@ -18,21 +18,29 @@ import { CtaLink } from "./CtaLink";
 import { useLandingCopy } from "../useLandingCopy";
 import { LandingRoutes } from "../routes";
 import { CONTAINER, FOCUS_RING_DARK } from "../tokens";
+import type { LandingSectionConfig } from "../config/types";
 
 export interface HeroSectionProps {
   routes: LandingRoutes;
   /** Optional photographic background, rendered under the brand scrim. */
   imageUrl?: string;
+  /** Config-driven overrides; absent => the built-in deck (unchanged). */
+  section?: LandingSectionConfig;
 }
 
-export function HeroSection({ routes, imageUrl }: HeroSectionProps) {
+export function HeroSection({ routes, imageUrl, section }: HeroSectionProps) {
   const { c } = useLandingCopy();
 
-  const trust = [
-    { icon: Lock, label: c("HERO_TRUST_CONFIDENTIAL") },
-    { icon: Hash, label: c("HERO_TRUST_CASE_NUMBER") },
-    { icon: Bell, label: c("HERO_TRUST_NOTIFICATIONS") },
-  ];
+  // Config-driven trust "features" (P4): items[] when provided, else the
+  // built-in three — byte-identical when config is absent.
+  const configItems = (section?.items as any[]) || [];
+  const trust = configItems.length
+    ? configItems.map((it) => ({ icon: it.icon ?? Lock, label: c(it.labelKey) }))
+    : [
+        { icon: Lock, label: c("HERO_TRUST_CONFIDENTIAL") },
+        { icon: Hash, label: c("HERO_TRUST_CASE_NUMBER") },
+        { icon: Bell, label: c("HERO_TRUST_NOTIFICATIONS") },
+      ];
 
   const chips = [
     { icon: Smartphone, label: c("HERO_CHANNEL_APP"), to: routes.ANDROID_APP, external: true },
@@ -69,19 +77,19 @@ export function HeroSection({ routes, imageUrl }: HeroSectionProps) {
       <div className={cn(CONTAINER, "py-14 md:py-20")}>
         <div className="max-w-3xl">
           <p className="m-0 inline-flex items-center rounded-full bg-[hsl(var(--pgrl-on-primary)/0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[hsl(var(--pgrl-accent))]">
-            {c("HERO_EYEBROW")}
+            {c(section?.bodyKey, "HERO_EYEBROW")}
           </p>
 
           <h1
             id="pgr-landing-hero-title"
             className="mb-0 mt-4 text-3xl font-bold leading-tight text-[hsl(var(--pgrl-on-primary))] sm:text-4xl lg:text-5xl"
           >
-            {c("HERO_TITLE")}
+            {c(section?.titleKey, "HERO_TITLE")}
           </h1>
 
           {/* Solid white: /0.9 dims below 4.5:1 over the gradient's light end. */}
           <p className="mb-0 mt-4 max-w-2xl text-base leading-relaxed text-[hsl(var(--pgrl-on-primary))] sm:text-lg">
-            {c("HERO_LEDE")}
+            {c(section?.subtitleKey, "HERO_LEDE")}
           </p>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">

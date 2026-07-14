@@ -13,22 +13,27 @@ import { NewsItem } from "../content";
 import { useLandingCopy } from "../useLandingCopy";
 import { LandingRoutes } from "../routes";
 import { FOCUS_RING } from "../tokens";
+import type { LandingSectionConfig } from "../config/types";
 
 export interface NewsSectionProps {
   routes: LandingRoutes;
   items: NewsItem[];
+  /** Config-driven overrides; absent => the built-in deck (unchanged).
+   *  Note: news CARDS stay prop-driven (their raw CMS fields don't fit the
+   *  key-based item schema) — only the heading is config-driven in v1. */
+  section?: LandingSectionConfig;
 }
 
 const isExternal = (href: string) => /^https?:\/\//i.test(href);
 
-export function NewsSection({ routes, items }: NewsSectionProps) {
+export function NewsSection({ routes, items, section }: NewsSectionProps) {
   const { c } = useLandingCopy();
-  if (!items.length) return null;
+  if (!items || !items.length) return null;
 
   return (
     <Section
       id="pgr-landing-news"
-      title={c("NEWS_TITLE")}
+      title={c(section?.titleKey, "NEWS_TITLE")}
       tone="page"
       action={
         <CtaLink

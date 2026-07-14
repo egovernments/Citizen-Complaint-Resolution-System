@@ -4,17 +4,24 @@ import * as React from "react";
 import { Section } from "./Section";
 import { INSTITUTIONS } from "../content";
 import { useLandingCopy } from "../useLandingCopy";
+import type { LandingSectionConfig } from "../config/types";
 
-export function InstitutionsSection() {
+export interface InstitutionsSectionProps {
+  /** Config-driven overrides; absent => the built-in deck (unchanged). */
+  section?: LandingSectionConfig;
+}
+
+export function InstitutionsSection({ section }: InstitutionsSectionProps = {}) {
   const { c } = useLandingCopy();
+  const items: any[] = (section?.items as any[]) ?? INSTITUTIONS;
 
   return (
-    <Section id="pgr-landing-institutions" title={c("INST_TITLE")} tone="surface">
+    <Section id="pgr-landing-institutions" title={c(section?.titleKey, "INST_TITLE")} tone="surface">
       <ul className="m-0 grid list-none grid-cols-1 gap-5 p-0 md:grid-cols-2">
-        {INSTITUTIONS.map((inst) => {
+        {items.map((inst) => {
           const Icon = inst.icon;
           return (
-            <li key={inst.titleKey} className="m-0 p-0">
+            <li key={inst.id ?? inst.titleKey} className="m-0 p-0">
               <article className="flex h-full flex-col gap-4 rounded-[var(--pgrl-radius)] border border-solid border-[hsl(var(--pgrl-line))] bg-[hsl(var(--pgrl-page))] p-6 sm:flex-row sm:items-start">
                 <span
                   aria-hidden
