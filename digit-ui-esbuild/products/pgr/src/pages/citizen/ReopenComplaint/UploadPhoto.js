@@ -50,7 +50,11 @@ const UploadPhoto = (props) => {
     <React.Fragment>
       <Card>
         <ImageUploadHandler
-          header={t(`${LOCALIZATION_KEY.CS_ADDCOMPLAINT}_UPLOAD_PHOTO`)}
+          header={
+            t(`${LOCALIZATION_KEY.CS_ADDCOMPLAINT}_UPLOAD_PHOTO`) +
+            // Photos are skippable on reopen — label them optional (CCSD-1955)
+            (props.skip ? " " + (t("CS_OPTIONAL_SUFFIX") === "CS_OPTIONAL_SUFFIX" ? "(Optional)" : t("CS_OPTIONAL_SUFFIX")) : "")
+          }
           tenantId={props?.complaintDetails?.service?.tenantId}
           cardText=""
           onPhotoChange={handleUpload}
