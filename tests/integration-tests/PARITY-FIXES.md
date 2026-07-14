@@ -246,7 +246,22 @@ kubectl patch svc egov-otp -n egov --type json -p '[{"op":"replace","path":"/spe
 ```
 - **In-files (committed):** egov-user OTP flags aligned to Compose — `charts/core-services/egov-user/values.yaml` + `env.yaml`: `otp-validation`, `citizen-otp-enabled`, `citizen-registration-withlogin` set **empty** (not emitted), keeping only `citizen-otp-fixed=123456`/`-enabled`. (Drops the earlier `OTP_VALIDATION_REGISTER_MANDATORY=false`/`withlogin=true` workarounds — the mock makes them unnecessary.)
 **Verified:** citizen provisioning + all 3 UI tests (`fresh phone → OTP → name+email`, `upload JPEG/photo`) pass on k8s.
-**Permanent fix:** wire the OTP mock into the k8s helmfile (deploy `otp-mock` and point the `user-otp`/`egov-otp` Services at it — or a gateway short-circuit for `/user-otp/*`+`/otp/v1/_validate`), matching Compose's default. *(Or `enable_otp_services:true` on both + fix the `user-otp` `MobileNumberValidation` match — the production-like path.)*
+**Permanent fix — a helmfile OTP toggle that MIRRORS Compose's, so both stacks are on/off-identical.**
+
+Compose already has a clean, documented toggle (this is the design to copy, not invent):
+- **`enable_otp_services`** in the tenant Ansible host_vars (`local-setup/ansible/inventory/host_vars/<tenant>.yml`) — `false` (default) keeps the real OTP stack (`egov-otp`,`user-otp`,`egov-notification-sms`) **down** (they sit behind the compose `otp` **profile**, added by `playbook-deploy.yml:543` only when `true`).
+- **Kong `user-otp-mock`** — a `request-termination` plugin in `local-setup/kong/kong.yml` short-circuits `/user-otp/*` with a canned 200 so the fixed `123456` works with no OTP stack. `kong.yml` documents the flip: delete the plugin + set `enable_otp_services:true` + configure a real SMS gateway.
+
+The k8s side today is a **live `kubectl` patch** (above) with **no equivalent switch** — that's the gap. Make it a **chart-gated toggle** keyed off the *same* `enable_otp_services` value (single source of truth across both stacks):
+
+| `enable_otp_services` | k8s (this fix) | Compose (already) |
+|---|---|---|
+| **`false` — mock (test default)** | helmfile deploys the `otp-mock` (chart the committed `deploy/otp-mock.k8s.yaml` as `{{- if not .Values.enable_otp_services }}`), and points the `user-otp`/`egov-otp` Service **selectors** at `app=otp-mock` (or a gateway short-circuit for `/user-otp/*` + `/otp/v1/_validate`). egov-user OTP flags → **empty** (mock, fixed `123456`). | `otp` profile down + Kong request-termination mock. egov-user OTP flags empty. |
+| **`true` — real (production)** | helmfile deploys the real `user-otp`/`egov-otp`; **no** otp-mock; Service selectors point at the real pods. egov-user OTP flags → `otp-validation:"true"` etc. + a real SMS provider. | `otp` profile up + Kong mock deleted + SMS gateway. |
+
+**Coupling to enforce:** the egov-user OTP flags (`otp-validation`/`citizen-otp-enabled`/`citizen-registration-withlogin`) must be gated by the **same** flag — empty when mock, `"true"` when real — so config can't drift from which OTP mode is actually deployed. (This is why the standalone empty-flags commit was reverted from `env.yaml`: the flags belong *inside* the toggle, not hard-set.)
+
+**Net:** one flag, mirrored on both stacks — tests run against the mock by default; production sets `enable_otp_services: true` once and both Compose and k8s bring up real OTP identically. Ties into the "standard config contract" ask in [`TEST-STANDARDIZATION-BRIEF.md`](./TEST-STANDARDIZATION-BRIEF.md#1-tests-assume-config-that-varies-by-deployment).
 
 ## §1.9 · egov-workflow-v2 mis-tenanted on **Compose** — `STATE_LEVEL_TENANT_ID` pointed at the city, not the state root  ✅ Permanent (fixed + verified)
 **Symptom (Compose-side, not k8s):** the complaint pipeline fails on Compose while passing on k3s+bomet — `PGR business service is present` → `undefined`, `citizen creates complaint` → false, and ~18 downstream tests (My Complaints, detail page, rate, reopen, assign→resolve, the `@p0`/`@p1` search tests) fail or skip.
