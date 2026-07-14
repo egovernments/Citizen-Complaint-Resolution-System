@@ -568,6 +568,71 @@ services:
     networks:
     - egov-network
 
+  # audit-service (deployment-parity item #13). Adds the audit QUERY API + the
+  # processor that turns raw audit events (process-audit-records) into persist-ready
+  # records (persist-audit-records); egov-persister then writes them to eg_audit_logs
+  # via configs/egov-persister/audit-service-persister.yml. K8s runs this too
+  # (coreservices-helmfile: audit-service installed:true). Compose previously lacked
+  # it, so audit capture was non-functional (no eg_audit_logs table). This restores
+  # cross-stack parity. Schema is created by the audit-service-db Flyway image below.
+  audit-service-migration:
+    image: egovio/audit-service-db:v2.9.2-4a60f20
+    container_name: audit-service-migration
+    depends_on:
+      # DIRECT to postgres-db (never the pgbouncer 'postgres' alias, which runs in
+      # transaction mode and breaks Flyway's session locks).
+      postgres-db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_TABLE: audit_service_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks:
+      - egov-network
+
+  audit-service:
+    image: egovio/audit-service:v2.9.2-4a60f20
+    depends_on:
+      audit-service-migration:
+        condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      egov-enc-service:
+        condition: service_healthy
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx128m"
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      # Flyway disabled on the app — the audit-service-migration init ran it.
+      SPRING_FLYWAY_ENABLED: 'false'
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: audit-service
+      PROCESS_AUDIT_LOGS_KAFKA_TOPIC: process-audit-records
+      PERSIST_AUDIT_LOGS_KAFKA_TOPIC: persist-audit-records
+      # integrity-hash signing goes through enc-service (same as K8s EGOV_ENC_SIGN_HOST)
+      EGOV_ENC_SIGN_HOST: http://egov-enc-service:1234
+      SERVER_PORT: 8080
+      SECURITY_BASIC_ENABLED: 'false'
+      MANAGEMENT_SECURITY_ENABLED: 'false'
+      MANAGEMENT_HEALTH_DB_ENABLED: 'false'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/audit-service/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+      - egov-network
+
   # Unified database migrations for all DIGIT services
   # Runs all Flyway migrations in one container before services start
   db-migrations:
