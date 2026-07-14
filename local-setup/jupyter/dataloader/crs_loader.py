@@ -414,7 +414,8 @@ class CRSLoader:
             'egov-hrms.EmployeeType',
             'egov-hrms.DeactivationReason',
             'ACCESSCONTROL-ROLES.roles',
-            'RAINMAKER-PGR.ServiceDefs',
+            'RAINMAKER-PGR.ComplaintHierarchyDefinition',
+            'RAINMAKER-PGR.ComplaintHierarchy',
             'Workflow.BusinessService',
             'INBOX.InboxQueryConfiguration',
         ]
@@ -1166,14 +1167,26 @@ class CRSLoader:
         after_depts = self.uploader.fetch_departments(tenant)
         print(f"   After load: {len(after_depts)} dept(s), {len(after_desigs)} desig(s) on {tenant}")
 
-        # 2. Load complaint types
-        print(f"\n[2/2] Loading complaint types...")
+        # 2. Load complaint hierarchy (merged 2-master model)
+        #    ComplaintHierarchyDefinition (levels) + ComplaintHierarchy (interior nodes + leaf rows).
+        print(f"\n[2/2] Loading complaint hierarchy...")
         complaint_data, complaint_loc = reader.read_complaint_types(tenant, dept_name_to_code)
 
         if complaint_data:
-            print(f"   Creating {len(complaint_data)} complaint types...")
+            # Definition first so the levels referenced by the rows exist.
+            hierarchy_def = reader.complaint_hierarchy_definition()
+            print(f"   Creating ComplaintHierarchyDefinition ({hierarchy_def['hierarchyType']})...")
+            results['complaint_hierarchy_definition'] = self.uploader.create_mdms_data(
+                schema_code='RAINMAKER-PGR.ComplaintHierarchyDefinition',
+                data_list=[hierarchy_def],
+                tenant=tenant,
+                sheet_name='Complaint Type',
+                excel_file=excel_path
+            )
+
+            print(f"   Creating {len(complaint_data)} complaint hierarchy rows...")
             results['complaint_types'] = self.uploader.create_mdms_data(
-                schema_code='RAINMAKER-PGR.ServiceDefs',
+                schema_code='RAINMAKER-PGR.ComplaintHierarchy',
                 data_list=complaint_data,
                 tenant=tenant,
                 sheet_name='Complaint Type',
@@ -1945,7 +1958,7 @@ class CRSLoader:
         schemas = [
             'common-masters.Department',
             'common-masters.Designation',
-            'RAINMAKER-PGR.ServiceDefs'
+            'RAINMAKER-PGR.ComplaintHierarchy'
         ]
         return self.uploader.rollback_mdms_by_schema(schemas, tenant)
 

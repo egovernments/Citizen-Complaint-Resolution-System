@@ -21,9 +21,13 @@ import {
   type AuthInfo,
 } from '../utils/manage/api';
 import { cleanupPgrComplaints } from '../utils/manage/teardown';
+import { generateCitizenPhone, ROOT_TENANT, TENANT } from '../utils/env';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
-const CITY_TENANT = process.env.DIGIT_TENANT || `${TENANT_CODE}.nairobi`;
+// Tenant identifiers come from env so the suite runs on any deployment.
+// TENANT_CODE is the STATE/root tenant (citizen tenantId); CITY_TENANT is the
+// configured city (DIGIT_TENANT) — no hardcoded ke / ke.nairobi.
+const TENANT_CODE = ROOT_TENANT;
+const CITY_TENANT = TENANT;
 
 const LIST_PATH = '/configurator/manage/complaints';
 const CREATE_PATH = `${LIST_PATH}/create`;
@@ -40,15 +44,20 @@ test.beforeAll(async () => {
   const auth = loadAuth();
 
   // --- Pick a live complaint type ---
+  // ComplaintHierarchy is one adjacency list of interior nodes AND leaf complaint
+  // types. Complaint types are the LEAF rows (data carries department/slaHours);
+  // a leaf's `code` is the serviceCode stored on a complaint, verbatim.
   const ctRecords = await mdmsSearch(
     auth,
     TENANT_CODE,
-    'RAINMAKER-PGR.ServiceDefs',
+    'RAINMAKER-PGR.ComplaintHierarchy',
     { limit: 200 },
   ).catch(() => [] as Awaited<ReturnType<typeof mdmsSearch>>);
   for (const r of ctRecords) {
     if (r.isActive === false) continue;
-    const code = (r.data as Record<string, unknown>).serviceCode as string | undefined;
+    const data = r.data as Record<string, unknown>;
+    if (data.department === undefined && data.slaHours === undefined) continue; // interior node
+    const code = data.code as string | undefined;
     if (code) { liveServiceCode = code; break; }
   }
 
@@ -103,7 +112,7 @@ Steps:
 3. Click Complaint Type select; pick the option matching liveServiceCode.
 4. Fill Description with >10 chars.
 5. pickLocality(page, liveBoundaryCode) — drives Hierarchy → Boundary type → Locality cascade.
-6. Fill Mobile number with a unique 10-digit phone starting with 7.
+6. Fill Mobile number with a unique phone from generateCitizenPhone() (valid for the deployment's MDMS mobile rule — 9 digits starting with 7/1).
 7. Set up createReqPromise on /pgr-services/v2/request/_create.
 8. Click Create.
 9. Parse the captured request body; assert service.citizen.tenantId === TENANT_CODE (root) and service.address.tenantId === CITY_TENANT, and address.locality.code is non-empty.
@@ -119,10 +128,11 @@ Citizen tenant must be ROOT — assigning to city would break login flows. Clean
 
     await page.goto(CREATE_PATH);
 
-    // Pick complaint type via the labeled select.
-    const typeSelect = page.getByLabel(/^Complaint Type/i);
-    await typeSelect.click();
-    await page.getByRole('option', { name: new RegExp(liveServiceCode!) }).first().click();
+    // Pick a complaint type. The single "Complaint Type" select was replaced
+    // by a Category → Sub-Type cascade (ComplaintHierarchyCascade), so drive
+    // that instead. The create assertions below don't pin a specific
+    // serviceCode, so picking the first valid leaf is sufficient.
+    await pickComplaintType(page);
 
     await page.getByLabel(/^Description/i).fill(
       'PW filed-by-test — complaint description over ten chars',
@@ -133,8 +143,9 @@ Citizen tenant must be ROOT — assigning to city would break login flows. Clean
     // (if known on this tenant) or the first listed boundary.
     await pickLocality(page, liveBoundaryCode || undefined);
 
-    // Citizen mobile (fresh PW_-namespaced number).
-    const phone = uniquePhoneNumber();
+    // Citizen mobile — valid for the deployment's MDMS mobile rule
+    // (9 digits starting with 7/1). A raw 10-digit 7… fails that rule.
+    const phone = generateCitizenPhone();
     await page.getByLabel(/^Mobile number/i).fill(phone);
     // Leave name blank intentionally — server should fall back to mobile.
 
@@ -157,11 +168,12 @@ Citizen tenant must be ROOT — assigning to city would break login flows. Clean
     expect(address?.tenantId).toBe(CITY_TENANT);
     expect(((address?.locality as Record<string, unknown>)?.code) ?? '').toBeTruthy();
 
-    // Wait for the redirect to the Show page with a fresh PG-PGR-* id.
-    await page.waitForURL(/PG-PGR-/, { timeout: 30_000 });
+    // Wait for the redirect to the Show page with a fresh <PREFIX>-PGR-* id
+    // (Maputo: PG-PGR-…, Kenya: NCCG-PGR-…) — keep the SRID match prefix-agnostic.
+    await page.waitForURL(/[A-Z]+-PGR-/, { timeout: 30_000 });
     const url = page.url();
-    const match = url.match(/(PG-PGR-[^/?#]+)/);
-    expect(match, `expected PG-PGR id in url ${url}`).not.toBeNull();
+    const match = url.match(/([A-Z]+-PGR-[^/?#]+)/);
+    expect(match, `expected <PREFIX>-PGR id in url ${url}`).not.toBeNull();
     if (match) createdComplaints.add(match[1]);
   });
 
@@ -686,7 +698,7 @@ Both client-side (single XHR count) and server-side (persistence) checks — tog
     expect(svc?.description).toBe(newDesc);
 
     // Server round-trip confirmation.
-    const wrappers = await pgrSearch(auth, CITY_TENANT, { serviceRequestId: target });
+    const wrappers = await pgrSearch(auth, CITY_TENANT, { serviceRequestId: target ?? undefined });
     const persisted = (wrappers[0]?.service as Record<string, unknown>)?.description;
     expect(persisted).toBe(newDesc);
   });
@@ -725,40 +737,113 @@ Probed 2026-04-23: 11 PENDINGFORASSIGNMENT on ke.nairobi. Hardcoding 11 would dr
 
 // --- Local helpers ---
 
-function uniquePhoneNumber(): string {
-  // 10 digits starting with 7. PW_ prefix lives in the description, not the
-  // phone number; mobile field needs to be valid for the user-service.
-  const tail = String(Date.now()).slice(-9);
-  return `7${tail}`;
+/** Locate a radix Select trigger sitting in the same wrapper <div> as a
+ *  given field <Label> text. These cascade selects don't associate their
+ *  label via htmlFor, so getByLabel can't reach them — anchor on the label
+ *  text and take the combobox in the innermost enclosing div. */
+function triggerNearLabel(
+  page: import('@playwright/test').Page,
+  labelText: RegExp,
+): import('@playwright/test').Locator {
+  return page
+    .locator('div')
+    .filter({ has: page.getByText(labelText) })
+    .filter({ has: page.getByRole('combobox') })
+    .last()
+    .getByRole('combobox')
+    .first();
+}
+
+async function pickComplaintType(
+  page: import('@playwright/test').Page,
+): Promise<void> {
+  // The complaint-type control is a Category → Sub-Type cascade — one radix
+  // Select per RAINMAKER-PGR.ComplaintHierarchy level. Pick the first option
+  // at each level until the deepest (terminal) level is chosen, which is what
+  // sets the form's serviceCode. Deeper levels are hidden once a branch is
+  // terminal, so a missing/disabled next level just ends the walk.
+  for (const lbl of [/^Category$/i, /^Sub-?Type$/i]) {
+    const sel = triggerNearLabel(page, lbl);
+    if (!(await sel.isVisible({ timeout: 8_000 }).catch(() => false))) break;
+    if (!(await sel.isEnabled().catch(() => false))) break;
+    await sel.click();
+    const opt = page.getByRole('option').first();
+    if (!(await opt.isVisible({ timeout: 5_000 }).catch(() => false))) {
+      await page.keyboard.press('Escape').catch(() => {});
+      break;
+    }
+    await opt.click();
+  }
 }
 
 async function pickLocality(
   page: import('@playwright/test').Page,
   preferredCode?: string,
 ): Promise<void> {
-  // The picker exposes three labeled selects — Hierarchy, Boundary type,
-  // and Locality. We pick first option in each, optionally pinning the
-  // locality to a known live code.
-  const hierarchy = page.getByLabel(/Hierarchy/i).first();
-  if (await hierarchy.isVisible().catch(() => false)) {
-    await hierarchy.click();
-    await page.getByRole('option').first().click();
-  }
-  const boundaryType = page.getByLabel(/Boundary type/i).first();
-  if (await boundaryType.isVisible().catch(() => false)) {
-    await boundaryType.click();
-    await page.getByRole('option').first().click();
-  }
-  const locality = page.getByLabel(/^Locality$/i).first();
-  await locality.click();
-  if (preferredCode) {
-    const opt = page.getByRole('option', { name: new RegExp(preferredCode) });
-    if (await opt.first().isVisible().catch(() => false)) {
-      await opt.first().click();
-      return;
+  // LocalityPicker is three radix Selects in one grid — Hierarchy → Boundary
+  // Type → Boundary(locality). Only the last carries a "Locality" label
+  // (htmlFor); the first two expose no accessible label, so scope to the grid
+  // and drive them positionally. The default hierarchy can be one with no
+  // usable city boundaries (e.g. ADMIN 400s on this tenant while MAPUTO_ADMIN
+  // holds the real tree), so iterate hierarchy × boundary-type until the
+  // Boundary select actually offers options, then pick preferredCode or first.
+  // Anchor on the picker's help text (unique) to scope to its 3 selects —
+  // the individual Hierarchy/Boundary-Type triggers carry no accessible label.
+  const localityGroup = page
+    .locator('div')
+    .filter({ has: page.getByText(/Cascades from hierarchy/i) })
+    .last();
+  await localityGroup.getByRole('combobox').first().waitFor({ state: 'visible', timeout: 15_000 });
+  const selects = localityGroup.getByRole('combobox');
+  const hierarchy = selects.nth(0);
+  const boundaryType = selects.nth(1);
+  const localityTrigger = selects.nth(2);
+
+  const pickFirstOrPreferred = async (): Promise<boolean> => {
+    const options = page.getByRole('option');
+    if ((await options.count()) === 0) return false;
+    if (preferredCode) {
+      const pref = page.getByRole('option', { name: new RegExp(preferredCode) });
+      if (await pref.first().isVisible().catch(() => false)) {
+        await pref.first().click();
+        return true;
+      }
+    }
+    await options.first().click();
+    return true;
+  };
+
+  const countOptions = async (trigger: import('@playwright/test').Locator): Promise<number> => {
+    if (!(await trigger.isEnabled().catch(() => false))) return 0;
+    await trigger.click();
+    const n = await page.getByRole('option').count();
+    if (n === 0) await page.keyboard.press('Escape').catch(() => {});
+    return n;
+  };
+
+  const hierN = await countOptions(hierarchy);
+  for (let h = 0; h < Math.max(hierN, 1); h++) {
+    if (hierN > 0) {
+      await page.getByRole('option').nth(h).click();
+    }
+    const typeN = await countOptions(boundaryType);
+    for (let t = 0; t < typeN; t++) {
+      await page.getByRole('option').nth(t).click();
+      if (!(await localityTrigger.isEnabled().catch(() => false))) continue;
+      await localityTrigger.click();
+      if (await pickFirstOrPreferred()) return;
+      await page.keyboard.press('Escape').catch(() => {});
+      // Re-open the type select for the next candidate.
+      if (t + 1 < typeN && (await boundaryType.isEnabled().catch(() => false))) {
+        await boundaryType.click();
+      }
+    }
+    // Re-open the hierarchy select for the next candidate.
+    if (h + 1 < hierN && (await hierarchy.isEnabled().catch(() => false))) {
+      await hierarchy.click();
     }
   }
-  await page.getByRole('option').first().click();
+  throw new Error('pickLocality: no hierarchy/type combination yielded a selectable boundary');
 }
 
 async function pickWorkableComplaint(auth: AuthInfo): Promise<string | null> {

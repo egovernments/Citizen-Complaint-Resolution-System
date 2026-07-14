@@ -26,13 +26,14 @@ const MOBILE_INPUT = 'input[name="user.mobileNumber"]';
 let mobileRule: MobileRule;
 let helpTextRe: RegExp;
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 test.beforeAll(async () => {
   mobileRule = await getMobileValidationRule(TENANT);
-  helpTextRe = new RegExp(escapeRegex(mobileRule.errorMessage), 'i');
+  // The form renders its error via the app's `useMobileValidator`, whose copy
+  // is "Please enter a valid mobile number (<len> digits, starting with <d>)"
+  // on every tenant — not the synthetic `mobileRule.errorMessage` the MDMS
+  // helper builds ("…valid <len>-digit mobile number"). Assert on the stable
+  // app substring so the check is tenant-agnostic and matches what renders.
+  helpTextRe = /valid mobile number/i;
 });
 
 test.describe('admin employee create — mobile validator (MDMS rule) #447 #674', () => {

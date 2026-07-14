@@ -1,7 +1,11 @@
 import {
-  DEFAULT_MOBILE_MAX_LENGTH,
+  computeMobileLengths,
+  DEFAULT_MOBILE_PATTERN,
   DEFAULT_MOBILE_PATTERN_LAX,
 } from "../../constants/mobileValidation";
+
+const { max: _defaultMax } = computeMobileLengths(DEFAULT_MOBILE_PATTERN);
+const DEFAULT_MOBILE_MAX_LENGTH = _defaultMax > 0 ? _defaultMax : 15;
 
 const inboxSearchFields = {
   PT: [

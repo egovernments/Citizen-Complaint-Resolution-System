@@ -1,6 +1,7 @@
 import { DigitEdit, DigitFormInput, DigitFormSelect, WorkflowActionSelect, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { LocalityPicker } from './LocalityPicker';
+import { ComplaintHierarchyCascade } from './ComplaintHierarchyCascade';
 
 // Aligned with the PGR service's server-side source allow-list — probed
 // 2026-04-23 on naipepea: web / mobile / whatsapp accepted; ivr / phone /
@@ -33,13 +34,7 @@ export function ComplaintEdit() {
 
       <FieldSection title="Details">
         <div className="space-y-4">
-          <DigitFormSelect
-            source="serviceCode"
-            label="Complaint Type"
-            reference="complaint-types"
-            optionValue="serviceCode"
-            placeholder="Select complaint type..."
-          />
+          <ComplaintHierarchyCascade source="serviceCode" label="Complaint Type" />
           <DigitFormInput source="description" label="Description" />
           <DigitFormSelect
             source="source"

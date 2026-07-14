@@ -143,14 +143,27 @@ export interface Designation {
   tenantId?: string;
 }
 
-// Complaint Type / Service Definition
+// Complaint Type — a LEAF row of the RAINMAKER-PGR.ComplaintHierarchy adjacency
+// list, adapted to the legacy ServiceDefs shape. A leaf's `code` (exposed here
+// as `serviceCode`) IS the serviceCode stored on a complaint.
+//
+// `menuPath` / `menuPathName` are no longer master fields — they are DERIVED:
+//   menuPath     = parentCode
+//   menuPathName = the parent ComplaintHierarchy node's `name` (group label)
 export interface ComplaintType {
   serviceCode: string;
   name: string;
   keywords: string;
   department: string;
+  /** Multi-department routing (leaf rows may list more than one). */
+  departments?: string[];
   slaHours: number;
+  /** Parent node code in the adjacency list (the group key). */
+  parentCode?: string;
+  /** Derived from parentCode — kept for downstream compatibility. */
   menuPath?: string;
+  /** Derived: the parent node's name (the group label). */
+  menuPathName?: string;
   active: boolean;
   order?: number;
 }

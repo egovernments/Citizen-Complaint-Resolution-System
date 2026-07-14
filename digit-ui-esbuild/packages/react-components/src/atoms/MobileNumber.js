@@ -17,7 +17,7 @@ const MobileNumber = (props) => {
   // lets Nai Pepea surface `+254` instead of the hardcoded India prefix
   // without changing every callsite (closes egovernments/CCRS#444 sub-1).
   const configuredPrefix =
-    window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobilePrefix;
+    window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.countryCode;
   const displayPrefix = props.prefix || configuredPrefix || "+91";
 
   return (

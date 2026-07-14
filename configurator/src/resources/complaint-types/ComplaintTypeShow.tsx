@@ -13,13 +13,28 @@ export function ComplaintTypeShow() {
       {(rec: Record<string, unknown>) => {
         const keywords = rec.keywords as string[] | string | undefined;
         const keywordList = Array.isArray(keywords) ? keywords : (typeof keywords === 'string' ? keywords.split(',').map(k => k.trim()) : []);
+        // A complaint type can map to MANY departments; `department` is the primary.
+        const deptList =
+          Array.isArray(rec.departments) && rec.departments.length
+            ? (rec.departments as string[])
+            : rec.department
+            ? [String(rec.department)]
+            : [];
 
         return (
           <div className="space-y-6">
             <FieldSection title="Details">
-              <FieldRow label="Complaint Type (Menu Path)">{String(rec.menuPath ?? '--')}</FieldRow>
-              <FieldRow label="Department">
-                {rec.department ? <EntityLink resource="departments" id={String(rec.department)} /> : '--'}
+              <FieldRow label="Parent (group code)">{String(rec.parentCode ?? '--')}</FieldRow>
+              <FieldRow label={deptList.length > 1 ? 'Departments' : 'Department'}>
+                {deptList.length ? (
+                  <div className="flex flex-wrap gap-1">
+                    {deptList.map((d) => (
+                      <EntityLink key={d} resource="departments" id={d} />
+                    ))}
+                  </div>
+                ) : (
+                  '--'
+                )}
               </FieldRow>
               <FieldRow label="SLA (hours)">{String(rec.slaHours ?? '--')}</FieldRow>
               <FieldRow label="Status">

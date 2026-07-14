@@ -14,7 +14,8 @@ let employeeToken = null;
 let employeeUserInfo = null;
 let employeeUUID = null;
 
-// All 33 PGR ServiceDefs from full-dump.sql — each VU/iteration uses a different one
+// All 33 PGR leaf complaint codes (RAINMAKER-PGR.ComplaintHierarchy leaf rows) from
+// full-dump.sql — each is a serviceCode stored verbatim on a complaint. Each VU/iteration uses a different one
 const SERVICE_CODES = [
   'StreetLightNotWorking',
   'NoStreetlight',

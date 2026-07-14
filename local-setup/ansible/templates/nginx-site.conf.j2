@@ -302,6 +302,19 @@ server {
     proxy_set_header Host $host;
     proxy_http_version 1.1;
   }
+
+  # React Router deep links — /env/<envId>/activity-feed, /env/<envId>/workflows,
+  # etc. Same class as /auth/ above: the dashboard is Vite base=/, so these are
+  # root-absolute. A direct load / hard-refresh must serve the container's
+  # index.html (the dashboard's http-server does SPA fallback) — otherwise it
+  # falls through `location /` to Kong and 404s ("no Route matched with those
+  # values"). Client-side nav from the dashboard home works either way; this is
+  # only needed for deep-link / refresh.
+  location /env/ {
+    proxy_pass http://127.0.0.1:14000;
+    proxy_set_header Host $host;
+    proxy_http_version 1.1;
+  }
   # Manifest + favicons (referenced unprefixed by the dashboard HTML).
   location = /manifest.json {
     proxy_pass http://127.0.0.1:14000/manifest.json;
@@ -343,14 +356,13 @@ server {
     proxy_read_timeout 24h;
   }
 
-  # novu-bridge REST endpoints (diagnostics: _validate, _dry-run,
-  # _test-trigger) are NOT exposed via host nginx by default. The
-  # bridge lives inside the egov-network and is reachable from kong,
-  # from MCP, and from any pod in the same compose. Operators who
-  # need to curl it can `docker exec novu-bridge curl ...` or open a
-  # shell into kong. Add a `location /novu-bridge/` block here if
-  # you want public access — but the diagnostic endpoints can leak
-  # subscriber info, so think before doing it.
+  # novu-bridge: the read-only configurator proxy endpoints
+  # (GET /novu-bridge/novu-adapter/v1/logs|integrations) are routed by Kong
+  # (see local-setup/kong/kong.yml) and auth-gated INSIDE novu-bridge by
+  # validating the DIGIT bearer token against egov-user /user/_details.
+  # The POST diagnostic endpoints (_validate/_dry-run/_test-trigger) are
+  # deliberately NOT routed publicly. Do NOT hand-wire an unauthenticated
+  # location block for them.
 
 {% endif %}
 {% if enable_turbopass | default(false) %}
@@ -455,25 +467,6 @@ server {
     client_max_body_size 25M;
     proxy_buffering off;
   }
-
-{% if nginx_features.minio_egov_rainmaker_alias | default(false) %}
-  # Legacy /egov-rainmaker/ MinIO passthrough. Used when egov-filestore
-  # signs presigned URLs with the public domain (MINIO_URL=https://<domain>)
-  # under the `egov-rainmaker` bucket instead of the internal minio:9000.
-  # Host is preserved so the AWS4 signature ($host) keeps validating.
-  # ^~ prefix beats the Kong catch-all below.
-  location ^~ /egov-rainmaker/ {
-    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_minio_port | default(19000) }};
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_buffering off;
-    proxy_request_buffering off;
-    client_max_body_size 100m;
-    proxy_read_timeout 120s;
-  }
-{% endif %}
 
 {% if nginx_features.root_to_digit_ui | default(false) %}
   # Bare domain -> citizen app login. Lands users in the digit-ui SPA

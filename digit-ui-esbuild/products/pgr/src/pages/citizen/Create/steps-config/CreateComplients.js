@@ -1,4 +1,5 @@
-
+// ⚠️ DEPRECATED / DORMANT config — belongs to the legacy FormExplorer flow (not routed; live flow is
+// CreatePGRFlowV2.tsx). References the REMOVED ServiceDefs/menuPath model — repoint before any re-enable.
 export const createComplaint = {
   "head": "CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS",
   "body": [

@@ -53,3 +53,6 @@ export { MdmsSchemaShow } from './mdms-schemas/MdmsSchemaShow';
 export { BoundaryHierarchyList } from './boundary-hierarchies/BoundaryHierarchyList';
 export { BoundaryHierarchyShow } from './boundary-hierarchies/BoundaryHierarchyShow';
 export { BoundaryHierarchyCreate } from './boundary-hierarchies/BoundaryHierarchyCreate';
+export { ComplaintHierarchyList } from './complaint-hierarchies/ComplaintHierarchyList';
+export { ComplaintHierarchyShow } from './complaint-hierarchies/ComplaintHierarchyShow';
+export { ComplaintHierarchyCreate } from './complaint-hierarchies/ComplaintHierarchyCreate';

@@ -48,18 +48,24 @@ CI_ROLES = ["SUPERUSER", "EMPLOYEE", "CSR", "GRO", "DGRO", "PGR_LME", "PGR_VIEWE
 
 
 def lookup_service_def(base_url, state_tenant):
-    """Find a ServiceDef and return (serviceCode, department, departmentName)."""
+    """Find a leaf complaint type and return (serviceCode, department, departmentName).
+
+    Reads the merged RAINMAKER-PGR.ComplaintHierarchy master and keeps only LEAF rows
+    (those carrying a 'department'); a leaf row's 'code' IS the serviceCode.
+    """
     headers = {"Content-Type": "application/json"}
-    # Get ServiceDefs
+    # Get ComplaintHierarchy rows (interior nodes + leaves)
     resp = requests.post(f"{base_url}/mdms-v2/v1/_search",
         json={"MdmsCriteria": {"tenantId": state_tenant,
               "moduleDetails": [{"moduleName": "RAINMAKER-PGR",
-                                 "masterDetails": [{"name": "ServiceDefs"}]}]},
+                                 "masterDetails": [{"name": "ComplaintHierarchy"}]}]},
               "RequestInfo": {"apiId": "Rainmaker"}},
         headers=headers, timeout=30)
     if not resp.ok:
         return None, None, None
-    defs = resp.json().get("MdmsRes", {}).get("RAINMAKER-PGR", {}).get("ServiceDefs", [])
+    rows = resp.json().get("MdmsRes", {}).get("RAINMAKER-PGR", {}).get("ComplaintHierarchy", [])
+    # Leaf rows carry a department (interior CATEGORY nodes do not).
+    defs = [r for r in rows if r.get("department")]
     if not defs:
         return None, None, None
     svc = defs[0]
@@ -78,7 +84,8 @@ def lookup_service_def(base_url, state_tenant):
             if d.get("code") == dept_code:
                 dept_name = d.get("name", dept_code)
                 break
-    return svc.get("serviceCode"), dept_code, dept_name
+    # For a ComplaintHierarchy leaf, the 'code' IS the serviceCode stored on a complaint.
+    return svc.get("code"), dept_code, dept_name
 
 
 def ensure_department_for_tenant(loader, dept_code, dept_name, city_tenant):
@@ -130,11 +137,11 @@ def main():
         return 1
     loader.load_common_masters(common_file, target_tenant=TARGET_TENANT)
 
-    # Step 4: Look up a ServiceDef and ensure its department exists at city level
-    print("\n[4/6] Look up ServiceDef department")
+    # Step 4: Look up a leaf complaint type and ensure its department exists at city level
+    print("\n[4/6] Look up complaint type department")
     service_code, dept_code, dept_name = lookup_service_def(BASE_URL, state_tenant)
     if not service_code or not dept_code:
-        print("FATAL: No ServiceDefs found")
+        print("FATAL: No leaf complaint types found in RAINMAKER-PGR.ComplaintHierarchy")
         return 1
     print(f"   Using: {service_code} -> dept {dept_code} ({dept_name})")
     # HRMS validates departments via MDMS v1 which has no tenant inheritance.

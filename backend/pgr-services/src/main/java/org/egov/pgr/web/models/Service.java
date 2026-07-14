@@ -69,7 +69,6 @@ public class Service   {
         @JsonProperty("rating")
         private Integer rating ;
 
-        @CharacterConstraint(size = 600)
         @JsonProperty("additionalDetail")
         private Object additionalDetail = null;
 
@@ -96,6 +95,9 @@ public class Service   {
 
         @JsonProperty("processInstance")
         private ProcessInstance processInstance;
+
+        @JsonProperty("extendedAttributes")
+        private ExtendedAttributes extendedAttributes;
 
 }
 

@@ -20,6 +20,7 @@
 
 import * as React from "react";
 import { useTranslation } from "react-i18next";
+import { complaintLabel } from "../../../utils/complaintLabel";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -53,6 +54,51 @@ function tr(t: (k: string) => string, key: string, fallback: string): string {
 
 declare const Digit: any;
 
+// Postal-code validation is config-driven so the UI honours the same length the
+// backend does, per tenant (CCRS#722). The employee create form and the legacy
+// FormExplorer already read `CORE_POSTAL_CONFIGS.postalCodePattern`; this citizen
+// v2 flow previously had no postal validation at all, so a wrong (e.g. 6-digit
+// Nominatim) pincode auto-filled from the map could be submitted. Optional field
+// — only the format is enforced, and only when a value is present.
+function getPostalConfig(): { pattern: string; errorMessage?: string } {
+  const cfg = (window as any)?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS") || {};
+  return {
+    pattern: cfg.postalCodePattern || "^[0-9]{5}$",
+    errorMessage: cfg.postalCodeErrorMessage, // optional explicit tenant override
+  };
+}
+
+function isPostalCodeValid(v: unknown): boolean {
+  const s = String(v ?? "").trim();
+  if (s.length === 0) return true; // optional — validate format only when filled
+  try {
+    return new RegExp(getPostalConfig().pattern).test(s);
+  } catch {
+    return true; // a malformed configured pattern must never hard-block the form
+  }
+}
+
+// Build an error message that reflects the CONFIGURED length, not a hard-coded
+// count: the stock CS_COMPLAINT_POSTALCODE_INVALID_ERROR string is localized to
+// "…5 digit…", which is wrong for a 4-digit tenant (CCRS#722). A tenant may pin
+// its own message via CORE_POSTAL_CONFIGS.postalCodeErrorMessage; otherwise we
+// derive the digit count from the pattern and use a length-parameterized key
+// (falling back to a correct English string until that key is localized).
+function postalErrorText(t: (k: string, opts?: any) => string): string {
+  const { pattern, errorMessage } = getPostalConfig();
+  if (errorMessage) return t(errorMessage);
+  const m = String(pattern).match(/\{\s*(\d+)/); // ^[0-9]{4}$ -> "4"
+  const len = m ? m[1] : null;
+  if (len) {
+    const key = "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN";
+    const out = t(key, { length: len });
+    return out === key ? `Please enter a valid ${len}-digit postal code` : out;
+  }
+  const gkey = "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC";
+  const gout = t(gkey);
+  return gout === gkey ? "Please enter a valid postal code" : gout;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -64,6 +110,37 @@ interface ServiceDef {
   name?: string;
   department?: string;
   order?: number;
+  // Optional denormalised hierarchy links (present once a tenant runs the
+  // ServiceDefs backfill). The picker falls back to menuPath when absent.
+  parentCode?: string;
+  sector?: string;
+}
+
+// Configurable complaint hierarchy (RAINMAKER-PGR.ComplaintHierarchyDefinition):
+// the number/identity of levels is pure data, mirroring boundary-service's
+// HierarchyDefinition. Absent => legacy flat menuPath grouping.
+interface HierarchyLevel {
+  levelCode: string;
+  order?: number;
+  parentLevel?: string | null;
+  isFreeText?: boolean;
+  isLeafServiceCode?: boolean;
+  label?: string;
+}
+interface ComplaintHierarchyDef {
+  hierarchyType: string;
+  active?: boolean;
+  levels: HierarchyLevel[];
+}
+interface ClassificationNode {
+  hierarchyType: string;
+  levelCode: string;
+  code: string;
+  parentCode?: string | null;
+  name?: string;
+  order?: number;
+  active?: boolean;
+  path?: string;
 }
 
 interface BoundaryNode {
@@ -269,10 +346,166 @@ interface StepBodyProps {
   data: FormData;
   patch: (partial: Partial<FormData>) => void;
   serviceDefs: ServiceDef[];
+  hierarchyDef?: ComplaintHierarchyDef | null;
+  nodes?: ClassificationNode[];
   t: (key: string) => string;
 }
 
-function Step0Type({ data, patch, serviceDefs, t }: StepBodyProps) {
+/**
+ * Generic, configurable N-level cascading picker driven entirely by a
+ * ComplaintHierarchyDefinition + the single ComplaintHierarchy adjacency list.
+ * Renders one dependent dropdown per level (the count is data, not code —
+ * boundary-service style). Non-leaf options come from the interior nodes
+ * (filtered by levelCode + parentCode); the single leaf level's options come
+ * from the leaf rows linked to the parent strictly by parentCode. Selecting the
+ * leaf hands the chosen ServiceDef-shaped row up so the existing payload/
+ * validation logic is reused unchanged.
+ */
+function ComplaintHierarchyPicker({
+  def,
+  nodes,
+  serviceDefs,
+  onLeafChange,
+  t,
+}: {
+  def: ComplaintHierarchyDef;
+  nodes: ClassificationNode[];
+  serviceDefs: ServiceDef[];
+  onLeafChange: (leaf: ServiceDef | null) => void;
+  t: (k: string) => string;
+}) {
+  const levels = React.useMemo(
+    () => [...(def.levels || [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    [def]
+  );
+  const [sel, setSel] = React.useState<(string | null)[]>(() => levels.map(() => null));
+  React.useEffect(() => {
+    setSel((prev) => levels.map((_, i) => prev[i] ?? null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [levels.length]);
+
+  const labelFor = (lvl: HierarchyLevel) =>
+    tr(t, (def.hierarchyType + "_" + lvl.levelCode).toUpperCase(), lvl.label || lvl.levelCode);
+
+  // Options for level `i` computed against an explicit selection array. Needed
+  // because handleChange must know the children of a just-picked node BEFORE
+  // React commits the new `sel` state (setSel is async).
+  const optionsForLevelWith = (
+    selArr: (string | null)[],
+    i: number
+  ): { value: string; label: string }[] => {
+    const lvl = levels[i];
+    const parentCode = i === 0 ? null : selArr[i - 1];
+    if (i > 0 && !parentCode) return [];
+    if (lvl.isLeafServiceCode) {
+      // Leaf rows link to their parent node strictly via parentCode (single
+      // adjacency list); no separate sector/menuPath master anymore.
+      return (serviceDefs || [])
+        .filter((s) => (parentCode ? s.parentCode === parentCode : true))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        .map((s) => ({ value: s.serviceCode, label: complaintLabel(t, s.serviceCode, s.name) }));
+    }
+    return (nodes || [])
+      .filter((n) => n.levelCode === lvl.levelCode && n.active !== false)
+      .filter((n) => (i === 0 ? !n.parentCode : n.parentCode === parentCode))
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((n) => ({ value: n.code, label: complaintLabel(t, n.code, n.name) }));
+  };
+
+  const optionsForLevel = (i: number) => optionsForLevelWith(sel, i);
+
+  // Build a ServiceDef-shaped value from an interior node so a branch that
+  // bottoms out before the declared leaf level (e.g. 3 levels declared, but
+  // this SECTOR has no SUB_TYPE) can still be submitted: the deepest node the
+  // user actually picked becomes the complaint's serviceCode. It is a real
+  // ComplaintHierarchy row, so pgr-services accepts it (no INVALID_SERVICECODE).
+  const interiorAsServiceDef = (i: number, code: string): ServiceDef | null => {
+    const node = (nodes || []).find(
+      (n) => n.levelCode === levels[i].levelCode && n.code === code
+    );
+    if (!node) return null;
+    return {
+      serviceCode: node.code,
+      menuPath: node.parentCode ?? node.code,
+      name: node.name || node.code,
+      parentCode: node.parentCode ?? undefined,
+      order: node.order,
+    };
+  };
+
+  const handleChange = (i: number, value: string) => {
+    const next = sel.slice();
+    next[i] = value || null;
+    for (let j = i + 1; j < next.length; j++) next[j] = null;
+    setSel(next);
+    if (!value) {
+      onLeafChange(null);
+      return;
+    }
+    if (levels[i].isLeafServiceCode) {
+      onLeafChange((serviceDefs || []).find((s) => s.serviceCode === value) || null);
+      return;
+    }
+    // Non-leaf selection: if a deeper level still has options, keep drilling
+    // (clear any pending value). Otherwise this node is terminal — submit with
+    // it as the serviceCode instead of trapping the user on an empty dropdown.
+    const hasDeeper =
+      i + 1 < levels.length && optionsForLevelWith(next, i + 1).length > 0;
+    onLeafChange(hasDeeper ? null : interiorAsServiceDef(i, value));
+  };
+
+  // The deepest level the user has actually selected, and whether that node is
+  // terminal (no children at the next level). Deeper levels are then hidden so
+  // the user isn't blocked by an empty, mandatory dropdown.
+  const deepestSelected = sel.reduce<number>((acc, v, idx) => (v != null ? idx : acc), -1);
+  const terminalAt =
+    deepestSelected >= 0 &&
+    (deepestSelected + 1 >= levels.length ||
+      optionsForLevelWith(sel, deepestSelected + 1).length === 0)
+      ? deepestSelected
+      : -1;
+
+  return (
+    <div className="space-y-5">
+      {levels.map((lvl, i) => {
+        // Once the chosen branch terminates early, drop the deeper levels that
+        // have nothing to offer (e.g. SUB_TYPE under a SECTOR that has none).
+        if (terminalAt >= 0 && i > terminalAt) return null;
+        const disabled = i > 0 && !sel[i - 1];
+        const opts = optionsForLevel(i);
+        return (
+          <Field
+            key={lvl.levelCode}
+            label={labelFor(lvl)}
+            required={opts.length > 0}
+            htmlFor={`lvl-${i}`}
+          >
+            <Select
+              id={`lvl-${i}`}
+              value={sel[i] ?? undefined}
+              disabled={disabled}
+              onValueChange={(value: string) => handleChange(i, value)}
+              placeholder={
+                disabled
+                  ? tr(t, "CS_COMPLAINT_PICK_PARENT_FIRST", "Select the level above first")
+                  : tr(t, "CS_COMPLAINT_PICK_ONE", "Select…")
+              }
+              options={opts}
+            />
+          </Field>
+        );
+      })}
+    </div>
+  );
+}
+
+function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBodyProps) {
+  const hierarchyActive = !!(
+    hierarchyDef &&
+    Array.isArray(hierarchyDef.levels) &&
+    hierarchyDef.levels.length > 0
+  );
+
   // Unique main types by menuPath
   const types = React.useMemo(() => {
     const seen = new Set<string>();
@@ -284,7 +517,9 @@ function Step0Type({ data, patch, serviceDefs, t }: StepBodyProps) {
       })
       .map((s) => ({
         ...s,
-        menuPathName: t("SERVICEDEFS." + s.menuPath.toUpperCase()),
+        // Group label = key-based (COMPLAINT_HIERARCHY.<parentCode>) with the
+        // parent node name as fallback.
+        menuPathName: complaintLabel(t, s.menuPath, s.menuPathName),
       }));
   }, [serviceDefs, t]);
 
@@ -299,6 +534,18 @@ function Step0Type({ data, patch, serviceDefs, t }: StepBodyProps) {
   return (
     <StepShell title={t("CS_COMPLAINT_DETAILS_COMPLAINT_DETAILS")}>
       <div className="space-y-5">
+        {hierarchyActive ? (
+          <ComplaintHierarchyPicker
+            def={hierarchyDef as ComplaintHierarchyDef}
+            nodes={nodes || []}
+            serviceDefs={serviceDefs}
+            t={t}
+            onLeafChange={(leaf) =>
+              patch({ SelectComplaintType: leaf, SelectSubComplaintType: leaf })
+            }
+          />
+        ) : (
+          <>
         <Field
           label={t("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE")}
           required
@@ -334,11 +581,13 @@ function Step0Type({ data, patch, serviceDefs, t }: StepBodyProps) {
               placeholder={tr(t, "CS_COMPLAINT_PICK_SUBTYPE", "Select a subtype")}
               options={subTypes.map((s) => ({
                 value: s.serviceCode,
-                label: s.name ? t(s.name) : s.serviceCode,
+                label: complaintLabel(t, s.serviceCode, s.name),
               }))}
             />
           </Field>
         ) : null}
+          </>
+        )}
       </div>
     </StepShell>
   );
@@ -375,12 +624,15 @@ function Step1Map({ data, patch, t }: StepBodyProps) {
         onSelect={(_key: string, value: GeoPoint) => {
           patch({
             GeoLocationsPoint: value,
-            // Mirror the pincode onto postalCode so the address step / submit
-            // validation see the latest pin's pincode (matches FormExplorer.useEffect).
+            // Mirror the new pin's pincode onto postalCode. Always reset to the
+            // current pin: if the newly-picked location has no pincode, clear it
+            // rather than keeping the previous pin's value — otherwise a stale
+            // pincode from an earlier pin lingers after the pin is moved
+            // (CCRS#722). The user can still type one on the location step.
             postalCode:
               value?.pincode != null && String(value.pincode).length > 0
                 ? String(value.pincode)
-                : data.postalCode,
+                : "",
           });
         }}
       />
@@ -417,14 +669,16 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
   const wardHint = data?.GeoLocationsPoint?.ward;
   const wardFromMap = !!(wardHint?.code || wardHint?.name);
 
-  // Pincode is read-only if it came from the map (Nominatim). If the
-  // map didn't return one, postalCode is empty / undefined and the
-  // user gets a normal editable field. Manual input must NOT feed back
-  // into this flag: gating on data.postalCode disabled the field after
-  // the first typed character.
+  // The pincode pre-fills from the map pin (Nominatim) but stays EDITABLE —
+  // the reverse-geocode is frequently wrong or the wrong length, so the user
+  // must always be able to correct it (CCRS#722). It used to be disabled
+  // whenever the map produced a value, which locked in bad pincodes.
   const pincodeFromMap = data?.GeoLocationsPoint?.pincode;
-  const pincodeKnown =
-    !!(pincodeFromMap != null && String(pincodeFromMap).length > 0);
+  // What's actually shown/submitted: a manual entry (data.postalCode) wins over
+  // the map-derived value.
+  const effectivePincode = data.postalCode ?? (pincodeFromMap != null ? String(pincodeFromMap) : "");
+  const postalValid = isPostalCodeValid(effectivePincode);
+  const showPostalError = effectivePincode.length > 0 && !postalValid;
 
   return (
     <StepShell
@@ -454,15 +708,19 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
           <p className="text-sm text-destructive">Boundary component not registered.</p>
         )}
 
-        <Field label={t("CS_COMPLAINT_POSTALCODE__DETAILS")} htmlFor="postal-code">
+        <Field
+          label={t("CS_COMPLAINT_POSTALCODE__DETAILS")}
+          htmlFor="postal-code"
+          error={showPostalError ? postalErrorText(t) : undefined}
+        >
           <Input
             id="postal-code"
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={7}
-            disabled={pincodeKnown}
-            value={data.postalCode ?? (pincodeFromMap != null ? String(pincodeFromMap) : "")}
+            invalid={showPostalError}
+            value={effectivePincode}
             onChange={(e) => patch({ postalCode: e.target.value.replace(/\D/g, "") })}
           />
         </Field>
@@ -560,16 +818,45 @@ const CreatePGRFlowV2: React.FC = () => {
     Digit.ULBService.getCurrentTenantId();
   const tenants: any = Digit.Hooks.pgr.useTenants();
 
-  const { data: serviceDefs, isLoading: isMDMSLoading } = Digit.Hooks.useCustomMDMS(
+  // The single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes
+  // + leaf complaint types) is the only complaint-type master now. We derive:
+  //   - serviceDefs: leaf rows mapped to the legacy shape (serviceCode=code,
+  //     menuPath=parentCode) so the flat fallback picker keeps working verbatim;
+  //   - hierData.nodes: the full row set the N-level cascade picker walks.
+  // Absent definition => the flat menuPath (=parentCode) picker is used.
+  const { data: hierAll, isLoading: isMDMSLoading } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
-    [{ name: "ServiceDefs" }],
+    [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
     {
       cacheTime: Infinity,
-      select: (raw: any) => raw?.["RAINMAKER-PGR"]?.ServiceDefs,
+      select: (raw: any) => {
+        const allDefs = (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter(
+          (d: any) => d?.active !== false
+        );
+        const allRows = raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [];
+        // Prefer a definition that actually HAS rows — guards against a
+        // stray/empty definition being picked first. Scope rows to its type.
+        const def =
+          allDefs.find((d: any) => allRows.some((n: any) => n?.hierarchyType === d?.hierarchyType)) ||
+          allDefs[0] ||
+          null;
+        const rows = def
+          ? allRows.filter((n: any) => n?.hierarchyType === def.hierarchyType)
+          : allRows;
+        const isLeaf = (n: any) => n?.department != null || n?.slaHours != null;
+        const nodes = (rows || []).filter((n: any) => !isLeaf(n));
+        const serviceDefs = (rows || [])
+          .filter((n: any) => isLeaf(n) && n.active !== false)
+          .map((n: any) => ({ ...n, serviceCode: n.code, menuPath: n.parentCode }));
+        return { def, nodes, serviceDefs };
+      },
     },
-    { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY" }
   );
+
+  const serviceDefs = hierAll?.serviceDefs;
+  const hierData = hierAll ? { def: hierAll.def, nodes: hierAll.nodes } : undefined;
 
   const { mutate: createMutation } = Digit.Hooks.pgr.useCreateComplaint(tenantId);
 
@@ -585,14 +872,28 @@ const CreatePGRFlowV2: React.FC = () => {
 
   const isLast = stepIndex === STEPS.length - 1;
 
-  // Mirror map-derived pincode onto postalCode (matches FormExplorer's effect).
+  // Seed postalCode from the map pin's pincode, but ONLY when the pin's pincode
+  // actually changes — never on a postalCode edit. The previous version listed
+  // `formData.postalCode` as a dependency and forced it back to the map value,
+  // so the auto-filled field reverted on every keystroke and was effectively
+  // un-editable (CCRS#722). A ref tracking the last map pincode lets the user
+  // freely correct the auto-filled value; a pin move still resets it (and
+  // clears it when the new pin has no pincode, rather than keeping a stale one).
+  const lastMapPincodeRef = React.useRef<string | undefined>(
+    formData?.GeoLocationsPoint?.pincode != null && String(formData.GeoLocationsPoint.pincode).length > 0
+      ? String(formData.GeoLocationsPoint.pincode)
+      : undefined
+  );
   React.useEffect(() => {
     const pin = formData?.GeoLocationsPoint?.pincode;
-    const desired = pin != null && String(pin).length > 0 ? String(pin) : undefined;
-    if (desired !== undefined && formData.postalCode !== desired) {
-      setFormData((prev) => ({ ...prev, postalCode: desired }));
+    const mapPin = pin != null && String(pin).length > 0 ? String(pin) : undefined;
+    if (mapPin !== lastMapPincodeRef.current) {
+      lastMapPincodeRef.current = mapPin;
+      setFormData((prev) => ({ ...prev, postalCode: mapPin ?? "" }));
     }
-  }, [formData?.GeoLocationsPoint?.pincode, formData.postalCode]);
+    // Intentionally excludes formData.postalCode — see comment above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData?.GeoLocationsPoint?.pincode]);
 
   const stepIsValid = React.useMemo(() => {
     const required = MANDATORY_BY_STEP[stepIndex] || [];
@@ -611,6 +912,13 @@ const CreatePGRFlowV2: React.FC = () => {
       if (subTypeOptions.length > 1 && !formData.SelectSubComplaintType) {
         return false;
       }
+    }
+    // Location step: don't let the user past a pincode that doesn't match the
+    // tenant's configured length (CCRS#722). Empty is allowed (optional); an
+    // invalid map-autofilled value must be corrected before continuing.
+    if (stepIndex === 2) {
+      const effective = formData.postalCode ?? formData?.GeoLocationsPoint?.pincode;
+      if (!isPostalCodeValid(effective)) return false;
     }
     return true;
   }, [stepIndex, formData, serviceDefs]);
@@ -712,6 +1020,8 @@ const CreatePGRFlowV2: React.FC = () => {
     data: formData,
     patch,
     serviceDefs: Array.isArray(serviceDefs) ? serviceDefs : [],
+    hierarchyDef: hierData?.def ?? null,
+    nodes: hierData?.nodes ?? [],
     t,
   };
 

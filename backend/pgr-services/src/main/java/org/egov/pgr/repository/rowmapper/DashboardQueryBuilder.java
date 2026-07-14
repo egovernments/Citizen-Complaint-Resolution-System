@@ -144,8 +144,8 @@ public class DashboardQueryBuilder {
     public String getFilteredDepartmentQuery(String tenantId, Long fromDate, Long toDate, List<Object> preparedStmtList) {
         StringBuilder sb = new StringBuilder(
             "WITH service_dept AS (" +
-            " SELECT DISTINCT ON (data->>'serviceCode') data->>'serviceCode' AS service_code, data->>'department' AS dept_code" +
-            " FROM eg_mdms_data WHERE schemacode = 'RAINMAKER-PGR.ServiceDefs' AND isactive = true" +
+            " SELECT DISTINCT ON (data->>'code') data->>'code' AS service_code, data->>'department' AS dept_code" +
+            " FROM eg_mdms_data WHERE schemacode = 'RAINMAKER-PGR.ComplaintHierarchy' AND isactive = true AND data->>'department' IS NOT NULL" +
             "), dept_names AS (" +
             " SELECT DISTINCT ON (data->>'code') data->>'code' AS dept_code, data->>'name' AS dept_name" +
             " FROM eg_mdms_data WHERE schemacode = 'common-masters.Department' AND isactive = true" +

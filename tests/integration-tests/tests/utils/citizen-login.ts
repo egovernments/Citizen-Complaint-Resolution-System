@@ -13,6 +13,7 @@
  */
 import type { Page } from '@playwright/test';
 import { BASE_URL, FIXED_OTP, ROOT_TENANT, DEFAULT_PASSWORD } from './env';
+import { readProvisionedCitizen } from './citizen-provision';
 
 /**
  * Citizen login via direct OAuth — same shape as `loginViaApi` for employees.
@@ -61,7 +62,21 @@ async function forceDigitAuthProvider(page: Page): Promise<void> {
   });
 }
 
-export async function citizenLoginViaApi(page: Page, phone: string): Promise<void> {
+export async function citizenLoginViaApi(page: Page, phone?: string): Promise<void> {
+  // Default to the suite-wide provisioned citizen (registered once by
+  // tests/fixtures/citizen.setup.ts) when no phone is passed. Specs that
+  // need a fresh citizen each run (e.g. register.spec.ts) still pass an
+  // explicit phone.
+  if (!phone) {
+    const provisioned = readProvisionedCitizen();
+    if (!provisioned) {
+      throw new Error(
+        'citizenLoginViaApi called without a phone, but citizen-fixture.json is missing — ' +
+          'either pass a phone or ensure the citizen-setup project ran (chromium depends on it).',
+      );
+    }
+    phone = provisioned.mobile;
+  }
   page.on('pageerror', (err) => console.log(`[PAGE ERROR in login] ${err.message}`));
   await forceDigitAuthProvider(page);
 
@@ -169,7 +184,7 @@ export async function citizenLoginViaApi(page: Page, phone: string): Promise<voi
 }
 
 /** Default export used by every spec — uses the OAuth API path. */
-export async function citizenOtpLogin(page: Page, phone: string): Promise<void> {
+export async function citizenOtpLogin(page: Page, phone?: string): Promise<void> {
   return citizenLoginViaApi(page, phone);
 }
 

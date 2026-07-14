@@ -158,7 +158,7 @@ const docsConfig: Record<string, DocSection[]> = {
       ],
     },
   ],
-  '/manage/complaint-types': [
+  '/manage/complaint-hierarchy': [
     {
       title: 'PGR Configuration',
       icon: BookOpen,

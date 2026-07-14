@@ -108,8 +108,8 @@ export function EmployeeBulkImport() {
   const [roles, setRoles] = useState<{ code: string; name: string; description?: string }[]>([]);
   const [mobileRules, setMobileRules] = useState<{
     pattern: string;
-    minLength: number;
-    maxLength: number;
+    minLength?: number;
+    maxLength?: number;
     errorMessage: string;
   } | null>(null);
   const [refsLoading, setRefsLoading] = useState(false);
@@ -125,10 +125,13 @@ export function EmployeeBulkImport() {
     async function load() {
       setRefsLoading(true);
       try {
+        const hierarchies = await boundaryService.getHierarchies(tenantId).catch(() => []);
+        const hierarchyType = hierarchies[0]?.hierarchyType;
+
         const [depts, desigs, bounds, fetchedRoles, mobile] = await Promise.all([
           mdmsService.getDepartments(tenantId),
           mdmsService.getDesignations(tenantId),
-          boundaryService.searchBoundaries(tenantId),
+          boundaryService.searchBoundaries(tenantId, hierarchyType ? { hierarchyType } : undefined),
           mdmsService.getRoles(tenantId).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(tenantId).catch(() => null),
         ]);
@@ -204,7 +207,7 @@ export function EmployeeBulkImport() {
         // bulk-import side of the CCRS#484/#540 BLOCKER.
         const minLen = mobileRules?.minLength ?? 9;
         const maxLen = mobileRules?.maxLength ?? 9;
-        const msg = mobileRules?.errorMessage ?? 'Please enter a valid Kenyan mobile number (9 digits starting with 1 or 7)';
+        const msg = mobileRules?.errorMessage ?? 'Please enter a valid mobile number';
         const len = row.mobileNumber.length;
         if (len < minLen || len > maxLen || (compiled && !compiled.test(row.mobileNumber))) {
           errors.push(msg);

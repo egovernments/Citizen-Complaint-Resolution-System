@@ -1,11 +1,14 @@
-import { DigitCreate, DigitFormInput, DigitFormSelect, v } from '@/admin';
+import { DigitCreate, DigitFormInput, v } from '@/admin';
 import { FieldSection } from '@/admin/fields';
 import { LocalityPicker } from './LocalityPicker';
+import { useMobileValidator } from '@/admin/hrms/useMobileValidator';
+import { ComplaintHierarchyCascade } from './ComplaintHierarchyCascade';
 import { useApp } from '../../App';
 
 export function ComplaintCreate() {
   const { state } = useApp();
   const tenantId = state.tenant;
+  const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
 
   const transform = (data: Record<string, unknown>): Record<string, unknown> => {
     // Citizen must be stamped at the state tenant (user-service upserts
@@ -30,12 +33,9 @@ export function ComplaintCreate() {
     <DigitCreate title="File Complaint" record={{}} transform={transform}>
       <FieldSection title="Complaint">
         <div className="space-y-4">
-          <DigitFormSelect
+          <ComplaintHierarchyCascade
             source="serviceCode"
             label="Complaint Type"
-            reference="complaint-types"
-            optionValue="serviceCode"
-            placeholder="Select complaint type..."
             validate={v.required}
           />
           <DigitFormInput
@@ -60,8 +60,9 @@ export function ComplaintCreate() {
           <DigitFormInput
             source="citizen.mobileNumber"
             label="Mobile number"
-            validate={v.required}
-            help="Used to identify the citizen. User-service upserts a CITIZEN account by mobile."
+            validate={mobileValidate}
+            maxLength={mobileRules.maxLength}
+            help={mobileRules.errorMessage}
           />
           <DigitFormInput
             source="citizen.name"
