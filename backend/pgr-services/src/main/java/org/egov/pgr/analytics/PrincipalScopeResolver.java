@@ -96,6 +96,12 @@ public class PrincipalScopeResolver {
         List<Role> roles = u.getRoles();
         if (roles != null) for (Role r : roles) {
             String c = r.getCode() == null ? "" : r.getCode().toUpperCase();
+            // TODO(#1071): this classifies ANY role other than CITIZEN as an employee role,
+            // i.e. it assumes a citizen principal carries ONLY the CITIZEN role. If a citizen
+            // can legitimately hold an additional NON-employee role (e.g. a future citizen-side
+            // role), that principal would be misclassified as an employee here and lose self-
+            // scoping. Harden this with an explicit employee-role set (or an isEmployee flag on
+            // the principal) rather than "anything != CITIZEN" before such roles are introduced.
             if (!c.equals("CITIZEN")) return false; // holds an employee role → not a pure citizen
         }
         return true;
