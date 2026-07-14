@@ -33,6 +33,14 @@ export async function loadMessages(tenantId: string, locale: string): Promise<Re
   return map;
 }
 
+/** Everything loaded from the store for a locale (empty until loadMessages).
+ *  The preview pushes this WHOLE map (staged edits layered on top) so the
+ *  iframe renders saved-but-unedited custom text too — its i18n store never
+ *  loads the module itself. */
+export function getLoadedMessages(locale: string): Record<string, string> {
+  return cache.get(locale) ?? {};
+}
+
 /** Staged edit wins, then the store; undefined when the key is unknown. */
 export function resolveText(
   key: string | undefined,
@@ -47,6 +55,7 @@ export function resolveText(
 
 /** Persist staged edits (per-locale batches) and fold them into the cache. */
 export async function persistLocEdits(tenantId: string, locEdits: LocEdits): Promise<void> {
+  let wrote = false;
   for (const [locale, byKey] of Object.entries(locEdits)) {
     const messages = Object.entries(byKey).map(([code, message]) => ({
       code,
@@ -55,8 +64,21 @@ export async function persistLocEdits(tenantId: string, locEdits: LocEdits): Pro
     }));
     if (!messages.length) continue;
     await digitClient.localizationUpsert(tenantId, locale, messages);
+    wrote = true;
     const map = cache.get(locale);
     if (map) messages.forEach((m) => { map[m.code] = m.message; });
+  }
+  if (wrote) {
+    // The localization service caches search responses; without a bust, other
+    // clients (the live landing page) can keep reading the pre-save text.
+    // Best-effort — the write above already succeeded.
+    try {
+      await digitClient.request('/localization/messages/cache-bust', {
+        RequestInfo: digitClient.buildRequestInfo(),
+      });
+    } catch {
+      /* non-fatal */
+    }
   }
 }
 

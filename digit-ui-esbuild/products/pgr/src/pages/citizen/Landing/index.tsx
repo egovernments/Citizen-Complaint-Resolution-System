@@ -23,6 +23,7 @@ import { NewsItem } from "./content";
 import { LanguageOption } from "./components/UtilityBar";
 import { useLandingCopy } from "./useLandingCopy";
 import { useLandingConfig } from "./config/useLandingConfig";
+import { useLandingMessages } from "./config/useLandingMessages";
 import { usePreviewBridge, PreviewBridge } from "./config/usePreviewBridge";
 import { LandingRenderer } from "./LandingRenderer";
 
@@ -73,6 +74,12 @@ export function PGRLandingPage(props: PGRLandingPageProps) {
 function ConfiguredLanding(props: PGRLandingPageProps) {
   const config = useLandingConfig();
   const { i18n } = useLandingCopy();
+
+  // Load the rainmaker-pgr message bundle for the active locale so Builder
+  // text edits (PGR_LANDING_* keys) reflect on the live page; the returned
+  // version bump re-renders this subtree once the messages land. The preview
+  // path doesn't need this — the Builder pushes messages over the bridge.
+  useLandingMessages(i18n);
 
   // Language switching must go through the platform's localization service:
   // it FETCHES the target locale's message bundles (LocalizationService
