@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FormComposerV2,} from '@egovernments/digit-ui-components';
 import PropTypes from 'prop-types';
@@ -45,6 +45,25 @@ const PGRWorkflowModal = ({
     }
   }
 
+  // Non-mandatory fields carry the localized "(Optional)" suffix (CCSD-1955),
+  // same convention as the create forms. Labels arrive as localization KEYS;
+  // suffixed ones become final strings — FormComposer's t() echoes unknown
+  // strings back, so pre-localizing here is safe.
+  const optionalSuffix = (() => {
+    const v = t("CS_OPTIONAL_SUFFIX");
+    return v === "CS_OPTIONAL_SUFFIX" ? "(Optional)" : v;
+  })();
+  const form = useMemo(
+    () =>
+      (config?.form || []).map((section) => ({
+        ...section,
+        body: (section.body || []).map((f) =>
+          f.isMandatory || !f.label ? f : { ...f, label: `${t(f.label)} ${optionalSuffix}` }
+        ),
+      })),
+    [config, t, optionalSuffix]
+  );
+
   if (!config || !selectedAction) return null;
 
   return (
@@ -60,7 +79,7 @@ const PGRWorkflowModal = ({
       formId="modal-action"
     >
       <FormComposerV2
-        config={config.form}
+        config={form}
         noBoxShadow
         inline
         childrenAtTheBottom
