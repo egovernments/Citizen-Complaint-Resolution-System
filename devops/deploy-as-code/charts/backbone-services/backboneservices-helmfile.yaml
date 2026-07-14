@@ -25,7 +25,7 @@ releases:
     - {{ .Values | toYaml | nindent 8 }}
 
 - name: minio
-  installed: true
+  installed: false
   chart: ./minio
   version: 13.3.1
   <<: *default
@@ -34,7 +34,7 @@ releases:
     - {{ .Values | toYaml | nindent 8 }}
 
 - name: postgresql
-  installed: true
+  installed: false
   chart: ./postgresql
   version: 11.9.13
   <<: *default
@@ -42,13 +42,9 @@ releases:
     - ./postgresql/values.yaml
     - {{ .Values | toYaml | nindent 8 }}
     - global:
-        storageClass: local-path
         postgresql:
           auth:
             postgresPassword: {{ .Values.secrets.db.password | quote }}
-            username: {{ .Values.secrets.db.username | quote }}
-            password: {{ .Values.secrets.db.password | quote }}
-            database: egov
 
 - name: redis
   installed: true
@@ -78,7 +74,6 @@ releases:
     - {{ .Values | toYaml | nindent 8 }}
 
 - name: kibana
-  installed: false
   chart: ./kibana
   version: 8.11.3
   force: true
@@ -119,7 +114,7 @@ releases:
     - domain: {{ .Values.global.domain }}
 
 - name: novu
-  installed: false
+  installed: true
   chart: ./novu
   version: 2.3.0
   namespace: novu
