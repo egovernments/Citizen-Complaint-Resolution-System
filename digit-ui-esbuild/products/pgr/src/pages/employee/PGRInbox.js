@@ -59,11 +59,16 @@ const PGRSearchInbox = () => {
   // don't match any workflow action (config drift) so "My" is never empty.
   const myStates = useMemo(() => {
     const s = statesForRoles(myRoleCodes);
+    if (!s.length && !bsLoading && allActionableStates.length) {
+      // Config drift, not a feature: none of this user's roles appear on any
+      // workflow action, which collapses My into All. Fix the workflow config.
+      console.warn("[PGR visibility] no queue states for roles", myRoleCodes, "— My falls back to all actionable states");
+    }
     return s.length ? s : allActionableStates;
-  }, [statesForRoles, myRoleCodes, allActionableStates]);
+  }, [statesForRoles, myRoleCodes, allActionableStates, bsLoading]);
   const allStates = allActionableStates;
 
-  const { counts, hasNew, markSeen } = useTabCounts({ tenantId, myStates, allStates });
+  const { counts, markSeen } = useTabCounts({ tenantId, myStates, allStates });
 
   // A tab is "seen" once it's the visible tab -> its badge clears, and the other
   // tab's badge keeps surfacing newly-arrived complaints.
@@ -210,12 +215,17 @@ const PGRSearchInbox = () => {
       <header className="v2-employee-page-header">
         <h1>{heading}</h1>
       </header>
-      {/* My / All tabs (Visibility V1) */}
-      <PGRInboxTabs activeTab={activeTab} onChange={setActiveTab} counts={counts} hasNew={hasNew} />
       {/* Complaint search and filter interface. key={activeTab} remounts the
-          composer on tab switch so search + filter forms reset (PRD). */}
+          composer on tab switch so search + filter forms reset (PRD). The
+          My/All tab strip (Visibility V1) renders through the composer's
+          resultsHeader slot so it sits directly above the complaint list —
+          not above the search/filter cards (PRD placement). */}
       <div className="digit-inbox-search-wrapper">
-        <InboxSearchComposer key={activeTab} configs={tabConfig} />
+        <InboxSearchComposer
+          key={activeTab}
+          configs={tabConfig}
+          resultsHeader={<PGRInboxTabs activeTab={activeTab} onChange={setActiveTab} counts={counts} />}
+        />
       </div>
     </div>
   );

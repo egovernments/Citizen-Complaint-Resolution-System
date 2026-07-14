@@ -1644,8 +1644,19 @@ export const UICustomizations = {
       const rawStatuses = filterForm.status || {};
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
       if (statuses.length > 0) {
-        // An explicit status filter always wins (applies within the active tab).
-        params.applicationStatus = statuses;
+        if (activeTab === "MY" && myStates.length > 0) {
+          // "My" is a queue: an explicit status filter applies WITHIN it, so
+          // it can never surface another role's queue. An empty intersection
+          // is an honestly-empty result — send an impossible status rather
+          // than silently dropping the filter.
+          const scoped = statuses.filter((s) => myStates.includes(s));
+          params.applicationStatus = scoped.length ? scoped : ["PGR_VISIBILITY_NO_MATCHING_STATE"];
+        } else {
+          // "All" is the superset view: the explicit filter wins outright,
+          // keeping terminal states (Resolved / Rejected / Closed…) reachable
+          // from the filter card exactly as before the tabs existed.
+          params.applicationStatus = statuses;
+        }
       } else if (activeTab === "MY" && myStates.length > 0) {
         // My = complaints in the queue-states my role(s) act on.
         params.applicationStatus = myStates;

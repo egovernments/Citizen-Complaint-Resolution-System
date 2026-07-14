@@ -6436,5 +6436,17 @@
         "message": "Pin Location",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "PGR_INBOX_TAB_MY",
+        "message": "My Complaints",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_INBOX_TAB_ALL",
+        "message": "All Complaints",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]

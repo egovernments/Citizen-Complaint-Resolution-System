@@ -1,26 +1,54 @@
+import { useState } from "react";
 import { useQuery } from "react-query";
 import { Request } from "@egovernments/digit-ui-libraries";
 import Urls from "../../utils/urls";
 
 /**
- * useTabCounts — tab badge counts.
+ * useTabCounts — tab badge counts (Visibility V1).
  *
- * Returns two things per tab:
- *  - `counts`  : the TOTAL number of complaints in that tab's state set — always
- *                shown on the badge so a number is always visible.
- *  - `hasNew`  : whether any complaints arrived since the user last opened that
- *                tab (high-water-mark cursor, CCRS/VISIBILITY-DESIGN.md §5.5) —
- *                drives the red "new" dot only.
+ * PRD: the (##) on each tab is the ALERT count, not the total —
+ *  - MY : complaints new in my queue since I last opened the tab
+ *  - ALL: complaints newly added since the tab was last opened
+ * realised as a high-water-mark cursor per (user, tenant, tab)
+ * (VISIBILITY-DESIGN.md §5.5): badge = pgr `_count` over the tab's state
+ * set with `fromDate = lastSeen`. Opening a tab advances its cursor, so
+ * its badge drops to 0 and starts accumulating again (channel-unread
+ * semantics). A never-opened tab counts everything currently in it.
  *
- * Cursor is one `lastSeen` per (user, tab) in localStorage; "new" is a pgr `_count`
- * with `fromDate = lastSeen`. Step-1 caveat: `_count` filters on `createdTime`, so
- * "new" means *created* since you last looked (Step 2 moves the cursor server-side
- * and keys off state-entry time).
+ * The cursor is mirrored into React state and into the query KEY: reading
+ * it from localStorage inside the query fn raced markSeen (the refetch
+ * deduped into an in-flight fetch that had already read the old cursor,
+ * leaving a stale badge). A key change always refetches deterministically.
+ *
+ * Step-1 caveats (accepted, see design doc): the cursor keys off
+ * `createdTime` (the only date filter the pgr criteria supports), so
+ * complaints re-routed into the queue don't count until Step 2 keys off
+ * state-entry time; and the cursor lives in localStorage, so it's
+ * per-browser until Step 2 moves it server-side.
  */
+const safeGet = (k) => {
+  try {
+    return window.localStorage.getItem(k);
+  } catch (e) {
+    return null;
+  }
+};
+const safeSet = (k, v) => {
+  try {
+    window.localStorage.setItem(k, v);
+  } catch (e) {
+    /* storage unavailable (private mode / quota) — badge degrades to "all new" */
+  }
+};
+
 const useTabCounts = ({ tenantId, myStates, allStates }) => {
   const uuid = Digit.UserService.getUser()?.info?.uuid || "anon";
-  const keyFor = (tab) => `pgr.inbox.lastSeen.${tab}.${uuid}`;
-  const getSeen = (tab) => Number(window.localStorage.getItem(keyFor(tab))) || 0;
+  const keyFor = (tab) => `pgr.inbox.lastSeen.${tenantId}.${tab}.${uuid}`;
+
+  const [seen, setSeen] = useState(() => ({
+    MY: Number(safeGet(keyFor("MY"))) || 0,
+    ALL: Number(safeGet(keyFor("ALL"))) || 0,
+  }));
 
   const countUrl = Urls.pgr.search.replace("_search", "_count");
 
@@ -33,33 +61,33 @@ const useTabCounts = ({ tenantId, myStates, allStates }) => {
     }
   };
 
-  // total (always shown) + new-since-lastSeen (drives the red dot)
   const countsFor = async (statuses, tab) => {
-    if (!statuses?.length) return { total: 0, newCount: 0 };
-    const total = await rawCount({ tenantId, applicationStatus: statuses });
-    const since = getSeen(tab);
-    const newCount = since ? await rawCount({ tenantId, applicationStatus: statuses, fromDate: since }) : total;
-    return { total, newCount };
+    if (!statuses?.length) return { newCount: 0 };
+    const since = seen[tab];
+    const newCount = await rawCount(
+      since ? { tenantId, applicationStatus: statuses, fromDate: since } : { tenantId, applicationStatus: statuses }
+    );
+    return { newCount };
   };
 
   const { data, refetch } = useQuery(
-    ["pgrTabCounts", tenantId, JSON.stringify(myStates), JSON.stringify(allStates), uuid],
+    ["pgrTabCounts", tenantId, JSON.stringify(myStates), JSON.stringify(allStates), uuid, seen.MY, seen.ALL],
     async () => {
       const [my, all] = await Promise.all([countsFor(myStates, "MY"), countsFor(allStates, "ALL")]);
       return { my, all };
     },
-    { staleTime: 0, retry: false, refetchOnWindowFocus: false, enabled: !!tenantId }
+    { staleTime: 0, retry: false, refetchOnWindowFocus: false, enabled: !!tenantId, keepPreviousData: true }
   );
 
-  const counts = { MY: data?.my?.total ?? 0, ALL: data?.all?.total ?? 0 };
-  const hasNew = { MY: (data?.my?.newCount ?? 0) > 0, ALL: (data?.all?.newCount ?? 0) > 0 };
+  const counts = { MY: data?.my?.newCount ?? 0, ALL: data?.all?.newCount ?? 0 };
 
   const markSeen = (tab) => {
-    window.localStorage.setItem(keyFor(tab), String(Date.now()));
-    refetch();
+    const now = Date.now();
+    safeSet(keyFor(tab), String(now));
+    setSeen((s) => ({ ...s, [tab]: now }));
   };
 
-  return { counts, hasNew, markSeen, refetch };
+  return { counts, markSeen, refetch };
 };
 
 export default useTabCounts;
