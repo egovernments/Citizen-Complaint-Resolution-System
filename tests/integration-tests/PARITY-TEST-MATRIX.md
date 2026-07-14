@@ -10,23 +10,23 @@ Columns:
 
 > **Reading it:** `compose` vs `k3s` (identical Maputo data) is the clean parity control; `bomet` adds the *"is this test meaningful on Maputo"* axis. Categories below are computed from **current** state, so a fixed test moves into *Clean parity* with a `✅` showing where it came from.
 
-> **Parity status:** compose passes **119**, k3s **113**; they agree on **264/272** rows. Of the 8 disagreements: **5** are a newly-surfaced **k3s-only gap** — the configurator DSS/PGR dashboard (`/manage/pgr-dashboard`) fetches `GET /pgr-services/v2/dashboard`, and the **k3s Spring gateway NPEs on that bodyless GET** (`CorrelationIdFilterHelper` does `Mono.just(null)` inside a ModifyRequestBody filter) → 500 before it reaches pgr-services; Kong forwards it fine (**§1.10**, root-caused — needs a gateway code fix); **1** is the intentional fail-closed `/user/_search` on k3s (§2.6b — k3s is the correct side); **2** are edge rows that also fail/skip on bomet (suite issues, not parity). Seeding PGR on compose (§1.9) is what exposed the DSS gap — the complaint pipeline had to work before the dashboard tests could even reach it.
+> **Parity status:** compose passes **119**, k3s **114**; they agree on **266/272** rows. Of the 6 disagreements: **5** are a **k3s-only gap** — the configurator DSS/PGR dashboard (`/manage/pgr-dashboard`) fetches `GET /pgr-services/v2/dashboard`, and the **k3s Spring gateway NPEs on that bodyless GET** (`CorrelationIdFilterHelper` does `Mono.just(null)` inside a ModifyRequestBody filter) → 500 before it reaches pgr-services; Kong forwards it fine (**§1.10**, root-caused — needs a gateway code fix, do NOT match k3s's bug); **1** is an onboarding edge row (`invalid role lands as Error`) that also fails/skips on bomet (suite issue, not parity). The former **§2.6b** divergence (`create — citizen user`) is now **FIXED** — passes on both stacks via the harness `apiAuth()` fresh-token change.
 
 > **Data currency:** all four re-run areas are post-§1.9 and fresh like-for-like (compose + k3s admin both re-run with PGR complaints present). Fixes reflected: §1.2 (configurator/MCP), §1.6 (egov-user), §1.7 (filestore), §1.8 (digit-ui config), §1.9 (PGR businessservice @ city), §2.4 (RBAC grant), §2.5 (egov-hrms). Open: §1.10 (DSS dashboard on k3s).
 
 ## Summary
 
-**Since baseline: 51 tests flipped fail/skip → pass** (the ✅ rows); 2 regressed.
+**Since baseline: 52 tests flipped fail/skip → pass** (the ✅ rows); 2 regressed.
 
 | Category | Count | What it means |
 |---|---:|---|
-| k8s-specific gap | 6 | Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open. |
+| k8s-specific gap | 5 | Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open. |
 | Maputo-data gap | 23 | Pass on bomet, fail on BOTH our stacks → the suite's Kenya/Bomet data-coupling, not the deployment. |
 | Suite / app bug | 30 | Fails on bomet too (its native tenant) → a genuine suite/app bug or flake, unrelated to parity. |
 | Tenant-coupled skip | 25 | Runs on bomet, skipped on both our stacks → hidden signal; needs tenant-portable fixtures. |
 | Ours better | 3 | Fails on bomet, passes on ours. |
 | Other / mixed | 9 |  |
-| Clean parity | 102 | Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column). |
+| Clean parity | 103 | Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column). |
 | Inherent N/A | 74 | Skipped everywhere (@local-only, no-keycloak, structural). |
 | **Total** | **272** | |
 
@@ -46,17 +46,17 @@ The `Fix` column in the tables below points here. **Exact reproducible steps per
 | §1.6b · **OTP mock** on k3s | 3 | Deploy the nginx OTP mock (`tests/integration-tests/deploy/otp-mock.k8s.yaml`) that rubber-stamps the fixed 123456 for `_validate`/`_send`, and repoint user-otp+egov-otp to it — matching Compose's default OTP-mock mode. Unblocks citizen register/login (and any citizen-gated flow, e.g. the photo-upload tests, which also need filestore §1.7). Pairs with the egov-user OTP-flag alignment (§1.6). |
 | §1.7 · Real **minio** object store | 1 | Install minio; chart-template the egov-ns `minio` secret (accesskey/secretkey from the minio release); set `egov-filestore minio-enabled:true`, correct `minio-url` (no trailing slash), fixed bucket. |
 | §1.2 · Add **configurator + digit-mcp** charts | 1 | Add `configurator` + `digit-mcp` charts to the k8s helmfile (Service + Ingress at `/configurator`, `/mcp`, `/v1`; MCP session DB). |
+| §2.6b · Harness **fresh-token** fix | 1 | `create — citizen user` failed on k3s (`/user/_search` 401): the API verify used the configurator storageState token, which resolves role-less on the fail-closed gateway. Added `apiAuth()` (fresh OAuth login → operator's real roles) in `tests/utils/manage/api.ts`; `users.spec.ts` uses it for /user/* verify+teardown. Passes on both stacks. Test-code fix. |
 | §1.4 · Right-size **pgr-services** memory | 1 | Set `memory_limits >= Xmx + ~50%` (or `-XX:MaxRAMPercentage`) so pgr-services doesn't cgroup-OOM and stays up. |
 
-> Attribution is best-effort (primary fix per test); some flips have more than one contributing fix. Total flipped since baseline: **51**.
+> Attribution is best-effort (primary fix per test); some flips have more than one contributing fix. Total flipped since baseline: **52**.
 
-## k8s-specific gap (6)
+## k8s-specific gap (5)
 
 Pass on bomet AND our compose, still fail/skip on k3s → the real k8s deployment delta still open.
 
 | Area | Test | k3s (base) | k3s (now) | compose | bomet | Fix (to productionize) |
 |---|---|:--:|:--:|:--:|:--:|---|
-| admin | 2. create — citizen user lands and is retrievable via API | **fail** | **fail** | pass | pass | — |
 | admin | all chart canvases render | **fail** | **fail** | pass | pass | — |
 | admin | breakdown table with 4 tabs | **fail** | **fail** | pass | pass | — |
 | admin | chart section titles are visible | **fail** | **fail** | pass | pass | — |
@@ -103,7 +103,7 @@ Fails on bomet too (its native tenant) → a genuine suite/app bug or flake, unr
 | admin | 2. create → edit → deactivate round-trip; visible at city tenant | skip | **fail** ◐ | **fail** | **fail** | — |
 | admin | 2. single create — happy path derives code + username, employee lands | skip | **fail** ◐ | **fail** | **fail** | — |
 | admin | 2. single create → edit → deactivate round-trip | **fail** | **fail** | **fail** | **fail** | — |
-| admin | 3. edit — username disabled, name updates round-trip | skip | skip | **fail** | **fail** | — |
+| admin | 3. edit — username disabled, name updates round-trip | skip | **fail** ◐ | **fail** | **fail** | — |
 | admin | 6. bulk import accepts comma-list department values as array | skip | skip | skip | **fail** | — |
 | admin | edit page renders the flagship editor (tabs + preview) | **fail** | **fail** | **fail** | **fail** | — |
 | admin | editing a brand token updates the preview live | **fail** | **fail** | **fail** | **fail** | — |
@@ -185,7 +185,7 @@ Fails on bomet, passes on ours.
 | citizen+employee | search for a well-formed but non-existent complaint number returns nothing @p1 | skip | pass ✅ | pass | skip | §1.6 — Pin **egov-user** mobile-validation image |
 | citizen+employee | status filter → only rows in the chosen workflow state @p0 | skip | pass ✅ | pass | skip | §1.6 — Pin **egov-user** mobile-validation image |
 
-## Clean parity (102)
+## Clean parity (103)
 
 Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now) column).
 
@@ -197,6 +197,7 @@ Pass on all three (includes tests we FIXED — look for the ✅ in the k3s (now)
 | admin | 1. list renders with profile columns + at least one citizen row | pass | pass | pass | pass | — |
 | admin | 1. list renders with Service Code / Name / Department / SLA / Status columns | **fail** | pass ✅ | pass | pass | §2.6 — Harness **role-string** fix |
 | admin | 1. list renders, search narrows, status filter applies | **fail** | pass ✅ | pass | pass | §1.2 — Add **configurator + digit-mcp** charts |
+| admin | 2. create — citizen user lands and is retrievable via API | **fail** | pass ✅ | pass | pass | §2.6b — Harness **fresh-token** fix |
 | admin | 2. employee create payload contains no literal "pg" | pass | pass | pass | pass | — |
 | admin | 2. search filter narrows to a known tenant code | pass | pass | pass | pass | — |
 | admin | 3. complaint create payload contains no literal "pg" | pass | pass | pass | pass | — |
