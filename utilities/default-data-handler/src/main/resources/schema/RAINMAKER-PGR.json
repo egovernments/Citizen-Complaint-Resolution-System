@@ -540,10 +540,6 @@
           "type": "string",
           "description": "Tenant whose boundary tree supplies the ward polygons. Replaces the deploy-time globalConfigs MAP_TENANT. No overlay is drawn when this resolves to nothing."
         },
-        "hierarchyType": {
-          "type": "string",
-          "description": "Boundary hierarchy the ward overlay is fetched from. Defaults to ADMIN."
-        },
         "geocodeCountryCodes": {
           "type": "string",
           "description": "Comma-separated ISO country codes the address search is restricted to, e.g. \"ke\". Left unset, the search is worldwide."

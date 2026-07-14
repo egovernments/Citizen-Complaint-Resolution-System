@@ -37,7 +37,6 @@ export const DEFAULT_CENTER = { lat: 21.1498, lng: 79.0806 };
 export const DEFAULT_ZOOM = 13;
 export const DEFAULT_MIN_ZOOM = 0;
 export const DEFAULT_MAX_ZOOM = 19;
-export const DEFAULT_HIERARCHY_TYPE = "ADMIN";
 
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
@@ -84,11 +83,14 @@ const asViewbox = (v) => {
 // source and geocoding scope from MDMS so they can be set per tenant without a
 // code change. Reads `RAINMAKER-PGR.MapConfig[0]`.
 //
+// The config is per tenant: mdms-v2 does not inherit across the tenant tree, so
+// each city carries its own record and nothing resolves against the state root.
+//
 // Every field resolves MDMS -> globalConfigs -> built-in default. A tenant with
 // no MapConfig record (or a partial one) keeps exactly the behaviour it had
 // before this master existed: the globalConfigs tier is the deploy-time Ansible
-// layer (MAP_CENTER / MAP_TENANT / HIERARCHY_TYPE) and stays in place, so
-// existing installations need no migration.
+// layer (MAP_CENTER / MAP_TENANT) and stays in place, so existing installations
+// need no migration.
 //
 // Supported MapConfig fields (all optional):
 //   baseMapTheme        one of BASE_MAP_THEMES keys. Defaults to "voyager" so
@@ -100,9 +102,13 @@ const asViewbox = (v) => {
 //   defaultZoom         zoom the map opens at once a location is known.
 //   minZoom / maxZoom   zoom bounds.
 //   boundaryTenantId    tenant whose boundary tree supplies the ward polygons.
-//   hierarchyType       boundary hierarchy the ward overlay is read from.
 //   geocodeCountryCodes ISO codes the address search is restricted to.
 //   searchViewbox       bounding box the address search is confined to.
+//
+// The boundary HIERARCHY is deliberately not here — it is a boundary construct,
+// not a map one, and belongs to a default-boundary-hierarchy master rather than
+// to map presentation. Until that master exists, consumers keep reading the
+// globalConfigs HIERARCHY_TYPE key.
 //
 // MDMS errors (master not registered for this tenant) must not break the map —
 // they are swallowed and every field falls through to its next tier.
@@ -164,11 +170,6 @@ const useMapConfig = () => {
       asNonEmptyString(cfg?.boundaryTenantId) ||
       asNonEmptyString(getGlobalConfig("MAP_TENANT")) ||
       asNonEmptyString(process.env.REACT_APP_MAP_TENANT);
-    const hierarchyType =
-      asNonEmptyString(cfg?.hierarchyType) ||
-      asNonEmptyString(getGlobalConfig("HIERARCHY_TYPE")) ||
-      DEFAULT_HIERARCHY_TYPE;
-
     // Deliberately no default country or viewbox. An unset geocoding scope means
     // a worldwide search, which is merely broad; a wrong one hides every valid
     // address (see asViewbox).
@@ -185,7 +186,6 @@ const useMapConfig = () => {
       minZoom,
       maxZoom,
       boundaryTenantId,
-      hierarchyType,
       geocodeCountryCodes,
       searchViewbox,
     };

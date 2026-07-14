@@ -70,8 +70,12 @@ const GEOMETRY_CHUNK_SIZE = 40;
 const useTenantBoundaries = () => {
   const [tenantBoundaries, setTenantBoundaries] = useState(null);
   // Which tenant's tree to draw is resolved from MDMS MapConfig, falling back to
-  // the deploy-time globalConfigs MAP_TENANT / HIERARCHY_TYPE keys.
-  const { isReady, boundaryTenantId: MAP_TENANT, hierarchyType: HIERARCHY_TYPE } = useMapConfig();
+  // the deploy-time globalConfigs MAP_TENANT key.
+  const { isReady, boundaryTenantId: MAP_TENANT } = useMapConfig();
+  // The hierarchy is a boundary construct rather than a map one, so it is not
+  // part of MapConfig; it stays on globalConfigs until a default-boundary-
+  // hierarchy master exists to own it.
+  const HIERARCHY_TYPE = window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
 
   useEffect(() => {
     let cancelled = false;

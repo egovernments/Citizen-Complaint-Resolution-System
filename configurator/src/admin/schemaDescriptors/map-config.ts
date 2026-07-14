@@ -19,7 +19,7 @@ export const mapConfigDescriptor: SchemaDescriptor = {
     { title: 'Identity', fields: ['code'] },
     { title: 'Basemap', fields: ['baseMapTheme', 'tileUrl', 'tileAttribution', 'wardHighlightColor'] },
     { title: 'Starting position', fields: ['center.lat', 'center.lng', 'defaultZoom', 'minZoom', 'maxZoom'] },
-    { title: 'Ward boundaries', fields: ['boundaryTenantId', 'hierarchyType'] },
+    { title: 'Ward boundaries', fields: ['boundaryTenantId'] },
     {
       title: 'Address search',
       fields: [
@@ -57,8 +57,6 @@ export const mapConfigDescriptor: SchemaDescriptor = {
 
     { path: 'boundaryTenantId', widget: 'text', label: 'Boundary tenant',
       help: 'Tenant whose ward polygons are drawn over the map and used to resolve a dropped pin to a ward, e.g. "ke.bomet". Leave blank to draw no ward overlay.' },
-    { path: 'hierarchyType', widget: 'text', label: 'Boundary hierarchy',
-      help: 'Which boundary hierarchy the wards come from. Defaults to ADMIN.' },
 
     { path: 'geocodeCountryCodes', widget: 'text', label: 'Search country codes',
       help: 'Restrict address search to these countries, as comma-separated two-letter codes (e.g. "ke"). Leave blank to search worldwide.' },
