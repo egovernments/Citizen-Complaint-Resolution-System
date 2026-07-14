@@ -101,7 +101,9 @@ Audit all SB3 services for the `SPRING_*` → `SPRING_DATA_*` rename.
 +  tag: "mobilevalidation-jdk8-4984479"    +  pullPolicy: "IfNotPresent"
 -otp-validation: "true"                    +otp-validation: "false"
 ```
-The `mobilevalidation` build reads the per-tenant mobile rule from MDMS (Compose already runs it). Decision pending: is this the intended prod image? Align `OTP_VALIDATION_REGISTER_MANDATORY` across stacks.
+**Root cause:** the stock image hardcodes the mobile-validation regex (Kenya/India). Maputo's MDMS rule (`common-masters.MobileNumberValidation`) is `+258` / numbers starting with `8`, so the stock image rejects every valid Maputo number → citizen register/create/provisioning fails on k8s. The `mobilevalidation-jdk8-4984479` build reads the per-tenant MDMS rule at runtime instead.
+**KEEP this pin (it's PARITY, not local-only):** Compose already pins the *exact same image* in `local-setup/docker-compose.egov-digit.yaml` (base). Reverting k8s to the stock tag would make k8s **diverge** from Compose — mobile validation would fail on k8s only. So both charts stay on this tag; a build-note is in `egov-user/values.yaml`.
+**Pending (product decision, applies to BOTH stacks):** publish the MDMS-driven mobile-validation fix as a **released `egovio/egov-user`** image, then repin Compose + k8s to that tag together. **Twin frontend bug:** digit-ui `UserCreate.tsx` hardcodes a Kenyan regex (`v.mobileKERequired` = `^0?[17][0-9]{8}$`) — blocks non-Kenya numbers client-side even with the backend fixed; fix it to read the same MDMS rule.
 
 ---
 
