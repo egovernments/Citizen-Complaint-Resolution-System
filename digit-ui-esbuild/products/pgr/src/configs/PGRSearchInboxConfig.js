@@ -147,6 +147,12 @@ const PGRSearchInboxConfig = () => {
                     ],
                     enableGlobalSearch: false,
                     enableColumnSort: true,
+                    // Must match PGRInboxConfig.preProcess's own fallback
+                    // (UICustomizations.js) — lets the table seed its sort
+                    // header icon correctly on first load, before the
+                    // operator has clicked anything.
+                    defaultSortBy: "sla",
+                    defaultSortOrder: "ASC",
                     resultsJsonPath: "items",
                     totalCountJsonPath: "totalCount",
                 },

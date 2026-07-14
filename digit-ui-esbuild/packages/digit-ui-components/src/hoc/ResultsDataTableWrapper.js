@@ -155,7 +155,11 @@ const ResultsDataTableWrapper = ({
     //test if accessor can take jsonPath value only and then check sort and global search work properly
     const mappedColumns = config?.columns?.map((column) => {
       const commonProps = {
-        id: column?.id,
+        // sortKey doubles as a stable column id (falling back to the
+        // config's own `id` if set) so `defaultSortFieldId` below can find
+        // this column again after a remount — see the sort-icon-direction
+        // comment near `defaultSortFieldId`/`defaultSortAsc`.
+        id: column?.sortKey || column?.id,
         name: t(column?.label) || t("ES_COMMON_NA"),
         format: column?.format,
         grow: column?.grow,
@@ -578,6 +582,19 @@ const ResultsDataTableWrapper = ({
     handleSubmit(onSubmit)();
   };
 
+  // react-data-table-component only reads defaultSortFieldId/defaultSortAsc
+  // to seed its OWN internal sortDirection/selectedColumn state once, on
+  // mount — later prop changes are ignored while it stays mounted. The
+  // isLoading/isFetching branch below unmounts <ResultsDataTable> (and with
+  // it <DataTable>) every time a sort click triggers a refetch, so the
+  // library's internal "which column, which direction" memory is wiped and
+  // re-seeded from scratch on every remount. Sourcing these two props from
+  // our own persisted tableForm.sortBy/sortOrder (rather than a static
+  // config default) means each remount re-seeds with the CURRENT sort, so
+  // the header's up/down icon reflects the real direction instead of
+  // resetting to "ascending" after every click (issue #922 follow-up).
+  const currentSortBy = state.tableForm.sortBy || config?.defaultSortBy;
+  const currentSortOrder = state.tableForm.sortOrder || config?.defaultSortOrder || "ASC";
 
   useEffect(() => {
     if (limitAndOffset) {
@@ -717,7 +734,8 @@ const ResultsDataTableWrapper = ({
       progressPending={config?.progressPending}
       conditionalRowStyles={conditionalRowStyles}
       tableClassName={config?.tableProps?.tableClassName ? config?.tableProps?.tableClassName : ""}
-      defaultSortAsc={config?.defaultSortAsc}
+      defaultSortFieldId={currentSortBy}
+      defaultSortAsc={currentSortOrder !== "DESC"}
       sortServer={true}
       onSort={handleSort}
       pagination={config.isPaginationRequired}
