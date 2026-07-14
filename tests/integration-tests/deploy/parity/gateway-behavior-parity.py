@@ -10,10 +10,11 @@
 # correctly better there; do NOT "fix" Kong to match k3s's 500).
 """Gateway parity probe: fire identical requests at compose-Kong and k3s-Spring
 gateways, diff the HTTP status outcomes. Every mismatch is a parity gap."""
-import json, subprocess, sys
+import json, os, subprocess, sys
 
-KONG = "http://localhost:18000"
-K3S  = "https://172.19.0.4.nip.io"
+# Endpoints are environment-specific — pass them in (see the usage note above).
+KONG = os.environ.get("KONG", "http://localhost:18000")
+K3S  = os.environ.get("K3S",  "https://<k3s-ingress>")
 
 def curl(base, method, path, token=None, body=None, insecure=False):
     cmd = ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "-X", method, base+path]
