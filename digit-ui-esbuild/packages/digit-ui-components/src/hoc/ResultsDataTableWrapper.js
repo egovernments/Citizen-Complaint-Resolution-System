@@ -460,8 +460,13 @@ const ResultsDataTableWrapper = ({
     // pagination submits — handleSubmit(onSubmit) always resends whatever
     // is currently registered, so an unregistered field would get dropped
     // from tableForm the next time the operator changes page (issue #922).
-    register("sortBy", session?.tableForm?.sortBy || state.tableForm.sortBy);
-    register("sortOrder", session?.tableForm?.sortOrder || state.tableForm.sortOrder);
+    // react-hook-form v6's second `register` argument is a validation-rules
+    // object, not a default value — restoring a prior sortBy/sortOrder from
+    // session storage is already handled by `defaultValuesFromSession`
+    // (spread into `useForm`'s `defaultValues` below), so no value belongs
+    // here.
+    register("sortBy");
+    register("sortOrder");
   });
 
   const handleDefaultPagination = (event) => {
