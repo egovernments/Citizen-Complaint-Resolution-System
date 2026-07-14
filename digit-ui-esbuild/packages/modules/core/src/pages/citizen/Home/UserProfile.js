@@ -32,6 +32,9 @@ import UploadDrawer from "./ImageUpload/UploadDrawer";
 import ImageComponent from "../../../components/ImageComponent";
 
 const DEFAULT_TENANT = Digit?.ULBService?.getStateId?.();
+// CCSD-1989: strict email shape (blank ok) so "a@b." fails client-side with a
+// localized error instead of the unlocalized backend save failure.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Derive the maximum digit count from a mobile regex pattern string.
 // Works for exact-count patterns like ^[79][0-9]{8}$ (→9) and optional-prefix
@@ -466,9 +469,6 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     }
   };
 
-  // CCSD-1989: strict email shape (blank ok) so "a@b." fails client-side
-  // with a localized error instead of the unlocalized backend save failure.
-  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const setUserEmailAddress = (value) => {
     if (userInfo?.userName !== value) {
       setEmail(value);
@@ -578,11 +578,15 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   const updateProfile = async () => {
     setLoading(true);
     try {
+      // Validate the trimmed value directly: setName is asynchronous, so the
+      // `name` binding below would still hold the untrimmed text (a legacy
+      // profile with leading whitespace would fail Save with no input error).
+      const trimmedName = (name || "").trim();
       if (name) {
-        setName((prev) => prev.trim());
+        setName(trimmedName);
       }
 
-      if (!validationConfig?.name?.test(name) || name === "" || name.length > 50 || name.length < 1) {
+      if (!validationConfig?.name?.test(trimmedName) || trimmedName === "" || trimmedName.length > 50 || trimmedName.length < 1) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_NAME_INVALID"),
