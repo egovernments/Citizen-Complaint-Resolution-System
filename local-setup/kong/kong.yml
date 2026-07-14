@@ -82,11 +82,35 @@ plugins:
           headers = { ["Content-Type"] = "application/json" },
         })
         local resolved = nil
+        local token_rejected = false
         if res and res.status == 200 then
           local ok2, user = pcall(cjson.decode, res.body)
-          if ok2 and type(user) == "table" and (user["uuid"] or user["userName"]) then resolved = user end
+          if ok2 and type(user) == "table" and (user["uuid"] or user["userName"]) then
+            resolved = user
+          else
+            token_rejected = true  -- 200 but no resolvable user
+          end
+        elseif res then
+          token_rejected = true    -- /user/_details rejected the token (invalid / expired)
         else
-          kong.log.err("auth-enrichment failed; stripping client userInfo")
+          -- /user/_details unreachable (network/timeout): a transient upstream error, NOT an
+          -- invalid token — do not force logout; forward with client userInfo stripped.
+          kong.log.err("auth-enrichment: /user/_details unreachable; stripping client userInfo")
+        end
+        if token_rejected then
+          -- Session-expiry parity (#4): a token was PRESENT but could not be validated. Return the
+          -- egov InvalidAccessTokenException envelope the Spring Cloud Gateway emits, so digit-ui
+          -- redirects to login instead of rendering blank/error screens on an expired session.
+          -- Guarded by "token present" above (the no-token branch returns early), so open/anonymous
+          -- endpoints are unaffected.
+          return kong.response.exit(401, cjson.encode({
+            ResponseInfo = cjson.null,
+            Errors = {{
+              code = "InvalidAccessTokenException",
+              message = "InvalidAccessTokenException",
+              description = "Invalid access token or access token expired for the request",
+            }},
+          }), { ["Content-Type"] = "application/json" })
         end
         ri["userInfo"] = resolved
         body["RequestInfo"] = ri
