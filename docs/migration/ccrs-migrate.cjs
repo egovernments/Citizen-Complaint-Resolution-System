@@ -609,13 +609,21 @@ async function phaseLanding() {
   await seedRows('RAINMAKER-PGR.LandingPageConfig', config);
   ok(`rows: ${created} created, ${present} present, ${failed} failed`);
 
-  if (!CFG.dryRun) {
-    for (const [msgs, locale] of [[locEn, 'en_IN'], [locPt, 'pt_PT']]) {
-      const { success, failed: f } = await upsertMessages(CFG.state, locale,
-        msgs.map((m) => ({ code: m.code, message: m.message, module: 'rainmaker-pgr', locale })));
-      (f ? warn : ok)(`localization ${locale}: ${success} keys${f ? `, ${f} failed` : ''}`);
-      if (f) { failed += f; failures.push(`localization ${locale}: ${f} failed`); }
-    }
+  // Localization: seed ONLY keys that don't exist yet. Existing messages are
+  // NEVER overwritten — operators customize landing text through the Builder,
+  // and a migration re-run must not reset their edits to the seed defaults.
+  for (const [msgs, locale] of [[locEn, 'en_IN'], [locPt, 'pt_PT']]) {
+    const r = await postJson(
+      `/localization/messages/v1/_search?tenantId=${encodeURIComponent(CFG.state)}&module=rainmaker-pgr&locale=${locale}`,
+      { RequestInfo: ri() });
+    const existing = new Set((parse(r.body)?.messages || []).map((m) => m.code));
+    const missing = msgs.filter((m) => !existing.has(m.code));
+    if (!missing.length) { ok(`localization ${locale}: all ${msgs.length} keys present — kept untouched`); continue; }
+    if (CFG.dryRun) { info(`dry-run: would seed ${missing.length} missing ${locale} keys (${msgs.length - missing.length} existing kept)`); continue; }
+    const { success, failed: f } = await upsertMessages(CFG.state, locale,
+      missing.map((m) => ({ code: m.code, message: m.message, module: 'rainmaker-pgr', locale })));
+    (f ? warn : ok)(`localization ${locale}: seeded ${success} missing keys (${msgs.length - missing.length} existing kept)${f ? `, ${f} failed` : ''}`);
+    if (f) { failed += f; failures.push(`localization ${locale}: ${f} failed`); }
   }
   if (CFG.dryRun) return record('landing', OUTCOME.SKIPPED, 'dry-run: plan printed above');
 
