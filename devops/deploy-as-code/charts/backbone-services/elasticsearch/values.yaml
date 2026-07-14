@@ -1,6 +1,6 @@
 
 name: elasticsearch-master
-replicas: 1
+replicas: 3
 
 image:
   pullPolicy: IfNotPresent  
@@ -18,7 +18,7 @@ masterService: "elasticsearch-master"
 # These will be set as environment variables. E.g. node.master=true
 roles:
   - master
-minimumMasterNodes: 1
+minimumMasterNodes: 2
 
 esMajorVersion: ""
 
@@ -83,9 +83,9 @@ esJavaOpts: "-Xmx448m -Xms448m"
 
 resources:
   requests:
-    memory: "1536Mi"
+    memory: "896Mi"
   limits:
-    memory: "1536Mi"  
+    memory: "896Mi"  
 
 initResources: {}
   # limits:
@@ -167,7 +167,7 @@ antiAffinityTopologyKey: "kubernetes.io/hostname"
 
 # Hard means that by default pods will only be scheduled if there are enough nodes for them
 # and that they will never end up on the same node. Setting this to soft will do this "best effort"
-antiAffinity: "soft"
+antiAffinity: "hard"
 
 # This is the node affinity settings as defined in
 # https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#node-affinity-beta-feature
