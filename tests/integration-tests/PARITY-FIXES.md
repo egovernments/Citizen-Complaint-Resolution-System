@@ -186,7 +186,7 @@ userInfo: auth.user
         typeof r === 'string' ? { code: r, name: r, tenantId: auth.user.tenantId } : r) }
   : undefined,
 ```
-Flips 4 of the 5 cluster tests on k8s. **§2.6b (the 5th, `users create`):** `/user/_search` is open on Compose but RBAC-enforced on k8s → 401; fix by **granting** the `/user/_search` action to the config-admin role (a §2.4-family seed) — do **not** open the endpoint on k8s (that copies Compose's fail-open PII search).
+Flips 4 of the 5 cluster tests on k8s. **§2.6b (the 5th, `create — citizen user`) — FIXED ✅:** the failure was `POST /user/_search → 401` on k3s only. Root cause: the test authenticated the API verify with the **configurator storageState token** (`loadAuth`), which resolves to **insufficient roles** on the fail-closed k3s gateway — and the k8s gateway RBAC-checks `/user/_search` against the token's *resolved* roles (`RbacFilterHelper` reads `RequestInfo.userInfo` from the token, not the body). Compose's Kong treats `/user/_search` as auth-optional so it never checked. **Fix (committed, harness-only):** added `apiAuth()` in `tests/utils/manage/api.ts` — a fresh OAuth password-grant login (`ADMIN@ROOT_TENANT`) that resolves the operator's real roles (`SUPERUSER`/`EMPLOYEE`, both granted `/user/_search`). `tests/admin/users.spec.ts` now uses it for all `/user/*` API verify/teardown calls (the UI create still drives the configurator session). **Verified:** the test now passes on **both** k3s and Compose (was k3s-fail / Compose-pass). No seed change, no endpoint opened — the fail-open PII search stays closed on k8s.
 
 ---
 

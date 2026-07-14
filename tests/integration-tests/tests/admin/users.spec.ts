@@ -19,7 +19,7 @@
  * doesn't implement.
  */
 import { test, expect } from '@playwright/test';
-import { loadAuth, type AuthInfo } from '../utils/manage/api';
+import { apiAuth, type AuthInfo } from '../utils/manage/api';
 import { testCode } from '../utils/manage/codes';
 import { TENANT, ROOT_TENANT } from '../utils/env';
 import { getMobileValidationRule, generateValidMobile, type MobileRule } from '../utils/mdms-mobile';
@@ -115,7 +115,7 @@ async function softDeleteUser(auth: AuthInfo, userName: string): Promise<void> {
 
 test.afterAll(async () => {
   if (createdUsernames.size === 0) return;
-  const auth = loadAuth();
+  const auth = await apiAuth();
   const failed: Array<{ userName: string; reason: string }> = [];
   for (const u of createdUsernames) {
     try { await softDeleteUser(auth, u); } catch (e) {
@@ -221,7 +221,7 @@ Teardown is API-only — egov-user has no UI delete affordance for users; the af
       .catch(() => {});
 
     // API sanity — user exists and is active. userName is derived from mobile.
-    const auth = loadAuth();
+    const auth = await apiAuth();
     const res = await postJson(auth, USER_SEARCH, {
       RequestInfo: requestInfo(auth),
       tenantId: TENANT_CODE,
@@ -267,7 +267,7 @@ Tolerant of show-vs-edit routing differences — works whether /:id lands on Sho
     const mobile = generateValidMobile(mobileRule);
     createdUsernames.add(uname);
 
-    const auth = loadAuth();
+    const auth = await apiAuth();
     await postJson(auth, '/user/users/_createnovalidate', {
       RequestInfo: requestInfo(auth, '_create'),
       user: {
@@ -361,7 +361,7 @@ Pairs with the edit test — together they cover the two read-only routes (show 
     const mobile = generateValidMobile(mobileRule);
     createdUsernames.add(uname);
 
-    const auth = loadAuth();
+    const auth = await apiAuth();
     await postJson(auth, '/user/users/_createnovalidate', {
       RequestInfo: requestInfo(auth, '_create'),
       user: {
