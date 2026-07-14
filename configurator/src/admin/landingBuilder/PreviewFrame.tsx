@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { useBuilder, buildPreviewConfig, isDirty } from './builderStore';
-import { resolveText } from './localization';
+import { BUILDER_LOCALES, getLoadedMessages } from './localization';
 import type { InspectorTab, LocEdits } from './types';
 
 const LANDING_PATH = '/digit-ui/landing?builderPreview=1';
@@ -20,10 +20,6 @@ export function PreviewFrame() {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   const debounceRef = useRef<number>();
-  // Keys ever overridden in the iframe's i18n store: when an edit is undone /
-  // cleared we must push the ORIGINAL store text back, or the stale override
-  // sticks (i18n addResources has no "remove").
-  const sentKeysRef = useRef<Record<string, Set<string>>>({});
 
   const post = (payload: Record<string, unknown>) =>
     frameRef.current?.contentWindow?.postMessage(payload, window.location.origin);
@@ -55,22 +51,22 @@ export function PreviewFrame() {
     if (!ready || state.loading) return;
     window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
-      // Merge staged edits with reset-to-original for retracted keys.
+      // Push the FULL loaded message map with staged edits layered on top —
+      // the iframe's i18n store never loads the rainmaker-pgr module, so
+      // partial pushes would leave saved-but-unedited custom text rendering
+      // as deck fallbacks (and this also makes retracted edits revert
+      // naturally, since the original text is always in the map).
       const messages: LocEdits = {};
       const locales = new Set([
+        ...BUILDER_LOCALES.map((l) => l.code),
         ...Object.keys(state.locEdits),
-        ...Object.keys(sentKeysRef.current),
       ]);
       locales.forEach((lng) => {
-        const staged = state.locEdits[lng] ?? {};
-        const sent = sentKeysRef.current[lng] ?? new Set<string>();
-        const out: Record<string, string> = {};
-        new Set([...Object.keys(staged), ...sent]).forEach((key) => {
-          const v = staged[key] ?? resolveText(key, lng, {});
-          if (v !== undefined) out[key] = v;
-        });
+        const out: Record<string, string> = {
+          ...getLoadedMessages(lng),
+          ...(state.locEdits[lng] ?? {}),
+        };
         if (Object.keys(out).length) messages[lng] = out;
-        sentKeysRef.current[lng] = new Set([...sent, ...Object.keys(staged)]);
       });
       post({
         type: 'pgrl-preview-config',
