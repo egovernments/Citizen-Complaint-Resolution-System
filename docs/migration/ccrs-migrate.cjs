@@ -503,7 +503,7 @@ async function phaseHierarchy() {
   const pLeaves = scoped.filter((n) => n.department != null || n.slaHours != null).length;
   const detail = `${pInterior}/${interior.length} interior · ${pLeaves}/${defs.length} leaves verified`;
   if (pLeaves >= defs.length && pInterior >= interior.length && !errors.length) return record('hierarchy', OUTCOME.OK, detail);
-  return record('hierarchy', errors.length ? OUTCOME.PARTIAL : OUTCOME.PARTIAL, `${detail}; ${errors.length} write error(s)`,
+  return record('hierarchy', errors.length ? OUTCOME.FAILED : OUTCOME.PARTIAL, `${detail}; ${errors.length} write error(s)`,
     'HIERARCHY_INCOMPLETE', errors.slice(0, 8).join(' | ') || 'Async persister may still be catching up — re-run to verify.');
 }
 
@@ -562,7 +562,7 @@ async function phasePgrMasters() {
   const empty = MASTERS.filter((m) => !((res[m.short] || []).length)).map((m) => m.short);
   const detail = `${created} created, ${present} present, ${failed} failed; v1-visible: ${MASTERS.map((m) => `${m.short}=${(res[m.short] || []).length}`).join(', ')}`;
   if (failed || empty.length) {
-    return record('pgr-masters', failed === 0 ? OUTCOME.PARTIAL : OUTCOME.PARTIAL, detail,
+    return record('pgr-masters', failed ? OUTCOME.FAILED : OUTCOME.PARTIAL, detail,
       empty.length ? 'MASTER_EMPTY_AFTER_SEED' : 'ROW_CREATE_FAILED', failures.slice(0, 6).join(' | ') || `Empty after seed: ${empty.join(', ')}`);
   }
   return record('pgr-masters', created ? OUTCOME.OK : OUTCOME.SKIPPED, detail);
@@ -578,8 +578,18 @@ async function phaseLanding() {
     locEn = readJson(SEED.locEn).filter((m) => m.code.startsWith('PGR_LANDING_'));
     locPt = readJson(SEED.locPt).filter((m) => m.code.startsWith('PGR_LANDING_'));
   } catch (e) {
+    // Seed files absent (checkout predates the merged landing feature) — the
+    // environment may still be fully seeded already, so verify before failing.
+    const res = await v1Search(CFG.state, ['LandingSection', 'LandingPageConfig']);
+    const nSec = (res.LandingSection || []).length;
+    const nCfg = (res.LandingPageConfig || []).length;
+    if (nSec >= 1 && nCfg >= 1) {
+      ok(`seed files not in this checkout, but environment already seeded (${nSec} sections + ${nCfg} config)`);
+      return record('landing', OUTCOME.SKIPPED,
+        `already seeded (${nSec} sections + ${nCfg} config via v1); seed files absent locally — git pull to enable (re)seeding`);
+    }
     return record('landing', OUTCOME.FAILED, `seed files unreadable: ${e.message}`, 'SEED_FILE_MISSING',
-      'Run from a full repo checkout containing the merged landing feature.');
+      'Run from a full repo checkout containing the merged landing feature (git pull).');
   }
   const failures = [];
   let created = 0, present = 0, failed = 0;
