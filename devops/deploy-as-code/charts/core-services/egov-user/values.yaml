@@ -33,18 +33,15 @@ tracing-enabled: true
 egov-state-level-tenant-id: "pb"
 decryption-abac-enabled: "false"
 account-unlock-cool-down-period-minutes: "30"
-# OTP flags aligned with Compose (whose default MOCKs OTP): leave these UNSET so
-# egov-user doesn't require/short-circuit register-OTP. The OTP mock (otp-mock,
-# repointing user-otp+egov-otp) rubber-stamps the fixed 123456 — see PARITY-FIXES §1.6b.
-otp-validation: ""
-citizen-otp-enabled: ""
+otp-validation: "true"
+citizen-otp-enabled: "true"
 employee-otp-enabled: "false"
 access-token-validity: "10080"
 refresh-token-validity: "20160"
 default-password-expiry: "90"
 mobile-number-validation: "false"
 roles-state-level: "true"
-citizen-registration-withlogin: ""   # aligned with Compose (OTP mocked) — see PARITY-FIXES §1.6b
+citizen-registration-withlogin: "true"
 citizen-otp-fixed: "123456"
 citizen-otp-fixed-enabled: "true"
 heap: "-Xmx384m -Xms256m"
