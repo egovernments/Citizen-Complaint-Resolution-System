@@ -107,6 +107,13 @@ public class PGRQueryBuilder {
             addToPreparedStatement(preparedStmtList, ids);
         }
 
+        //department is stored under ser.additionaldetails (JSON), not a column - see PGRService#getDepartmentFromMDMS.
+        if (StringUtils.hasText(criteria.getDepartment())) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ser.additionaldetails->>'department' = ? ");
+            preparedStmtList.add(criteria.getDepartment());
+        }
+
         //When UI tries to fetch "escalated" complaints count.
         if(criteria.getSlaDeltaMaxLimit() != null && criteria.getSlaDeltaMinLimit() == null){
             addClauseIfRequired(preparedStmtList, builder);

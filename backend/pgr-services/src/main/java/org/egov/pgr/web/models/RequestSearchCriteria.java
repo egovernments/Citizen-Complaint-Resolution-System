@@ -96,6 +96,10 @@ public class RequestSearchCriteria {
     @JsonProperty("assignee")
     private String assignee;
 
+    @SafeHtml
+    @JsonProperty("department")
+    private String department;
+
     @JsonIgnore
     private Set<String> serviceRequestIds;
 
@@ -107,7 +111,7 @@ public class RequestSearchCriteria {
     public boolean isEmpty(){
         return (this.tenantId==null && this.serviceCode==null && this.mobileNumber==null && this.serviceRequestId==null
         && this.applicationStatus==null && this.ids==null && this.userIds==null && this.locality==null
-        && this.assignee==null);
+        && this.assignee==null && this.department==null);
     }
 
 }
