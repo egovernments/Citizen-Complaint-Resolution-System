@@ -8,6 +8,7 @@ import { pgrUiConstantsDescriptor } from './pgr-ui-constants';
 import { stateInfoDescriptor } from './state-info';
 import { landingSectionDescriptor } from './landing-section';
 import { landingPageConfigDescriptor } from './landing-page-config';
+import { cityModuleDescriptor } from './city-module';
 
 /** Map of schema code -> descriptor. Add new entries as we cover more schemas. */
 const DESCRIPTORS: Record<string, SchemaDescriptor> = {
@@ -20,6 +21,7 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [stateInfoDescriptor.schema]: stateInfoDescriptor,
   [landingSectionDescriptor.schema]: landingSectionDescriptor,
   [landingPageConfigDescriptor.schema]: landingPageConfigDescriptor,
+  [cityModuleDescriptor.schema]: cityModuleDescriptor,
 };
 
 export function getDescriptor(schemaCode?: string): SchemaDescriptor | undefined {
