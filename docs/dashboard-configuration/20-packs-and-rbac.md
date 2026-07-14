@@ -25,7 +25,13 @@ lives in MDMS module `dss`, master `DashboardPack`, at the **state-root tenant**
 Semantics (`POST /pgr-services/v2/analytics/packs`):
 
 - **Role match**: the **first** pack (in MDMS record order) whose `roles` overlap the caller's
-  roles wins. There is no specificity scoring — order your packs most-specific-first.
+  roles wins (`DashboardPack.matchesRoles`, `anyMatch`). There is no specificity scoring — order
+  your packs most-specific-first. **Live example (bomet, 2026-07-09):** two packs exist —
+  `executive-default` (roles `TICKET_REPORT_VIEWER`, `PGR_VIEWER`; 15 tiles) *before*
+  `supervisor-default` (the seven supervisor roles; 11 tiles). `KE_ADMIN` carries `PGR_VIEWER`, so
+  its `/packs` returns the **executive** pack first — even though it also holds
+  `SUPERUSER`/`GRO`/`DGRO` that match `supervisor-default`. A pure supervisor (no `PGR_VIEWER`)
+  correctly lands on `supervisor-default`. See `80-live-bomet-state.md` §3.
 - **Ceiling filter**: pack `tiles`/`layout` are filtered down to the KPIs the caller can actually
   see (`rbac.visibleTo` + `status:published`). A pack can never leak a tile past the catalog
   ceiling.
@@ -33,8 +39,9 @@ Semantics (`POST /pgr-services/v2/analytics/packs`):
   `defaultLayout` — functional but unlaid-out. Give every dashboard-holding role a pack.
 - **Layout grid**: `x/y/w/h` in react-grid-layout units on a **12-column** grid (see the live
   layout: rows of five `w:2` cards, full-width `w:12` tables). Users can rearrange locally; the
-  FE persists per-browser layout to localStorage (`frontend/micro-ui/web/src/dashboard/hooks/useCatalogLayout.js`) —
-  the pack is only the *default*.
+  FE persists per-browser layout to localStorage (key `ccrs.dashboard.catalog-layout.v1`,
+  `digit-ui-esbuild/products/dashboard/src/hooks/useCatalogLayout.js`) — the pack is only the
+  *default*.
 - The response (`AnalyticsController.safeTile`) contains viz metadata only — **never** the
   def's `query` or `rbac` blocks.
 
@@ -101,7 +108,8 @@ the edge with the caller's own credentials.
 An unauthenticated / role-less caller degrades to the synthetic `PUBLIC` role
 (`AnalyticsService.extractRoles`), which may:
 
-- see only tiles whose `visibleTo` explicitly contains `"PUBLIC"` (10 of the 28 live `ke` defs);
+- see only tiles whose `visibleTo` explicitly contains `"PUBLIC"` (**10** live `ke` tiles, verified
+  via anonymous `/packs` on bomet 2026-07-09 — `80-live-bomet-state.md` §2);
 - run **only** `kpiId`-by-reference queries — every inline body gets `kpi_forbidden`.
 
 This is a deliberate degrade-to-curated-aggregates, not a lock-out; it closed the old fail-open
@@ -136,8 +144,11 @@ emits `scope_incomplete`, which currently falls through to the raw-code default 
 | role R sees only its own department's numbers | give the user an HRMS assignment with that department; keep R out of `TENANT_WIDE_ROLES` | HRMS + (code constant, deploy) |
 | role R sees the whole tenant | grant one of the `TENANT_WIDE_ROLES` (e.g. `PGR_SUPERVISOR`) | HRMS/user roles |
 | anonymous/public page shows KPI X | add `"PUBLIC"` to X's `visibleTo` | `dss.KpiDefinition` (MDMS) |
-| role R can *open the dashboard view at all* (home card, sidebar entry) | `tenant.citymodule` + ACCESSCONTROL actions/roleactions — **a different system entirely** | see `30-view-access.md` |
+| role R can *open the dashboard view at all* (home card, deep-link route) | add R to `DASHBOARD_ROLES` (FE gate) **and** a `Dashboard` `tenant.citymodule` row (home card) — **a different system entirely** | `70-esbuild-embedding.md` §4, `30-view-access.md` |
+| role R gets a *sidebar* entry for the dashboard | ACCESSCONTROL actions/roleactions | `30-view-access.md` §2 (note the live bomet sidebar outage, `80-live-bomet-state.md` §5) |
 
-The last row is the classic confusion: `visibleTo`/packs govern *what renders inside* the
-dashboard; whether the user can *navigate to* the dashboard is the digit-ui access-control
-surface documented in `30-view-access.md`.
+The last rows are the classic confusion: `visibleTo`/packs govern *what renders inside* the
+dashboard; whether the user can *navigate to* it is a different stack — the FE `DASHBOARD_ROLES`
+gate + home card + always-on deep-link route (`70-esbuild-embedding.md`), plus the optional
+digit-ui sidebar access-control surface (`30-view-access.md`). Three independent gates; align all
+that apply.

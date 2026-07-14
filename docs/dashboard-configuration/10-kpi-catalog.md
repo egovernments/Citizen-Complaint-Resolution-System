@@ -6,7 +6,9 @@ collapsed to its root before the MDMS lookup — `KpiCatalogService.getVisibleDe
 `MultiStateInstanceUtil.getStateLevelTenant`), so definitions are authored once per state root
 (e.g. `ke`), never per city.
 
-- Live seed example: `ansible/nairobi-mdms/mdms/dss/KpiDefinition.json` (28 defs on `ke`)
+- Live seed example: `ansible/nairobi-mdms/mdms/dss/KpiDefinition.json` (authored source). The
+  **deployed** catalog on bomet serves **37 published defs** to a superset-role user (measured
+  2026-07-09); the seed file and the live records can diverge — see `80-live-bomet-state.md` §4.
 - Loader: `backend/pgr-services/src/main/java/org/egov/pgr/analytics/KpiCatalogService.java`
 - POJO / accepted fields: `backend/pgr-services/src/main/java/org/egov/pgr/analytics/model/KpiDefinition.java`
 - Query grammar reference (authoritative): `backend/pgr-services/ANALYTICS-QUERY-API.md`
@@ -91,8 +93,9 @@ time-bounded.
 
 ## 3. The `viz` block — rendering contract
 
-The FE render engine is `frontend/micro-ui/web/src/dashboard/components/KpiTile.jsx`
-(`renderByKind`). Every `viz.kind` it dispatches:
+The FE render engine is `digit-ui-esbuild/products/dashboard/src/components/KpiTile.jsx`
+(`renderByKind`; the deployed location post-#1062 — see `70-esbuild-embedding.md` §7). Every
+`viz.kind` it dispatches:
 
 | `viz.kind` (aliases) | renders as | key extra fields |
 |---|---|---|

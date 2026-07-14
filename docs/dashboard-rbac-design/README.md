@@ -25,6 +25,7 @@ A multi-part design for moving dashboard config + access control server-side and
 | 70 | Dashboard View Management Across Users | `70-view-management.md` | "elaborate how view management works for different users" — synthesis over D/E/F (who manages what, lifecycle) |
 | 80 | Multi-Tier Complaint Types in the Grains | `80-multi-tier-complaint-types.md` | "array/jsonb or config-built MV" → a `complaint_node_path` materialized path (boundary-path analogue); consumes Discussion **#864** |
 | 90 | Dashboard Test Strategy | `90-test-strategy.md` | "tests for dashboard" — consolidates A–F per-part tests into one leak-regression matrix + layers + exit gates |
+| 62 | **Shipped Realization & Live Verification** | `62-shipped-and-verified.md` | closes the loop: this design **shipped** (esbuild embedding **PR #1062** + the analytics RBAC train) — maps every layer (A–F) to the implemented `file:line` and the **live bomet probe** that proves enforcement (anon→10 PUBLIC, pack first-match, fail-closed scope), and carries the 2 open items forward. Pairs with `../dashboard-configuration/70`+`80`. |
 
 Parts A–F each end with a `## Code-grounded review (<verdict>)` section carrying the full severity-tagged findings with `file:line` evidence. Parts 70/80/90 are **pass-1** (authored against the same code + Discussion #864) and have **not** yet had that dual-review pass run — each ends with a "Review status" note saying so.
 
