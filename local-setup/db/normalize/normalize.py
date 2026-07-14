@@ -120,16 +120,39 @@ WHERE n.nspname = 'public' AND c.relkind = 'r'
 """
 
 
+# Fail LOUDLY instead of hanging the whole deploy. Every migrator and app gates on
+# db-history-normalize completing, so a psql that blocks forever — most likely the
+# DROP branch's `LOCK TABLE ... ACCESS EXCLUSIVE` waiting on another session's lock —
+# would silently deadlock the entire stack. lock_timeout aborts a LOCK that can't be
+# acquired; statement_timeout caps any single statement; the subprocess timeout is a
+# hard backstop that turns a hung psql into a diagnosable non-zero exit.
+LOCK_TIMEOUT = "30s"        # abort a blocked LOCK TABLE
+STATEMENT_TIMEOUT = "300s"  # cap any single statement server-side
+SUBPROCESS_TIMEOUT = 600    # hard client-side backstop on the psql process (seconds)
+
+
 def psql(sql: str, *, capture: bool = True) -> str:
     """Run SQL. ON_ERROR_STOP=1 so a failure is a non-zero exit, not a warning.
 
     (psql prints errors as `psql:<file>:<line>: ERROR: ...` — never grep for a
     line-anchored ^ERROR to detect failure; check the exit code.)
+
+    Runs with lock_timeout/statement_timeout (via PGOPTIONS) and a subprocess
+    timeout so a blocked lock or a wedged connection fails fast instead of
+    hanging every downstream migrator forever.
     """
-    proc = subprocess.run(
-        ["psql", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", sql],
-        capture_output=capture, text=True,
-    )
+    env = {**os.environ, "PGOPTIONS": f"-c lock_timeout={LOCK_TIMEOUT} -c statement_timeout={STATEMENT_TIMEOUT}"}
+    try:
+        proc = subprocess.run(
+            ["psql", "-v", "ON_ERROR_STOP=1", "-qtA", "-c", sql],
+            capture_output=capture, text=True, env=env, timeout=SUBPROCESS_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        sys.stderr.write(
+            f"psql exceeded {SUBPROCESS_TIMEOUT}s (likely a blocked lock) — aborting "
+            "rather than hanging the deploy.\n"
+        )
+        raise
     if proc.returncode != 0:
         sys.stderr.write(proc.stderr or "")
         raise subprocess.CalledProcessError(proc.returncode, "psql", proc.stdout, proc.stderr)

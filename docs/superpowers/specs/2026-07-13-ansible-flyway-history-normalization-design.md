@@ -89,8 +89,14 @@ Known limitation.
 | `local-setup/docker-compose.migrations.yml` | **edit** — add `db-history-normalize`; gate every migrator on it |
 | `.github/scripts/check-flyway-dump-alignment.py` | **edit** — read the map instead of hardcoding names |
 
-No change to `playbook-deploy.yml`. Ansible already runs these compose files, so it
-inherits the guard.
+**Update (final PR scope):** the original design assumed no `playbook-deploy.yml`
+change was needed. That was wrong — Ansible did **not** reference the migration
+overlay at all, so a deploy ran none of the migrators and fell back to embedded
+Flyway. `playbook-deploy.yml` **is** changed in this PR: it now copies
+`docker-compose.migrations.yml` (+ the Ansible build-context overlay
+`docker-compose.migrations.ansible.yml`) to the target and **always** layers them
+into `compose_files`, so an Ansible deploy inherits the `db-history-normalize` guard
+the same way the plain-compose flow does.
 
 ### Ordering
 
