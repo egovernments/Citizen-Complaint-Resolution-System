@@ -12,7 +12,7 @@ ingress:
 # Init Containers Configs
 initContainers:
   dbMigration:
-    enabled: false   # restore-based deploy: schema+data already present; migrator hits a baselined-history gap
+    enabled: true
     schemaTable: "egov_user_schema"
     image:
       repository: "egov-user-db"

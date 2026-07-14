@@ -12,7 +12,7 @@ ingress:
 # Init Containers Configs
 initContainers:
   dbMigration:
-    enabled: false   # restore-based deploy: hrms schema+data already present (9 eg_hrms* tables)
+    enabled: true
     schemaTable: "egov_hrms_schema"
     image:
       repository: "egov-hrms-db"
