@@ -22,9 +22,9 @@ service needs to be built against for the integration branch to function:
 |---|---|---|---|
 | **digit-ui** | **Yes** (frontend) | **#1098** `fix/egov-location-boundary-migration` | `digit-ui-v2/packages/data-provider/src/client/endpoints.ts` |
 | **pgr-services** | **Yes** (backend) | **#1100** `fix/pgr-search-citizen-scoping` | `PrincipalScopeResolver.java`, `EnrichmentService.java` (citizen-scoping / search-IDOR fix) |
-| **egov-user** | image *decision* | mobile-validation build (§1.6) — reads the per-tenant MDMS mobile rule | product decision on the prod image tag |
-| **egov-hrms** | image *decision* | deploy + a build that boots on the tenant (§2.5) | deploy wiring, not source |
-| **mdms-v2** | image *decision* | a build that tolerates string-valued `userInfo.roles` (§2.6 context) | image drift, not a parity PR |
+| **egov-user** | **Keep pin** (matches Compose) | `mobilevalidation-jdk8-4984479` — reads the per-tenant MDMS mobile rule (§1.6); Compose pins the identical image | pending: publish the fix as a released `egovio` tag + repin both stacks; fix twin frontend regex |
+| **egov-hrms** | **Keep pin** (matches Compose) | `egov-hrms:800-preview` — Compose runs the same; base chart tag differs (§2.5) | pending: released `egovio` tag decision |
+| **mdms-v2** | **Keep pin** (matches Compose) | `egovio/mdms-v2:maven-jdk21-9f83afb` — tolerates string-valued `userInfo.roles`; v2.9.2 500s; Compose pins the same (repo normalized to `egovio/`) | pending: released tag decision |
 | **all others** (egov-workflow-v2, boundary, filestore, gateway, …) | **No** | — parity fixes are config/chart-values (`#1099`,`#1102`,`#1128`,`#1142`,`#1157`) | stock `egovio` images work |
 
 > Rule of thumb: only **digit-ui (#1098)** and **pgr-services (#1100)** changed *source* among the parity PRs → they must be built from a branch containing those PRs. Everything else is applied via chart/env values in this repo.
