@@ -7,12 +7,15 @@ import { CtaLink } from "./CtaLink";
 import { useLandingCopy } from "../useLandingCopy";
 import { LandingRoutes } from "../routes";
 import { CONTAINER } from "../tokens";
+import type { LandingSectionConfig } from "../config/types";
 
 export interface FinalCtaSectionProps {
   routes: LandingRoutes;
+  /** Config-driven overrides; absent => the built-in deck (unchanged). */
+  section?: LandingSectionConfig;
 }
 
-export function FinalCtaSection({ routes }: FinalCtaSectionProps) {
+export function FinalCtaSection({ routes, section }: FinalCtaSectionProps) {
   const { c } = useLandingCopy();
 
   return (
@@ -31,10 +34,10 @@ export function FinalCtaSection({ routes }: FinalCtaSectionProps) {
             id="pgr-landing-final-title"
             className="mb-0 mt-4 text-2xl font-bold leading-tight text-[hsl(var(--pgrl-on-primary))] md:text-3xl"
           >
-            {c("FINAL_TITLE")}
+            {c(section?.titleKey, "FINAL_TITLE")}
           </h2>
           <p className="mb-0 mt-3 text-base leading-relaxed text-[hsl(var(--pgrl-on-primary))]">
-            {c("FINAL_TEXT")}
+            {c(section?.subtitleKey ?? section?.bodyKey, "FINAL_TEXT")}
           </p>
         </div>
 

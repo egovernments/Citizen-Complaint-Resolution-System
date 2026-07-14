@@ -9,20 +9,27 @@ import { Bell, Check } from "lucide-react";
 import { Section } from "./Section";
 import { HOW_STEPS } from "../content";
 import { useLandingCopy } from "../useLandingCopy";
+import type { LandingSectionConfig } from "../config/types";
 
-export function HowItWorksSection() {
+export interface HowItWorksSectionProps {
+  /** Config-driven overrides; absent => the built-in deck (unchanged). */
+  section?: LandingSectionConfig;
+}
+
+export function HowItWorksSection({ section }: HowItWorksSectionProps = {}) {
   const { c } = useLandingCopy();
+  const items: any[] = (section?.items as any[]) ?? HOW_STEPS;
 
   const notes = [c("HOW_NOTE_NOTIFY"), c("HOW_NOTE_RECORD"), c("HOW_NOTE_CHANNELS")];
 
   return (
-    <Section id="pgr-landing-how" title={c("HOW_TITLE")} tone="surface">
+    <Section id="pgr-landing-how" title={c(section?.titleKey, "HOW_TITLE")} tone="surface">
       <ol className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
-        {HOW_STEPS.map((step, i) => {
+        {items.map((step, i) => {
           const Icon = step.icon;
           return (
             <li
-              key={step.titleKey}
+              key={step.id ?? step.titleKey ?? i}
               className="m-0 flex items-start gap-4 rounded-[var(--pgrl-radius)] border border-solid border-[hsl(var(--pgrl-line))] bg-[hsl(var(--pgrl-page))] p-5"
             >
               <span

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLocaleState, useLocales, useTranslate } from 'ra-core';
 import { useApp } from '../App';
@@ -33,6 +33,8 @@ import {
   SlidersHorizontal,
   MessageCircle,
   UserCog,
+  LayoutTemplate,
+  Paintbrush,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +77,16 @@ const navGroups = [
     ],
   },
   {
+    // CCSD-2008: config-driven public landing (RAINMAKER-PGR.LandingSection /
+    // LandingPageConfig) — generic CRUD in P3, Builder editor lands in P4.
+    labelKey: 'app.nav.landing_page',
+    items: [
+      { id: 'landing-builder', nameKey: 'app.nav.landing_builder', path: '/manage/landing-builder', icon: Paintbrush },
+      { id: 'landing-sections', nameKey: 'app.nav.landing_sections', path: '/manage/landing-sections', icon: LayoutTemplate },
+      { id: 'landing-page-config', nameKey: 'app.nav.landing_page_config', path: '/manage/landing-page-config', icon: Settings },
+    ],
+  },
+  {
     labelKey: 'app.nav.people',
     items: [
       { id: 'employees', nameKey: 'app.nav.employees', path: '/manage/employees', icon: Users },
@@ -106,6 +118,21 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
   const location = useLocation();
   const translate = useTranslate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // CCSD-2009 (Builder v2 polish): the Builder is a full-canvas workspace —
+  // auto-collapse the nav sidebar and hide the docs pane while it's open,
+  // restoring the user's previous state on leave.
+  const isBuilderRoute = location.pathname.includes('/landing-builder');
+  const preBuilderCollapsed = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (isBuilderRoute) {
+      if (preBuilderCollapsed.current === null) preBuilderCollapsed.current = sidebarCollapsed;
+      setSidebarCollapsed(true);
+    } else if (preBuilderCollapsed.current !== null) {
+      setSidebarCollapsed(preBuilderCollapsed.current);
+      preBuilderCollapsed.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBuilderRoute]);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
     // Auto-expand groups that contain the active route, collapse others
     const initial: Record<string, boolean> = {};
@@ -413,7 +440,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
       </div>
 
       {/* Documentation Pane */}
-      <DocsPane />
+      {!isBuilderRoute && <DocsPane />}
     </div>
   );
 }

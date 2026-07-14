@@ -6982,5 +6982,629 @@
         "message": "Rows per page",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_GOV_NAME",
+        "message": "Republic of Mozambique",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PORTAL_NAME",
+        "message": "Complaints and Reports Portal",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_ORG_NAMES",
+        "message": "IGE and IGSAE",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TAGLINE",
+        "message": "The citizen speaks. The State responds.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_MOTTO_VALUES",
+        "message": "Transparency · Integrity",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_SKIP_LINK",
+        "message": "Skip to main content",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_UTILITY_PHONE_LABEL",
+        "message": "+258 21 490 000",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_UTILITY_GREEN_LINE",
+        "message": "Green Line 1490",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_UTILITY_GREEN_LINE_FREE",
+        "message": "toll-free",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_LOGIN",
+        "message": "Sign in",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_ARIA_LANGUAGE",
+        "message": "Language",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_ARIA_UTILITY",
+        "message": "Service information",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_ARIA_MAIN_NAV",
+        "message": "Main navigation",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_NAV_MENU_OPEN",
+        "message": "Open menu",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_NAV_MENU_CLOSE",
+        "message": "Close menu",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_NAV_HOME",
+        "message": "Home",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_NAV_SUBMIT",
+        "message": "Submit a Case",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_NAV_TRACK",
+        "message": "Track a Case",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_NAV_TRAINING",
+        "message": "Training & Help",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_NAV_ABOUT",
+        "message": "About the Portal",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_NAV_CONTACTS",
+        "message": "Contacts",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_EYEBROW",
+        "message": "Republic of Mozambique · IGE · IGSAE",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TITLE",
+        "message": "Complaints and Reports Portal",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_LEDE",
+        "message": "The national channel for complaints, grievances, petitions and reports about public services, public administration and economic activities — with simple, secure and transparent tracking.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CTA_SUBMIT",
+        "message": "Submit a Case",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CTA_TRACK",
+        "message": "Track a Case",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TRUST_CONFIDENTIAL",
+        "message": "Confidential handling",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TRUST_CASE_NUMBER",
+        "message": "Unique case number",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TRUST_NOTIFICATIONS",
+        "message": "SMS & WhatsApp notifications",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNELS_LABEL",
+        "message": "Also available on:",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNEL_APP",
+        "message": "Android App",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNEL_WA",
+        "message": "Official WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNEL_LINE",
+        "message": "Green Line 1490",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPES_TITLE",
+        "message": "Types of Submission",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPES_INTRO",
+        "message": "Choose the type that best describes your situation. If unsure, pick the closest — our services will route it correctly.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_COMPLAINT_TITLE",
+        "message": "Complaints",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_COMPLAINT_DESC",
+        "message": "Dissatisfaction with the quality, availability or service provided by public administration bodies and institutions.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_GRIEVANCE_TITLE",
+        "message": "Grievances",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_GRIEVANCE_DESC",
+        "message": "Reporting misconduct, negligence, abuse of power or failure to perform duties by public officials, agents or institutions.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_PETITION_TITLE",
+        "message": "Petitions",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_PETITION_DESC",
+        "message": "Formal requests addressed to the State for consideration, intervention, review of decisions or adoption of public-interest measures.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_REPORT_TITLE",
+        "message": "Reports",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_REPORT_DESC",
+        "message": "Reporting facts related to economic activities, consumer protection, food safety or infractions by economic operators.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_CTA",
+        "message": "Submit",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_TITLE",
+        "message": "How it Works",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_LABEL",
+        "message": "Step",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_1",
+        "message": "Submit your case",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_2",
+        "message": "Receive your case number",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_3",
+        "message": "Your case is reviewed",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_4",
+        "message": "The competent authority is engaged",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_5",
+        "message": "Track the case status",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_6",
+        "message": "Receive the final decision",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_TITLE",
+        "message": "Guaranteed follow-up",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_NOTIFY",
+        "message": "You receive an SMS or WhatsApp notification every time the case status changes.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_RECORD",
+        "message": "The entire process is digitally recorded, ensuring transparency, traceability and accountability.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_CHANNELS",
+        "message": "Every channel — Portal, App or WhatsApp — issues a unique case number for tracking.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNELS_TITLE",
+        "message": "Service Channels",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNELS_INTRO",
+        "message": "Use the Web Portal for the full submission and tracking experience, or pick the channel that suits you best.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_TITLE",
+        "message": "Web Portal",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_DESC",
+        "message": "Full submission and tracking, with complete case history.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_CTA",
+        "message": "Submit now",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_BADGE",
+        "message": "You are here",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_APP_TITLE",
+        "message": "Android App",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_APP_DESC",
+        "message": "Submit and track cases from your mobile phone.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_APP_CTA",
+        "message": "Get it on Google Play",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WA_TITLE",
+        "message": "Official WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WA_DESC",
+        "message": "Submit cases and get support through the official chat.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WA_CTA",
+        "message": "Chat on WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_LINE_TITLE",
+        "message": "Green Line 1490",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_LINE_DESC",
+        "message": "Toll-free call for support, guidance and assisted submission.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_LINE_CTA",
+        "message": "Call 1490",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_TITLE",
+        "message": "Confidentiality and Data Protection",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_P1",
+        "message": "The portal protects citizens' personal data in accordance with applicable legislation.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_P2",
+        "message": "When submitting a case you may request confidential treatment of your data. Your identity is then hidden from the users managing and processing the case, except where required by law.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_LINK",
+        "message": "Read the Privacy Policy",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_NEWS_TITLE",
+        "message": "Latest Updates",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_NEWS_READ_MORE",
+        "message": "Read more",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_NEWS_VIEW_ALL",
+        "message": "See all updates",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_INST_TITLE",
+        "message": "IGE and IGSAE at the citizen's service",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_INST_IGE_TITLE",
+        "message": "General State Inspectorate (IGE)",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_INST_IGE_DESC",
+        "message": "Central internal-control body of the public administration, responsible for auditing, oversight and inspection of the legality, regularity, efficiency and effectiveness of the use of public resources.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_INST_IGSAE_TITLE",
+        "message": "General Inspectorate of Food and Economic Safety (IGSAE)",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_INST_IGSAE_DESC",
+        "message": "Body responsible for overseeing economic activities, consumer protection and food safety, promoting compliance with applicable legislation and the protection of the public interest.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FINAL_TITLE",
+        "message": "Have a Complaint, Grievance, Petition or Report?",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FINAL_TEXT",
+        "message": "Help improve public services and economic activity. Submit your case and follow its handling through the portal.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FINAL_CTA",
+        "message": "Submit a Case",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_CHANNELS",
+        "message": "Official Channels",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_LINKS",
+        "message": "Useful Links",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_ACCESS",
+        "message": "Access",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_LEGAL",
+        "message": "Legal",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_PORTAL_WEB",
+        "message": "Web Portal",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_ANDROID",
+        "message": "Android App",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_WHATSAPP",
+        "message": "Official WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_GREEN_LINE",
+        "message": "Green Line 1490",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_FAQ",
+        "message": "FAQ",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_CITIZEN_LOGIN",
+        "message": "Citizen Sign in",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_EMPLOYEE_LOGIN",
+        "message": "Employee Access",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_PRIVACY",
+        "message": "Privacy Policy",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_TERMS",
+        "message": "Terms of Use",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_ACCESSIBILITY",
+        "message": "Accessibility",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_COPYRIGHT",
+        "message": "Complaints and Reports Portal · Republic of Mozambique. All rights reserved.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_FAB_LABEL",
+        "message": "Chat with us on WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PLACEHOLDER_PENDING",
+        "message": "Page being configured",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_EXTERNAL_LINK_NOTE",
+        "message": "opens in a new window",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]

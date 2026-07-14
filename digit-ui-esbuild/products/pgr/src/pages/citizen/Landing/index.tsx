@@ -16,26 +16,15 @@
 // colors resolve from --pgrl-*-brand CSS vars with Mozambique gov defaults.
 
 import * as React from "react";
-import { cn } from "@egovernments/digit-ui-components-v2";
 
-import { LandingRoutes, mergeRoutes, DEFAULT_LANDING_ROUTES } from "./routes";
-import { buildTokenStyle, LandingTokens, DEFAULT_LANDING_TOKENS } from "./tokens";
-import { NewsItem, DEFAULT_NEWS } from "./content";
+import { LandingRoutes } from "./routes";
+import { LandingTokens } from "./tokens";
+import { NewsItem } from "./content";
+import { LanguageOption } from "./components/UtilityBar";
 import { useLandingCopy } from "./useLandingCopy";
-
-import { UtilityBar, LanguageOption, DEFAULT_LANGUAGES } from "./components/UtilityBar";
-import { LandingHeader } from "./components/LandingHeader";
-import { HeroSection } from "./components/HeroSection";
-import { TypesSection } from "./components/TypesSection";
-import { HowItWorksSection } from "./components/HowItWorksSection";
-import { ChannelsSection } from "./components/ChannelsSection";
-import { PrivacySection } from "./components/PrivacySection";
-import { NewsSection } from "./components/NewsSection";
-import { InstitutionsSection } from "./components/InstitutionsSection";
-import { FinalCtaSection } from "./components/FinalCtaSection";
-import { LandingFooter } from "./components/LandingFooter";
-import { WhatsAppFab } from "./components/WhatsAppFab";
-import { FOCUS_RING } from "./tokens";
+import { useLandingConfig } from "./config/useLandingConfig";
+import { usePreviewBridge, PreviewBridge } from "./config/usePreviewBridge";
+import { LandingRenderer } from "./LandingRenderer";
 
 export interface PGRLandingPageProps {
   /** Override any destination — see LandingRoutes for the full map. */
@@ -52,79 +41,76 @@ export interface PGRLandingPageProps {
   onLanguageChange?: (code: string) => void;
   /** Design-token overrides (HSL triples — see LandingTokens). */
   tokens?: Partial<LandingTokens>;
-  /** Show the floating WhatsApp action. Default true. */
+  /** Force the floating WhatsApp action on/off (else the LandingPageConfig
+   *  toggle governs; default on). */
   showWhatsAppFab?: boolean;
+  /** Force the top utility bar on/off (else the LandingPageConfig toggle
+   *  governs; default on). */
+  showUtilityBar?: boolean;
   className?: string;
 }
 
-export function PGRLandingPage({
-  routes: routeOverrides,
-  news = DEFAULT_NEWS,
-  heroImageUrl,
-  emblemUrl,
-  languages = DEFAULT_LANGUAGES,
-  onLanguageChange,
-  tokens,
-  showWhatsAppFab = true,
-  className,
-}: PGRLandingPageProps) {
-  const { c } = useLandingCopy();
-  const routes = React.useMemo(() => mergeRoutes(routeOverrides), [routeOverrides]);
-  const tokenStyle = React.useMemo(() => buildTokenStyle(tokens), [tokens]);
+/**
+ * Config-driven entry point. Fetches the landing config from MDMS
+ * (RAINMAKER-PGR.LandingSection + LandingPageConfig) with a built-in fallback
+ * that reproduces the previous static layout, then renders it generically via
+ * LandingRenderer. Props remain as integrator overrides layered on top of the
+ * config. Backward-compatible: with no/empty config the page is unchanged.
+ *
+ * Preview mode (P4 Builder): when embedded with ?builderPreview=1 the config
+ * comes from the Configurator via postMessage instead of MDMS. The branch
+ * happens HERE, at the entry — LandingRenderer is Builder-unaware and always
+ * receives a plain config, from either source.
+ */
+export function PGRLandingPage(props: PGRLandingPageProps) {
+  const bridge = usePreviewBridge();
+  // `bridge.active` is constant for the page's lifetime (URL + embedding), so
+  // choosing between the two child components never reorders hooks.
+  if (bridge.active) return <PreviewedLanding bridge={bridge} {...props} />;
+  return <ConfiguredLanding {...props} />;
+}
 
-  // The sticky nav (48px) would otherwise fully obscure elements the browser
-  // scrolls into view on keyboard focus / skip-link jumps (WCAG 2.2 SC 2.4.11).
-  // scroll-padding must live on the scroll container (html), so set it for the
-  // page's lifetime and restore on unmount.
-  React.useEffect(() => {
-    const el = document.documentElement;
-    const prev = el.style.scrollPaddingTop;
-    el.style.scrollPaddingTop = "4rem";
-    return () => {
-      el.style.scrollPaddingTop = prev;
-    };
-  }, []);
+function ConfiguredLanding(props: PGRLandingPageProps) {
+  const config = useLandingConfig();
+  const { i18n } = useLandingCopy();
+
+  // Language switching must go through the platform's localization service:
+  // it FETCHES the target locale's message bundles (LocalizationService
+  // .changeLanguage -> getLocale -> addResources) and records the choice in
+  // Digit's store before switching i18next. A bare i18n.changeLanguage()
+  // switches to a locale with no resources loaded and the page stays put —
+  // which is exactly the EN/PT-toggle-does-nothing bug this fixes.
+  const defaultLanguageChange = React.useCallback(
+    (code: string) => {
+      try {
+        const D = typeof window !== "undefined" ? (window as unknown as { Digit?: any }).Digit : undefined;
+        const stateCode = D?.ULBService?.getStateId?.();
+        if (D?.LocalizationService?.changeLanguage) {
+          D.LocalizationService.changeLanguage(code, stateCode);
+          return;
+        }
+      } catch {
+        /* fall through to the standalone path */
+      }
+      // No DIGIT shell (standalone embed): deck strings still switch.
+      i18n?.changeLanguage?.(code);
+    },
+    [i18n]
+  );
 
   return (
-    // Outer div carries .v2-scope (activates the scoped Tailwind layer) and
-    // seeds the --pgrl-* design tokens; utilities apply to descendants only.
-    <div className="v2-scope" style={tokenStyle}>
-      <div
-        className={cn(
-          "pgr-landing flex min-h-screen flex-col bg-[hsl(var(--pgrl-page))] text-[hsl(var(--pgrl-ink))]",
-          className
-        )}
-      >
-        <a
-          href="#pgr-landing-main"
-          className={cn(
-            "sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-[var(--pgrl-radius)]",
-            "focus:bg-[hsl(var(--pgrl-surface))] focus:px-4 focus:py-2 focus:font-semibold focus:text-[hsl(var(--pgrl-deep))] focus:shadow-lg",
-            FOCUS_RING
-          )}
-        >
-          {c("SKIP_LINK")}
-        </a>
-
-        <UtilityBar routes={routes} languages={languages} onLanguageChange={onLanguageChange} />
-        <LandingHeader routes={routes} emblemUrl={emblemUrl} />
-
-        <main id="pgr-landing-main" className="flex-1">
-          <HeroSection routes={routes} imageUrl={heroImageUrl} />
-          <TypesSection routes={routes} />
-          <HowItWorksSection />
-          <ChannelsSection routes={routes} />
-          <PrivacySection routes={routes} />
-          <NewsSection routes={routes} items={news} />
-          <InstitutionsSection />
-          <FinalCtaSection routes={routes} />
-        </main>
-
-        <LandingFooter routes={routes} />
-        {showWhatsAppFab && <WhatsAppFab href={routes.WHATSAPP} />}
-      </div>
-    </div>
+    <LandingRenderer
+      config={config}
+      {...props}
+      onLanguageChange={props.onLanguageChange ?? defaultLanguageChange}
+    />
   );
+}
+
+function PreviewedLanding({ bridge, ...props }: PGRLandingPageProps & { bridge: PreviewBridge }) {
+  // Render nothing until the Builder pushes the first draft config.
+  if (!bridge.config) return null;
+  return <LandingRenderer config={bridge.config} {...props} />;
 }
 
 export default PGRLandingPage;
