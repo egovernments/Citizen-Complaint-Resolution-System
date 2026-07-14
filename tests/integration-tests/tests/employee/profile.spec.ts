@@ -8,8 +8,11 @@
  * +254 / 0-prefixed number.
  *
  * Fix (PR #30, 2f6008c) reads the country code out of tenantInfo and
- * renders it in the `.citizen-card-input--front` block. On naipepea
- * the tenant is `ke.nairobi` so the prefix must be `+254`.
+ * renders it as the dial-code prefix. The v2 UserProfile.js no longer
+ * uses the old `.citizen-card-input--front` block (0 occurrences) — the
+ * prefix is now an inline `<span>` chip (Phone icon + countryCode) sitting
+ * immediately before the `#profile-mobile` local-digits input. On
+ * ke.nairobi the MDMS countryCode is `+254`.
  *
  * We deliberately stop short of submitting the form — the logged-in
  * ADMIN is a shared principal and we don't want a passing test to
@@ -17,53 +20,81 @@
  */
 import { test, expect } from '@playwright/test';
 
-import { BASE_URL } from '../utils/env';
+import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { getMobileValidationRule } from '../utils/mdms-mobile';
+import { loginViaApi } from '../utils/auth';
 
-// Country dial-code rendered in the Edit Profile mobile-number prefix
-// block. Defaults to Kenya (+254) for naipepea; override per deployment.
-const MOBILE_PREFIX = process.env.MOBILE_PREFIX || '+254';
+// Expected dial code. Prefer an explicit override, else derive it from
+// the tenant's MDMS mobile rule (rule.prefix === the countryCode, e.g.
+// "+254" on ke.nairobi). When neither is available the test falls back to
+// asserting a generic "+<digits>" shape so it stays tenant-agnostic.
+const MOBILE_PREFIX_OVERRIDE = process.env.MOBILE_PREFIX || null;
 
 test.describe('employee profile — country prefix #444', () => {
-  test('mobile prefix renders +254 on Kenya tenant (not +91)', {
+  test('mobile prefix chip renders the tenant dial code (not hardcoded +91)', {
     annotation: {
       type: 'description',
-      description: `Catches CCRS#444 sub-1: the Edit Profile mobile-number field used to render a hardcoded "+91" prefix block regardless of tenant. On Kenya deployments this is wrong cosmetically AND functionally — submitting would later fail validation against the +254/0-prefixed Kenya rule. PR #30 reads the country code from tenantInfo and renders it; on naipepea (ke.nairobi) the prefix must be "+254".
+      description: `Catches CCRS#444 sub-1: the Edit Profile mobile-number field used to render a hardcoded "+91" prefix regardless of tenant. On Kenya deployments this is wrong cosmetically AND functionally — submitting would later fail validation against the +254/0-prefixed Kenya rule. PR #30 reads the country code from MDMS/tenantInfo and renders it as a dial-code chip. The v2 UserProfile.js renders this as an inline <span> chip immediately before #profile-mobile (the old .citizen-card-input--front block is gone).
 
 Steps:
-1. Navigate to /digit-ui/employee/user/profile and wait for domcontentloaded.
-2. Wait up to 20s for a mobile input (input[name="mobileNumber"], input[type="tel"], or pattern-matched) to be visible — the form mounts after HRMS self-lookup.
-3. Locate .citizen-card-input--front (the prefix block) and wait up to 10s for it to be visible.
-4. Read its trimmed innerText.
-5. Assert prefixText === '+254'.
-6. Assert prefixText !== '+91'.
+1. Derive the expected dial code from the tenant MDMS mobile rule (or MOBILE_PREFIX override).
+2. Navigate to /digit-ui/employee/user/profile and wait for domcontentloaded.
+3. Wait up to 20s for #profile-mobile to be visible — the form mounts after HRMS self-lookup.
+4. Read the trimmed innerText of the <span> chip immediately preceding the input.
+5. Assert it is a "+<digits>" dial code, and not "+91" (unless the tenant genuinely uses +91).
+6. When a concrete expected dial code is known, assert an exact match.
 
 Deliberately stops short of submitting the form — ADMIN is a shared principal and the test should not mutate their profile.`,
     },
     tag: ['@area:pgr', '@ccrs:444', '@kind:regression', '@layer:ui', '@persona:employee'] }, async ({ page }) => {
+    // Derive the expected dial code from the tenant's MDMS mobile rule so
+    // the spec stays tenant-agnostic (was hardcoded +254 for naipepea).
+    const rule = await getMobileValidationRule(TENANT).catch(() => null);
+    const expectedPrefix = MOBILE_PREFIX_OVERRIDE || rule?.prefix || null;
+
+    // The profile route is behind PrivateRoute in the digit-ui EMPLOYEE shell,
+    // which reads its own `Employee.token` from localStorage — the suite-wide
+    // auth.json only carries the *configurator* session, so a bare navigation
+    // lands on the shell's login / language-selection gate and #profile-mobile
+    // never mounts. Inject an employee session (ADMIN — always present after
+    // bootstrap) via the tenant-agnostic loginViaApi helper first.
+    await loginViaApi(page, {
+      tenant: TENANT,
+      username: ADMIN_USER,
+      password: ADMIN_PASS,
+    });
+
     await page.goto(`${BASE_URL}/digit-ui/employee/user/profile`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
     });
 
-    // Profile form mounts after the HRMS self-lookup; wait for the
-    // mobile input to appear so we know the page settled.
-    const mobileInput = page
-      .locator('input[name="mobileNumber"], input[type="tel"], input[pattern*="0-9"]')
-      .first();
+    // Profile form mounts after the HRMS self-lookup; wait for the v2
+    // mobile input (#profile-mobile) to appear so we know it settled.
+    const mobileInput = page.locator('#profile-mobile');
     await mobileInput.waitFor({ state: 'visible', timeout: 20_000 });
 
-    // The prefix block sits to the left of the mobile input. The
-    // `.citizen-card-input--front` class is the DIGIT UI convention;
-    // if that class gets renamed we'd rather fail loudly than silently
-    // pick up the wrong element.
-    const prefix = page.locator('.citizen-card-input--front').first();
+    // The dial-code chip is the <span> (Phone icon + countryCode) sitting
+    // immediately before the input inside the pill container. v2 replaced
+    // the old `.citizen-card-input--front` block, which no longer exists.
+    const prefix = mobileInput.locator('xpath=preceding-sibling::span[1]');
     await expect(prefix).toBeVisible({ timeout: 10_000 });
 
+    // The chip first renders DEFAULT_MOBILE_PREFIX (+91) and then updates to
+    // the tenant's countryCode once the async MDMS mobile-rule fetch
+    // (common-masters.MobileNumberValidation) resolves. Poll for the settled
+    // value rather than reading innerText once (which races the update).
+    if (expectedPrefix) {
+      await expect(prefix).toHaveText(expectedPrefix, { timeout: 15_000 });
+    } else {
+      await expect(prefix).toHaveText(/^\+\d+$/, { timeout: 15_000 });
+    }
     const prefixText = (await prefix.innerText()).trim();
-    expect(prefixText).toBe(MOBILE_PREFIX);
-    // Guard against the historical +91 regression regardless of which
-    // country the deployment is configured for.
-    if (MOBILE_PREFIX !== '+91') {
+    // Must be a "+"-prefixed numeric dial code (e.g. +258), never a raw
+    // enum or empty. Guards the historical +91 regression except where
+    // the deployment genuinely uses +91.
+    expect(prefixText).toMatch(/^\+\d+$/);
+    if (expectedPrefix !== '+91') {
       expect(prefixText).not.toBe('+91');
     }
   });

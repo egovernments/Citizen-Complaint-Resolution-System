@@ -19,8 +19,11 @@ import {
 } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
 import { cleanupMdms } from '../utils/manage/teardown';
+import { ROOT_TENANT } from '../utils/env';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+// Root (state) tenant, sourced from env (ROOT_TENANT / DIGIT_TENANT) so the
+// suite is deployment-portable — no hardcoded 'ke'.
+const TENANT_CODE = ROOT_TENANT;
 const DESIG_SCHEMA = 'common-masters.Designation';
 const DEPT_SCHEMA = 'common-masters.Department';
 const LIST_PATH = '/configurator/manage/designations';
@@ -45,10 +48,13 @@ test.beforeAll(async () => {
 
   for (const code of [DEPT_A, DEPT_B, DEPT_C]) {
     createdDeptCodes.add(code);
+    // NB: the Department schema is additionalProperties:false and only
+    // permits {code, name, active} — sending `description` is rejected with
+    // "extraneous key [description]" on every tenant (see
+    // configurator-mdms-fixes-2026-04-29.spec.ts, which asserts exactly that).
     await mdmsCreate(auth, TENANT_CODE, DEPT_SCHEMA, code, {
       code,
       name: `PW Dept for designation tests (${code})`,
-      description: 'Seeded by designations.spec.ts',
       active: true,
     });
   }
@@ -173,7 +179,15 @@ Pairs with create test #1 — together they cover all three mutation paths (crea
     // Open edit, add a third chip.
     await page.getByRole('button', { name: /^Edit$/i }).click();
     await pickDepartmentChips(page, [DEPT_C]);
-    await page.getByRole('button', { name: /^Save$/i }).click();
+    // Wait for the edit to actually land before re-reading. DigitEdit
+    // redirects to the list only inside onSuccess (after the _update HTTP
+    // response resolves), so the redirect back to LIST_PATH is a reliable
+    // "write committed" signal — a bare click returns immediately and a
+    // straight API read would race the write and see the pre-edit value.
+    await Promise.all([
+      page.waitForURL(LIST_PATH, { timeout: 30_000 }),
+      page.getByRole('button', { name: /^Save$/i }).click(),
+    ]);
 
     // Re-read; should now be 3 entries.
     let records = await mdmsSearch(auth, TENANT_CODE, DESIG_SCHEMA, {
@@ -184,10 +198,20 @@ Pairs with create test #1 — together they cover all three mutation paths (crea
     expect(dept.length).toBe(3);
     expect(dept).toEqual(expect.arrayContaining([DEPT_A, DEPT_B, DEPT_C]));
 
-    // Now remove one chip via the UI and resave.
+    // Now remove one chip via the UI and resave. The first Save redirected
+    // back to the list (DigitEdit default redirect='list'), clearing the
+    // search filter — so re-open the record before the second edit rather
+    // than assuming we're still on its show view.
+    await page.goto(LIST_PATH);
+    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.getByRole('row').filter({ hasText: code }).click();
     await page.getByRole('button', { name: /^Edit$/i }).click();
     await removeDepartmentChip(page, DEPT_C);
-    await page.getByRole('button', { name: /^Save$/i }).click();
+    await Promise.all([
+      page.waitForURL(LIST_PATH, { timeout: 30_000 }),
+      page.getByRole('button', { name: /^Save$/i }).click(),
+    ]);
 
     records = await mdmsSearch(auth, TENANT_CODE, DESIG_SCHEMA, {
       uniqueIdentifiers: [code],
@@ -220,14 +244,27 @@ The bare-string seed is required for this test — if the schema later rejects b
     createdDesigCodes.add(code);
 
     const auth = loadAuth();
-    // Pre-PR-5 shape: department is a bare string, not an array.
-    await mdmsCreate(auth, TENANT_CODE, DESIG_SCHEMA, code, {
-      code,
-      name: `PW Legacy ${code}`,
-      description: 'Legacy single-string department',
-      department: DEPT_A,
-      active: true,
-    } as Record<string, unknown>);
+    // Pre-PR-5 shape: department is a bare string, not an array. Per this
+    // test's own contingency note, a backend whose Designation schema now
+    // enforces department:array rejects this legacy seed — in which case the
+    // in-place-migration scenario is no longer reproducible and we skip
+    // rather than fail (and rather than block the serial chain).
+    try {
+      await mdmsCreate(auth, TENANT_CODE, DESIG_SCHEMA, code, {
+        code,
+        name: `PW Legacy ${code}`,
+        description: 'Legacy single-string department',
+        department: DEPT_A,
+        active: true,
+      } as Record<string, unknown>);
+    } catch (err) {
+      const msg = String(err);
+      if (/JSONArray|expected type|INVALID_REQUEST/i.test(msg)) {
+        createdDesigCodes.delete(code);
+        test.skip(true, `Backend Designation schema rejects a bare-string department — legacy shape no longer seedable: ${msg}`);
+      }
+      throw err;
+    }
 
     await page.goto(LIST_PATH);
     await page.getByPlaceholder(/search/i).first().fill(code);
@@ -596,19 +633,31 @@ async function pickDepartmentChips(
   page: import('@playwright/test').Page,
   codes: string[],
 ): Promise<void> {
-  const combobox = page.getByRole('combobox').filter({
-    has: page.locator(':scope'),
-  }).first();
-  // Above is overcautious; fall back to the labeled control.
-  const input = (await combobox.count())
-    ? combobox
+  // The Departments control is a role=combobox input carrying the
+  // "Search departments…" placeholder (DepartmentChipInput). A bare
+  // getByRole('combobox').first() wrongly matched the header language
+  // switcher (also role=combobox), so target the placeholder directly and
+  // fall back to the labeled control.
+  const byPlaceholder = page.getByPlaceholder(/search departments/i);
+  const input = (await byPlaceholder.count())
+    ? byPlaceholder.first()
     : page.getByLabel(/^Departments?/i);
 
   for (const code of codes) {
     await input.click();
     await input.fill(code);
-    // The listbox option matches code text exactly.
-    await page.getByRole('option', { name: new RegExp(code) }).first().click();
+    // The listbox option matches code text exactly. Wait for it to render
+    // (the departments reference list can still be fetching right after an
+    // edit-form mount) before clicking, else the click races an empty list.
+    const option = page.getByRole('option', { name: new RegExp(code) }).first();
+    await option.waitFor({ state: 'visible', timeout: 15_000 });
+    await option.click();
+    // Confirm the chip actually landed — each selected chip renders a
+    // remove button labelled `remove <code>` — before moving on. Guards
+    // against a silently-dropped selection (the add-then-Save race).
+    await expect(
+      page.getByRole('button', { name: `remove ${code}` }),
+    ).toBeVisible({ timeout: 10_000 });
     // Clear the input ready for the next pick.
     await input.fill('');
   }
@@ -618,17 +667,13 @@ async function removeDepartmentChip(
   page: import('@playwright/test').Page,
   code: string,
 ): Promise<void> {
-  // Each chip renders the code text followed by a remove button. Match
-  // a remove button (× or "Remove") sibling within the chip.
-  const chip = page.locator('[role="listitem"], li, span').filter({ hasText: code }).first();
-  // The chip's remove control is usually a button or icon nested inside.
-  const removeBtn = chip.getByRole('button').first();
-  if (await removeBtn.count()) {
-    await removeBtn.click();
-  } else {
-    // Fall back to clicking an × character close to the chip.
-    await page.locator('button').filter({ hasText: /^×$/ }).first().click();
-  }
+  // Each selected chip renders a remove button labelled `remove <code>`
+  // (DepartmentChipInput uses an <X> lucide icon + aria-label, NOT a "×"
+  // text glyph — so a text-based fallback never matches). Target the
+  // accessible name directly and wait for the chip to actually disappear.
+  const removeBtn = page.getByRole('button', { name: `remove ${code}` });
+  await removeBtn.click();
+  await expect(removeBtn).toHaveCount(0, { timeout: 10_000 });
 }
 
 async function buildDesignationXlsx(

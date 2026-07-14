@@ -20,13 +20,15 @@ import {
   buildWrappedVerticalXAxisLabels,
 } from "../config/chartAxisLabels";
 import { resolveLabelSlotWidth } from "../utils/barChartXAxis";
+import useDashboardT from "../i18n/useDashboardT";
+import { translate as t } from "../i18n/localeRuntime";
 import ChartTooltipPortal from "./ChartTooltipPortal";
 import ChartScrollViewport from "./ChartScrollViewport";
 
 function normalizeChartData(data, categoryOrder) {
   if (!categoryOrder?.length) {
     return (data ?? []).map((d) => ({
-      label: String(d.label ?? d.department ?? "Unknown"),
+      label: String(d.label ?? d.department ?? t("DASHBOARD_COMMON_UNKNOWN", "Unknown")),
       count: Number(d.count) || 0,
     }));
   }
@@ -49,6 +51,8 @@ const DepartmentBarChart = ({
   histogram = false,
   valueFormat = "count",
 }) => {
+  // Subscribes to language changes so labels below re-render translated.
+  const { language } = useDashboardT();
   const isPercent = valueFormat === "percent";
   const {
     containerRef: histogramContainerRef,
@@ -60,7 +64,7 @@ const DepartmentBarChart = ({
 
   const chartData = useMemo(
     () => normalizeChartData(data, categoryOrder),
-    [data, categoryOrder]
+    [data, categoryOrder, language]
   );
 
   const { viewportRef, chartSize, isScrollable, isReady, scrollAxis } = useScrollableChartSize({
@@ -71,8 +75,13 @@ const DepartmentBarChart = ({
 
   const categories = useMemo(() => chartData.map((d) => d.label), [chartData]);
   const series = useMemo(
-    () => [{ name: isPercent ? "Resolution rate" : "Count", data: chartData.map((d) => d.count) }],
-    [chartData, isPercent]
+    () => [{
+      name: isPercent
+        ? t("DASHBOARD_TILE_SERIES_RESOLUTION_RATE", "Resolution rate")
+        : t("DASHBOARD_COMMON_COUNT", "Count"),
+      data: chartData.map((d) => d.count),
+    }],
+    [chartData, isPercent, language]
   );
 
   const seriesMax = useMemo(
@@ -122,7 +131,7 @@ const DepartmentBarChart = ({
       if (dataPointIndex < 0) return;
 
       setTooltip({
-        label: categories[dataPointIndex] ?? "Unknown",
+        label: categories[dataPointIndex] ?? t("DASHBOARD_COMMON_UNKNOWN", "Unknown"),
         value: chartData[dataPointIndex]?.count ?? 0,
         x: event.clientX,
         y: event.clientY,
@@ -257,7 +266,10 @@ const DepartmentBarChart = ({
       <ChartTooltipPortal tooltip={tooltip}>
         <div className={SHARED_CHROME.chartTooltipTitle}>{tooltip?.label}</div>
         <div className={SHARED_CHROME.chartTooltipRow}>
-          {isPercent ? "Resolution rate" : "Count"} :{" "}
+          {isPercent
+            ? t("DASHBOARD_TILE_SERIES_RESOLUTION_RATE", "Resolution rate")
+            : t("DASHBOARD_COMMON_COUNT", "Count")}{" "}
+          :{" "}
           {isPercent
             ? formatBarChartPercentOneDecimal(tooltip?.value)
             : tooltip?.value}

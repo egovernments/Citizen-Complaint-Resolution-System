@@ -66,11 +66,10 @@ public class DispatchPipelineService {
                 ? event.getSubscriberId()
                 : context.getSubscriberId();
         if (!StringUtils.hasText(subscriberId)) {
-            // Record the terminal status before throwing — every other branch in
-            // process() persists, and the class invariant is that every consumed
-            // event leaves an explicit status row in nb_dispatch_log.
-            persist(event, context, "FAILED", "NB_SUBSCRIBER_ID_MISSING",
-                    "subscriberId is required (PGR resolved it; null means a bad event)", null, 1);
+            // A blank subscriberId is a pre-delivery validation-family rejection: throw
+            // WITHOUT writing a dispatch-log row. This is the tested contract — see
+            // EnvelopePipelineNegativesTest.assertRejected (verify(dispatchLogRepository,
+            // never()).upsert(...)). Do NOT add a persist() here.
             throw new CustomException("NB_SUBSCRIBER_ID_MISSING",
                     "subscriberId is required (PGR resolved it; null means a bad event)");
         }

@@ -1,22 +1,10 @@
-import { formatDimensionLabel } from "./labelFormat";
-import { formatWorkflowStatusLabel } from "./complaintsAtRiskPresentation";
-
-const PIN_SLA_LABELS = {
-  within: "Within SLA",
-  approaching: "Nearing breach",
-  breached: "Breached",
-};
-const PIN_CHANNEL_LABELS = {
-  web: "Web",
-  mobile: "Mobile app",
-  csc: "Counter (CSC)",
-  ivr: "IVR",
-  whatsapp: "WhatsApp",
-  sms: "SMS",
-  email: "Email",
-};
-const titleCaseWord = (v) =>
-  String(v ?? "").replace(/\b\w/g, (c) => c.toUpperCase());
+// Not a component — translate lazily inside render-time functions only (never
+// at module level), so language switches pick up fresh strings. Pin field
+// values (channel / SLA / status) resolve through dimensionLabel against
+// DASHBOARD_CHANNEL_* / DASHBOARD_SLA_* / DASHBOARD_WF_STAGE_* messages; no
+// code-owned fallbacks — unseeded values surface their raw code.
+import { translate as t, getLanguage } from "../i18n/localeRuntime";
+import { dimensionLabel } from "../i18n/dimensionLabel";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -39,8 +27,9 @@ function formatPct(value) {
 /**
  * Hover card for ward polygons — matches reference layout with layer highlight + totals.
  */
-export function buildMapHoverTooltipHtml(ward = {}, { layerMode = "created", geoLevel = "District" } = {}) {
-  const label = ward.label || ward.wardCode || "Area";
+export function buildMapHoverTooltipHtml(ward = {}, { layerMode = "created", geoLevel } = {}) {
+  const label = ward.label || ward.wardCode || t("DASHBOARD_MAP_AREA", "Area");
+  const level = geoLevel ?? t("DASHBOARD_GEO_LEVEL_0", "District");
   const created = ward.created ?? ward.count ?? 0;
   const open = ward.open ?? 0;
   const resolved = ward.resolved ?? 0;
@@ -49,22 +38,22 @@ export function buildMapHoverTooltipHtml(ward = {}, { layerMode = "created", geo
 
   const rows = [];
   if (layerMode === "open") {
-    rows.push(metricRow("% Open", formatPct(openPct)));
+    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_PCT_OPEN", "% Open"), formatPct(openPct)));
   } else if (layerMode === "resolved") {
-    rows.push(metricRow("% Resolved", formatPct(resolvedPct)));
+    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_PCT_RESOLVED", "% Resolved"), formatPct(resolvedPct)));
   } else {
-    rows.push(metricRow("Created", created));
+    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_CREATED", "Created"), created));
   }
 
   if (layerMode !== "created") {
-    rows.push(metricRow("Total created", created));
-    rows.push(metricRow("Open", open));
-    rows.push(metricRow("Resolved", resolved));
+    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_TOTAL_CREATED", "Total created"), created));
+    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_OPEN", "Open"), open));
+    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_RESOLVED", "Resolved"), resolved));
   }
 
   return `
     <div class="dashboard-map-hover-card">
-      <div class="dashboard-map-hover-title">${escapeHtml(label)} · ${escapeHtml(geoLevel)}</div>
+      <div class="dashboard-map-hover-title">${escapeHtml(label)} · ${escapeHtml(level)}</div>
       ${rows.join("")}
     </div>
   `;
@@ -75,7 +64,7 @@ function formatPinDate(ms) {
   const n = Number(ms);
   if (!Number.isFinite(n) || n <= 0) return null;
   try {
-    return new Date(n).toLocaleDateString(undefined, {
+    return new Date(n).toLocaleDateString(getLanguage()?.replace("_", "-"), {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -86,29 +75,29 @@ function formatPinDate(ms) {
 }
 
 export function buildComplaintPinTooltipHtml(pin = {}) {
-  const title = pin.serviceCode ? formatDimensionLabel(pin.serviceCode) : "Complaint";
-  const status = pin.status ? formatWorkflowStatusLabel(pin.status) : "—";
-  const ward = pin.wardCode ? formatDimensionLabel(pin.wardCode) : null;
+  const title = pin.serviceCode
+    ? dimensionLabel(pin.serviceCode, "complaintType")
+    : t("DASHBOARD_MAP_PIN_COMPLAINT", "Complaint");
+  const status = pin.status ? dimensionLabel(pin.status, "workflowStatus") : "—";
+  const ward = pin.wardCode ? dimensionLabel(pin.wardCode, "boundary") : null;
   const filed = formatPinDate(pin.createdDate);
-  const channel = pin.source
-    ? PIN_CHANNEL_LABELS[String(pin.source).toLowerCase()] || titleCaseWord(pin.source)
-    : null;
-  const sla = pin.slaStatus
-    ? PIN_SLA_LABELS[String(pin.slaStatus).toLowerCase()] || titleCaseWord(pin.slaStatus)
-    : null;
+  const channel = pin.source ? dimensionLabel(pin.source, "channel") : null;
+  const sla = pin.slaStatus ? dimensionLabel(pin.slaStatus, "slaState") : null;
 
   return `
     <div class="dashboard-map-hover-card dashboard-map-hover-card--pin">
       <div class="dashboard-map-hover-title">${escapeHtml(title)}</div>
-      ${metricRow("Status", status)}
-      ${ward ? metricRow("Ward", ward) : ""}
-      ${filed ? metricRow("Filed", filed) : ""}
-      ${channel ? metricRow("Channel", channel) : ""}
-      ${sla ? metricRow("SLA", sla) : ""}
-      ${pin.serviceRequestId ? metricRow("ID", pin.serviceRequestId) : ""}
+      ${metricRow(t("DASHBOARD_MAP_PIN_STATUS", "Status"), status)}
+      ${ward ? metricRow(t("DASHBOARD_MAP_PIN_WARD", "Ward"), ward) : ""}
+      ${filed ? metricRow(t("DASHBOARD_MAP_PIN_FILED", "Filed"), filed) : ""}
+      ${channel ? metricRow(t("DASHBOARD_MAP_PIN_CHANNEL", "Channel"), channel) : ""}
+      ${sla ? metricRow(t("DASHBOARD_MAP_PIN_SLA", "SLA"), sla) : ""}
+      ${pin.serviceRequestId ? metricRow(t("DASHBOARD_MAP_PIN_ID", "ID"), pin.serviceRequestId) : ""}
       ${
         pin.approximate
-          ? '<div class="dashboard-map-hover-note">Approximate location (ward centroid)</div>'
+          ? `<div class="dashboard-map-hover-note">${escapeHtml(
+              t("DASHBOARD_MAP_PIN_APPROXIMATE", "Approximate location (ward centroid)")
+            )}</div>`
           : ""
       }
     </div>

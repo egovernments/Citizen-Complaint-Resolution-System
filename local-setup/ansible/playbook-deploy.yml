@@ -396,6 +396,20 @@
              | default('default-data-handler:local' if (build_default_data_handler | default(false))
                        else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260611-111521') }}
 
+    # Novu dashboard: when `build_novu_dashboard: true` we build a subpath-rebased
+    # image locally (backend/novu-dashboard/Dockerfile, tag novu-dashboard:local)
+    # so the SPA serves under /novu with a single strip-prefix nginx location;
+    # otherwise pull the stock image, which serves at base=/ and needs the legacy
+    # root-path workarounds. Override either with `novu_dashboard_image:` in
+    # host_vars. Consumed by digit.env.j2 (NOVU_DASHBOARD_IMAGE) → compose
+    # ${NOVU_DASHBOARD_IMAGE}.
+    - name: "Resolve novu-dashboard image tag"
+      ansible.builtin.set_fact:
+        novu_dashboard_image: >-
+          {{ novu_dashboard_image
+             | default('novu-dashboard:local' if (build_novu_dashboard | default(false))
+                       else 'ghcr.io/novuhq/novu/dashboard:' ~ (novu_dashboard_version | default('2.3.0'))) }}
+
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
     # links match the tenant's actual domain). Compose auto-loads .env from the
@@ -638,6 +652,28 @@
       changed_when: true
       when:
         - build_default_data_handler | default(false)
+
+    # ==================== Build novu-dashboard image locally ==============
+    # When `build_novu_dashboard: true`, derive a subpath-rebased dashboard
+    # image from the official one (backend/novu-dashboard/Dockerfile) and tag it
+    # novu-dashboard:local; compose picks it up via NOVU_DASHBOARD_IMAGE. The
+    # build context is just the Dockerfile dir (FROM the upstream image — no
+    # repo source needed), so this is cheap and works for local + remote targets.
+    # NOVU_BASE_PATH defaults to /novu; override via host_vars novu_base_path.
+    - name: "Build novu-dashboard image locally (when build_novu_dashboard)"
+      ansible.builtin.command: >-
+        docker build
+        -t novu-dashboard:local
+        --build-arg NOVU_DASHBOARD_VERSION={{ novu_dashboard_version | default('2.3.0') }}
+        --build-arg NOVU_BASE_PATH={{ novu_base_path | default('/novu') }}
+        .
+      args:
+        chdir: "{{ playbook_dir }}/../../backend/novu-dashboard"
+      register: novu_dashboard_build_run
+      changed_when: true
+      when:
+        - enable_novu | default(false)
+        - build_novu_dashboard | default(false)
 
     # ==================== Build otp-publisher image locally ===============
     # When `build_otp_publisher: true`, build the vendored Node service at

@@ -10,7 +10,8 @@ import {
   getResolvedShareFillStyle,
 } from "../config/geographyMapPresentation";
 import { buildMapHoverTooltipHtml, buildComplaintPinTooltipHtml } from "../config/mapHoverPresentation";
-import { formatDimensionLabel } from "../config/labelFormat";
+import useDashboardT from "../i18n/useDashboardT";
+import { dimensionLabel } from "../i18n/dimensionLabel";
 import { fetchBoundariesByCodes, fetchBoundaryRelationshipsByCodes } from "../services/boundaryService";
 import { useMapResize } from "../hooks/useMapResize";
 import {
@@ -159,6 +160,7 @@ const GeographyChoroplethMap = ({
   layerOptions = [],
   cityLabel = getMapCityLabel(),
 }) => {
+  const { t, language } = useDashboardT();
   const shellRef = useRef(null);
   const frameRef = useRef(null);
   const elRef = useRef(null);
@@ -198,9 +200,9 @@ const GeographyChoroplethMap = ({
 
   const geoLevel =
     activeLevel === "county"
-      ? "County"
+      ? t("DASHBOARD_GEO_LEVEL_0", "County")
       : activeLevel === "subCounty"
-        ? "Sub-county"
+        ? t("DASHBOARD_GEO_LEVEL_1", "Sub-county")
         : getMapZoomLevelLabel({
             drillTrailLength: drillTrail.length,
             focusedCode,
@@ -253,18 +255,18 @@ const GeographyChoroplethMap = ({
   // ── data joins ───────────────────────────────────────────────────────────
   const joined = useMemo(
     () => joinWardMapData(wardCounts, boundaries),
-    [wardCounts, boundaries]
+    [wardCounts, boundaries, language]
   );
 
   // Parent-level joins for the zoom-driven boundary levels (counts rolled up to the
   // sub-county / county, joined against the seeded parent polygons).
   const subCountyJoined = useMemo(
     () => joinWardMapData(aggregateWardCountsToLevel(wardCounts, hierarchyIndex, 1), boundaries),
-    [wardCounts, hierarchyIndex, boundaries]
+    [wardCounts, hierarchyIndex, boundaries, language]
   );
   const countyJoined = useMemo(
     () => joinWardMapData(aggregateWardCountsToLevel(wardCounts, hierarchyIndex, 0), boundaries),
-    [wardCounts, hierarchyIndex, boundaries]
+    [wardCounts, hierarchyIndex, boundaries, language]
   );
   // Active level by zoom; fall back to wards if a level's parent polygons are missing.
   const activeJoined =
@@ -286,12 +288,12 @@ const GeographyChoroplethMap = ({
 
   const mapRootLabel = useMemo(
     () => resolveMapRootLabel(cityLabel, drillHierarchyIndex, wardCodes, boundaries),
-    [cityLabel, drillHierarchyIndex, wardCodes, boundaries]
+    [cityLabel, drillHierarchyIndex, wardCodes, boundaries, language]
   );
 
   const boundaryLabelIndex = useMemo(
     () => buildBoundaryLabelIndex(boundaries),
-    [boundaries]
+    [boundaries, language]
   );
 
   const focusedWard = useMemo(
@@ -319,7 +321,7 @@ const GeographyChoroplethMap = ({
 
   const visibleComplaintPins = displayLayers.complaintPins ?? [];
 
-  const legendItems = useMemo(() => getGeographyMapLegend(layerMode), [layerMode]);
+  const legendItems = useMemo(() => getGeographyMapLegend(layerMode), [layerMode, language]);
   const legendTitle = getGeographyMapLegendTitle(layerMode);
   const legendFooter = getGeographyMapLegendFooter(drillTrail.length);
 
@@ -565,7 +567,7 @@ const GeographyChoroplethMap = ({
             const wardLabel =
               props.label ||
               boundaryLabelIndex[code] ||
-              formatDimensionLabel(code);
+              dimensionLabel(code, "boundary");
             handleWardFocus(code, feature, wardLabel);
             return;
           }
@@ -593,7 +595,7 @@ const GeographyChoroplethMap = ({
             scopedWardFeatures,
             tierId: currentTier.id,
             groupKey,
-            label: groupLabel || props.label || "Area",
+            label: groupLabel || props.label || t("DASHBOARD_MAP_AREA", "Area"),
           });
         });
       },
@@ -609,6 +611,9 @@ const GeographyChoroplethMap = ({
     drillHierarchyIndex,
     drillTrail,
     joined.geoFeatures?.features,
+    // Leaflet tooltips are drawn imperatively — redraw layers on language switch
+    // (#882 ward-tooltip precedent) so bound tooltip text picks up the new locale.
+    language,
     layerMode,
   ]);
 
@@ -714,7 +719,9 @@ const GeographyChoroplethMap = ({
     } else {
       selectedPinKeyRef.current = null;
     }
-  }, [visibleComplaintPins]);
+    // `language` dep: popup content is baked at bind time — rebuild pins on
+    // language switch so pin tooltips re-render localized (#882 precedent).
+  }, [visibleComplaintPins, language]);
 
   // ── initial fit ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -799,9 +806,13 @@ const GeographyChoroplethMap = ({
         </div>
 
         <div className="dashboard-map-zoom-badge tw-shrink-0 tw-rounded-sm tw-border tw-border-border tw-bg-muted/40 tw-px-2 tw-py-0.5 tw-text-[10px] tw-text-muted-foreground">
-          zoom {zoomLevel} · {geoLevel}
+          {t("DASHBOARD_MAP_ZOOM", "zoom")} {zoomLevel} · {geoLevel}
           {visibleComplaintPins.length
-            ? ` · ${visibleComplaintPins.length} complaint${visibleComplaintPins.length === 1 ? "" : "s"}`
+            ? ` · ${visibleComplaintPins.length} ${
+                visibleComplaintPins.length === 1
+                  ? t("DASHBOARD_MAP_COMPLAINT_COUNT_SINGULAR", "complaint")
+                  : t("DASHBOARD_MAP_COMPLAINT_COUNT_PLURAL", "complaints")
+              }`
             : ""}
         </div>
 
@@ -809,7 +820,7 @@ const GeographyChoroplethMap = ({
           <button
             type="button"
             className="dashboard-map-control-btn"
-            title="Locate me"
+            title={t("DASHBOARD_MAP_LOCATE_ME", "Locate me")}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={handleLocate}
           >
@@ -818,17 +829,21 @@ const GeographyChoroplethMap = ({
           <button
             type="button"
             className="dashboard-map-control-btn dashboard-map-control-btn--text"
-            title="Reset view"
+            title={t("DASHBOARD_MAP_RESET_VIEW", "Reset view")}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={resetView}
           >
             <ResetIcon />
-            <span>Reset</span>
+            <span>{t("DASHBOARD_MAP_RESET", "Reset")}</span>
           </button>
           <button
             type="button"
             className="dashboard-map-control-btn"
-            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            title={
+              isFullscreen
+                ? t("DASHBOARD_MAP_EXIT_FULLSCREEN", "Exit fullscreen")
+                : t("DASHBOARD_MAP_FULLSCREEN", "Fullscreen")
+            }
             onMouseDown={(e) => e.stopPropagation()}
             onClick={toggleFullscreen}
           >
@@ -843,12 +858,12 @@ const GeographyChoroplethMap = ({
       >
         {showLoading ? (
           <div className="tw-pointer-events-none tw-absolute tw-inset-0 tw-z-[500] tw-flex tw-items-center tw-justify-center tw-bg-surface/70 tw-text-[12px] tw-text-muted-foreground">
-            Loading boundaries…
+            {t("DASHBOARD_MAP_LOADING_BOUNDARIES", "Loading boundaries…")}
           </div>
         ) : null}
         {showEmpty ? (
           <div className="tw-pointer-events-none tw-absolute tw-inset-0 tw-z-[500] tw-flex tw-items-center tw-justify-center tw-bg-surface/70 tw-p-4 tw-text-[12px] tw-text-muted-foreground">
-            No geographic data
+            {t("DASHBOARD_MAP_NO_GEO_DATA", "No geographic data")}
           </div>
         ) : null}
         <div
@@ -858,7 +873,7 @@ const GeographyChoroplethMap = ({
 
         {activeFilterLabel ? (
           <div className="dashboard-map-filter-chip tw-pointer-events-auto tw-absolute tw-right-3 tw-top-3 tw-z-[1000] tw-flex tw-items-center tw-gap-2 tw-rounded-sm tw-border tw-border-border tw-bg-surface/95 tw-px-2.5 tw-py-1.5 tw-text-[10px] tw-shadow-sm">
-            <span className="tw-text-muted-foreground">Filter:</span>
+            <span className="tw-text-muted-foreground">{t("DASHBOARD_MAP_FILTER", "Filter:")}</span>
             <span className="tw-font-semibold tw-text-foreground">{activeFilterLabel}</span>
             <button
               type="button"
@@ -866,19 +881,22 @@ const GeographyChoroplethMap = ({
               onMouseDown={(e) => e.stopPropagation()}
               onClick={resetView}
             >
-              Clear
+              {t("DASHBOARD_MAP_CLEAR", "Clear")}
             </button>
           </div>
         ) : null}
 
         {boundariesError ? (
           <div className="tw-pointer-events-none tw-absolute tw-right-3 tw-top-12 tw-z-[1000] tw-rounded tw-bg-surface/90 tw-px-2 tw-py-1 tw-text-[10px] tw-text-muted-foreground">
-            {boundariesError}
+            {t("DASHBOARD_MAP_BOUNDARIES_ERROR", "Could not load ward boundaries")}
           </div>
         ) : null}
         {complaintPinsError ? (
           <div className="tw-pointer-events-none tw-absolute tw-right-3 tw-top-20 tw-z-[1000] tw-max-w-[220px] tw-rounded tw-bg-amber-50/95 tw-px-2 tw-py-1 tw-text-[10px] tw-text-amber-900">
-            Complaint pins unavailable: analytics API must expose latitude, longitude, and service_request_id on the facts grain.
+            {t(
+              "DASHBOARD_MAP_PINS_UNAVAILABLE",
+              "Complaint pins unavailable: analytics API must expose latitude, longitude, and service_request_id on the facts grain."
+            )}
           </div>
         ) : null}
       </div>
@@ -892,7 +910,11 @@ const GeographyChoroplethMap = ({
               className="dashboard-map-legend-toggle"
               onMouseDown={(e) => e.stopPropagation()}
               onClick={() => setLegendCollapsed((prev) => !prev)}
-              aria-label={legendCollapsed ? "Expand legend" : "Collapse legend"}
+              aria-label={
+                legendCollapsed
+                  ? t("DASHBOARD_MAP_LEGEND_EXPAND", "Expand legend")
+                  : t("DASHBOARD_MAP_LEGEND_COLLAPSE", "Collapse legend")
+              }
             >
               {legendCollapsed ? "+" : "−"}
             </button>

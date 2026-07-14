@@ -5,6 +5,7 @@ import {
   DEFAULT_MOBILE_PATTERN,
   DEFAULT_MOBILE_PREFIX,
 } from "@egovernments/digit-ui-libraries";
+import { useTranslation } from "react-i18next";
 
 /**
  * Custom hook that returns the mobile-number validation config for the
@@ -34,6 +35,7 @@ import {
  * @returns {object} - Returns validation rules and loading state
  */
 const useMobileValidation = (tenantId, validationName = "defaultMobileValidation") => {
+  const { t } = useTranslation();
   const reqCriteria = {
     url: `/${window?.globalConfigs?.getConfig?.("MDMS_V1_CONTEXT_PATH") || "mdms-v2"}/v1/_search`,
     params: {
@@ -107,7 +109,10 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
     minLength: resolvedMin,
     maxLength: resolvedMax > 0 ? resolvedMax : 15,
 
-    errorMessage: buildMobileErrorMessage(resolvedPattern),
+    // `t` from react-i18next resolves ERR_INVALID_MOBILE_NUMBER / MOBILE_VALIDATION_*
+    // against the active locale (module: rainmaker-common) — without it this
+    // message is hardcoded English regardless of the selected language.
+    errorMessage: buildMobileErrorMessage(resolvedPattern, t),
 
     isActive: mdmsConfig?.isActive !== undefined ? mdmsConfig.isActive : true,
   };

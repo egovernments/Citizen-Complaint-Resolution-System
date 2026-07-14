@@ -150,6 +150,7 @@ const customEnglishMessages: TranslationMessages = {
       request_id: 'Request ID',
       citizen: 'Citizen',
       locality: 'Locality',
+      mobile_login_username_help: "Used as the citizen's login username.",
     },
     list: {
       refresh: 'Refresh',

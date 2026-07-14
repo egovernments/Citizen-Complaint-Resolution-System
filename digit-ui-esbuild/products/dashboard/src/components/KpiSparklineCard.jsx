@@ -5,6 +5,7 @@ import { resolveDashboardCssColor } from "../config/chartColors";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import { getNumberTileValueClass } from "../config/kpiDisplay";
 import { useChartContainerSize } from "../hooks/useChartContainerSize";
+import useDashboardT from "../i18n/useDashboardT";
 import ResizeGrip from "./ResizeGrip";
 
 const SPARKLINE_MIN_HEIGHT = 10;
@@ -52,6 +53,7 @@ const KpiSparklineCard = ({
   loading = false,
   onRemove,
 }) => {
+  const { t } = useDashboardT();
   const isUnavailable = value === "—";
   const displayValue = value ?? (loading ? "…" : "—");
   const valueClass = getNumberTileValueClass(status, { unavailable: isUnavailable });
@@ -87,11 +89,11 @@ const KpiSparklineCard = ({
       {onRemove ? (
         <button
           type="button"
-          title="Remove from dashboard"
+          title={t("DASHBOARD_TILE_REMOVE", "Remove from dashboard")}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={onRemove}
           className="dashboard-widget-remove-btn"
-          aria-label={`Remove ${title}`}
+          aria-label={`${t("DASHBOARD_TILE_REMOVE_ARIA", "Remove")} ${title}`}
         >
           <RemoveIcon />
         </button>

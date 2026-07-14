@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { runBatchQueries } from "../services/analyticsService";
 import { fetchComplaintTypeIndex } from "../services/complaintHierarchyService";
-import { formatDimensionLabel } from "../config/labelFormat";
+import { dimensionLabel } from "../i18n/dimensionLabel";
+import useDashboardT from "../i18n/useDashboardT";
 import {
   COMPLAINT_TYPE_OPTIONS,
   GEOGRAPHY_OPTIONS,
@@ -15,11 +16,10 @@ import {
  *
  * The analytics distinct decides WHICH codes appear; the MDMS complaint
  * hierarchy (RAINMAKER-PGR.ComplaintHierarchy, fetched in parallel) supplies
- * the complaint-type display names and root-category grouping. Codes missing
- * from the master (stray/QA data) — and everything when the hierarchy fetch
- * fails — fall back to formatDimensionLabel (the shared dimension humanizer)
- * with no group. Ward labels stay humanized codes (localized ward naming is a
- * separate follow-up).
+ * the complaint-type display names and root-category grouping. All labels
+ * resolve through dimensionLabel: localized message first, then the master's
+ * display name, then the shared humanizer (stray/QA codes, failed hierarchy
+ * fetch). Labels re-derive from the cached rows on a language switch.
  *
  * Returns: { options, loading }
  * - options: { geography: [{id,label}], complaintType: [{id,label,group?}] } —
@@ -47,7 +47,7 @@ const OPTION_QUERIES = {
   },
 };
 
-function toOptionList(rows, codeKey, sentinelOptions, decorate) {
+function toOptionList(rows, codeKey, sentinelOptions, kind, decorate) {
   const options = (rows || [])
     .map((row) => String(row?.[codeKey] ?? "").trim())
     .filter(Boolean) // live data carries blank-code rows — drop them
@@ -55,7 +55,7 @@ function toOptionList(rows, codeKey, sentinelOptions, decorate) {
       const extra = decorate?.(code);
       return {
         id: code,
-        label: extra?.label || formatDimensionLabel(code),
+        label: dimensionLabel(code, kind, extra?.label || undefined),
         ...(extra?.group && { group: extra.group }),
       };
     })
@@ -81,13 +81,19 @@ function toComplaintTypeDecorator(hierarchyIndex) {
       label: entry.label,
       // A code that IS its own root (top-level category) stays ungrouped —
       // a one-item optgroup echoing the option's own label is just noise.
-      ...(entry.rootCode !== code && entry.rootLabel && { group: entry.rootLabel }),
+      ...(entry.rootCode !== code &&
+        entry.rootLabel && {
+          group: dimensionLabel(entry.rootCode, "complaintType", entry.rootLabel),
+        }),
     };
   };
 }
 
 export function useFilterOptions() {
-  const [state, setState] = useState({ options: null, loading: true });
+  // Raw fetch payload and derived labels are split so a language switch
+  // re-labels from the cached rows without re-querying the backend.
+  const [raw, setRaw] = useState({ results: null, hierarchyIndex: null, loading: true });
+  const { language } = useDashboardT();
 
   useEffect(() => {
     let cancelled = false;
@@ -99,36 +105,41 @@ export function useFilterOptions() {
     ])
       .then(([res, hierarchyIndex]) => {
         if (cancelled) return;
-        const results = res?.results || {};
-        // Per-entry failures come back as { error } (no rows) — treated as empty.
-        const complaintType = toOptionList(
-          results.complaintTypes?.rows,
-          "service_code",
-          COMPLAINT_TYPE_OPTIONS,
-          toComplaintTypeDecorator(hierarchyIndex)
-        );
-        const geography = toOptionList(
-          results.wards?.rows,
-          "ward_code",
-          GEOGRAPHY_OPTIONS
-        );
-        const options = {
-          ...(geography && { geography }),
-          ...(complaintType && { complaintType }),
-        };
-        setState({
-          options: Object.keys(options).length ? options : null,
-          loading: false,
-        });
+        setRaw({ results: res?.results || {}, hierarchyIndex, loading: false });
       })
       .catch(() => {
         // Never block the dashboard — the selects keep their placeholder lists.
-        if (!cancelled) setState({ options: null, loading: false });
+        if (!cancelled) setRaw({ results: null, hierarchyIndex: null, loading: false });
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  return state;
+  return useMemo(() => {
+    if (!raw.results) return { options: null, loading: raw.loading };
+    // Per-entry failures come back as { error } (no rows) — treated as empty.
+    const complaintType = toOptionList(
+      raw.results.complaintTypes?.rows,
+      "service_code",
+      COMPLAINT_TYPE_OPTIONS,
+      "complaintType",
+      toComplaintTypeDecorator(raw.hierarchyIndex)
+    );
+    const geography = toOptionList(
+      raw.results.wards?.rows,
+      "ward_code",
+      GEOGRAPHY_OPTIONS,
+      "boundary"
+    );
+    const options = {
+      ...(geography && { geography }),
+      ...(complaintType && { complaintType }),
+    };
+    return {
+      options: Object.keys(options).length ? options : null,
+      loading: raw.loading,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- language re-labels cached rows
+  }, [raw, language]);
 }

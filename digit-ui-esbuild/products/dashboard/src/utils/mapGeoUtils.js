@@ -1,6 +1,9 @@
 import L from "leaflet";
-import { formatDimensionLabel } from "../config/labelFormat";
 import { getWowChangeFillStyle } from "../config/geographyMapPresentation";
+// Not a component — translate lazily inside render-time functions only (never
+// at module level), so language switches pick up fresh strings.
+import { translate as t } from "../i18n/localeRuntime";
+import { dimensionLabel } from "../i18n/dimensionLabel";
 
 const TEAL_SCALE = ["#ccfbf1", "#5eead4", "#14b8a6", "#0d9488", "#115e59"];
 
@@ -139,7 +142,7 @@ export function joinWardMapData(wardCounts = [], boundaries = []) {
 
     const boundary = boundaryByCode[code];
     const geometry = boundary?.geometry;
-    const label = ward.label || formatDimensionLabel(code);
+    const label = dimensionLabel(code, "boundary", ward.label || undefined);
     const type = geometry?.type;
 
     if (!type) {
@@ -229,8 +232,17 @@ export function getDrillTier(level) {
   return MAP_DRILL_TIERS[idx];
 }
 
+/** Localized tier name per drill depth index — English fallbacks match MAP_ZOOM_LEVEL_LABELS. */
+export function localizeGeoLevelLabel(index) {
+  const idx = Math.min(Math.max(Number(index) || 0, 0), MAP_ZOOM_LEVEL_LABELS.length - 1);
+  if (idx === 0) return t("DASHBOARD_GEO_LEVEL_0", "District");
+  if (idx === 1) return t("DASHBOARD_GEO_LEVEL_1", "Subdistrict");
+  if (idx === 2) return t("DASHBOARD_GEO_LEVEL_2", "Sub-subdistrict");
+  return t("DASHBOARD_GEO_LEVEL_3", "Complaints");
+}
+
 export function getDrillTierLabel(level) {
-  return getDrillTier(level).label;
+  return localizeGeoLevelLabel(getDrillTier(level).index);
 }
 
 export function isWardDrillLevel(level) {
@@ -240,10 +252,10 @@ export function isWardDrillLevel(level) {
 /** Zoom-badge / tooltip area label for the current drill depth. */
 export function getMapZoomLevelLabel({ drillTrailLength = 0, focusedCode = null, drillLevel = 0 } = {}) {
   if (focusedCode || drillLevel >= MAP_DRILL_MAX_LEVEL) {
-    return MAP_ZOOM_LEVEL_LABELS[MAP_ZOOM_LEVEL_LABELS.length - 1];
+    return localizeGeoLevelLabel(MAP_ZOOM_LEVEL_LABELS.length - 1);
   }
   const idx = Math.min(Math.max(drillTrailLength, 0), MAP_ZOOM_LEVEL_LABELS.length - 1);
-  return MAP_ZOOM_LEVEL_LABELS[idx];
+  return localizeGeoLevelLabel(idx);
 }
 
 const GENERIC_MAP_ROOT_LABELS = new Set(["state", "city", "district", "region", "country", "area"]);
@@ -258,8 +270,8 @@ export function resolveMapRootLabel(cityLabel, hierarchyIndex = {}, wardCodes = 
   for (const boundary of boundaries) {
     const code = String(boundary?.code ?? "").trim();
     const name = boundary?.localname || boundary?.name || boundary?.label;
+    if (code) return dimensionLabel(code, "boundary", name ? String(name) : undefined);
     if (name) return String(name);
-    if (code) return formatDimensionLabel(code);
   }
 
   const ancestorCounts = new Map();
@@ -268,11 +280,11 @@ export function resolveMapRootLabel(cityLabel, hierarchyIndex = {}, wardCodes = 
     const entry = hierarchyIndex?.[wardCode];
     const ancestors = entry?.ancestors ?? [];
     if (ancestors[0]) {
-      const rootLabel = formatDimensionLabel(ancestors[0]);
+      const rootLabel = dimensionLabel(ancestors[0], "boundary");
       if (rootLabel) rootCounts.set(rootLabel, (rootCounts.get(rootLabel) ?? 0) + 1);
     }
     for (const ancestor of ancestors) {
-      const label = formatDimensionLabel(ancestor);
+      const label = dimensionLabel(ancestor, "boundary");
       if (!label) continue;
       ancestorCounts.set(label, (ancestorCounts.get(label) ?? 0) + 1);
     }
@@ -298,7 +310,7 @@ export function resolveMapRootLabel(cityLabel, hierarchyIndex = {}, wardCodes = 
   }
   if (bestLabel) return bestLabel;
 
-  return configured || "Region";
+  return configured || t("DASHBOARD_MAP_REGION", "Region");
 }
 
 export function buildBoundaryLabelIndex(boundaries = []) {
@@ -307,17 +319,17 @@ export function buildBoundaryLabelIndex(boundaries = []) {
     const code = String(boundary?.code ?? "").trim();
     if (!code) continue;
     const name = boundary?.localname || boundary?.name || boundary?.label;
-    index[code] = name ? String(name) : formatDimensionLabel(code);
+    index[code] = dimensionLabel(code, "boundary", name ? String(name) : undefined);
   }
   return index;
 }
 
 export function formatHierarchyGroupLabel(groupKey, boundaryLabelIndex = {}) {
   const code = String(groupKey ?? "").trim();
-  if (!code) return "Area";
+  if (!code) return t("DASHBOARD_MAP_AREA", "Area");
   if (code.startsWith("geo@")) return formatSpatialGroupLabel(code);
   if (boundaryLabelIndex[code]) return boundaryLabelIndex[code];
-  return formatDimensionLabel(code);
+  return dimensionLabel(code, "boundary");
 }
 
 function levelsUpFromLeafForTier(tier) {
@@ -428,9 +440,9 @@ export function buildMapDrillHierarchy({
 
 function formatSpatialGroupLabel(groupKey) {
   const match = String(groupKey ?? "").match(/^geo@(\d+):(\d+)x(\d+)$/);
-  if (!match) return "Area";
+  if (!match) return t("DASHBOARD_MAP_AREA", "Area");
   const [, , x, y] = match;
-  return `Zone ${Number(x) + 1}-${Number(y) + 1}`;
+  return `${t("DASHBOARD_MAP_ZONE", "Zone")} ${Number(x) + 1}-${Number(y) + 1}`;
 }
 
 function ancestorGroupKey(entry, wardCode, levelsUp) {
@@ -750,8 +762,8 @@ function aggregateClusterProperties(members) {
 
   const label =
     members.length > 1
-      ? `${members.length} areas`
-      : members[0]?.properties?.label ?? "Area";
+      ? `${members.length} ${t("DASHBOARD_MAP_AREAS", "areas")}`
+      : members[0]?.properties?.label ?? t("DASHBOARD_MAP_AREA", "Area");
 
   return {
     code: clusterCodes.join("+"),
@@ -1018,7 +1030,7 @@ export function aggregateWardCountsToLevel(wardCounts = [], hierarchyIndex = {},
     if (!parentCode) continue;
     let agg = byParent.get(parentCode);
     if (!agg) {
-      agg = { wardCode: parentCode, label: formatDimensionLabel(parentCode), count: 0, created: 0, open: 0, resolved: 0 };
+      agg = { wardCode: parentCode, label: dimensionLabel(parentCode, "boundary"), count: 0, created: 0, open: 0, resolved: 0 };
       byParent.set(parentCode, agg);
     }
     agg.count += Number(ward.count) || 0;

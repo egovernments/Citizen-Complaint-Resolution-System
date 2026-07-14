@@ -297,8 +297,7 @@ local-setup/
 │   └── inventory.ini.example       # Template inventory
 ├── docker-compose.registry.yml     # Compose with public registry images
 ├── kong/
-│   ├── kong.yml                    # API gateway routes + auth enrichment
-│   └── auth-enrichment.lua         # Kong pre-function: authToken → userInfo
+│   └── kong.yml                    # API gateway routes + auth enrichment + RBAC (pre-function)
 ├── nginx/
 │   ├── digit-ui.conf               # UI + API proxy config
 │   ├── globalConfigs.js            # Runtime UI configuration
@@ -649,8 +648,7 @@ local-setup/
 │   ├── playbook-deploy.yml         # Ansible: install Docker, deploy stack, run CI tests
 │   └── inventory.ini.example       # Template inventory with placeholder IP
 ├── kong/
-│   ├── kong.yml                    # API gateway routes + OTEL + auth enrichment
-│   └── auth-enrichment.lua         # Kong pre-function: resolve authToken → userInfo
+│   └── kong.yml                    # API gateway routes + OTEL + auth enrichment + RBAC (pre-function)
 ├── nginx/
 │   ├── digit-ui.conf               # UI serving + API proxy to Kong
 │   ├── globalConfigs.js            # Runtime UI config (auth provider, API endpoints)
