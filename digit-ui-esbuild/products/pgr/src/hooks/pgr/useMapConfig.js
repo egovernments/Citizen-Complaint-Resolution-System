@@ -83,8 +83,11 @@ const asViewbox = (v) => {
 // source and geocoding scope from MDMS so they can be set per tenant without a
 // code change. Reads `RAINMAKER-PGR.MapConfig[0]`.
 //
-// The config is per tenant: mdms-v2 does not inherit across the tenant tree, so
-// each city carries its own record and nothing resolves against the state root.
+// The config is per tenant, and the tenant is always the CITY the user is acting
+// in — never the state root. mdms-v2 itself resolves up the tenant tree, so a
+// city that has its own record overrides, and one that doesn't inherits whatever
+// the parent holds. That inheritance is the platform's, not ours: nothing here
+// may substitute a root tenant of its own accord.
 //
 // Every field resolves MDMS -> globalConfigs -> built-in default. A tenant with
 // no MapConfig record (or a partial one) keeps exactly the behaviour it had
