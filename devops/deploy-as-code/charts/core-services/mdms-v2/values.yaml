@@ -18,13 +18,18 @@ initContainers:
       tag: "v2.9.2-4a60f20"
 
 # Container Configs
-# Parity fix: pin the compose-baked mdms-v2 image. The chart-default v2.9.2 tag
-# STRICTLY rejects string-valued RequestInfo.userInfo.roles (e.g. ["DGRO"]) with a
-# 500 (Cannot construct Role from String) — which the configurator SPA sends —
-# whereas the compose stack runs maven-jdk21-9f83afb, which tolerates it. Image
-# drift, not app logic; imported into k3s containerd, so pullPolicy: IfNotPresent.
+# PARITY / IMAGE NOTE — why this is NOT the chart-default v2.9.2 tag:
+#   v2.9.2 STRICTLY rejects string-valued RequestInfo.userInfo.roles (e.g. ["DGRO"])
+#   with a 500 (Cannot construct Role from String) — which the configurator SPA sends
+#   — so configurator writes fail on k8s. The maven-jdk21-9f83afb build tolerates it.
+#   Image drift, not app logic.
+#   PARITY: Compose pins the SAME image (egovio/mdms-v2:maven-jdk21-9f83afb,
+#   local-setup/docker-compose.egov-digit.yaml) — reverting to v2.9.2 would make k8s
+#   diverge from Compose. Keep both on this tag.
+#   Repo normalized to egovio/ so k8s pulls the same published image Compose does
+#   (was bare "mdms-v2", which relied on a local containerd import during the parity run).
 image:
-  repository: "mdms-v2"
+  repository: "egovio/mdms-v2"
   tag: "maven-jdk21-9f83afb"
   pullPolicy: "IfNotPresent"
 replicas: "1"
