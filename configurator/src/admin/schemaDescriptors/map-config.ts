@@ -12,6 +12,13 @@ import type { SchemaDescriptor } from './types';
  *
  * Help text describes the *visible effect* of each field — an operator should not
  * have to know that `bounded=1` is a Nominatim query parameter to use the form.
+ *
+ * The starting position, boundary tenant and search extent are DERIVED from the
+ * boundaries the operator onboards in Phase 2 (see utils/mapConfigFromBoundaries)
+ * — the polygons of the area a tenant serves already answer where the map should
+ * open and how far the address search may reach. They are therefore hidden on
+ * create (there is nothing sensible to type before boundaries exist) and exposed
+ * on edit purely as an override.
  */
 export const mapConfigDescriptor: SchemaDescriptor = {
   schema: 'RAINMAKER-PGR.MapConfig',
@@ -44,29 +51,29 @@ export const mapConfigDescriptor: SchemaDescriptor = {
     { path: 'wardHighlightColor', widget: 'color', label: 'Ward highlight colour',
       help: 'Fill and outline colour of the ward the citizen has pinned. Defaults to orange (#FFA74F).' },
 
-    { path: 'center.lat', widget: 'number', label: 'Start latitude', min: -90, max: 90,
-      help: 'Where the map opens when the citizen has not shared their location. Pick a point inside your service area — otherwise the citizen starts somewhere they have to pan away from.' },
-    { path: 'center.lng', widget: 'number', label: 'Start longitude', min: -180, max: 180,
-      help: 'Longitude of the starting point.' },
-    { path: 'defaultZoom', widget: 'integer', label: 'Start zoom', min: 0, max: 22,
-      help: 'How far in the map opens once a location is known. 13 is neighbourhood level (the default), 15 is street level, 10 shows a whole city.' },
+    { path: 'center.lat', widget: 'number', label: 'Start latitude', min: -90, max: 90, hidden: 'create',
+      help: 'Derived from your boundaries during Boundary Setup — the centre of the area you onboarded. Override only if the map should open somewhere other than the middle of your service area.' },
+    { path: 'center.lng', widget: 'number', label: 'Start longitude', min: -180, max: 180, hidden: 'create',
+      help: 'Longitude of the starting point. Derived alongside the latitude.' },
+    { path: 'defaultZoom', widget: 'integer', label: 'Start zoom', min: 0, max: 22, hidden: 'create',
+      help: 'Derived to fit your boundaries in view. Override to open closer or further out: 13 is neighbourhood level, 15 street level, 10 shows a whole city.' },
     { path: 'minZoom', widget: 'integer', label: 'Minimum zoom', min: 0, max: 22,
       help: 'Furthest the citizen can zoom out.' },
     { path: 'maxZoom', widget: 'integer', label: 'Maximum zoom', min: 0, max: 22,
       help: 'Closest the citizen can zoom in.' },
 
-    { path: 'boundaryTenantId', widget: 'text', label: 'Boundary tenant',
-      help: 'Tenant whose ward polygons are drawn over the map and used to resolve a dropped pin to a ward, e.g. "ke.bomet". Leave blank to draw no ward overlay.' },
+    { path: 'boundaryTenantId', widget: 'text', label: 'Boundary tenant', hidden: 'create',
+      help: 'Tenant whose ward polygons are drawn over the map and used to resolve a dropped pin to a ward. Set to this tenant during Boundary Setup. Leave blank to draw no ward overlay.' },
 
     { path: 'geocodeCountryCodes', widget: 'text', label: 'Search country codes',
       help: 'Restrict address search to these countries, as comma-separated two-letter codes (e.g. "ke"). Leave blank to search worldwide.' },
-    { path: 'searchViewbox.minLon', widget: 'number', label: 'Search box — west', min: -180, max: 180,
-      help: 'Optional. Confines address search to a bounding box. Addresses OUTSIDE the box are discarded entirely, so leave all four blank unless the box definitely covers your whole service area — a box that is too small silently hides valid addresses.' },
-    { path: 'searchViewbox.minLat', widget: 'number', label: 'Search box — south', min: -90, max: 90,
-      help: 'South edge of the address-search box.' },
-    { path: 'searchViewbox.maxLon', widget: 'number', label: 'Search box — east', min: -180, max: 180,
-      help: 'East edge of the address-search box.' },
-    { path: 'searchViewbox.maxLat', widget: 'number', label: 'Search box — north', min: -90, max: 90,
-      help: 'North edge of the address-search box.' },
+    { path: 'searchViewbox.minLon', widget: 'number', label: 'Search box — west', min: -180, max: 180, hidden: 'create',
+      help: 'Derived from your boundaries during Boundary Setup. Addresses OUTSIDE this box are discarded from search results entirely, so widen it only deliberately — narrowing it silently hides addresses your citizens are entitled to pick. Clear all four to search the whole country.' },
+    { path: 'searchViewbox.minLat', widget: 'number', label: 'Search box — south', min: -90, max: 90, hidden: 'create',
+      help: 'South edge of the address-search box. Derived from your boundaries.' },
+    { path: 'searchViewbox.maxLon', widget: 'number', label: 'Search box — east', min: -180, max: 180, hidden: 'create',
+      help: 'East edge of the address-search box. Derived from your boundaries.' },
+    { path: 'searchViewbox.maxLat', widget: 'number', label: 'Search box — north', min: -90, max: 90, hidden: 'create',
+      help: 'North edge of the address-search box. Derived from your boundaries.' },
   ],
 };
