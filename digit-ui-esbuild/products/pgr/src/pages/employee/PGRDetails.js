@@ -275,6 +275,24 @@ const PGRDetails = () => {
     { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
   );
 
+  // Reopen window (ms) from RAINMAKER-PGR.UIConstants.REOPENSLA — the same tenant-configurable
+  // knob the citizen flow and pgr-services' validateReOpen() use, so this guard can never claim
+  // a different deadline than the server enforces (issue #925). undefined while loading or on an
+  // unseeded tenant: the guard below then defers to the backend rather than blocking blindly.
+  const { data: reopenWindowMs } = Digit.Hooks.useCustomMDMS(
+    tenantId,
+    "RAINMAKER-PGR",
+    [{ name: "UIConstants" }],
+    {
+      cacheTime: Infinity,
+      select: (raw) => {
+        const value = raw?.["RAINMAKER-PGR"]?.UIConstants?.[0]?.REOPENSLA;
+        return typeof value === "number" && value > 0 ? value : undefined;
+      },
+    },
+    { schemaCode: "RAINMAKER-PGR.UIConstants" }
+  );
+
   // Complaint classification hierarchy (configurable N levels). Absent on
   // un-migrated tenants -> buildComplaintPath returns null and the flat
   // Type/Sub-Type rows are kept below. `nodes` is the full adjacency list
@@ -729,14 +747,11 @@ const PGRDetails = () => {
                 console.log("*** Log ===> selected", selected);
                 if (selected.action === "REOPEN") {
                   const lastModifiedTime = pgrData?.ServiceWrappers?.[0]?.service?.auditDetails?.lastModifiedTime;
-                  const ComplainMaxIdleTime = 3600000; // 1 hour in ms
-                  if (lastModifiedTime && (Date.now() - lastModifiedTime >= ComplainMaxIdleTime)) {
-                    const msgKey = "CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE";
-                    const fallback = "Complaint cannot be reopened after 1 hour of resolution/rejection";
+                  if (reopenWindowMs && lastModifiedTime && Date.now() - lastModifiedTime > reopenWindowMs) {
                     setToast({
                       show: true,
                       type: "error",
-                      label: t(msgKey) === msgKey ? fallback : t(msgKey),
+                      label: t("CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE"),
                     });
                     return;
                   }

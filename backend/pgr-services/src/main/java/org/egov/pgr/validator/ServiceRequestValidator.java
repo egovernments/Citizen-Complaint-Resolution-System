@@ -8,6 +8,7 @@ import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.repository.ServiceRequestRepository;
 import org.egov.pgr.util.HRMSUtil;
+import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.web.models.*;
 import org.egov.pgr.web.models.boundary.Boundary;
 import org.egov.pgr.web.models.boundary.BoundaryResponse;
@@ -35,14 +36,18 @@ public class ServiceRequestValidator {
 
     private ObjectMapper objectMapper;
 
+    private MDMSUtils mdmsUtils;
+
     @Autowired
     public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil,
-                                   ServiceRequestRepository serviceRequestRepository, ObjectMapper objectMapper) {
+                                   ServiceRequestRepository serviceRequestRepository, ObjectMapper objectMapper,
+                                   MDMSUtils mdmsUtils) {
         this.config = config;
         this.repository = repository;
         this.hrmsUtil = hrmsUtil;
         this.serviceRequestRepository = serviceRequestRepository;
         this.objectMapper = objectMapper;
+        this.mdmsUtils = mdmsUtils;
     }
 
 
@@ -208,6 +213,10 @@ public class ServiceRequestValidator {
      * fully client-controlled — a caller could otherwise forge the accountId or a fresh
      * lastModifiedTime and bypass the reopen deadline via a direct API call.
      *
+     * The window itself comes from MDMS (RAINMAKER-PGR.UIConstants.REOPENSLA) — the same
+     * knob the UI gates on — so the window is configurable per tenant and the UI guard and
+     * this server-side check can never drift apart (issue #925).
+     *
      * @param request        the update request (used only for action + logged-in user)
      * @param persistedService the current record as stored in the DB (source of truth)
      */
@@ -227,8 +236,9 @@ public class ServiceRequestValidator {
             throw new CustomException("INVALID_ACTION","Complaint is closed");
 
         Long lastModifiedTime = persistedService.getAuditDetails().getLastModifiedTime();
+        long reopenWindow = mdmsUtils.getReopenWindowMillis(requestInfo, persistedService.getTenantId());
 
-        if(System.currentTimeMillis()-lastModifiedTime > config.getComplainMaxIdleTime())
+        if(System.currentTimeMillis()-lastModifiedTime > reopenWindow)
             throw new CustomException("INVALID_ACTION","Complaint is closed");
 
     }

@@ -136,8 +136,6 @@ charts/*.tgz
 *.tmp
 *.orig
 
-# Local testing folder
-local-testing/
 # ─── Operator Local Testing ──────────────────────────────────────────────────
 local-testing/
 .agent/

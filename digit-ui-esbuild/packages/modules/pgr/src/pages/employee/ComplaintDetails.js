@@ -252,7 +252,25 @@ export const ComplaintDetails = (props) => {
   const { isLoading, complaintDetails, revalidate: revalidateComplaintDetails } = Digit.Hooks.pgr.useComplaintDetails({ tenantId, id });
   const workflowDetails = Digit.Hooks.useWorkflowDetails({ tenantId, id, moduleCode: "PGR", role: "EMPLOYEE" });
   const [imagesToShowBelowComplaintDetails, setImagesToShowBelowComplaintDetails] = useState([])
-  
+
+  // Reopen window (ms) from RAINMAKER-PGR.UIConstants.REOPENSLA — the same tenant-configurable
+  // knob the citizen flow and pgr-services' validateReOpen() use, so this guard can never claim
+  // a different deadline than the server enforces (issue #925). undefined while loading or on an
+  // unseeded tenant: the guard below then defers to the backend rather than blocking blindly.
+  const { data: reopenWindowMs } = Digit.Hooks.useCustomMDMS(
+    tenantId,
+    "RAINMAKER-PGR",
+    [{ name: "UIConstants" }],
+    {
+      cacheTime: Infinity,
+      select: (raw) => {
+        const value = raw?.["RAINMAKER-PGR"]?.UIConstants?.[0]?.REOPENSLA;
+        return typeof value === "number" && value > 0 ? value : undefined;
+      },
+    },
+    { schemaCode: "RAINMAKER-PGR.UIConstants" }
+  );
+
   // RAIN-5692 PGR : GRO is assigning complaint, Selecting employee and assign. Its not getting assigned.
   // Fix for next action  assignee dropdown issue
   if (workflowDetails && workflowDetails?.data){
@@ -360,11 +378,8 @@ export const ComplaintDetails = (props) => {
         break;
       case "REOPEN":
         const lastModifiedTime = complaintDetails?.service?.auditDetails?.lastModifiedTime;
-        const ComplainMaxIdleTime = 3600000; // 1 hour in ms
-        if (lastModifiedTime && (Date.now() - lastModifiedTime >= ComplainMaxIdleTime)) {
-          const msgKey = "CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE";
-          const fallback = "Complaint cannot be reopened after 1 hour of resolution/rejection";
-          setValidationToast(t(msgKey) === msgKey ? fallback : t(msgKey));
+        if (reopenWindowMs && lastModifiedTime && Date.now() - lastModifiedTime > reopenWindowMs) {
+          setValidationToast(t("CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE"));
           setDisplayMenu(false);
         } else {
           setPopup(true);
