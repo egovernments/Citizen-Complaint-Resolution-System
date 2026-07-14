@@ -12,14 +12,18 @@ import { getMapCityLabel } from "../utils/mapGeoUtils";
 import GeographyChoroplethMap from "./GeographyChoroplethMap";
 
 const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
-  const [activeLayer, setActiveLayer] = useState("wow_change");
+  const [activeLayer, setActiveLayer] = useState("created");
   const cityLabel = getMapCityLabel();
 
-  const resolvedLayer = isGeographyMapLayerId(activeLayer) ? activeLayer : "wow_change";
-  const wardCounts = useMemo(
-    () => layers?.[resolvedLayer] ?? [],
-    [layers, resolvedLayer]
-  );
+  const resolvedLayer = isGeographyMapLayerId(activeLayer) ? activeLayer : "created";
+  const wardCounts = useMemo(() => {
+    const series = layers?.[resolvedLayer] ?? [];
+    const details = layers?.wardDetails ?? {};
+    return series.map((row) => ({
+      ...details[row.wardCode],
+      ...row,
+    }));
+  }, [layers, resolvedLayer]);
 
   if (loading && !wardCounts.length) {
     return (
@@ -38,6 +42,8 @@ const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
       </header>
       <GeographyChoroplethMap
         wardCounts={wardCounts}
+        complaintPins={layers?.complaintPinsByLayer?.[resolvedLayer] ?? []}
+        complaintPinsError={layers?.complaintPinsError ?? null}
         layerMode={resolvedLayer}
         onLayerModeChange={setActiveLayer}
         layerOptions={GEOGRAPHY_MAP_LAYERS}

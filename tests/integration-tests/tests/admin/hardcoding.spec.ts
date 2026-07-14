@@ -12,8 +12,12 @@
  * issued, then the spec navigates away.
  */
 import { test, expect, type Request } from '@playwright/test';
+import { ROOT_TENANT } from '../utils/env';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+// The configured root (state) tenant, from env — the login placeholder now
+// derives from the configured tenant (app fix), so we expect ROOT_TENANT here,
+// not a hardcoded 'ke'.
+const TENANT_CODE = ROOT_TENANT;
 
 test.describe('hardcoding smoke', () => {
   // Test 1 needs an unauthenticated session. The other three need the
@@ -23,14 +27,14 @@ test.describe('hardcoding smoke', () => {
   test('1. login tenant placeholder uses configured tenant, not "pg"', {
     annotation: {
       type: 'description',
-      description: `Smoke check that the configurator login form's tenant placeholder reflects the configured TENANT_CODE (default 'ke') and is NOT the legacy 'pg' (Punjab) value. Catches a regression where someone copy-pastes example markup with hardcoded 'pg' back into the login template.
+      description: `Smoke check that the configurator login form's tenant placeholder reflects the configured root tenant (ROOT_TENANT, from env) and is NOT the legacy 'pg' (Punjab) value. The app fix derives the placeholder from the configured tenant, so this expects ROOT_TENANT on any deployment. Catches a regression where someone copy-pastes example markup with hardcoded 'pg' back into the login template.
 
 Steps:
 1. Open a fresh browser context with no storageState (need the unauthenticated form).
 2. Navigate to /configurator/login.
 3. Locate input#tenantCode; assert visible.
 4. Read placeholder attribute.
-5. Assert placeholder === TENANT_CODE (default 'ke').
+5. Assert placeholder === TENANT_CODE (the configured ROOT_TENANT).
 6. Assert placeholder.toLowerCase() !== 'pg' — belt-and-braces in case the placeholder is empty.
 
 Pairs with the other three hardcoding tests in this file — together they cover login UI + employee create + complaint create + localization endpoint as the four most common 'pg' leak vectors.`,

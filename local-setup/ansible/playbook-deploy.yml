@@ -115,6 +115,50 @@
         - ansible_facts['os_family'] != 'Debian'
         - ansible_system != 'Darwin'
 
+    # common-masters.MobileNumberValidation (utilities/default-data-handler)
+    # only accepts countryCode + mobileNumberRegex — the old UserValidation-era
+    # fields (mobilePrefix, mobileNumberPattern, mobileNumberLength,
+    # mobileNumberAllowedStartingCharacters, mobileNumberErrorMessage) are
+    # gone from the schema. Every core_mobile_configs lookup below reads the
+    # new names with `| default(...)`, so a host_vars file still on the old
+    # names doesn't error — it silently falls back to the India defaults,
+    # which is wrong on every non-India tenant and was previously caught only
+    # by a live HRMS crash-loop. Fail fast instead.
+    - name: "preflight — core_mobile_configs must use the current mobile-validation schema"
+      vars:
+        # `| default(...)` in the mobile-number tasks below only substitutes
+        # when mobileNumberRegex is Jinja-Undefined, not when it's defined
+        # but empty. An empty regex makes derive_valid_mobile's `compiled`
+        # stay None, so matches() returns True unconditionally and the
+        # hardcoded `preferred` value is returned with zero regex validation
+        # — silently reintroducing the hardcoded-mobile bug this file fixes.
+        # Treat missing-or-empty the same way here so that case fails fast
+        # instead of at runtime.
+        _mobile_present_truthy_keys: "{{ core_mobile_configs | dict2items | selectattr('value') | map(attribute='key') | list }}"
+        _mobile_missing_keys: "{{ ['countryCode', 'mobileNumberRegex'] | reject('in', _mobile_present_truthy_keys) | list }}"
+        _mobile_legacy_keys: "{{ core_mobile_configs.keys() | list | intersect(['mobilePrefix', 'mobileNumberPattern', 'mobileNumberLength', 'mobileNumberAllowedStartingCharacters', 'mobileNumberErrorMessage']) }}"
+      ansible.builtin.fail:
+        msg: |
+          host_vars for {{ inventory_hostname }} sets an incomplete
+          core_mobile_configs — missing or empty required field(s): {{ _mobile_missing_keys }}
+          {% if _mobile_legacy_keys | length > 0 %}
+          (retired field names found instead: {{ _mobile_legacy_keys }})
+          {% endif %}
+
+          common-masters.MobileNumberValidation now only takes countryCode +
+          mobileNumberRegex (length and allowed leading digits are derived
+          from the regex — see filter_plugins/mobile.py). Update host_vars to:
+
+            core_mobile_configs:
+              countryCode: "<dial prefix, e.g. +254>"
+              mobileNumberRegex: "<pattern, e.g. ^[17][0-9]{8}$>"
+
+          See inventory/host_vars/_example.yml for a worked example.
+      when:
+        - core_mobile_configs is defined
+        - core_mobile_configs
+        - _mobile_missing_keys | length > 0
+
     # ==================== Docker host install + config ====================
     # Linux/Debian targets only. On macOS the operator already runs Docker
     # Desktop / OrbStack, so apt + docker.service + /etc/docker/daemon.json
@@ -125,7 +169,8 @@
       # ==================== Docker Installation ====================
       - name: Install Docker prerequisites
         apt:
-          name: [ca-certificates, curl, gnupg]
+          # jq is used by config/bootstrap-novu-whatsapp.sh (Twilio provider bootstrap).
+          name: [ca-certificates, curl, gnupg, jq]
           state: present
           update_cache: yes
 
@@ -351,6 +396,20 @@
              | default('default-data-handler:local' if (build_default_data_handler | default(false))
                        else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260611-111521') }}
 
+    # Novu dashboard: when `build_novu_dashboard: true` we build a subpath-rebased
+    # image locally (backend/novu-dashboard/Dockerfile, tag novu-dashboard:local)
+    # so the SPA serves under /novu with a single strip-prefix nginx location;
+    # otherwise pull the stock image, which serves at base=/ and needs the legacy
+    # root-path workarounds. Override either with `novu_dashboard_image:` in
+    # host_vars. Consumed by digit.env.j2 (NOVU_DASHBOARD_IMAGE) → compose
+    # ${NOVU_DASHBOARD_IMAGE}.
+    - name: "Resolve novu-dashboard image tag"
+      ansible.builtin.set_fact:
+        novu_dashboard_image: >-
+          {{ novu_dashboard_image
+             | default('novu-dashboard:local' if (build_novu_dashboard | default(false))
+                       else 'ghcr.io/novuhq/novu/dashboard:' ~ (novu_dashboard_version | default('2.3.0'))) }}
+
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
     # links match the tenant's actual domain). Compose auto-loads .env from the
@@ -491,10 +550,11 @@
         compose_profiles: >-
           {{
             ([]
-              + (['search']        if enable_search_stack | default(false) else [])
-              + (['mcp']           if enable_mcp          | default(false) else [])
-              + (['notifications'] if enable_novu         | default(false) else [])
-              + (['keycloak']      if enable_keycloak     | default(false) else [])
+              + (['search']        if enable_search_stack  | default(false) else [])
+              + (['mcp']           if enable_mcp           | default(false) else [])
+              + (['notifications'] if enable_novu          | default(false) else [])
+              + (['keycloak']      if enable_keycloak      | default(false) else [])
+              + (['otp']           if enable_otp_services  | default(false) else [])
             ) | join(',')
           }}
 
@@ -592,6 +652,28 @@
       changed_when: true
       when:
         - build_default_data_handler | default(false)
+
+    # ==================== Build novu-dashboard image locally ==============
+    # When `build_novu_dashboard: true`, derive a subpath-rebased dashboard
+    # image from the official one (backend/novu-dashboard/Dockerfile) and tag it
+    # novu-dashboard:local; compose picks it up via NOVU_DASHBOARD_IMAGE. The
+    # build context is just the Dockerfile dir (FROM the upstream image — no
+    # repo source needed), so this is cheap and works for local + remote targets.
+    # NOVU_BASE_PATH defaults to /novu; override via host_vars novu_base_path.
+    - name: "Build novu-dashboard image locally (when build_novu_dashboard)"
+      ansible.builtin.command: >-
+        docker build
+        -t novu-dashboard:local
+        --build-arg NOVU_DASHBOARD_VERSION={{ novu_dashboard_version | default('2.3.0') }}
+        --build-arg NOVU_BASE_PATH={{ novu_base_path | default('/novu') }}
+        .
+      args:
+        chdir: "{{ playbook_dir }}/../../backend/novu-dashboard"
+      register: novu_dashboard_build_run
+      changed_when: true
+      when:
+        - enable_novu | default(false)
+        - build_novu_dashboard | default(false)
 
     # ==================== Build otp-publisher image locally ===============
     # When `build_otp_publisher: true`, build the vendored Node service at
@@ -1744,8 +1826,8 @@
       # `nginx_preserve_vhost: true` in host_vars makes the next three tasks
       # (render / enable / remove-default) no-op. Use it for tenants whose
       # production vhost has hand-crafted routing the template can't (yet)
-      # render — e.g. Bomet's /egov-rainmaker/ filestore passthrough,
-      # /novu/+/novu-api/ routing, and the /digit-ui/ host-alias. The nginx
+      # render — e.g. Bomet's /novu/+/novu-api/ routing and the /digit-ui/
+      # host-alias. The nginx
       # install task above still runs (idempotent), so the package is
       # always present; only the site file is left alone.
 
@@ -1989,11 +2071,8 @@
         body:
           target_tenant: "{{ state_root }}"
           source_tenant: "pg"
-          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
-          mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
-          mobile_prefix: "{{ core_mobile_configs.mobilePrefix | default(omit) }}"
-          mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
-          mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
@@ -2016,11 +2095,8 @@
         body:
           target_tenant: "{{ tenant_id }}"
           source_tenant: "pg.citest"
-          mobile_regex: "{{ core_mobile_configs.mobileNumberPattern | default('^[6-9][0-9]{9}$') }}"
-          mobile_length: "{{ core_mobile_configs.mobileNumberLength | default(10) }}"
-          mobile_prefix: "{{ core_mobile_configs.mobilePrefix | default(omit) }}"
-          mobile_allowed_starting_characters: "{{ core_mobile_configs.mobileNumberAllowedStartingCharacters | default(omit) }}"
-          mobile_error_message: "{{ core_mobile_configs.mobileNumberErrorMessage | default(omit) }}"
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
           user_validation: "{{ user_validation | default(omit) }}"
           pincode_allowlist: "{{ pgr_pincode_allowlist | default(omit) }}"
           auth:
@@ -2211,39 +2287,87 @@
       changed_when: false
       when: state_root != 'pg'
 
-    # user-seed.sh only creates INTERNAL_USER on `pg`. HRMS (now pointed
-    # at state_root) tries to self-create it at boot, but egov-user's
-    # tenant-aware mobile validation (enforced even on _createnovalidate
-    # since :1044-preview) rejects HRMS's hardcoded 10-digit mobile on
-    # tenants with a stricter rule (e.g. ethiopia's ^[17][0-9]{8}$) and
-    # HRMS crash-loops with "Service returned null while fetching user".
-    # Seed it here with a mobile derived from the tenant's own rule:
-    # first allowed starting digit, padded with 9s to the rule length.
-    - name: "post-bootstrap — seed INTERNAL_USER system user on state_root for HRMS"
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate"
-        method: POST
-        body_format: json
-        body:
-          RequestInfo: { apiId: digit, ver: "1.0" }
-          User:
-            userName: INTERNAL_USER
-            name: Internal Microservice User
-            mobileNumber: "{{ ((core_mobile_configs.mobileNumberAllowedStartingCharacters | first) ~ ('9' * ((core_mobile_configs.mobileNumberLength | int) - 1))) if core_mobile_configs is defined else '9999999999' }}"
-            gender: MALE
-            active: true
-            type: SYSTEM
-            tenantId: "{{ state_root }}"
-            password: "System@123"
-            roles:
-              - { code: INTERNAL_MICROSERVICE_ROLE, name: Internal Microservice Role, tenantId: "{{ state_root }}" }
-        status_code: [200, 400]
-        return_content: true
+    # user-seed.sh only creates INTERNAL_USER on `pg`. HRMS (now pointed at
+    # state_root) tries to self-create it at boot, but egov-user's tenant-aware
+    # mobile validation (enforced even on _createnovalidate since :1044-preview)
+    # rejects HRMS's hardcoded 10-digit mobile on tenants with a stricter rule,
+    # and HRMS crash-loops with "Service returned null while fetching user".
+    #
+    # We seed it here with a mobile derived from the tenant's own
+    # mobileNumberRegex via the derive_valid_mobile filter (filter_plugins/
+    # mobile.py) — core_mobile_configs no longer carries the legacy
+    # mobileNumberAllowedStartingCharacters/mobileNumberLength fields (see the
+    # preflight check above), so deriving from those is a no-op that always
+    # falls back to a hardcoded 10-digit number and fails on tenants whose
+    # rule rejects it. BUT: the fast-path base
+    # dump ships the India default UserValidation (^[6-9][0-9]{9}$), and the MCP
+    # tenant bootstrap above reseeds the tenant's own rule (e.g. Kenya
+    # ^0?[17][0-9]{8}$) into MDMS *asynchronously* (via the persister). For a
+    # short window after bootstrap egov-user still validates against the stale
+    # India rule (also cached in Redis `validationRules`, which survives restarts
+    # — see CLAUDE.md "Mobile Number Validation"), so a one-shot create hits
+    # INVALID_MOBILE_NUMBER, the deploy aborts, and no ADMIN is ever created
+    # (breaking HRMS, user-seed, notif-seed…). So retry: each round drop the
+    # cached rule and re-POST until the tenant rule is live (200) or the user
+    # already exists. Idempotent; non-pg tenants only.
+    - name: "post-bootstrap — seed INTERNAL_USER on state_root (retry until tenant UserValidation is live)"
+      ansible.builtin.shell: |
+        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"INTERNAL_USER","name":"Internal Microservice User","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='9999999999') }}","gender":"MALE","active":true,"type":"SYSTEM","tenantId":"{{ state_root }}","password":"System@123","roles":[{"code":"INTERNAL_MICROSERVICE_ROLE","name":"Internal Microservice Role","tenantId":"{{ state_root }}"}]}}'
+        for i in $(seq 1 30); do
+          docker exec {{ redis_container | default('digit-redis') }} redis-cli DEL validationRules >/dev/null 2>&1 || true
+          resp=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
+          code=$(printf '%s' "$resp" | tail -n1)
+          content=$(printf '%s' "$resp" | sed '$d')
+          if [ "$code" = "200" ] || printf '%s' "$content" | grep -q DuplicateUserName; then
+            echo "CHANGED INTERNAL_USER seeded (attempt $i/30, http=$code)"
+            exit 0
+          fi
+          echo "attempt $i/30: http=$code $(printf '%s' "$content" | head -c 120)"
+          sleep 10
+        done
+        echo "INTERNAL_USER seed failed after 30 attempts — tenant UserValidation never went live" >&2
+        exit 1
+      args:
+        chdir: "{{ digit_dir }}"
       register: internal_user_seed
-      failed_when: >-
-        internal_user_seed.status != 200 and
-        'DuplicateUserName' not in (internal_user_seed.content | default(''))
-      changed_when: internal_user_seed.status == 200
+      changed_when: "'CHANGED' in (internal_user_seed.stdout | default(''))"
+      no_log: true
+      when: state_root != 'pg'
+
+    # The MCP tenant bootstrap is supposed to create an ADMIN eg_user on
+    # state_root, but if it ran during the async UserValidation window (above)
+    # its ADMIN create was rejected on the mobile rule — and because that task is
+    # ignore_errors, the deploy continued WITHOUT an ADMIN on state_root. Then
+    # every later ADMIN@state_root token mint (configurator-i18n, dashboards, …)
+    # 400s "Invalid login credentials". The tenant rule is guaranteed live by now
+    # (the INTERNAL_USER seed above blocks until it is), so ensure ADMIN exists
+    # with the expected password + SUPERUSER. Idempotent (DuplicateUserName ok);
+    # distinct mobile (8s vs INTERNAL_USER's 9s, both derived via
+    # derive_valid_mobile — see the INTERNAL_USER seed task above) to avoid
+    # collisions where possible. NOT a guarantee: for a mobileNumberRegex with
+    # a fixed multi-character literal prefix (e.g. Djibouti's
+    # ^77[0-9]{6}$), derive_valid_mobile's preferred-fill sweep fails
+    # identically for both '9999999999' and '8888888888' (only the lead digit
+    # varies; the literal prefix can't be forced), and both calls fall
+    # through to the same deterministic candidate — see
+    # filter_plugins/mobile.py's `_seeded_digit_order` docstring.
+    - name: "post-bootstrap — ensure ADMIN exists on state_root (MCP bootstrap may miss it in the validation window)"
+      ansible.builtin.shell: |
+        body='{"RequestInfo":{"apiId":"digit","ver":"1.0"},"User":{"userName":"{{ bootstrap_user | default('ADMIN') }}","name":"Admin","mobileNumber":"{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') | derive_valid_mobile(preferred='8888888888') }}","gender":"MALE","active":true,"type":"EMPLOYEE","tenantId":"{{ state_root }}","password":"{{ bootstrap_password | default('eGov@123') }}","roles":[{"code":"SUPERUSER","name":"Super User","tenantId":"{{ state_root }}"},{"code":"LOC_ADMIN","name":"Localisation Admin","tenantId":"{{ state_root }}"},{"code":"MDMS_ADMIN","name":"MDMS Admin","tenantId":"{{ state_root }}"},{"code":"EMPLOYEE","name":"Employee","tenantId":"{{ state_root }}"}]}}'
+        for i in $(seq 1 6); do
+          resp=$(curl -s -w '\n%{http_code}' -X POST "http://127.0.0.1:{{ upstream_kong_port }}/user/users/_createnovalidate" -H 'Content-Type: application/json' -d "$body")
+          code=$(printf '%s' "$resp" | tail -n1)
+          content=$(printf '%s' "$resp" | sed '$d')
+          if [ "$code" = "200" ]; then echo "CHANGED ADMIN created on {{ state_root }} (attempt $i)"; exit 0; fi
+          if printf '%s' "$content" | grep -q DuplicateUserName; then echo "ADMIN already present on {{ state_root }}"; exit 0; fi
+          echo "attempt $i/6: http=$code $(printf '%s' "$content" | head -c 120)"; sleep 8
+        done
+        echo "ADMIN seed on {{ state_root }} failed" >&2; exit 1
+      args:
+        chdir: "{{ digit_dir }}"
+      register: admin_state_seed
+      changed_when: "'CHANGED' in (admin_state_seed.stdout | default(''))"
+      no_log: true
       when: state_root != 'pg'
 
     - name: "post-bootstrap — recreate egov-hrms after egov-user is healthy"
@@ -2306,6 +2430,121 @@
       changed_when: false
       when: state_root != 'pg'
 
+    # egov-user's EncryptionDecryptionUtil.encryptObject() uses stateLevelTenantId
+    # (STATE_LEVEL_TENANT_ID env var) as the enc key — not the user's tenantId.
+    # Bootstrap runs while STATE_LEVEL=pg → ADMIN@mz stored with pg's enc key.
+    # Post-bootstrap restarts egov-user with STATE_LEVEL=mz → login now encrypts
+    # with mz's key → ciphertext mismatch → "Invalid login credentials".
+    # Fix: call bootstrap with user_only=true AFTER STATE_LEVEL=mz is active so
+    # the new ADMIN row is stored with mz's enc key. configurator-i18n login
+    # finds this row and succeeds.
+    - name: "post-bootstrap — re-provision ADMIN with state_root enc key (user_only)"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:13101/v1/tenant/bootstrap"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body_format: json
+        body:
+          target_tenant: "{{ state_root }}"
+          source_tenant: "pg"
+          user_only: true
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
+        status_code: [200]
+        timeout: 60
+      register: mcp_rekey_root
+      failed_when: >-
+        mcp_rekey_root.status != 200 or
+        not (mcp_rekey_root.json.admin_user_provisioned | default(false))
+      when: state_root != 'pg'
+      no_log: true
+
+    - name: "post-bootstrap — re-provision ADMIN with city enc key (user_only)"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:13101/v1/tenant/bootstrap"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body_format: json
+        body:
+          target_tenant: "{{ tenant_id }}"
+          source_tenant: "pg"
+          user_only: true
+          mobile_regex: "{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}"
+          mobile_prefix: "{{ core_mobile_configs.countryCode | default(omit) }}"
+        status_code: [200]
+        timeout: 60
+      register: mcp_rekey_city
+      failed_when: >-
+        mcp_rekey_city.status != 200 or
+        not (mcp_rekey_city.json.admin_user_provisioned | default(false))
+      when: state_root != 'pg' and tenant_id != state_root
+      no_log: true
+
+    # ────────────────────────────────────────────────────────────────
+    # Configurator UI localization seed. The configurator's own chrome —
+    # nav, field labels, resource names, dashboard strings — for every
+    # supported locale lives in the `configurator-ui` localization module
+    # so it renders from the backend and is editable in the configurator's
+    # own Localization screen (no rebuild to change a label or add a
+    # language). Seed/refresh it from the committed bundle so the strings
+    # survive redeploys (which rewrite server-side state) and every new
+    # tenant gets all languages on day 1. Idempotent: _upsert overwrites
+    # by (tenant, locale, module, code).
+    # ────────────────────────────────────────────────────────────────
+    - name: "configurator-i18n — mint ADMIN token at state_root for localization upsert"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
+        method: POST
+        headers: >-
+          {{
+            {'Authorization': 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+             'Content-Type': 'application/x-www-form-urlencoded'}
+            | combine({'Host': domain} if not (tls_enabled | default(true)) else {})
+          }}
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          username: "{{ bootstrap_user | default('ADMIN') }}"
+          password: "{{ bootstrap_password | default('eGov@123') }}"
+          scope: read
+          tenantId: "{{ state_root }}"
+          userType: EMPLOYEE
+        status_code: [200]
+        timeout: 15
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      register: cfg_i18n_auth
+      retries: 6
+      delay: 10
+      until: cfg_i18n_auth.status == 200
+      no_log: true
+      when: state_root != 'pg'
+
+    - name: "configurator-i18n — upsert configurator-ui bundle (per locale)"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/localization/messages/v1/_upsert"
+        method: POST
+        headers: "{{ {'Content-Type': 'application/json'} | combine({'Host': domain} if not (tls_enabled | default(true)) else {}) }}"
+        body_format: json
+        body:
+          RequestInfo:
+            apiId: emp
+            ver: ".01"
+            action: create
+            authToken: "{{ cfg_i18n_auth.json.access_token }}"
+            userInfo: "{{ cfg_i18n_auth.json.UserRequest }}"
+          tenantId: "{{ state_root }}"
+          locale: "{{ item }}"
+          messages: "{{ configurator_i18n_bundle | selectattr('locale', 'equalto', item) | list }}"
+        status_code: [200, 201]
+        timeout: 60
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      vars:
+        configurator_i18n_bundle: "{{ lookup('file', playbook_dir ~ '/files/configurator-localization/configurator-ui.json') | from_json }}"
+      loop: "{{ configurator_i18n_bundle | map(attribute='locale') | unique | list }}"
+      when: state_root != 'pg'
+
     # ────────────────────────────────────────────────────────────────
     # Novu Twilio bootstrap. Runs only when:
     #   1. enable_novu is true (the notifications profile is active)
@@ -2317,6 +2556,28 @@
     # re-runs deploy. Second deploy hits this task with all four values
     # set and creates the Twilio integration + workflow inside Novu.
     # ────────────────────────────────────────────────────────────────
+    # ────────────────────────────────────────────────────────────────
+    # Kafka topics for the config-driven notification pipeline. Redpanda
+    # runs with auto.create.topics.enable defaulting to true, so PGR's
+    # publish to complaints.domain.events and novu-bridge's retry/DLQ
+    # topics would be created on first produce. We create them upfront
+    # anyway (idempotent, -p 1 -r 1 to match the single-broker stack) so
+    # the bridge consumer + retry/DLQ exist before the first event and so
+    # the dependency order is explicit. failed_when:false → re-runs are
+    # no-ops ("TOPIC_ALREADY_EXISTS").
+    - name: "novu — ensure complaints.domain.events + retry + dlq topics exist"
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} \
+          exec -T redpanda rpk topic create \
+          complaints.domain.events novu-bridge.retry novu-bridge.dlq \
+          -p 1 -r 1
+      register: novu_topic_create
+      changed_when: "'CREATED' in (novu_topic_create.stdout | default(''))"
+      failed_when: false
+      when:
+        - enable_novu | default(false)
+
     - name: "novu-bootstrap — wait for novu-api health"
       ansible.builtin.uri:
         url: http://127.0.0.1:14002/v1/health-check
@@ -2328,8 +2589,43 @@
       until: novu_api_health.status == 200
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length > 0
-        - (twilio_account_sid | default('')) | length > 0
+
+    # Self-hosted Novu mints its first env API key only after a signup at /novu/.
+    # That signup is just a REST call — POST /v1/auth/register creates the first
+    # user + org + Development/Production envs and returns a JWT; the env's key is
+    # then readable. So when novu_api_key is unset we mint it programmatically here
+    # (idempotent: re-runs log in instead of registering) and use it for the rest
+    # of the bootstrap. No human, no second deploy. Deployments that pin an
+    # explicit novu_api_key (e.g. Bomet/Nairobi) skip minting and keep their key.
+    - name: "novu-bootstrap — copy key-mint script to target"
+      ansible.builtin.copy:
+        src: ../../backend/novu-bridge/config/novu-mint-key.sh
+        dest: "{{ digit_dir }}/novu-mint-key.sh"
+        mode: '0755'
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length == 0
+
+    - name: "novu-bootstrap — mint Development API key programmatically when unset"
+      ansible.builtin.shell: |
+        NOVU_API_URL=http://127.0.0.1:14002 \
+        NOVU_ADMIN_EMAIL='{{ novu_admin_email | default("admin@digit.local") }}' \
+        NOVU_ADMIN_PASSWORD='{{ novu_admin_password | default("Digit@12345") }}' \
+        NOVU_ORG_NAME='{{ novu_org_name | default("DIGIT") }}' \
+        bash {{ digit_dir }}/novu-mint-key.sh
+      args:
+        chdir: "{{ digit_dir }}"
+      register: novu_mint
+      changed_when: true
+      when:
+        - enable_novu | default(false)
+        - (novu_api_key | default('')) | length == 0
+
+    - name: "novu-bootstrap — resolve effective Novu key (pinned or minted)"
+      ansible.builtin.set_fact:
+        effective_novu_key: "{{ (novu_api_key | default('')) if ((novu_api_key | default('')) | length > 0) else (novu_mint.stdout | default('') | trim) }}"
+      when:
+        - enable_novu | default(false)
 
     - name: "novu-bootstrap — copy bootstrap script to target"
       ansible.builtin.copy:
@@ -2338,14 +2634,14 @@
         mode: '0755'
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length > 0
+        - (effective_novu_key | default('')) | length > 0
         - (twilio_account_sid | default('')) | length > 0
 
     - name: "novu-bootstrap — run Twilio integration + workflow create"
       ansible.builtin.shell: |
         cd {{ digit_dir }}
         NOVU_BASE_URL=http://127.0.0.1:14002 \
-        NOVU_API_KEY={{ novu_api_key }} \
+        NOVU_API_KEY={{ effective_novu_key }} \
         TWILIO_ACCOUNT_SID={{ twilio_account_sid }} \
         TWILIO_AUTH_TOKEN={{ twilio_auth_token }} \
         TWILIO_WHATSAPP_FROM='{{ twilio_whatsapp_from | default("whatsapp:+14155238886") }}' \
@@ -2353,20 +2649,37 @@
       register: novu_bootstrap_result
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length > 0
+        - (effective_novu_key | default('')) | length > 0
         - (twilio_account_sid | default('')) | length > 0
+      # The provider bootstrap is OPTIONAL — the Novu key is already minted and
+      # wired, so a provider can always be added later via the Configurator
+      # (Notifications → Providers). A missing/placeholder Twilio cred or a
+      # transient Novu error must NOT abort the whole deploy.
+      failed_when: false
       changed_when: "'created' in (novu_bootstrap_result.stdout | default(''))"
+
+    - name: "novu-bootstrap — warn if the (optional) Twilio provider bootstrap did not succeed"
+      ansible.builtin.debug:
+        msg: >-
+          Twilio provider bootstrap did not complete (rc={{ novu_bootstrap_result.rc | default('n/a') }}):
+          {{ (novu_bootstrap_result.stderr | default('')) | truncate(160) }}
+          — the Novu key is minted + wired; add a provider via the Configurator
+          (Notifications → Providers) or set real twilio_* and re-run.
+      when:
+        - enable_novu | default(false)
+        - novu_bootstrap_result is defined
+        - (novu_bootstrap_result.rc | default(0)) != 0
 
     - name: "novu-bootstrap — wire NOVU_API_KEY into compose .env"
       ansible.builtin.lineinfile:
         path: "{{ digit_dir }}/.env"
         regexp: '^NOVU_API_KEY='
-        line: "NOVU_API_KEY={{ novu_api_key }}"
+        line: "NOVU_API_KEY={{ effective_novu_key }}"
         create: true
         mode: '0600'
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length > 0
+        - (effective_novu_key | default('')) | length > 0
 
     - name: "novu-bootstrap — recreate novu-bridge so it picks up NOVU_API_KEY"
       ansible.builtin.shell: |
@@ -2374,27 +2687,25 @@
         COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d --force-recreate novu-bridge
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length > 0
+        - (effective_novu_key | default('')) | length > 0
       changed_when: false
 
-    - name: "novu-bootstrap — operator setup hint (when api_key missing)"
+    - name: "novu-bootstrap — provider setup hint (Novu key auto-minted; no provider yet)"
       ansible.builtin.debug:
         msg: |
-          Novu containers are up. To finish setup:
-            1. Open {{ 'https://' + domain if (tls_enabled | default(true)) else 'http://' + domain }}/novu/
-            2. Sign up (first signup creates the org + API key)
-            3. Settings → API Keys → copy the API key
-            4. Set in host_vars/{{ inventory_hostname }}.yml:
-                 novu_api_key: <pasted key>
-                 twilio_account_sid: <from twilio console>
-                 twilio_auth_token: <from twilio console>
-                 twilio_whatsapp_from: 'whatsapp:+14155238886'  # Twilio Sandbox default
-            5. Re-run ./deploy.sh {{ inventory_hostname }}
-          The next deploy will run the bootstrap script and wire NOVU_API_KEY
-          into compose .env so novu-bridge can dispatch.
+          Novu is up and its API key was minted + wired automatically
+          (key: {{ (effective_novu_key | default(''))[:6] ~ '…' if (effective_novu_key | default('')) | length > 0 else 'MINT FAILED — see the novu-mint task above' }}).
+          novu-bridge can now reach Novu. To actually DELIVER messages, add a
+          provider (credentials live in Novu, never in our DB):
+            • Self-service: Configurator → Notifications → Notification Providers →
+              Add provider (Twilio SMS/WhatsApp or SMTP), then Verify + Test-send.
+            • Or ansible-bootstrapped: set twilio_account_sid / twilio_auth_token /
+              twilio_whatsapp_from in host_vars/{{ inventory_hostname }}.yml and
+              re-run ./deploy.sh {{ inventory_hostname }} (creates the Twilio
+              integration + complaints-* workflows for you).
       when:
         - enable_novu | default(false)
-        - (novu_api_key | default('')) | length == 0
+        - (twilio_account_sid | default('')) | length == 0
 
     # ────────────────────────────────────────────────────────────────
     # Keycloak bootstrap. Once the keycloak container is up (created the
@@ -2805,6 +3116,55 @@
         fi
       register: newman_install
       changed_when: "'added' in newman_install.stdout"
+
+    # ─────────── Config-driven notification MDMS seed ───────────
+    # Seeds the 3 PGR notification masters (schema + data) at the state root,
+    # scoped to JUST notifications — the standalone equivalent of DDH's file
+    # loader (which the deploy does NOT invoke; the fast-path dump carries no
+    # notification rows). Two run modes:
+    #   • Fresh install: runs automatically when `seed_notifications` (or the
+    #     config-driven flag) is on.
+    #   • Add-on to an existing deploy:  ./deploy.sh <tenant> --tags notifications
+    #     (state_root / digit_dir / upstream_kong_port are group/host vars, so
+    #     they resolve even under --tags). Idempotent — MDMS dedupes on re-run.
+    - name: "notif-seed — stage schema + data + seeder on target"
+      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ digit_dir }}/notification-seed/"
+      loop:
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/schema/RAINMAKER-PGR.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationRouting.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationTemplate.json"
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json"
+        - "{{ playbook_dir }}/../scripts/seed-notifications.py"
+
+    - name: "notif-seed — seed the 3 notification MDMS masters (idempotent)"
+      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}/notification-seed
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        NOTIF_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
+        DIGIT_USERNAME={{ notif_seed_user | default('ADMIN') }} \
+        DIGIT_PASSWORD={{ notif_seed_pass | default('eGov@123') }} \
+        DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
+        SCHEMA_FILE={{ digit_dir }}/notification-seed/RAINMAKER-PGR.json \
+        DATA_DIR={{ digit_dir }}/notification-seed \
+        python3 seed-notifications.py
+      register: notif_seed
+      changed_when: "'created' in (notif_seed.stdout | default(''))"
+      # Gate on the exit code too: seed-notifications.py prints DONE even when it
+      # exits non-zero on core-master failures, so a DONE-only check would let a
+      # broken seed pass.
+      failed_when: "notif_seed.rc != 0 or 'DONE' not in (notif_seed.stdout | default(''))"
+
+    - name: "notif-seed — result"
+      when: seed_notifications | default(pgr_notification_config_driven | default(false))
+      tags: ['notifications', 'notification-seed']
+      ansible.builtin.debug:
+        msg: "{{ notif_seed.stdout_lines | default(['(no output)']) }}"
 
     - name: "CI — Postman digit-core-validation (every core service)"
       when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated

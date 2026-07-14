@@ -21,7 +21,7 @@ const getStorage = (storageClass) => ({
       }
       return item.value;
     } else if (typeof window !== "undefined") {
-      return window?.eGov?.Storage && window.eGov.Storage[k(key)].value;
+      return window?.eGov?.Storage && window.eGov.Storage[k(key)] ? window.eGov.Storage[k(key)].value : null;
     } else {
       return null;
     }
@@ -33,7 +33,17 @@ const getStorage = (storageClass) => ({
       expiry: Date.now() + ttl * 1000,
     };
     if (localStoreSupport()) {
-      storageClass.setItem(k(key), JSON.stringify(item));
+      try {
+        storageClass.setItem(k(key), JSON.stringify(item));
+      } catch (e) {
+        // Never crash on a full/blocked store. Large async-read payloads (MDMS /
+        // ComplaintHierarchy) live in IndexedDB now (idbCache); this guards any
+        // other oversize sync write — skip persisting (the value re-derives on
+        // next load) instead of throwing QuotaExceededError.
+        if (typeof console !== "undefined") {
+          console.warn(`Digit.Storage: "${key}" not persisted (${e && e.name ? e.name : "write failed"}).`);
+        }
+      }
     } else if (typeof window !== "undefined") {
       window.eGov = window.eGov || {};
       window.eGov.Storage = window.eGov.Storage || {};

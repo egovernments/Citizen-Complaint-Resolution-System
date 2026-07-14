@@ -51,7 +51,15 @@ plugins:
     access:
       - |
         -- Auth enrichment: resolve authToken → userInfo (mirrors Spring Cloud Gateway AuthCheckFilterHelper)
-        local cjson = require("cjson")
+        -- Scoped cjson instance with array metatable on decode. Plain lua-cjson cannot tell an
+        -- empty array from an empty object (both are empty Lua tables) and re-encodes [] as {},
+        -- so the decode->encode round-trip below would silently corrupt every EMPTY array in the
+        -- body (e.g. MDMS schema "x-ref-schema": []). decode_array_with_array_mt(true) tags
+        -- decoded arrays (incl. empty ones) so cjson.encode re-emits them as []; genuinely-empty
+        -- objects carry no array mt and stay {}. .new() scopes this so it never leaks to the
+        -- shared cjson used by other pre-functions in the worker.
+        local cjson = require("cjson").new()
+        cjson.decode_array_with_array_mt(true)
         local http = require("resty.http")
         if kong.request.get_method() ~= "POST" then return end
         local raw_body = kong.request.get_raw_body()
@@ -61,23 +69,26 @@ plugins:
         local ri = body["RequestInfo"]
         if not ri or type(ri) ~= "table" then return end
         local token = ri["authToken"]
-        if not token or type(token) ~= "string" or token == "" then return end
-        if ri["userInfo"] and type(ri["userInfo"]) == "table" then
-          local ui = ri["userInfo"]
-          if ui["uuid"] or ui["id"] or ui["userName"] then return end
+        if not token or type(token) ~= "string" or token == "" then
+          -- no token: NEVER trust body userInfo (close the no-token spoof) — strip it.
+          if ri["userInfo"] ~= nil then ri["userInfo"] = nil; body["RequestInfo"] = ri; kong.service.request.set_raw_body(cjson.encode(body)) end
+          return
         end
+        -- Part A: never trust client-supplied userInfo; always resolve from the token.
         local httpc = http.new()
         httpc:set_timeout(5000)
         local res, err = httpc:request_uri("http://egov-user-proxy:8107/user/_details?access_token=" .. token, {
           method = "POST",
           headers = { ["Content-Type"] = "application/json" },
         })
-        if not res then kong.log.err("auth-enrichment: ", err); return end
-        if res.status ~= 200 then kong.log.err("auth-enrichment: status ", res.status); return end
-        local ok2, user = pcall(cjson.decode, res.body)
-        if not ok2 or type(user) ~= "table" then return end
-        if not user["uuid"] and not user["userName"] then return end
-        ri["userInfo"] = user
+        local resolved = nil
+        if res and res.status == 200 then
+          local ok2, user = pcall(cjson.decode, res.body)
+          if ok2 and type(user) == "table" and (user["uuid"] or user["userName"]) then resolved = user end
+        else
+          kong.log.err("auth-enrichment failed; stripping client userInfo")
+        end
+        ri["userInfo"] = resolved
         body["RequestInfo"] = ri
         kong.service.request.set_raw_body(cjson.encode(body))
 services:
@@ -118,22 +129,39 @@ services:
     methods:
     - POST
 - name: user-otp-mock
-  url: http://localhost:9999
+  url: http://user-otp:8090
   tags:
   - core
   - auth
-  - mock
   routes:
   - name: user-otp-route
     paths:
     - /user-otp
     strip_path: false
-  plugins:
-  - name: request-termination
-    config:
-      status_code: 200
-      content_type: application/json
-      body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":".01","ts":"","resMsgId":"uief87324","msgId":"","status":"successful"},"otp":{"otp":"","UUID":"","isValidationSuccessful":true}}'
+    # MOCK (default): request-termination short-circuits every /user-otp/*
+    # call with a canned success response, so login/register work using the
+    # fixed OTP (123456, see CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE in
+    # docker-compose.egov-digit.yaml) without the real egov-otp/user-otp/
+    # egov-notification-sms stack running or any SMS gateway integrated.
+    #
+    # TO ENABLE REAL OTP FOR PRODUCTION, before deploying:
+    #   1. Delete the `plugins:` block below (the request-termination mock).
+    #   2. Set enable_otp_services: true in the tenant's Ansible host_vars
+    #      (local-setup/ansible/inventory/host_vars/<tenant>.yml) so compose
+    #      starts the `otp` profile (egov-otp, user-otp, egov-notification-sms).
+    #   3. Configure a real SMS gateway: egov-notification-sms defaults to
+    #      SMS_PROVIDER_CLASS: Console (logs OTP SMS to container stdout only)
+    #      in docker-compose.egov-digit.yaml — point it at a real provider
+    #      class + credentials before relying on SMS delivery.
+    # Without all three, the first OTP request has nothing to answer it
+    # (real stack down or SMS not actually sent), and only the fixed
+    # 123456 fallback keeps working.
+    plugins:
+    - name: request-termination
+      config:
+        status_code: 200
+        content_type: application/json
+        body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":null,"ts":null,"resMsgId":"uief87324","msgId":null,"status":"successful"},"otp":{"identity":"","tenantId":"","type":"","otp":"","expiryTime":0}}'
 - name: enc-service
   url: http://egov-enc-service:1234
   tags:
@@ -353,6 +381,60 @@ services:
     config:
       replace:
         uri: /pgr-services/health
+# novu-bridge configurator proxy. Seven endpoints are routed: the three
+# read-only GETs (logs / integrations / preferences) plus the provider
+# management set (POST providers, GET providers/templates, POST
+# providers/verify, POST providers/test-send). The /dispatch/* diagnostics
+# trio stays unrouted on purpose. Auth happens INSIDE novu-bridge
+# (ProxyAuthFilter validates the DIGIT bearer token against egov-user
+# /user/_details) — Kong is a dumb router here. novu-bridge listens on 8080
+# with servlet context /novu-bridge, so strip_path:false with the
+# context-prefixed path is correct.
+- name: novu-bridge-proxy
+  url: http://novu-bridge:8080
+  routes:
+  - name: novu-bridge-logs-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/logs
+    strip_path: false
+  - name: novu-bridge-integrations-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/integrations
+    strip_path: false
+  - name: novu-bridge-preferences-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/preferences
+    strip_path: false
+  - name: novu-bridge-providers-create-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers
+    strip_path: false
+  - name: novu-bridge-providers-templates-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/templates
+    strip_path: false
+  - name: novu-bridge-providers-verify-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/verify
+    strip_path: false
+  - name: novu-bridge-providers-test-send-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/test-send
+    strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083
   tags:

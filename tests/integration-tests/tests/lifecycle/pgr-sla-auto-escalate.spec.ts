@@ -123,6 +123,20 @@ async function fetchComplaint(token: string, userInfo: Record<string, unknown>, 
 }
 
 test.describe.serial('PGR SLA auto-escalation (fast)', () => {
+  // Pre-flight gate: the ~130s poll deadline is only meetable when pgr-services
+  // is deployed with fast escalation tuning (PGR_ESCALATION_INTERVAL_MS=60000 +
+  // PGR_ESCALATION_DEFAULT_SLA_MS=30000). The service defaults are 300000 /
+  // 432000000, and no in-repo deploy passes the fast values, so on a stock
+  // deployment the scheduler can't possibly escalate within the deadline and the
+  // test would hard-fail as red noise. Opt in with PGR_FAST_ESCALATION=1 (mirrors
+  // how enc-key-drift-622.spec.ts gates its destructive variant on an env flag).
+  test.skip(
+    process.env.PGR_FAST_ESCALATION !== '1',
+    'Set PGR_FAST_ESCALATION=1 only on a deployment tuned for fast escalation ' +
+      '(PGR_ESCALATION_INTERVAL_MS=60000 + PGR_ESCALATION_DEFAULT_SLA_MS=30000). ' +
+      'pgr-services defaults (300000 / 432000000) make the ~130s poll deadline unmeetable.',
+  );
+
   let adminToken: string;
   let adminUserInfo: Record<string, unknown>;
   let citizenToken: string;

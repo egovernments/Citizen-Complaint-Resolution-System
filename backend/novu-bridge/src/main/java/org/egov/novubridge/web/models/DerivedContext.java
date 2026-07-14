@@ -16,4 +16,12 @@ public class DerivedContext {
     private String locale;
     private String recipientMobile;
     private String recipientUserId;
+
+    // ---- Config-driven pass-through fields (carried from the event) ----
+    private String subscriberId;
+    private String renderedBody;
+    private String renderedSubject;
+    private String email;
+    private String name;
+    private String transactionId;
 }

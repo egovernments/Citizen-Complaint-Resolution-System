@@ -7,6 +7,7 @@ import Sidebar from "./Sidebar";
 const DashboardLayout = ({
   children,
   visibleLayoutIds,
+  catalogItems,
   onAddWidget,
   onResetLayout,
   onDragWidgetStart,
@@ -19,6 +20,14 @@ const DashboardLayout = ({
   onClearFilters,
   filterOptions,
   filterOptionsLoading,
+  kpiCardData,
+  allowedWidgetIds,
+  scopedRole,
+  username,
+  officerAccess,
+  visibleKpiCount,
+  scope,
+  onSignOut,
 }) => {
   const brandStyle = useMemo(() => {
     const theme = getBrandTheme();
@@ -34,10 +43,11 @@ const DashboardLayout = ({
       className="dashboard-root tw-flex tw-h-screen tw-overflow-hidden tw-bg-background tw-font-sans tw-text-foreground"
       style={brandStyle}
     >
-      <Sidebar />
+      <Sidebar onSignOut={onSignOut} />
       <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col tw-overflow-hidden">
         <DashboardHeader
           visibleLayoutIds={visibleLayoutIds}
+          catalogItems={catalogItems}
           onAddWidget={onAddWidget}
           onResetLayout={onResetLayout}
           onDragWidgetStart={onDragWidgetStart}
@@ -47,6 +57,12 @@ const DashboardLayout = ({
           onExport={onExport}
           filters={filters}
           filterOptions={filterOptions}
+          kpiCardData={kpiCardData}
+          allowedWidgetIds={allowedWidgetIds}
+          scopedRole={scopedRole}
+          officerAccess={officerAccess}
+          visibleKpiCount={visibleKpiCount}
+          scope={scope}
         />
         <main className="tw-flex-1 tw-overflow-auto tw-bg-background tw-p-4 lg:tw-p-6">
           <DashboardFilters

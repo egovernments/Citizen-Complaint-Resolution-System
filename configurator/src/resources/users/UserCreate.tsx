@@ -1,4 +1,6 @@
+import { useTranslate } from 'ra-core';
 import { DigitCreate, DigitFormInput, DigitFormSelect, v } from '@/admin';
+import { useMobileValidator } from '@/admin/hrms/useMobileValidator';
 
 const GENDER_CHOICES = [
   { value: 'MALE', label: 'Male' },
@@ -23,14 +25,21 @@ const transform = (data: Record<string, unknown>) => {
 };
 
 export function UserCreate() {
+  const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
+  const translate = useTranslate();
+  const loginUsernameHelp = translate('app.fields.mobile_login_username_help', {
+    _: "Used as the citizen's login username.",
+  });
+
   return (
     <DigitCreate title="Create User" record={defaultRecord} transform={transform}>
       <DigitFormInput source="name" label="Name" validate={v.name} />
       <DigitFormInput
         source="mobileNumber"
         label="Mobile Number"
-        validate={v.mobileKERequired}
-        help="9 digits starting with 7 or 1 (e.g. 712345678). Used as the citizen's login username."
+        validate={mobileValidate}
+        maxLength={mobileRules.maxLength}
+        help={loginUsernameHelp}
       />
       <DigitFormInput source="emailId" label="Email" validate={v.emailOptional} />
       <DigitFormSelect

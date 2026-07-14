@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   DATA_TABLE_STYLES,
   getDataTableTdClass,
@@ -8,81 +8,57 @@ import {
   SLA_RISK_TABLE_STYLES,
 } from "../config/visualizationStyles";
 import { complaintDetailHref } from "../config/complaintsAtRiskPresentation";
+import useTableSort from "../hooks/useTableSort";
+import TableSortHeader from "./TableSortHeader";
 
 const COLUMNS = [
-  { id: "id", label: "ID", align: "left" },
-  { id: "typeLabel", label: "Type", align: "left" },
-  { id: "subtypeLabel", label: "Subtype", align: "left" },
-  { id: "locality", label: "Locality", align: "left" },
-  { id: "ownerName", label: "Owner", align: "left" },
-  { id: "ownerRole", label: "Owner role", align: "left" },
-  { id: "statusLabel", label: "Status", align: "left" },
-  { id: "slaLabel", label: "SLA status", align: "left" },
-  { id: "breachDurationMs", label: "Breach duration", align: "right" },
+  { id: "id", label: "ID", align: "left", type: "text" },
+  { id: "typeLabel", label: "Type", align: "left", type: "text" },
+  { id: "subtypeLabel", label: "Subtype", align: "left", type: "text" },
+  { id: "locality", label: "Locality", align: "left", type: "text" },
+  { id: "ownerName", label: "Owner", align: "left", type: "text" },
+  { id: "ownerRole", label: "Owner role", align: "left", type: "text" },
+  { id: "statusLabel", label: "Status", align: "left", type: "text" },
+  { id: "slaLabel", label: "SLA status", align: "left", type: "text" },
+  { id: "breachDurationMs", label: "Breach duration", align: "left", type: "integer" },
 ];
-
-function compareRows(left, right, key) {
-  if (key === "breachDurationMs") {
-    return (left.breachDurationMs ?? -1) - (right.breachDurationMs ?? -1);
-  }
-  const leftValue = left[key] ?? "";
-  const rightValue = right[key] ?? "";
-  return String(leftValue).localeCompare(String(rightValue));
-}
 
 const ComplaintsAtRiskTable = ({ rows = [] }) => {
   const tableStyles = DATA_TABLE_STYLES;
   const slaStyles = SLA_RISK_TABLE_STYLES;
-  const [sortState, setSortState] = useState({ key: "breachDurationMs", direction: "desc" });
-
-  const sortedRows = useMemo(() => {
-    if (!sortState.key) return rows;
-    const next = [...rows];
-    next.sort((left, right) => {
-      const result = compareRows(left, right, sortState.key);
-      return sortState.direction === "asc" ? result : -result;
-    });
-    return next;
-  }, [rows, sortState]);
-
-  const handleSort = (key) => {
-    setSortState((current) => {
-      if (current.key !== key) {
-        return { key, direction: key === "breachDurationMs" ? "desc" : "asc" };
-      }
-      return {
-        key,
-        direction: current.direction === "asc" ? "desc" : "asc",
-      };
-    });
-  };
+  const { sortState, handleSort, sortRows } = useTableSort(COLUMNS, {
+    defaultKey: "breachDurationMs",
+    defaultDirection: "desc",
+  });
+  const sortedRows = useMemo(() => sortRows(rows), [rows, sortRows]);
 
   return (
-    <table className={tableStyles.table}>
+    <table
+      className={`${tableStyles.table} ${tableStyles.tableEqualCols} ${slaStyles.table}`}
+    >
+      <colgroup>
+        {COLUMNS.map((col) => (
+          <col key={col.id} style={{ width: `${100 / COLUMNS.length}%` }} />
+        ))}
+      </colgroup>
       <thead>
         <tr>
-          {COLUMNS.map((col) => {
-            const active = sortState.key === col.id;
-            return (
-              <th key={col.id} className={getDataTableThClass(col.align)}>
-                <button
-                  type="button"
-                  className="dashboard-table-sort-btn"
-                  onClick={() => handleSort(col.id)}
-                  aria-label={`Sort by ${col.label} ${active && sortState.direction === "asc" ? "descending" : "ascending"}`}
-                >
-                  <span>{col.label}</span>
-                  <span className="dashboard-table-sort-indicator" aria-hidden>
-                    {active ? (sortState.direction === "asc" ? "↑" : "↓") : "↕"}
-                  </span>
-                </button>
-              </th>
-            );
-          })}
+          {COLUMNS.map((col) => (
+            <th key={col.id} className={getDataTableThClass(col.align)}>
+              <TableSortHeader column={col} sortState={sortState} onSort={handleSort} />
+            </th>
+          ))}
         </tr>
       </thead>
       <tbody>
-        {sortedRows.map((row) => (
+        {sortedRows.length === 0 ? (
+          <tr>
+            <td colSpan={COLUMNS.length} className={tableStyles.empty}>
+              No complaints at risk
+            </td>
+          </tr>
+        ) : (
+          sortedRows.map((row) => (
           <tr key={row.id}>
             <td className={getDataTableTdClass()}>
               <a href={complaintDetailHref(row.id)} className={slaStyles.link}>
@@ -108,15 +84,22 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
                 {row.slaLabel}
               </span>
             </td>
-            <td className={getDataTableTdClass("right")}>
+            <td className={getDataTableTdClass()}>
               {row.breachDurationLabel ? (
-                <span className={slaStyles.overdue}>{row.breachDurationLabel}</span>
+                <span
+                  className={
+                    row.slaLevel === "breached" ? slaStyles.overdue : tableStyles.muted
+                  }
+                >
+                  {row.breachDurationLabel}
+                </span>
               ) : (
                 <span className={tableStyles.muted}>—</span>
               )}
             </td>
           </tr>
-        ))}
+          ))
+        )}
       </tbody>
     </table>
   );

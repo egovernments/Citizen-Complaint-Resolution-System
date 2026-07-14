@@ -5,18 +5,17 @@ import { getMobileValidationRule, generateValidMobile } from '../utils/mdms-mobi
 test('mobile validation reflects the deployment MDMS rule', {
   annotation: {
     type: 'description',
-    description: `End-to-end verification that the citizen login page reflects the deployment's MDMS UserValidation rule (originally pinned to the 9-digit-only CCRS Kenya rollout, now parameterized). The page must hard-cap input length at rule.maxLength, the visible counter must read x/<maxLength>, and typing a too-long number must truncate to <= maxLength — confirming the MDMS rule made it through the validationRules Redis cache and into the UI.
+    description: `End-to-end verification that the citizen login page reflects the deployment's MDMS MobileNumberValidation rule (originally pinned to the 9-digit-only CCRS Kenya rollout, now parameterized). The page must hard-cap input length at rule.maxLength, typing a too-long number must truncate to <= maxLength, and the help text must reflect the rule length — confirming the MDMS rule made it through the validationRules Redis cache and into the UI. The v2 login card (SelectMobileNumber.js) renders NO x/<max> counter; the help text comes from buildMobileErrorMessage and reads like "Please enter a valid mobile number (9 digits, starting with 1 or 7)".
 
 Steps:
 1. Fetch the live mobile-validation rule from MDMS for TENANT.
 2. Open <BASE_URL>/digit-ui/citizen/login and wait 8s for the form to mount.
-3. Read maxlength + placeholder off the Mobile Number textbox; assert maxlength === String(rule.maxLength).
-4. Scrape the counter text from body innerText (matches /\\d+\\/\\d+/) and assert the denominator equals rule.maxLength.
-5. Type a (maxLength+1)-digit number and assert the input value is truncated to <= maxLength characters.
-6. Clear and type a valid mobile number; assert the Next button is enabled.
-7. Read body text and assert it mentions the rule length, not a stale length.
+3. Read maxlength off the Mobile Number textbox; assert maxlength === String(rule.maxLength).
+4. Type a (maxLength+1)-digit number and assert the input value is truncated to <= maxLength characters.
+5. Clear and type a valid mobile number; assert the Continue/Next button is enabled.
+6. Read body text and assert the help text mentions the rule length ("<n> digits"), not a stale length.
 
-Catches a regression where the validationRules Redis cache wasn't invalidated after MDMS update — old rule sticks and the test fails on maxlength or counter.`,
+Catches a regression where the validationRules Redis cache wasn't invalidated after MDMS update — old rule sticks and the test fails on maxlength or the help text.`,
   },
   tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
   test.setTimeout(60_000);
@@ -39,13 +38,12 @@ Catches a regression where the validationRules Redis cache wasn't invalidated af
   const placeholder = await mobileInput.getAttribute('placeholder');
   console.log('maxLength:', maxLength, '| placeholder:', placeholder, '| expected:', expectedLen);
 
-  // Read the counter / hint text near the input
   const bodyText = await page.locator('body').innerText();
-  const counterMatch = bodyText.match(/(\d+)\/(\d+)/);
-  console.log('Counter shows:', counterMatch ? counterMatch[0] : 'NOT FOUND');
 
+  // The v2 login card (SelectMobileNumber.js) hard-caps the input via
+  // maxLength — assert that reflects the MDMS rule. (The old x/<max>
+  // counter no longer exists in v2, so we no longer scrape it.)
   expect(maxLength).toBe(String(expectedLen));
-  expect(counterMatch?.[2]).toBe(String(expectedLen));
 
   // Try entering a too-long number — input should truncate to maxLength OR validation rejects
   await mobileInput.fill(tooLong);
@@ -58,15 +56,21 @@ Catches a regression where the validationRules Redis cache wasn't invalidated af
   await mobileInput.fill('');
   await mobileInput.fill(validMobile);
   await page.waitForTimeout(500);
-  const nextBtn = page.locator('button:has-text("Next")').first();
+  // v2 renames the CTA to "Continue" (falls back from CS_COMMONS_NEXT);
+  // accept either wording so the assertion survives the rename.
+  const nextBtn = page.locator('button:has-text("Continue"), button:has-text("Next")').first();
   const validEnabled = await nextBtn.isEnabled().catch(() => false);
-  console.log(`Next enabled with valid mobile "${validMobile}":`, validEnabled);
+  console.log(`Continue/Next enabled with valid mobile "${validMobile}":`, validEnabled);
   expect(validEnabled).toBe(true);
 
-  // Verify the page hint mentions the rule's length — guards against a
-  // stale "10-digit"/"9-digit" string from a previous rule sticking in
-  // the bundle / localization cache.
-  const placeholderText = await mobileInput.getAttribute('placeholder');
-  console.log('Placeholder:', placeholderText);
-  expect(bodyText.toLowerCase()).toContain(`${expectedLen}-digit`);
+  // Verify the help text mentions the rule's length — guards against a
+  // stale length sticking in the bundle / localization cache. v2's
+  // buildMobileErrorMessage renders "(<n> digits, starting with …)"
+  // (space + plural "digits"), NOT the old "<n>-digit" copy. min may
+  // differ from max (e.g. "9-10 digits"), so match either the exact
+  // maxLength or a "<min>-<max> digits" range that includes it.
+  const helpText = bodyText.toLowerCase();
+  console.log('Placeholder:', await mobileInput.getAttribute('placeholder'));
+  expect(helpText).toMatch(/\d+(?:-\d+)?\s*digits/);
+  expect(helpText).toContain(String(expectedLen));
 });

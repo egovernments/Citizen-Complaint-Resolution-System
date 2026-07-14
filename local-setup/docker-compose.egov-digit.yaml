@@ -599,10 +599,8 @@ services:
     # `registry.preview.egov.theflywheel.in` is a read-only HTTPS proxy
     # in front of the egov-ci VPC registry — public cert, no
     # insecure-registries trust required, pullable from anywhere.
-    # Override EGOV_USER_IMAGE in host_vars if the preview registry is
-    # unreachable; egovio/egov-user:master-e22c7c5 is the last Docker Hub
-    # tag before the 1044 fix was added (lacks tenant-aware encryption).
-    image: ${EGOV_USER_IMAGE:-registry.preview.egov.theflywheel.in/egovio/egov-user:1044-preview}
+    #
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:mobilevalidation-jdk8-4984479
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -654,6 +652,8 @@ services:
       JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_ENABLED: 'true'
       CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE: '123456'
+      EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '+91'
+      EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '^[6-9][0-9]{9}$'
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8107/user/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -1250,6 +1250,128 @@ services:
     restart: "no"
 
   # ===========================================================================
+  # OTP Services (opt-in via `enable_otp_services: true` in Ansible host_vars)
+  #
+  # When disabled (default), Kong mocks /user-otp/* with a 200 response and
+  # egov-user's CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE (123456) is used for
+  # local login/register flows.  When enabled, real OTP generation + SMS
+  # delivery are active — required for production.
+  # ===========================================================================
+
+  egov-otp:
+    image: egovio/egov-otp:v2.9.2-4a60f20
+    container_name: egov-otp
+    profiles: [otp]
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      # Flyway disabled - migrations run by db-migrations container (pgbouncer transaction mode incompatible with Flyway)
+      SPRING_FLYWAY_ENABLED: "false"
+      SERVER_PORT: 8089
+      EGOV_OTP_LENGTH: 6
+      EGOV_OTP_TTL: 900
+      EGOV_OTP_ENCRYPT: "true"
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8089/otp/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+    networks:
+      - egov-network
+
+  user-otp:
+    image: egovio/user-otp:master-e22c7c5
+    container_name: user-otp
+    profiles: [otp]
+    depends_on:
+      egov-otp:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8090
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      OTP_HOST: http://egov-otp:8089
+      OTP_CREATE_URL: /otp/v1/_create
+      USER_HOST: http://egov-user:8107/
+      SEARCH_USER_URL: /user/_search
+      SMS_TOPIC: egov.core.notification.sms
+      EMAIL_TOPIC: egov.core.notification.email
+      EXPIRY_TIME_FOR_OTP: 300000
+      EGOV_LOCALISATION_HOST: http://egov-localization:8096
+      EGOV_LOCALISATION_SEARCH_ENDPOINT: /localization/messages/v1/_search
+      EGOV_LOCALISATION_TENANTID_STRIP_SUFFIX_COUNT: 1
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+    networks:
+      - egov-network
+
+  egov-notification-sms:
+    image: egovio/egov-notification-sms:master-e22c7c5
+    container_name: egov-notification-sms
+    profiles: [otp]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8005
+      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SMS_ENABLED: "true"
+      KAFKA_TOPICS_NOTIFICATION_SMS_NAME: egov.core.notification.sms
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
+      EGOV_STATE_LEVEL_TENANT_ID: pg
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
+      # Console only logs the OTP SMS to this container's stdout — no SMS is
+      # actually sent. For production, set enable_otp_services: true in the
+      # tenant's Ansible host_vars AND replace this with a real provider
+      # class + credentials (e.g. an SMSCountry/Twilio/MSG91 provider class
+      # supported by this image) before relying on real OTP delivery.
+      SMS_PROVIDER_CLASS: Console
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.1'
+    networks:
+      - egov-network
+
+  # ===========================================================================
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
@@ -1270,6 +1392,8 @@ services:
       egov-workflow-v2:
         condition: service_healthy
       egov-localization:
+        condition: service_healthy
+      egov-enc-service:
         condition: service_healthy
       otel-collector:
         condition: service_started
@@ -1301,6 +1425,7 @@ services:
       EGOV_BOUNDARY_HOST: http://boundary-service:8081/
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
+      EGOV_ENC_HOST: http://egov-enc-service:1234
       EGOV_UI_APP_HOST: http://localhost:18080
       # pgr-services' EscalationScheduler resolves the tenant to query
       # MDMS at from the KEYS of this map (PGRConfiguration#getUiAppHostMap,
@@ -1313,9 +1438,29 @@ services:
       EGOV_UI_APP_HOST_MAP: "{pg:'http://localhost:18080'}"
       NOTIFICATION_SMS_ENABLED: 'false'
       NOTIFICATION_EMAIL_ENABLED: 'false'
+      # Config-driven notifications (design D1/D4). When 'true', PGR reads the
+      # PGR.NotificationRouting + PGR.NotificationTemplate MDMS masters, renders
+      # + localizes per recipient, and publishes ONE pre-rendered event per
+      # (recipient × channel) to complaints.domain.events for novu-bridge to
+      # deliver. DEFAULT stays 'false' here (and in application.properties) so
+      # non-Bomet tenants keep the legacy hardcoded path; Bomet flips it 'true'
+      # via docker-compose.bomet.yml. Spring relaxed-binding maps this env to
+      # the `pgr.notification.config.driven` property.
+      PGR_NOTIFICATION_CONFIG_DRIVEN: ${PGR_NOTIFICATION_CONFIG_DRIVEN:-false}
+      # Kafka topic the per-recipient pre-rendered events are published to.
+      # Maps to `kafka.topics.complaints.domain.events`; kept explicit so it
+      # always matches novu-bridge's NOVU_BRIDGE_KAFKA_INPUT_TOPIC.
+      KAFKA_TOPICS_COMPLAINTS_DOMAIN_EVENTS: ${PGR_DOMAIN_EVENTS_TOPIC:-complaints.domain.events}
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'
+      # Master switch for pgr-services' EscalationScheduler (@Scheduled scan).
+      # Baked-in default is already 'true'; surfaced here so the auto-escalation
+      # engine is a visible, per-tenant-overridable knob. Set 'false' to disable
+      # the scan entirely (no workflow transitions / kafka events). Note: with
+      # EGOV_UI_APP_HOST_MAP set above, this scan actively fires on the 5-day
+      # fallback SLA when MDMS EscalationConfig is unseeded.
+      PGR_ESCALATION_ENABLED: 'true'
       COMMENT_BY_EMPLOYEE_NOTIF_ENABLED: 'false'
       NOTIFICATION_ALLOWED_ON_STATUS: 'open,assigned,rejected,resolved'
       EGOV_USR_EVENTS_NOTIFICATION_ENABLED: 'true'
@@ -1809,7 +1954,13 @@ services:
       - egov-network
 
   novu-dashboard:
-    image: ghcr.io/novuhq/novu/dashboard:2.3.0
+    # Image ref is wired through .env (NOVU_DASHBOARD_IMAGE) so the deploy can
+    # either use a locally-built, subpath-rebased image (built when
+    # `build_novu_dashboard: true`, tagged `novu-dashboard:local`) or pull the
+    # stock registry image. Default (build off) = stock, which serves at base=/
+    # and needs the legacy root-path nginx workarounds. See
+    # backend/novu-dashboard/Dockerfile and the nginx-site.conf.j2 enable_novu branch.
+    image: ${NOVU_DASHBOARD_IMAGE:-ghcr.io/novuhq/novu/dashboard:2.3.0}
     container_name: novu-dashboard
     restart: unless-stopped
     profiles: ["notifications"]
@@ -1963,7 +2114,11 @@ services:
       - egov-network
 
   novu-bridge:
-    image: registry.preview.egov.theflywheel.in/egovio/novu-bridge:latest
+    # Overridable so Bomet can pull the pass-through build (PGR pre-renders
+    # + localizes; the bridge only identifies the Novu subscriber and
+    # delivers renderedBody — design D4/D6). CI builds+pushes to the VPC
+    # registry; default keeps the prior preview tag.
+    image: ${NOVU_BRIDGE_IMAGE:-registry.preview.egov.theflywheel.in/egovio/novu-bridge:latest}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2006,12 +2161,12 @@ services:
       NOVU_BRIDGE_KAFKA_INPUT_TOPIC: complaints.domain.events
       NOVU_BRIDGE_KAFKA_RETRY_TOPIC: novu-bridge.retry
       NOVU_BRIDGE_KAFKA_DLQ_TOPIC: novu-bridge.dlq
-      NOVU_BRIDGE_MAX_RETRIES: '3'
       # Channel is compared CASE-SENSITIVELY against the TemplateBinding
       # `channel` field. Our seed data uses lowercase `sms` / `whatsapp`
       # — keep this lowercase too. Override per-tenant in host_vars.
-      # (Default whatsapp: live deploys use it; SMS is paused pending A2P.)
-      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-whatsapp}
+      # (Default SMS: WhatsApp is paused pending an A2P/provider. The config-
+      # driven path uses NOVU_BRIDGE_CHANNELS_ENABLED below, not this legacy knob.)
+      NOVU_BRIDGE_CHANNEL: ${NOVU_BRIDGE_CHANNEL:-SMS}
       NOVU_BRIDGE_DEFAULT_LOCALE: en_IN
       # NOTE: the preference check calls
       # `digit-user-preferences-service/user-preference/v1/_check`,
@@ -2022,14 +2177,21 @@ services:
       NOVU_BRIDGE_PREFERENCE_ENABLED: ${NOVU_BRIDGE_PREFERENCE_ENABLED:-false}
       NOVU_BRIDGE_PREFERENCE_HOST: http://digit-user-preferences-service:8080
       NOVU_BRIDGE_PREFERENCE_CHECK_PATH: /user-preference/v1/_check
+      # Full search endpoint (returns the preferences list) — used by the
+      # read-only /novu-adapter/v1/preferences proxy for the configurator's
+      # User Preferences screen. Distinct from the boolean _check path above.
+      NOVU_BRIDGE_PREFERENCE_SEARCH_PATH: /user-preference/v1/_search
       NOVU_BRIDGE_PREFERENCE_CODE: USER_NOTIFICATION_PREFERENCES
-      NOVU_BRIDGE_CONFIG_HOST: http://digit-config-service:8080
-      # Full path = SERVER_SERVLET_CONTEXT_PATH (/config-service) +
-      # controller mapping (/config/v1) + endpoint. The earlier
-      # `/config-service/v1/_resolve` was missing the `/config/`
-      # segment and got Spring's "No static resource v1/_resolve" 500.
-      NOVU_BRIDGE_CONFIG_RESOLVE_PATH: /config-service/config/v1/_resolve
-      NOVU_BRIDGE_CONFIG_SEARCH_PATH: /config-service/config/v1/_search
+      # Per-channel Novu workflow ids the bridge triggers (rendered text
+      # travels in payload.body; the workflow is just the delivery shell).
+      NOVU_BRIDGE_WORKFLOW_ID_SMS: ${NOVU_BRIDGE_WORKFLOW_ID_SMS:-complaints-sms}
+      NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP: ${NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP:-complaints-whatsapp}
+      NOVU_BRIDGE_WORKFLOW_ID_EMAIL: ${NOVU_BRIDGE_WORKFLOW_ID_EMAIL:-complaints-email}
+      # TTL cache (ms) skips redundant identifies for the same subscriberId.
+      NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
+      # Channels actually delivered. WHATSAPP stays OFF until a legitimate
+      # provider is onboarded as a Novu integration (then just add it here).
+      NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-SMS,EMAIL}
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
       # MDMS_HOST MUST be set. The bridge's application.properties default

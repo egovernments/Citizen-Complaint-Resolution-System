@@ -265,7 +265,7 @@ services:
       - egov-network
 
   egov-user:
-    image: egovio/egov-user:master-fa75ba8
+    image: egovio/egov-user:master-e22c7c5
     container_name: egov-user
     depends_on:
       pgbouncer:
@@ -344,7 +344,7 @@ services:
       - egov-network
 
   user-otp:
-    image: egovio/user-otp:mobile-validation-user-otp-12b1961
+    image: egovio/user-otp:master-e22c7c5
     container_name: user-otp
     depends_on:
       egov-otp:
@@ -386,7 +386,7 @@ services:
       - egov-network
 
   egov-notification-sms:
-    image: egovio/egov-notification-sms:mobile-validation-user-otp-db06ec6
+    image: egovio/egov-notification-sms:master-e22c7c5
     container_name: egov-notification-sms
     depends_on:
       redpanda:
@@ -799,6 +799,11 @@ services:
       NEW_COMPLAINT_ENABLED: 'true'
       REASSIGN_COMPLAINT_ENABLED: 'true'
       REOPEN_COMPLAINT_ENABLED: 'true'
+      # Master switch for pgr-services' EscalationScheduler (@Scheduled scan).
+      # Baked-in default is already 'true'; surfaced here so the auto-escalation
+      # engine is a visible, per-tenant-overridable knob. Set 'false' to disable
+      # the scan entirely (no workflow transitions / kafka events).
+      PGR_ESCALATION_ENABLED: 'true'
       COMMENT_BY_EMPLOYEE_NOTIF_ENABLED: 'false'
       NOTIFICATION_ALLOWED_ON_STATUS: 'open,assigned,rejected,resolved'
       EGOV_USR_EVENTS_NOTIFICATION_ENABLED: 'true'

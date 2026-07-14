@@ -54,6 +54,51 @@ function tr(t: (k: string) => string, key: string, fallback: string): string {
 
 declare const Digit: any;
 
+// Postal-code validation is config-driven so the UI honours the same length the
+// backend does, per tenant (CCRS#722). The employee create form and the legacy
+// FormExplorer already read `CORE_POSTAL_CONFIGS.postalCodePattern`; this citizen
+// v2 flow previously had no postal validation at all, so a wrong (e.g. 6-digit
+// Nominatim) pincode auto-filled from the map could be submitted. Optional field
+// — only the format is enforced, and only when a value is present.
+function getPostalConfig(): { pattern: string; errorMessage?: string } {
+  const cfg = (window as any)?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS") || {};
+  return {
+    pattern: cfg.postalCodePattern || "^[0-9]{5}$",
+    errorMessage: cfg.postalCodeErrorMessage, // optional explicit tenant override
+  };
+}
+
+function isPostalCodeValid(v: unknown): boolean {
+  const s = String(v ?? "").trim();
+  if (s.length === 0) return true; // optional — validate format only when filled
+  try {
+    return new RegExp(getPostalConfig().pattern).test(s);
+  } catch {
+    return true; // a malformed configured pattern must never hard-block the form
+  }
+}
+
+// Build an error message that reflects the CONFIGURED length, not a hard-coded
+// count: the stock CS_COMPLAINT_POSTALCODE_INVALID_ERROR string is localized to
+// "…5 digit…", which is wrong for a 4-digit tenant (CCRS#722). A tenant may pin
+// its own message via CORE_POSTAL_CONFIGS.postalCodeErrorMessage; otherwise we
+// derive the digit count from the pattern and use a length-parameterized key
+// (falling back to a correct English string until that key is localized).
+function postalErrorText(t: (k: string, opts?: any) => string): string {
+  const { pattern, errorMessage } = getPostalConfig();
+  if (errorMessage) return t(errorMessage);
+  const m = String(pattern).match(/\{\s*(\d+)/); // ^[0-9]{4}$ -> "4"
+  const len = m ? m[1] : null;
+  if (len) {
+    const key = "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN";
+    const out = t(key, { length: len });
+    return out === key ? `Please enter a valid ${len}-digit postal code` : out;
+  }
+  const gkey = "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC";
+  const gout = t(gkey);
+  return gout === gkey ? "Please enter a valid postal code" : gout;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -579,12 +624,15 @@ function Step1Map({ data, patch, t }: StepBodyProps) {
         onSelect={(_key: string, value: GeoPoint) => {
           patch({
             GeoLocationsPoint: value,
-            // Mirror the pincode onto postalCode so the address step / submit
-            // validation see the latest pin's pincode (matches FormExplorer.useEffect).
+            // Mirror the new pin's pincode onto postalCode. Always reset to the
+            // current pin: if the newly-picked location has no pincode, clear it
+            // rather than keeping the previous pin's value — otherwise a stale
+            // pincode from an earlier pin lingers after the pin is moved
+            // (CCRS#722). The user can still type one on the location step.
             postalCode:
               value?.pincode != null && String(value.pincode).length > 0
                 ? String(value.pincode)
-                : data.postalCode,
+                : "",
           });
         }}
       />
@@ -621,14 +669,16 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
   const wardHint = data?.GeoLocationsPoint?.ward;
   const wardFromMap = !!(wardHint?.code || wardHint?.name);
 
-  // Pincode is read-only if it came from the map (Nominatim). If the
-  // map didn't return one, postalCode is empty / undefined and the
-  // user gets a normal editable field. Manual input must NOT feed back
-  // into this flag: gating on data.postalCode disabled the field after
-  // the first typed character.
+  // The pincode pre-fills from the map pin (Nominatim) but stays EDITABLE —
+  // the reverse-geocode is frequently wrong or the wrong length, so the user
+  // must always be able to correct it (CCRS#722). It used to be disabled
+  // whenever the map produced a value, which locked in bad pincodes.
   const pincodeFromMap = data?.GeoLocationsPoint?.pincode;
-  const pincodeKnown =
-    !!(pincodeFromMap != null && String(pincodeFromMap).length > 0);
+  // What's actually shown/submitted: a manual entry (data.postalCode) wins over
+  // the map-derived value.
+  const effectivePincode = data.postalCode ?? (pincodeFromMap != null ? String(pincodeFromMap) : "");
+  const postalValid = isPostalCodeValid(effectivePincode);
+  const showPostalError = effectivePincode.length > 0 && !postalValid;
 
   return (
     <StepShell
@@ -658,15 +708,19 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
           <p className="text-sm text-destructive">Boundary component not registered.</p>
         )}
 
-        <Field label={t("CS_COMPLAINT_POSTALCODE__DETAILS")} htmlFor="postal-code">
+        <Field
+          label={t("CS_COMPLAINT_POSTALCODE__DETAILS")}
+          htmlFor="postal-code"
+          error={showPostalError ? postalErrorText(t) : undefined}
+        >
           <Input
             id="postal-code"
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={7}
-            disabled={pincodeKnown}
-            value={data.postalCode ?? (pincodeFromMap != null ? String(pincodeFromMap) : "")}
+            invalid={showPostalError}
+            value={effectivePincode}
             onChange={(e) => patch({ postalCode: e.target.value.replace(/\D/g, "") })}
           />
         </Field>
@@ -818,14 +872,28 @@ const CreatePGRFlowV2: React.FC = () => {
 
   const isLast = stepIndex === STEPS.length - 1;
 
-  // Mirror map-derived pincode onto postalCode (matches FormExplorer's effect).
+  // Seed postalCode from the map pin's pincode, but ONLY when the pin's pincode
+  // actually changes — never on a postalCode edit. The previous version listed
+  // `formData.postalCode` as a dependency and forced it back to the map value,
+  // so the auto-filled field reverted on every keystroke and was effectively
+  // un-editable (CCRS#722). A ref tracking the last map pincode lets the user
+  // freely correct the auto-filled value; a pin move still resets it (and
+  // clears it when the new pin has no pincode, rather than keeping a stale one).
+  const lastMapPincodeRef = React.useRef<string | undefined>(
+    formData?.GeoLocationsPoint?.pincode != null && String(formData.GeoLocationsPoint.pincode).length > 0
+      ? String(formData.GeoLocationsPoint.pincode)
+      : undefined
+  );
   React.useEffect(() => {
     const pin = formData?.GeoLocationsPoint?.pincode;
-    const desired = pin != null && String(pin).length > 0 ? String(pin) : undefined;
-    if (desired !== undefined && formData.postalCode !== desired) {
-      setFormData((prev) => ({ ...prev, postalCode: desired }));
+    const mapPin = pin != null && String(pin).length > 0 ? String(pin) : undefined;
+    if (mapPin !== lastMapPincodeRef.current) {
+      lastMapPincodeRef.current = mapPin;
+      setFormData((prev) => ({ ...prev, postalCode: mapPin ?? "" }));
     }
-  }, [formData?.GeoLocationsPoint?.pincode, formData.postalCode]);
+    // Intentionally excludes formData.postalCode — see comment above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData?.GeoLocationsPoint?.pincode]);
 
   const stepIsValid = React.useMemo(() => {
     const required = MANDATORY_BY_STEP[stepIndex] || [];
@@ -844,6 +912,13 @@ const CreatePGRFlowV2: React.FC = () => {
       if (subTypeOptions.length > 1 && !formData.SelectSubComplaintType) {
         return false;
       }
+    }
+    // Location step: don't let the user past a pincode that doesn't match the
+    // tenant's configured length (CCRS#722). Empty is allowed (optional); an
+    // invalid map-autofilled value must be corrected before continuing.
+    if (stepIndex === 2) {
+      const effective = formData.postalCode ?? formData?.GeoLocationsPoint?.pincode;
+      if (!isPostalCodeValid(effective)) return false;
     }
     return true;
   }, [stepIndex, formData, serviceDefs]);

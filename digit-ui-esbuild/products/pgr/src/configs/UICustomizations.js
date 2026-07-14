@@ -1694,6 +1694,9 @@ export const UICustomizations = {
           return value ? <span>{value?.[0]?.name}</span> : <span>{t("NA")}</span>;
 
         case "WF_INBOX_HEADER_SLA_DAYS_REMAINING":
+          // slaDays is null only when the record has no createdTime; render NA
+          // rather than an empty error Tag. 0 or negative = SLA breached (error).
+          if (value == null) return <span>{t("ES_COMMON_NA")}</span>;
           return value > 0 ? <Tag label={value} showIcon={false} type="success" /> : <Tag label={value} showIcon={false} type="error" />;
 
         default:

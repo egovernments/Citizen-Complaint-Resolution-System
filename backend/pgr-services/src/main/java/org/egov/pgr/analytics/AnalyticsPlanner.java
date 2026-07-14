@@ -10,6 +10,7 @@ import java.time.temporal.IsoFields;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Translates one validated JSON query node into parameterized SQL against a single grain.
@@ -171,14 +172,32 @@ public class AnalyticsPlanner {
 
     // ---------- predicates (filterable whitelist + bound params) ----------
     private String predicate(Grain g, String colKey, JsonNode spec, List<Object> params){
-        if (!g.filterable.contains(colKey))
+        // #1079: a column may be plain-filterable, prefix-filterable (starts_with only), or both.
+        boolean plainFilterable  = g.filterable.contains(colKey);
+        boolean prefixFilterable = g.prefixFilterable.contains(colKey);
+        if (!plainFilterable && !prefixFilterable)
             throw new IllegalArgumentException("op_not_allowed: column '" + colKey + "' is not filterable on " + g.name);
-        if (!spec.isObject()) { params.add(value(spec)); return colKey + " = ?"; }      // shorthand: eq
+        if (!spec.isObject()) {
+            if (!plainFilterable) throw new IllegalArgumentException(
+                    "op_not_allowed: column '" + colKey + "' on " + g.name + " only supports the 'starts_with' filter op");
+            params.add(value(spec)); return colKey + " = ?";      // shorthand: eq
+        }
         List<String> parts = new ArrayList<>();
         Iterator<Map.Entry<String,JsonNode>> it = spec.fields();
         while (it.hasNext()) {
             Map.Entry<String,JsonNode> e = it.next();
             String op = e.getKey(); JsonNode v = e.getValue();
+            // #1079: starts_with is ONLY valid on the per-column prefix allowlist (materialized
+            // paths); every other op needs plain filterability. Both rejections are explicit.
+            if ("starts_with".equals(op)) {
+                if (!prefixFilterable) throw new IllegalArgumentException(
+                        "op_not_allowed: 'starts_with' is only permitted on prefix-filterable path columns, not '" + colKey + "' on " + g.name);
+                params.add(escapeLike(v.asText()));
+                parts.add(colKey + " LIKE ? || '%'");
+                continue;
+            }
+            if (!plainFilterable) throw new IllegalArgumentException(
+                    "op_not_allowed: column '" + colKey + "' on " + g.name + " only supports the 'starts_with' filter op");
             switch (op) {
                 case "eq":  params.add(value(v)); parts.add(colKey + " = ?"); break;
                 case "ne":  params.add(value(v)); parts.add(colKey + " <> ?"); break;
@@ -198,6 +217,11 @@ public class AnalyticsPlanner {
             }
         }
         return parts.size()==1 ? parts.get(0) : "(" + String.join(" AND ", parts) + ")";
+    }
+
+    /** Escape LIKE metacharacters (backslash default escape) so a starts_with value is a literal prefix. */
+    private String escapeLike(String s){
+        return s.replace("\\","\\\\").replace("%","\\%").replace("_","\\_");
     }
 
     private Object value(JsonNode v){
@@ -243,10 +267,28 @@ public class AnalyticsPlanner {
             if (scope.tenantStateLevel) { conj.add(g.tenantColumn + " LIKE ?"); params.add(scope.tenantId + "%"); }
             else { conj.add(g.tenantColumn + " = ?"); params.add(scope.tenantId); }
         }
-        if (scope.citizenUuid != null && g.citizenColumn != null) { conj.add(g.citizenColumn + " = ?"); params.add(scope.citizenUuid); }
-        if (scope.boundaryPrefix != null && g.boundaryColumn != null) {
+        // FAIL-CLOSED: a constrained principal whose scope CANNOT be enforced on the target grain
+        // must NOT have the constraint silently dropped (that leaked cross-department / cross-citizen
+        // data on the events & daily grains, which lack these columns). Reject instead.
+        if (scope.citizenUuid != null) {
+            if (g.citizenColumn == null)
+                throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce citizen self-scope");
+            conj.add(g.citizenColumn + " = ?"); params.add(scope.citizenUuid);
+        }
+        if (scope.boundaryPrefix != null) {
+            if (g.boundaryColumn == null)
+                throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce jurisdiction scope");
             conj.add(g.boundaryColumn + " LIKE ?");
             params.add(scope.boundaryPrefix.replace("\\","\\\\").replace("%","\\%").replace("_","\\_") + "%");
+        }
+        // department scope: restrict to the union of the principal's HRMS assignment departments.
+        // NULL department_code rows won't match an IN list → correctly excluded.
+        if (scope.departmentCodes != null && !scope.departmentCodes.isEmpty()) {
+            if (g.departmentColumn == null)
+                throw new IllegalArgumentException("scope_incomplete: grain '" + g.table + "' cannot enforce department scope");
+            String placeholders = scope.departmentCodes.stream().map(x -> "?").collect(Collectors.joining(", "));
+            conj.add(g.departmentColumn + " IN (" + placeholders + ")");
+            params.addAll(scope.departmentCodes);
         }
     }
 

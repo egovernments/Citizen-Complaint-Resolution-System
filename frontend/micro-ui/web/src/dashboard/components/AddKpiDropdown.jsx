@@ -1,9 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  INVENTORY_CHART_WIDGETS,
-  INVENTORY_KPI_METRICS,
-} from "../config/supervisorMetrics";
+import AddKpiPreview from "./AddKpiPreview";
 
 const PANEL_WIDTH_PX = 320; // ~tw-w-80
 
@@ -85,29 +82,27 @@ const AddKpiDropdown = ({
   open,
   onOpenChange,
   containerRef,
+  kpiCardData,
+  allowedWidgetIds,
+  catalogItems,
 }) => {
   const panelRef = useRef(null);
   const [panelPosition, setPanelPosition] = useState(null);
+  const [hoveredItem, setHoveredItem] = useState(null);
+  const [hoverRect, setHoverRect] = useState(null);
 
   const availableItems = useMemo(() => {
-    const metrics = INVENTORY_KPI_METRICS.filter(
-      (m) => !visibleLayoutIds.includes(m.id)
-    ).map((m) => ({
-      ...m,
-      itemType: "kpi",
-    }));
-    const widgets = INVENTORY_CHART_WIDGETS.filter(
-      (w) => !visibleLayoutIds.includes(w.id)
-    ).map((w) => ({
-      ...w,
-      itemType: "widget",
-    }));
-    return [...metrics, ...widgets];
-  }, [visibleLayoutIds]);
+    // Offer every role-visible catalog tile not already on the grid. The catalog
+    // is role-filtered server-side, so no extra allowedWidgetIds gate is needed.
+    // Each item is { id:kpiId, metric:title, type:viz.kind, itemType }.
+    return (catalogItems || []).filter((it) => !visibleLayoutIds.includes(it.id));
+  }, [visibleLayoutIds, catalogItems]);
 
   useLayoutEffect(() => {
     if (!open) {
       setPanelPosition(null);
+      setHoveredItem(null);
+      setHoverRect(null);
       return undefined;
     }
 
@@ -151,6 +146,8 @@ const AddKpiDropdown = ({
   }, [open, onOpenChange, containerRef]);
 
   const handleDragStart = (event, widgetId) => {
+    setHoveredItem(null);
+    setHoverRect(null);
     event.dataTransfer.setData("text/plain", widgetId);
     event.dataTransfer.effectAllowed = "copy";
     onDragWidgetStart?.(widgetId);
@@ -194,26 +191,38 @@ const AddKpiDropdown = ({
                 draggable
                 onDragStart={(event) => handleDragStart(event, item.id)}
                 onDragEnd={handleDragEnd}
-                className="dashboard-add-kpi-item tw-flex tw-cursor-grab tw-select-none tw-items-center tw-gap-2.5 tw-px-4 tw-py-2.5 active:tw-cursor-grabbing"
+                onMouseEnter={(event) => {
+                  setHoveredItem(item);
+                  setHoverRect(event.currentTarget.getBoundingClientRect());
+                }}
+                onMouseLeave={() => {
+                  setHoveredItem(null);
+                  setHoverRect(null);
+                }}
+                className={`dashboard-add-kpi-item${
+                  hoveredItem?.id === item.id ? " dashboard-add-kpi-item--hover" : ""
+                }`}
               >
-                <MetricIcon kind={iconKind(item)} />
-                <span className="dashboard-add-kpi-item-label tw-min-w-0 tw-flex-1 tw-truncate">
-                  {item.metric}
-                </span>
-                <span className="dashboard-add-kpi-type">{itemTypeLabel(item)}</span>
-                <button
-                  type="button"
-                  draggable={false}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={() => {
-                    onAddWidget(item.id);
-                    onOpenChange(false);
-                  }}
-                  className="dashboard-add-kpi-add-btn"
-                  aria-label={`Add ${item.metric}`}
-                >
-                  +
-                </button>
+                <div className="dashboard-add-kpi-item-main">
+                  <MetricIcon kind={iconKind(item)} />
+                  <span className="dashboard-add-kpi-item-label">{item.metric}</span>
+                </div>
+                <div className="dashboard-add-kpi-item-aside">
+                  <span className="dashboard-add-kpi-type">{itemTypeLabel(item)}</span>
+                  <button
+                    type="button"
+                    draggable={false}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={() => {
+                      onAddWidget(item.id);
+                      onOpenChange(false);
+                    }}
+                    className="dashboard-add-kpi-add-btn"
+                    aria-label={`Add ${item.metric}`}
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </li>
           ))
@@ -222,7 +231,17 @@ const AddKpiDropdown = ({
     </div>
   );
 
-  return createPortal(panel, document.body);
+  return (
+    <>
+      {createPortal(panel, document.body)}
+      <AddKpiPreview
+        item={hoveredItem}
+        anchorRect={hoverRect}
+        panelLeft={panelPosition?.left}
+        kpiCardData={kpiCardData}
+      />
+    </>
+  );
 };
 
 export default AddKpiDropdown;
