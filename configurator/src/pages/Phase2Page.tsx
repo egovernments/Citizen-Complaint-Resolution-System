@@ -33,7 +33,6 @@ import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
 import { buildOsmBoundaries, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
-import osmtogeojson from 'osmtogeojson';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
 
 type Step =
@@ -87,12 +86,12 @@ function validateLevelSelection(levels: OsmAdminLevel[]): { valid: boolean; erro
 // proxies it to the search-api container); override via VITE_TURBOPASS_URL.
 const TURBOPASS_BASE: string = import.meta.env.VITE_TURBOPASS_URL || '/turbopass';
 
-// Overpass endpoint for the boundary-polygon fetch. Defaults to the public
-// instance (zero-config, but rate-limited / 504-prone under load). A deploy
-// that self-hosts Overpass sets VITE_OVERPASS_URL (e.g. same-origin
-// '/overpass/api/interpreter', proxied by nginx to the on-box container behind
-// the enable_overpass gate) at configurator build time.
-const OVERPASS_URL: string = import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
+// Boundary data source served by turbopass. 'geoapify' hits the hosted
+// Geoapify API (needs GEOAPIFY_API_KEY on the search-api); 'overture' hits the
+// self-hosted offline SQLite DB built by the bootstrap pipeline (docker compose
+// --profile bootstrap). Default stays 'geoapify' for backwards compatibility;
+// set VITE_TURBOPASS_SOURCE=overture to run fully offline.
+const TURBOPASS_SOURCE: string = import.meta.env.VITE_TURBOPASS_SOURCE || 'geoapify';
 
 // The OSM path always writes the ADMIN hierarchy (the Excel path lets the
 // operator name it).
@@ -213,7 +212,7 @@ export default function Phase2Page() {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   // Full turbopass suggestion the operator picked (null once they edit the
-  // text again) — its countryCode scopes the Overpass query to one country.
+  // text again) — its place_id drives the turbopass /boundary/fetch call.
   const [pickedSuggestion, setPickedSuggestion] = useState<any | null>(null);
   const [skippedFeatures, setSkippedFeatures] = useState<SkippedOsmFeature[]>([]);
   const [pendingBoundaries, setPendingBoundaries] = useState<Boundary[]>([]);
@@ -258,13 +257,13 @@ export default function Phase2Page() {
 
     const timeoutId = setTimeout(async () => {
       try {
-        const res = await fetch(`${TURBOPASS_BASE}/search?q=${encodeURIComponent(searchTerm)}&limit=5`);
-        if (!res.ok) throw new Error(`Turbopass search returned ${res.status}`);
+        const res = await fetch(`${TURBOPASS_BASE}/boundary/search?q=${encodeURIComponent(searchTerm)}&source=${TURBOPASS_SOURCE}`);
+        if (!res.ok) throw new Error(`Turbopass boundary search returned ${res.status}`);
         const data = await res.json();
-        // The API ignores `limit` — slice client-side regardless.
-        setSuggestions((data.results || []).slice(0, 5));
+        // Slice features to top 5
+        setSuggestions((data.features || []).slice(0, 5));
       } catch (e) {
-        console.debug('Turbopass suggestions unavailable', e);
+        console.debug('Turbopass boundary suggestions unavailable', e);
         setSuggestions([]);
       }
     }, 500);
@@ -273,14 +272,11 @@ export default function Phase2Page() {
   }, [searchTerm, showSuggestions]);
 
   const formatSuggestion = (item: any) => {
-    const parts = [];
-    if (item.name) parts.push(item.name);
-    if (item.stateName && item.stateName !== item.name) parts.push(item.stateName);
-    if (item.countryName && item.countryName !== item.stateName && item.countryName !== item.name) parts.push(item.countryName);
-
-    const type = item.placeType || 'location';
+    const props = item.properties || {};
+    const text = props.formatted || props.name || '';
+    const type = props.result_type || 'location';
     return {
-      text: parts.join('/'),
+      text,
       type: `[${type}]`
     };
   };
@@ -532,104 +528,74 @@ export default function Phase2Page() {
     setLoading(true);
     setError(null);
     try {
-      // Escape quotes/backslashes so a name like `Saint "X"` can't break out
-      // of the Overpass QL string literal.
-      const escaped = searchTerm.trim().replace(/[\\"]/g, '\\$&');
-      const countryCode = typeof pickedSuggestion?.countryCode === 'string'
-        ? pickedSuggestion.countryCode.trim().toUpperCase().replace(/[\\"]/g, '\\$&')
-        : '';
+      let suggestion = pickedSuggestion;
+      if (!suggestion) {
+        // If user clicked search button without selecting a suggestion, fetch the top suggestion
+        try {
+          const res = await fetch(`${TURBOPASS_BASE}/boundary/search?q=${encodeURIComponent(searchTerm)}&source=${TURBOPASS_SOURCE}`);
+          if (!res.ok) throw new Error(`Search returned ${res.status}`);
+          const data = await res.json();
+          if (data.features && data.features.length > 0) {
+            suggestion = data.features[0];
+            setPickedSuggestion(suggestion);
+          }
+        } catch (e) {
+          console.error('Failed to resolve search term suggestion', e);
+        }
+      }
+      if (!suggestion || !suggestion.properties?.place_id) {
+        setError("Please select a valid location from the suggestions dropdown.");
+        setLoading(false);
+        return;
+      }
+      const placeId = suggestion.properties.place_id;
 
-      // OSM stores a place's primary `name` in the LOCAL language, but the
-      // typeahead (Turbopass) usually surfaces a translated/anglicized name —
-      // e.g. it suggests "Maputo Province" while the OSM relation's name is
-      // "Maputo" (the English label lives only in name:en). A strict
-      // ["name"="Maputo Province"] match then resolves nothing, so the search
-      // dead-ends with "No administrative boundaries found" (issue #757).
-      // Match the picked name against the common name variants so either the
-      // native or the translated form resolves the relation.
-      const NAME_KEYS = ['name', 'name:en', 'int_name', 'alt_name'];
-      const relByName = NAME_KEYS
-        .map(k => `  rel(area.country)["boundary"="administrative"]["${k}"="${escaped}"];`)
-        .join('\n');
-      const areaByName = NAME_KEYS
-        .map(k => `  area["${k}"="${escaped}"]["boundary"="administrative"];`)
-        .join('\n');
-
-      // When the operator picked a typeahead suggestion with a country code,
-      // scope the lookup to that country and resolve the named relation
-      // itself (included in the output so the root level isn't lost).
-      // Otherwise fall back to the worldwide name match, constrained to
-      // administrative areas.
-      const query = countryCode
-        ? `[out:json][timeout:90];
-area["ISO3166-1"="${countryCode}"][admin_level=2]->.country;
-(
-${relByName}
-)->.target;
-.target map_to_area ->.searchArea;
-(
-  rel(area.searchArea)["boundary"="administrative"];
-  .target;
-);
-out body;
->;
-out skel qt;`
-        : `[out:json][timeout:90];
-(
-${areaByName}
-)->.searchArea;
-(
-  rel(area.searchArea)["boundary"="administrative"];
-);
-out body;
->;
-out skel qt;`;
-
-      const res = await fetch(OVERPASS_URL, {
-        method: 'POST',
-        body: query
-      });
-      if (!res.ok) throw new Error("Overpass API failed");
-      const data = await res.json();
-
-      const geojson = osmtogeojson(data);
+      const res = await fetch(`${TURBOPASS_BASE}/boundary/fetch?id=${encodeURIComponent(placeId)}&source=${TURBOPASS_SOURCE}`);
+      if (!res.ok) throw new Error("Turbopass boundary fetch failed");
+      const geojson = await res.json();
 
       let targetAdminLevel = 0;
-      const sTerm = searchTerm.toLowerCase().trim();
-      geojson.features.forEach((feature: any) => {
-        const props = feature.properties || {};
-        // Match the search term against the same name variants the query
-        // resolves on (name/name:en/int_name/alt_name) — otherwise a place
-        // picked by its translated name (e.g. "Maputo Province" vs the OSM
-        // name "Maputo") never matches here and the root level isn't found.
-        const featNames = NAME_KEYS
-          .map(k => (typeof props[k] === 'string' ? props[k].toLowerCase() : ''))
-          .filter(Boolean);
-        if (featNames.some(n => n === sTerm || n.includes(sTerm))) {
-          const lvl = parseInt(props.admin_level, 10);
-          // If we found a match, we prefer the HIGHEST admin_level number (most specific)
-          // Wait, if it's the search target, it should be the ROOT.
-          // e.g. "Maputo" matches Level 4 (Cidade de maputo).
-          // If "Maputo" also matches a Level 8 "Maputo Bairro", we might accidentally set targetAdminLevel to 8,
-          // filtering out Level 4! That's bad.
-          // We want the LOWEST admin_level number that matches, so we don't accidentally filter out the actual city!
-          if (!isNaN(lvl) && (targetAdminLevel === 0 || lvl < targetAdminLevel)) {
-            targetAdminLevel = lvl;
-          }
+      const getAdminLevel = (props: any) => {
+        if (!props) return NaN;
+        return parseInt(props.admin_level || props.datasource?.raw?.admin_level, 10);
+      };
+
+      if (suggestion.properties) {
+        targetAdminLevel = getAdminLevel(suggestion.properties);
+        if (isNaN(targetAdminLevel)) {
+          targetAdminLevel = 0;
         }
-      });
+      }
+      if (isNaN(targetAdminLevel) || targetAdminLevel === 0) {
+        // A place is often surfaced under a translated/anglicized name while the
+        // source's primary `name` is local (e.g. picked "Maputo Province" vs the
+        // feature's name "Maputo", with the English label only in name:en).
+        // Match the search term against the common name variants so either form
+        // resolves the root level (issue #757).
+        const NAME_KEYS = ['name', 'name:en', 'int_name', 'alt_name'];
+        const sTerm = searchTerm.toLowerCase().trim();
+        geojson.features.forEach((feature: any) => {
+          const props = feature.properties || {};
+          const featNames = NAME_KEYS
+            .map(k => (typeof props[k] === 'string' ? props[k].toLowerCase() : ''))
+            .filter(Boolean);
+          if (featNames.some(n => n === sTerm || n.includes(sTerm))) {
+            const lvl = getAdminLevel(props);
+            if (!isNaN(lvl) && (targetAdminLevel === 0 || lvl < targetAdminLevel)) {
+              targetAdminLevel = lvl;
+            }
+          }
+        });
+      }
 
       const levelsMap = new Map<number, any[]>();
       geojson.features.forEach((feature: any) => {
-        // osmtogeojson also emits member WAYS carrying boundary tags as
-        // standalone LineString features — only real areas count, otherwise
-        // level counts inflate, the skip report floods, and unit-square
-        // phantom roots appear.
         const geomType = feature.geometry?.type;
         if (geomType !== 'Polygon' && geomType !== 'MultiPolygon') return;
-        if (feature.properties?.boundary === 'administrative' && feature.properties?.admin_level) {
-          const lvl = parseInt(feature.properties.admin_level, 10);
-          if (!isNaN(lvl) && (targetAdminLevel === 0 || lvl >= targetAdminLevel)) {
+        
+        const lvl = getAdminLevel(feature.properties);
+        if (!isNaN(lvl)) {
+          if (targetAdminLevel === 0 || lvl >= targetAdminLevel) {
             if (!levelsMap.has(lvl)) levelsMap.set(lvl, []);
             levelsMap.get(lvl)!.push(feature);
           }
@@ -659,7 +625,7 @@ out skel qt;`;
       setStep('map-levels');
     } catch (e) {
       console.error(e);
-      setError("Failed to fetch data from OSM. Please try again.");
+      setError("Failed to fetch data from Geoapify. Please try again.");
     } finally {
       setLoading(false);
     }

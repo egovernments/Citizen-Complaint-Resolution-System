@@ -1,0 +1,7 @@
+# Pinned floors for the Overture bootstrap pipeline (scrape.py, build_hierarchy.py).
+# geopandas >= 0.14 + shapely >= 2 use shapely's STRtree for sjoin, so no
+# separate rtree/pygeos spatial-index dependency is required.
+duckdb>=1.1
+pandas>=2.0
+geopandas>=0.14
+shapely>=2.0
