@@ -54,6 +54,9 @@ export const CreateComplaintConfig = {
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
                 validation: {
                   required: true,
+                  // FALLBACK only — createComplaintForm overrides this from
+                  // common-masters.MobileNumberValidation.nameRegex when the
+                  // master carries it.
                   // CCRS#437: Allow 4-character names (e.g. "John"). The
                   // quantifier counts characters AFTER the leading letter,
                   // CCSD-1990: min length 1 (was 4). {0,29} = total 1–30.

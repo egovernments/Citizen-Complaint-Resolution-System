@@ -61,6 +61,29 @@ const CreateComplaintForm = ({
     { schemaCode: "PGR_HIER_PRESENT" }
   );
 
+  // CCSD-1990: complainant-name pattern from the shared validation master
+  // (common-masters.MobileNumberValidation.nameRegex) — same channel the
+  // mobile pattern rides elsewhere. The static pattern in
+  // CreateComplaintConfig stays as the FALLBACK when the master doesn't
+  // carry the field (all pre-existing environments).
+  const { data: nameRegexFromMdms } = Digit.Hooks.useCustomMDMS(
+    tenantId,
+    "common-masters",
+    [{ name: "MobileNumberValidation" }],
+    {
+      cacheTime: Infinity,
+      select: (raw) => {
+        const list = raw?.["common-masters"]?.MobileNumberValidation || [];
+        const record =
+          list.find((x) => x.default === true && x.isActive !== false) ||
+          list.find((x) => x.isActive !== false) ||
+          null;
+        return record?.nameRegex;
+      },
+    },
+    { schemaCode: "MOBILE_VALIDATION_NAME_REGEX" }
+  );
+
   // Logged-in employee's department — needed to gate the Sub-Type dropdown
   // so an employee can only file sub-types of their own department. The user
   // token doesn't carry the department, so look it up from HRMS by the
@@ -226,9 +249,27 @@ const CreateComplaintForm = ({
             field.populators?.name === "ComplainantName" ||
             field.populators?.name === "ComplainantContactNumber"
           ) {
+            // Name pattern: MDMS master value wins when present + valid; the
+            // config's static pattern remains the fallback.
+            let mdmsPattern;
+            if (field.populators?.name === "ComplainantName" && nameRegexFromMdms) {
+              try {
+                mdmsPattern = new RegExp(nameRegexFromMdms);
+              } catch (e) {
+                console.error("Invalid nameRegex in MobileNumberValidation master:", e);
+              }
+            }
             return [{
               ...field,
               disable: disabledFields[field.populators.name],
+              ...(mdmsPattern
+                ? {
+                    populators: {
+                      ...field.populators,
+                      validation: { ...field.populators.validation, pattern: mdmsPattern },
+                    },
+                  }
+                : {}),
             }];
           }
           return [field];
@@ -237,7 +278,7 @@ const CreateComplaintForm = ({
     });
 
     return { ...baseConfig, form: updatedForm };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, hasHierarchy, departmentGate]);
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, hasHierarchy, departmentGate, nameRegexFromMdms]);
 
 
 

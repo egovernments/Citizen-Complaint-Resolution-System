@@ -678,6 +678,10 @@
         "emailRegex": {
           "type": "string",
           "description": "Optional email validation pattern; frontends fall back to a built-in strict pattern when absent."
+        },
+        "nameRegex": {
+          "type": "string",
+          "description": "Optional person-name validation pattern; frontends fall back to their built-in pattern when absent."
         }
       },
       "x-ref-schema": [],
