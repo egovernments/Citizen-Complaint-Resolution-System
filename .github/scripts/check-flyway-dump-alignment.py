@@ -45,25 +45,36 @@ DUMP = ROOT / "local-setup/db/full-dump.sql"
 COMPOSE = ROOT / "local-setup/docker-compose.egov-digit.yaml"
 FAST_PATH = ROOT / "local-setup/docker-compose.fast-path.yml"
 MIGRATIONS = ROOT / "local-setup/docker-compose.migrations.yml"
+MAP = ROOT / "local-setup/db/flyway-history-map.yml"
 
-# ── Transitional allowlists (drive these to empty as item #10 lands) ──────────
-# Enabled services that legitimately create their history fresh: they claim a
-# table absent from the dump AND their data tables are not in the dump, so Flyway
-# baselines from empty with no 42P07 risk. Remove an entry only if that service's
-# schema gets baked into the dump (then it must align instead).
+
+def _load_history_map() -> dict:
+    with open(MAP) as fh:
+        return yaml.safe_load(fh) or {}
+
+
+_HISTORY_MAP = _load_history_map()
+
+# Services that legitimately create their history fresh: their data tables are not
+# in the dump, so Flyway baselines from empty with no 42P07 risk. Declared in the
+# map (`baseline_fresh: true`) so the map and this check cannot drift apart.
 BASELINE_FRESH = {
-    "egov_indexer_schema",         # egov-indexer      — no eg_indexer* in dump
-    "digit_config_service_schema", # digit-config-svc  — no config tables in dump
-    "novu_bridge_schema",          # novu-bridge       — no novu tables in dump
+    spec["canonical"] for spec in _HISTORY_MAP.values() if spec.get("baseline_fresh")
 }
 
-# History tables the dump ships whose owning service currently has Flyway OFF
-# (item #10 decision #2 backlog). When you enable one, set its SPRING_FLYWAY_TABLE
-# to exactly this name and delete the entry here — the check then enforces it.
-# Emptied in Phase 3: the dump was re-baked to the K8s <service>_schema names and
-# every core service (incl. idgen/localization/user/otp) now has a per-service
-# migration init container claiming its table, so nothing is pending-enable.
+# Emptied in Phase 3: every core service now has a migration init container
+# claiming its table, so nothing is pending-enable. db-history-normalize renames
+# any legacy names in the dump before the migrators run, so a legacy alias in a
+# dump is no longer a misalignment — it is expected and handled.
 PENDING_ENABLE = set()
+
+# Legacy names the normalizer will rename into canonical form at deploy time.
+# A dump carrying these is fine, so they must not be reported as orphans.
+NORMALIZED_ALIASES = {
+    alias
+    for spec in _HISTORY_MAP.values()
+    for alias in (spec.get("aliases") or [])
+}
 
 _FALSE = {"false", "0", "no", "off"}
 
@@ -154,7 +165,7 @@ def analyze(dump: set, claimed: set):
         "claimed_not_in_dump": sorted(claimed - dump - BASELINE_FRESH),
         # Dump ships a history table no enabled service reconciles and it isn't a
         # known pending-enable -> orphaned history / latent 42P07 when enabled.
-        "dump_not_claimed": sorted(dump - claimed - PENDING_ENABLE),
+        "dump_not_claimed": sorted(dump - claimed - PENDING_ENABLE - NORMALIZED_ALIASES),
         # Allowlist hygiene: entries that no longer describe reality.
         "stale_baseline_fresh": sorted((BASELINE_FRESH & dump) | (BASELINE_FRESH - claimed)),
         "stale_pending_enable": sorted((PENDING_ENABLE & claimed) | (PENDING_ENABLE - dump)),
@@ -204,31 +215,45 @@ def report(dump: set, claimed: set) -> int:
 
 
 def self_test() -> int:
-    dump = {"pgr_services_schema", "hrms_schema_version", "egov_idgen_schema_version"}
+    # Synthetic names throughout: a real table name here would collide with the
+    # shipped map's aliases and make these cases depend on the map's contents.
+    dump = {"alpha_schema", "beta_schema", "gamma_schema_version"}
+
+    global PENDING_ENABLE, BASELINE_FRESH, NORMALIZED_ALIASES
+    saved_p, saved_b, saved_n = PENDING_ENABLE, BASELINE_FRESH, NORMALIZED_ALIASES
+    NORMALIZED_ALIASES = set()
 
     # Aligned: enabled claims match the dump; the disabled one is acknowledged.
-    global PENDING_ENABLE, BASELINE_FRESH
-    saved_p, saved_b = PENDING_ENABLE, BASELINE_FRESH
-    PENDING_ENABLE, BASELINE_FRESH = {"egov_idgen_schema_version"}, set()
-    ok = analyze(dump, {"pgr_services_schema", "hrms_schema_version"})
+    PENDING_ENABLE, BASELINE_FRESH = {"gamma_schema_version"}, set()
+    ok = analyze(dump, {"alpha_schema", "beta_schema"})
     assert not any(ok.values()), f"clean case should pass: {ok}"
 
     # Mismatch: enabled claims a table the dump lacks (the url-shortening bug shape).
-    bad = analyze(dump, {"pgr_services_schema", "hrms_schema_version", "typo_schema"})
+    bad = analyze(dump, {"alpha_schema", "beta_schema", "typo_schema"})
     assert bad["claimed_not_in_dump"] == ["typo_schema"], bad
 
     # Orphan: dump ships a history table nobody enabled claims and it's not pending.
     PENDING_ENABLE = set()
-    orphan = analyze(dump, {"pgr_services_schema", "hrms_schema_version"})
-    assert orphan["dump_not_claimed"] == ["egov_idgen_schema_version"], orphan
+    orphan = analyze(dump, {"alpha_schema", "beta_schema"})
+    assert orphan["dump_not_claimed"] == ["gamma_schema_version"], orphan
+
+    # ...but a LEGACY ALIAS the normalizer renames at deploy time is NOT an orphan.
+    # db-history-normalize turns gamma_schema_version into gamma_schema before any
+    # migrator runs, so a dump carrying the legacy name is handled, not misaligned.
+    NORMALIZED_ALIASES = {"gamma_schema_version"}
+    handled = analyze(dump, {"alpha_schema", "beta_schema"})
+    assert handled["dump_not_claimed"] == [], handled
+    NORMALIZED_ALIASES = set()
 
     # Stale allowlists self-report.
-    PENDING_ENABLE = {"pgr_services_schema"}  # in dump AND claimed -> stale
-    stale = analyze(dump, {"pgr_services_schema", "hrms_schema_version"})
-    assert "pgr_services_schema" in stale["stale_pending_enable"], stale
-    PENDING_ENABLE, BASELINE_FRESH = {"egov_idgen_schema_version"}, {"hrms_schema_version"}
-    stale2 = analyze(dump, {"pgr_services_schema", "hrms_schema_version"})
-    assert "hrms_schema_version" in stale2["stale_baseline_fresh"], stale2
+    PENDING_ENABLE = {"alpha_schema"}  # in dump AND claimed -> stale
+    stale = analyze(dump, {"alpha_schema", "beta_schema"})
+    assert "alpha_schema" in stale["stale_pending_enable"], stale
+    PENDING_ENABLE, BASELINE_FRESH = {"gamma_schema_version"}, {"beta_schema"}
+    stale2 = analyze(dump, {"alpha_schema", "beta_schema"})
+    assert "beta_schema" in stale2["stale_baseline_fresh"], stale2
+
+    NORMALIZED_ALIASES = saved_n
 
     # A service migrated to an init container claims its table via SCHEMA_TABLE,
     # not SPRING_FLYWAY_TABLE. That must still count as claimed.
@@ -240,7 +265,21 @@ def self_test() -> int:
     assert migrated == {"pgr_services_schema"}, f"migrator SCHEMA_TABLE not claimed: {migrated}"
 
     PENDING_ENABLE, BASELINE_FRESH = saved_p, saved_b
-    print("self-test OK: alignment, mismatch, orphan, migrator-claim, and stale-allowlist all detected.")
+
+    # The map must claim every canonical name the compose overlay declares, or the
+    # normalizer would not know about a service the migrators do run.
+    claimed_by_compose = claimed_tables(merged_services(
+        COMPOSE.read_text(), FAST_PATH.read_text(), MIGRATIONS.read_text()))
+    canonical_in_map = {spec["canonical"] for spec in _HISTORY_MAP.values()}
+    unmapped = claimed_by_compose - canonical_in_map
+    assert not unmapped, (
+        f"compose declares SCHEMA_TABLE(s) absent from flyway-history-map.yml: "
+        f"{sorted(unmapped)} — add them to the map or db-history-normalize will "
+        f"not protect them"
+    )
+
+    print("self-test OK: alignment, mismatch, orphan, migrator-claim, stale-allowlist, "
+          "and map-covers-compose all detected.")
     return 0
 
 

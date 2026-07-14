@@ -13,6 +13,9 @@ on:
       - 'local-setup/docker-compose.egov-digit.yaml'
       - 'local-setup/docker-compose.fast-path.yml'
       - 'local-setup/docker-compose.migrations.yml'
+      - 'local-setup/db/flyway-history-map.yml'
+      - 'local-setup/db/normalize/normalize.py'
+      - 'local-setup/tests/test_flyway_history_normalize.py'
       - '.github/scripts/check-flyway-dump-alignment.py'
       - '.github/workflows/flyway-dump-alignment.yml'
   push:
@@ -22,6 +25,9 @@ on:
       - 'local-setup/docker-compose.egov-digit.yaml'
       - 'local-setup/docker-compose.fast-path.yml'
       - 'local-setup/docker-compose.migrations.yml'
+      - 'local-setup/db/flyway-history-map.yml'
+      - 'local-setup/db/normalize/normalize.py'
+      - 'local-setup/tests/test_flyway_history_normalize.py'
 
 permissions:
   contents: read
@@ -35,8 +41,12 @@ jobs:
         with:
           python-version: '3.x'
       - name: Install deps
-        run: pip install pyyaml
+        run: pip install pyyaml pytest
       - name: Self-test the alignment check
         run: python3 .github/scripts/check-flyway-dump-alignment.py --self-test
       - name: Check Flyway ↔ dump history-table alignment
         run: python3 .github/scripts/check-flyway-dump-alignment.py
+      # The decision table is where every safety property of db-history-normalize
+      # lives — including "never drop a populated table". Pin it on every PR.
+      - name: Normalizer decision-table unit tests
+        run: python3 -m pytest local-setup/tests/test_flyway_history_normalize.py -v
