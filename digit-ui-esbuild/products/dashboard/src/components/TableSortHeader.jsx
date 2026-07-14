@@ -1,15 +1,16 @@
 import React from "react";
 import useDashboardT from "../i18n/useDashboardT";
+import { seriesEntryLabel } from "../i18n/textResolver";
 
 const TableSortHeader = ({ column, sortState, onSort }) => {
-  const { t, exists } = useDashboardT();
+  const { t } = useDashboardT();
   const active = sortState.key === column.id;
   const nextDirection =
     active && sortState.direction === "asc"
       ? t("DASHBOARD_TABLE_SORT_DESCENDING", "descending")
       : t("DASHBOARD_TABLE_SORT_ASCENDING", "ascending");
   // Column descriptors may carry a labelKey (DASHBOARD_COL_*) that wins when seeded.
-  const label = column.labelKey && exists(column.labelKey) ? t(column.labelKey) : column.label;
+  const label = seriesEntryLabel(column, column.label);
 
   return (
     <button
