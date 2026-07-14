@@ -11,6 +11,26 @@ The **blueprint for the fix PRs**. Each entry matches a finding in issue #1160 a
 
 ---
 
+## Image build requirements — which PRs each service must be built against
+
+The parity test ran **locally-built `:integration` images** for the two services with
+*source* changes; those local pins were reverted (they'll be built + repinned when the
+PR merges and deploys). Config-only services run stock `egovio` images. What each
+service needs to be built against for the integration branch to function:
+
+| Service | Needs rebuild? | Must contain PR(s) | Source changed |
+|---|---|---|---|
+| **digit-ui** | **Yes** (frontend) | **#1098** `fix/egov-location-boundary-migration` | `digit-ui-v2/packages/data-provider/src/client/endpoints.ts` |
+| **pgr-services** | **Yes** (backend) | **#1100** `fix/pgr-search-citizen-scoping` | `PrincipalScopeResolver.java`, `EnrichmentService.java` (citizen-scoping / search-IDOR fix) |
+| **egov-user** | image *decision* | mobile-validation build (§1.6) — reads the per-tenant MDMS mobile rule | product decision on the prod image tag |
+| **egov-hrms** | image *decision* | deploy + a build that boots on the tenant (§2.5) | deploy wiring, not source |
+| **mdms-v2** | image *decision* | a build that tolerates string-valued `userInfo.roles` (§2.6 context) | image drift, not a parity PR |
+| **all others** (egov-workflow-v2, boundary, filestore, gateway, …) | **No** | — parity fixes are config/chart-values (`#1099`,`#1102`,`#1128`,`#1142`,`#1157`) | stock `egovio` images work |
+
+> Rule of thumb: only **digit-ui (#1098)** and **pgr-services (#1100)** changed *source* among the parity PRs → they must be built from a branch containing those PRs. Everything else is applied via chart/env values in this repo.
+
+---
+
 ## §1.2 · Deploy `configurator` + `digit-mcp` on k8s  ⚠️ Live-only
 **Symptom:** `/configurator/`, `/mcp` 404 on k8s → no in-cluster admin/onboarding.
 **Permanent fix (the PR):** add `configurator` (nginx serving the built dist + Service + Ingress `/configurator`) and `digit-mcp` (the shim + its session postgres) charts to the helmfile. The manifest below is the reference for the MCP chart's Deployment/Service/Ingress and env.
