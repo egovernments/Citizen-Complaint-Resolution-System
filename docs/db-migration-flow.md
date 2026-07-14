@@ -166,3 +166,55 @@ dump from the `-db` images** so its history matches them:
 
 The **CI alignment check** guards naming drift on every PR; the **smoke test** above
 guards the apply path. Regenerating the dump on a cadence guards content drift.
+
+## Deploying over a dump you did not build
+
+The stack boots from whatever dump sits at `local-setup/db/full-dump.sql`. A dump
+handed over by a service team, or lifted from a running environment, carries the
+**legacy compose** Flyway history-table names (`*_schema_version`) — but the `-db`
+migrator images look for the **K8s** names (`<service>_schema`).
+
+On a mismatch Flyway sees an empty history and replays every migration from V1
+against a populated database. Nine migrators crash with 42P07. Two do not:
+`egov-localization` and `egov-enc-service` open their V1 with `DROP TABLE IF EXISTS`,
+so they drop, recreate empty, and **exit 0**. Measured on a real team dump: 97,250
+rows → 26,377, including the encryption keys that decrypt all user PII. That loss is
+unrecoverable — `eg_user.name` and `mobilenumber` are ciphertext, and those keys were
+the only thing that could decrypt them.
+
+`db-history-normalize` runs before every migrator and prevents this. It reads
+`local-setup/db/flyway-history-map.yml`, renames legacy history tables to their
+canonical names, rebuilds empty orphan tables, and **aborts the deploy** on anything
+it cannot prove safe. It is idempotent, and it is gated in compose — so Ansible and a
+bare `docker compose up` are both covered, with no playbook change.
+
+What it does, per service:
+
+| Canonical | Legacy alias | Data tables | Action |
+|---|---|---|---|
+| present | — | — | no-op |
+| — | present | — | **rename** alias → canonical |
+| present | present | — | **abort** — ambiguous |
+| — | — | absent | no-op — fresh install |
+| — | — | present, **0 rows** | **drop**; the migrator rebuilds them |
+| — | — | present, **has rows** | **abort** — cannot prove which migrations are applied |
+
+A service whose empty tables were dropped (today: `egov-otp`/`eg_token`) will have its
+migrator **apply** its migrations rather than no-op. That is correct — the tables are
+gone and it must rebuild them.
+
+**Adding a service:** add it to `flyway-history-map.yml` — canonical name matching its
+`SCHEMA_TABLE`, any legacy aliases, and the tables its migrations create (derive these
+from its own `CREATE TABLE` statements; exclude materialized views). CI fails if a
+migrator's `SCHEMA_TABLE` has no map entry.
+
+**Testing a dump before you trust it:**
+
+```bash
+./local-setup/db/normalize/test-integration.sh /path/to/dump.sql
+```
+
+It loads the dump into a throwaway database, normalizes, runs all eleven pinned `-db`
+migrators, and asserts every pre-existing table is byte-identical afterwards. It also
+runs the same dump *without* the normalizer and asserts the data IS destroyed — if
+that half ever stops failing, the guard has been silently disabled.

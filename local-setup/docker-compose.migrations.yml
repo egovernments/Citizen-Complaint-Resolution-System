@@ -7,6 +7,35 @@
 # How future migrations flow, conditions, testing & troubleshooting:
 #   docs/db-migration-flow.md
 services:
+  # ── Guard · runs before EVERY migrator ──────────────────────────────────────
+  # An operator-supplied dump carries the LEGACY compose history-table names
+  # (*_schema_version). The -db migrator images look for the K8s <service>_schema
+  # names. On a mismatch Flyway sees an empty history, replays from V1 against a
+  # populated database, and egov-localization + egov-enc-service DROP+recreate
+  # their tables and exit 0 — silent, unrecoverable data loss (the encryption keys
+  # that decrypt all user PII). This renames them into place first, and aborts the
+  # deploy on anything it cannot prove safe.
+  #   docs/superpowers/specs/2026-07-13-ansible-flyway-history-normalization-design.md
+  db-history-normalize:
+    build:
+      context: ./db/normalize
+    container_name: db-history-normalize
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres-db
+      PGPORT: "5432"
+      PGUSER: egov
+      PGPASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      PGDATABASE: egov
+      MAP_PATH: /map.yml
+    volumes:
+      - ./db/flyway-history-map.yml:/map.yml:ro
+    restart: "no"
+    networks:
+      - egov-network
+
   pgr-services-migration:
     build:
       context: ../backend/pgr-services/src/main/resources/db
@@ -14,6 +43,8 @@ services:
     depends_on:
       postgres-db:
         condition: service_healthy
+      db-history-normalize:
+        condition: service_completed_successfully
       # pgr's analytics migrations build materialized views that read other
       # services' tables (boundary_relationship/_hierarchy, eg_user, eg_mdms_data,
       # eg_wf_*). Gate on those services being healthy so their schemas exist
@@ -55,6 +86,10 @@ services:
     depends_on:
       postgres-db:
         condition: service_healthy
+      # db-history-normalize carries no profile, so it is always active and
+      # satisfies this gate in every profile combination.
+      db-history-normalize:
+        condition: service_completed_successfully
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_TABLE: novu_bridge_schema
@@ -81,6 +116,8 @@ services:
     depends_on:
       postgres-db:
         condition: service_healthy
+      db-history-normalize:
+        condition: service_completed_successfully
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       # digit-config-service's migrate.sh sets currentSchema per SCHEMA_NAME.
@@ -110,7 +147,9 @@ services:
   boundary-service-migration:
     image: egovio/boundary-service-db:v2.9.2-4a60f20
     container_name: boundary-service-migration
-    depends_on: { postgres-db: { condition: service_healthy } }
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_NAME: public
@@ -128,7 +167,9 @@ services:
   egov-user-migration:
     image: egovio/egov-user-db:master-d69ce29
     container_name: egov-user-migration
-    depends_on: { postgres-db: { condition: service_healthy } }
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_NAME: public
@@ -146,7 +187,9 @@ services:
   mdms-backend-migration:
     image: egovio/mdms-v2-db:v2.9.2-4a60f20
     container_name: mdms-backend-migration
-    depends_on: { postgres-db: { condition: service_healthy } }
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_NAME: public
@@ -164,7 +207,9 @@ services:
   egov-idgen-migration:
     image: egovio/egov-idgen-db:v2.9.2-4a60f20
     container_name: egov-idgen-migration
-    depends_on: { postgres-db: { condition: service_healthy } }
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_NAME: public
@@ -182,7 +227,9 @@ services:
   egov-localization-migration:
     image: egovio/egov-localization-db:v2.9.2-4a60f20
     container_name: egov-localization-migration
-    depends_on: { postgres-db: { condition: service_healthy } }
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_NAME: public
@@ -200,7 +247,9 @@ services:
   egov-enc-service-migration:
     image: egovio/egov-enc-service-db:v2.9.2-4a60f20
     container_name: egov-enc-service-migration
-    depends_on: { postgres-db: { condition: service_healthy } }
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_NAME: public
@@ -218,7 +267,9 @@ services:
   egov-filestore-migration:
     image: egovio/egov-filestore-db:v2.9.2-4a60f20
     container_name: egov-filestore-migration
-    depends_on: { postgres-db: { condition: service_healthy } }
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_NAME: public
@@ -236,7 +287,9 @@ services:
   egov-workflow-v2-migration:
     image: egovio/egov-workflow-v2-db:v2.9.2-4a60f20
     container_name: egov-workflow-v2-migration
-    depends_on: { postgres-db: { condition: service_healthy } }
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_NAME: public
@@ -254,7 +307,9 @@ services:
   egov-hrms-migration:
     image: egovio/egov-hrms-db:hrms-boundary-0a4e737
     container_name: egov-hrms-migration
-    depends_on: { postgres-db: { condition: service_healthy } }
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_NAME: public
@@ -272,7 +327,9 @@ services:
   egov-url-shortening-migration:
     image: egovio/egov-url-shortening-db:v2.9.2-4a60f20
     container_name: egov-url-shortening-migration
-    depends_on: { postgres-db: { condition: service_healthy } }
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_NAME: public
@@ -292,7 +349,9 @@ services:
     image: egovio/egov-otp-db:v2.9.2-4a60f20
     container_name: egov-otp-migration
     profiles: ["otp"]
-    depends_on: { postgres-db: { condition: service_healthy } }
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
     environment:
       DB_URL: jdbc:postgresql://postgres-db:5432/egov
       SCHEMA_NAME: public
