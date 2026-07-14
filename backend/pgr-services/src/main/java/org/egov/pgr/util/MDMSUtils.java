@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.request.RequestInfo;
+import org.egov.common.contract.request.Role;
 import org.egov.common.utils.MultiStateInstanceUtil;
 import org.egov.mdms.model.MasterDetail;
 import org.egov.mdms.model.MdmsCriteria;
@@ -22,6 +23,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.egov.pgr.util.PGRConstants.MDMS_MODULE_NAME;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICEDEF;
@@ -37,6 +39,7 @@ import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_MASTER;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_MASTER;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.MDMS_ACCESSCONTROL_ACTIONS_MASTER;
 
 @Slf4j
 @Component
@@ -450,6 +453,58 @@ public class MDMSUtils {
         List<String> out = new ArrayList<>();
         for (Object o : (List<?>) raw) out.add(String.valueOf(o));
         return out;
+    }
+
+    /**
+     * Fetches the ACCESSCONTROL-ACTIONS-TEST.actions-test MDMS entry (id/url/method/resource/
+     * condition) for a given action url — the Tier-2 PDP's source of truth for JsonLogic
+     * conditions (see org.egov.pgr.policy.AccessPolicyRegistry). Returns an empty list (never
+     * null) on any MDMS failure or when no matching action is found, so callers fail closed
+     * rather than throwing.
+     *
+     * Deliberately omits the request's "enabled" field: egov-accesscontrol's
+     * /access/v1/actions/mdms/_get only constrains results by enabled status when that field is
+     * present, so leaving it out fetches every action mapped to the caller's roles regardless of
+     * its enabled flag, filtered only by roleCodes/tenantId/actionMaster.
+     */
+    public List<Map<String, Object>> fetchAccessControlActions(RequestInfo requestInfo, String tenantId, String actionUrl) {
+        try {
+            List<String> roleCodes = extractRoleCodes(requestInfo);
+            if (roleCodes.isEmpty()) {
+                log.error("No roles on RequestInfo — cannot resolve access-control action for url='{}' tenant='{}'",
+                        actionUrl, tenantId);
+                return Collections.emptyList();
+            }
+
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("roleCodes", roleCodes);
+            body.put("tenantId", tenantId);
+            body.put("actionMaster", MDMS_ACCESSCONTROL_ACTIONS_MASTER);
+            body.put("RequestInfo", requestInfo);
+
+            StringBuilder url = new StringBuilder(config.getAccessControlHost())
+                    .append(config.getAccessControlActionsMdmsGetPath());
+            Object result = serviceRequestRepository.fetchResult(url, body);
+            if (result == null)
+                return Collections.emptyList();
+
+            String safeUrl = actionUrl.replace("'", "\\'");
+            List<Map<String, Object>> actions = JsonPath.read(result, "$.actions[?(@.url=='" + safeUrl + "')]");
+            return actions == null ? Collections.emptyList() : actions;
+        } catch (Exception e) {
+            log.error("Failed to fetch access-control action for url='{}' tenant='{}' via {} — treating as no policy found",
+                    actionUrl, tenantId, config.getAccessControlActionsMdmsGetPath(), e);
+            return Collections.emptyList();
+        }
+    }
+
+    private List<String> extractRoleCodes(RequestInfo requestInfo) {
+        if (requestInfo == null || requestInfo.getUserInfo() == null || requestInfo.getUserInfo().getRoles() == null)
+            return Collections.emptyList();
+        return requestInfo.getUserInfo().getRoles().stream()
+                .map(Role::getCode)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
 }

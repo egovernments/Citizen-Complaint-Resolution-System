@@ -1098,7 +1098,28 @@
     "displayName": "MDMS v2",
     "orderNumber": 1,
     "serviceCode": "MDMS v2",
-    "parentModule": ""
+    "parentModule": "",
+    "resource": {
+      "masters": {
+        "ACCESSCONTROL-ROLES.roles": {
+          "condition": { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] }
+        },
+        "ACCESSCONTROL-ACTIONS-TEST.actions-test": {
+          "condition": { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] }
+        },
+        "ACCESSCONTROL-ROLEACTIONS.roleactions": {
+          "condition": { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] }
+        },
+        "common-masters.Department": {
+          "condition": {
+            "or": [
+              { "in": [ "MDMS_ADMIN", { "var": "user.roles" } ] },
+              { "in": [ "SUPERVISOR", { "var": "user.roles" } ] }
+            ]
+          }
+        }
+      }
+    }
   },
   {
     "id": 2510,
@@ -1406,7 +1427,37 @@
     "displayName": "Search PGR Request",
     "orderNumber": 0,
     "serviceCode": "pgr-services",
-    "parentModule": ""
+    "parentModule": "",
+    "method": "POST",
+    "resource": {
+      "complaint": {
+        "attributes": {
+          "citizen.mobileNumber": {
+            "condition": {
+              "or": [
+                { "==": [ { "var": "user.attributes.tenantWide" }, true ] },
+                { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
+              ]
+            },
+            "onDeny": { "strategy": "MASK_SHOW_LAST_N", "n": 2, "maskChar": "X" }
+          }
+        }
+      }
+    },
+    "condition": {
+      "or": [
+        { "==": [ { "var": "user.attributes.tenantWide" }, true ] },
+        { "and": [
+            { "==": [ { "var": "user.type" }, "CITIZEN" ] },
+            { "==": [ { "var": "resource.complaint.accountId" }, { "var": "user.uuid" } ] }
+        ]},
+        { "and": [
+            { "==": [ { "var": "user.type" }, "EMPLOYEE" ] },
+            { "in": [ { "var": "resource.complaint.department" }, { "var": "user.attributes.departments" } ] },
+            { "in": [ { "var": "resource.complaint.boundary" }, { "var": "user.attributes.jurisdictions" } ] }
+        ]}
+      ]
+    }
   },
   {
     "id": 2007,

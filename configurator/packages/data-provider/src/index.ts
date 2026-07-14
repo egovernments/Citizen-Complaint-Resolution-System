@@ -19,3 +19,5 @@ export type { ResourceConfig, ResourceType } from './providers/resourceRegistry.
 export { createDigitDataProvider } from './providers/dataProvider.js';
 export type { DigitDataProvider } from './providers/dataProvider.js';
 export { createDigitAuthProvider } from './providers/authProvider.js';
+export type { DigitPermissions } from './providers/authProvider.js';
+export type { MastersCapability } from './providers/accessPolicy.js';

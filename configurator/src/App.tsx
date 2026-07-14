@@ -38,6 +38,7 @@ import { NotificationPreferenceList } from '@/resources/notification-preferences
 import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import PgrDashboard from './pages/PgrDashboard';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
+import { MastersCapabilityProvider, useMastersCapability } from '@/hooks/useMastersCapability';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
 // UndoToast removed — see CCRS#417. The previous Undo button only popped
@@ -107,7 +108,22 @@ const queryClient = new QueryClient({
 });
 
 function ManagementAdmin() {
+  return (
+    <MastersCapabilityProvider>
+      <ManagementAdminResources />
+    </MastersCapabilityProvider>
+  );
+}
+
+// Split from ManagementAdmin so useMastersCapability() (which reads the
+// context MastersCapabilityProvider establishes above) resolves correctly —
+// see docs/design/masters-configurator-access-policy-design.md §3.3. Masters
+// the current role can't see are filtered out via `{cond && <Resource .../>}`
+// (React.Children.toArray drops the resulting `false`), keeping every
+// <Resource> a direct child of <CoreAdminUI> as react-admin requires.
+function ManagementAdminResources() {
   const { state } = useApp();
+  const { canViewResource } = useMastersCapability();
   return (
     <CoreAdminContext
       dataProvider={getDataProvider(state.tenant)}
@@ -118,40 +134,40 @@ function ManagementAdmin() {
     >
       <CoreAdminUI layout={DigitLayout} dashboard={DigitDashboard}>
         {/* Core entities with List/Show/Edit/Create */}
-        <Resource name="tenants" list={TenantList} show={TenantShow} edit={TenantEdit} />
-        <Resource name="departments" list={DepartmentList} show={DepartmentShow} edit={DepartmentEdit} create={DepartmentCreate} />
-        <Resource name="designations" list={DesignationList} show={DesignationShow} edit={DesignationEdit} create={DesignationCreate} />
+        {canViewResource('tenants') && <Resource name="tenants" list={TenantList} show={TenantShow} edit={TenantEdit} />}
+        {canViewResource('departments') && <Resource name="departments" list={DepartmentList} show={DepartmentShow} edit={DepartmentEdit} create={DepartmentCreate} />}
+        {canViewResource('designations') && <Resource name="designations" list={DesignationList} show={DesignationShow} edit={DesignationEdit} create={DesignationCreate} />}
         {/* Complaint types are the LEAF rows of the single ComplaintHierarchy
             master (registry key 'complaint-hierarchy'); the data provider
             filters leaves and maps them to the legacy ServiceDefs shape so
             these dedicated views keep working unchanged. */}
-        <Resource name="complaint-hierarchy" list={ComplaintTypeList} show={ComplaintTypeShow} edit={ComplaintTypeEdit} create={ComplaintTypeCreate} />
-        <Resource name="employees" list={EmployeeList} show={EmployeeShow} edit={EmployeeEdit} create={EmployeeCreate} />
-        <Resource name="complaints" list={ComplaintList} show={ComplaintShow} edit={ComplaintEdit} create={ComplaintCreate} />
-        <Resource name="boundaries" list={BoundaryList} show={BoundaryShow} edit={BoundaryEdit} create={BoundaryCreate} />
-        <Resource name="localization" list={LocalizationList} show={LocalizationShow} edit={LocalizationEdit} create={LocalizationCreate} />
-        <Resource name="users" list={UserList} show={UserShow} edit={UserEdit} create={UserCreate} />
+        {canViewResource('complaint-hierarchy') && <Resource name="complaint-hierarchy" list={ComplaintTypeList} show={ComplaintTypeShow} edit={ComplaintTypeEdit} create={ComplaintTypeCreate} />}
+        {canViewResource('employees') && <Resource name="employees" list={EmployeeList} show={EmployeeShow} edit={EmployeeEdit} create={EmployeeCreate} />}
+        {canViewResource('complaints') && <Resource name="complaints" list={ComplaintList} show={ComplaintShow} edit={ComplaintEdit} create={ComplaintCreate} />}
+        {canViewResource('boundaries') && <Resource name="boundaries" list={BoundaryList} show={BoundaryShow} edit={BoundaryEdit} create={BoundaryCreate} />}
+        {canViewResource('localization') && <Resource name="localization" list={LocalizationList} show={LocalizationShow} edit={LocalizationEdit} create={LocalizationCreate} />}
+        {canViewResource('users') && <Resource name="users" list={UserList} show={UserShow} edit={UserEdit} create={UserCreate} />}
 
         {/* Read-only entities with List/Show */}
-        <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} />
-        <Resource name="access-actions" list={AccessActionList} show={AccessActionShow} />
-        <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} />
-        <Resource name="workflow-business-services" list={WorkflowServiceList} show={WorkflowServiceShow} />
-        <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />
-        <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />
-        <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} create={BoundaryHierarchyCreate} />
-        <Resource name="complaint-hierarchies" list={ComplaintHierarchyList} show={ComplaintHierarchyShow} create={ComplaintHierarchyCreate} />
+        {canViewResource('access-roles') && <Resource name="access-roles" list={AccessRoleList} show={AccessRoleShow} />}
+        {canViewResource('access-actions') && <Resource name="access-actions" list={AccessActionList} show={AccessActionShow} />}
+        {canViewResource('role-actions') && <Resource name="role-actions" list={RoleActionList} show={RoleActionShow} />}
+        {canViewResource('workflow-business-services') && <Resource name="workflow-business-services" list={WorkflowServiceList} show={WorkflowServiceShow} />}
+        {canViewResource('workflow-processes') && <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />}
+        {canViewResource('mdms-schemas') && <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />}
+        {canViewResource('boundary-hierarchies') && <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} create={BoundaryHierarchyCreate} />}
+        {canViewResource('complaint-hierarchies') && <Resource name="complaint-hierarchies" list={ComplaintHierarchyList} show={ComplaintHierarchyShow} create={ComplaintHierarchyCreate} />}
 
         {/* Novu-into-configurator: read-only notification surfaces served by the
             novu-bridge proxy (not egov-mdms). Names match the 'custom' registry
             keys the data provider branches on. Routable at
             /manage/notification-log and /manage/notification-provider. */}
-        <Resource name="notification-log" list={NotificationLogList} />
-        <Resource name="notification-provider" list={NotificationProviderList} />
-        <Resource name="notification-preference" list={NotificationPreferenceList} />
+        {canViewResource('notification-log') && <Resource name="notification-log" list={NotificationLogList} />}
+        {canViewResource('notification-provider') && <Resource name="notification-provider" list={NotificationProviderList} />}
+        {canViewResource('notification-preference') && <Resource name="notification-preference" list={NotificationPreferenceList} />}
 
         {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above) */}
-        {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions').map((name) => (
+        {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions' && canViewResource(name)).map((name) => (
           <Resource key={name} name={name} list={MdmsResourcePage} show={MdmsResourceShow} edit={MdmsResourceEdit} create={MdmsResourceCreate} />
         ))}
 
@@ -475,7 +491,7 @@ function App() {
           {/* Onboarding Mode Routes */}
           <Route path="/" element={
             state.isAuthenticated
-              ? state.mode === 'onboarding' ? <Layout /> : <Navigate to="/manage" />
+              ? state.mode === 'onboarding' ? <MastersCapabilityProvider><Layout /></MastersCapabilityProvider> : <Navigate to="/manage" />
               : <Navigate to="/login" />
           }>
             <Route index element={<Navigate to="/phase/1" />} />

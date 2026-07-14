@@ -36,21 +36,31 @@ describe('createDigitAuthProvider', () => {
     assert.equal(identity.id, 'admin');
   });
 
-  it('getPermissions returns role codes', async () => {
+  it('getPermissions returns role codes plus a masters capability', async () => {
     client.setAuth('token', {
       userName: 'admin', name: 'Admin', tenantId: 'pg',
       roles: [{ code: 'SUPERUSER', name: 'Super User' }, { code: 'EMPLOYEE', name: 'Employee' }],
     });
+    // No policy-fetch mock needed: mdmsSearch hits the network via
+    // client.request, which we stub here (same pattern as
+    // DigitApiClient.test.ts's phantom-200 test) so the test never makes a
+    // real HTTP call and the fetch resolves to "no data" — canView/canEdit
+    // then fall back to their documented open-by-default behavior.
+    (client as unknown as { request: (...args: unknown[]) => Promise<unknown> }).request =
+      async () => ({ mdms: [] });
     const auth = createDigitAuthProvider(client);
-    const perms = await auth.getPermissions!({});
-    assert.deepEqual(perms, ['SUPERUSER', 'EMPLOYEE']);
+    const perms = await auth.getPermissions!({}) as { roles: string[]; masters: { canView: (s?: string) => boolean; canEdit: (s?: string) => boolean } };
+    assert.deepEqual(perms.roles, ['SUPERUSER', 'EMPLOYEE']);
+    assert.equal(perms.masters.canView('common-masters.Department'), true);
+    assert.equal(perms.masters.canEdit('common-masters.Department'), false);
   });
 
-  it('getPermissions returns empty array when no roles', async () => {
+  it('getPermissions returns empty roles and an open-by-default capability when no roles', async () => {
     client.setAuth('token', { userName: 'admin', name: 'Admin', tenantId: 'pg' });
     const auth = createDigitAuthProvider(client);
-    const perms = await auth.getPermissions!({});
-    assert.deepEqual(perms, []);
+    const perms = await auth.getPermissions!({}) as { roles: string[]; masters: { canView: (s?: string) => boolean } };
+    assert.deepEqual(perms.roles, []);
+    assert.equal(perms.masters.canView('common-masters.Department'), true);
   });
 
   it('logout clears auth and returns redirect path', async () => {

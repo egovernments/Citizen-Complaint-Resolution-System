@@ -13,20 +13,32 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 const phases = [
-  { id: 1, name: 'Tenant', fullName: 'Tenant & Branding', icon: Building2 },
-  { id: 2, name: 'Boundary', fullName: 'Boundary Setup', icon: MapPin },
-  { id: 3, name: 'Common', fullName: 'Common Masters', icon: FileSpreadsheet },
-  { id: 4, name: 'Employee', fullName: 'Employee Onboarding', icon: Users },
+  { id: 1, name: 'Tenant', fullName: 'Tenant & Branding', icon: Building2, master: 'tenants' },
+  { id: 2, name: 'Boundary', fullName: 'Boundary Setup', icon: MapPin, master: 'boundaries' },
+  { id: 3, name: 'Common', fullName: 'Common Masters', icon: FileSpreadsheet, master: 'departments' },
+  { id: 4, name: 'Employee', fullName: 'Employee Onboarding', icon: Users, master: 'employees' },
 ];
 
 export default function Layout() {
   const { state, logout, goToPhase, setMode, toggleHelp } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
+  const { canEditResource } = useMastersCapability();
 
   const currentPhaseFromUrl = parseInt(location.pathname.split('/').pop() || '1');
+  const currentPhaseInfo = phases.find((p) => p.id === currentPhaseFromUrl);
+  // Actionability = visibility (docs/design/masters-configurator-access-policy-design.md
+  // §3.3): a role can act on whatever masters it can edit; this phase's create
+  // actions are already gateway-enforced (§3.1) — this banner just tells a
+  // view-only role that up front instead of letting them discover it via a
+  // failed submit deep in the flow. Individual field-level gating inside each
+  // phase is out of scope for this pass (flagged as a follow-up in the design
+  // doc's open questions).
+  const currentPhaseEditable = !currentPhaseInfo || canEditResource(currentPhaseInfo.master);
 
   const handlePhaseClick = (phaseId: number) => {
     if (state.completedPhases.includes(phaseId) || phaseId <= state.currentPhase) {
@@ -173,6 +185,15 @@ export default function Layout() {
 
       {/* Main content */}
       <main id="main-content" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {!currentPhaseEditable && (
+          <Alert className="mb-4">
+            <AlertDescription>
+              Your role has view-only access to {currentPhaseInfo?.fullName}. You can review this
+              step, but creating or editing records here is restricted to roles with write access
+              (e.g. MDMS_ADMIN).
+            </AlertDescription>
+          </Alert>
+        )}
         <Outlet />
       </main>
 

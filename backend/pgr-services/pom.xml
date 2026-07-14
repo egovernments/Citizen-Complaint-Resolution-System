@@ -123,6 +123,19 @@
             <version>4.13.2</version>
             <scope>test</scope>
         </dependency>
+        <!-- Without this, Surefire's auto-detected JUnit Platform provider (pulled in
+             transitively by spring-boot-starter-test) silently runs zero of this module's
+             JUnit 4 (org.junit.Test/@RunWith) tests, e.g. ComplaintsEventsTest. -->
+        <dependency>
+            <groupId>org.junit.vintage</groupId>
+            <artifactId>junit-vintage-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.jamsesso</groupId>
+            <artifactId>json-logic-java</artifactId>
+            <version>1.1.0</version>
+        </dependency>
     </dependencies>
     <repositories>
      		<repository>

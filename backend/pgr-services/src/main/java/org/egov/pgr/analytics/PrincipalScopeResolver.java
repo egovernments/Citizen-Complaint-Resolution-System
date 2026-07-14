@@ -120,7 +120,8 @@ public class PrincipalScopeResolver {
                 }
             }
 
-            // boundary / jurisdiction scope: DELIBERATELY SKIPPED for now (boundaryPrefix=null).
+            // analytics module's own hierarchical jurisdiction axis: DELIBERATELY SKIPPED for now
+            // (boundaryPrefix=null).
             //
             // boundary_path is '|'-delimited root-first (ancestralmaterializedpath||'|'||code), so an
             // HRMS jurisdiction whose boundary code is the path ROOT (e.g. county "BOMET") IS a valid
@@ -131,19 +132,35 @@ public class PrincipalScopeResolver {
             // block below — applyScope already injects boundary_path LIKE prefix%. (Resolver-only change;
             // no downstream change — the seam holds.)
             String boundaryPrefix = null;
-            // JsonNode jurisdictions = emp.get("jurisdictions");
-            // if (jurisdictions != null && jurisdictions.isArray() && jurisdictions.size() > 0) {
-            //     String b = jurisdictions.get(0).path("boundary").asText(null);
+            // JsonNode jurisdictionsForAnalytics = emp.get("jurisdictions");
+            // if (jurisdictionsForAnalytics != null && jurisdictionsForAnalytics.isArray() && jurisdictionsForAnalytics.size() > 0) {
+            //     String b = jurisdictionsForAnalytics.get(0).path("boundary").asText(null);
             //     if (b != null && !b.isEmpty()) boundaryPrefix = b;
             // }
 
+            // PGR search's own jurisdiction axis (exact-match against a complaint's address
+            // locality, see AnalyticsScope#jurisdictionCodes) — union of ALL assigned jurisdiction
+            // boundary codes, required exactly like department: an employee with no resolvable
+            // jurisdiction fails closed via unresolvedScope below, same as no department.
+            Set<String> jurisdictions = new LinkedHashSet<>();
+            JsonNode jurisdictionNodes = emp.get("jurisdictions");
+            if (jurisdictionNodes != null && jurisdictionNodes.isArray()) {
+                for (JsonNode j : jurisdictionNodes) {
+                    String boundary = j.path("boundary").asText(null);
+                    if (boundary != null && !boundary.isEmpty()) jurisdictions.add(boundary);
+                }
+            }
+
             if (departments.isEmpty())
                 return unresolvedScope(u, tenantId, stateLevel, "no active HRMS department assignment");
+            if (jurisdictions.isEmpty())
+                return unresolvedScope(u, tenantId, stateLevel, "no HRMS jurisdiction assignment");
 
             List<String> deptList = new ArrayList<>(departments);
-            log.info("PrincipalScopeResolver: userName='{}' departments={} boundaryPrefix={}",
-                    userName, deptList, boundaryPrefix);
-            return new AnalyticsScope(tenantId, stateLevel, null, boundaryPrefix, deptList);
+            List<String> jurisdictionList = new ArrayList<>(jurisdictions);
+            log.info("PrincipalScopeResolver: userName='{}' departments={} jurisdictions={} boundaryPrefix={}",
+                    userName, deptList, jurisdictionList, boundaryPrefix);
+            return new AnalyticsScope(tenantId, stateLevel, null, boundaryPrefix, deptList, jurisdictionList);
         } catch (Exception ex) {
             log.warn("HRMS scope resolution failed for '{}': {}", u.getUserName(), ex.toString());
             return unresolvedScope(u, tenantId, stateLevel, "HRMS error");

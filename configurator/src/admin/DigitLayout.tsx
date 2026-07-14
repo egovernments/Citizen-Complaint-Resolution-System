@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLocaleState, useLocales, useTranslate } from 'ra-core';
 import { useApp } from '../App';
@@ -39,6 +39,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DocsPane from '@/components/layout/DocsPane';
 import { getGenericMdmsResources, getResourceLabel } from '@/providers/bridge';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 import { useTheme } from '@/providers/ThemeProvider';
 import { THEMES } from '@/themes';
 
@@ -105,6 +106,23 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const translate = useTranslate();
+  const { canViewResource } = useMastersCapability();
+
+  // Masters the current role can't see (per resource.masters conditions on
+  // the shared MDMS search action) drop out of nav entirely — UI-level only,
+  // see docs/design/masters-configurator-access-policy-design.md §3.3.
+  const visibleNavGroups = useMemo(
+    () =>
+      navGroups
+        .map((group) => ({ ...group, items: group.items.filter((item) => canViewResource(item.id)) }))
+        .filter((group) => group.items.length > 0),
+    [canViewResource],
+  );
+  const visibleAdvancedResources = useMemo(
+    () => advancedResources.filter((r) => canViewResource(r.id)),
+    [canViewResource],
+  );
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
     // Auto-expand groups that contain the active route, collapse others
@@ -211,7 +229,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           </div>
 
           {/* Grouped navigation */}
-          {navGroups.map((group) => {
+          {visibleNavGroups.map((group) => {
             const isCollapsed = collapsedGroups[group.labelKey];
             return (
               <div key={group.labelKey} className="mt-3">
@@ -297,7 +315,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
 
             {!sidebarCollapsed && advancedExpanded && (
               <div className="mt-1 space-y-0.5 ml-2">
-                {advancedResources.map((item) => {
+                {visibleAdvancedResources.map((item) => {
                   const isActive = location.pathname.startsWith(item.path);
                   return (
                     <button

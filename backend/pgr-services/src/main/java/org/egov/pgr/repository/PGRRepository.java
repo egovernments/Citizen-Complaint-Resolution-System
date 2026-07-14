@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.repository.rowmapper.DocumentRowMapper;
 import org.egov.pgr.repository.rowmapper.PGRQueryBuilder;
 import org.egov.pgr.repository.rowmapper.PGRRowMapper;
@@ -73,7 +74,19 @@ public class PGRRepository {
      * @return
      */
     public List<ServiceWrapper> getServiceWrappers(RequestSearchCriteria criteria){
-        List<Service> services = getServices(criteria);
+        return getServiceWrappers(criteria, null);
+    }
+
+    /**
+     * searches services based on search criteria, restricted to the given (server-derived, never
+     * client-controlled) RBAC scope. A null scope applies no additional restriction (used by
+     * plainSearch, which is intentionally cross-tenant/unrestricted).
+     * @param criteria
+     * @param scope
+     * @return
+     */
+    public List<ServiceWrapper> getServiceWrappers(RequestSearchCriteria criteria, AnalyticsScope scope){
+        List<Service> services = getServices(criteria, scope);
         List<String> serviceRequestids = services.stream().map(Service::getServiceRequestId).collect(Collectors.toList());
         Map<String, Workflow> idToWorkflowMap = new HashMap<>();
         List<ServiceWrapper> serviceWrappers = new ArrayList<>();
@@ -91,10 +104,20 @@ public class PGRRepository {
      * @return
      */
     public List<Service> getServices(RequestSearchCriteria criteria) {
+        return getServices(criteria, null);
+    }
+
+    /**
+     * searches services based on search criteria, restricted to the given RBAC scope (null = no restriction).
+     * @param criteria
+     * @param scope
+     * @return
+     */
+    public List<Service> getServices(RequestSearchCriteria criteria, AnalyticsScope scope) {
 
         String tenantId = criteria.getTenantId();
         List<Object> preparedStmtList = new ArrayList<>();
-        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, slaMapFor(criteria));
+        String query = queryBuilder.getPGRSearchQuery(criteria, preparedStmtList, slaMapFor(criteria), scope);
         try {
             query = utils.replaceSchemaPlaceholder(query, tenantId);
         } catch (Exception e) {
@@ -135,10 +158,20 @@ public class PGRRepository {
      * @return
      */
     public Integer getCount(RequestSearchCriteria criteria) {
+        return getCount(criteria, null);
+    }
+
+    /**
+     * Returns the count based on the search criteria, restricted to the given RBAC scope (null = no restriction).
+     * @param criteria
+     * @param scope
+     * @return
+     */
+    public Integer getCount(RequestSearchCriteria criteria, AnalyticsScope scope) {
 
         String tenantId = criteria.getTenantId();
         List<Object> preparedStmtList = new ArrayList<>();
-        String query = queryBuilder.getCountQuery(criteria, preparedStmtList, slaMapFor(criteria));
+        String query = queryBuilder.getCountQuery(criteria, preparedStmtList, slaMapFor(criteria), scope);
         try {
             query = utils.replaceSchemaPlaceholder(query, tenantId);
         } catch (Exception e) {

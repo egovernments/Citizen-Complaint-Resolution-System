@@ -1,5 +1,6 @@
 package org.egov.pgr.repository.rowmapper;
 
+import org.egov.pgr.analytics.AnalyticsScope;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.egov.tracer.model.CustomException;
@@ -48,10 +49,20 @@ public class PGRQueryBuilder {
 
 
     public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList) {
-        return getPGRSearchQuery(criteria, preparedStmtList, null);
+        return getPGRSearchQuery(criteria, preparedStmtList, null, null);
     }
 
     public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla) {
+        return getPGRSearchQuery(criteria, preparedStmtList, serviceCodeToSla, null);
+    }
+
+    /**
+     * @param scope server-derived RBAC restriction (citizen-self / employee-department), or null
+     *              for no additional restriction (e.g. plainSearch, which stays unrestricted).
+     *              NEVER sourced from client-controlled request fields — see
+     *              {@link org.egov.pgr.policy.SearchAccessPolicyService}.
+     */
+    public String getPGRSearchQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, AnalyticsScope scope) {
 
         StringBuilder builder = new StringBuilder(QUERY);
 
@@ -165,6 +176,8 @@ public class PGRQueryBuilder {
         }
 
 
+        applyScope(scope, builder, preparedStmtList);
+
         addOrderByClause(builder, criteria, preparedStmtList, serviceCodeToSla);
 
         addLimitAndOffset(builder, criteria, preparedStmtList);
@@ -172,13 +185,47 @@ public class PGRQueryBuilder {
         return builder.toString();
     }
 
+    /**
+     * Injects the RBAC scope's WHERE predicates. Mirrors the same axes/pattern as
+     * {@code AnalyticsPlanner.applyScope} in the analytics module (citizen self-scope, employee
+     * department-scope), plus PGR search's own jurisdiction axis (exact-match on the complaint's
+     * address locality — see {@code AnalyticsScope#jurisdictionCodes}, distinct from the analytics
+     * module's own hierarchical {@code boundaryPrefix}, which stays unwired here).
+     */
+    private void applyScope(AnalyticsScope scope, StringBuilder builder, List<Object> preparedStmtList) {
+        if (scope == null)
+            return;
+
+        if (scope.citizenUuid != null) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ser.accountId = ? ");
+            preparedStmtList.add(scope.citizenUuid);
+        }
+
+        if (!CollectionUtils.isEmpty(scope.departmentCodes)) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ser.additionaldetails->>'department' IN (").append(createQuery(scope.departmentCodes)).append(")");
+            addToPreparedStatement(preparedStmtList, scope.departmentCodes);
+        }
+
+        if (!CollectionUtils.isEmpty(scope.jurisdictionCodes)) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ads.locality IN (").append(createQuery(scope.jurisdictionCodes)).append(")");
+            addToPreparedStatement(preparedStmtList, scope.jurisdictionCodes);
+        }
+    }
+
 
     public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList){
-        return getCountQuery(criteria, preparedStmtList, null);
+        return getCountQuery(criteria, preparedStmtList, null, null);
     }
 
     public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla){
-        String query = getPGRSearchQuery(criteria, preparedStmtList, serviceCodeToSla);
+        return getCountQuery(criteria, preparedStmtList, serviceCodeToSla, null);
+    }
+
+    public String getCountQuery(RequestSearchCriteria criteria, List<Object> preparedStmtList, Map<String, Long> serviceCodeToSla, AnalyticsScope scope){
+        String query = getPGRSearchQuery(criteria, preparedStmtList, serviceCodeToSla, scope);
         String countQuery = COUNT_WRAPPER.replace("{INTERNAL_QUERY}", query);
         return countQuery;
     }
