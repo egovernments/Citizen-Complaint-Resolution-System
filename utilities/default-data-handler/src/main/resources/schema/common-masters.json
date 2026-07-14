@@ -22,9 +22,7 @@
           "type": "boolean"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -52,9 +50,7 @@
           "type": "string"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -115,9 +111,7 @@
           }
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -150,9 +144,7 @@
           "default": true
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -194,9 +186,7 @@
           "type": "string"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -232,9 +222,7 @@
           "type": "string"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -686,6 +674,10 @@
         "default": {
           "type": "boolean",
           "default": false
+        },
+        "emailRegex": {
+          "type": "string",
+          "description": "Optional email validation pattern; frontends fall back to a built-in strict pattern when absent."
         }
       },
       "x-ref-schema": [],

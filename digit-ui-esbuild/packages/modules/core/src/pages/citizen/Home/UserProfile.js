@@ -33,7 +33,9 @@ import ImageComponent from "../../../components/ImageComponent";
 
 const DEFAULT_TENANT = Digit?.ULBService?.getStateId?.();
 // CCSD-1989: strict email shape (blank ok) so "a@b." fails client-side with a
-// localized error instead of the unlocalized backend save failure.
+// localized error instead of the unlocalized backend save failure. FALLBACK
+// only — the live pattern comes from common-masters.MobileNumberValidation
+// (emailRegex) via validationConfig, same channel as the mobile pattern.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Derive the maximum digit count from a mobile regex pattern string.
@@ -312,7 +314,9 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         if (!record) return null;
         const maxLen = mobileRegexMaxLength(record.mobileNumberRegex) || 15;
         return {
-          UserProfileValidationConfig: [{ mobileNumber: record.mobileNumberRegex }],
+          // email is optional in the master — undefined entries are dropped
+          // below so the built-in EMAIL_RE fallback stays in effect.
+          UserProfileValidationConfig: [{ mobileNumber: record.mobileNumberRegex, email: record.emailRegex }],
           prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
           maxLength: maxLen,
         };
@@ -473,7 +477,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     if (userInfo?.userName !== value) {
       setEmail(value);
 
-      if (value.length && !EMAIL_RE.test(value.trim())) {
+      if (value.length && !(validationConfig?.email || EMAIL_RE).test(value.trim())) {
         setErrors({
           ...errors,
           emailAddress: {
@@ -600,7 +604,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         });
       }
 
-      if (email.length && !EMAIL_RE.test(email.trim())) {
+      if (email.length && !(validationConfig?.email || EMAIL_RE).test(email.trim())) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_EMAIL_INVALID"),
