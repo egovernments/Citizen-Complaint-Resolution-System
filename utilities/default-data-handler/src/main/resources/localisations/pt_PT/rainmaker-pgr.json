@@ -24,6 +24,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_OPTIONAL_SUFFIX",
+        "message": "(Opcional)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_INBOX",
         "message": "Caixa de Reclamações",
         "module": "rainmaker-pgr",
