@@ -195,28 +195,73 @@ pull-based (its views are dynamic/derived, so precomputed per-user counters aren
 - **Step 2 (real):** durable server-side `(user, tab) → lastSeenAt` store + an `arrivalTime`
   (state-entry) predicate on the search criteria. Additive to the resolver — no notification service.
 
-## 6. Configuration (MDMS) — versions are config-flippable
+## 6. Configuration (MDMS) — feature-flagged, versions are config-flippable
 
-`RAINMAKER-PGR.InboxVisibilityConfig` (state-level), read by `VisibilityService`:
+`RAINMAKER-PGR.InboxVisibilityConfig` (state-level; schema seeded via DDH
+`schema/RAINMAKER-PGR.json`), read by the FE (Step 1) and by `VisibilityService` (Step 2):
 ```json
 {
+  "code": "INBOX_VISIBILITY",
+  "enabled": true,
   "version": "v1",
   "reporteeDepth": 1,
-  "jurisdictionScoped": true,
-  "tabs": [
-    { "key": "MY",  "label": "PGR_INBOX_TAB_MY",  "badge": "unopened" },
-    { "key": "ALL", "label": "PGR_INBOX_TAB_ALL", "badge": "newSinceLastOpen" }
-  ]
+  "jurisdictionScoped": true
 }
 ```
 Moving a tenant V1→V2→V3 is a `version` bump + the matching backend capability being deployed —
 no frontend fork (consistent with MDMS-over-code / holistic fixes).
 
+### 6.1 Feature flag — off = the legacy inbox, everywhere
+
+One flag, `InboxVisibilityConfig.enabled`, gates the whole feature per tenant. **Default is OFF:
+an absent record, a fetch error, or `enabled: false` all behave identically** — the inbox renders
+and queries exactly as it did before Visibility V1. Rollout and rollback are pure MDMS flips
+(no redeploy on either side).
+
+**FE (`useInboxVisibility`, shipped with Step 1):**
+| | flag ON | flag OFF / absent |
+|---|---|---|
+| Tabs | My/All strip above the complaint list, cursor badges | not rendered |
+| Filter card | no radio; status filter intersects the My queue | legacy `assignedToMe` radio restored (`PGRSearchInboxConfig(visibilityEnabled)`); explicit filter behaves as before |
+| Default search | tab state-set (`statesFor(roles)` / all actionable) | legacy `OPEN_STATES` |
+| Network | workflow BusinessService + 2× `_count` badge queries | none of these fire (react-query `enabled` gates) |
+| Cursor | localStorage high-water mark per (user, tenant, tab) | not read or written |
+
+`PGRInboxConfig.preProcess` keeps BOTH paths: the tab branch runs only when
+`additionalDetails.activeTab` is supplied (flag on), the legacy `assignedToMe → params.assignee`
+branch only when the radio exists in the form (flag off). Nothing is deleted, so the flag can
+flip either way at runtime.
+
+**BE (Step 2) — two layers, mirroring the escalation-engine precedent
+(`PGR_ESCALATION_ENABLED` env + `EscalationConfig` MDMS):**
+1. `PGR_VISIBILITY_ENABLED` env on pgr-services — deploy-level kill switch, default `false`.
+   Gates the `/inbox/_search` + `/inbox/_count` endpoints (off → `FEATURE_DISABLED` error, which
+   the FE never triggers because its own flag is off), the HRMS-topic projection consumer, and
+   the nightly projection rebuild. Surfaced in the deploy env blocks like the escalation flag.
+2. Per-tenant `InboxVisibilityConfig.enabled` — read by `VisibilityService.resolve` before any
+   resolution work; off → same `FEATURE_DISABLED` error. The env switch protects the service,
+   the MDMS flag scopes the rollout tenant-by-tenant.
+
+Because the FE decides which endpoints to call from the SAME MDMS record the BE validates
+against, flag-off tenants never touch the new code path end-to-end: old `_search`, old filters,
+old UI. The `eg_pgr_hrms_projection` table may retain rows when flipped off — harmless, it is
+only read by the resolver.
+
+**Flip latency (verified on bomet):** `MdmsService.getDataByCriteria` persists MDMS responses in
+localStorage (`PersistantStorage`, TTL from `DIGIT-UI.ApiCachingSettings.cacheTimeInSecs`), so an
+already-active browser session keeps its cached flag value until the TTL lapses or the user gets a
+fresh session. A flip is therefore eventually-consistent per browser, not instantaneous — fine for
+rollout/rollback, but don't expect a mid-session switch.
+
+**Rollout:** merge dark (no record anywhere → legacy inbox), seed `enabled: true` on pilot
+tenants (bomet `ke` first — done, schema + `INBOX_VISIBILITY` record live), widen per tenant, and
+only fold the flag away once V1 semantics are sign-off-stable across tenants.
+
 ## 7. Phasing
 
 | Phase | Backend | Frontend |
 |---|---|---|
-| **P1 (V1)** | `eg_pgr_hrms_projection` + HRMS-topic consumer + nightly rebuild; `VisibilityService` resolver (subtree via recursive CTE), `/inbox/_search`+`_count`, `statesFor(roles)` from BusinessService at search time, jurisdiction→locality expansion, `InboxVisibilityConfig` master | `Tab` atom, point hook at `/inbox/*`, remove radio, counts + red dot, filter-reset-on-switch |
+| **P1 (V1)** | `PGR_VISIBILITY_ENABLED` env kill switch (§6.1); `eg_pgr_hrms_projection` + HRMS-topic consumer + nightly rebuild; `VisibilityService` resolver (subtree via recursive CTE), `/inbox/_search`+`_count`, `statesFor(roles)` from BusinessService at search time, jurisdiction→locality expansion, `InboxVisibilityConfig` master | tab strip via `resultsHeader` slot, `useInboxVisibility` flag (off = legacy inbox, §6.1), point hook at `/inbox/*`, radio removed behind flag, cursor badges + red dot, filter-reset-on-switch |
 | **P2 (V2)** | denormalize `assignee` col + persister + migration + criteria/QueryBuilder/validator | resolver v2 params flow through unchanged (BE-owned) |
 | **P3 (V3)** | persist `escalated_from` in `EscalationService` + criteria | unchanged |
 | **Follow-up** | add `reportingTo` filter to egov-hrms `_search` (turns the reportee sweep into one query/level) | — |

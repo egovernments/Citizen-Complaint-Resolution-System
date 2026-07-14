@@ -6,6 +6,7 @@ import PGRSearchInboxConfig from "../../configs/PGRSearchInboxConfig";
 import { useLocation } from "react-router-dom";
 import useBusinessServiceStates from "../../hooks/pgr/useBusinessServiceStates";
 import useTabCounts from "../../hooks/pgr/useTabCounts";
+import useInboxVisibility from "../../hooks/pgr/useInboxVisibility";
 import PGRInboxTabs from "../../components/PGRInboxTabs";
 
 /**
@@ -49,12 +50,20 @@ const PGRSearchInbox = () => {
   // FE-composed, unoptimised visibility: derive each role's queue-states from the
   // workflow BusinessService and drive the pgr search per active tab. The real
   // server-side resolver is CCRS/VISIBILITY-DESIGN.md §4.
+  //
+  // Feature-flagged: RAINMAKER-PGR.InboxVisibilityConfig.enabled (state-level
+  // MDMS). Flag OFF (or master absent) renders the LEGACY inbox — no tabs,
+  // assigned-to-me radio restored, OPEN_STATES default — and skips the
+  // workflow/_count requests entirely.
+  const { enabled: visibilityEnabled, isLoading: visLoading } = useInboxVisibility();
   const [activeTab, setActiveTab] = useState("MY");
   const myRoleCodes = useMemo(
     () => (Digit.UserService.getUser()?.info?.roles || []).map((r) => r?.code).filter(Boolean),
     []
   );
-  const { statesForRoles, allActionableStates, isLoading: bsLoading } = useBusinessServiceStates(tenantId);
+  const { statesForRoles, allActionableStates, isLoading: bsLoading } = useBusinessServiceStates(tenantId, {
+    enabled: visibilityEnabled,
+  });
   // My = states my role(s) act on; fall back to all open states if role codes
   // don't match any workflow action (config drift) so "My" is never empty.
   const myStates = useMemo(() => {
@@ -68,14 +77,14 @@ const PGRSearchInbox = () => {
   }, [statesForRoles, myRoleCodes, allActionableStates, bsLoading]);
   const allStates = allActionableStates;
 
-  const { counts, markSeen } = useTabCounts({ tenantId, myStates, allStates });
+  const { counts, markSeen } = useTabCounts({ tenantId, myStates, allStates, enabled: visibilityEnabled });
 
   // A tab is "seen" once it's the visible tab -> its badge clears, and the other
   // tab's badge keeps surfacing newly-arrived complaints.
   useEffect(() => {
-    if (!bsLoading) markSeen(activeTab);
+    if (visibilityEnabled && !bsLoading) markSeen(activeTab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, bsLoading]);
+  }, [activeTab, bsLoading, visibilityEnabled]);
 
   // Fetch mobile validation config from MDMS
   const { validationRules, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
@@ -94,8 +103,10 @@ const PGRSearchInbox = () => {
     }
   );
 
-  // Fallback to static config if MDMS is not available
-  let configs = mdmsData || PGRSearchInboxConfig();
+  // Fallback to static config if MDMS is not available. The static config
+  // shape depends on the visibility flag: legacy mode restores the
+  // assigned-to-me radio the tabs replaced.
+  let configs = mdmsData || PGRSearchInboxConfig(visibilityEnabled);
 
   // Inject mobile validation rules from MDMS into the search config
   if (configs && validationRules && configs.sections?.search?.uiConfig?.fields) {
@@ -173,16 +184,19 @@ const PGRSearchInbox = () => {
   }, [updatedConfig, activeTab, myStates, allStates]);
 
   /**
-   * Reset or refresh config when the route changes
+   * Reset or refresh config when the route changes — and when the visibility
+   * flag resolves, since the static config's shape (assigned-to-me radio vs
+   * tabs) depends on it.
    */
   useEffect(() => {
-    setPageConfig(_.cloneDeep(configs));
-  }, [location]);
+    if (!visLoading) setPageConfig(_.cloneDeep(configs));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location, visLoading, visibilityEnabled]);
 
   /**
    * Show loader until necessary data is available
    */
-  if (isLoading || isValidationLoading || !pageConfig || serviceDefs?.length === 0) {
+  if (isLoading || isValidationLoading || visLoading || !pageConfig || serviceDefs?.length === 0) {
     return <Loader />;
   }
 
@@ -219,13 +233,18 @@ const PGRSearchInbox = () => {
           composer on tab switch so search + filter forms reset (PRD). The
           My/All tab strip (Visibility V1) renders through the composer's
           resultsHeader slot so it sits directly above the complaint list —
-          not above the search/filter cards (PRD placement). */}
+          not above the search/filter cards (PRD placement).
+          Flag OFF => legacy inbox: plain composer, no tabs, no tab config. */}
       <div className="digit-inbox-search-wrapper">
-        <InboxSearchComposer
-          key={activeTab}
-          configs={tabConfig}
-          resultsHeader={<PGRInboxTabs activeTab={activeTab} onChange={setActiveTab} counts={counts} />}
-        />
+        {visibilityEnabled ? (
+          <InboxSearchComposer
+            key={activeTab}
+            configs={tabConfig}
+            resultsHeader={<PGRInboxTabs activeTab={activeTab} onChange={setActiveTab} counts={counts} />}
+          />
+        ) : (
+          <InboxSearchComposer configs={updatedConfig} />
+        )}
       </div>
     </div>
   );

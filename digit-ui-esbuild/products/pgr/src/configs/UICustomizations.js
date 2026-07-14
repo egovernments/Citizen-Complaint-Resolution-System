@@ -1668,6 +1668,16 @@ export const UICustomizations = {
         params.applicationStatus = OPEN_STATES;
       }
 
+      // Legacy assigned-to-me radio (only present in the filter form when the
+      // visibility-tabs feature flag is OFF — see PGRSearchInboxConfig).
+      const assignedFilter = filterForm.assignedToMe;
+      if (assignedFilter?.code === "ASSIGNED_TO_ME") {
+        const userInfo = Digit.UserService.getUser()?.info;
+        if (userInfo?.uuid) {
+          params.assignee = [userInfo.uuid];
+        }
+      }
+
       clonedData.params = params;
       return clonedData;
     },

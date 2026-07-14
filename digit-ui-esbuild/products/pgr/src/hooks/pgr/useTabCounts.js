@@ -41,7 +41,7 @@ const safeSet = (k, v) => {
   }
 };
 
-const useTabCounts = ({ tenantId, myStates, allStates }) => {
+const useTabCounts = ({ tenantId, myStates, allStates, enabled = true }) => {
   const uuid = Digit.UserService.getUser()?.info?.uuid || "anon";
   const keyFor = (tab) => `pgr.inbox.lastSeen.${tenantId}.${tab}.${uuid}`;
 
@@ -76,7 +76,7 @@ const useTabCounts = ({ tenantId, myStates, allStates }) => {
       const [my, all] = await Promise.all([countsFor(myStates, "MY"), countsFor(allStates, "ALL")]);
       return { my, all };
     },
-    { staleTime: 0, retry: false, refetchOnWindowFocus: false, enabled: !!tenantId, keepPreviousData: true }
+    { staleTime: 0, retry: false, refetchOnWindowFocus: false, enabled: !!tenantId && enabled, keepPreviousData: true }
   );
 
   const counts = { MY: data?.my?.newCount ?? 0, ALL: data?.all?.newCount ?? 0 };

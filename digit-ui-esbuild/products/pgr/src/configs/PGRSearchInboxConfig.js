@@ -9,7 +9,13 @@
 
 import Urls from "../utils/urls";
 
-const PGRSearchInboxConfig = () => {
+/**
+ * @param {boolean} visibilityEnabled — RAINMAKER-PGR.InboxVisibilityConfig
+ *   feature flag (Visibility V1 My/All tabs). When OFF the legacy
+ *   assigned-to-me / assigned-to-all radio is restored in the filter card,
+ *   since the tabs that replaced it are not rendered.
+ */
+const PGRSearchInboxConfig = (visibilityEnabled = true) => {
     const tenantId = Digit.ULBService.getCurrentTenantId();
     return {
         label: "CS_COMMON_INBOX",
@@ -180,12 +186,49 @@ const PGRSearchInboxConfig = () => {
                     minReqFields: 0,
                     defaultValues: {
                         locality: null,
+                        // Legacy radio default only exists when the visibility
+                        // tabs are OFF (the tabs replaced it).
+                        ...(visibilityEnabled
+                            ? {}
+                            : {
+                                  assignedToMe: {
+                                      "code": "ASSIGNED_TO_ALL",
+                                      "name": "ASSIGNED_TO_ALL"
+                                  },
+                              }),
                         status: null,
                         complaintType: null,
                         serviceCode:null,
 
                     },
                     fields: [
+                        // Legacy assigned-to-me / assigned-to-all radio,
+                        // restored only when the visibility tabs are OFF.
+                        ...(visibilityEnabled
+                            ? []
+                            : [
+                                  {
+                                      label: "",
+                                      type: "radio",
+                                      isMandatory: false,
+                                      disable: false,
+                                      populators: {
+                                          name: "assignedToMe",
+                                          options: [
+                                              { code: "ASSIGNED_TO_ME", name: "ASSIGNED_TO_ME" },
+                                              { code: "ASSIGNED_TO_ALL", name: "ASSIGNED_TO_ALL" },
+                                          ],
+                                          optionsKey: "name",
+                                          styles: {
+                                              "gap": "1rem",
+                                              "flexDirection": "column"
+                                          },
+                                          innerStyles: {
+                                              "display": "flex"
+                                          }
+                                      },
+                                  },
+                              ]),
                         {
 
                             label: "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",

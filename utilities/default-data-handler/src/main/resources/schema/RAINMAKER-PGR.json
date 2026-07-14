@@ -230,5 +230,54 @@
       "x-ref-schema": [],
       "additionalProperties": false
     }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.InboxVisibilityConfig",
+    "description": "Feature flag + config for the PGR inbox My/All visibility tabs (Visibility V1, PR #1052 / issue #1020). `enabled: false` (or no record) renders the legacy inbox — no tabs, assigned-to-me radio, open-states default — so per-tenant rollout/rollback is a pure MDMS flip with no frontend redeploy. `version` selects the predicate matrix (v1 role/state, v2 +assignee, v3 +escalation trail) once the server-side resolver (Step 2) lands; the frontend Step 1 only reads `enabled`.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "code",
+        "enabled"
+      ],
+      "x-unique": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "INBOX_VISIBILITY"
+          ],
+          "description": "Fixed discriminator so the master is a singleton per tenant."
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string",
+          "enum": [
+            "v1",
+            "v2",
+            "v3"
+          ],
+          "description": "Predicate matrix version (design doc §3). Ignored by FE Step 1."
+        },
+        "reporteeDepth": {
+          "type": "number",
+          "description": "Reportee subtree depth for the All tab (server-side resolver, Step 2). Default 1."
+        },
+        "jurisdictionScoped": {
+          "type": "boolean",
+          "description": "AND the jurisdiction axis onto every predicate (Step 2)."
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
   }
 ]

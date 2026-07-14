@@ -26,7 +26,7 @@ import Urls from "../../utils/urls";
 const codeOf = (s) => s?.applicationStatus || s?.state;
 const isActionable = (s) => !s?.isTerminateState && Array.isArray(s?.actions) && s.actions.length > 0;
 
-const useBusinessServiceStates = (tenantId) => {
+const useBusinessServiceStates = (tenantId, { enabled = true } = {}) => {
   const fetchStates = async () => {
     const wfBs = await Request({
       url: Urls.workflow.businessServiceSearch,
@@ -42,7 +42,7 @@ const useBusinessServiceStates = (tenantId) => {
   const { data: states = [], isLoading } = useQuery(
     ["pgrBusinessServiceStates", tenantId],
     fetchStates,
-    { staleTime: 5 * 60 * 1000, retry: false, refetchOnWindowFocus: false }
+    { staleTime: 5 * 60 * 1000, retry: false, refetchOnWindowFocus: false, enabled: !!tenantId && enabled }
   );
 
   // Every open/actionable state (any non-terminal state that has actions).
