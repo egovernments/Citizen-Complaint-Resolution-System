@@ -25,7 +25,6 @@ HOST="${1:?usage: seed-landing-config.sh <HOST> <STATE_TENANT> [USER] [PASS]}"
 TENANT="${2:?state tenant required (e.g. mz)}"
 ADMIN_USER="${3:-ADMIN}"
 ADMIN_PASS="${4:-eGov@123}"
-# Default REPO = the repo this script lives in (docs/migration/landing-config/../../..)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${REPO:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 RES="$REPO/utilities/default-data-handler/src/main/resources"
@@ -83,7 +82,11 @@ for s in schemas:
     if s["code"] in existing:
         print(f"  = schema {s['code']} already registered — skip")
         continue
-    body = {"RequestInfo": RI, "SchemaDefinition": {**s, "tenantId": TENANT}}
+    # ASCII-sanitize the description: older MDMS images have silently dropped
+    # schema-create messages carrying non-ASCII (seen on the pilot box).
+    safe = {**s, "tenantId": TENANT,
+            "description": s.get("description", "").encode("ascii", "ignore").decode()[:500]}
+    body = {"RequestInfo": RI, "SchemaDefinition": safe}
     st, res = post("/mdms-v2/schema/v1/_create", body)
     ok = st == 200 or st == 202
     print(f"  {'✓' if ok else '✗'} schema {s['code']} create → HTTP {st}"
