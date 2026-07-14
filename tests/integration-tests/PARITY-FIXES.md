@@ -94,12 +94,11 @@ Audit all SB3 services for the `SPRING_*` → `SPRING_DATA_*` rename.
 ---
 
 ## §1.6 · egov-user image divergence — mobile validation  ✅ Permanent *(needs product decision)*
-**Fix (committed diff):** `core-services/egov-user/values.yaml`
+**Fix (committed diff):** `core-services/egov-user/values.yaml` — image pin only (the OTP flags were reverted to base `"true"`; they belong in the §1.6b `enable_otp_services` toggle, not hard-set here):
 ```diff
 -  repository: "egov-user"                                     -  tag: master-d69ce29
 +  repository: "registry.preview.egov.theflywheel.in/egovio/egov-user"
 +  tag: "mobilevalidation-jdk8-4984479"    +  pullPolicy: "IfNotPresent"
--otp-validation: "true"                    +otp-validation: "false"
 ```
 **Root cause:** the stock image hardcodes the mobile-validation regex (Kenya/India). Maputo's MDMS rule (`common-masters.MobileNumberValidation`) is `+258` / numbers starting with `8`, so the stock image rejects every valid Maputo number → citizen register/create/provisioning fails on k8s. The `mobilevalidation-jdk8-4984479` build reads the per-tenant MDMS rule at runtime instead.
 **KEEP this pin (it's PARITY, not local-only):** Compose already pins the *exact same image* in `local-setup/docker-compose.egov-digit.yaml` (base). Reverting k8s to the stock tag would make k8s **diverge** from Compose — mobile validation would fail on k8s only. So both charts stay on this tag; a build-note is in `egov-user/values.yaml`.
