@@ -1576,9 +1576,9 @@ export const UICustomizations = {
       const searchForm = clonedData?.state?.searchForm || {};
       const filterForm = clonedData?.state?.filterForm || {};
 
-      // Visibility V1 tab context (passed from PGRInbox via additionalDetails).
-      const activeTab = additionalDetails?.activeTab || "MY";
-      const myStates = additionalDetails?.myStates || [];
+      // Visibility V1 tab context (passed from PGRInbox via additionalDetails;
+      // absent when the visibility feature flag is off -> legacy behaviour).
+      const activeTab = additionalDetails?.activeTab;
       const allStates = additionalDetails?.allStates || [];
 
       // Build clean params from form state
@@ -1643,29 +1643,25 @@ export const UICustomizations = {
       ];
       const rawStatuses = filterForm.status || {};
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
+      // Status scope: an explicit filter wins; otherwise both tabs default to
+      // every open/actionable state. The tabs differ on the ASSIGNEE axis, not
+      // the status axis (PO decision 2026-07-15).
       if (statuses.length > 0) {
-        if (activeTab === "MY" && myStates.length > 0) {
-          // "My" is a queue: an explicit status filter applies WITHIN it, so
-          // it can never surface another role's queue. An empty intersection
-          // is an honestly-empty result — send an impossible status rather
-          // than silently dropping the filter.
-          const scoped = statuses.filter((s) => myStates.includes(s));
-          params.applicationStatus = scoped.length ? scoped : ["PGR_VISIBILITY_NO_MATCHING_STATE"];
-        } else {
-          // "All" is the superset view: the explicit filter wins outright,
-          // keeping terminal states (Resolved / Rejected / Closed…) reachable
-          // from the filter card exactly as before the tabs existed.
-          params.applicationStatus = statuses;
-        }
-      } else if (activeTab === "MY" && myStates.length > 0) {
-        // My = complaints in the queue-states my role(s) act on.
-        params.applicationStatus = myStates;
-      } else if (activeTab === "ALL" && allStates.length > 0) {
-        // All = every open/actionable state (V1 supervisor reportee-scoping is
-        // resolved server-side in the optimised backend — see design §4).
-        params.applicationStatus = allStates;
+        params.applicationStatus = statuses;
       } else {
-        params.applicationStatus = OPEN_STATES;
+        params.applicationStatus = allStates.length > 0 ? allStates : OPEN_STATES;
+      }
+
+      // My = complaints whose workflow assignee is me. The tabs replaced the
+      // assigned-to-me radio, so "My" keeps the radio's person semantics
+      // (this is the design matrix's V2 "My", pulled forward — see design §3).
+      // All = every open complaint; a GRO's unassigned assignment queue
+      // therefore lives in All, not My (accepted tradeoff).
+      if (activeTab === "MY") {
+        const userInfo = Digit.UserService.getUser()?.info;
+        if (userInfo?.uuid) {
+          params.assignee = [userInfo.uuid];
+        }
       }
 
       // Legacy assigned-to-me radio (only present in the filter form when the

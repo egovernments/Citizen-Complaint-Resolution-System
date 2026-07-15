@@ -7,7 +7,8 @@ import Urls from "../../utils/urls";
  * useTabCounts — tab badge counts (Visibility V1).
  *
  * PRD: the (##) on each tab is the ALERT count, not the total —
- *  - MY : complaints new in my queue since I last opened the tab
+ *  - MY : complaints newly ASSIGNED-TO-ME-scoped since I last opened the tab
+ *         (assignee = me, the same axis the My tab's list uses)
  *  - ALL: complaints newly added since the tab was last opened
  * realised as a high-water-mark cursor per (user, tenant, tab)
  * (VISIBILITY-DESIGN.md §5.5): badge = pgr `_count` over the tab's state
@@ -41,7 +42,7 @@ const safeSet = (k, v) => {
   }
 };
 
-const useTabCounts = ({ tenantId, myStates, allStates, enabled = true }) => {
+const useTabCounts = ({ tenantId, allStates, enabled = true }) => {
   const uuid = Digit.UserService.getUser()?.info?.uuid || "anon";
   const keyFor = (tab) => `pgr.inbox.lastSeen.${tenantId}.${tab}.${uuid}`;
 
@@ -61,19 +62,21 @@ const useTabCounts = ({ tenantId, myStates, allStates, enabled = true }) => {
     }
   };
 
-  const countsFor = async (statuses, tab) => {
-    if (!statuses?.length) return { newCount: 0 };
+  const countsFor = async (tab) => {
+    if (!allStates?.length) return { newCount: 0 };
     const since = seen[tab];
-    const newCount = await rawCount(
-      since ? { tenantId, applicationStatus: statuses, fromDate: since } : { tenantId, applicationStatus: statuses }
-    );
-    return { newCount };
+    const params = { tenantId, applicationStatus: allStates };
+    // MY is the assignee axis; requires the count-parity fix in
+    // pgr-services PGRService.count() (same assignee resolution as search).
+    if (tab === "MY") params.assignee = [uuid];
+    if (since) params.fromDate = since;
+    return { newCount: await rawCount(params) };
   };
 
   const { data, refetch } = useQuery(
-    ["pgrTabCounts", tenantId, JSON.stringify(myStates), JSON.stringify(allStates), uuid, seen.MY, seen.ALL],
+    ["pgrTabCounts", tenantId, JSON.stringify(allStates), uuid, seen.MY, seen.ALL],
     async () => {
-      const [my, all] = await Promise.all([countsFor(myStates, "MY"), countsFor(allStates, "ALL")]);
+      const [my, all] = await Promise.all([countsFor("MY"), countsFor("ALL")]);
       return { my, all };
     },
     { staleTime: 0, retry: false, refetchOnWindowFocus: false, enabled: !!tenantId && enabled, keepPreviousData: true }

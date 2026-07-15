@@ -56,11 +56,21 @@ Notation:
 - `hasReportees` — user has ≥1 direct reportee.
 - **Every predicate below is additionally `AND locality ∈ myLocalities`** (the jurisdiction axis).
 
-### V1 — queue axis = role/state only
+### V1 — My is the assignee axis (PO decision 2026-07-15)
 | | My Complaints | All Complaints |
 |---|---|---|
-| no reportees | `status ∈ statesFor(myRoles)` | `status ∈ statesFor(myRoles)` |
-| has reportees | `status ∈ statesFor(myRoles)` | `status ∈ statesFor(reporteeRoles(N))` |
+| all users | `assignee = me ∧ status ∈ openStates` | `status ∈ openStates` |
+
+> **Revision note:** V1 originally scoped My by role/state (`status ∈ statesFor(myRoles)`), but a
+> bomet demo showed complaints with three different owners under "My" — broad roles (GRO) act on
+> nearly every open state, so My≈All and users read "My Complaints" as *assigned to me* (the PRD
+> says the tabs **replace the assigned-to-me radio**, which carried person semantics). V1's My is
+> therefore the design matrix's V2 "My" pulled forward, using the existing pgr `assignee` filter.
+> Accepted tradeoff: a GRO's unassigned assignment queue lives in All, not My, until the V2 union
+> (`assignee = me ∨ assignee = ∅` per owned state) lands server-side. `statesFor(roles)` remains
+> a Step-2 resolver concern (with the state→ownerRole refinement, §8.4).
+> Requires the `_count` assignee-parity fix in `PGRService.count()` (same workflow resolution as
+> `search()`), shipped alongside — without it the My badge silently counted ALL open complaints.
 
 ### V2 — queue axis adds assignee
 | | My Complaints | All Complaints |
@@ -222,8 +232,8 @@ and queries exactly as it did before Visibility V1. Rollout and rollback are pur
 | | flag ON | flag OFF / absent |
 |---|---|---|
 | Tabs | My/All strip above the complaint list, cursor badges | not rendered |
-| Filter card | no radio; status filter intersects the My queue | legacy `assignedToMe` radio restored (`PGRSearchInboxConfig(visibilityEnabled)`); explicit filter behaves as before |
-| Default search | tab state-set (`statesFor(roles)` / all actionable) | legacy `OPEN_STATES` |
+| Filter card | no radio; status filter composes with the tab's assignee axis | legacy `assignedToMe` radio restored (`PGRSearchInboxConfig(visibilityEnabled)`); explicit filter behaves as before |
+| Default search | open states from the BusinessService; My additionally `assignee = me` | legacy `OPEN_STATES` |
 | Network | workflow BusinessService + 2× `_count` badge queries | none of these fire (react-query `enabled` gates) |
 | Cursor | localStorage high-water mark per (user, tenant, tab) | not read or written |
 

@@ -47,8 +47,9 @@ const PGRSearchInbox = () => {
   const location = useLocation();
 
   // ---- Visibility V1 (My / All tabs) ----------------------------------------
-  // FE-composed, unoptimised visibility: derive each role's queue-states from the
-  // workflow BusinessService and drive the pgr search per active tab. The real
+  // FE-composed, unoptimised visibility: My = complaints assigned to me (the
+  // existing pgr `assignee` filter), All = every open complaint (open states
+  // from the workflow BusinessService). The reportee/jurisdiction-aware
   // server-side resolver is CCRS/VISIBILITY-DESIGN.md §4.
   //
   // Feature-flagged: RAINMAKER-PGR.InboxVisibilityConfig.enabled (state-level
@@ -57,27 +58,14 @@ const PGRSearchInbox = () => {
   // workflow/_count requests entirely.
   const { enabled: visibilityEnabled, isLoading: visLoading } = useInboxVisibility();
   const [activeTab, setActiveTab] = useState("MY");
-  const myRoleCodes = useMemo(
-    () => (Digit.UserService.getUser()?.info?.roles || []).map((r) => r?.code).filter(Boolean),
-    []
-  );
-  const { statesForRoles, allActionableStates, isLoading: bsLoading } = useBusinessServiceStates(tenantId, {
+  // Both tabs share the same status scope (all open/actionable states); they
+  // differ on the assignee axis — My = assigned to me, All = everyone's
+  // (PO decision 2026-07-15; the tabs replaced the assigned-to-me radio).
+  const { allActionableStates: allStates, isLoading: bsLoading } = useBusinessServiceStates(tenantId, {
     enabled: visibilityEnabled,
   });
-  // My = states my role(s) act on; fall back to all open states if role codes
-  // don't match any workflow action (config drift) so "My" is never empty.
-  const myStates = useMemo(() => {
-    const s = statesForRoles(myRoleCodes);
-    if (!s.length && !bsLoading && allActionableStates.length) {
-      // Config drift, not a feature: none of this user's roles appear on any
-      // workflow action, which collapses My into All. Fix the workflow config.
-      console.warn("[PGR visibility] no queue states for roles", myRoleCodes, "— My falls back to all actionable states");
-    }
-    return s.length ? s : allActionableStates;
-  }, [statesForRoles, myRoleCodes, allActionableStates, bsLoading]);
-  const allStates = allActionableStates;
 
-  const { counts, markSeen } = useTabCounts({ tenantId, myStates, allStates, enabled: visibilityEnabled });
+  const { counts, markSeen } = useTabCounts({ tenantId, allStates, enabled: visibilityEnabled });
 
   // A tab is "seen" once it's the visible tab -> its badge clears, and the other
   // tab's badge keeps surfacing newly-arrived complaints.
@@ -177,11 +165,10 @@ const PGRSearchInbox = () => {
     c.additionalDetails = {
       ...(c.additionalDetails || {}),
       activeTab,
-      myStates,
       allStates,
     };
     return c;
-  }, [updatedConfig, activeTab, myStates, allStates]);
+  }, [updatedConfig, activeTab, allStates]);
 
   /**
    * Reset or refresh config when the route changes — and when the visibility
