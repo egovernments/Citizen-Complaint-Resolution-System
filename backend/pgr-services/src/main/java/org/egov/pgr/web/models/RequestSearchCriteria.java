@@ -85,6 +85,7 @@ public class RequestSearchCriteria {
         applicationStatus,
         serviceRequestId,
         createdTime,
+        lastModifiedTime,
         sla
     }
 
@@ -99,10 +100,20 @@ public class RequestSearchCriteria {
     @JsonIgnore
     private Set<String> serviceRequestIds;
 
-    // Server-resolved only (see EmployeeDepartmentScopeService) — never bound from the request
-    // body. Restricts results to the searching employee's own HRMS department code(s).
+    // Server-resolved only — never bound from the request body. Matches against the complaint's
+    // stored additionaldetails.department. Set by EmployeeDepartmentScopeService to restrict an
+    // employee's search to their own HRMS department code(s), or by AdminComplaintSearchService
+    // to filter the SUPERUSER admin search on an arbitrary chosen department (code or name).
     @JsonIgnore
     private Set<String> departmentCodes;
+
+    // Set only by AdminComplaintSearchService for the SUPERUSER cross-department admin search.
+    // Exempts that path entirely from PGRService#applyEmployeeDepartmentScope, which would
+    // otherwise overwrite the admin's explicitly chosen departmentCodes with the caller's own
+    // HRMS department whenever the caller also happens to hold a role in
+    // pgr.department.scope.roles — silently narrowing a "cross-department" search to one dept.
+    @JsonIgnore
+    private boolean skipEmployeeDepartmentScope;
 
     public boolean isEmpty(){
         return (this.tenantId==null && this.serviceCode==null && this.mobileNumber==null && this.serviceRequestId==null

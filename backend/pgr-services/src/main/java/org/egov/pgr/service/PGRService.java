@@ -283,8 +283,16 @@ public class PGRService {
      * employee role, and citizen/system callers (including plainSearch calls with no userInfo at
      * all), are untouched. Returns false when the caller must see nothing (search/count/plainSearch
      * should short-circuit).
+     *
+     * Skipped entirely when {@code criteria.isSkipEmployeeDepartmentScope()} — set by
+     * AdminComplaintSearchService for the SUPERUSER cross-department admin search, whose
+     * explicitly chosen departmentCodes must not be overwritten by the caller's own HRMS
+     * department just because they also happen to hold a scoped role.
      */
     private boolean applyEmployeeDepartmentScope(RequestInfo requestInfo, RequestSearchCriteria criteria) {
+        if (criteria.isSkipEmployeeDepartmentScope())
+            return true;
+
         if (requestInfo.getUserInfo() == null
                 || !USERTYPE_EMPLOYEE.equalsIgnoreCase(requestInfo.getUserInfo().getType()))
             return true;

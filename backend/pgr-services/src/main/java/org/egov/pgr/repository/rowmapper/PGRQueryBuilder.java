@@ -138,8 +138,9 @@ public class PGRQueryBuilder {
         }
 
         // Server-resolved department scope (see EmployeeDepartmentScopeService) — never bound
-        // from the request body. additionaldetails.department is populated with the raw MDMS
-        // department code (see PGRService#getDepartmentFromMDMS), matching HRMS's code directly.
+        // from the request body. additionaldetails.department holds either the raw MDMS
+        // department code or its resolved name (see PGRService#getDepartmentFromMDMS), so
+        // EmployeeDepartmentScopeService populates departmentCodes with both forms.
         Set<String> departmentCodes = criteria.getDepartmentCodes();
         if (!CollectionUtils.isEmpty(departmentCodes)) {
             addClauseIfRequired(preparedStmtList, builder);
@@ -209,6 +210,9 @@ public class PGRQueryBuilder {
 
         else if(criteria.getSortBy()== RequestSearchCriteria.SortBy.createdTime)
             builder.append(" ORDER BY ser.createdtime ");
+
+        else if(criteria.getSortBy()== RequestSearchCriteria.SortBy.lastModifiedTime)
+            builder.append(" ORDER BY ser.lastmodifiedtime ");
 
         // SLA-remaining ordering = (SLA budget for this complaint type) − (wall-clock
         // elapsed since creation). Done server-side so the order is consistent across

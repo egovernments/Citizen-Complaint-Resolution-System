@@ -39,6 +39,12 @@ public class PGRConstants {
 
     public static final String MDMS_DEPARTMENT_NAME_SEARCH = "$.MdmsRes.common-masters.Department[?(@.code=='{CODE}')].name";
 
+    // Full Department master rows (code + name), used to resolve HRMS department CODES to their
+    // MDMS NAME counterpart — see EmployeeDepartmentScopeService, which must match complaints
+    // stored under either form (PGRService#getDepartmentFromMDMS stores the name when resolvable,
+    // falling back to the code only on lookup failure).
+    public static final String MDMS_ALL_DEPARTMENTS_JSONPATH = "$.MdmsRes.common-masters.Department[*]";
+
     public static final String MDMS_SERVICENAME_SEARCH = "$.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy[?(@.code=='{SERVICEDEF}')].name";
 
     public static final String HRMS_DEPARTMENT_JSONPATH = "$.Employees.*.assignments.*.department";
