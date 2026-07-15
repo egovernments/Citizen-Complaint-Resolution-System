@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -62,11 +63,15 @@ class DispatchPipelineWhatsappNoProviderTest {
         config.setDefaultLocale("en_IN");
         // Default enabled set ships SMS,EMAIL — WHATSAPP is deliberately absent.
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
+        // @Value defaults only apply under Spring; set explicitly for this plain-POJO config.
+        config.setNovuWorkflowWhatsapp("complaints-whatsapp");
         mdmsServiceClient = mock(MdmsServiceClient.class);
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
         when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any()))
+                .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
+        when(novuClient.trigger(anyString(), anyString(), any(), any(), anyString(), any()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
@@ -108,18 +113,64 @@ class DispatchPipelineWhatsappNoProviderTest {
     }
 
     @Test
-    void whatsappEvent_gateEnabled_triggersNovuWhatsappWorkflow() {
+    void whatsappEvent_gateEnabled_noSenderConfigured_triggersNovuWithoutOverrides() {
         config.setChannelsEnabled(List.of("SMS", "EMAIL", "WHATSAPP"));
+        // No ProviderDetail configured for this tenant: getWhatsappSenderNumber() returns null.
+        when(mdmsServiceClient.getWhatsappSenderNumber(anyString())).thenReturn(null);
 
         DispatchResult result = service.process(whatsappEvent(), true, null);
 
         assertTrue(result.getNovuTriggered());
-        // The bridge asks NovuClient to deliver on the WHATSAPP channel; NovuClient owns
-        // resolving the complaints-whatsapp workflow id internally.
-        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
-        verify(novuClient).identifyThenTrigger(eq("ke.bomet:uuid-123"), any(), eq("WHATSAPP"),
-                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP"), any());
-        assertEquals("Dear Jane, your complaint PGR-001 is assigned.", body.getValue());
+        // WHATSAPP now goes through identify() + the pass-through trigger() overload
+        // (rather than identifyThenTrigger) because it needs the option to attach a
+        // per-tenant "from" override — with no senderNumber configured, overrides is null
+        // and Novu falls back to the integration's own credentials.from.
+        verify(novuClient).identify(eq("ke.bomet:uuid-123"), any());
+        ArgumentCaptor<Map> payload = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map> overrides = ArgumentCaptor.forClass(Map.class);
+        // formatRecipientPhone() also normalizes the recipient's "to" phone for WHATSAPP:
+        // it is already E.164, so it is only prefixed with "whatsapp:".
+        verify(novuClient).trigger(eq("complaints-whatsapp"), eq("ke.bomet:uuid-123"), eq("whatsapp:+254712345678"),
+                payload.capture(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP"),
+                overrides.capture());
+        assertEquals("Dear Jane, your complaint PGR-001 is assigned.", payload.getValue().get("body"));
+        assertEquals(null, overrides.getValue());
+        verify(novuClient, never()).identifyThenTrigger(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void whatsappEvent_gateEnabled_senderConfigured_triggersNovuWithFromOverride() {
+        config.setChannelsEnabled(List.of("SMS", "EMAIL", "WHATSAPP"));
+        // ProviderDetail in MDMS carries a raw (unprefixed) Twilio WhatsApp sender number.
+        when(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet")).thenReturn("+14155550123");
+
+        DispatchResult result = service.process(whatsappEvent(), true, null);
+
+        assertTrue(result.getNovuTriggered());
+        ArgumentCaptor<Map> overrides = ArgumentCaptor.forClass(Map.class);
+        // formatRecipientPhone() also normalizes the recipient's "to" phone for WHATSAPP:
+        // it is already E.164, so it is only prefixed with "whatsapp:".
+        verify(novuClient).trigger(eq("complaints-whatsapp"), eq("ke.bomet:uuid-123"), eq("whatsapp:+254712345678"),
+                any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP"), overrides.capture());
+
+        Map<String, Object> providers = (Map<String, Object>) overrides.getValue().get("providers");
+        Map<String, Object> twilio = (Map<String, Object>) providers.get("twilio");
+        // The bare MDMS number is prefixed with "whatsapp:" before being sent as the override.
+        assertEquals("whatsapp:+14155550123", twilio.get("from"));
+    }
+
+    @Test
+    void whatsappEvent_gateEnabled_senderAlreadyPrefixed_isNotDoublePrefixed() {
+        config.setChannelsEnabled(List.of("SMS", "EMAIL", "WHATSAPP"));
+        when(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet")).thenReturn("whatsapp:+14155550123");
+
+        service.process(whatsappEvent(), true, null);
+
+        ArgumentCaptor<Map> overrides = ArgumentCaptor.forClass(Map.class);
+        verify(novuClient).trigger(anyString(), anyString(), any(), any(), anyString(), overrides.capture());
+        Map<String, Object> providers = (Map<String, Object>) overrides.getValue().get("providers");
+        Map<String, Object> twilio = (Map<String, Object>) providers.get("twilio");
+        assertEquals("whatsapp:+14155550123", twilio.get("from"));
     }
 
     @Test

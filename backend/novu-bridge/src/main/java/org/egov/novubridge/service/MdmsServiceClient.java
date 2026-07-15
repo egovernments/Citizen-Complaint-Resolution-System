@@ -32,11 +32,17 @@ public class MdmsServiceClient {
     /** Schema that carries the mobile number validation config. */
     private static final String SCHEMA_CODE = "common-masters.MobileNumberValidation";
 
+    /** Schema that carries per-tenant provider delivery config (WhatsApp sender number etc.). */
+    private static final String PROVIDER_DETAIL_SCHEMA = "ProviderDetail";
+
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
 
     /** Cache: tenantId → country-code prefix (e.g. "+91") */
     private final Map<String, String> prefixCache = new ConcurrentHashMap<>();
+
+    /** Cache: tenantId → WhatsApp sender number from ProviderDetail MDMS */
+    private final Map<String, String> senderCache = new ConcurrentHashMap<>();
 
     public MdmsServiceClient(RestTemplate restTemplate, NovuBridgeConfiguration config) {
         this.restTemplate = restTemplate;
@@ -69,6 +75,63 @@ public class MdmsServiceClient {
         config.setMobileNumberRegex((String) data.get("mobileNumberRegex"));
 
         return config;
+    }
+
+    /**
+     * Returns the WhatsApp sender number for the given tenant from the
+     * {@code ProviderDetail} MDMS schema. Returns {@code null} if not configured;
+     * the pipeline then falls back to the Novu integration's own credentials.from.
+     */
+    @SuppressWarnings("unchecked")
+    public String getWhatsappSenderNumber(String tenantId) {
+        if (senderCache.containsKey(tenantId)) {
+            return senderCache.get(tenantId);
+        }
+        try {
+            String url = config.getMdmsHost() + config.getMdmsSearchPath();
+
+            Map<String, Object> mdmsCriteria = new HashMap<>();
+            mdmsCriteria.put("tenantId", tenantId);
+            mdmsCriteria.put("schemaCode", PROVIDER_DETAIL_SCHEMA);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("MdmsCriteria", mdmsCriteria);
+            body.put("RequestInfo", buildMinimalRequestInfo());
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.POST, new HttpEntity<>(body),
+                    (Class<Map<String, Object>>) (Class<?>) Map.class);
+
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                log.warn("MDMS returned non-2xx or empty body for ProviderDetail tenantId={}", tenantId);
+                return null;
+            }
+
+            List<Map<String, Object>> mdmsList =
+                    (List<Map<String, Object>>) response.getBody().get("mdms");
+            if (mdmsList == null || mdmsList.isEmpty()) {
+                log.warn("No ProviderDetail records in MDMS for tenantId={}", tenantId);
+                return null;
+            }
+
+            String senderNumber = mdmsList.stream()
+                    .map(r -> (Map<String, Object>) r.get("data"))
+                    .filter(d -> d != null
+                            && "whatsapp".equalsIgnoreCase((String) d.get("channel"))
+                            && Boolean.TRUE.equals(d.get("isActive")))
+                    .map(d -> (String) d.get("senderNumber"))
+                    .filter(s -> s != null && !s.isBlank())
+                    .findFirst().orElse(null);
+
+            if (senderNumber != null) {
+                senderCache.put(tenantId, senderNumber);
+            }
+            return senderNumber;
+        } catch (Exception e) {
+            log.warn("Failed to fetch WhatsApp senderNumber from MDMS for tenantId={}: {}",
+                    tenantId, e.getMessage());
+            return null;
+        }
     }
 
     // -------------------------------------------------------------------------
