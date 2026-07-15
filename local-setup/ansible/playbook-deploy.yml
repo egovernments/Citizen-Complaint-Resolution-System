@@ -554,6 +554,30 @@
         regexp: '^(\s+)DEFAULT_TENANT_ID: pg$'
         replace: '\1DEFAULT_TENANT_ID: {{ state_root }}'
 
+    # egov-user's OWN mobile-number-validation fallback (Spring env vars,
+    # baked into the image's application.properties as India's +91 /
+    # 10-digit regex). Distinct from the MDMS common-masters
+    # .MobileNumberValidation config that mcp-bootstrap seeds later from
+    # this same core_mobile_configs — that MDMS config only governs
+    # UI-driven, MDMS-aware validation. egov-user itself falls back to
+    # THIS env var whenever a request doesn't carry a country code (e.g.
+    # a direct /user/citizen/_create call that bypasses the UI), so
+    # without this rewrite every tenant silently validates against India's
+    # format regardless of its actual mobileNumberRegex/countryCode. No
+    # bootstrap-order dependency here (unlike STATE_LEVEL_TENANT_ID above),
+    # so this runs pre-boot alongside the other tenant-shaped literals.
+    - name: Set EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE (egov-user) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: "^(\\s+)EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '\\+91'$"
+        replace: "\\1EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '{{ core_mobile_configs.countryCode | default('+91') }}'"
+
+    - name: Set EGOV_MOBILE_VALIDATION_DEFAULT_REGEX (egov-user) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: "^(\\s+)EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '\\^\\[6-9\\]\\[0-9\\]\\{9\\}\\$'$"
+        replace: "\\1EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}'"
+
     # ==================== Publish digit-mcp image ====================
     # digit-mcp ships from the same registry as every other DIGIT image
     # ({{ docker_registry }}/digit-mcp:latest). Compose `pull` picks it
