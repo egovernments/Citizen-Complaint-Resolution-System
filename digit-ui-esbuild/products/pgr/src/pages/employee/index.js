@@ -28,6 +28,7 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
   const PGRCreateComplaint = Digit?.ComponentRegistryService?.getComponent("PGRCreateComplaint");
   const PGRComplaintDetails = Digit?.ComponentRegistryService?.getComponent("PGRComplaintDetails");
   const PGRSearchInbox = Digit?.ComponentRegistryService?.getComponent("PGRSearchInbox");
+  const PGRAdminSearch = Digit?.ComponentRegistryService?.getComponent("PGRAdminSearch");
   const PGRResponse = Digit?.ComponentRegistryService?.getComponent("PGRResponse");
   const BreadCrumbs = Digit?.ComponentRegistryService?.getComponent("PGRBreadCrumbs");
 
@@ -55,6 +56,11 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
                 internalLink: `/${window?.contextPath}/employee/pgr/inbox-v2`,
                 content: t("PGR_INBOX"),
                 show: location.pathname.includes("inbox"),
+              },
+              {
+                internalLink: `/${window?.contextPath}/employee/pgr/admin-search`,
+                content: t("ES_PGR_ADMIN_SEARCH"),
+                show: location.pathname.includes("admin-search"),
               },
               {
                 internalLink: `/${window?.contextPath}/employee/pgr/complaint-details`,
@@ -91,6 +97,12 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
         <PrivateRoute
           path={`${path}/inbox-v2`}
           component={() => <PGRSearchInbox />}
+        />
+
+        {/* SUPERUSER-only admin cross-department search (role re-checked inside the page) */}
+        <PrivateRoute
+          path={`${path}/admin-search`}
+          component={() => <PGRAdminSearch />}
         />
 
       </AppContainer>
