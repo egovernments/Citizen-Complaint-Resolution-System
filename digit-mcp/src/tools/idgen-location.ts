@@ -76,7 +76,7 @@ export function registerIdgenLocationTools(registry: ToolRegistry): void {
     category: 'location',
     risk: 'read',
     description:
-      'Search geographic boundaries using the legacy egov-location service. This service is NOT available in all environments. For boundary data, prefer "validate_boundary" (boundary-service) which is available everywhere.',
+      'Search geographic boundaries. Routes through boundary-service (boundary-relationships) and returns the boundary tree in the legacy TenantBoundary shape; available in all environments. For hierarchy validation, "validate_boundary" is also available.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -86,7 +86,8 @@ export function registerIdgenLocationTools(registry: ToolRegistry): void {
         },
         boundary_type: {
           type: 'string',
-          description: 'Boundary type filter (e.g. "City", "Ward", "Block")',
+          description:
+            'Ignored (kept for backward compatibility). The full boundary tree for the tenant is always returned — the underlying boundary-service search does not filter by boundary type.',
         },
         hierarchy_type: {
           type: 'string',
@@ -121,10 +122,10 @@ export function registerIdgenLocationTools(registry: ToolRegistry): void {
           success: false,
           error: msg,
           hint: isDnsError
-            ? 'The egov-location service is not deployed in this environment. ' +
-              'Use "validate_boundary" instead — it queries boundary-service which is available in all environments.'
-            : 'The egov-location service returned an error. ' +
-              'This is a legacy service. Use "validate_boundary" (boundary-service) as the preferred alternative.',
+            ? 'boundary-service could not be resolved in this environment. ' +
+              'Check that boundary-service is deployed and routed; "validate_boundary" uses the same service.'
+            : 'boundary-service returned an error. ' +
+              'Verify the tenantId and hierarchyType; "validate_boundary" queries the same service.',
           alternatives: [
             { tool: 'validate_boundary', purpose: 'Read boundary hierarchy from boundary-service (recommended, works in all environments)' },
             { tool: 'mdms_get_tenants', purpose: 'List available tenants to find correct tenant IDs' },

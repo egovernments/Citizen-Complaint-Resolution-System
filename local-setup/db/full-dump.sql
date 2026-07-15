@@ -1,33 +1,8 @@
 --
 -- PostgreSQL database dump
 --
--- ============================================================================
--- STALE COMPLAINT MASTERS — REGENERATE THIS DUMP FROM A MIGRATED TENANT
--- ----------------------------------------------------------------------------
--- This dump's eg_mdms_data table still seeds the RETIRED complaint masters:
---   * RAINMAKER-PGR.ServiceDefs   (legacy flat leaf rows, with "menuPath")
---   * (and any RAINMAKER-PGR.ClassificationNode / HierarchySchema /
---      ComplaintTypeDepartments rows, if present)
--- The complaint-type model is now the TWO-master adjacency hierarchy:
---   * RAINMAKER-PGR.ComplaintHierarchyDefinition  (ordered levels)
---   * RAINMAKER-PGR.ComplaintHierarchy            (interior nodes + leaf rows;
---       a leaf row's "code" IS the serviceCode; "menuPath" no longer exists —
---       grouping derives from parentCode/path)
---
--- DO NOT hand-edit the ServiceDefs/menuPath rows below — fixing them by hand is
--- error-prone and will drift from the schema. Instead REGENERATE this entire
--- dump by:
---   1. Standing up a stack on the current schema + backend.
---   2. Loading complaint masters via the dataloader (crs_loader.load_common_masters,
---      which now writes ComplaintHierarchyDefinition + ComplaintHierarchy), OR
---      running the configurator one-click migration on an existing tenant.
---   3. Re-running pg_dump to produce a fresh full-dump.sql.
--- Until regenerated, a stack restored from this dump will have NO complaint
--- types under the new model (the seeded ServiceDefs rows are ignored by the
--- cut-over backend).
--- ============================================================================
 
-\restrict XCN8W99QyqbCXmfs0qAeFgB8W0g9mhulyxVgFl6MmobAdASkh4xR96gpgnjnR3i
+\restrict khfTsZ1ktr0RAULBk6Bs28kBqKU4Bfrmf02yBc0FejfEp5oIZSwwvgwBY2kwXs5
 
 -- Dumped from database version 16.12 (Debian 16.12-1.pgdg13+1)
 -- Dumped by pg_dump version 16.12 (Debian 16.12-1.pgdg13+1)
@@ -48,7 +23,7 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- Name: accesscontrol_schema_version; Type: TABLE; Schema: public; Owner: -
+-- Name: accesscontrol_schema_version; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.accesscontrol_schema_version (
@@ -65,8 +40,10 @@ CREATE TABLE public.accesscontrol_schema_version (
 );
 
 
+ALTER TABLE public.accesscontrol_schema_version OWNER TO egov;
+
 --
--- Name: boundary; Type: TABLE; Schema: public; Owner: -
+-- Name: boundary; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.boundary (
@@ -82,8 +59,10 @@ CREATE TABLE public.boundary (
 );
 
 
+ALTER TABLE public.boundary OWNER TO egov;
+
 --
--- Name: boundary_hierarchy; Type: TABLE; Schema: public; Owner: -
+-- Name: boundary_hierarchy; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.boundary_hierarchy (
@@ -98,8 +77,10 @@ CREATE TABLE public.boundary_hierarchy (
 );
 
 
+ALTER TABLE public.boundary_hierarchy OWNER TO egov;
+
 --
--- Name: boundary_relationship; Type: TABLE; Schema: public; Owner: -
+-- Name: boundary_relationship; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.boundary_relationship (
@@ -117,11 +98,13 @@ CREATE TABLE public.boundary_relationship (
 );
 
 
+ALTER TABLE public.boundary_relationship OWNER TO egov;
+
 --
--- Name: boundary_schema_version; Type: TABLE; Schema: public; Owner: -
+-- Name: boundary_service_schema; Type: TABLE; Schema: public; Owner: egov
 --
 
-CREATE TABLE public.boundary_schema_version (
+CREATE TABLE public.boundary_service_schema (
     installed_rank integer NOT NULL,
     version character varying(50),
     description character varying(200) NOT NULL,
@@ -135,8 +118,10 @@ CREATE TABLE public.boundary_schema_version (
 );
 
 
+ALTER TABLE public.boundary_service_schema OWNER TO egov;
+
 --
--- Name: eg_action; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_action; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_action (
@@ -156,8 +141,10 @@ CREATE TABLE public.eg_action (
 );
 
 
+ALTER TABLE public.eg_action OWNER TO egov;
+
 --
--- Name: eg_address; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_address; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_address (
@@ -180,8 +167,10 @@ CREATE TABLE public.eg_address (
 );
 
 
+ALTER TABLE public.eg_address OWNER TO egov;
+
 --
--- Name: eg_address_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: eg_address_id_seq; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.eg_address_id_seq
@@ -193,15 +182,17 @@ CREATE SEQUENCE public.eg_address_id_seq
     CACHE 1;
 
 
+ALTER SEQUENCE public.eg_address_id_seq OWNER TO egov;
+
 --
--- Name: eg_address_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: eg_address_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: egov
 --
 
 ALTER SEQUENCE public.eg_address_id_seq OWNED BY public.eg_address.id;
 
 
 --
--- Name: eg_bm_generated_template; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_bm_generated_template; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_bm_generated_template (
@@ -220,8 +211,10 @@ CREATE TABLE public.eg_bm_generated_template (
 );
 
 
+ALTER TABLE public.eg_bm_generated_template OWNER TO egov;
+
 --
--- Name: eg_bm_processed_template; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_bm_processed_template; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_bm_processed_template (
@@ -241,8 +234,10 @@ CREATE TABLE public.eg_bm_processed_template (
 );
 
 
+ALTER TABLE public.eg_bm_processed_template OWNER TO egov;
+
 --
--- Name: eg_enc_asymmetric_keys; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_enc_asymmetric_keys; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_enc_asymmetric_keys (
@@ -255,8 +250,10 @@ CREATE TABLE public.eg_enc_asymmetric_keys (
 );
 
 
+ALTER TABLE public.eg_enc_asymmetric_keys OWNER TO egov;
+
 --
--- Name: eg_enc_asymmetric_keys_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: eg_enc_asymmetric_keys_id_seq; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.eg_enc_asymmetric_keys_id_seq
@@ -268,15 +265,17 @@ CREATE SEQUENCE public.eg_enc_asymmetric_keys_id_seq
     CACHE 1;
 
 
+ALTER SEQUENCE public.eg_enc_asymmetric_keys_id_seq OWNER TO egov;
+
 --
--- Name: eg_enc_asymmetric_keys_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: eg_enc_asymmetric_keys_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: egov
 --
 
 ALTER SEQUENCE public.eg_enc_asymmetric_keys_id_seq OWNED BY public.eg_enc_asymmetric_keys.id;
 
 
 --
--- Name: eg_enc_symmetric_keys; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_enc_symmetric_keys; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_enc_symmetric_keys (
@@ -289,8 +288,10 @@ CREATE TABLE public.eg_enc_symmetric_keys (
 );
 
 
+ALTER TABLE public.eg_enc_symmetric_keys OWNER TO egov;
+
 --
--- Name: eg_enc_symmetric_keys_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: eg_enc_symmetric_keys_id_seq; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.eg_enc_symmetric_keys_id_seq
@@ -302,15 +303,17 @@ CREATE SEQUENCE public.eg_enc_symmetric_keys_id_seq
     CACHE 1;
 
 
+ALTER SEQUENCE public.eg_enc_symmetric_keys_id_seq OWNER TO egov;
+
 --
--- Name: eg_enc_symmetric_keys_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: eg_enc_symmetric_keys_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: egov
 --
 
 ALTER SEQUENCE public.eg_enc_symmetric_keys_id_seq OWNED BY public.eg_enc_symmetric_keys.id;
 
 
 --
--- Name: eg_filestoremap; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_filestoremap; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_filestoremap (
@@ -330,8 +333,10 @@ CREATE TABLE public.eg_filestoremap (
 );
 
 
+ALTER TABLE public.eg_filestoremap OWNER TO egov;
+
 --
--- Name: eg_hrms_assignment; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_hrms_assignment; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_hrms_assignment (
@@ -356,8 +361,10 @@ CREATE TABLE public.eg_hrms_assignment (
 );
 
 
+ALTER TABLE public.eg_hrms_assignment OWNER TO egov;
+
 --
--- Name: eg_hrms_deactivationdetails; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_hrms_deactivationdetails; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_hrms_deactivationdetails (
@@ -376,8 +383,10 @@ CREATE TABLE public.eg_hrms_deactivationdetails (
 );
 
 
+ALTER TABLE public.eg_hrms_deactivationdetails OWNER TO egov;
+
 --
--- Name: eg_hrms_departmentaltests; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_hrms_departmentaltests; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_hrms_departmentaltests (
@@ -395,8 +404,10 @@ CREATE TABLE public.eg_hrms_departmentaltests (
 );
 
 
+ALTER TABLE public.eg_hrms_departmentaltests OWNER TO egov;
+
 --
--- Name: eg_hrms_educationaldetails; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_hrms_educationaldetails; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_hrms_educationaldetails (
@@ -416,8 +427,10 @@ CREATE TABLE public.eg_hrms_educationaldetails (
 );
 
 
+ALTER TABLE public.eg_hrms_educationaldetails OWNER TO egov;
+
 --
--- Name: eg_hrms_empdocuments; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_hrms_empdocuments; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_hrms_empdocuments (
@@ -435,8 +448,10 @@ CREATE TABLE public.eg_hrms_empdocuments (
 );
 
 
+ALTER TABLE public.eg_hrms_empdocuments OWNER TO egov;
+
 --
--- Name: eg_hrms_employee; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_hrms_employee; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_hrms_employee (
@@ -456,8 +471,10 @@ CREATE TABLE public.eg_hrms_employee (
 );
 
 
+ALTER TABLE public.eg_hrms_employee OWNER TO egov;
+
 --
--- Name: eg_hrms_jurisdiction; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_hrms_jurisdiction; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_hrms_jurisdiction (
@@ -475,8 +492,10 @@ CREATE TABLE public.eg_hrms_jurisdiction (
 );
 
 
+ALTER TABLE public.eg_hrms_jurisdiction OWNER TO egov;
+
 --
--- Name: eg_hrms_position; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: eg_hrms_position; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.eg_hrms_position
@@ -487,8 +506,10 @@ CREATE SEQUENCE public.eg_hrms_position
     CACHE 1;
 
 
+ALTER SEQUENCE public.eg_hrms_position OWNER TO egov;
+
 --
--- Name: eg_hrms_reactivationdetails; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_hrms_reactivationdetails; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_hrms_reactivationdetails (
@@ -506,8 +527,10 @@ CREATE TABLE public.eg_hrms_reactivationdetails (
 );
 
 
+ALTER TABLE public.eg_hrms_reactivationdetails OWNER TO egov;
+
 --
--- Name: eg_hrms_servicehistory; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_hrms_servicehistory; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_hrms_servicehistory (
@@ -528,8 +551,10 @@ CREATE TABLE public.eg_hrms_servicehistory (
 );
 
 
+ALTER TABLE public.eg_hrms_servicehistory OWNER TO egov;
+
 --
--- Name: eg_mdms_data; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_mdms_data; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_mdms_data (
@@ -546,8 +571,10 @@ CREATE TABLE public.eg_mdms_data (
 );
 
 
+ALTER TABLE public.eg_mdms_data OWNER TO egov;
+
 --
--- Name: eg_mdms_schema_definition; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_mdms_schema_definition; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_mdms_schema_definition (
@@ -564,8 +591,10 @@ CREATE TABLE public.eg_mdms_schema_definition (
 );
 
 
+ALTER TABLE public.eg_mdms_schema_definition OWNER TO egov;
+
 --
--- Name: eg_ms_role; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_ms_role; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_ms_role (
@@ -580,8 +609,10 @@ CREATE TABLE public.eg_ms_role (
 );
 
 
+ALTER TABLE public.eg_ms_role OWNER TO egov;
+
 --
--- Name: eg_pgr_address_v2; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_pgr_address_v2; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_pgr_address_v2 (
@@ -610,8 +641,10 @@ CREATE TABLE public.eg_pgr_address_v2 (
 );
 
 
+ALTER TABLE public.eg_pgr_address_v2 OWNER TO egov;
+
 --
--- Name: eg_pgr_service_v2; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_pgr_service_v2; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_pgr_service_v2 (
@@ -633,8 +666,10 @@ CREATE TABLE public.eg_pgr_service_v2 (
 );
 
 
+ALTER TABLE public.eg_pgr_service_v2 OWNER TO egov;
+
 --
--- Name: eg_role; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_role; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_role (
@@ -651,8 +686,10 @@ CREATE TABLE public.eg_role (
 );
 
 
+ALTER TABLE public.eg_role OWNER TO egov;
+
 --
--- Name: eg_roleaction; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_roleaction; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_roleaction (
@@ -662,8 +699,32 @@ CREATE TABLE public.eg_roleaction (
 );
 
 
+ALTER TABLE public.eg_roleaction OWNER TO egov;
+
 --
--- Name: eg_url_shortener; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_token; Type: TABLE; Schema: public; Owner: egov
+--
+
+CREATE TABLE public.eg_token (
+    id character(36) NOT NULL,
+    tenantid character varying(256) NOT NULL,
+    tokennumber character varying(128) NOT NULL,
+    tokenidentity character varying(100) NOT NULL,
+    validated character(1) DEFAULT 'N'::bpchar NOT NULL,
+    ttlsecs bigint NOT NULL,
+    createddate timestamp without time zone NOT NULL,
+    lastmodifieddate timestamp without time zone,
+    createdby bigint NOT NULL,
+    lastmodifiedby bigint,
+    version bigint,
+    createddatenew bigint
+);
+
+
+ALTER TABLE public.eg_token OWNER TO egov;
+
+--
+-- Name: eg_url_shortener; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_url_shortener (
@@ -674,8 +735,10 @@ CREATE TABLE public.eg_url_shortener (
 );
 
 
+ALTER TABLE public.eg_url_shortener OWNER TO egov;
+
 --
--- Name: eg_url_shorter_id; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: eg_url_shorter_id; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.eg_url_shorter_id
@@ -686,8 +749,10 @@ CREATE SEQUENCE public.eg_url_shorter_id
     CACHE 1;
 
 
+ALTER SEQUENCE public.eg_url_shorter_id OWNER TO egov;
+
 --
--- Name: eg_user; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_user; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_user (
@@ -728,8 +793,10 @@ CREATE TABLE public.eg_user (
 );
 
 
+ALTER TABLE public.eg_user OWNER TO egov;
+
 --
--- Name: eg_user_address; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_user_address; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_user_address (
@@ -748,8 +815,10 @@ CREATE TABLE public.eg_user_address (
 );
 
 
+ALTER TABLE public.eg_user_address OWNER TO egov;
+
 --
--- Name: eg_user_audit_table; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_user_audit_table; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_user_audit_table (
@@ -785,8 +854,10 @@ CREATE TABLE public.eg_user_audit_table (
 );
 
 
+ALTER TABLE public.eg_user_audit_table OWNER TO egov;
+
 --
--- Name: eg_user_login_failed_attempts; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_user_login_failed_attempts; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_user_login_failed_attempts (
@@ -797,8 +868,10 @@ CREATE TABLE public.eg_user_login_failed_attempts (
 );
 
 
+ALTER TABLE public.eg_user_login_failed_attempts OWNER TO egov;
+
 --
--- Name: eg_userrole; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_userrole; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_userrole (
@@ -810,8 +883,10 @@ CREATE TABLE public.eg_userrole (
 );
 
 
+ALTER TABLE public.eg_userrole OWNER TO egov;
+
 --
--- Name: eg_userrole_v1; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_userrole_v1; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_userrole_v1 (
@@ -823,8 +898,10 @@ CREATE TABLE public.eg_userrole_v1 (
 );
 
 
+ALTER TABLE public.eg_userrole_v1 OWNER TO egov;
+
 --
--- Name: eg_wf_action_v2; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_wf_action_v2; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_wf_action_v2 (
@@ -842,8 +919,10 @@ CREATE TABLE public.eg_wf_action_v2 (
 );
 
 
+ALTER TABLE public.eg_wf_action_v2 OWNER TO egov;
+
 --
--- Name: eg_wf_assignee_v2; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_wf_assignee_v2; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_wf_assignee_v2 (
@@ -857,8 +936,10 @@ CREATE TABLE public.eg_wf_assignee_v2 (
 );
 
 
+ALTER TABLE public.eg_wf_assignee_v2 OWNER TO egov;
+
 --
--- Name: eg_wf_businessservice_v2; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_wf_businessservice_v2; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_wf_businessservice_v2 (
@@ -876,8 +957,10 @@ CREATE TABLE public.eg_wf_businessservice_v2 (
 );
 
 
+ALTER TABLE public.eg_wf_businessservice_v2 OWNER TO egov;
+
 --
--- Name: eg_wf_document_v2; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_wf_document_v2; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_wf_document_v2 (
@@ -895,8 +978,10 @@ CREATE TABLE public.eg_wf_document_v2 (
 );
 
 
+ALTER TABLE public.eg_wf_document_v2 OWNER TO egov;
+
 --
--- Name: eg_wf_processinstance_v2; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_wf_processinstance_v2; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_wf_processinstance_v2 (
@@ -922,8 +1007,10 @@ CREATE TABLE public.eg_wf_processinstance_v2 (
 );
 
 
+ALTER TABLE public.eg_wf_processinstance_v2 OWNER TO egov;
+
 --
--- Name: eg_wf_state_v2; Type: TABLE; Schema: public; Owner: -
+-- Name: eg_wf_state_v2; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.eg_wf_state_v2 (
@@ -945,11 +1032,13 @@ CREATE TABLE public.eg_wf_state_v2 (
 );
 
 
+ALTER TABLE public.eg_wf_state_v2 OWNER TO egov;
+
 --
--- Name: egov_idgen_schema_version; Type: TABLE; Schema: public; Owner: -
+-- Name: egov-url-shortening_schema; Type: TABLE; Schema: public; Owner: egov
 --
 
-CREATE TABLE public.egov_idgen_schema_version (
+CREATE TABLE public."egov-url-shortening_schema" (
     installed_rank integer NOT NULL,
     version character varying(50),
     description character varying(200) NOT NULL,
@@ -963,11 +1052,13 @@ CREATE TABLE public.egov_idgen_schema_version (
 );
 
 
+ALTER TABLE public."egov-url-shortening_schema" OWNER TO egov;
+
 --
--- Name: egov_localization_schema_version; Type: TABLE; Schema: public; Owner: -
+-- Name: egov_enc_service_schema; Type: TABLE; Schema: public; Owner: egov
 --
 
-CREATE TABLE public.egov_localization_schema_version (
+CREATE TABLE public.egov_enc_service_schema (
     installed_rank integer NOT NULL,
     version character varying(50),
     description character varying(200) NOT NULL,
@@ -981,11 +1072,13 @@ CREATE TABLE public.egov_localization_schema_version (
 );
 
 
+ALTER TABLE public.egov_enc_service_schema OWNER TO egov;
+
 --
--- Name: egov_url_shortening_schema_version; Type: TABLE; Schema: public; Owner: -
+-- Name: egov_filestore_schema; Type: TABLE; Schema: public; Owner: egov
 --
 
-CREATE TABLE public.egov_url_shortening_schema_version (
+CREATE TABLE public.egov_filestore_schema (
     installed_rank integer NOT NULL,
     version character varying(50),
     description character varying(200) NOT NULL,
@@ -999,11 +1092,13 @@ CREATE TABLE public.egov_url_shortening_schema_version (
 );
 
 
+ALTER TABLE public.egov_filestore_schema OWNER TO egov;
+
 --
--- Name: egov_user_schema_version; Type: TABLE; Schema: public; Owner: -
+-- Name: egov_hrms_schema; Type: TABLE; Schema: public; Owner: egov
 --
 
-CREATE TABLE public.egov_user_schema_version (
+CREATE TABLE public.egov_hrms_schema (
     installed_rank integer NOT NULL,
     version character varying(50),
     description character varying(200) NOT NULL,
@@ -1017,11 +1112,13 @@ CREATE TABLE public.egov_user_schema_version (
 );
 
 
+ALTER TABLE public.egov_hrms_schema OWNER TO egov;
+
 --
--- Name: enc_schema_version; Type: TABLE; Schema: public; Owner: -
+-- Name: egov_idgen_schema; Type: TABLE; Schema: public; Owner: egov
 --
 
-CREATE TABLE public.enc_schema_version (
+CREATE TABLE public.egov_idgen_schema (
     installed_rank integer NOT NULL,
     version character varying(50),
     description character varying(200) NOT NULL,
@@ -1035,11 +1132,13 @@ CREATE TABLE public.enc_schema_version (
 );
 
 
+ALTER TABLE public.egov_idgen_schema OWNER TO egov;
+
 --
--- Name: filestore_schema_version; Type: TABLE; Schema: public; Owner: -
+-- Name: egov_localization_schema; Type: TABLE; Schema: public; Owner: egov
 --
 
-CREATE TABLE public.filestore_schema_version (
+CREATE TABLE public.egov_localization_schema (
     installed_rank integer NOT NULL,
     version character varying(50),
     description character varying(200) NOT NULL,
@@ -1053,11 +1152,13 @@ CREATE TABLE public.filestore_schema_version (
 );
 
 
+ALTER TABLE public.egov_localization_schema OWNER TO egov;
+
 --
--- Name: hrms_schema_version; Type: TABLE; Schema: public; Owner: -
+-- Name: egov_otp_schema; Type: TABLE; Schema: public; Owner: egov
 --
 
-CREATE TABLE public.hrms_schema_version (
+CREATE TABLE public.egov_otp_schema (
     installed_rank integer NOT NULL,
     version character varying(50),
     description character varying(200) NOT NULL,
@@ -1071,8 +1172,50 @@ CREATE TABLE public.hrms_schema_version (
 );
 
 
+ALTER TABLE public.egov_otp_schema OWNER TO egov;
+
 --
--- Name: id_generator; Type: TABLE; Schema: public; Owner: -
+-- Name: egov_user_schema; Type: TABLE; Schema: public; Owner: egov
+--
+
+CREATE TABLE public.egov_user_schema (
+    installed_rank integer NOT NULL,
+    version character varying(50),
+    description character varying(200) NOT NULL,
+    type character varying(20) NOT NULL,
+    script character varying(1000) NOT NULL,
+    checksum integer,
+    installed_by character varying(100) NOT NULL,
+    installed_on timestamp without time zone DEFAULT now() NOT NULL,
+    execution_time integer NOT NULL,
+    success boolean NOT NULL
+);
+
+
+ALTER TABLE public.egov_user_schema OWNER TO egov;
+
+--
+-- Name: egov_workflow_v2_schema; Type: TABLE; Schema: public; Owner: egov
+--
+
+CREATE TABLE public.egov_workflow_v2_schema (
+    installed_rank integer NOT NULL,
+    version character varying(50),
+    description character varying(200) NOT NULL,
+    type character varying(20) NOT NULL,
+    script character varying(1000) NOT NULL,
+    checksum integer,
+    installed_by character varying(100) NOT NULL,
+    installed_on timestamp without time zone DEFAULT now() NOT NULL,
+    execution_time integer NOT NULL,
+    success boolean NOT NULL
+);
+
+
+ALTER TABLE public.egov_workflow_v2_schema OWNER TO egov;
+
+--
+-- Name: id_generator; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.id_generator (
@@ -1084,8 +1227,10 @@ CREATE TABLE public.id_generator (
 );
 
 
+ALTER TABLE public.id_generator OWNER TO egov;
+
 --
--- Name: id_generator_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: id_generator_id_seq; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.id_generator_id_seq
@@ -1096,18 +1241,20 @@ CREATE SEQUENCE public.id_generator_id_seq
     CACHE 1;
 
 
+ALTER SEQUENCE public.id_generator_id_seq OWNER TO egov;
+
 --
--- Name: id_generator_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: id_generator_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: egov
 --
 
 ALTER SEQUENCE public.id_generator_id_seq OWNED BY public.id_generator.id;
 
 
 --
--- Name: mdms_schema_version; Type: TABLE; Schema: public; Owner: -
+-- Name: mdms_v2_schema; Type: TABLE; Schema: public; Owner: egov
 --
 
-CREATE TABLE public.mdms_schema_version (
+CREATE TABLE public.mdms_v2_schema (
     installed_rank integer NOT NULL,
     version character varying(50),
     description character varying(200) NOT NULL,
@@ -1121,8 +1268,10 @@ CREATE TABLE public.mdms_schema_version (
 );
 
 
+ALTER TABLE public.mdms_v2_schema OWNER TO egov;
+
 --
--- Name: message; Type: TABLE; Schema: public; Owner: -
+-- Name: message; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.message (
@@ -1139,8 +1288,10 @@ CREATE TABLE public.message (
 );
 
 
+ALTER TABLE public.message OWNER TO egov;
+
 --
--- Name: pgr_services_schema; Type: TABLE; Schema: public; Owner: -
+-- Name: pgr_services_schema; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.pgr_services_schema (
@@ -1157,8 +1308,10 @@ CREATE TABLE public.pgr_services_schema (
 );
 
 
+ALTER TABLE public.pgr_services_schema OWNER TO egov;
+
 --
--- Name: seq_ack_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_ack_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_ack_num
@@ -1169,8 +1322,10 @@ CREATE SEQUENCE public.seq_ack_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_ack_num OWNER TO egov;
+
 --
--- Name: seq_advocate_code; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_advocate_code; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_advocate_code
@@ -1181,8 +1336,10 @@ CREATE SEQUENCE public.seq_advocate_code
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_advocate_code OWNER TO egov;
+
 --
--- Name: seq_advocatepayment_code; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_advocatepayment_code; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_advocatepayment_code
@@ -1193,8 +1350,10 @@ CREATE SEQUENCE public.seq_advocatepayment_code
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_advocatepayment_code OWNER TO egov;
+
 --
--- Name: seq_agency; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_agency; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_agency
@@ -1205,8 +1364,10 @@ CREATE SEQUENCE public.seq_agency
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_agency OWNER TO egov;
+
 --
--- Name: seq_assesmnt_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_assesmnt_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_assesmnt_num
@@ -1217,8 +1378,10 @@ CREATE SEQUENCE public.seq_assesmnt_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_assesmnt_num OWNER TO egov;
+
 --
--- Name: seq_case_advocate; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_case_advocate; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_case_advocate
@@ -1229,8 +1392,10 @@ CREATE SEQUENCE public.seq_case_advocate
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_case_advocate OWNER TO egov;
+
 --
--- Name: seq_case_reference; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_case_reference; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_case_reference
@@ -1241,8 +1406,10 @@ CREATE SEQUENCE public.seq_case_reference
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_case_reference OWNER TO egov;
+
 --
--- Name: seq_coll_rcpt_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_coll_rcpt_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_coll_rcpt_num
@@ -1253,8 +1420,10 @@ CREATE SEQUENCE public.seq_coll_rcpt_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_coll_rcpt_num OWNER TO egov;
+
 --
--- Name: seq_eg_action; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_action; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_action
@@ -1265,8 +1434,10 @@ CREATE SEQUENCE public.seq_eg_action
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_action OWNER TO egov;
+
 --
--- Name: seq_eg_filestoremap; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_filestoremap; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_filestoremap
@@ -1277,8 +1448,10 @@ CREATE SEQUENCE public.seq_eg_filestoremap
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_filestoremap OWNER TO egov;
+
 --
--- Name: seq_eg_hrms_emp_code; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_hrms_emp_code; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_hrms_emp_code
@@ -1289,8 +1462,10 @@ CREATE SEQUENCE public.seq_eg_hrms_emp_code
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_hrms_emp_code OWNER TO egov;
+
 --
--- Name: seq_eg_ms_role; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_ms_role; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_ms_role
@@ -1301,8 +1476,10 @@ CREATE SEQUENCE public.seq_eg_ms_role
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_ms_role OWNER TO egov;
+
 --
--- Name: seq_eg_pg_txn; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_pg_txn; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_pg_txn
@@ -1313,8 +1490,10 @@ CREATE SEQUENCE public.seq_eg_pg_txn
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_pg_txn OWNER TO egov;
+
 --
--- Name: seq_eg_pgr_id; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_pgr_id; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_pgr_id
@@ -1325,8 +1504,10 @@ CREATE SEQUENCE public.seq_eg_pgr_id
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_pgr_id OWNER TO egov;
+
 --
--- Name: seq_eg_pt_ack; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_pt_ack; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_pt_ack
@@ -1337,8 +1518,10 @@ CREATE SEQUENCE public.seq_eg_pt_ack
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_pt_ack OWNER TO egov;
+
 --
--- Name: seq_eg_pt_assm; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_pt_assm; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_pt_assm
@@ -1349,8 +1532,10 @@ CREATE SEQUENCE public.seq_eg_pt_assm
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_pt_assm OWNER TO egov;
+
 --
--- Name: seq_eg_pt_ln; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_pt_ln; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_pt_ln
@@ -1361,8 +1546,10 @@ CREATE SEQUENCE public.seq_eg_pt_ln
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_pt_ln OWNER TO egov;
+
 --
--- Name: seq_eg_pt_ptid; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_pt_ptid; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_pt_ptid
@@ -1373,8 +1560,10 @@ CREATE SEQUENCE public.seq_eg_pt_ptid
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_pt_ptid OWNER TO egov;
+
 --
--- Name: seq_eg_role; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_role; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_role
@@ -1385,8 +1574,10 @@ CREATE SEQUENCE public.seq_eg_role
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_role OWNER TO egov;
+
 --
--- Name: seq_eg_tl_apl; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_tl_apl; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_tl_apl
@@ -1397,8 +1588,10 @@ CREATE SEQUENCE public.seq_eg_tl_apl
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_tl_apl OWNER TO egov;
+
 --
--- Name: seq_eg_user; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_user; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_user
@@ -1409,8 +1602,10 @@ CREATE SEQUENCE public.seq_eg_user
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_user OWNER TO egov;
+
 --
--- Name: seq_eg_user_address; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_user_address; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_user_address
@@ -1421,8 +1616,10 @@ CREATE SEQUENCE public.seq_eg_user_address
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_user_address OWNER TO egov;
+
 --
--- Name: seq_eg_wf_state_v2; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_eg_wf_state_v2; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_eg_wf_state_v2
@@ -1433,8 +1630,10 @@ CREATE SEQUENCE public.seq_eg_wf_state_v2
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_eg_wf_state_v2 OWNER TO egov;
+
 --
--- Name: seq_egf_bill_dft_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_egf_bill_dft_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_egf_bill_dft_num
@@ -1445,8 +1644,10 @@ CREATE SEQUENCE public.seq_egf_bill_dft_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_egf_bill_dft_num OWNER TO egov;
+
 --
--- Name: seq_employee_code; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_employee_code; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_employee_code
@@ -1457,8 +1658,10 @@ CREATE SEQUENCE public.seq_employee_code
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_employee_code OWNER TO egov;
+
 --
--- Name: seq_event; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_event; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_event
@@ -1469,8 +1672,10 @@ CREATE SEQUENCE public.seq_event
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_event OWNER TO egov;
+
 --
--- Name: seq_hearing_details; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_hearing_details; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_hearing_details
@@ -1481,8 +1686,10 @@ CREATE SEQUENCE public.seq_hearing_details
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_hearing_details OWNER TO egov;
+
 --
--- Name: seq_message; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_message; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_message
@@ -1493,8 +1700,10 @@ CREATE SEQUENCE public.seq_message
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_message OWNER TO egov;
+
 --
--- Name: seq_notice; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_notice; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_notice
@@ -1505,8 +1714,10 @@ CREATE SEQUENCE public.seq_notice
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_notice OWNER TO egov;
+
 --
--- Name: seq_opinion_code; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_opinion_code; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_opinion_code
@@ -1517,8 +1728,10 @@ CREATE SEQUENCE public.seq_opinion_code
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_opinion_code OWNER TO egov;
+
 --
--- Name: seq_parawise_comments; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_parawise_comments; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_parawise_comments
@@ -1529,8 +1742,10 @@ CREATE SEQUENCE public.seq_parawise_comments
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_parawise_comments OWNER TO egov;
+
 --
--- Name: seq_personal_details; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_personal_details; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_personal_details
@@ -1541,8 +1756,10 @@ CREATE SEQUENCE public.seq_personal_details
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_personal_details OWNER TO egov;
+
 --
--- Name: seq_reference_evidence; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_reference_evidence; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_reference_evidence
@@ -1553,8 +1770,10 @@ CREATE SEQUENCE public.seq_reference_evidence
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_reference_evidence OWNER TO egov;
+
 --
--- Name: seq_register; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_register; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_register
@@ -1565,8 +1784,10 @@ CREATE SEQUENCE public.seq_register
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_register OWNER TO egov;
+
 --
--- Name: seq_service; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_service; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_service
@@ -1577,8 +1798,10 @@ CREATE SEQUENCE public.seq_service
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_service OWNER TO egov;
+
 --
--- Name: seq_summon_code; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_summon_code; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_summon_code
@@ -1589,8 +1812,10 @@ CREATE SEQUENCE public.seq_summon_code
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_summon_code OWNER TO egov;
+
 --
--- Name: seq_summon_reference; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_summon_reference; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_summon_reference
@@ -1601,8 +1826,10 @@ CREATE SEQUENCE public.seq_summon_reference
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_summon_reference OWNER TO egov;
+
 --
--- Name: seq_swm_ctrt_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_ctrt_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_ctrt_num
@@ -1613,8 +1840,10 @@ CREATE SEQUENCE public.seq_swm_ctrt_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_ctrt_num OWNER TO egov;
+
 --
--- Name: seq_swm_shift_code_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_shift_code_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_shift_code_num
@@ -1625,8 +1854,10 @@ CREATE SEQUENCE public.seq_swm_shift_code_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_shift_code_num OWNER TO egov;
+
 --
--- Name: seq_swm_snts_trgt_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_snts_trgt_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_snts_trgt_num
@@ -1637,8 +1868,10 @@ CREATE SEQUENCE public.seq_swm_snts_trgt_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_snts_trgt_num OWNER TO egov;
+
 --
--- Name: seq_swm_splr_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_splr_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_splr_num
@@ -1649,8 +1882,10 @@ CREATE SEQUENCE public.seq_swm_splr_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_splr_num OWNER TO egov;
+
 --
--- Name: seq_swm_stf_trn_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_stf_trn_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_stf_trn_num
@@ -1661,8 +1896,10 @@ CREATE SEQUENCE public.seq_swm_stf_trn_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_stf_trn_num OWNER TO egov;
+
 --
--- Name: seq_swm_trn_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_trn_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_trn_num
@@ -1673,8 +1910,10 @@ CREATE SEQUENCE public.seq_swm_trn_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_trn_num OWNER TO egov;
+
 --
--- Name: seq_swm_vendor_payment_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_vendor_payment_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_vendor_payment_num
@@ -1685,8 +1924,10 @@ CREATE SEQUENCE public.seq_swm_vendor_payment_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_vendor_payment_num OWNER TO egov;
+
 --
--- Name: seq_swm_vhl_trip_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_vhl_trip_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_vhl_trip_num
@@ -1697,8 +1938,10 @@ CREATE SEQUENCE public.seq_swm_vhl_trip_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_vhl_trip_num OWNER TO egov;
+
 --
--- Name: seq_swm_vmr_trn_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_vmr_trn_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_vmr_trn_num
@@ -1709,8 +1952,10 @@ CREATE SEQUENCE public.seq_swm_vmr_trn_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_vmr_trn_num OWNER TO egov;
+
 --
--- Name: seq_swm_vndr_ctrt_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_vndr_ctrt_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_vndr_ctrt_num
@@ -1721,8 +1966,10 @@ CREATE SEQUENCE public.seq_swm_vndr_ctrt_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_vndr_ctrt_num OWNER TO egov;
+
 --
--- Name: seq_swm_vndr_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_vndr_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_vndr_num
@@ -1733,8 +1980,10 @@ CREATE SEQUENCE public.seq_swm_vndr_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_vndr_num OWNER TO egov;
+
 --
--- Name: seq_swm_vs_trn_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_swm_vs_trn_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_swm_vs_trn_num
@@ -1745,8 +1994,10 @@ CREATE SEQUENCE public.seq_swm_vs_trn_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_swm_vs_trn_num OWNER TO egov;
+
 --
--- Name: seq_tl_app_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_tl_app_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_tl_app_num
@@ -1757,8 +2008,10 @@ CREATE SEQUENCE public.seq_tl_app_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_tl_app_num OWNER TO egov;
+
 --
--- Name: seq_tl_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_tl_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_tl_num
@@ -1769,8 +2022,10 @@ CREATE SEQUENCE public.seq_tl_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_tl_num OWNER TO egov;
+
 --
--- Name: seq_uc_demand_consumer_code; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_uc_demand_consumer_code; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_uc_demand_consumer_code
@@ -1781,8 +2036,10 @@ CREATE SEQUENCE public.seq_uc_demand_consumer_code
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_uc_demand_consumer_code OWNER TO egov;
+
 --
--- Name: seq_ulb_code; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_ulb_code; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_ulb_code
@@ -1793,8 +2050,10 @@ CREATE SEQUENCE public.seq_ulb_code
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_ulb_code OWNER TO egov;
+
 --
--- Name: seq_upic_num; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_upic_num; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_upic_num
@@ -1805,8 +2064,10 @@ CREATE SEQUENCE public.seq_upic_num
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_upic_num OWNER TO egov;
+
 --
--- Name: seq_voucher_code; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: seq_voucher_code; Type: SEQUENCE; Schema: public; Owner: egov
 --
 
 CREATE SEQUENCE public.seq_voucher_code
@@ -1817,8 +2078,10 @@ CREATE SEQUENCE public.seq_voucher_code
     CACHE 1;
 
 
+ALTER SEQUENCE public.seq_voucher_code OWNER TO egov;
+
 --
--- Name: service; Type: TABLE; Schema: public; Owner: -
+-- Name: service; Type: TABLE; Schema: public; Owner: egov
 --
 
 CREATE TABLE public.service (
@@ -1834,54 +2097,38 @@ CREATE TABLE public.service (
 );
 
 
---
--- Name: workflow_schema_version; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.workflow_schema_version (
-    installed_rank integer NOT NULL,
-    version character varying(50),
-    description character varying(200) NOT NULL,
-    type character varying(20) NOT NULL,
-    script character varying(1000) NOT NULL,
-    checksum integer,
-    installed_by character varying(100) NOT NULL,
-    installed_on timestamp without time zone DEFAULT now() NOT NULL,
-    execution_time integer NOT NULL,
-    success boolean NOT NULL
-);
-
+ALTER TABLE public.service OWNER TO egov;
 
 --
--- Name: eg_address id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: eg_address id; Type: DEFAULT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_address ALTER COLUMN id SET DEFAULT nextval('public.eg_address_id_seq'::regclass);
 
 
 --
--- Name: eg_enc_asymmetric_keys id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: eg_enc_asymmetric_keys id; Type: DEFAULT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_enc_asymmetric_keys ALTER COLUMN id SET DEFAULT nextval('public.eg_enc_asymmetric_keys_id_seq'::regclass);
 
 
 --
--- Name: eg_enc_symmetric_keys id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: eg_enc_symmetric_keys id; Type: DEFAULT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_enc_symmetric_keys ALTER COLUMN id SET DEFAULT nextval('public.eg_enc_symmetric_keys_id_seq'::regclass);
 
 
 --
--- Name: id_generator id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: id_generator id; Type: DEFAULT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.id_generator ALTER COLUMN id SET DEFAULT nextval('public.id_generator_id_seq'::regclass);
 
 
 --
--- Data for Name: accesscontrol_schema_version; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: accesscontrol_schema_version; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.accesscontrol_schema_version (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
@@ -1897,7 +2144,7 @@ COPY public.accesscontrol_schema_version (installed_rank, version, description, 
 
 
 --
--- Data for Name: boundary; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: boundary; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.boundary (id, tenantid, code, geometry, additionaldetails, createdtime, createdby, lastmodifiedtime, lastmodifiedby) FROM stdin;
@@ -1957,7 +2204,7 @@ f97cd7b4-8c8c-47c2-9f28-817f10ac5e15	pg.citya	SUN02_ADMIN_LOCALITY	{"type": "Poi
 
 
 --
--- Data for Name: boundary_hierarchy; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: boundary_hierarchy; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.boundary_hierarchy (id, tenantid, hierarchytype, boundaryhierarchy, createdtime, createdby, lastmodifiedtime, lastmodifiedby) FROM stdin;
@@ -1969,7 +2216,7 @@ b552c410-eb42-4229-9f87-ad348e5f0aec	statea.citya	ADMIN	[{"active": true, "bound
 
 
 --
--- Data for Name: boundary_relationship; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: boundary_relationship; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.boundary_relationship (id, tenantid, code, hierarchytype, boundarytype, parent, ancestralmaterializedpath, createdtime, createdby, lastmodifiedtime, lastmodifiedby) FROM stdin;
@@ -2027,19 +2274,18 @@ d35f7376-f2e0-42b3-8a68-fa57ec7a56d9	pg.citya	Z1_ADMIN_ZONE	ADMIN	Zone	PG_CITYA_
 
 
 --
--- Data for Name: boundary_schema_version; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: boundary_service_schema; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
-COPY public.boundary_schema_version (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
-1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-02-09 05:24:45.947744	0	t
-2	20230728110535	boundary-service ddl	SQL	V20230728110535__boundary-service_ddl.sql	1587416147	egov	2026-02-09 05:24:46.067587	54	t
-3	20231025110679	boundary hierarchy ddl	SQL	V20231025110679__boundary_hierarchy_ddl.sql	38639821	egov	2026-02-09 05:24:46.291622	31	t
-4	20231031120752	boundary relationship ddl	SQL	V20231031120752__boundary_relationship_ddl.sql	1434917045	egov	2026-02-09 05:24:46.375928	25	t
+COPY public.boundary_service_schema (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
+1	20230728110535	boundary-service ddl	SQL	V20230728110535__boundary-service_ddl.sql	1587416147	egov	2026-07-10 10:43:52.90786	24	t
+2	20231025110679	boundary hierarchy ddl	SQL	V20231025110679__boundary_hierarchy_ddl.sql	38639821	egov	2026-07-10 10:43:53.003697	19	t
+3	20231031120752	boundary relationship ddl	SQL	V20231031120752__boundary_relationship_ddl.sql	1434917045	egov	2026-07-10 10:43:53.0576	14	t
 \.
 
 
 --
--- Data for Name: eg_action; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_action; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_action (id, name, url, servicecode, queryparams, parentmodule, ordernumber, displayname, enabled, createdby, createddate, lastmodifiedby, lastmodifieddate) FROM stdin;
@@ -2047,7 +2293,7 @@ COPY public.eg_action (id, name, url, servicecode, queryparams, parentmodule, or
 
 
 --
--- Data for Name: eg_address; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_address; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_address (housenobldgapt, subdistrict, postoffice, landmark, country, type, streetroadline, citytownvillage, arealocalitysector, district, state, pincode, id, version, tenantid, userid) FROM stdin;
@@ -2055,7 +2301,7 @@ COPY public.eg_address (housenobldgapt, subdistrict, postoffice, landmark, count
 
 
 --
--- Data for Name: eg_bm_generated_template; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_bm_generated_template; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_bm_generated_template (id, filestoreid, status, tenantid, hierarchytype, locale, createdby, createdtime, lastmodifiedby, lastmodifiedtime, additionaldetails, referenceid) FROM stdin;
@@ -2063,7 +2309,7 @@ COPY public.eg_bm_generated_template (id, filestoreid, status, tenantid, hierarc
 
 
 --
--- Data for Name: eg_bm_processed_template; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_bm_processed_template; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_bm_processed_template (id, status, tenantid, hierarchytype, filestoreid, processedfilestoreid, action, createdby, createdtime, lastmodifiedby, lastmodifiedtime, additionaldetails, referenceid) FROM stdin;
@@ -2071,7 +2317,7 @@ COPY public.eg_bm_processed_template (id, status, tenantid, hierarchytype, files
 
 
 --
--- Data for Name: eg_enc_asymmetric_keys; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_enc_asymmetric_keys; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_enc_asymmetric_keys (id, key_id, public_key, private_key, active, tenant_id) FROM stdin;
@@ -2084,7 +2330,7 @@ COPY public.eg_enc_asymmetric_keys (id, key_id, public_key, private_key, active,
 
 
 --
--- Data for Name: eg_enc_symmetric_keys; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_enc_symmetric_keys; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_enc_symmetric_keys (id, key_id, secret_key, initial_vector, active, tenant_id) FROM stdin;
@@ -2097,7 +2343,7 @@ COPY public.eg_enc_symmetric_keys (id, key_id, secret_key, initial_vector, activ
 
 
 --
--- Data for Name: eg_filestoremap; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_filestoremap; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_filestoremap (id, filestoreid, filename, contenttype, module, tag, tenantid, version, filesource, createdby, lastmodifiedby, createdtime, lastmodifiedtime) FROM stdin;
@@ -2109,7 +2355,7 @@ COPY public.eg_filestoremap (id, filestoreid, filename, contenttype, module, tag
 
 
 --
--- Data for Name: eg_hrms_assignment; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_hrms_assignment; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_hrms_assignment (uuid, employeeid, "position", department, designation, fromdate, todate, govtordernumber, reportingto, ishod, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, iscurrentassignment, isactive) FROM stdin;
@@ -2127,7 +2373,7 @@ a0d644a4-fb72-4bc0-89c6-7c61c3744354	2c28d95f-136f-46b6-892f-49e5245ebc59	9	DEPT
 
 
 --
--- Data for Name: eg_hrms_deactivationdetails; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_hrms_deactivationdetails; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_hrms_deactivationdetails (uuid, employeeid, reasonfordeactivation, effectivefrom, ordernumber, remarks, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, isactive) FROM stdin;
@@ -2135,7 +2381,7 @@ COPY public.eg_hrms_deactivationdetails (uuid, employeeid, reasonfordeactivation
 
 
 --
--- Data for Name: eg_hrms_departmentaltests; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_hrms_departmentaltests; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_hrms_departmentaltests (uuid, employeeid, test, yearofpassing, remarks, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, isactive) FROM stdin;
@@ -2143,7 +2389,7 @@ COPY public.eg_hrms_departmentaltests (uuid, employeeid, test, yearofpassing, re
 
 
 --
--- Data for Name: eg_hrms_educationaldetails; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_hrms_educationaldetails; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_hrms_educationaldetails (uuid, employeeid, qualification, stream, yearofpassing, university, remarks, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, isactive) FROM stdin;
@@ -2151,7 +2397,7 @@ COPY public.eg_hrms_educationaldetails (uuid, employeeid, qualification, stream,
 
 
 --
--- Data for Name: eg_hrms_empdocuments; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_hrms_empdocuments; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_hrms_empdocuments (uuid, employeeid, documentid, documentname, referencetype, referenceid, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate) FROM stdin;
@@ -2159,7 +2405,7 @@ COPY public.eg_hrms_empdocuments (uuid, employeeid, documentid, documentname, re
 
 
 --
--- Data for Name: eg_hrms_employee; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_hrms_employee; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_hrms_employee (id, uuid, code, dateofappointment, employeestatus, employeetype, active, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, reactivateemployee) FROM stdin;
@@ -2177,7 +2423,7 @@ COPY public.eg_hrms_employee (id, uuid, code, dateofappointment, employeestatus,
 
 
 --
--- Data for Name: eg_hrms_jurisdiction; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_hrms_jurisdiction; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_hrms_jurisdiction (uuid, employeeid, hierarchy, boundarytype, boundary, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, isactive) FROM stdin;
@@ -2195,7 +2441,7 @@ fb3dc864-43e8-41fc-b718-baf5729359bc	2c28d95f-136f-46b6-892f-49e5245ebc59	REVENU
 
 
 --
--- Data for Name: eg_hrms_reactivationdetails; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_hrms_reactivationdetails; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_hrms_reactivationdetails (uuid, employeeid, reasonforreactivation, effectivefrom, ordernumber, remarks, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate) FROM stdin;
@@ -2203,7 +2449,7 @@ COPY public.eg_hrms_reactivationdetails (uuid, employeeid, reasonforreactivation
 
 
 --
--- Data for Name: eg_hrms_servicehistory; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_hrms_servicehistory; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_hrms_servicehistory (uuid, employeeid, servicestatus, servicefrom, serviceto, ordernumber, iscurrentposition, location, tenantid, createdby, createddate, lastmodifiedby, lastmodifieddate, isactive) FROM stdin;
@@ -2211,7 +2457,7 @@ COPY public.eg_hrms_servicehistory (uuid, employeeid, servicestatus, servicefrom
 
 
 --
--- Data for Name: eg_mdms_data; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_mdms_data; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime) FROM stdin;
@@ -2336,6 +2582,7 @@ c035cbc7-eee6-4520-be80-5b71f81455ba	pg	d020b04dbabd90aae70aa05b26536c9a77c9d11b
 9ab4d2de-a4e0-423c-a046-11bfead9570a	pg	1fca001c4ac090488ff7677a1ca82ac1a98ed3e6a9d9257df2003aadd214b283	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2009, "url": "/pgr-services/v2/request/_count", "code": "null", "name": "Search PGR Request", "path": "", "enabled": false, "displayName": "Count PGR Request", "orderNumber": 0, "serviceCode": "pgr-services", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 89e82efb-c5b2-45bd-a1ad-657d33fb6882	pg	09124d06961e5b657a9813fc586486be1013b693af0e6c0ec856da1c7c247e88	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2008, "url": "/pgr-services/v2/request/_search", "code": "null", "name": "Search PGR Request", "path": "", "enabled": false, "displayName": "Search PGR Request", "orderNumber": 0, "serviceCode": "pgr-services", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 045347e2-8d89-4b13-a9cf-c388405ad822	pg	86665da0a458a4414649bdb1d23cf43f880051987581b3794298fa3145d8f441	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2007, "url": "/pgr-services/v2/request/_update", "code": "null", "name": "Update PGR Request", "path": "", "enabled": false, "displayName": "Update PGR Request", "orderNumber": 0, "serviceCode": "pgr-services", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+1cc0758c-25c9-4f03-b22d-d58af0683ec9	pg	1ed1d61d04816b289dea0c6276336e62a95fe2ad0642ad6c731ef8b5b28991df	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 63, "actionid": 254, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 40489f54-f46d-429b-901d-833f7ab14f84	pg	6db0181592a75d133170c77acfc75cd32a106aa04f4f80be894bf191e96384dd	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2006, "url": "/pgr-services/v2/request/_create", "code": "null", "name": "Create PGR Request", "path": "", "enabled": false, "displayName": "Create PGR Request", "orderNumber": 0, "serviceCode": "pgr-services", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 390bf6a7-d6d5-4730-b91d-a164ba10ddaf	pg	b5f5128abcc67ff163d3c81b94887b5a0bde15dedf8ddfbfaa3f25f42eeb2863	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1101, "actionid": 2562, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 b52fa966-2749-49e1-955f-65135b8f6eb6	pg	fdbf60ec93a1e5981a867ea6f6148f3f823e7f2124ba81e1f57d72f473019281	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2005, "url": "/egov-searcher/locality/noc-services/_get", "code": "null", "name": "Locality searcher endpoint for Noc Servcies", "path": "", "enabled": false, "displayName": "Noc locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
@@ -2383,6 +2630,7 @@ f961ad5b-7d2e-4d40-9710-be21a3d2dc8d	pg	e6caedcaf853a3c1d4930e7c18396670db753e27
 474bcefb-089e-475f-9e3c-282ff92c16dc	pg	0b64afb8da01c2461b8789c91c4042bc63b39ae65dbf9c9bf5b9d2c067ec92da	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1958, "url": "card", "code": "", "name": "rainmaker-common-wns", "path": "", "enabled": false, "leftIcon": "places:business-center", "rightIcon": "", "displayName": "SURE Dashboard", "orderNumber": 2, "queryParams": "", "serviceCode": "integration", "parentModule": "", "navigationURL": "integration/dss/home"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 5631133a-1c9f-4dd9-a68b-e0627aec1ed7	pg	3d555802754448a3de0864749845fa963ae9b4c0a5fb37b530347a3a84f409f6	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1956, "url": "/pt-calculator-v2/billingslab/mutation/_update", "code": "null", "name": "MutationBillingSlabUpdate", "path": "", "enabled": false, "displayName": "Mutation Billing Slab Update", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 461f28cc-44f2-4bdc-90c9-9b20731291c5	pg	2219641ead956d537b4f34690a5e82722ceefebd7b6824c7526bad7ce58c00b4	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1955, "url": "/pt-calculator-v2/billingslab/mutation/_search", "code": "null", "name": "MutationBillingSlabSearch", "path": "", "enabled": false, "displayName": "Draft Search", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+32142e73-6d79-422b-885e-7a6dddcee0ff	pg	519918cb19cfed9b0ca53ecb445d07f3dab75b72aade3a161daedb1eb588a44c	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 61, "actionid": 582, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 549d42d5-37ab-48ba-9456-d799581b0dbd	pg	9588b0da6767a59cdfc63d7d4e9dc3d1295207bbc32938913a5d74c1d3c5a7f4	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1954, "url": "/pt-calculator-v2/billingslab/mutation/_create", "code": "null", "name": "MutationBillingSlabCreate", "path": "", "enabled": false, "displayName": "Draft Search", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 aea5104f-8f5c-4a18-a975-b4718c0f871c	pg	bfafa4145b0897b0d79821d3bc1b0a7c15384981538969814e601c1d38140696	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1950, "url": "quickAction", "name": "search BPA application", "path": "Building Plan Approval.Search Application", "enabled": false, "leftIcon": "communication:business", "tenantId": "pg", "createdBy": null, "rightIcon": "", "createdDate": null, "displayName": "Search Application", "orderNumber": 1, "queryParams": "", "quickAction": false, "serviceCode": "", "parentModule": "", "navigationURL": "egov-bpa/search", "lastModifiedBy": null, "lastModifiedDate": null}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 edf18d67-2907-4a92-bc26-8ff215b4a15d	pg	0372f3a4b5288fffad59bb6c2997ba9631c71abaa2cbdc0f4b71e79f4f106e5e	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1949, "url": "url", "code": "null", "name": "Dashboard Overview", "path": "Dashboard.Overview", "enabled": false, "leftIcon": "places:business-center", "rightIcon": "", "displayName": "Overview", "orderNumber": 3, "serviceCode": "DSS", "parentModule": "dss-dashboard", "navigationURL": "integration/dss/overview"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
@@ -2398,6 +2646,7 @@ f9c532b1-abf0-4f78-9e12-3f153d19a708	pg	a24f7136fafbdbea75536a9264406a4da063c1de
 ab7d88aa-3728-4fb4-b3c9-794bfaf43fa1	pg	4a50f7b69482f4c3b34db00f23f25ab1adbf5701a54b4ad2a1d2495a17269584	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1938, "url": "/sw-services/swc/_create", "code": "null", "name": "Create Sewerage Connection", "path": "", "enabled": false, "displayName": "Create Sewerage Connection", "orderNumber": 0, "serviceCode": "sw-services"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 f4c75707-76dc-4110-8a51-aeac54749da7	pg	e28db5fa684a6e354617fdc64538d58377d156e18ba490d94561a5dba790dfbb	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1937, "url": "/ws-calculator/waterCalculator/_calculate", "code": "null", "name": "Calculate Water Bill", "path": "", "enabled": false, "displayName": "Calculate Water Bill", "orderNumber": 0, "serviceCode": "ws-calculator"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 65cb3139-64d2-491d-894f-1e6cd6b7b592	pg	928fff950997bf8013bc49f7ef20fb5d4dfe89755ca7b9999725a0f91934112d	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1936, "url": "/ws-calculator/meterConnection/_search", "code": "null", "name": "Search Meter Reading", "path": "", "enabled": false, "displayName": "Search Meter Reading", "orderNumber": 0, "serviceCode": "ws-calculator"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+d6b2c1dc-d519-4c71-80aa-c35d5d23ed81	pg	5f420d84baef2eb7a295a33d09f386512945bc960a2b76b2497947f84b904481	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 60, "actionid": 604, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 ccc4301d-f6b8-411f-93a3-dbebadc17336	pg	85ea2a5f6762400fbc87bdbc8e7b0f71f999fd645a03c8bf5910fe9d933449b1	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1935, "url": "/ws-calculator/meterConnection/_create", "code": "null", "name": "Enter Meter Reading", "path": "", "enabled": false, "displayName": "Enter Meter Reading", "orderNumber": 0, "serviceCode": "ws-calculator"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 b7ccf439-1c9c-42f8-b13e-2dae0c50428a	pg	86e20e7278924ba42975315a8dbe53907a92d8acbd4a87bc659177c2cc5b95c4	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1901, "url": "/ws-services/wc/_update", "code": "null", "name": "Update Water Connection", "path": "", "enabled": false, "displayName": "Update Water COnnection", "orderNumber": 0, "serviceCode": "ws-services"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 8b9b011d-bb14-4400-ad16-1b6367c307a9	pg	7fd5f1a51609443b93466f989b6595505308ecc499ad0158f0027d295cc40fee	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1900, "url": "/ws-services/wc/_search", "code": "null", "name": "Search Water Connection", "path": "", "enabled": false, "displayName": "Search Water COnnection", "orderNumber": 0, "serviceCode": "ws-services"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
@@ -2428,6 +2677,7 @@ eb570d03-9dc1-4aef-8733-e9f69b31cb56	pg	aed62017f4e65e8677392faeb6a62542c5e1c039
 592e864c-b0ea-40c9-a583-8b15d68109f0	pg	19184b5fee65d6e2814db761e9b4c39b3a8ef0cb9ffbe880c7da72ec066e1fac	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1742, "url": "/egov-workflow-v2/egov-wf/businessservice/_update", "code": "null", "name": "BusinessService Update", "path": "", "enabled": false, "displayName": "BusinessService Update", "orderNumber": 0, "serviceCode": "egov-workflow-v2", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 297f1b8b-aac0-44f9-904c-98b4052c2e48	pg	8c36703bc48164eea4ca018c96a9540f12592f1c7773b234421daea548f3e67a	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1741, "url": "/egov-workflow-v2/egov-wf/businessservice/_create", "code": "null", "name": "BusinessService Create", "path": "", "enabled": false, "displayName": "BusinessService Create", "orderNumber": 0, "serviceCode": "egov-workflow-v2", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 c109f8a7-2953-4148-b5d8-03c646bc3044	pg	7df56f709ccdcc6d89011f62b5ad655ea15ae5ef4bdc14dd0e1b90611d65b0a5	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1734, "url": "/localization/messages/v1/_upsert", "code": "null", "name": "LocalizationMessagesUpsert", "path": "", "enabled": false, "displayName": "Localization Messages Upsert", "orderNumber": 1, "serviceCode": "filestore url", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+170d7f77-e479-456d-b7ff-e625430432f2	pg	ab6e876102a7723ab57e6892f60be96625bc255dea2523373fb3f4af33937fcd	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 59, "actionid": 605, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 9a0272b5-0fc4-4e6d-8b8b-f463adc9e343	pg	33b23b707006638dbda4fc0e44e076ac8057627888b29f892bef8a1920fcace1	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1730, "url": "/egov-workflow-v2/egov-wf/process/_search", "code": "null", "name": "Workflow search", "path": "", "enabled": false, "displayName": "Workflow search", "orderNumber": 0, "serviceCode": "egov-workflow-v2", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 7628e255-a5e3-4db3-bab1-c7edec9a3cbc	pg	a7f4d52ce5f6d4bc89ceb84ac53594fe827f17f7b0948e0ea52e0787363652f7	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1729, "url": "/egov-workflow-v2/egov-wf/process/_transition", "code": "null", "name": "Workflow transition", "path": "", "enabled": false, "displayName": "Workflow transition", "orderNumber": 0, "serviceCode": "egov-workflow-v2", "parentModule": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 78f06d6a-4eb2-4bd1-a4cb-65f3e5854e90	pg	803bcb3e6f1d2d77607b8b5a2c4312cfc3f14aa5f74a5cfbd6a0ca1b33dff893	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1700, "url": "/user/users/_updatenovalidate", "code": "null", "name": "updateUsernovalidate", "path": "", "enabled": false, "displayName": "Update User novalidate", "orderNumber": 1, "serviceCode": "ADMIN"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
@@ -2490,6 +2740,7 @@ e594da44-f87d-446b-a653-10469a099ef8	pg	78ca406940552be3ea9a86a7cb26c891f9165689
 81ed7f23-a065-498c-8f6f-1973fa0c2e39	pg	07aab54f22ffe7d17107dafd0d62107237e2d84330d4311fe79eb7aaea9f4550	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 691, "url": "/otp/v1/_create", "code": "null", "name": "CreateOtp", "path": "Otp.CreateOtp", "enabled": false, "displayName": "Create Otp", "orderNumber": 1, "serviceCode": "OTP", "parentModule": "247"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 b761c846-bdc2-4824-b13e-9529d376d7cd	pg	0436056fd740917f9cc4facc2d311870b979b98871c543e1b8661797edcac883	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 627, "url": "/egov-location/boundarys/_search", "code": "null", "name": "Search Boundary", "path": "Location.Search Boundary", "enabled": false, "displayName": "Search Boundary", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 cd8b78a0-67d6-4f4f-98d9-c39faf6258f1	pg	73ad0b6629cb0cd5114d2b9f73a93ee04d74efc3b3bd9ca33a4d9bc0d7711ebf	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 623, "url": "/egov-idgen/id/_generate", "code": "null", "name": "GenerateNumber", "path": "Administration.GenerateNumber", "enabled": false, "displayName": "Generate Number", "orderNumber": 1, "serviceCode": "ADMIN"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+2f4ef09e-ed52-48d3-810b-2d9d6bee5b6b	pg	4828b3ab3c1143d393b29c4ad6597813dd408d4f04f35f479460f56bb44ab1e3	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 58, "actionid": 594, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 acddd6a0-7079-4c52-9eb1-91e784ec26dc	pg	29455213ed309180e548b4883cf39b129a9c4757081973ebd7abd74013b6c157	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 605, "url": "/user/users/_createnovalidate", "code": "null", "name": "CreateUsernovalidate", "path": "Administration.CreateUsernovalidate", "enabled": false, "displayName": "Create User novalidate", "orderNumber": 1, "serviceCode": "ADMIN"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 3df4f300-a2c8-42c8-94e3-4aac3da04538	pg	314dcd2a3958c7f687d3bb95061e74f3fd0e58465d95a80caeafdb71ef32e1ff	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 604, "url": "/user/_search", "code": "null", "name": "SearchUser", "path": "Administration.SearchUser", "enabled": false, "displayName": "Search User", "orderNumber": 1, "serviceCode": "ADMIN"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 fc5c33ba-ee15-4518-827b-ada04fc752a8	pg	093882cf08f22f0907e47b292d14f59b2bfd8352462bc7ba0d052a2667fe61c6	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 594, "url": "/access/v1/actions/_get", "code": "null", "name": "Get All Actions", "path": "Access Control.Get All Actions", "enabled": false, "displayName": "Get All Actions", "orderNumber": 1, "serviceCode": "AccessControl"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
@@ -2838,11 +3089,6 @@ f4aacd11-407d-4402-a468-bbda600d75ff	pg	d0fb3c5623ec9538db082f9a9fd5e6e82d386eb2
 09c29b4f-4480-4ed6-9f3a-a6445fd16c82	pg	dda909e163d71df6c4a929d4bfbeb08520c1ba34c3aab2e820e5310c8730d720	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 66, "actionid": 627, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 f58efa7c-4120-40ea-89db-a12ea8aacedf	pg	1cde343daa87308ab4d9cd9ff71898694e76496a4bd2e8c76148749fecb61bf6	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 65, "actionid": 623, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 2677f8f0-8286-4733-bb0c-dd303439d624	pg	6e7911b124577e981c71357cbb0d09551aa282c6f4b49bab8041966276688aec	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 64, "actionid": 254, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
-1cc0758c-25c9-4f03-b22d-d58af0683ec9	pg	1ed1d61d04816b289dea0c6276336e62a95fe2ad0642ad6c731ef8b5b28991df	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 63, "actionid": 254, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
-32142e73-6d79-422b-885e-7a6dddcee0ff	pg	519918cb19cfed9b0ca53ecb445d07f3dab75b72aade3a161daedb1eb588a44c	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 61, "actionid": 582, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
-d6b2c1dc-d519-4c71-80aa-c35d5d23ed81	pg	5f420d84baef2eb7a295a33d09f386512945bc960a2b76b2497947f84b904481	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 60, "actionid": 604, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
-170d7f77-e479-456d-b7ff-e625430432f2	pg	ab6e876102a7723ab57e6892f60be96625bc255dea2523373fb3f4af33937fcd	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 59, "actionid": 605, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
-2f4ef09e-ed52-48d3-810b-2d9d6bee5b6b	pg	4828b3ab3c1143d393b29c4ad6597813dd408d4f04f35f479460f56bb44ab1e3	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 58, "actionid": 594, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 e566a754-8424-49cd-af8e-6e6b5ff3d4d2	pg	fb19ff3824ad3a9f1cda8ed892a08ddc5e1548855df75290a6652224b9e17758	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 57, "actionid": 594, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 800d1463-7022-4c3a-b20e-54f11ff60486	pg	5be4e6cfe9d42b567ab23b1f69699e5ce6a28b43cb3af80c032b8a9f3c43be07	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 56, "actionid": 695, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 521a123e-9fc1-4b48-bfd6-1617d2d12fe5	pg	59733f844ea6cd15e5bc10e4ec0d3e0ba0117097528e193c3bec6f70d23b3aa5	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 55, "actionid": 355, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
@@ -3161,6 +3407,7 @@ c484e9d2-acf9-4aad-8af7-802f3e2771ac	pg	33552d7944d29db95d3abfda24a528d39c715f48
 47215ddc-cdc9-4021-81ef-9b6137c9123a	pg	e08f0fc8b81e33183a57e2d0fdf93aefb2a75b1c10208502e948a55ea39cd673	Workflow.BusinessService	{"uuid": "2b75575a-f84d-11e8-8eb2-f2801f1b9fd1", "getUri": "", "states": [{"uuid": "bf5fd4f4-f7df-11e8-8eb2-f2801f1b9fd1", "state": "INITIATED", "actions": [{"uuid": "4bd0f10a-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "CITIZEN,TL_CEMP", "action": "APPLY", "stateId": "bf5fd4f4-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fd8c8-f7df-11e8-8eb2-f2801f1b9fd1"}], "tenantId": "pg", "isStartState": "true", "UpdateAllowed": "false", "isTerminateState": "false", "applicableActions": "INITIATE", "businessServiceId": "NewTL", "docUploadRequired": "false", "applicableNextStates": "APPLIED"}, {"uuid": "bf5fd8c8-f7df-11e8-8eb2-f2801f1b9fd1", "state": "APPLIED", "actions": [{"uuid": "4bd0f2a4-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "SYSTEM_PAYMENT", "action": "PAY", "stateId": "bf5fd8c8-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fdaee-f7df-11e8-8eb2-f2801f1b9fd1"}, {"uuid": "4bd0f3ee-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "CLERK", "action": "CANCEL", "stateId": "bf5fd8c8-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fe0fc-f7df-11e8-8eb2-f2801f1b9fd1"}, {"uuid": "4bd0f524-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "CLERK", "action": "REJECT", "stateId": "bf5fd8c8-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fe318-f7df-11e8-8eb2-f2801f1b9fd1"}, {"uuid": "543f802e-f952-11e8-8eb2-f2801f1b9fd1", "roles": "TL_APPROVER", "action": "APPROVE", "stateId": "bf5fe444-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fdfbc-f7df-11e8-8eb2-f2801f1b9fd1"}], "tenantId": "pg", "isStartState": "false", "UpdateAllowed": "true", "isTerminateState": "false", "applicableActions": "Reject,Pay,Cancel,Mark", "businessServiceId": "NewTL", "docUploadRequired": "false", "applicableNextStates": "Paid,Cancelled,Rejected"}, {"uuid": "bf5fdaee-f7df-11e8-8eb2-f2801f1b9fd1", "state": "PAID", "actions": [{"uuid": "4bd0faa6-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "CLERK", "action": "CANCEL", "stateId": "bf5fdaee-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fe0fc-f7df-11e8-8eb2-f2801f1b9fd1"}, {"uuid": "4bd0fc54-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "CLERK", "action": "REJECT", "stateId": "bf5fdaee-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fe318-f7df-11e8-8eb2-f2801f1b9fd1"}, {"uuid": "4bd0feac-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "CLERK", "action": "MARK", "stateId": "bf5fdaee-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fdaee-f7df-11e8-8eb2-f2801f1b9fd1"}, {"uuid": "4bd10136-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "CLERK", "action": "FORWARD", "stateId": "bf5fdaee-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fdd28-f7df-11e8-8eb2-f2801f1b9fd1"}], "tenantId": "pg", "isStartState": "false", "UpdateAllowed": "true", "isTerminateState": "false", "applicableActions": "Approve,Cancel,Reject,Mark", "businessServiceId": "NewTL", "docUploadRequired": "false", "applicableNextStates": "Intermediate"}, {"uuid": "bf5fdd28-f7df-11e8-8eb2-f2801f1b9fd1", "state": "FIELDINSPECTION", "actions": [{"uuid": "4bd1041a-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "TL_FIELD_INSPECTOR", "action": "CANCEL", "stateId": "bf5fdd28-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fe0fc-f7df-11e8-8eb2-f2801f1b9fd1"}, {"uuid": "4bd1064a-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "TL_FIELD_INSPECTOR", "action": "REJECT", "stateId": "bf5fdd28-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fe318-f7df-11e8-8eb2-f2801f1b9fd1"}, {"uuid": "4bd108ac-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "TL_FIELD_INSPECTOR", "action": "MARK", "stateId": "bf5fdd28-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fdd28-f7df-11e8-8eb2-f2801f1b9fd1"}, {"uuid": "4bd10de8-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "TL_FIELD_INSPECTOR", "action": "FORWARD", "stateId": "bf5fdd28-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fe444-f7df-11e8-8eb2-f2801f1b9fd1"}], "tenantId": "pg", "isStartState": "false", "UpdateAllowed": "", "isTerminateState": "false", "applicableActions": "", "businessServiceId": "NewTL", "docUploadRequired": "", "applicableNextStates": "Approved,Cancelled,Rejected"}, {"uuid": "bf5fdfbc-f7df-11e8-8eb2-f2801f1b9fd1", "state": "APPROVED", "actions": [{"uuid": "4bd11770-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "TL_APPROVER", "action": "CANCEL", "stateId": "bf5fdfbc-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fe0fc-f7df-11e8-8eb2-f2801f1b9fd1"}], "tenantId": "pg", "isStartState": "false", "UpdateAllowed": "true", "isTerminateState": "true", "applicableActions": "CANCEL", "businessServiceId": "NewTL", "docUploadRequired": "true", "applicableNextStates": ""}, {"uuid": "bf5fe0fc-f7df-11e8-8eb2-f2801f1b9fd1", "state": "CANCELLED", "actions": [{"uuid": "4bd112e8-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "", "action": "", "stateId": "bf5fe0fc-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": ""}], "tenantId": "pg", "isStartState": "false", "UpdateAllowed": "true", "isTerminateState": "true", "applicableActions": "", "businessServiceId": "NewTL", "docUploadRequired": "false", "applicableNextStates": ""}, {"uuid": "bf5fe318-f7df-11e8-8eb2-f2801f1b9fd1", "state": "REJECTED", "actions": [{"uuid": "4bd115fe-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "CITIZEN,TL_CEMP", "action": "REINITIATE", "stateId": "bf5fe318-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fd4f4-f7df-11e8-8eb2-f2801f1b9fd1"}], "tenantId": "pg", "isStartState": "false", "UpdateAllowed": "true", "isTerminateState": "true", "applicableActions": "Reapply", "businessServiceId": "NewTL", "docUploadRequired": "true", "applicableNextStates": "Initiated"}, {"uuid": "bf5fe444-f7df-11e8-8eb2-f2801f1b9fd1", "state": "PENDINGAPPROVAL", "actions": [{"uuid": "4bd10f50-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "TL_APPROVER", "action": "APPROVE", "stateId": "bf5fe444-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fdfbc-f7df-11e8-8eb2-f2801f1b9fd1"}, {"uuid": "4bd11086-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "TL_APPROVER", "action": "CANCEL", "stateId": "bf5fe444-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fe0fc-f7df-11e8-8eb2-f2801f1b9fd1"}, {"uuid": "4bd111a8-f7d3-11e8-8eb2-f2801f1b9fd1", "roles": "TL_APPROVER", "action": "REJECT", "stateId": "bf5fe444-f7df-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fe318-f7df-11e8-8eb2-f2801f1b9fd1"}], "tenantId": "pg", "isStartState": "false", "UpdateAllowed": "", "isTerminateState": "false", "applicableActions": "", "businessServiceId": "NewTL", "docUploadRequired": "", "applicableNextStates": ""}, {"uuid": "9d458700-f894-11e8-8eb2-f2801f1b9fd1", "state": "", "actions": [{"uuid": "2efb9036-f895-11e8-8eb2-f2801f1b9fd1", "roles": "CITIZEN,TL_CEMP", "action": "INITIATE", "stateId": "9d458700-f894-11e8-8eb2-f2801f1b9fd1", "tenantId": "pg", "nextStateId": "bf5fd4f4-f7df-11e8-8eb2-f2801f1b9fd1"}], "tenantId": "pg", "isStartState": "true", "UpdateAllowed": "true", "isTerminateState": "false", "applicableActions": "INITIATE", "businessServiceId": "NewTL", "docUploadRequired": "false", "applicableNextStates": "Initiated"}], "postUri": "", "tenantId": "pg", "businessService": "NewTL"}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 22fcc569-d23d-4e85-a2cb-1528123d8c0a	pg	9c1639a0d054ead7762c28dc39d4faace7bd3c2beb39dadf044bdd15a3662d5d	Workflow.BusinessServiceConfig	{"code": "NEWTL", "isStateLevel": true}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
 7a114c79-20af-4062-b49d-c6b8d8aae969	pg	0c5d9c83e755ff20012541233d8dec09a5bded28ac0007b76328de484bf77700	Workflow.BusinessServiceConfig	{"code": "FIRENOC", "isStateLevel": true}	t	system-mdms-seed	system-mdms-seed	1766039437780	1766039437780
+1fe68083-0c43-42d8-bc11-0bf551c8ec1e	ciregtest	tx.property_tax_2013-14.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "tx.property_tax_2013-14.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166376	1778655166376
 83c6884b-dabc-43b4-bcb1-8e81eeda24b8	statea	RAINMAKER-PGR.inbox-pgr-services	INBOX.InboxQueryConfiguration	{"index": "inbox-pgr-services", "module": "RAINMAKER-PGR", "sortBy": {"path": "Data.service.auditDetails.createdTime", "defaultOrder": "ASC"}, "sourceFilterPathList": ["Data.currentProcessInstance", "Data.service.serviceRequestId", "Data.service.address.locality.code", "Data.service.applicationStatus", "Data.service.citizen", "Data.service.auditDetails.createdTime", "Data.auditDetails", "Data.tenantId", "Data.service.serviceCode"], "allowedSearchCriteria": [{"name": "area", "path": "Data.service.address.locality.code.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "status", "path": "Data.currentProcessInstance.state.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignedToMe", "path": "Data.workflow.assignes.*.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "fromDate", "path": "Data.service.auditDetails.createdTime", "operator": "GTE", "isMandatory": false}, {"name": "toDate", "path": "Data.service.auditDetails.createdTime", "operator": "LTE", "isMandatory": false}, {"name": "complaintNumber", "path": "Data.service.serviceRequestId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "mobileNumber", "path": "Data.service.citizen.mobileNumber.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "tenantId", "path": "Data.service.tenantId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignee", "path": "Data.currentProcessInstance.assignes.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "complaintType", "path": "Data.service.serviceCode.keyword", "operator": "EQUAL", "isMandatory": false}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614860649	1770614860649
 eb840c25-0911-4732-aa7d-b54c59fa7c04	statea	Workbench	tenant.citymodule	{"code": "Workbench", "order": 1, "active": true, "module": "Workbench", "tenants": [{"code": "statea"}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614860662	1770614860662
 89305733-2ab6-44a5-b77d-c6c127adef60	statea	PGR	tenant.citymodule	{"code": "PGR", "order": 2, "active": true, "module": "PGR", "tenants": [{"code": "statea"}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614860675	1770614860675
@@ -3249,6 +3496,7 @@ f1a8df35-3af2-4614-8631-2bf2979298eb	statea	2623	ACCESSCONTROL-ACTIONS-TEST.acti
 77357c52-5da2-4ca1-a0a3-3816f5459574	statea	2622	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2622, "url": "/egov-mdms-service/v2/_update/Workflow.AutoEscalation", "code": "null", "name": "MDMS", "path": "", "enabled": true, "displayName": "update Workflow.AutoEscalation", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864069	1770614864069
 5bf80ff3-a002-4e6c-a508-16cc073a1300	statea	2621	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2621, "url": "/egov-mdms-service/v2/_update/Workflow.AutoEscalationStatesToIgnore", "code": "null", "name": "MDMS", "path": "", "enabled": true, "displayName": "update Workflow.AutoEscalationStatesToIgnore", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864081	1770614864081
 ec7f406d-b964-4e21-9d9a-925bd57ffa53	statea	2620	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2620, "url": "/egov-mdms-service/v2/_update/Workflow.BusinessService", "code": "null", "name": "MDMS", "path": "", "enabled": true, "displayName": "update Workflow.BusinessService", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864090	1770614864090
+ce254d2d-65e6-42df-9707-e5bc9e03f96c	ciregtest	advt.test_munadi_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "advt.test_munadi_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166490	1778655166490
 4095ad10-aef6-40e9-9f4d-aab8cb164064	statea	2619	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2619, "url": "/egov-mdms-service/v2/_update/Workflow.BusinessServiceConfig", "code": "null", "name": "MDMS", "path": "", "enabled": true, "displayName": "update Workflow.BusinessServiceConfig", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864099	1770614864099
 a97c3c80-d5ad-4861-8165-507fe33334fd	statea	2618	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2618, "url": "/egov-mdms-service/v2/_update/Workflow.BusinessServiceMasterConfig", "code": "null", "name": "MDMS", "path": "", "enabled": true, "displayName": "update Workflow.BusinessServiceMasterConfig", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864107	1770614864107
 0f7884a6-ae41-435c-91a2-6d9b14b58742	statea	2600	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2600, "url": "/egov-mdms-service/v2/_create/ACCESSCONTROL-ACTIONS-TEST.actions-test", "code": "null", "name": "MDMS", "path": "", "enabled": true, "displayName": "create ACCESSCONTROL-ACTIONS-TEST.actions-test", "orderNumber": 1, "serviceCode": "MDMS v2", "parentModule": ""}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864257	1770614864257
@@ -3328,6 +3576,7 @@ dd08e1db-8e42-4b87-9690-f0e4b8e5da16	statea	2560	ACCESSCONTROL-ACTIONS-TEST.acti
 63893375-4a93-4a34-a991-370a550aa949	statea	2557	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2557, "url": "/inbox/v2/_search", "code": "null", "name": "Inbox Search for UI", "path": "", "enabled": true, "displayName": "Inbox v2 Search", "orderNumber": 0, "serviceCode": "inbox"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864617	1770614864617
 ae01a6af-8145-4da8-bff5-5b9e9b14b7a7	statea	2556	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2556, "url": "/inbox/v2/_search", "code": "null", "name": "Inbox Search for UI", "path": "", "enabled": false, "displayName": "Inbox Search", "orderNumber": 0, "serviceCode": "inbox"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864624	1770614864624
 40f4958f-88e6-46c4-9fe3-d8c82a61ab92	statea	2538	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2538, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ROLESrolesroles", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Roleactions Roles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ROLES&masterName=rolesroles"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864641	1770614864640
+80326725-d496-46d0-a55f-06610f72d94f	ciregtest	advt.outdoor_media_display_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "advt.outdoor_media_display_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166604	1778655166604
 8e523d49-f479-40a4-a5a8-b71c5dd59884	statea	2535	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2535, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ROLEACTIONSroleactions", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Roleactions", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ROLEACTIONS&masterName=roleactions"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864648	1770614864648
 f7742aca-1097-4ac5-9d09-cf3e0c1a0353	statea	2532	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2532, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ROLESroles", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Roles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ROLES&masterName=roles"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864655	1770614864655
 16496af1-5a2c-499f-a3d7-fecef9f43de3	statea	2529	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2529, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ACTIONS-TESTactions-test", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Actions test", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ACTIONS-TEST&masterName=actions-test"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614864663	1770614864663
@@ -3392,6 +3641,7 @@ bd4f9956-29b2-407a-a22f-02971ead0ee2	statea	870	ACCESSCONTROL-ACTIONS-TEST.actio
 1402c43f-ab5c-40af-a1d0-dc7b0bb6291e	statea	730	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 730, "url": "/access/v1/roles/_create", "code": "null", "name": "CreateRoles", "path": "Access Control.CreateRoles", "enabled": false, "displayName": "Create Roles", "orderNumber": 1, "serviceCode": "AccessControl"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865219	1770614865219
 b0b4d15e-06b6-444a-a0d7-170b153f93d2	statea	729	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 729, "url": "/access/v1/roles/_search", "code": "null", "name": "SearchRoles", "path": "Access Control.SearchRoles", "enabled": false, "displayName": "Search Roles", "orderNumber": 1, "serviceCode": "AccessControl"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865226	1770614865226
 b446c9b1-fe2d-4be1-a230-4e3b8d14b57c	statea	728	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 728, "url": "/access/v1/role-actions/_create", "code": "null", "name": "CreateRoleActions", "path": "Access Control.CreateRoleActions", "enabled": false, "displayName": "Create Role actions", "orderNumber": 1, "serviceCode": "AccessControl"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865234	1770614865234
+ed95985b-87ca-42f3-8b42-4820634120ec	ciregtest	advt.canopy_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "advt.canopy_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166716	1778655166716
 c1a8ac56-0f86-4fc3-9acc-8c468e227f28	statea	727	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 727, "url": "/access/v1/actions/_update", "code": "null", "name": "UpdateActions", "path": "Access Control.UpdateActions", "enabled": false, "displayName": "Update Action", "orderNumber": 1, "serviceCode": "AccessControl"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865242	1770614865242
 264216ae-3390-4380-ab5b-aa17622d3a15	statea	726	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 726, "url": "/access/v1/actions/_create", "code": "null", "name": "CreateActions", "path": "Access Control.CreateActions", "enabled": false, "displayName": "Create Action", "orderNumber": 1, "serviceCode": "AccessControl"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865250	1770614865250
 4b1483a1-ce81-4039-8a0c-7c8bb3fdb1f0	statea	725	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 725, "url": "/access/v1/actions/_validate", "code": "null", "name": "ValidateAction", "path": "Access Control.ValidateAction", "enabled": false, "displayName": "Validate Action", "orderNumber": 1, "serviceCode": "AccessControl"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865257	1770614865257
@@ -3455,6 +3705,7 @@ e49cbfd7-4005-488c-be2e-909d8af5393c	statea	UserListSelf	DataSecurity.Decryption
 415f2860-aab6-47c3-92af-7a1109b373f5	statea	LMEPerformanceReport	DataSecurity.DecryptionABAC	{"key": "LMEPerformanceReport", "roleAttributeAccessList": [{"roleCode": "SUPERUSER", "attributeAccessList": [{"attribute": {"jsonPath": "*/employee"}, "accessType": "PLAIN"}]}, {"roleCode": "GRO", "attributeAccessList": [{"attribute": {"jsonPath": "*/employee"}, "accessType": "PLAIN"}]}, {"roleCode": "PGR_LME", "attributeAccessList": [{"attribute": {"jsonPath": "*/employee"}, "accessType": "PLAIN"}]}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865662	1770614865662
 bd48e49e-6888-4a5a-88d3-eaa46d3f5cc1	statea	ULBEmployeeWiseReport	DataSecurity.DecryptionABAC	{"key": "ULBEmployeeWiseReport", "roleAttributeAccessList": [{"roleCode": "EMPLOYEE", "attributeAccessList": [{"attribute": {"jsonPath": "*/employee"}, "accessType": "PLAIN"}]}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865668	1770614865668
 15fd3e9f-9cd6-49d7-8d16-e64b040b2bda	statea	EmployeeReport	DataSecurity.DecryptionABAC	{"key": "EmployeeReport", "roleAttributeAccessList": [{"roleCode": "EMPLOYEE", "attributeAccessList": [{"attribute": {"jsonPath": "*/name"}, "accessType": "PLAIN"}]}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865675	1770614865675
+76b6205c-e140-44e4-aff5-3a84b07d6259	ciregtest	admn.parking_booking_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "admn.parking_booking_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166832	1778655166832
 72384f46-92f5-456b-b118-5b4a4710c0c2	statea	DescriptionReport	DataSecurity.DecryptionABAC	{"key": "DescriptionReport", "roleAttributeAccessList": [{"roleCode": "PGR_LME", "attributeAccessList": [{"attribute": {"jsonPath": "*/name"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/lastassignedto"}, "accessType": "PLAIN"}]}, {"roleCode": "GRO", "attributeAccessList": [{"attribute": {"jsonPath": "*/name"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/lastassignedto"}, "accessType": "PLAIN"}]}, {"roleCode": "SUPERUSER", "attributeAccessList": [{"attribute": {"jsonPath": "*/name"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/lastassignedto"}, "accessType": "PLAIN"}]}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865683	1770614865683
 3e096f6b-819b-44df-a04a-652360178e82	statea	TradeLicenseCancelledRegistryReport	DataSecurity.SecurityPolicy	{"model": "TradeLicenseCancelledRegistryReport", "attributes": [{"name": "name", "jsonPath": "name", "patternId": "002", "defaultVisibility": "PLAIN"}], "uniqueIdentifier": {"name": "uuid", "jsonPath": "/uuid"}, "roleBasedDecryptionPolicy": []}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865930	1770614865930
 0bc7d858-4749-4f84-a082-c9a5685aeae4	statea	ALL_ACCESS	DataSecurity.DecryptionABAC	{"key": "ALL_ACCESS", "roleAttributeAccessList": [{"roleCode": "SYSTEM", "attributeAccessList": [{"attribute": {"jsonPath": "*/name"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/mobileNumber"}, "accessType": "PLAIN"}]}, {"roleCode": "CITIZEN", "attributeAccessList": [{"attribute": {"jsonPath": "*/name"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/mobileNumber"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/emailId"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/username"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/altContactNumber"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/pan"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/aadhaarNumber"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/guardian"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/permanentAddress/address"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/correspondenceAddress/address"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/addresses/*/address"}, "accessType": "PLAIN"}]}, {"roleCode": "ANONYMOUS", "attributeAccessList": [{"attribute": {"jsonPath": "*/name"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/mobileNumber"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/emailId"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/username"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/altContactNumber"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/pan"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/aadhaarNumber"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/guardian"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/permanentAddress/address"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/correspondenceAddress/address"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/addresses/*/address"}, "accessType": "PLAIN"}]}, {"roleCode": "EMPLOYEE", "attributeAccessList": [{"attribute": {"jsonPath": "*/name"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/mobileNumber"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/emailId"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/username"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/altContactNumber"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/pan"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/aadhaarNumber"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/guardian"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/permanentAddress/address"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/correspondenceAddress/address"}, "accessType": "PLAIN"}, {"attribute": {"jsonPath": "*/addresses/*/address"}, "accessType": "PLAIN"}]}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865691	1770614865691
@@ -3466,6 +3717,7 @@ bd48e49e-6888-4a5a-88d3-eaa46d3f5cc1	statea	ULBEmployeeWiseReport	DataSecurity.D
 5349d3cf-86c5-4592-a21b-59b88d32e140	statea	DescriptionReport	DataSecurity.SecurityPolicy	{"model": "DescriptionReport", "attributes": [{"name": "name", "jsonPath": "name", "patternId": "002", "defaultVisibility": "PLAIN"}], "uniqueIdentifier": {"name": "user_uuid", "jsonPath": "/user_uuid"}, "roleBasedDecryptionPolicy": []}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865739	1770614865739
 98443fb9-5680-4f66-a36c-fce360149383	statea	LMEPerformanceReport	DataSecurity.SecurityPolicy	{"model": "LMEPerformanceReport", "attributes": [{"name": "employee", "jsonPath": "employee", "patternId": "002", "defaultVisibility": "PLAIN"}], "uniqueIdentifier": {"name": "user_uuid", "jsonPath": "/user_uuid"}, "roleBasedDecryptionPolicy": []}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865748	1770614865748
 eb0faa2c-cc51-4985-b7dc-adce4fa0e02f	statea	GROPerformanceReport	DataSecurity.SecurityPolicy	{"model": "GROPerformanceReport", "attributes": [{"name": "employee", "jsonPath": "employee", "patternId": "002", "defaultVisibility": "PLAIN"}], "uniqueIdentifier": {"name": "user_uuid", "jsonPath": "/user_uuid"}, "roleBasedDecryptionPolicy": []}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865757	1770614865757
+7d1caa0f-7d1f-4b3b-998f-b9f5fc8e3870	ciregtest	om.road_cut_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "om.road_cut_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166948	1778655166948
 302cd212-b0c9-47a0-a80b-785ed6d7e6c7	statea	Property	DataSecurity.SecurityPolicy	{"model": "Property", "attributes": [{"name": "sample", "jsonPath": "sample", "patternId": null, "defaultVisibility": "PLAIN"}], "uniqueIdentifier": {"name": "uuid", "jsonPath": "/owners/0/uuid"}, "roleBasedDecryptionPolicy": [{"roles": ["WS_CEMP", "WS_DOC_VERIFIER", "WS_FIELD_INSPECTOR", "WS_APPROVER", "WS_CLERK", "SW_CEMP", "SW_DOC_VERIFIER", "SW_FIELD_INSPECTOR", "SW_APPROVER", "SW_CLERK", "PT_APPROVER", "PT_CEMP", "PT_COLLECTION_EMP", "PT_FIELD_INSPECTOR", "PT_DOC_VERIFIER"], "attributeAccessList": []}, {"roles": ["REINDEXING_ROLE"], "attributeAccessList": []}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865768	1770614865768
 c2a0c456-8c6b-491e-95dd-a4ffdd953c5f	statea	WnSConnection	DataSecurity.SecurityPolicy	{"model": "WnSConnection", "attributes": [{"name": "sample", "jsonPath": "sample", "patternId": null, "defaultVisibility": "PLAIN"}], "uniqueIdentifier": {"name": "uuid", "jsonPath": "/connectionHolders/0/uuid"}, "roleBasedDecryptionPolicy": [{"roles": ["WS_CEMP", "WS_DOC_VERIFIER", "WS_FIELD_INSPECTOR", "WS_APPROVER", "WS_CLERK", "SW_CEMP", "SW_DOC_VERIFIER", "SW_FIELD_INSPECTOR", "SW_APPROVER", "SW_CLERK"], "attributeAccessList": []}, {"roles": ["REINDEXING_ROLE"], "attributeAccessList": []}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865777	1770614865777
 1810fba9-4b32-4b02-816d-aa9e0123b14b	statea	WnSConnectionOwner	DataSecurity.SecurityPolicy	{"model": "WnSConnectionOwner", "attributes": [{"name": "sample", "jsonPath": "sample", "patternId": null, "defaultVisibility": "PLAIN"}], "uniqueIdentifier": {"name": "uuid", "jsonPath": "/uuid"}, "roleBasedDecryptionPolicy": [{"roles": ["WS_CEMP", "WS_DOC_VERIFIER", "WS_FIELD_INSPECTOR", "WS_APPROVER", "WS_CLERK", "SW_CEMP", "SW_DOC_VERIFIER", "SW_FIELD_INSPECTOR", "SW_APPROVER", "SW_CLERK"], "attributeAccessList": []}, {"roles": ["REINDEXING_ROLE"], "attributeAccessList": []}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614865786	1770614865786
@@ -3498,6 +3750,7 @@ b26f279f-1e4e-4bf9-bd63-c537a7f1a741	statea	005	DataSecurity.MaskingPatterns	{"p
 61afed30-4630-43d2-bc00-62b0ee0ff6de	statea	006	DataSecurity.MaskingPatterns	{"pattern": "\\\\w(?=(?:[ \\\\w]*\\\\w){2}$)", "patternId": "006"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614866030	1770614866030
 537c26d2-4b6d-45b3-b206-f5bb007c2259	statea	007	DataSecurity.MaskingPatterns	{"pattern": "(?<=.).(?=.{3})", "patternId": "007"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614866038	1770614866038
 43b18ec7-a00a-4b89-afe9-d2e2190bed58	statea	008	DataSecurity.MaskingPatterns	{"pattern": "(?<=.).(?=.{2})", "patternId": "008"}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614866044	1770614866044
+fa3979d0-e133-45bf-b479-746a0941be38	ciregtest	nks.building_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.building_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655167061	1778655167061
 2a812630-6d1e-47a1-a830-ddcc5a67a27e	statea	BndDetail	DataSecurity.EncryptionPolicy	{"key": "BndDetail", "attributeList": [{"type": "Normal", "jsonPath": "mobileno"}, {"type": "Normal", "jsonPath": "emailid"}, {"type": "Normal", "jsonPath": "aadharno"}, {"type": "Normal", "jsonPath": "icdcode"}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614866051	1770614866051
 e9b6f58c-c36c-4e2e-a40d-e02c2510de29	statea	UserSearchCriteria	DataSecurity.EncryptionPolicy	{"key": "UserSearchCriteria", "attributeList": [{"type": "Normal", "jsonPath": "userName"}, {"type": "Normal", "jsonPath": "name"}, {"type": "Normal", "jsonPath": "mobileNumber"}, {"type": "Normal", "jsonPath": "aadhaarNumber"}, {"type": "Normal", "jsonPath": "pan"}, {"type": "Normal", "jsonPath": "emailId"}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614866058	1770614866058
 0f2b791e-0a01-4540-8878-3137dc2fb4e6	statea	User	DataSecurity.EncryptionPolicy	{"key": "User", "attributeList": [{"type": "Normal", "jsonPath": "name"}, {"type": "Normal", "jsonPath": "mobileNumber"}, {"type": "Normal", "jsonPath": "emailId"}, {"type": "Normal", "jsonPath": "username"}, {"type": "Normal", "jsonPath": "altContactNumber"}, {"type": "Normal", "jsonPath": "pan"}, {"type": "Normal", "jsonPath": "aadhaarNumber"}, {"type": "Normal", "jsonPath": "guardian"}, {"type": "Normal", "jsonPath": "permanentAddress/address"}, {"type": "Normal", "jsonPath": "correspondenceAddress/address"}, {"type": "Normal", "jsonPath": "addresses/*/address"}]}	t	9180cc27-b550-4245-96b1-e1e111e3eb3a	9180cc27-b550-4245-96b1-e1e111e3eb3a	1770614866065	1770614866065
@@ -4135,6 +4388,7 @@ bc969895-7929-40cc-b4ee-c31a0203ad6a	ke	StreetLightNotWorking	RAINMAKER-PGR.Serv
 804edb73-e27e-4ee9-b730-869511fd0f84	ke	BlockOrOverflowingSewage	RAINMAKER-PGR.ServiceDefs	{"name": "Block / Overflowing sewage", "order": 2, "active": true, "keywords": "water, supply, connection, damage, repair, broken, pipe, piping, tap", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "BlockOrOverflowingSewage"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655054006	1778655054006
 60c7056e-e6c3-45ca-9a0a-1bba0c34b781	ke	CuttingOrTrimmingOfTreeRequired	RAINMAKER-PGR.ServiceDefs	{"name": "Cutting/trimming of tree required", "active": true, "keywords": "tree, remove, trim, fallen, cut, plant, branch", "menuPath": "Trees", "slaHours": 336, "department": "DEPT_5", "serviceCode": "CuttingOrTrimmingOfTreeRequired"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655054122	1778655054122
 aded5d62-0ca3-4445-96e3-a28d0694c806	ke	OverflowingOrBlockedDrain	RAINMAKER-PGR.ServiceDefs	{"name": "Overflowing/Blocked drain", "active": true, "keywords": "drain, block, clean, debris, silt, drainage, water, clean, roadside, flow, remove, waste, garbage, clear, overflow, canal, fill, stagnate, rain, sanitation, sand, pipe, clog, stuck", "menuPath": "Drains", "slaHours": 336, "department": "DEPT_4", "serviceCode": "OverflowingOrBlockedDrain"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655054238	1778655054238
+aa9d4b08-418d-4a9b-bb6a-f003bc2a7e1a	ciregtest	nks.boundary_wall_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.boundary_wall_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655167173	1778655167173
 7ace3feb-ac2e-4122-929a-e30ae1a8ae88	ke	all-services	common-masters.uiHomePage	{"redirectURL": "all-services", "appBannerMobile": {"code": "APP_BANNER_MOBILE", "name": "App Banner Mobile View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"}, "appBannerDesktop": {"code": "APP_BANNER_DESKTOP", "name": "App Banner Desktop View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"}, "citizenServicesCard": {"code": "HOME_CITIZEN_SERVICES_CARD", "name": "Home Citizen services Card", "props": [{"code": "ACTION_TEST_MCOLLECT", "name": "Miscellaneous Collection", "label": "ACTION_TEST_MCOLLECT", "enabled": true, "navigationUrl": "/digit-ui/citizen/mcollect-home"}, {"code": "CITIZEN_SERVICE_PT", "name": "Property Tax", "label": "MODULE_PT", "enabled": true, "navigationUrl": "/digit-ui/citizen/pt-home"}, {"code": "CITIZEN_SERVICE_TL", "name": "Trade Licence", "label": "MODULE_TL", "enabled": true, "navigationUrl": "/digit-ui/citizen/tl-home"}, {"code": "ACTION_TEST_BPA_STAKEHOLDER_HOME", "name": "Online Building Permit System", "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME", "enabled": true, "navigationUrl": "/digit-ui/citizen/obps-home"}, {"code": "ACTION_TEST_WATER_AND_SEWERAGE", "name": "Water & Sewerage", "label": "ACTION_TEST_WATER_AND_SEWERAGE", "enabled": true, "navigationUrl": "/digit-ui/citizen/ws-home"}, {"code": "ACTION_TEST_FIRE_NOC", "name": "Fire No Objection Certificate", "label": "ACTION_TEST_FIRE_NOC", "enabled": true, "navigationUrl": "/citizen/fire-noc/home"}, {"code": "ACTION_TEST_BIRTH_CERTIFICATE", "name": "Birth Certificate", "label": "ACTION_TEST_BIRTH_CERTIFICATE", "enabled": true, "navigationUrl": "/digit-ui/citizen/birth-citizen/home"}, {"code": "ACTION_TEST_DEATH_CERTIFICATE", "name": "Death Certificate", "label": "ACTION_TEST_DEATH_CERTIFICATE", "enabled": true, "navigationUrl": "/digit-ui/citizen/death-citizen/home"}], "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": "/digit-ui/citizen/all-services"}, "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"}, "whatsNewSection-disabled": {"code": "WHATSNEW", "name": "What's New", "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/whats-new"}, "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"}, "informationAndUpdatesCard": {"code": "HOME_CITIZEN_INFO_UPDATE_CARD", "name": "Home Citizen Information and Updates card", "props": [{"code": "CITIZEN_MY_CITY", "name": "My City", "label": "CS_HEADER_MYCITY", "enabled": true, "navigationUrl": ""}, {"code": "CITIZEN_EVENTS", "name": "Events", "label": "EVENTS_EVENTS_HEADER", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/events"}, {"code": "CITIZEN_DOCUMENTS", "name": "Documents", "label": "CS_COMMON_DOCUMENTS", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/docs"}, {"code": "CITIZEN_SURVEYS", "name": "Surveys", "label": "CS_COMMON_SURVEYS", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"}], "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": ""}, "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"}, "whatsAppBannerMobile-disabled": {"code": "WHATSAPP_BANNER_MOBILE", "name": "WhatsApp Banner Mobile View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg", "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"}, "whatsAppBannerDesktop-disabled": {"code": "WHATSAPP_BANNER_DESKTOP", "name": "WhatsApp Banner Desktop View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg", "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"}}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655054361	1778655054361
 a61a2c8f-a830-4bba-892c-58dae9cab8c3	ke	33	common-masters.wfSlaConfig	{"slotPercentage": 33, "middleSlabColor": "#EEA73A", "negativeSlabColor": "#F44336", "positiveSlabColor": "#4CAF50"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655054481	1778655054481
 839963f0-5ce2-46c5-a3c3-0b98117ab1d7	ke	432000000	RAINMAKER-PGR.UIConstants	{"REOPENSLA": 432000000}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655054725	1778655054725
@@ -4149,6 +4403,7 @@ c79dd988-b85e-44c5-8048-18683fb1c3e3	ke	1995	ACCESSCONTROL-ACTIONS-TEST.actions-
 4fe2fed9-0ca8-40af-b8ac-c3ad6a24e36a	ke	1932	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1932, "url": "quickAction", "code": "null", "name": "FIRE-NOC", "path": "FIRE-NOC.Search", "enabled": false, "leftIcon": "social:people", "displayName": "Search Fire Noc", "orderNumber": 3, "serviceCode": "FIRE-NOC", "parentModule": "", "navigationURL": "fire-noc/search"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655055904	1778655055904
 22631181-062f-4ee9-9f1b-1eac68938719	ke	691	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 691, "url": "/otp/v1/_create", "code": "null", "name": "CreateOtp", "path": "Otp.CreateOtp", "enabled": false, "displayName": "Create Otp", "orderNumber": 1, "serviceCode": "OTP", "parentModule": "247"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655056022	1778655056022
 1411b2c6-49c2-4ece-8076-a04ac9a5244c	ke	2018	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2018, "url": "/report/pgr/ULBReport/_get", "code": "null", "name": "ULBReport", "path": "PGR Report", "enabled": false, "displayName": "PGR Report", "orderNumber": 0, "serviceCode": "PGRReports"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655056138	1778655056138
+96e9e666-40b9-475a-bf2e-41eadcbf3c0f	ciregtest	TRANSFERRED	egov-hrms.EmployeeStatus	{"code": "TRANSFERRED", "active": true}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655184228	1778655184228
 f7543bf1-d68f-493e-bd76-aeb92ff7beed	ke	2008	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2008, "url": "/pgr-services/v2/request/_search", "code": "null", "name": "Search PGR Request", "path": "", "enabled": false, "displayName": "Search PGR Request", "orderNumber": 0, "serviceCode": "pgr-services", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655056253	1778655056253
 b0f55cd1-d784-4156-81aa-deeeeb72569c	ke	594	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 594, "url": "/access/v1/actions/_get", "code": "null", "name": "Get All Actions", "path": "Access Control.Get All Actions", "enabled": false, "displayName": "Get All Actions", "orderNumber": 1, "serviceCode": "AccessControl"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655056374	1778655056374
 0ffa88f9-2db2-45ee-a7d4-e0599e24d0a4	ke	1988	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1988, "url": "/land-services/v1/land/_create", "code": "null", "name": "BPA-Land-Create", "path": "", "enabled": false, "displayName": "Land Create", "orderNumber": 0, "serviceCode": "BPA"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655056490	1778655056490
@@ -4165,6 +4420,7 @@ f0411320-702a-4462-9d35-85033f8c70f2	ke	2515	ACCESSCONTROL-ACTIONS-TEST.actions-
 a6c77f06-79f4-4070-810a-4c64e13e731e	ke	277	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 277, "url": "/v1/files/id", "code": "null", "name": "filesearch", "path": "", "enabled": false, "displayName": "filesearch", "orderNumber": 1, "serviceCode": "filesearch", "parentModule": "76"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655057767	1778655057767
 9f79d3c6-4f15-4f04-9607-e5ec21b7a937	ke	1742	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1742, "url": "/egov-workflow-v2/egov-wf/businessservice/_update", "code": "null", "name": "BusinessService Update", "path": "", "enabled": false, "displayName": "BusinessService Update", "orderNumber": 0, "serviceCode": "egov-workflow-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655057883	1778655057883
 7f895704-38f2-4e08-80df-39ed180e4694	ke	2009	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2009, "url": "/pgr-services/v2/request/_count", "code": "null", "name": "Search PGR Request", "path": "", "enabled": false, "displayName": "Count PGR Request", "orderNumber": 0, "serviceCode": "pgr-services", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655057999	1778655057999
+1a5c476b-965b-4c6f-894f-39bf4f580aaf	ciregtest	nks.malba_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.malba_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655167290	1778655167290
 2f4524e4-3ac0-4857-88d5-3acef07417c9	ke	874	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 874, "url": "/egov-location/hierarchytypes/_search", "code": "null", "name": "SearchHierarchyTypes", "path": "Location.SearchHierarchyTypes", "enabled": false, "displayName": "Search HierarchyTypes", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655058115	1778655058115
 eb394527-1ee6-49be-8be9-70b0666e4b8b	ke	1955	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1955, "url": "/pt-calculator-v2/billingslab/mutation/_search", "code": "null", "name": "MutationBillingSlabSearch", "path": "", "enabled": false, "displayName": "Draft Search", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655058231	1778655058231
 973c42f8-ed08-460c-a5a8-65c92f216372	ke	1997	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1997, "url": "/egov-pdf/download/PT/ptmutationcertificate", "code": "null", "name": "ptmutationcertificate search", "path": "", "enabled": false, "displayName": "ptmutationcertificate search", "orderNumber": 7, "serviceCode": "egov-pdf"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655058345	1778655058345
@@ -4857,16 +5113,6 @@ f51b3270-d647-4f80-860f-fb6737f9f260	ciregtest	other.fire_noc_fee.receipt.id	com
 151bfb03-9536-41da-8fb9-d5f4e2ade6fc	ciregtest	other.fire_tender_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "other.fire_tender_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166034	1778655166034
 77cae6f5-c2c4-46eb-8b68-495c7affb93e	ciregtest	rev_grants.receipt.id	common-masters.IdFormat	{"format": "[cy:MM]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON", "idname": "rev_grants.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166148	1778655166148
 dacee7ba-044a-41a3-ad12-02cc6d7e183a	ciregtest	other.noc_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "other.noc_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166263	1778655166263
-1fe68083-0c43-42d8-bc11-0bf551c8ec1e	ciregtest	tx.property_tax_2013-14.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "tx.property_tax_2013-14.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166376	1778655166376
-ce254d2d-65e6-42df-9707-e5bc9e03f96c	ciregtest	advt.test_munadi_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "advt.test_munadi_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166490	1778655166490
-80326725-d496-46d0-a55f-06610f72d94f	ciregtest	advt.outdoor_media_display_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "advt.outdoor_media_display_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166604	1778655166604
-ed95985b-87ca-42f3-8b42-4820634120ec	ciregtest	advt.canopy_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "advt.canopy_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166716	1778655166716
-76b6205c-e140-44e4-aff5-3a84b07d6259	ciregtest	admn.parking_booking_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "admn.parking_booking_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166832	1778655166832
-7d1caa0f-7d1f-4b3b-998f-b9f5fc8e3870	ciregtest	om.road_cut_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "om.road_cut_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655166948	1778655166948
-fa3979d0-e133-45bf-b479-746a0941be38	ciregtest	nks.building_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.building_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655167061	1778655167061
-aa9d4b08-418d-4a9b-bb6a-f003bc2a7e1a	ciregtest	nks.boundary_wall_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.boundary_wall_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655167173	1778655167173
-96e9e666-40b9-475a-bf2e-41eadcbf3c0f	ciregtest	TRANSFERRED	egov-hrms.EmployeeStatus	{"code": "TRANSFERRED", "active": true}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655184228	1778655184228
-1a5c476b-965b-4c6f-894f-39bf4f580aaf	ciregtest	nks.malba_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.malba_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655167290	1778655167290
 4d596359-b7a2-479a-a28f-0da1c0d40aee	ciregtest	nks.development_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.development_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655167407	1778655167407
 85e31deb-e762-497e-9da9-4565aa837661	ciregtest	nks.change_of_land_use_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.change_of_land_use_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655167522	1778655167522
 f693b22a-5608-41bd-aab0-c27c629a23d8	ciregtest	nks.under_development_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.under_development_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655167635	1778655167635
@@ -5042,6 +5288,7 @@ b2dadc6d-f874-45f3-b228-b3bee4d2a7d5	ciregtest	HRMS_ADMIN	ACCESSCONTROL-ROLES.ro
 838c1d7a-d10e-45b5-b31c-d90d36a937df	ciregtest	WORKFLOW_ADMIN	ACCESSCONTROL-ROLES.roles	{"code": "WORKFLOW_ADMIN", "name": "WORKFLOW ADMIN", "description": "WORKFLOW User that can create and search Workflow"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655187444	1778655187444
 82845b3d-3311-4c67-b45d-0b2b92190d62	ciregtest	RequestSprayingOrFoggingOperation	RAINMAKER-PGR.ServiceDefs	{"name": "Request spraying/ fogging operations", "active": true, "keywords": "mosquito, menace, fog, spray, kill, health, dengue, malaria, disease, clean", "menuPath": "Mosquitos", "slaHours": 336, "department": "DEPT_3", "serviceCode": "RequestSprayingOrFoggingOperation"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655187561	1778655187561
 0116400e-cd77-4b05-8c62-d6f82f997653	ciregtest	Others	RAINMAKER-PGR.ServiceDefs	{"name": "Others", "order": 6, "active": true, "keywords": "other, miscellaneous,ad,playgrounds,burial,slaughterhouse, misc, tax, revenue", "menuPath": "", "slaHours": 336, "department": "DEPT_10", "serviceCode": "Others"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655187673	1778655187673
+f7885aae-e82e-43f9-9570-b7e9271878cb	cids55384	SUPERUSER.692	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 23, "actionid": 692, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655488556	1778655488556
 68e823ef-9ca1-45b0-9842-9fde0e4b12ce	ciregtest	ParkRequiresMaintenance	RAINMAKER-PGR.ServiceDefs	{"name": "Park requires maintenance", "active": true, "keywords": "open, defecation, waste, human, privy, toilet", "menuPath": "Parks", "slaHours": 336, "department": "DEPT_5", "serviceCode": "ParkRequiresMaintenance"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655187787	1778655187787
 a58cef6b-415d-44e0-890e-d82aa7e62bcc	ciregtest	OpenDefecation	RAINMAKER-PGR.ServiceDefs	{"name": "Open Defecation", "active": true, "keywords": "open, defecation, waste, human, privy, toilet", "menuPath": "OpenDefecation", "slaHours": 336, "department": "DEPT_3", "serviceCode": "OpenDefecation"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655187903	1778655187903
 ae94769b-c666-4953-a9fc-e376ee8adc85	ciregtest	CuttingOrTrimmingOfTreeRequired	RAINMAKER-PGR.ServiceDefs	{"name": "Cutting/trimming of tree required", "active": true, "keywords": "tree, remove, trim, fallen, cut, plant, branch", "menuPath": "Trees", "slaHours": 336, "department": "DEPT_5", "serviceCode": "CuttingOrTrimmingOfTreeRequired"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655188021	1778655188021
@@ -5104,6 +5351,7 @@ ad0d19d9-a731-435c-8401-b45ba5231600	ciregtest	2533	ACCESSCONTROL-ACTIONS-TEST.a
 fcf76ec6-ab74-4b55-a043-662671efb9c8	ciregtest	2530	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2530, "url": "/mdms-v2/v2/_create/ACCESSCONTROL-ACTIONS-TEST.actions-test", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create ACCESSCONTROL-ACTIONS-TEST actions-test", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655195464	1778655195464
 de7d812f-e488-47f7-80bc-aabe537c6646	ciregtest	2529	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2529, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ACTIONS-TESTactions-test", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Actions test", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ACTIONS-TEST&masterName=actions-test"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655195576	1778655195576
 ffe09462-bd3d-4e6f-af1d-0d209c272d39	ciregtest	2528	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2528, "url": "/mdms-v2/v2/_update/tenant.tenants", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Update tenant tenants", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655195689	1778655195689
+2f720633-240d-4256-bafb-12dce79eec3d	cids55384	SUPERUSER.691	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 22, "actionid": 691, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655488670	1778655488670
 1b4022ca-f0d6-4f45-b3a0-7d5a1c803ab4	ciregtest	2527	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2527, "url": "/mdms-v2/v2/_create/tenant.tenants", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create tenant tenants", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655195801	1778655195801
 4a3a22c3-9c6b-4a06-a5dc-46ff60fd5cf7	ciregtest	2526	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2526, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.tenanttenants", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Tenant", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=tenant&masterName=tenants"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655195915	1778655195915
 1a33b924-3e35-47bb-9606-a6187c17d4df	ciregtest	2516	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2516, "url": "/mdms-v2/v2/_update/TradeLicense.Usagee", "code": "null", "name": "MDMS v2 update data2", "path": "", "enabled": false, "displayName": "MDMS v2", "orderNumber": 1, "serviceCode": "MDMS v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655196031	1778655196031
@@ -5171,6 +5419,7 @@ fb807efb-85cf-4afb-bf8b-1a6620bec721	ciregtest	1991	ACCESSCONTROL-ACTIONS-TEST.a
 1d26da73-87f6-42a9-8a88-6b83c66a93f8	ciregtest	1985	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1985, "url": "/egov-searcher/locality/ws-services/_get", "code": "null", "name": "Locality searcher endpoint for WS", "path": "", "enabled": false, "displayName": "WS-Service locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655202765	1778655202765
 d8261091-7104-445e-b253-5795cc054c1f	ciregtest	1984	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1984, "url": "/egov-searcher/locality/sw-services/_get", "code": "null", "name": "Locality searcher endpoint for SW", "path": "", "enabled": false, "displayName": "SW-Service locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655202881	1778655202881
 64a556a6-223f-4e03-a36f-f6c525b01ab8	ciregtest	1983	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1983, "url": "url", "code": "null", "name": "Remittance Pending Report", "path": "Finance.Reports.Revenue Reports.Remittance Pending Report", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Remittance Pending Report", "orderNumber": 6, "serviceCode": "FinanceReport", "parentModule": "", "navigationURL": "services/EGF/report/remittance/pending/form"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655202994	1778655202994
+af0db087-5ad1-4477-8aa9-5dcef8623b7b	cids55384	SUPERUSER.266	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 14, "actionid": 266, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655488781	1778655488781
 b8b897bd-9675-4540-b777-a12fe3904260	ciregtest	1982	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1982, "url": "url", "code": "null", "name": "Dishonored Cheque Report ", "path": "Finance.Reports.MIS Reports.Dishonored Cheque Report", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Dishonored Cheque Report ", "orderNumber": 7, "serviceCode": "FinanceReport", "parentModule": "", "navigationURL": "services/collection/report/dishonouredcheque/searchform"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655203109	1778655203109
 1a9fa475-e7ed-4f19-a968-3a6ebf50c50a	ciregtest	1981	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1981, "url": "url", "code": "null", "name": "Dishonor Cheque/DD", "path": "Finance.Administration.Dishonor Cheque/DD", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Dishonor Cheque/DD", "orderNumber": 1, "serviceCode": "FinanceAdmin", "parentModule": "", "navigationURL": "services/collection/dishonour/cheque/form"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655203226	1778655203226
 f55e571e-b56e-4ef9-8c1d-d473250ff597	ciregtest	1980	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1980, "url": "url", "code": "", "name": "rainmaker-localization-screen", "path": "Localization", "enabled": false, "leftIcon": "places:business-center", "rightIcon": "", "displayName": "Localization", "orderNumber": 5, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "integration/ui-localisation/localization"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655203340	1778655203340
@@ -5299,6 +5548,7 @@ ded0c26e-00a5-4df8-8b70-fc321a3796bd	ciregtest	SUPERUSER.2563	ACCESSCONTROL-ROLE
 bd5c7fc9-185a-42e6-8901-a49c1ac3994f	ciregtest	695	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 695, "url": "/user/v1/_search", "code": "null", "name": "Search User Details", "path": "Administration.Search User Details", "enabled": false, "displayName": "Search User Details", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655216898	1778655216898
 25d20cef-74d8-4231-8f6a-a600eed3c574	ciregtest	694	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 694, "url": "/user/citizen/_create", "code": "null", "name": "Create Citizen", "path": "Administration.Create Citizen", "enabled": false, "displayName": "Create Citizen", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655217016	1778655217016
 bb9983ff-e4e0-4cb6-8785-6c0580324748	ciregtest	693	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 693, "url": "/otp/v1/_search", "code": "null", "name": "SearchOtp", "path": "Otp.SearchOtp", "enabled": false, "displayName": "Search Otp", "orderNumber": 1, "serviceCode": "OTP", "parentModule": "247"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655217131	1778655217131
+0c6052cf-bbb3-456d-a51e-6c97acb205e2	cids55384	SUPERUSER.265	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 13, "actionid": 265, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655488894	1778655488894
 fd48b113-038b-4bb8-84ef-7f48b9db6ba3	ciregtest	692	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 692, "url": "/otp/v1/_validate", "code": "null", "name": "ValidateOtp", "path": "Otp.ValidateOtp", "enabled": false, "displayName": "Validate Otp", "orderNumber": 1, "serviceCode": "OTP", "parentModule": "247"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655217245	1778655217245
 9715d819-ab4c-4cd2-9829-fa94f7b04bcc	ciregtest	691	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 691, "url": "/otp/v1/_create", "code": "null", "name": "CreateOtp", "path": "Otp.CreateOtp", "enabled": false, "displayName": "Create Otp", "orderNumber": 1, "serviceCode": "OTP", "parentModule": "247"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655217358	1778655217358
 e861f343-16fa-4129-9d32-f1384b32dbaf	ciregtest	627	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 627, "url": "/egov-location/boundarys/_search", "code": "null", "name": "Search Boundary", "path": "Location.Search Boundary", "enabled": false, "displayName": "Search Boundary", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655217471	1778655217471
@@ -5315,6 +5565,7 @@ dcd2d5da-df50-4140-bde9-b51ce694a852	ciregtest	623	ACCESSCONTROL-ACTIONS-TEST.ac
 85fadf20-2194-49ac-a254-9862199bbdd9	ciregtest	276	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 276, "url": "/v1/files", "code": "null", "name": "uploadfiles", "path": "", "enabled": false, "displayName": "uploadfiles", "orderNumber": 1, "serviceCode": "uploadfiles", "parentModule": "76"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655218715	1778655218715
 3233fc29-06e7-435a-a726-021c70583176	ciregtest	266	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 266, "url": "/boundarys/boundariesByBndryTypeNameAndHierarchyTypeName", "code": "null", "name": "Get Boundaries by boundarytype and hierarchy Type", "path": "Location.Get Boundaries by boundarytype and hierarchy Type", "enabled": false, "displayName": "Get Boundaries by boundarytype and hierarchy Type", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655218831	1778655218831
 e149e0e0-fdfe-482f-a8c1-3816c22e31f6	ciregtest	265	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 265, "url": "/boundarytype/create", "code": "null", "name": "Create Boundary Type", "path": "Location.Create Boundary Type", "enabled": false, "displayName": "Create Boundary Type", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655218945	1778655218945
+308d7dba-3d4b-4170-ac43-4d3220243ac3	cids55384	SUPERUSER.264	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 12, "actionid": 264, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489007	1778655489007
 3639426f-c39a-480e-aa44-d77d8f7db133	ciregtest	264	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 264, "url": "/crosshierarchys/{code}", "code": "null", "name": "Get Cross Hierarchy By Code", "path": "Location.Get Cross Hierarchy By Code", "enabled": false, "displayName": "Get Cross Hierarchy By Code", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655219058	1778655219058
 21b37911-c9d7-4963-a0b2-0630bbabcad1	ciregtest	263	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 263, "url": "/egov-location/crosshierarchys", "code": "null", "name": "Cross Hierarchys", "path": "Location.Cross Hierarchys", "enabled": false, "displayName": "Cross Hierarchys", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655219173	1778655219173
 2e3bdc4f-3f1f-4dee-8524-58cf9e38ccc5	ciregtest	262	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 262, "url": "/hierarchytypes/{code}", "code": "null", "name": "Get Heirarchy Type By Code", "path": "Location.Get Heirarchy Type By Code", "enabled": false, "displayName": "Get Heirarchy Type By Code", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655219290	1778655219290
@@ -5695,6 +5946,9 @@ e9f63255-f25c-4c6d-9225-97adbe9a5866	ciregtest	SUPERUSER.254	ACCESSCONTROL-ROLEA
 a8b8b59f-ccdf-41d9-99dc-7e59b47020b0	ciregtest	SUPERUSER.253	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1, "actionid": 253, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655264171	1778655264171
 4b64fd37-5072-436d-ab48-4aae82901551	ciregtest	CSR.1729	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 745, "actionid": 1729, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655264291	1778655264291
 e8bc4edb-5edd-4b8b-aef0-2bd3b3697a36	ciregtest	PGR_LME.1729	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 745, "actionid": 1729, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655264407	1778655264407
+e48b8bf4-631a-42a8-8ba7-0d1069fbb3a1	ciwf55274	1675	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1675, "url": "/egov-common-masters/businessCategory/_search", "code": "null", "name": "business category search", "path": "", "enabled": false, "displayName": "business category search", "orderNumber": 0, "serviceCode": "Collections", "parentModule": "", "navigationURL": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655328143	1778655328143
+862fb967-0192-4023-a7d8-57bc49042a9e	ciwf55274	1577	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1577, "url": "url", "name": "Assess New Property", "path": "Property Tax.Assess New Property", "enabled": false, "leftIcon": "communication:business", "tenantId": "pg", "createdBy": null, "rightIcon": "", "createdDate": null, "displayName": "Assess New Property", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/pt/inbox", "lastModifiedBy": null, "lastModifiedDate": null}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655328259	1778655328259
+966ea63d-429d-4ec2-a955-d9e7efe0ac43	cids55384	SUPERUSER.263	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 11, "actionid": 263, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489119	1778655489119
 8deb9186-f4e9-45d8-b47f-fae20834e975	ciregtest	RAINMAKER-PGR.inbox-pgr-services	INBOX.InboxQueryConfiguration	{"index": "inbox-pgr-services", "module": "RAINMAKER-PGR", "sortBy": {"path": "Data.service.auditDetails.createdTime", "defaultOrder": "ASC"}, "sourceFilterPathList": ["Data.currentProcessInstance", "Data.service.serviceRequestId", "Data.service.address.locality.code", "Data.service.applicationStatus", "Data.service.citizen", "Data.service.auditDetails.createdTime", "Data.auditDetails", "Data.tenantId"], "allowedSearchCriteria": [{"name": "area", "path": "Data.service.address.locality.code.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "status", "path": "Data.currentProcessInstance.state.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignedToMe", "path": "Data.workflow.assignes.*.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "fromDate", "path": "Data.service.auditDetails.createdTime", "operator": "GTE", "isMandatory": false}, {"name": "toDate", "path": "Data.service.auditDetails.createdTime", "operator": "LTE", "isMandatory": false}, {"name": "complaintNumber", "path": "Data.service.serviceRequestId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "mobileNumber", "path": "Data.service.citizen.mobileNumber.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "tenantId", "path": "Data.service.tenantId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignee", "path": "Data.currentProcessInstance.assignes.uuid.keyword", "operator": "EQUAL", "isMandatory": false}]}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655264523	1778655264523
 2a981f9a-0deb-41df-bdfd-aabeb4bd8ce3	pg.cidept	DEPT_36	common-masters.Department	{"code": "DEPT_36", "name": "WATER DEPARTMENT", "active": true}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655268080	1778655268080
 160a5b0e-bf90-490f-95bc-1ab99563deea	ciregtest	pgr-services.inbox-pgr-services	INBOX.InboxQueryConfiguration	{"index": "inbox-pgr-services", "module": "pgr-services", "sortBy": {"path": "Data.service.auditDetails.createdTime", "defaultOrder": "ASC"}, "sourceFilterPathList": ["Data.currentProcessInstance", "Data.service.serviceRequestId", "Data.service.address.locality.code", "Data.service.applicationStatus", "Data.service.citizen", "Data.service.auditDetails.createdTime", "Data.auditDetails", "Data.tenantId"], "allowedSearchCriteria": [{"name": "area", "path": "Data.service.address.locality.code.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "status", "path": "Data.currentProcessInstance.state.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignedToMe", "path": "Data.workflow.assignes.*.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "fromDate", "path": "Data.service.auditDetails.createdTime", "operator": "GTE", "isMandatory": false}, {"name": "toDate", "path": "Data.service.auditDetails.createdTime", "operator": "LTE", "isMandatory": false}, {"name": "complaintNumber", "path": "Data.service.serviceRequestId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "mobileNumber", "path": "Data.service.citizen.mobileNumber.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "tenantId", "path": "Data.service.tenantId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignee", "path": "Data.currentProcessInstance.assignes.uuid.keyword", "operator": "EQUAL", "isMandatory": false}]}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655264647	1778655264647
@@ -5987,6 +6241,7 @@ d285eeb2-97cd-406e-bed2-8d68a5cce17f	ciwf55274	DamagedGarbageBin	RAINMAKER-PGR.S
 31312f63-5159-4f65-8d90-172b3a4eaaef	ciwf55274	StreetLightNotWorking	RAINMAKER-PGR.ServiceDefs	{"name": "Streetlight not working", "order": 1, "active": true, "keywords": "streetlight, light, repair, work, pole, electric, power, repair, fix", "menuPath": "StreetLights", "slaHours": 336, "department": "DEPT_1", "serviceCode": "StreetLightNotWorking"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655307624	1778655307624
 9b72a95e-a5f6-419f-a046-e4962c237fa1	ciwf55274	NonSweepingOfRoad	RAINMAKER-PGR.ServiceDefs	{"name": "Non sweeping of road", "order": 5, "active": true, "keywords": "garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw", "menuPath": "Garbage", "slaHours": 336, "department": "DEPT_3", "serviceCode": "NonSweepingOfRoad"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655307736	1778655307736
 b9661296-a678-46bf-9be7-5680ce776465	ciwf55274	NoStreetlight	RAINMAKER-PGR.ServiceDefs	{"name": "No streetlight", "active": true, "keywords": "streetlight, light, repair, work, pole, electric, power, repair, damage, fix", "menuPath": "StreetLights", "slaHours": 336, "department": "DEPT_1", "serviceCode": "NoStreetlight"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655307850	1778655307850
+dc128b93-d8be-4dd4-88a8-dfb286f2d2c3	ciwf55274	1559	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1559, "url": "url", "code": "null", "name": "CreateComplaint", "path": "Complaints.CreateComplaint", "enabled": false, "leftIcon": "content:add", "rightIcon": "", "displayName": "Create Complaint", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee/pgr/complaint/create"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655328372	1778655328372
 86505c52-7d09-4a6b-8cf1-988544019817	ciwf55274	all-services	common-masters.uiHomePage	{"redirectURL": "all-services", "appBannerMobile": {"code": "APP_BANNER_MOBILE", "name": "App Banner Mobile View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"}, "appBannerDesktop": {"code": "APP_BANNER_DESKTOP", "name": "App Banner Desktop View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"}, "citizenServicesCard": {"code": "HOME_CITIZEN_SERVICES_CARD", "name": "Home Citizen services Card", "props": [{"code": "ACTION_TEST_MCOLLECT", "name": "Miscellaneous Collection", "label": "ACTION_TEST_MCOLLECT", "enabled": true, "navigationUrl": "/digit-ui/citizen/mcollect-home"}, {"code": "CITIZEN_SERVICE_PT", "name": "Property Tax", "label": "MODULE_PT", "enabled": true, "navigationUrl": "/digit-ui/citizen/pt-home"}, {"code": "CITIZEN_SERVICE_TL", "name": "Trade Licence", "label": "MODULE_TL", "enabled": true, "navigationUrl": "/digit-ui/citizen/tl-home"}, {"code": "ACTION_TEST_BPA_STAKEHOLDER_HOME", "name": "Online Building Permit System", "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME", "enabled": true, "navigationUrl": "/digit-ui/citizen/obps-home"}, {"code": "ACTION_TEST_WATER_AND_SEWERAGE", "name": "Water & Sewerage", "label": "ACTION_TEST_WATER_AND_SEWERAGE", "enabled": true, "navigationUrl": "/digit-ui/citizen/ws-home"}, {"code": "ACTION_TEST_FIRE_NOC", "name": "Fire No Objection Certificate", "label": "ACTION_TEST_FIRE_NOC", "enabled": true, "navigationUrl": "/citizen/fire-noc/home"}, {"code": "ACTION_TEST_BIRTH_CERTIFICATE", "name": "Birth Certificate", "label": "ACTION_TEST_BIRTH_CERTIFICATE", "enabled": true, "navigationUrl": "/digit-ui/citizen/birth-citizen/home"}, {"code": "ACTION_TEST_DEATH_CERTIFICATE", "name": "Death Certificate", "label": "ACTION_TEST_DEATH_CERTIFICATE", "enabled": true, "navigationUrl": "/digit-ui/citizen/death-citizen/home"}], "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": "/digit-ui/citizen/all-services"}, "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"}, "whatsNewSection-disabled": {"code": "WHATSNEW", "name": "What's New", "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/whats-new"}, "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"}, "informationAndUpdatesCard": {"code": "HOME_CITIZEN_INFO_UPDATE_CARD", "name": "Home Citizen Information and Updates card", "props": [{"code": "CITIZEN_MY_CITY", "name": "My City", "label": "CS_HEADER_MYCITY", "enabled": true, "navigationUrl": ""}, {"code": "CITIZEN_EVENTS", "name": "Events", "label": "EVENTS_EVENTS_HEADER", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/events"}, {"code": "CITIZEN_DOCUMENTS", "name": "Documents", "label": "CS_COMMON_DOCUMENTS", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/docs"}, {"code": "CITIZEN_SURVEYS", "name": "Surveys", "label": "CS_COMMON_SURVEYS", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"}], "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": ""}, "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"}, "whatsAppBannerMobile-disabled": {"code": "WHATSAPP_BANNER_MOBILE", "name": "WhatsApp Banner Mobile View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg", "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"}, "whatsAppBannerDesktop-disabled": {"code": "WHATSAPP_BANNER_DESKTOP", "name": "WhatsApp Banner Desktop View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg", "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"}}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655307967	1778655307967
 db8710bb-b16e-44af-9e45-76c03ff5348c	ciwf55274	33	common-masters.wfSlaConfig	{"slotPercentage": 33, "middleSlabColor": "#EEA73A", "negativeSlabColor": "#F44336", "positiveSlabColor": "#4CAF50"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655308082	1778655308082
 1c92376e-84e2-4be4-a239-34770bf768b8	ciwf55274	432000000	RAINMAKER-PGR.UIConstants	{"REOPENSLA": 432000000}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655308317	1778655308317
@@ -6084,6 +6339,7 @@ b5bd5767-1c36-4c0e-84b0-af6b7d54af77	ciwf55274	1994	ACCESSCONTROL-ACTIONS-TEST.a
 e0356a2e-64d3-4f45-b528-ea01ed1937e8	ciwf55274	1991	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1991, "url": "/egov-pdf/download/PAYMENT/consolidatedreceipt", "code": "null", "name": "consolidatedreceipt search", "path": "", "enabled": false, "displayName": "consolidatedreceipt search", "orderNumber": 1, "serviceCode": "egov-pdf"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655319181	1778655319181
 56a2bc74-8f29-4e1f-8d5e-d3c2af15d322	ciwf55274	1985	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1985, "url": "/egov-searcher/locality/ws-services/_get", "code": "null", "name": "Locality searcher endpoint for WS", "path": "", "enabled": false, "displayName": "WS-Service locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655319295	1778655319295
 5dd48d10-59fd-4a27-b41b-372b12f7873e	ciwf55274	1984	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1984, "url": "/egov-searcher/locality/sw-services/_get", "code": "null", "name": "Locality searcher endpoint for SW", "path": "", "enabled": false, "displayName": "SW-Service locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655319408	1778655319408
+71194d8d-51fb-41bd-b978-d23efbfc5ff0	cids55384	SUPERUSER.262	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 10, "actionid": 262, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489233	1778655489233
 04312b84-0070-461d-94c5-d14a21b58b94	ciwf55274	1983	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1983, "url": "url", "code": "null", "name": "Remittance Pending Report", "path": "Finance.Reports.Revenue Reports.Remittance Pending Report", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Remittance Pending Report", "orderNumber": 6, "serviceCode": "FinanceReport", "parentModule": "", "navigationURL": "services/EGF/report/remittance/pending/form"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655319521	1778655319521
 46615469-fc31-4b6e-94a0-588317a47bbf	ciwf55274	1982	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1982, "url": "url", "code": "null", "name": "Dishonored Cheque Report ", "path": "Finance.Reports.MIS Reports.Dishonored Cheque Report", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Dishonored Cheque Report ", "orderNumber": 7, "serviceCode": "FinanceReport", "parentModule": "", "navigationURL": "services/collection/report/dishonouredcheque/searchform"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655319633	1778655319633
 4b242bf5-8cee-4807-8b28-b1b74c88ff5b	ciwf55274	1981	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1981, "url": "url", "code": "null", "name": "Dishonor Cheque/DD", "path": "Finance.Administration.Dishonor Cheque/DD", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Dishonor Cheque/DD", "orderNumber": 1, "serviceCode": "FinanceAdmin", "parentModule": "", "navigationURL": "services/collection/dishonour/cheque/form"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655319744	1778655319744
@@ -6099,6 +6355,7 @@ aeb59057-30d9-4e42-a1d6-1a14b1d0294f	ciwf55274	1971	ACCESSCONTROL-ACTIONS-TEST.a
 38020f0f-87dc-44cc-9f2f-50959d3ae993	ciwf55274	1970	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1970, "url": "/dashboard-ingest/ingest/paymentsindex-v1/v2", "code": "null", "name": "Dashboard Payments-v1", "path": "", "enabled": false, "displayName": "DSS", "orderNumber": 0, "serviceCode": "DSS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655320757	1778655320757
 4cc8657e-99f8-4f88-b822-c4ee33cc013b	ciwf55274	1969	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1969, "url": "/egov-searcher/locality/pt-services/_get", "code": "null", "name": "Locality searcher endpoint for PT Service", "path": "", "enabled": false, "displayName": "PT locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655320874	1778655320874
 d55f62b0-f192-44da-bd1b-b9e97e92d880	ciwf55274	1968	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1968, "url": "/egov-searcher/locality/PT/_get", "code": "null", "name": "Locality searcher endpoint for PT", "path": "", "enabled": false, "displayName": "PT locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655320986	1778655320986
+1a9a1576-c244-4b1d-92f3-792e486f82b3	cids55384	SUPERUSER.261	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 9, "actionid": 261, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489345	1778655489345
 4c078bad-523a-4f5e-b320-f56678806bdc	ciwf55274	1965	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1965, "url": "/dashboard-ingest/update/publish", "code": "null", "name": "Dashboard Api W&S to update", "path": "", "enabled": false, "displayName": "DSS", "orderNumber": 0, "serviceCode": "DSS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655321098	1778655321098
 02d1470d-9cca-4267-b452-5211e80caaf1	ciwf55274	1964	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1964, "url": "/dashboard-ingest/ingest/upload", "code": "null", "name": "Dashboard Static Upload", "path": "", "enabled": false, "displayName": "DSS", "orderNumber": 0, "serviceCode": "DSS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655321211	1778655321211
 7eb289ec-545c-42ad-b0b8-33ba6e0b5494	ciwf55274	1963	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1963, "url": "/dashboard-ingest/ingest/migrate/collectionsindex-v1/v1", "code": "null", "name": "Dashboard collectionsindex-v1", "path": "", "enabled": false, "displayName": "DSS", "orderNumber": 0, "serviceCode": "DSS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655321324	1778655321324
@@ -6163,9 +6420,6 @@ cbfdf836-be89-4752-9c37-68bdeba38b4a	ciwf55274	1690	ACCESSCONTROL-ACTIONS-TEST.a
 95bab24a-3783-4f2c-b232-9dd3cd0bf965	ciwf55274	1678	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1678, "url": "/egov-common-masters/businessDetails/_create", "code": "null", "name": "businessDetails create", "path": "", "enabled": false, "displayName": "", "orderNumber": 0, "serviceCode": "Collections", "parentModule": "", "navigationURL": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655327806	1778655327806
 2b8d411d-3ead-4e15-aaaa-922da5530b85	ciwf55274	1677	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1677, "url": "/egov-common-masters/businessCategory/_create", "code": "null", "name": "business category create", "path": "", "enabled": false, "displayName": "business category search", "orderNumber": 0, "serviceCode": "Collections", "parentModule": "", "navigationURL": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655327919	1778655327919
 59782285-6698-4626-951b-5cdd3eb4661f	ciwf55274	1676	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1676, "url": "/egov-common-masters/businessDetails/_search", "code": "null", "name": "businessDetails search", "path": "", "enabled": false, "displayName": "", "orderNumber": 0, "serviceCode": "Collections", "parentModule": "", "navigationURL": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655328030	1778655328030
-e48b8bf4-631a-42a8-8ba7-0d1069fbb3a1	ciwf55274	1675	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1675, "url": "/egov-common-masters/businessCategory/_search", "code": "null", "name": "business category search", "path": "", "enabled": false, "displayName": "business category search", "orderNumber": 0, "serviceCode": "Collections", "parentModule": "", "navigationURL": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655328143	1778655328143
-862fb967-0192-4023-a7d8-57bc49042a9e	ciwf55274	1577	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1577, "url": "url", "name": "Assess New Property", "path": "Property Tax.Assess New Property", "enabled": false, "leftIcon": "communication:business", "tenantId": "pg", "createdBy": null, "rightIcon": "", "createdDate": null, "displayName": "Assess New Property", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/pt/inbox", "lastModifiedBy": null, "lastModifiedDate": null}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655328259	1778655328259
-dc128b93-d8be-4dd4-88a8-dfb286f2d2c3	ciwf55274	1559	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1559, "url": "url", "code": "null", "name": "CreateComplaint", "path": "Complaints.CreateComplaint", "enabled": false, "leftIcon": "content:add", "rightIcon": "", "displayName": "Create Complaint", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee/pgr/complaint/create"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655328372	1778655328372
 71a7a215-8ed9-4d49-aa32-3cc897441123	ciwf55274	1557	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1557, "url": "url", "code": "null", "name": "OpenComplaints", "path": "Complaints.MyComplaints", "enabled": false, "leftIcon": "action:announcement", "rightIcon": "", "displayName": "Open Complaints", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee/pgr/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655328484	1778655328484
 52b6fe73-3efc-437a-a8df-85014950f9ac	ciwf55274	1556	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1556, "url": "url", "code": "null", "name": "Home", "path": "Home", "enabled": true, "leftIcon": "action:home", "rightIcon": "", "displayName": "Home", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655328597	1778655328597
 7a1d082f-e141-46e0-83db-1d7039d0645a	ciwf55274	1531	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1531, "url": "/localization/messages/v1/_search", "code": "null", "name": "LocalizationMessagesSearch", "path": "", "enabled": false, "displayName": "Localization Messages Search", "orderNumber": 1, "serviceCode": "filestore url", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655328712	1778655328712
@@ -6913,6 +7167,7 @@ e97d45dd-9bd5-4e29-a87a-a6ffc81c00dc	cids55384	DirtyOrSmellyPublicToilets	RAINMA
 cf59b9aa-dd39-43da-b060-2bdfb1515aa7	cids55384	BrokenWaterPipeOrLeakage	RAINMAKER-PGR.ServiceDefs	{"name": "Broken water pipe / Leakage", "order": 3, "active": true, "keywords": "water, supply, connection, damage, repair, broken, pipe, piping, tap", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "BrokenWaterPipeOrLeakage"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655415990	1778655415990
 a4f8377d-6da7-4a29-ac45-ec3f0fee4579	cids55384	IllegalConstructions	RAINMAKER-PGR.ServiceDefs	{"name": "Illegal constructions", "active": true, "keywords": "illegal, violation, property, public, space, land, unathourised, site, construction, wrong, build", "menuPath": "LandViolations", "slaHours": 336, "department": "DEPT_6", "serviceCode": "IllegalConstructions"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655416102	1778655416102
 66761a15-e174-48cb-ab35-acba674189a6	cids55384	NonSweepingOfRoad	RAINMAKER-PGR.ServiceDefs	{"name": "Non sweeping of road", "order": 5, "active": true, "keywords": "garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw", "menuPath": "Garbage", "slaHours": 336, "department": "DEPT_3", "serviceCode": "NonSweepingOfRoad"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655416215	1778655416215
+79c82fc6-9618-4dab-b3a2-8b6e2dd69c9f	cids55384	SUPERUSER.260	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 8, "actionid": 260, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489457	1778655489457
 8e5ada0f-4216-4dce-b7a3-f7c14c2ee8cb	cids55384	DirtyWaterSupply	RAINMAKER-PGR.ServiceDefs	{"name": "Dirty water supply", "active": true, "keywords": "water, supply, connection, drink, dirty, contaminated, impure, health, clean", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "DirtyWaterSupply"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655416327	1778655416327
 bcbc646f-f49b-49d9-ab94-09a09e262398	cids55384	BurningOfGarbage	RAINMAKER-PGR.ServiceDefs	{"name": "Burning of garbage", "active": true, "keywords": "garbage, remove, burn, fire, health, waste, smoke, plastic, illegal", "menuPath": "Garbage", "slaHours": 336, "department": "DEPT_3", "serviceCode": "BurningOfGarbage"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655416439	1778655416439
 16657ec2-43c2-4238-a3a8-21e496c9b635	cids55384	WaterPressureisVeryLess	RAINMAKER-PGR.ServiceDefs	{"name": "Water pressure is very less", "active": true, "keywords": "water, supply, connection, damage, repair, broken, pipe, piping, tap", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "WaterPressureisVeryLess"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655416553	1778655416553
@@ -6929,6 +7184,7 @@ b12fd2e7-37b4-434d-9af9-d7a97923c8eb	cids55384	GarbageNeedsTobeCleared	RAINMAKER
 7ca560c6-053e-4878-8621-e86f97d57b15	cids55384	BlockOrOverflowingSewage	RAINMAKER-PGR.ServiceDefs	{"name": "Block / Overflowing sewage", "order": 2, "active": true, "keywords": "water, supply, connection, damage, repair, broken, pipe, piping, tap", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "BlockOrOverflowingSewage"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655417680	1778655417680
 2937f395-3f45-4975-b962-c9c59a47ebd9	cids55384	CuttingOrTrimmingOfTreeRequired	RAINMAKER-PGR.ServiceDefs	{"name": "Cutting/trimming of tree required", "active": true, "keywords": "tree, remove, trim, fallen, cut, plant, branch", "menuPath": "Trees", "slaHours": 336, "department": "DEPT_5", "serviceCode": "CuttingOrTrimmingOfTreeRequired"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655417794	1778655417794
 6e93dd2c-6aec-4d50-98ce-dffb61fd37bc	cids55384	OverflowingOrBlockedDrain	RAINMAKER-PGR.ServiceDefs	{"name": "Overflowing/Blocked drain", "active": true, "keywords": "drain, block, clean, debris, silt, drainage, water, clean, roadside, flow, remove, waste, garbage, clear, overflow, canal, fill, stagnate, rain, sanitation, sand, pipe, clog, stuck", "menuPath": "Drains", "slaHours": 336, "department": "DEPT_4", "serviceCode": "OverflowingOrBlockedDrain"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655417907	1778655417907
+3ead6398-fa91-40f5-be1f-b3a6da51d918	cids55384	SUPERUSER.259	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 7, "actionid": 259, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489569	1778655489569
 ccbe8b86-98a1-4941-8cad-a1f31b2df15b	cids55384	all-services	common-masters.uiHomePage	{"redirectURL": "all-services", "appBannerMobile": {"code": "APP_BANNER_MOBILE", "name": "App Banner Mobile View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"}, "appBannerDesktop": {"code": "APP_BANNER_DESKTOP", "name": "App Banner Desktop View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"}, "citizenServicesCard": {"code": "HOME_CITIZEN_SERVICES_CARD", "name": "Home Citizen services Card", "props": [{"code": "ACTION_TEST_MCOLLECT", "name": "Miscellaneous Collection", "label": "ACTION_TEST_MCOLLECT", "enabled": true, "navigationUrl": "/digit-ui/citizen/mcollect-home"}, {"code": "CITIZEN_SERVICE_PT", "name": "Property Tax", "label": "MODULE_PT", "enabled": true, "navigationUrl": "/digit-ui/citizen/pt-home"}, {"code": "CITIZEN_SERVICE_TL", "name": "Trade Licence", "label": "MODULE_TL", "enabled": true, "navigationUrl": "/digit-ui/citizen/tl-home"}, {"code": "ACTION_TEST_BPA_STAKEHOLDER_HOME", "name": "Online Building Permit System", "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME", "enabled": true, "navigationUrl": "/digit-ui/citizen/obps-home"}, {"code": "ACTION_TEST_WATER_AND_SEWERAGE", "name": "Water & Sewerage", "label": "ACTION_TEST_WATER_AND_SEWERAGE", "enabled": true, "navigationUrl": "/digit-ui/citizen/ws-home"}, {"code": "ACTION_TEST_FIRE_NOC", "name": "Fire No Objection Certificate", "label": "ACTION_TEST_FIRE_NOC", "enabled": true, "navigationUrl": "/citizen/fire-noc/home"}, {"code": "ACTION_TEST_BIRTH_CERTIFICATE", "name": "Birth Certificate", "label": "ACTION_TEST_BIRTH_CERTIFICATE", "enabled": true, "navigationUrl": "/digit-ui/citizen/birth-citizen/home"}, {"code": "ACTION_TEST_DEATH_CERTIFICATE", "name": "Death Certificate", "label": "ACTION_TEST_DEATH_CERTIFICATE", "enabled": true, "navigationUrl": "/digit-ui/citizen/death-citizen/home"}], "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": "/digit-ui/citizen/all-services"}, "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"}, "whatsNewSection-disabled": {"code": "WHATSNEW", "name": "What's New", "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/whats-new"}, "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"}, "informationAndUpdatesCard": {"code": "HOME_CITIZEN_INFO_UPDATE_CARD", "name": "Home Citizen Information and Updates card", "props": [{"code": "CITIZEN_MY_CITY", "name": "My City", "label": "CS_HEADER_MYCITY", "enabled": true, "navigationUrl": ""}, {"code": "CITIZEN_EVENTS", "name": "Events", "label": "EVENTS_EVENTS_HEADER", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/events"}, {"code": "CITIZEN_DOCUMENTS", "name": "Documents", "label": "CS_COMMON_DOCUMENTS", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/docs"}, {"code": "CITIZEN_SURVEYS", "name": "Surveys", "label": "CS_COMMON_SURVEYS", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"}], "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": ""}, "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"}, "whatsAppBannerMobile-disabled": {"code": "WHATSAPP_BANNER_MOBILE", "name": "WhatsApp Banner Mobile View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg", "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"}, "whatsAppBannerDesktop-disabled": {"code": "WHATSAPP_BANNER_DESKTOP", "name": "WhatsApp Banner Desktop View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg", "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"}}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655418034	1778655418034
 87bc93e0-8fec-4d33-b471-973626310fd0	cids55384	33	common-masters.wfSlaConfig	{"slotPercentage": 33, "middleSlabColor": "#EEA73A", "negativeSlabColor": "#F44336", "positiveSlabColor": "#4CAF50"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655418150	1778655418150
 a5507901-e1fe-46bd-8637-bd4647a04c58	cids55384	432000000	RAINMAKER-PGR.UIConstants	{"REOPENSLA": 432000000}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655418396	1778655418396
@@ -6943,6 +7199,7 @@ b29284a7-91f1-43e7-b6a2-f3c415e3df77	cids55384	1995	ACCESSCONTROL-ACTIONS-TEST.a
 742f43c4-1387-49ec-adce-829dbe1c8671	cids55384	691	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 691, "url": "/otp/v1/_create", "code": "null", "name": "CreateOtp", "path": "Otp.CreateOtp", "enabled": false, "displayName": "Create Otp", "orderNumber": 1, "serviceCode": "OTP", "parentModule": "247"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655419653	1778655419653
 8cfe1d37-049d-41da-a703-0e56bfae2c9a	cids55384	2018	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2018, "url": "/report/pgr/ULBReport/_get", "code": "null", "name": "ULBReport", "path": "PGR Report", "enabled": false, "displayName": "PGR Report", "orderNumber": 0, "serviceCode": "PGRReports"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655419768	1778655419768
 96e66d59-b762-4a9a-ade7-b301f4b6267a	cids55384	2008	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2008, "url": "/pgr-services/v2/request/_search", "code": "null", "name": "Search PGR Request", "path": "", "enabled": false, "displayName": "Search PGR Request", "orderNumber": 0, "serviceCode": "pgr-services", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655419886	1778655419886
+c92ef60a-bfe0-48d2-b532-4971533c0178	cids55384	SUPERUSER.258	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 6, "actionid": 258, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489685	1778655489685
 790ad953-e0c3-45c4-9255-bce90fe3c633	cids55384	594	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 594, "url": "/access/v1/actions/_get", "code": "null", "name": "Get All Actions", "path": "Access Control.Get All Actions", "enabled": false, "displayName": "Get All Actions", "orderNumber": 1, "serviceCode": "AccessControl"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655419998	1778655419998
 0a8485cc-9c09-4051-96cd-ef345e255cae	cids55384	1988	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1988, "url": "/land-services/v1/land/_create", "code": "null", "name": "BPA-Land-Create", "path": "", "enabled": false, "displayName": "Land Create", "orderNumber": 0, "serviceCode": "BPA"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655420112	1778655420112
 feeb61ee-7f63-49eb-b2f0-dbb14a90bb4e	cids55384	258	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 258, "url": "/egov-location/boundarytypes/getByHierarchyType", "code": "null", "name": "Get BoundaryTypes By Heirarchy Type", "path": "Location.Get BoundaryTypes By Heirarchy Type", "enabled": false, "displayName": "Get BoundaryTypes By Heirarchy Type", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655420224	1778655420224
@@ -6959,6 +7216,7 @@ c5b7ef33-2fdc-4d04-ace6-ed2c6ff44193	cids55384	604	ACCESSCONTROL-ACTIONS-TEST.ac
 fe365466-d6d3-40dd-a687-11698cc9b3ed	cids55384	277	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 277, "url": "/v1/files/id", "code": "null", "name": "filesearch", "path": "", "enabled": false, "displayName": "filesearch", "orderNumber": 1, "serviceCode": "filesearch", "parentModule": "76"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655421347	1778655421347
 ad3cf371-8929-4616-906a-1332b3a28afb	cids55384	1742	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1742, "url": "/egov-workflow-v2/egov-wf/businessservice/_update", "code": "null", "name": "BusinessService Update", "path": "", "enabled": false, "displayName": "BusinessService Update", "orderNumber": 0, "serviceCode": "egov-workflow-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655421459	1778655421459
 9514f21c-de98-44cd-8591-5dfc6460cd87	cids55384	2009	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2009, "url": "/pgr-services/v2/request/_count", "code": "null", "name": "Search PGR Request", "path": "", "enabled": false, "displayName": "Count PGR Request", "orderNumber": 0, "serviceCode": "pgr-services", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655421572	1778655421572
+f46eb695-b9ed-43d8-9e97-d52f0d669f57	cids55384	SUPERUSER.257	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 5, "actionid": 257, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489799	1778655489799
 6fcd705d-40c3-4ab6-aeb4-150cfccff20c	cids55384	874	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 874, "url": "/egov-location/hierarchytypes/_search", "code": "null", "name": "SearchHierarchyTypes", "path": "Location.SearchHierarchyTypes", "enabled": false, "displayName": "Search HierarchyTypes", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655421683	1778655421683
 afe85436-8366-4bdc-b296-547af2c5a243	cids55384	1955	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1955, "url": "/pt-calculator-v2/billingslab/mutation/_search", "code": "null", "name": "MutationBillingSlabSearch", "path": "", "enabled": false, "displayName": "Draft Search", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655421795	1778655421795
 6d076c90-0327-4070-9516-efc0976d4cc8	cids55384	1997	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1997, "url": "/egov-pdf/download/PT/ptmutationcertificate", "code": "null", "name": "ptmutationcertificate search", "path": "", "enabled": false, "displayName": "ptmutationcertificate search", "orderNumber": 7, "serviceCode": "egov-pdf"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655421908	1778655421908
@@ -7125,6 +7383,7 @@ f6b93d5e-3eaf-40e3-b0cb-e3b7773690a2	cids55384	2001	ACCESSCONTROL-ACTIONS-TEST.a
 73acd715-31dd-444b-89f9-90a13aff8dba	cids55384	207	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 207, "url": "/egov-common-masters/departments/_search", "code": "null", "name": "CommonDepartmentsSearch", "path": "Employee Management.Employee Masters.CommonDepartmentsSearch", "enabled": false, "displayName": "CommonDepartmentsSearch", "orderNumber": 0, "serviceCode": "EIS Masters", "parentModule": "71"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655440031	1778655440031
 f82cee11-b51a-43b6-b7fa-e711a5ed5d33	cids55384	697	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 697, "url": "/user/users/{id}/_updatenovalidate", "code": "null", "name": "UpdateUserWithoutValidation", "path": "Administration.UpdateUserWithoutValidation", "enabled": true, "displayName": "UserRole Mapping", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655440143	1778655440143
 5bb2ea3a-4d0c-43c3-9f05-9bc860011ebe	cids55384	1966	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1966, "url": "/ws-calculator/waterCalculator/_estimate", "code": "null", "name": "Calculate Fee For Water Application", "path": "", "enabled": false, "displayName": "Fee Calculation For Water Application", "orderNumber": 0, "serviceCode": "ws-calculator"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655440255	1778655440255
+5029a6f5-7669-4bfe-ac97-e3cdc29e2a28	cids55384	SUPERUSER.256	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 4, "actionid": 256, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489911	1778655489911
 34e475a8-5002-4cae-af87-4fd56ed66c1b	cids55384	2022	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2022, "url": "/ws-calculator/waterCalculator/_applyAdhocTax", "code": "null", "name": "Add adhoc tax", "path": "", "enabled": false, "displayName": "Add adhoc tax", "orderNumber": 0, "serviceCode": "ws-calculator"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655440366	1778655440366
 86685344-39aa-4bcf-a887-fbb40e3b8cce	cids55384	2028	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2028, "url": "/collection-services/payments/PT/_workflow", "code": "null", "name": "PT Receipt Update", "path": "", "enabled": false, "displayName": "PT Receipt Update", "orderNumber": 1, "serviceCode": "", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655440478	1778655440478
 19e8c1e1-f408-4009-8775-ec19cd6dee2d	cids55384	2026	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2026, "url": "url", "code": "null", "name": "ULBReport", "path": "Complaints.PGR Reports.ULBReport", "enabled": false, "leftIcon": "action:assignment", "rightIcon": "", "displayName": "ULB Report", "orderNumber": 6, "serviceCode": "PGR", "parentModule": "pgr", "navigationURL": "report/pgr/ULBReport"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655440589	1778655440589
@@ -7535,19 +7794,6 @@ f48f2b69-40bb-4fc7-a251-d04fc2432b67	cids55384	SUPERUSER.278	ACCESSCONTROL-ROLEA
 8db9c3d3-fe1a-4dd9-8eb5-3bc64673af13	cids55384	SUPERUSER.277	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 26, "actionid": 277, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655488213	1778655488213
 268fab74-9ed1-4e24-8383-1330c484fe2b	cids55384	SUPERUSER.276	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 25, "actionid": 276, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655488328	1778655488328
 a0aba74c-5697-4896-abc1-6b4482063af7	cids55384	SUPERUSER.693	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 24, "actionid": 693, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655488441	1778655488441
-f7885aae-e82e-43f9-9570-b7e9271878cb	cids55384	SUPERUSER.692	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 23, "actionid": 692, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655488556	1778655488556
-2f720633-240d-4256-bafb-12dce79eec3d	cids55384	SUPERUSER.691	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 22, "actionid": 691, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655488670	1778655488670
-af0db087-5ad1-4477-8aa9-5dcef8623b7b	cids55384	SUPERUSER.266	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 14, "actionid": 266, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655488781	1778655488781
-0c6052cf-bbb3-456d-a51e-6c97acb205e2	cids55384	SUPERUSER.265	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 13, "actionid": 265, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655488894	1778655488894
-308d7dba-3d4b-4170-ac43-4d3220243ac3	cids55384	SUPERUSER.264	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 12, "actionid": 264, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489007	1778655489007
-966ea63d-429d-4ec2-a955-d9e7efe0ac43	cids55384	SUPERUSER.263	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 11, "actionid": 263, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489119	1778655489119
-71194d8d-51fb-41bd-b978-d23efbfc5ff0	cids55384	SUPERUSER.262	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 10, "actionid": 262, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489233	1778655489233
-1a9a1576-c244-4b1d-92f3-792e486f82b3	cids55384	SUPERUSER.261	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 9, "actionid": 261, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489345	1778655489345
-79c82fc6-9618-4dab-b3a2-8b6e2dd69c9f	cids55384	SUPERUSER.260	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 8, "actionid": 260, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489457	1778655489457
-3ead6398-fa91-40f5-be1f-b3a6da51d918	cids55384	SUPERUSER.259	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 7, "actionid": 259, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489569	1778655489569
-c92ef60a-bfe0-48d2-b532-4971533c0178	cids55384	SUPERUSER.258	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 6, "actionid": 258, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489685	1778655489685
-f46eb695-b9ed-43d8-9e97-d52f0d669f57	cids55384	SUPERUSER.257	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 5, "actionid": 257, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489799	1778655489799
-5029a6f5-7669-4bfe-ac97-e3cdc29e2a28	cids55384	SUPERUSER.256	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 4, "actionid": 256, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655489911	1778655489911
 05d3f220-2a48-4da1-bcf7-f7af1150b562	cids55384	SUPERUSER.255	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 3, "actionid": 255, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655490024	1778655490024
 c8e3e6c0-a365-48ba-ab94-b9605412ccc7	cids55384	SUPERUSER.254	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 2, "actionid": 254, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655490137	1778655490137
 c179b732-5f5f-4d24-8c27-33d0ae65e8bc	cids55384	SUPERUSER.253	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1, "actionid": 253, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655490252	1778655490252
@@ -7919,6 +8165,7 @@ f3bcc042-c4e4-479c-8f14-26b0916e8202	ciwfi55515	GRO.254	ACCESSCONTROL-ROLEACTION
 9642c3dc-fddb-406e-8c60-202babc96d37	ciwfi55515	1929	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1929, "url": "quickAction", "code": "null", "name": "TradeLicenseApplication", "path": "TradeLicense.Apply", "enabled": false, "leftIcon": "places:business-center", "displayName": "Apply TL", "orderNumber": 13, "serviceCode": "TradeLicense", "parentModule": "", "navigationURL": "/digit-ui/employee/tl/new-application"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655552713	1778655552713
 250c452c-8e49-4b94-a1a2-9e30fe89b56c	ciwfi55515	2021	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2021, "url": "/report/pgr/GROPerformanceReport/_get", "code": "null", "name": "GROPerformanceReport", "path": "PGR Report", "enabled": false, "displayName": "PGR Report", "orderNumber": 0, "serviceCode": "PGRReports"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655552826	1778655552826
 7657663b-7e91-42d1-bd1c-f7a958fc4b8d	ciwfi55515	732	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 732, "url": "/egov-location/boundarys/isshapefileexist", "code": "null", "name": "isShapeFileExist", "path": "Location.isShapeFileExist", "enabled": false, "displayName": "Is ShapeFile ExistOrNot", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655552938	1778655552938
+2ba59e33-db6b-40f0-aa45-cbaa467ea015	cids59125	SUPERUSER.1734	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 231, "actionid": 1734, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659214719	1778659214719
 173d06a0-2fd8-46cd-8297-8becc11f4c3b	ciwfi55515	260	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 260, "url": "/city/getCitybyCityRequest", "code": "null", "name": "Get City By City Request", "path": "Location.Get City By City Request", "enabled": false, "displayName": "Get City By City Request", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655553050	1778655553050
 106d94c2-dfe6-465d-a763-36a03dc0b9dd	ciwfi55515	604	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 604, "url": "/user/_search", "code": "null", "name": "SearchUser", "path": "Administration.SearchUser", "enabled": false, "displayName": "Search User", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655553162	1778655553162
 29964548-0fdb-4ae9-9a2d-dea4880c4061	ciwfi55515	2027	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2027, "url": "/egov-workflow-v2/egov-wf/process/_count", "code": "null", "name": "WorkflowProcessCount", "path": "", "enabled": false, "displayName": "Workflow Count", "orderNumber": 1, "serviceCode": "", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655553272	1778655553272
@@ -7951,6 +8198,7 @@ af44641a-e5f1-4d88-9df6-3e82bb638d7f	ciwfi55515	1675	ACCESSCONTROL-ACTIONS-TEST.
 e4271472-1149-4ade-b4da-bd3e341311d9	ciwfi55515	1872	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1872, "url": "/pdf-service/v1/_createnosave", "code": "null", "name": "Pdf Generator createnosave", "path": "", "enabled": false, "displayName": "Pdf Generator createnosave", "orderNumber": 3, "serviceCode": "pdf-generator-createnosave"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655556405	1778655556405
 ebbbd45e-e8fa-4ecb-9bb0-7d8bf113e375	ciwfi55515	1429	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1429, "url": "/egov-location/location/v11/boundarys/_search", "code": "null", "name": "Search Boundaries With Mdms", "path": "Location.Search Boundary", "enabled": false, "displayName": "Boundaries Mdms Search", "orderNumber": 3, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655556525	1778655556525
 ed6c4341-e82e-423c-a66d-ed29fb093bb7	ciwfi55515	2510	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2510, "url": "/mdms-v2/schema/v1/_search", "code": "null", "name": "MDMS v2 Search", "path": "", "enabled": false, "displayName": "MDMS v2", "orderNumber": 1, "serviceCode": "MDMS v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655556637	1778655556637
+4e55e603-9009-4bb9-bb93-2fa1542858f3	cids59125	CITIZEN.1960	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 329, "actionid": 1960, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659214832	1778659214832
 1f510be5-4d34-4744-a10e-d23f3f3573fa	ciwfi55515	2563	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2563, "url": "/boundary-service/boundary-relationships/_create", "code": "null", "name": "Create boundary relationship", "path": "", "enabled": false, "displayName": "Create boundary relationship", "orderNumber": 0, "serviceCode": "boundary-hierarchy"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655556750	1778655556750
 ebaca8a1-7761-4b96-885e-533b71649f49	ciwfi55515	1976	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1976, "url": "/egov-searcher/locality/BPAREG/_get", "code": "null", "name": "Locality searcher endpoint for BPA", "path": "", "enabled": false, "displayName": "BPA locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655556860	1778655556860
 a727b275-6087-4529-b38d-e6a67ec61549	ciwfi55515	2317	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2317, "url": "/filestore/v1/files", "code": "null", "name": "FilestoreUrl", "path": "", "enabled": false, "displayName": "Filestore Url", "orderNumber": 1, "serviceCode": "filestore url", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655556971	1778655556971
@@ -7966,6 +8214,7 @@ ca061564-aa97-49ec-92f2-31da039fc0f6	ciwfi55515	2531	ACCESSCONTROL-ACTIONS-TEST.
 e3f08f34-4d1e-467f-83ed-2c35e18a4a2b	ciwfi55515	1982	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1982, "url": "url", "code": "null", "name": "Dishonored Cheque Report ", "path": "Finance.Reports.MIS Reports.Dishonored Cheque Report", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Dishonored Cheque Report ", "orderNumber": 7, "serviceCode": "FinanceReport", "parentModule": "", "navigationURL": "services/collection/report/dishonouredcheque/searchform"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655558208	1778655558208
 a26f3274-2f87-4069-b3a5-4fd634cc1ab4	ciwfi55515	2537	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2537, "url": "/mdms-v2/v2/_update/ACCESSCONTROL-ROLEACTIONS.roleactions", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Update ACCESSCONTROL-ROLEACTIONS roleactions", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655558320	1778655558320
 f546726a-8d20-41fd-a3ce-8280bcce4486	ciwfi55515	2538	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2538, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ROLESrolesroles", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Roleactions Roles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ROLES&masterName=rolesroles"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655558433	1778655558433
+0a9ffd28-cebc-4701-86cb-f0030d7ff9b9	cids59125	GRO.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1092, "actionid": 2556, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659214943	1778659214943
 f5676f21-d917-4101-aacd-5467f7efd026	ciwfi55515	795	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 795, "url": "/egov-common-masters/departments/v1/_create", "code": "null", "name": "Create Department", "path": "Administration.Department.Create Department", "enabled": true, "displayName": "Create Department", "orderNumber": 1, "serviceCode": "DEPT", "parentModule": "273"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655558546	1778655558546
 039a6e7d-3d00-479b-bb39-a1cd6109cb8b	ciwfi55515	873	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 873, "url": "/egov-location/boundarytypes/_search", "code": "null", "name": "SearchBoundaryType", "path": "Location.SearchBoundaryType", "enabled": false, "displayName": "Search BoundaryType", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655558658	1778655558658
 58dcf288-77ec-4146-afc6-0c83d89efe2c	ciwfi55515	1960	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1960, "url": "/egov-searcher/bill-genie/waterbills/_get", "code": "null", "name": "Search Water Bill", "path": "", "enabled": false, "displayName": "Search Water Bill", "orderNumber": 1, "serviceCode": "Searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655558771	1778655558771
@@ -8014,6 +8263,7 @@ c42c02e3-26b0-4658-a8d6-c504fca2597c	ciwfi55515	1968	ACCESSCONTROL-ACTIONS-TEST.
 9b08611e-0777-4299-88fb-c83a2975fab3	ciwfi55515	2559	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2559, "url": "/boundary-service/boundary-hierarchy-definition/_create", "code": "null", "name": "Create boundary hierarchy", "path": "", "enabled": false, "displayName": "Create boundary hierarchy", "orderNumber": 0, "serviceCode": "boundary-hierarchy"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655563601	1778655563601
 88492360-0e08-40d3-a74c-60210f6f6a03	ciwfi55515	1978	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1978, "url": "/property-services/property/_migration", "code": "null", "name": "Migrate Property v1 to v2", "path": "", "enabled": false, "displayName": "Migrate Property v1 to v2", "orderNumber": 5, "serviceCode": "property-services"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655563713	1778655563713
 97274c1b-b124-488e-88e7-4fa28e3de529	ciwfi55515	1941	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1941, "url": "/sw-calculator/sewerageCalculator/_calculate", "code": "null", "name": "Sewerage Calculation", "path": "", "enabled": false, "displayName": "Sewerage Calculation", "orderNumber": 0, "serviceCode": "sw-calculator"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655563827	1778655563827
+1e6844b0-85ef-40c9-a929-6add25da13d5	cids59125	COMMON_EMPLOYEE.698	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 988, "actionid": 698, "rolecode": "COMMON_EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215055	1778659215055
 8cf2a006-b55c-421a-a2fb-803a7b73d5bb	ciwfi55515	1741	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1741, "url": "/egov-workflow-v2/egov-wf/businessservice/_create", "code": "null", "name": "BusinessService Create", "path": "", "enabled": false, "displayName": "BusinessService Create", "orderNumber": 0, "serviceCode": "egov-workflow-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655563939	1778655563939
 523e3d67-3bce-44c2-b562-1223c9f3d114	ciwfi55515	2031	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2031, "url": "card", "code": "", "name": "ReceiptCancellation", "path": "receipts", "enabled": false, "leftIcon": "action:receipt", "rightIcon": "", "displayName": "ReceiptCancellation", "orderNumber": 25, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "receipts/search"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655564051	1778655564051
 24ac3d71-f93d-4f4f-bd2b-3a2111166106	ciwfi55515	2533	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2533, "url": "/mdms-v2/v2/_create/ACCESSCONTROL-ROLES.roles", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create ACCESSCONTROL-ROLES roles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655564165	1778655564165
@@ -8030,6 +8280,7 @@ a3a6db8f-8eaf-4dd2-97b2-3dc79b98f2a4	ciwfi55515	GRO.1528	ACCESSCONTROL-ROLEACTIO
 b0485fe6-b601-4605-833a-eff8be629ef2	ciwfi55515	797	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 797, "url": "/egov-common-masters/departments/v1/_search", "code": "null", "name": "View Department", "path": "Administration.Department.View Department", "enabled": true, "displayName": "View Department", "orderNumber": 3, "serviceCode": "DEPT", "parentModule": "273"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655565308	1778655565308
 a028c6f1-52df-47b8-b3ba-030a516807d9	ciwfi55515	694	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 694, "url": "/user/citizen/_create", "code": "null", "name": "Create Citizen", "path": "Administration.Create Citizen", "enabled": false, "displayName": "Create Citizen", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655565422	1778655565422
 19d4e7ee-7da6-4b6c-ae37-f5333acfb376	ciwfi55515	2016	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2016, "url": "/report/pgr/LMEPerformanceReport/metadata/_get", "code": "null", "name": "PGR-LMEPerformanceReport-Metadata", "path": "PGR Report", "enabled": false, "displayName": "Rainmaker PGR report", "orderNumber": 1, "serviceCode": "PGRReports", "parentModule": "147"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655565536	1778655565536
+d45e0214-25c9-4a00-8de9-286e3ebec9a7	ciwf59016	1964	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1964, "url": "/dashboard-ingest/ingest/upload", "code": "null", "name": "Dashboard Static Upload", "path": "", "enabled": false, "displayName": "DSS", "orderNumber": 0, "serviceCode": "DSS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659068457	1778659068457
 34507ce3-743c-4e9c-bd66-5491dfe3edab	ciwfi55515	1983	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1983, "url": "url", "code": "null", "name": "Remittance Pending Report", "path": "Finance.Reports.Revenue Reports.Remittance Pending Report", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Remittance Pending Report", "orderNumber": 6, "serviceCode": "FinanceReport", "parentModule": "", "navigationURL": "services/EGF/report/remittance/pending/form"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655565649	1778655565649
 b53b4d30-9051-4fba-a5c9-b6d8ef4bf010	ciwfi55515	1980	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1980, "url": "url", "code": "", "name": "rainmaker-localization-screen", "path": "Localization", "enabled": false, "leftIcon": "places:business-center", "rightIcon": "", "displayName": "Localization", "orderNumber": 5, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "integration/ui-localisation/localization"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655565760	1778655565760
 ce03d78f-a8d8-4017-afbd-0b688c2eeb4e	ciwfi55515	1933	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1933, "url": "/egov-searcher/locality/tl-services/_get", "code": "null", "name": "Locality searcher endpoint for TL", "path": "", "enabled": false, "displayName": "TL locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655565872	1778655565872
@@ -8062,6 +8313,7 @@ c79239e9-99a8-4bb4-b9cd-842bb6e777f3	ciwfi55515	1975	ACCESSCONTROL-ACTIONS-TEST.
 0381358d-ae2f-4630-a730-850b312fa4af	ciwfi55515	700	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 700, "url": "/user/password/nologin/_update", "code": "null", "name": "UpdatePasswordForNonLoggedInUser", "path": "Administration.UpdatePasswordForNonLoggedInUser", "enabled": false, "displayName": "UpdatePassword For NonLogged InUser", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655569133	1778655569133
 bc1435d2-9c45-42ed-8671-91b56d0de695	ciwfi55515	1779	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1779, "url": "card", "code": "", "name": "rainmaker-common-hrms", "path": "", "enabled": false, "leftIcon": "social:people", "rightIcon": "", "displayName": "HRMS", "orderNumber": 2, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/hrms/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655569245	1778655569245
 af4c0f97-6f7d-45fa-a63b-f54d4cda2979	ciwfi55515	883	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 883, "url": "/egov-location/crosshierarchys/_search", "code": "null", "name": "Search Cross Hierarchy", "path": "Location.Search Cross Hierarchy", "enabled": false, "displayName": "Search Cross Hierarchys", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655569357	1778655569357
+04352538-d6d5-4701-8e0f-b60129cba9e7	cids59125	SUPERUSER.954	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 94, "actionid": 954, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215167	1778659215167
 786c0f47-d02d-4d38-95ca-9a654b33ecce	ciwfi55515	1529	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1529, "url": "/localization/messages/v1/_create", "code": "null", "name": "LocalizationMessagesCreate", "path": "", "enabled": false, "displayName": "Localization Messages Create", "orderNumber": 1, "serviceCode": "filestore url", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655569467	1778655569467
 be7ea0d6-701e-4619-b1af-328a1f6c0081	ciwfi55515	724	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 724, "url": "/access/v1/actions/_search", "code": "null", "name": "SearchActions", "path": "Access Control.SearchActions", "enabled": false, "displayName": "Search Actions", "orderNumber": 1, "serviceCode": "AccessControl"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655569578	1778655569578
 74b313bc-5dc1-4eaf-b4da-5560e2b72c47	ciwfi55515	2527	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2527, "url": "/mdms-v2/v2/_create/tenant.tenants", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create tenant tenants", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655569690	1778655569690
@@ -8093,6 +8345,7 @@ b694e639-b7ca-4f73-a0f7-b85e463cbf43	ciwfi55515	355	ACCESSCONTROL-ACTIONS-TEST.a
 2bac83bd-67eb-4394-bdaa-7df7f9c83a52	ciwfi55515	2156	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2156, "url": "/egov-workflow-v2/egov-wf/escalate/_search", "code": "null", "name": "Workflow Escalation search", "path": "", "enabled": false, "displayName": "Workflow Escalation search", "orderNumber": 0, "serviceCode": "egov-workflow-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655572496	1778655572496
 cc0f2279-6b2f-4628-b905-4012279c02e7	ciwfi55515	2565	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2565, "url": "digit-ui-card", "code": "", "name": "CS_COMMON_FILE_A_COMPLAINT", "path": "", "enabled": true, "sidebar": "digit-ui-links", "leftIcon": "PGRIcon", "rightIcon": "", "sidebarURL": "/digit-ui/citizen/pgr-home", "displayName": "File a Complaint", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "PGR", "navigationURL": "/digit-ui/citizen/pgr/create-complaint/complaint-type"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655572608	1778655572608
 41ae49fe-74ea-4c4a-ad04-93fc136a71f8	ciwfi55515	1934	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1934, "url": "/egov-searcher/locality/fireNoc/_get", "code": "null", "name": "Locality searcher endpoint for PT", "path": "", "enabled": false, "displayName": "FIRENOC locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655572720	1778655572720
+0163da5d-334f-48a4-90f9-6f27f238a3dd	cids59125	REINDEXING_ROLE.695	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1024, "actionid": 695, "rolecode": "REINDEXING_ROLE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215279	1778659215279
 01157cec-0cee-4a35-9d5c-069420988703	ciwfi55515	253	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 253, "url": "/egov-location/boundarys/getByBoundaryType", "code": "null", "name": "Get Boundary by Boundary Type", "path": "Location.Get Boundary by Boundary Type", "enabled": false, "displayName": "Get Boundary by Boundary Type", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655572832	1778655572832
 f975d80e-bc85-4560-8d6f-d7ea1c1b5981	ciwfi55515	1971	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1971, "url": "url", "code": "null", "name": "Reopening Closed Period", "path": "Finance.Period End Activities.Close Period", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Reopening Closed Period", "orderNumber": 4, "serviceCode": "FinanceMaster", "parentModule": "", "navigationURL": "services/EGF/closedperiod/search/reopen"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655572943	1778655572943
 597934f9-acc4-40fa-95b5-77b6359f9896	ciwfi55515	1969	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1969, "url": "/egov-searcher/locality/pt-services/_get", "code": "null", "name": "Locality searcher endpoint for PT Service", "path": "", "enabled": false, "displayName": "PT locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655573055	1778655573055
@@ -8240,6 +8493,7 @@ c80f7d8f-2701-4ceb-a420-1522533ffa1e	ciwfi59256	2033	ACCESSCONTROL-ACTIONS-TEST.
 08e9cfef-e66f-4f27-8da8-0e59ef2c5933	ciwfi59256	1936	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1936, "url": "/ws-calculator/meterConnection/_search", "code": "null", "name": "Search Meter Reading", "path": "", "enabled": false, "displayName": "Search Meter Reading", "orderNumber": 0, "serviceCode": "ws-calculator"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659305187	1778659305187
 e3f8d3f2-aaa6-4e06-9fd3-57ace490e7dc	ciwfi59256	2002	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2002, "url": "/noc-services/v1/noc/_search", "code": "null", "name": "NOC Search", "path": "", "enabled": false, "displayName": "Search", "orderNumber": 0, "serviceCode": "NOC"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659305304	1778659305304
 ed71cdb5-f8db-443d-8776-1dcb56fa3c7d	ciwfi59256	1989	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1989, "url": "/land-services/v1/land/_update", "code": "null", "name": "BPA-Land-Update", "path": "", "enabled": false, "displayName": "Land Update", "orderNumber": 0, "serviceCode": "BPA"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659305419	1778659305419
+1e310386-d186-44c3-a9e0-5c6313fc1840	cids59125	CSR.699	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 712, "actionid": 699, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215392	1778659215392
 bf6e7542-77f0-48b2-8089-f8b074fd656a	ciwfi59256	1954	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1954, "url": "/pt-calculator-v2/billingslab/mutation/_create", "code": "null", "name": "MutationBillingSlabCreate", "path": "", "enabled": false, "displayName": "Draft Search", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659305531	1778659305531
 ad93f458-d0bf-4de4-8575-19ecd62b2476	ciwfi59256	1944	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1944, "url": "/property-services/assessment/_update", "code": "null", "name": "Update Assessment registry", "path": "", "enabled": false, "displayName": "Update Assessment Registry", "orderNumber": 1, "serviceCode": "property-services"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659305642	1778659305642
 20c4d491-eba2-4c90-8992-debf55166625	ciwfi59256	729	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 729, "url": "/access/v1/roles/_search", "code": "null", "name": "SearchRoles", "path": "Access Control.SearchRoles", "enabled": false, "displayName": "Search Roles", "orderNumber": 1, "serviceCode": "AccessControl"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659305755	1778659305755
@@ -8407,6 +8661,7 @@ e38701df-9c80-4e22-8c93-3e241d7907d7	ciwfi55515	CITIZEN.2008	ACCESSCONTROL-ROLEA
 1b9c8bf3-88c4-49e3-a4c9-8befd127057c	ciwfi55515	GRO.1729	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 226, "actionid": 1729, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655611208	1778655611208
 db34635c-8c38-4328-94df-443a33593927	ciwfi55515	PGR_LME.1730	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 742, "actionid": 1730, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655611322	1778655611322
 94e9e88f-96f9-4e03-8ab8-715d220862fc	ciwfi55515	SUPERUSER.260	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 8, "actionid": 260, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655611435	1778655611435
+c36ffefe-c7bb-4c71-aa2f-c0f09ce5a79c	cids59125	CITIZEN.694	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 29, "actionid": 694, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215505	1778659215505
 5e2709b1-2eff-41f6-bb8c-5bcdd689a6a6	ciwfi55515	HRMS_ADMIN.698	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 968, "actionid": 698, "rolecode": "HRMS_ADMIN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655611549	1778655611549
 ae82e8db-ad5e-4128-be95-9c5eeca036ee	ciwfi55515	EMPLOYEE.623	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 481, "actionid": 623, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655611661	1778655611661
 a3de5090-cead-41ef-9dab-49b76608ebbe	ciwfi55515	SUPERUSER.1429	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 101, "actionid": 1429, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778655611774	1778655611774
@@ -8487,6 +8742,7 @@ bc2d6714-bdb0-49f4-aad0-a4140845c309	ciwfi59256	726	ACCESSCONTROL-ACTIONS-TEST.a
 1944aaa7-a8f4-4acc-b422-2cd6f6351da4	ciwfi59256	692	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 692, "url": "/otp/v1/_validate", "code": "null", "name": "ValidateOtp", "path": "Otp.ValidateOtp", "enabled": false, "displayName": "Validate Otp", "orderNumber": 1, "serviceCode": "OTP", "parentModule": "247"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659301578	1778659301578
 7e361baf-7eda-4f87-b615-60aff702ea04	ciwfi59256	2567	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2567, "url": "/egov-user-event/v1/events/_search", "code": "null", "name": "mSeva Event Search", "path": "", "enabled": false, "displayName": "mSeva Event Notification", "orderNumber": 1, "serviceCode": "msea-event-notification"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659301692	1778659301692
 4d003eaf-727c-4409-a430-aa751f11dfff	ciwfi59256	2003	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2003, "url": "/noc-services/v1/noc/_update", "code": "null", "name": "NOC Update", "path": "", "enabled": false, "displayName": "Update", "orderNumber": 0, "serviceCode": "NOC"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659301806	1778659301806
+005bf78a-9895-4cc2-8bf2-50451c8806e1	cids59125	EMPLOYEE.1743	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 235, "actionid": 1743, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215618	1778659215618
 0d075cc9-3958-46a6-b66b-44f54694debd	ciwfi59256	2536	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2536, "url": "/mdms-v2/v2/_create/ACCESSCONTROL-ROLEACTIONS.roleactions", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create ACCESSCONTROL-ROLEACTIONS roleactions", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659301919	1778659301919
 f496e23a-2a53-4f2a-ad9f-71569c7fa38a	ciwfi59256	954	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 954, "url": "/egov-mdms-service/v1/_search", "code": "null", "name": "MDMS Search", "path": "", "enabled": false, "displayName": "MDMS Search", "orderNumber": 0, "serviceCode": "MDMS Search", "parentModule": "306"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659302031	1778659302031
 d2dbf4e7-ef79-43f9-8fdc-d5f47038d294	ciwfi59256	2086	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2086, "url": "/egov-enc-service/crypto/v1/_encrypt", "code": "null", "name": "Encrypt", "path": "Enc.Encrypt", "enabled": false, "displayName": "Encrypt", "orderNumber": 1, "serviceCode": "Enc"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659317002	1778659317002
@@ -8769,6 +9025,7 @@ f3dede49-e12f-4e9e-8dd4-40ddb4e3453e	ciwf59016	IllegalParking	RAINMAKER-PGR.Serv
 db17d102-008e-41e0-bb0d-c42954c1f164	ciwf59016	DamagedRoad	RAINMAKER-PGR.ServiceDefs	{"name": "Damaged road", "active": true, "keywords": "road, damage, hole, surface, repair, patch, broken, maintenance, street, construction, fix", "menuPath": "RoadsAndFootpaths", "slaHours": 336, "department": "DEPT_4", "serviceCode": "DamagedRoad"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659048250	1778659048250
 9e82d791-552e-4635-8c16-0af5fb595d18	ciwf59016	illegalDischargeOfSewage	RAINMAKER-PGR.ServiceDefs	{"name": "Illegal discharge of sewage", "active": true, "keywords": "water, supply, connection, damage, repair, broken, pipe, piping, tap", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "illegalDischargeOfSewage"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659048362	1778659048362
 63f9583e-f14c-4cb5-92d3-eb3b67e2588a	ciwf59016	NoWaterSupply	RAINMAKER-PGR.ServiceDefs	{"name": "No water supply", "active": true, "keywords": "water, supply, connection, drink, tap", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "NoWaterSupply"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659048474	1778659048474
+4f1f1d13-68c6-4c55-98cf-02248215127f	cids59125	CITIZEN.870	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 172, "actionid": 870, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215729	1778659215729
 c43dd88d-e7c8-4b3b-abbc-fb9d048dd30d	ciwf59016	StreetLightNotWorking	RAINMAKER-PGR.ServiceDefs	{"name": "Streetlight not working", "order": 1, "active": true, "keywords": "streetlight, light, repair, work, pole, electric, power, repair, fix", "menuPath": "StreetLights", "slaHours": 336, "department": "DEPT_1", "serviceCode": "StreetLightNotWorking"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659048587	1778659048587
 9ae3ee8a-02f0-4d2f-93d4-b10cf9f4ccde	ciwf59016	GarbageNeedsTobeCleared	RAINMAKER-PGR.ServiceDefs	{"name": "Garbage needs to be cleared", "order": 4, "active": true, "keywords": "garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw", "menuPath": "Garbage", "slaHours": 336, "department": "DEPT_3", "serviceCode": "GarbageNeedsTobeCleared"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659048698	1778659048698
 5bc57da3-b7cd-46a4-b278-233c306c5a5c	ciwf59016	BlockOrOverflowingSewage	RAINMAKER-PGR.ServiceDefs	{"name": "Block / Overflowing sewage", "order": 2, "active": true, "keywords": "water, supply, connection, damage, repair, broken, pipe, piping, tap", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "BlockOrOverflowingSewage"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659048812	1778659048812
@@ -8816,6 +9073,7 @@ b8ef0e6a-a7d5-408d-b101-ab165af05ca6	ciwf59016	605	ACCESSCONTROL-ACTIONS-TEST.ac
 346840ff-f6d3-425a-ac6f-6e99fcc6e587	ciwf59016	1929	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1929, "url": "quickAction", "code": "null", "name": "TradeLicenseApplication", "path": "TradeLicense.Apply", "enabled": false, "leftIcon": "places:business-center", "displayName": "Apply TL", "orderNumber": 13, "serviceCode": "TradeLicense", "parentModule": "", "navigationURL": "/digit-ui/employee/tl/new-application"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659053569	1778659053569
 596aace7-dbf3-4796-a6a3-81558350111b	ciwf59016	2021	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2021, "url": "/report/pgr/GROPerformanceReport/_get", "code": "null", "name": "GROPerformanceReport", "path": "PGR Report", "enabled": false, "displayName": "PGR Report", "orderNumber": 0, "serviceCode": "PGRReports"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659053681	1778659053681
 7730aa1d-2766-4e98-8366-805aee52437b	ciwf59016	732	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 732, "url": "/egov-location/boundarys/isshapefileexist", "code": "null", "name": "isShapeFileExist", "path": "Location.isShapeFileExist", "enabled": false, "displayName": "Is ShapeFile ExistOrNot", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659053793	1778659053793
+273d7cc9-1880-49c4-a5ab-585c38d34f46	cids59125	GRO.1730	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 228, "actionid": 1730, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215844	1778659215844
 ca442b88-7ac6-469d-b9da-32487337929c	ciwf59016	260	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 260, "url": "/city/getCitybyCityRequest", "code": "null", "name": "Get City By City Request", "path": "Location.Get City By City Request", "enabled": false, "displayName": "Get City By City Request", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659053905	1778659053905
 bfb23566-9273-4999-86d2-a80af31a177c	ciwf59016	604	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 604, "url": "/user/_search", "code": "null", "name": "SearchUser", "path": "Administration.SearchUser", "enabled": false, "displayName": "Search User", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659054018	1778659054018
 945c2df0-b099-4f72-a3ee-3b12d3b8dce8	ciwf59016	CITIZEN.627	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 87, "actionid": 627, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659080257	1778659080257
@@ -8848,6 +9106,7 @@ c1d9e71b-0006-4611-b117-86b846c16f0c	ciwf59016	1938	ACCESSCONTROL-ACTIONS-TEST.a
 c78d1ebe-b472-4d93-9d9b-873b0e616915	ciwf59016	1872	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1872, "url": "/pdf-service/v1/_createnosave", "code": "null", "name": "Pdf Generator createnosave", "path": "", "enabled": false, "displayName": "Pdf Generator createnosave", "orderNumber": 3, "serviceCode": "pdf-generator-createnosave"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659057266	1778659057266
 36b4bb1f-caaf-44dd-98ee-2b5987c5c678	ciwf59016	1429	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1429, "url": "/egov-location/location/v11/boundarys/_search", "code": "null", "name": "Search Boundaries With Mdms", "path": "Location.Search Boundary", "enabled": false, "displayName": "Boundaries Mdms Search", "orderNumber": 3, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659057379	1778659057379
 1c782d41-271d-4bcc-901d-fbef77b8af73	ciwf59016	2510	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2510, "url": "/mdms-v2/schema/v1/_search", "code": "null", "name": "MDMS v2 Search", "path": "", "enabled": false, "displayName": "MDMS v2", "orderNumber": 1, "serviceCode": "MDMS v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659057491	1778659057491
+060ef630-f9bb-4ac5-b700-3be213e37870	cids59125	MDMS_ADMIN.2539	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1049, "actionid": 2539, "rolecode": "MDMS_ADMIN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215956	1778659215956
 1c21c67e-c8b5-4a20-99bf-346a25949b1a	ciwf59016	2563	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2563, "url": "/boundary-service/boundary-relationships/_create", "code": "null", "name": "Create boundary relationship", "path": "", "enabled": false, "displayName": "Create boundary relationship", "orderNumber": 0, "serviceCode": "boundary-hierarchy"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659057603	1778659057603
 4dbb408a-1b0f-4a8e-8943-020abc23ac85	ciwf59016	EMPLOYEE.2156	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 849, "actionid": 2156, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659080370	1778659080370
 5392c2bd-046b-4dba-b1d8-dbc7c69588c5	ciwf59016	1976	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1976, "url": "/egov-searcher/locality/BPAREG/_get", "code": "null", "name": "Locality searcher endpoint for BPA", "path": "", "enabled": false, "displayName": "BPA locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659057713	1778659057713
@@ -8864,7 +9123,6 @@ eccc6359-f2f2-4476-9083-26c34e91c4e3	ciwf59016	2531	ACCESSCONTROL-ACTIONS-TEST.a
 d73be7d5-b256-4aa0-ad04-9f28ec4128b0	ciwf59016	1982	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1982, "url": "url", "code": "null", "name": "Dishonored Cheque Report ", "path": "Finance.Reports.MIS Reports.Dishonored Cheque Report", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Dishonored Cheque Report ", "orderNumber": 7, "serviceCode": "FinanceReport", "parentModule": "", "navigationURL": "services/collection/report/dishonouredcheque/searchform"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659059064	1778659059064
 b8c6f77e-24a3-4fb0-abe5-5cde127243e0	ciwf59016	2537	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2537, "url": "/mdms-v2/v2/_update/ACCESSCONTROL-ROLEACTIONS.roleactions", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Update ACCESSCONTROL-ROLEACTIONS roleactions", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659059175	1778659059175
 f8233319-09e6-49c7-8d8c-a49d25070486	ciwf59016	2538	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2538, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ROLESrolesroles", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Roleactions Roles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ROLES&masterName=rolesroles"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659059288	1778659059288
-d45e0214-25c9-4a00-8de9-286e3ebec9a7	ciwf59016	1964	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1964, "url": "/dashboard-ingest/ingest/upload", "code": "null", "name": "Dashboard Static Upload", "path": "", "enabled": false, "displayName": "DSS", "orderNumber": 0, "serviceCode": "DSS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659068457	1778659068457
 c1c32675-9079-468a-a1c1-a2ea93f30316	ciwf59016	795	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 795, "url": "/egov-common-masters/departments/v1/_create", "code": "null", "name": "Create Department", "path": "Administration.Department.Create Department", "enabled": true, "displayName": "Create Department", "orderNumber": 1, "serviceCode": "DEPT", "parentModule": "273"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659059401	1778659059401
 fa8b63f4-1eed-4b02-9588-408e0a489c38	ciwf59016	873	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 873, "url": "/egov-location/boundarytypes/_search", "code": "null", "name": "SearchBoundaryType", "path": "Location.SearchBoundaryType", "enabled": false, "displayName": "Search BoundaryType", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659059512	1778659059512
 37cac8c0-f870-4aaa-91b1-097b3939b935	ciwf59016	1960	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1960, "url": "/egov-searcher/bill-genie/waterbills/_get", "code": "null", "name": "Search Water Bill", "path": "", "enabled": false, "displayName": "Search Water Bill", "orderNumber": 1, "serviceCode": "Searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659059622	1778659059622
@@ -9026,6 +9284,7 @@ b6454a02-4232-4879-8168-8623d3d2e24a	ciwf59016	1814	ACCESSCONTROL-ACTIONS-TEST.a
 75cac80f-c9ef-429e-a541-8cf7062ce17b	ciwf59016	2526	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2526, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.tenanttenants", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Tenant", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=tenant&masterName=tenants"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659077408	1778659077408
 c591ec2a-4bb1-4b14-8196-48fdccbb8baf	ciwf59016	1559	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1559, "url": "url", "code": "null", "name": "CreateComplaint", "path": "Complaints.CreateComplaint", "enabled": false, "leftIcon": "content:add", "rightIcon": "", "displayName": "Create Complaint", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee/pgr/complaint/create"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659077519	1778659077519
 4d30870d-b890-4fd4-a76d-58967429a1aa	ciwf59016	1577	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1577, "url": "url", "name": "Assess New Property", "path": "Property Tax.Assess New Property", "enabled": false, "leftIcon": "communication:business", "tenantId": "pg", "createdBy": null, "rightIcon": "", "createdDate": null, "displayName": "Assess New Property", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/pt/inbox", "lastModifiedBy": null, "lastModifiedDate": null}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659077632	1778659077632
+57deab43-a2c3-4c9b-87af-dd6e7c6e9eac	cids59125	SUPERUSER.2560	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1101, "actionid": 2560, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216069	1778659216069
 5d8fd6e2-a024-4b7a-93e0-31b5ca13700c	ciwf59016	1806	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1806, "url": "url", "name": "PropertyTax", "path": "Property Tax", "enabled": false, "leftIcon": "communication:business", "rightIcon": "", "displayName": "Property Tax", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/citizen"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659077745	1778659077745
 cab99d81-d2e4-44a6-9850-97ec03595949	ciwf59016	254	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 254, "url": "/egov-location/boundarys/childLocationsByBoundaryId", "code": "null", "name": "Get Child locations by Boundary", "path": "Location.Get Child locations by Boundary", "enabled": false, "displayName": "Get Child locations by Boundary", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659077859	1778659077859
 faa94a30-6891-404d-8c91-2848e410b958	ciwf59016	2005	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2005, "url": "/egov-searcher/locality/noc-services/_get", "code": "null", "name": "Locality searcher endpoint for Noc Servcies", "path": "", "enabled": false, "displayName": "Noc locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659077971	1778659077971
@@ -9753,6 +10012,7 @@ b651b939-979e-4389-811b-ea0d5c0b6c44	cids59125	1972	ACCESSCONTROL-ACTIONS-TEST.a
 b06a3e41-fc8a-46cf-98d4-c7f487bf4b58	cids59125	2023	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2023, "url": "/sw-calculator/sewerageCalculator/_applyAdhocTax", "code": "null", "name": "Add adhoc tax to sewerage", "path": "", "enabled": false, "displayName": "Add adhoc tax", "orderNumber": 0, "serviceCode": "sw-calculator"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659166106	1778659166106
 c96def67-1070-46a7-bfd9-044d343260e0	cids59125	2022	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2022, "url": "/ws-calculator/waterCalculator/_applyAdhocTax", "code": "null", "name": "Add adhoc tax", "path": "", "enabled": false, "displayName": "Add adhoc tax", "orderNumber": 0, "serviceCode": "ws-calculator"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659166219	1778659166219
 5f1b7a70-66ae-4bf1-b893-df1893a9369b	cids59125	2021	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2021, "url": "/report/pgr/GROPerformanceReport/_get", "code": "null", "name": "GROPerformanceReport", "path": "PGR Report", "enabled": false, "displayName": "PGR Report", "orderNumber": 0, "serviceCode": "PGRReports"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659166333	1778659166333
+00f1e989-8208-425d-9134-b1e95c0a4b48	cids59125	MDMS_ADMIN.2532	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1041, "actionid": 2532, "rolecode": "MDMS_ADMIN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216180	1778659216180
 3afdb9d1-cd2e-4162-aca1-8c97b1bf6c49	cids59125	2020	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2020, "url": "/report/pgr/LMEPerformanceReport/_get", "code": "null", "name": "LMEPerformanceReport", "path": "PGR Report", "enabled": false, "displayName": "PGR Report", "orderNumber": 0, "serviceCode": "PGRReports"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659166448	1778659166448
 792cacc2-e2f3-40e2-8e51-3963ecdb6c7a	cids59125	2019	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2019, "url": "/report/pgr/DescriptionReport/_get", "code": "null", "name": "DescriptionReport", "path": "PGR Report", "enabled": false, "displayName": "PGR Report", "orderNumber": 0, "serviceCode": "PGRReports"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659166560	1778659166560
 8cd77458-a69c-48e5-a5ef-02432c939b18	cids59125	2018	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2018, "url": "/report/pgr/ULBReport/_get", "code": "null", "name": "ULBReport", "path": "PGR Report", "enabled": false, "displayName": "PGR Report", "orderNumber": 0, "serviceCode": "PGRReports"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659166675	1778659166675
@@ -9801,6 +10061,7 @@ d2b53061-1f90-4812-8556-9559db0cf547	cids59125	1979	ACCESSCONTROL-ACTIONS-TEST.a
 5ce5e86c-e41e-4e01-8031-d550082ba42b	cids59125	1971	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1971, "url": "url", "code": "null", "name": "Reopening Closed Period", "path": "Finance.Period End Activities.Close Period", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Reopening Closed Period", "orderNumber": 4, "serviceCode": "FinanceMaster", "parentModule": "", "navigationURL": "services/EGF/closedperiod/search/reopen"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659171504	1778659171504
 fb7f49dd-0ce5-41e2-bb5e-85e1bed63e1b	cids59125	1970	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1970, "url": "/dashboard-ingest/ingest/paymentsindex-v1/v2", "code": "null", "name": "Dashboard Payments-v1", "path": "", "enabled": false, "displayName": "DSS", "orderNumber": 0, "serviceCode": "DSS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659171616	1778659171616
 cf58ee5b-34e9-489f-8619-f24dd7cfe67f	cids59125	1969	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1969, "url": "/egov-searcher/locality/pt-services/_get", "code": "null", "name": "Locality searcher endpoint for PT Service", "path": "", "enabled": false, "displayName": "PT locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659171729	1778659171729
+02e10166-7576-4a06-8db3-9d701e4a0fc5	cids59125	SUPERUSER.870	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 83, "actionid": 870, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216293	1778659216293
 13d39759-800a-4e22-ba0f-b7964930cf7c	cids59125	1968	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1968, "url": "/egov-searcher/locality/PT/_get", "code": "null", "name": "Locality searcher endpoint for PT", "path": "", "enabled": false, "displayName": "PT locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659171841	1778659171841
 38d7f210-ff93-4d8c-aa15-c820c087ae2c	cids59125	1965	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1965, "url": "/dashboard-ingest/update/publish", "code": "null", "name": "Dashboard Api W&S to update", "path": "", "enabled": false, "displayName": "DSS", "orderNumber": 0, "serviceCode": "DSS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659171954	1778659171954
 c7c74a91-6ce4-47f6-a40f-3b83f908f9f2	cids59125	1964	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1964, "url": "/dashboard-ingest/ingest/upload", "code": "null", "name": "Dashboard Static Upload", "path": "", "enabled": false, "displayName": "DSS", "orderNumber": 0, "serviceCode": "DSS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659172067	1778659172067
@@ -9816,6 +10077,7 @@ deabba18-daf3-426d-9e10-b837e094022f	cids59125	1960	ACCESSCONTROL-ACTIONS-TEST.a
 bea5615f-4d8a-4b3b-9ec5-7ef10b0d729a	cids59125	1954	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1954, "url": "/pt-calculator-v2/billingslab/mutation/_create", "code": "null", "name": "MutationBillingSlabCreate", "path": "", "enabled": false, "displayName": "Draft Search", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659173192	1778659173192
 0e1c85cf-dd22-47ca-b47f-4c785ea895a7	cids59125	1950	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1950, "url": "quickAction", "name": "search BPA application", "path": "Building Plan Approval.Search Application", "enabled": false, "leftIcon": "communication:business", "tenantId": "pg", "createdBy": null, "rightIcon": "", "createdDate": null, "displayName": "Search Application", "orderNumber": 1, "queryParams": "", "quickAction": false, "serviceCode": "", "parentModule": "", "navigationURL": "egov-bpa/search", "lastModifiedBy": null, "lastModifiedDate": null}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659173303	1778659173303
 1c4cc176-9929-42b2-b050-01070657e2f9	cids59125	1949	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1949, "url": "url", "code": "null", "name": "Dashboard Overview", "path": "Dashboard.Overview", "enabled": false, "leftIcon": "places:business-center", "rightIcon": "", "displayName": "Overview", "orderNumber": 3, "serviceCode": "DSS", "parentModule": "dss-dashboard", "navigationURL": "integration/dss/overview"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659173415	1778659173415
+17e6b8ae-9c0a-4fd8-9ea6-f9c0c137d8cb	cids59125	GRO.2007	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 492, "actionid": 2007, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216406	1778659216406
 1a2b7ce7-7f7b-4c64-a989-82fa6959dead	cids59125	1948	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1948, "url": "/dashboard-analytics/dashboard/getDashboardConfig/overview", "code": "null", "name": "DSS Dashboard Config Overview", "path": "", "enabled": false, "displayName": "DSS", "orderNumber": 0, "serviceCode": "DSS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659173526	1778659173526
 a17b5a6e-adf0-4b5e-8c14-e7ea2d3538be	cids59125	1947	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1947, "url": "card", "code": "", "name": "rainmaker-citizen-edcrscrutiny", "path": "", "enabled": false, "leftIcon": "custom:edcr", "rightIcon": "", "displayName": "eDCR Scrutiny", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "edcrscrutiny/home"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659173637	1778659173637
 10f58a0b-75bb-4f2d-a9a9-b9728559ddd5	cids59125	1944	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1944, "url": "/property-services/assessment/_update", "code": "null", "name": "Update Assessment registry", "path": "", "enabled": false, "displayName": "Update Assessment Registry", "orderNumber": 1, "serviceCode": "property-services"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659173750	1778659173750
@@ -9848,6 +10110,7 @@ a20035f7-216a-41ca-a5a6-4e5ee3c25498	cids59125	1872	ACCESSCONTROL-ACTIONS-TEST.a
 fb576e2c-8a1a-4f88-abe1-a5cdad96b258	ciwfi59256	TEMPORARY	egov-hrms.EmployeeType	{"code": "TEMPORARY", "active": true}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659282677	1778659282677
 35182280-a5eb-47db-a957-f397a136a3bf	cids59125	1806	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1806, "url": "url", "name": "PropertyTax", "path": "Property Tax", "enabled": false, "leftIcon": "communication:business", "rightIcon": "", "displayName": "Property Tax", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/citizen"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659176800	1778659176800
 1a67c897-a658-445e-b1de-fffe6824ce5d	cids59125	1805	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1805, "url": "url", "code": "null", "name": "Complaints", "path": "Complaints", "enabled": false, "leftIcon": "custom:account-alert", "rightIcon": "", "displayName": "Complaints", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/citizen/pgr/complaints"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659176912	1778659176912
+9d1f97ed-e851-4742-b661-0b2a7c08bc58	ciwfi59256	TRANSFERRED	egov-hrms.EmployeeStatus	{"code": "TRANSFERRED", "active": true}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659281663	1778659281663
 b33bd36e-b60d-4329-9a60-3cd6f3678f8c	cids59125	1779	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1779, "url": "card", "code": "", "name": "rainmaker-common-hrms", "path": "", "enabled": false, "leftIcon": "social:people", "rightIcon": "", "displayName": "HRMS", "orderNumber": 2, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/hrms/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659177024	1778659177024
 788e50e7-15aa-4e09-a7b1-f89279de195e	cids59125	1775	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1775, "url": "card", "code": "", "name": "rainmaker-common-complaints", "path": "", "enabled": false, "leftIcon": "action:announcement", "rightIcon": "", "displayName": "Complaints", "orderNumber": 2, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/pgr/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659177136	1778659177136
 5df42d46-3166-4629-ad78-464f7fba8adf	cids59125	1773	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1773, "url": "url", "code": "null", "name": "HRMS", "path": "HRMS.Search", "enabled": false, "leftIcon": "social:people", "displayName": "Search Employee", "orderNumber": 2, "serviceCode": "HRMS", "parentModule": "", "navigationURL": "/digit-ui/employee/hrms/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659177250	1778659177250
@@ -9879,6 +10142,7 @@ b2110b86-6a18-4b62-90e1-d786a6379dbb	cids59125	1529	ACCESSCONTROL-ACTIONS-TEST.a
 307613fd-208d-40c9-b1bf-41630943dc9d	cids59125	1519	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1519, "url": "/filestore/v1/files/metadata", "code": "null", "name": "Uploaded File MetaData", "path": "", "enabled": false, "displayName": "Uploaded File MetaData", "orderNumber": 1, "queryParams": null, "serviceCode": "FILE_METADATA", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659180186	1778659180186
 c987efa2-3063-484d-bf81-ae5ea021eb31	cids59125	CSR.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1063, "actionid": 604, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659190295	1778659190295
 7046bc8e-f5c5-4296-aa2a-8ebc9b359c9f	cids59125	1429	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1429, "url": "/egov-location/location/v11/boundarys/_search", "code": "null", "name": "Search Boundaries With Mdms", "path": "Location.Search Boundary", "enabled": false, "displayName": "Boundaries Mdms Search", "orderNumber": 3, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659180298	1778659180298
+f0ef95bd-1e7e-463e-b407-7d5ca810db92	cids59125	SUPERVISOR.2008	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 886, "actionid": 2008, "rolecode": "SUPERVISOR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216518	1778659216518
 9a1c19d4-3107-46b4-ac5c-a088a2278ff0	cids59125	797	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 797, "url": "/egov-common-masters/departments/v1/_search", "code": "null", "name": "View Department", "path": "Administration.Department.View Department", "enabled": true, "displayName": "View Department", "orderNumber": 3, "serviceCode": "DEPT", "parentModule": "273"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659180411	1778659180411
 e3da245e-0e8c-4c47-bbdd-b57737c24b52	cids59125	796	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 796, "url": "/egov-common-masters/departments/v1/_search", "code": "null", "name": "Modify Department", "path": "Administration.Department.Modify Department", "enabled": true, "displayName": "Modify Department", "orderNumber": 2, "serviceCode": "DEPT", "parentModule": "273"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659180523	1778659180523
 1f4f2dc8-8655-47bb-92c8-052683630943	cids59125	795	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 795, "url": "/egov-common-masters/departments/v1/_create", "code": "null", "name": "Create Department", "path": "Administration.Department.Create Department", "enabled": true, "displayName": "Create Department", "orderNumber": 1, "serviceCode": "DEPT", "parentModule": "273"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659180634	1778659180634
@@ -10141,6 +10405,7 @@ b2ea0a26-c782-441a-8e8a-111293b705c3	cids59125	CITIZEN.1807	ACCESSCONTROL-ROLEAC
 6ad1b418-6c1d-409f-94cc-e48428b3d22f	cids59125	EMPLOYEE.1557	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 165, "actionid": 1557, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659210751	1778659210751
 08a13a66-13e9-4590-a3e0-cab69fbbd230	cids59125	CITIZEN.1556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 166, "actionid": 1556, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659210863	1778659210863
 30a60afc-c0f8-4f34-bef9-3cd38cc5648b	ciwfi59256	2564	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2564, "url": "/boundary-service/boundary-relationships/_search", "code": "null", "name": "Search boundary relationship", "path": "", "enabled": false, "displayName": "Search boundary relationship", "orderNumber": 0, "serviceCode": "boundary-hierarchy"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659302476	1778659302476
+91f4e403-a143-4553-95ca-be2fe60d4596	cids59125	COMMON_EMPLOYEE.701	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 990, "actionid": 701, "rolecode": "COMMON_EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216631	1778659216631
 ae2f527b-179e-4ec1-999d-2a94591c638c	ciwfi59256	2535	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2535, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ROLEACTIONSroleactions", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Roleactions", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ROLEACTIONS&masterName=roleactions"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659302588	1778659302588
 e79aa273-1d9c-4dd0-9c43-25410018d210	ciwfi59256	1557	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1557, "url": "url", "code": "null", "name": "OpenComplaints", "path": "Complaints.MyComplaints", "enabled": false, "leftIcon": "action:announcement", "rightIcon": "", "displayName": "Open Complaints", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee/pgr/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659302701	1778659302701
 5b4ee2af-c749-42c2-9595-e00910a5f119	ciwfi59256	1900	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1900, "url": "/ws-services/wc/_search", "code": "null", "name": "Search Water Connection", "path": "", "enabled": false, "displayName": "Search Water COnnection", "orderNumber": 0, "serviceCode": "ws-services"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659302816	1778659302816
@@ -10184,25 +10449,6 @@ b6f5b304-1a44-4d68-8c58-a59b1ba8f304	cids59125	CITIZEN.1938	ACCESSCONTROL-ROLEAC
 6196e76f-7c20-42ac-92e1-5deb7ce21a63	cids59125	EMPLOYEE.1730	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 227, "actionid": 1730, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659214379	1778659214379
 e822d180-094e-4d01-89f1-79855880162d	cids59125	SUPERUSER.698	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 35, "actionid": 698, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659214493	1778659214493
 aa02dc96-d0a1-4da0-b6dd-6f872976cf72	cids59125	CITIZEN.1743	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 236, "actionid": 1743, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659214606	1778659214606
-2ba59e33-db6b-40f0-aa45-cbaa467ea015	cids59125	SUPERUSER.1734	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 231, "actionid": 1734, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659214719	1778659214719
-4e55e603-9009-4bb9-bb93-2fa1542858f3	cids59125	CITIZEN.1960	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 329, "actionid": 1960, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659214832	1778659214832
-0a9ffd28-cebc-4701-86cb-f0030d7ff9b9	cids59125	GRO.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1092, "actionid": 2556, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659214943	1778659214943
-1e6844b0-85ef-40c9-a929-6add25da13d5	cids59125	COMMON_EMPLOYEE.698	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 988, "actionid": 698, "rolecode": "COMMON_EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215055	1778659215055
-04352538-d6d5-4701-8e0f-b60129cba9e7	cids59125	SUPERUSER.954	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 94, "actionid": 954, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215167	1778659215167
-0163da5d-334f-48a4-90f9-6f27f238a3dd	cids59125	REINDEXING_ROLE.695	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1024, "actionid": 695, "rolecode": "REINDEXING_ROLE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215279	1778659215279
-1e310386-d186-44c3-a9e0-5c6313fc1840	cids59125	CSR.699	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 712, "actionid": 699, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215392	1778659215392
-c36ffefe-c7bb-4c71-aa2f-c0f09ce5a79c	cids59125	CITIZEN.694	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 29, "actionid": 694, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215505	1778659215505
-005bf78a-9895-4cc2-8bf2-50451c8806e1	cids59125	EMPLOYEE.1743	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 235, "actionid": 1743, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215618	1778659215618
-4f1f1d13-68c6-4c55-98cf-02248215127f	cids59125	CITIZEN.870	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 172, "actionid": 870, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215729	1778659215729
-273d7cc9-1880-49c4-a5ab-585c38d34f46	cids59125	GRO.1730	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 228, "actionid": 1730, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215844	1778659215844
-060ef630-f9bb-4ac5-b700-3be213e37870	cids59125	MDMS_ADMIN.2539	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1049, "actionid": 2539, "rolecode": "MDMS_ADMIN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659215956	1778659215956
-57deab43-a2c3-4c9b-87af-dd6e7c6e9eac	cids59125	SUPERUSER.2560	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1101, "actionid": 2560, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216069	1778659216069
-00f1e989-8208-425d-9134-b1e95c0a4b48	cids59125	MDMS_ADMIN.2532	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1041, "actionid": 2532, "rolecode": "MDMS_ADMIN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216180	1778659216180
-02e10166-7576-4a06-8db3-9d701e4a0fc5	cids59125	SUPERUSER.870	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 83, "actionid": 870, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216293	1778659216293
-17e6b8ae-9c0a-4fd8-9ea6-f9c0c137d8cb	cids59125	GRO.2007	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 492, "actionid": 2007, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216406	1778659216406
-9d1f97ed-e851-4742-b661-0b2a7c08bc58	ciwfi59256	TRANSFERRED	egov-hrms.EmployeeStatus	{"code": "TRANSFERRED", "active": true}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659281663	1778659281663
-f0ef95bd-1e7e-463e-b407-7d5ca810db92	cids59125	SUPERVISOR.2008	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 886, "actionid": 2008, "rolecode": "SUPERVISOR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216518	1778659216518
-91f4e403-a143-4553-95ca-be2fe60d4596	cids59125	COMMON_EMPLOYEE.701	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 990, "actionid": 701, "rolecode": "COMMON_EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216631	1778659216631
 2066b0df-c13b-4a38-8e25-964ba471f3fb	cids59125	SUPERUSER.266	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 14, "actionid": 266, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216744	1778659216744
 7238f5e4-8cd4-4e76-b62e-00db3f1079f1	cids59125	SUPERUSER.605	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 59, "actionid": 605, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216858	1778659216858
 c053f0ed-5bdb-4acb-a2de-7acbd43fb2b3	cids59125	CSR.1559	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 167, "actionid": 1559, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659216972	1778659216972
@@ -10605,6 +10851,7 @@ a0175722-c5fc-4848-a35f-c965cf4d88c2	ciwfi59256	PublicToiletIsDamaged	RAINMAKER-
 b7289c34-84a6-4e0e-9a47-02073029a9bc	ciwfi59256	ShortageOfWater	RAINMAKER-PGR.ServiceDefs	{"name": "Shortage of water", "active": true, "keywords": "water, supply, shortage, drink, tap, connection,leakage,less", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "ShortageOfWater"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659286736	1778659286736
 0f79fa5f-2238-4aca-86ca-dfa489e94d5a	ciwfi59256	OpenDefecation	RAINMAKER-PGR.ServiceDefs	{"name": "Open Defecation", "active": true, "keywords": "open, defecation, waste, human, privy, toilet", "menuPath": "OpenDefecation", "slaHours": 336, "department": "DEPT_3", "serviceCode": "OpenDefecation"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659286849	1778659286849
 3776988c-a704-4c1b-9e1f-7877d5935035	ciwfi59256	DirtyOrSmellyPublicToilets	RAINMAKER-PGR.ServiceDefs	{"name": "Dirty/smelly public toilet", "active": true, "keywords": "toilet, public, restroom, bathroom, urinal, smell, dirty", "menuPath": "PublicToilets", "slaHours": 336, "department": "DEPT_3", "serviceCode": "DirtyOrSmellyPublicToilets"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659286960	1778659286960
+829007c8-a19d-469f-981a-642c3664fa29	cids61812	EMPLOYEE.1934	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 286, "actionid": 1934, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661897479	1778661897479
 e908f848-1c93-43ce-ae7b-d07fcdadd97f	ciwfi59256	WaterLoggedRoad	RAINMAKER-PGR.ServiceDefs	{"name": "Water logged road", "active": true, "keywords": "road, drainage, water, block, puddle, street, flood, overflow, rain", "menuPath": "RoadsAndFootpaths", "slaHours": 336, "department": "DEPT_4", "serviceCode": "WaterLoggedRoad"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659287072	1778659287072
 5d02422c-9ca7-4c1a-a04f-2ba53127e365	ciwfi59256	BrokenWaterPipeOrLeakage	RAINMAKER-PGR.ServiceDefs	{"name": "Broken water pipe / Leakage", "order": 3, "active": true, "keywords": "water, supply, connection, damage, repair, broken, pipe, piping, tap", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "BrokenWaterPipeOrLeakage"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659287184	1778659287184
 040799cb-f4cf-4454-90b1-a58b24127076	ciwfi59256	IllegalConstructions	RAINMAKER-PGR.ServiceDefs	{"name": "Illegal constructions", "active": true, "keywords": "illegal, violation, property, public, space, land, unathourised, site, construction, wrong, build", "menuPath": "LandViolations", "slaHours": 336, "department": "DEPT_6", "serviceCode": "IllegalConstructions"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659287296	1778659287296
@@ -10767,6 +11014,7 @@ b9b412f9-4162-4add-a22e-597fe6b8c7f9	ciwfi59256	947	ACCESSCONTROL-ACTIONS-TEST.a
 5ab7d3f2-1533-4aa7-8f66-7c3bd9ccc8ed	ciwfi59256	SUPERUSER.977	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 96, "actionid": 977, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659320402	1778659320402
 2572b2d7-a22f-4c69-a241-ae489de90eec	ciwfi59256	700	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 700, "url": "/user/password/nologin/_update", "code": "null", "name": "UpdatePasswordForNonLoggedInUser", "path": "Administration.UpdatePasswordForNonLoggedInUser", "enabled": false, "displayName": "UpdatePassword For NonLogged InUser", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659310034	1778659310034
 6a09806d-beed-43a4-97b7-7d7ec10d2781	ciwfi59256	1779	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1779, "url": "card", "code": "", "name": "rainmaker-common-hrms", "path": "", "enabled": false, "leftIcon": "social:people", "rightIcon": "", "displayName": "HRMS", "orderNumber": 2, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/hrms/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659310146	1778659310146
+7bfb9992-515f-4516-9c2e-32e62f682f09	cids61812	SUPERUSER.1933	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 285, "actionid": 1933, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661897593	1778661897593
 5b57e4ce-89a5-4237-a8be-7a7d272b67c3	ciwfi59256	883	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 883, "url": "/egov-location/crosshierarchys/_search", "code": "null", "name": "Search Cross Hierarchy", "path": "Location.Search Cross Hierarchy", "enabled": false, "displayName": "Search Cross Hierarchys", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659310257	1778659310257
 318017e2-c926-4c53-8322-d0dbe89815ed	ciwfi59256	1529	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1529, "url": "/localization/messages/v1/_create", "code": "null", "name": "LocalizationMessagesCreate", "path": "", "enabled": false, "displayName": "Localization Messages Create", "orderNumber": 1, "serviceCode": "filestore url", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659310369	1778659310369
 ae176995-269a-49f4-8314-cc60c7cab20d	ciwfi59256	724	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 724, "url": "/access/v1/actions/_search", "code": "null", "name": "SearchActions", "path": "Access Control.SearchActions", "enabled": false, "displayName": "Search Actions", "orderNumber": 1, "serviceCode": "AccessControl"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659310481	1778659310481
@@ -10798,6 +11046,7 @@ b10c1d17-ef23-4996-b0d8-6779f78097c5	ciwfi59256	2017	ACCESSCONTROL-ACTIONS-TEST.
 bc77e7cb-4403-4d58-92f1-1c827f54f06a	ciwfi59256	698	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 698, "url": "/user/profile/_update", "code": "null", "name": "Profile Update", "path": "Administration.Profile Update", "enabled": false, "displayName": "Profile Update", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659313288	1778659313288
 77f960b8-fbad-42f5-b5b0-df5412114f6b	ciwfi59256	2156	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2156, "url": "/egov-workflow-v2/egov-wf/escalate/_search", "code": "null", "name": "Workflow Escalation search", "path": "", "enabled": false, "displayName": "Workflow Escalation search", "orderNumber": 0, "serviceCode": "egov-workflow-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659313401	1778659313401
 6d4c2525-8cf6-4ce8-b0c7-2f4369f1b2df	ciwfi59256	2565	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2565, "url": "digit-ui-card", "code": "", "name": "CS_COMMON_FILE_A_COMPLAINT", "path": "", "enabled": true, "sidebar": "digit-ui-links", "leftIcon": "PGRIcon", "rightIcon": "", "sidebarURL": "/digit-ui/citizen/pgr-home", "displayName": "File a Complaint", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "PGR", "navigationURL": "/digit-ui/citizen/pgr/create-complaint/complaint-type"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659313516	1778659313516
+08a7e8dd-8d6c-4096-9161-f9fedfc8f074	cids61812	CSR.1927	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 278, "actionid": 1927, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661897711	1778661897711
 c5c691c8-946a-4f90-839b-b8fa08a9bd3d	ciwfi59256	1934	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1934, "url": "/egov-searcher/locality/fireNoc/_get", "code": "null", "name": "Locality searcher endpoint for PT", "path": "", "enabled": false, "displayName": "FIRENOC locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659313628	1778659313628
 9e34766b-4d56-48f2-ae96-def04b825718	ciwfi59256	253	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 253, "url": "/egov-location/boundarys/getByBoundaryType", "code": "null", "name": "Get Boundary by Boundary Type", "path": "Location.Get Boundary by Boundary Type", "enabled": false, "displayName": "Get Boundary by Boundary Type", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659313740	1778659313740
 a55347cd-7bef-45f5-a6f4-f81ec74d95db	ciwfi59256	1971	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1971, "url": "url", "code": "null", "name": "Reopening Closed Period", "path": "Finance.Period End Activities.Close Period", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Reopening Closed Period", "orderNumber": 4, "serviceCode": "FinanceMaster", "parentModule": "", "navigationURL": "services/EGF/closedperiod/search/reopen"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778659313852	1778659313852
@@ -11540,6 +11789,7 @@ a13b5371-d617-452a-ba47-f5406b2e40e2	ciwf61702	1998	ACCESSCONTROL-ACTIONS-TEST.a
 f70e9bd6-742e-4c74-ac7d-583b251827d4	ciwf61702	605	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 605, "url": "/user/users/_createnovalidate", "code": "null", "name": "CreateUsernovalidate", "path": "Administration.CreateUsernovalidate", "enabled": false, "displayName": "Create User novalidate", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661739959	1778661739959
 3b2edcf3-c912-4803-84e9-57708a065693	ciwf61702	2036	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2036, "url": "/collection-services/payments/WS/_search", "code": "null", "name": "WS Payment search", "path": "", "enabled": false, "displayName": "WS Payment search", "orderNumber": 1, "serviceCode": "", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661740071	1778661740071
 a10d1499-3ffe-45c5-bcf0-2926e05235e2	ciwf61702	1929	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1929, "url": "quickAction", "code": "null", "name": "TradeLicenseApplication", "path": "TradeLicense.Apply", "enabled": false, "leftIcon": "places:business-center", "displayName": "Apply TL", "orderNumber": 13, "serviceCode": "TradeLicense", "parentModule": "", "navigationURL": "/digit-ui/employee/tl/new-application"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661740184	1778661740184
+92c89104-36ef-4a00-b3db-a8f92fdefde7	cids61812	SUPERUSER.697	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 34, "actionid": 697, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661914708	1778661914708
 84c03a33-2ebe-4d6c-8250-975c44f3a794	ciwf61702	2021	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2021, "url": "/report/pgr/GROPerformanceReport/_get", "code": "null", "name": "GROPerformanceReport", "path": "PGR Report", "enabled": false, "displayName": "PGR Report", "orderNumber": 0, "serviceCode": "PGRReports"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661740295	1778661740295
 3cd7b8d7-e31d-4807-a57c-038c4dec0a97	ciwf61702	732	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 732, "url": "/egov-location/boundarys/isshapefileexist", "code": "null", "name": "isShapeFileExist", "path": "Location.isShapeFileExist", "enabled": false, "displayName": "Is ShapeFile ExistOrNot", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661740406	1778661740406
 afa9d624-32ff-477e-955b-2859171e781c	ciwf61702	260	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 260, "url": "/city/getCitybyCityRequest", "code": "null", "name": "Get City By City Request", "path": "Location.Get City By City Request", "enabled": false, "displayName": "Get City By City Request", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661740518	1778661740518
@@ -11572,6 +11822,7 @@ d4111cea-c857-437b-977a-9bd223f5e138	ciwf61702	1752	ACCESSCONTROL-ACTIONS-TEST.a
 4e36c8ae-ed5b-489f-9baa-1f092d24fc3b	ciwf61702	1675	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1675, "url": "/egov-common-masters/businessCategory/_search", "code": "null", "name": "business category search", "path": "", "enabled": false, "displayName": "business category search", "orderNumber": 0, "serviceCode": "Collections", "parentModule": "", "navigationURL": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661743666	1778661743666
 58c5691d-f6cf-4272-904b-52f860e83e15	ciwf61702	1522	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1522, "url": "/egov-location/location/v11/geography/_search", "code": "null", "name": "Get GeoJSON and other geographical data of requested tenant", "path": "Location.Search Geography GeoJSON", "enabled": false, "displayName": "Geographical Search", "orderNumber": 0, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661743778	1778661743778
 75f0db49-fbf3-4d73-9598-30211582fcb4	ciwf61702	1872	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1872, "url": "/pdf-service/v1/_createnosave", "code": "null", "name": "Pdf Generator createnosave", "path": "", "enabled": false, "displayName": "Pdf Generator createnosave", "orderNumber": 3, "serviceCode": "pdf-generator-createnosave"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661743891	1778661743891
+c6e8e3f5-192a-46c8-820e-1f42e75e8255	cids61812	SUPERUSER.290	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 32, "actionid": 290, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661914825	1778661914825
 f745d65d-c2d1-45ee-ba79-d2194bc3ace3	ciwf61702	1429	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1429, "url": "/egov-location/location/v11/boundarys/_search", "code": "null", "name": "Search Boundaries With Mdms", "path": "Location.Search Boundary", "enabled": false, "displayName": "Boundaries Mdms Search", "orderNumber": 3, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661744004	1778661744004
 3e9b5e89-26ba-479d-807e-7be975e2800a	ciwf61702	2510	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2510, "url": "/mdms-v2/schema/v1/_search", "code": "null", "name": "MDMS v2 Search", "path": "", "enabled": false, "displayName": "MDMS v2", "orderNumber": 1, "serviceCode": "MDMS v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661744114	1778661744114
 9c3b7617-dbf4-4427-88a2-eaeed17e64e9	ciwf61702	2563	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2563, "url": "/boundary-service/boundary-relationships/_create", "code": "null", "name": "Create boundary relationship", "path": "", "enabled": false, "displayName": "Create boundary relationship", "orderNumber": 0, "serviceCode": "boundary-hierarchy"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661744227	1778661744227
@@ -11636,6 +11887,7 @@ f5019385-1830-40f9-b167-280d54973a8d	ciwf61702	1968	ACCESSCONTROL-ACTIONS-TEST.a
 2212015a-d838-4c8e-9e7d-6135beab65d2	ciwf61702	2560	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2560, "url": "/boundary-service/boundary-hierarchy-definition/_search", "code": "null", "name": "Search boundary hierarchy", "path": "", "enabled": false, "displayName": "Search boundary hierarchy", "orderNumber": 0, "serviceCode": "boundary-hierarchy"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661750777	1778661750777
 d103ac94-5afa-4e30-a419-d5f267f522d1	ciwf61702	2014	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2014, "url": "/report/pgr/DescriptionReport/metadata/_get", "code": "null", "name": "PGR-DescriptionReport-Metadata", "path": "PGR Report", "enabled": false, "displayName": "Rainmaker PGR report", "orderNumber": 1, "serviceCode": "PGRReports", "parentModule": "147"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661750889	1778661750889
 2bd3e9d1-7365-4325-b0e6-ec14f214a2a1	ciwf61702	731	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 731, "url": "/access/v1/roles/_update", "code": "null", "name": "updateRoles", "path": "Access Control.updateRoles", "enabled": false, "displayName": "Update Roles", "orderNumber": 1, "serviceCode": "AccessControl"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661751000	1778661751000
+149b8b88-c54e-45c3-a255-f1bfae35e19a	cids61812	SUPERUSER.696	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 31, "actionid": 696, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661914938	1778661914938
 42ba027d-5132-4210-93eb-8667a2158dee	ciwf61702	2559	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2559, "url": "/boundary-service/boundary-hierarchy-definition/_create", "code": "null", "name": "Create boundary hierarchy", "path": "", "enabled": false, "displayName": "Create boundary hierarchy", "orderNumber": 0, "serviceCode": "boundary-hierarchy"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661751111	1778661751111
 c78b3a43-bb00-4747-b403-24da1326ff24	ciwf61702	1978	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1978, "url": "/property-services/property/_migration", "code": "null", "name": "Migrate Property v1 to v2", "path": "", "enabled": false, "displayName": "Migrate Property v1 to v2", "orderNumber": 5, "serviceCode": "property-services"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661751223	1778661751223
 a46029e1-dde3-41d0-9fd5-568154d4c155	ciwf61702	1941	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1941, "url": "/sw-calculator/sewerageCalculator/_calculate", "code": "null", "name": "Sewerage Calculation", "path": "", "enabled": false, "displayName": "Sewerage Calculation", "orderNumber": 0, "serviceCode": "sw-calculator"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661751335	1778661751335
@@ -11652,6 +11904,7 @@ adf2e1ae-6d81-44c3-bca4-32c1df97addf	ciwf61702	2002	ACCESSCONTROL-ACTIONS-TEST.a
 fe2a3a4b-840f-4f5b-8adc-dcdbb92cc099	ciwf61702	1928	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1928, "url": "quickAction", "code": "", "name": "rainmaker-common-tradelicence", "path": "", "enabled": false, "leftIcon": "places:business-center", "rightIcon": "", "displayName": "Search TL", "orderNumber": 2, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/tl/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661752458	1778661752458
 afbe1bb7-1b63-4d7a-af43-7731a8f9073a	ciwf61702	2020	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2020, "url": "/report/pgr/LMEPerformanceReport/_get", "code": "null", "name": "LMEPerformanceReport", "path": "PGR Report", "enabled": false, "displayName": "PGR Report", "orderNumber": 0, "serviceCode": "PGRReports"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661752570	1778661752570
 0a9858c2-5bc1-4a38-9d78-c3a51234782f	ciwf61702	2528	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2528, "url": "/mdms-v2/v2/_update/tenant.tenants", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Update tenant tenants", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661752682	1778661752682
+7ae9128f-578d-4925-8bee-c057eec70f49	cids61812	SUPERUSER.695	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 30, "actionid": 695, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915051	1778661915051
 3299ffe8-6597-472b-b068-d65522f99747	ciwf61702	797	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 797, "url": "/egov-common-masters/departments/v1/_search", "code": "null", "name": "View Department", "path": "Administration.Department.View Department", "enabled": true, "displayName": "View Department", "orderNumber": 3, "serviceCode": "DEPT", "parentModule": "273"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661752794	1778661752794
 06cf98fb-dc15-42bf-91dc-db82b3013335	ciwf61702	694	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 694, "url": "/user/citizen/_create", "code": "null", "name": "Create Citizen", "path": "Administration.Create Citizen", "enabled": false, "displayName": "Create Citizen", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661752906	1778661752906
 e7a9a9e0-735c-4a30-8a46-d5356e6474ba	ciwf61702	2016	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2016, "url": "/report/pgr/LMEPerformanceReport/metadata/_get", "code": "null", "name": "PGR-LMEPerformanceReport-Metadata", "path": "PGR Report", "enabled": false, "displayName": "Rainmaker PGR report", "orderNumber": 1, "serviceCode": "PGRReports", "parentModule": "147"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661753022	1778661753022
@@ -11669,6 +11922,7 @@ f2751ff1-0d14-4f91-8072-250580b6d27a	ciwfi61938	SUPERUSER.2559	ACCESSCONTROL-ROL
 d36414b0-5a3d-439c-b251-dd4ebc100ebf	ciwfi61938	SUPERUSER.2561	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1101, "actionid": 2561, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662001051	1778662001051
 36fdf202-1d18-4546-ada0-05b6ece7190d	ciwf61970	IllegalShopsOnFootPath	RAINMAKER-PGR.ServiceDefs	{"name": "Illegal shops on footpath", "active": true, "keywords": "illegal, shop, footpath, violation, property, public, space, land, unathourised, site, construction, wrong", "menuPath": "LandViolations", "slaHours": 336, "department": "DEPT_6", "serviceCode": "IllegalShopsOnFootPath"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662001155	1778662001155
 baaba76b-101f-4345-8848-d0a635b4c3ab	ciwfi61938	CITIZEN.2562	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1101, "actionid": 2562, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662001166	1778662001166
+b97fcd8c-d509-4a91-b982-1fc4717cf1c9	cids61812	CITIZEN.694	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 29, "actionid": 694, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915165	1778661915165
 ce7758ad-ddc8-4409-891e-c11879ad65b6	ciwf61970	NoWaterOrElectricityinPublicToilet	RAINMAKER-PGR.ServiceDefs	{"name": "No water/electricity in public toilet", "active": true, "keywords": "toilet, public, restroom, bathroom, urinal, electricity, water, working", "menuPath": "PublicToilets", "slaHours": 336, "department": "DEPT_3", "serviceCode": "NoWaterOrElectricityinPublicToilet"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662001269	1778662001269
 753b8644-590d-45e0-8393-e2b317270b76	ciwfi61938	GRO.2562	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1101, "actionid": 2562, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662001281	1778662001281
 d59a0a8f-026c-41e1-90d2-573358fd1fc2	ciwf61970	PublicToiletIsDamaged	RAINMAKER-PGR.ServiceDefs	{"name": "Public toilet damaged", "active": true, "keywords": "toilet, public, restroom, bathroom, urinal, block, working", "menuPath": "PublicToilets", "slaHours": 336, "department": "DEPT_3", "serviceCode": "PublicToiletIsDamaged"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662001381	1778662001381
@@ -11703,6 +11957,7 @@ f38eefb7-47f5-455a-8abd-a12faf74e365	ciwf61702	728	ACCESSCONTROL-ACTIONS-TEST.ac
 b4338cec-d1ea-4e7b-a17c-f3aee5e8f32a	ciwf61702	1779	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1779, "url": "card", "code": "", "name": "rainmaker-common-hrms", "path": "", "enabled": false, "leftIcon": "social:people", "rightIcon": "", "displayName": "HRMS", "orderNumber": 2, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/hrms/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661756743	1778661756743
 7161e1cd-8684-48ed-a708-4c3737830d82	ciwf61702	883	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 883, "url": "/egov-location/crosshierarchys/_search", "code": "null", "name": "Search Cross Hierarchy", "path": "Location.Search Cross Hierarchy", "enabled": false, "displayName": "Search Cross Hierarchys", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661756856	1778661756856
 afd10ab8-08c6-434c-9143-2a6659071d3b	ciwf61702	1529	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1529, "url": "/localization/messages/v1/_create", "code": "null", "name": "LocalizationMessagesCreate", "path": "", "enabled": false, "displayName": "Localization Messages Create", "orderNumber": 1, "serviceCode": "filestore url", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661756969	1778661756969
+75d9f9ad-f2fc-47d7-9009-b7abc6b64c6d	cids61812	SUPERUSER.694	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 28, "actionid": 694, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915278	1778661915278
 ca60265a-01ad-4356-b01f-f459e087e64b	ciwf61702	724	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 724, "url": "/access/v1/actions/_search", "code": "null", "name": "SearchActions", "path": "Access Control.SearchActions", "enabled": false, "displayName": "Search Actions", "orderNumber": 1, "serviceCode": "AccessControl"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661757081	1778661757081
 9606b92d-c68f-4d1a-a7e1-f629351349e1	ciwf61702	2527	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2527, "url": "/mdms-v2/v2/_create/tenant.tenants", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create tenant tenants", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661757194	1778661757194
 80172dd5-889f-4033-ba07-ba9ddf674a88	ciwf61702	1530	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1530, "url": "/localization/messages/v1/_update", "code": "null", "name": "LocalizationMessagesUpdate", "path": "", "enabled": false, "displayName": "Localization Messages Update", "orderNumber": 1, "serviceCode": "filestore url", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661757308	1778661757308
@@ -11734,6 +11989,7 @@ d29f35a6-c8b7-47cb-bb2c-62819b598ddb	ciwf61702	698	ACCESSCONTROL-ACTIONS-TEST.ac
 17f8d3df-478d-417e-89a1-0dffd664edd2	ciwf61702	1934	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1934, "url": "/egov-searcher/locality/fireNoc/_get", "code": "null", "name": "Locality searcher endpoint for PT", "path": "", "enabled": false, "displayName": "FIRENOC locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661760211	1778661760211
 7fe55ff6-9bc5-40ff-849a-589942fe79eb	ciwf61702	253	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 253, "url": "/egov-location/boundarys/getByBoundaryType", "code": "null", "name": "Get Boundary by Boundary Type", "path": "Location.Get Boundary by Boundary Type", "enabled": false, "displayName": "Get Boundary by Boundary Type", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661760326	1778661760326
 14a348f3-ce1e-4d5b-97a7-bc0937c2c57b	ciwf61702	1971	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1971, "url": "url", "code": "null", "name": "Reopening Closed Period", "path": "Finance.Period End Activities.Close Period", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Reopening Closed Period", "orderNumber": 4, "serviceCode": "FinanceMaster", "parentModule": "", "navigationURL": "services/EGF/closedperiod/search/reopen"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661760438	1778661760438
+c194f0ad-be04-4cf0-b517-10f84268f865	cids61812	SUPERUSER.278	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 27, "actionid": 278, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915393	1778661915393
 a30f80d0-143b-416e-82c3-2420ae58201f	ciwf61702	1969	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1969, "url": "/egov-searcher/locality/pt-services/_get", "code": "null", "name": "Locality searcher endpoint for PT Service", "path": "", "enabled": false, "displayName": "PT locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661760550	1778661760550
 40c5d0f8-4ee5-4892-9c65-4f663aa780b9	ciwf61702	1993	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1993, "url": "/egov-pdf/download/TL/tlreceipt", "code": "null", "name": "tlreceipt search", "path": "", "enabled": false, "displayName": "tlreceipt search", "orderNumber": 3, "serviceCode": "egov-pdf"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661760664	1778661760664
 46d3530b-25a8-485f-8817-c17c5c90dff1	ciwf61702	1937	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1937, "url": "/ws-calculator/waterCalculator/_calculate", "code": "null", "name": "Calculate Water Bill", "path": "", "enabled": false, "displayName": "Calculate Water Bill", "orderNumber": 0, "serviceCode": "ws-calculator"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661760779	1778661760779
@@ -12168,6 +12424,7 @@ c1948e32-6774-4ed5-80c7-e384931fdec8	cids61812	nks.information_certificate_fee.r
 5909aeb3-5441-4070-9283-43c728a541a8	cids61812	nks.sub_division_charges_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.sub_division_charges_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661815214	1778661815214
 8edeb3ff-3e41-4896-b890-403f00c6acc3	cids61812	ch.burning_of_waste_challan_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "ch.burning_of_waste_challan_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661815326	1778661815326
 f9f3da4e-56a1-4fb1-b507-dfb0fa31acd4	cids61812	ch.collection_and_demolition_waste_challan_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "ch.collection_and_demolition_waste_challan_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661815439	1778661815439
+e26194c9-47ea-4c65-b00d-32f928400dd6	cids61812	SUPERUSER.277	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 26, "actionid": 277, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915506	1778661915506
 2689e8be-2eaa-4433-aad0-5df1be25edb1	cids61812	fn.security_deposit_fee_refundable fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "fn.security_deposit_fee_refundable fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661815552	1778661815552
 c2e6f021-b01b-40db-bbc2-ea0bc627e746	cids61812	fn.tender_earnest_money_deposit_refundable fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "fn.tender_earnest_money_deposit_refundable fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661815663	1778661815663
 35f3480a-5318-4857-a981-78a7f9ed53f7	cids61812	rt.street_vendor_icard_certificate_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "rt.street_vendor_icard_certificate_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661815775	1778661815775
@@ -12442,6 +12699,7 @@ d9b02c75-15ba-4846-a383-378f469ba8ea	cids61812	NoWaterSupply	RAINMAKER-PGR.Servi
 3233daf8-4808-4736-a9ea-da3fb25ef59d	cids61812	illegalDischargeOfSewage	RAINMAKER-PGR.ServiceDefs	{"name": "Illegal discharge of sewage", "active": true, "keywords": "water, supply, connection, damage, repair, broken, pipe, piping, tap", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "illegalDischargeOfSewage"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661844602	1778661844602
 b799f233-e7b7-4e35-9058-17e759895b01	cids61812	OverflowingOrBlockedDrain	RAINMAKER-PGR.ServiceDefs	{"name": "Overflowing/Blocked drain", "active": true, "keywords": "drain, block, clean, debris, silt, drainage, water, clean, roadside, flow, remove, waste, garbage, clear, overflow, canal, fill, stagnate, rain, sanitation, sand, pipe, clog, stuck", "menuPath": "Drains", "slaHours": 336, "department": "DEPT_4", "serviceCode": "OverflowingOrBlockedDrain"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661844713	1778661844713
 98639199-934b-4c10-aa94-250d03c38aa8	cids61812	BurningOfGarbage	RAINMAKER-PGR.ServiceDefs	{"name": "Burning of garbage", "active": true, "keywords": "garbage, remove, burn, fire, health, waste, smoke, plastic, illegal", "menuPath": "Garbage", "slaHours": 336, "department": "DEPT_3", "serviceCode": "BurningOfGarbage"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661844826	1778661844826
+b8c8f427-632e-449c-9001-aac220cd129f	cids61812	SUPERUSER.276	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 25, "actionid": 276, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915617	1778661915617
 44668e9f-b27e-4049-8896-67dc59c5f509	cids61812	DamagedGarbageBin	RAINMAKER-PGR.ServiceDefs	{"name": "Damaged garbage bin", "active": true, "keywords": "garbage, waste, bin, dustbin, clean, remove, sanitation, overflow, smell, health, throw, dispose", "menuPath": "Garbage", "slaHours": 336, "department": "DEPT_3", "serviceCode": "DamagedGarbageBin"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661844938	1778661844938
 f3d5aecb-0bff-4e28-b1ea-e14479bf7675	cids61812	GarbageNeedsTobeCleared	RAINMAKER-PGR.ServiceDefs	{"name": "Garbage needs to be cleared", "order": 4, "active": true, "keywords": "garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw", "menuPath": "Garbage", "slaHours": 336, "department": "DEPT_3", "serviceCode": "GarbageNeedsTobeCleared"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661845049	1778661845049
 475272f5-9fa8-4a96-a38f-e475dd0d9969	cids61812	StreetLightNotWorking	RAINMAKER-PGR.ServiceDefs	{"name": "Streetlight not working", "order": 1, "active": true, "keywords": "streetlight, light, repair, work, pole, electric, power, repair, fix", "menuPath": "StreetLights", "slaHours": 336, "department": "DEPT_1", "serviceCode": "StreetLightNotWorking"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661845162	1778661845162
@@ -12568,6 +12826,7 @@ e49e3ec3-3122-443a-b917-a9ba641513f6	cids61812	1956	ACCESSCONTROL-ACTIONS-TEST.a
 5de38c5d-4393-43fd-9150-7bcd7f2e9d31	cids61812	1955	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1955, "url": "/pt-calculator-v2/billingslab/mutation/_search", "code": "null", "name": "MutationBillingSlabSearch", "path": "", "enabled": false, "displayName": "Draft Search", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661859693	1778661859693
 4c7748bf-e106-4e01-a0ae-e803fde2200e	cids61812	1954	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1954, "url": "/pt-calculator-v2/billingslab/mutation/_create", "code": "null", "name": "MutationBillingSlabCreate", "path": "", "enabled": false, "displayName": "Draft Search", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661859804	1778661859804
 dde7ce8d-1726-427c-b386-0eedcf0af9a9	cids61812	1950	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1950, "url": "quickAction", "name": "search BPA application", "path": "Building Plan Approval.Search Application", "enabled": false, "leftIcon": "communication:business", "tenantId": "pg", "createdBy": null, "rightIcon": "", "createdDate": null, "displayName": "Search Application", "orderNumber": 1, "queryParams": "", "quickAction": false, "serviceCode": "", "parentModule": "", "navigationURL": "egov-bpa/search", "lastModifiedBy": null, "lastModifiedDate": null}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661859914	1778661859914
+bbb5ed61-3798-4327-8605-754606b209c8	cids61812	SUPERUSER.693	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 24, "actionid": 693, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915730	1778661915730
 9c32f425-5a07-487f-81b3-e7e134df5412	cids61812	1949	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1949, "url": "url", "code": "null", "name": "Dashboard Overview", "path": "Dashboard.Overview", "enabled": false, "leftIcon": "places:business-center", "rightIcon": "", "displayName": "Overview", "orderNumber": 3, "serviceCode": "DSS", "parentModule": "dss-dashboard", "navigationURL": "integration/dss/overview"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661860025	1778661860025
 fa78f578-c0cf-4bf8-8ed5-f1115456573c	cids61812	1948	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1948, "url": "/dashboard-analytics/dashboard/getDashboardConfig/overview", "code": "null", "name": "DSS Dashboard Config Overview", "path": "", "enabled": false, "displayName": "DSS", "orderNumber": 0, "serviceCode": "DSS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661860140	1778661860140
 4660877c-85d3-4cbc-a28a-bf02b32550f7	cids61812	1947	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1947, "url": "card", "code": "", "name": "rainmaker-citizen-edcrscrutiny", "path": "", "enabled": false, "leftIcon": "custom:edcr", "rightIcon": "", "displayName": "eDCR Scrutiny", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "edcrscrutiny/home"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661860252	1778661860252
@@ -12600,6 +12859,7 @@ f21435a0-14b7-4a89-9991-f0481dbfaf37	cids61812	1925	ACCESSCONTROL-ACTIONS-TEST.a
 39b9f8a9-f2ac-49d9-aa9e-b2748871114c	cids61812	1834	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1834, "url": "/pdf-service/v1/_create", "code": "null", "name": "Pdf Generator create", "path": "", "enabled": false, "displayName": "Pdf Generator create", "orderNumber": 1, "serviceCode": "pdf-generator-create"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661863053	1778661863053
 a255cf0d-d071-4be4-a864-8bd4f089e827	cids61812	1814	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1814, "url": "card", "code": "", "name": "rainmaker-citizen-complaints", "path": "", "enabled": false, "leftIcon": "custom:account-alert", "rightIcon": "", "displayName": "Complaints", "orderNumber": 2, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/citizen"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661863165	1778661863165
 803a2f1c-8309-4557-93e5-d23c4967759a	cids61812	1807	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1807, "url": "url", "code": "null", "name": "TradeLicense", "path": "TradeLicense", "enabled": false, "leftIcon": "places:business-center", "rightIcon": "", "displayName": "Trade License", "orderNumber": 13, "serviceCode": "TradeLicense", "parentModule": "", "navigationURL": "/digit-ui/citizen/"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661863276	1778661863276
+1b5f4c5e-c41d-4b2c-aaf6-13b60efe9f3a	cids61812	SUPERUSER.692	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 23, "actionid": 692, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915843	1778661915843
 04fc11bb-a474-4fce-b2b9-a33d9df42f30	cids61812	1806	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1806, "url": "url", "name": "PropertyTax", "path": "Property Tax", "enabled": false, "leftIcon": "communication:business", "rightIcon": "", "displayName": "Property Tax", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/citizen"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661863388	1778661863388
 85f9073e-5d58-44b2-8f39-2c6d8194ee5b	cids61812	1805	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1805, "url": "url", "code": "null", "name": "Complaints", "path": "Complaints", "enabled": false, "leftIcon": "custom:account-alert", "rightIcon": "", "displayName": "Complaints", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/citizen/pgr/complaints"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661863499	1778661863499
 92b89aa9-376f-4503-b4ca-207677ae2378	cids61812	1779	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1779, "url": "card", "code": "", "name": "rainmaker-common-hrms", "path": "", "enabled": false, "leftIcon": "social:people", "rightIcon": "", "displayName": "HRMS", "orderNumber": 2, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/hrms/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661863611	1778661863611
@@ -12648,6 +12908,7 @@ d55b8caf-c2ca-4c76-aa0e-2832a0af6a3c	cids61812	724	ACCESSCONTROL-ACTIONS-TEST.ac
 78327c87-1bc6-43cc-a3e8-1fd753e5466e	cids61812	701	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 701, "url": "/user/_logout", "code": "null", "name": "Delete Token", "path": "Administration.Delete Token", "enabled": false, "displayName": "Delete Token", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661870141	1778661870141
 afe448f2-843a-4d37-896b-d977513053ae	cids61812	700	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 700, "url": "/user/password/nologin/_update", "code": "null", "name": "UpdatePasswordForNonLoggedInUser", "path": "Administration.UpdatePasswordForNonLoggedInUser", "enabled": false, "displayName": "UpdatePassword For NonLogged InUser", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661870253	1778661870253
 7d499a36-3b8e-4a6e-b4fb-6469e7d08c60	cids61812	699	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 699, "url": "/user/password/_update", "code": "null", "name": "Update Password", "path": "Administration.Update Password", "enabled": false, "displayName": "Update Password", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661870365	1778661870365
+101b2285-4e6d-412e-a631-24b838f938c6	cids61812	SUPERUSER.691	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 22, "actionid": 691, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915957	1778661915957
 9ab3d57a-983f-4897-9908-9f4fe0391610	cids61812	698	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 698, "url": "/user/profile/_update", "code": "null", "name": "Profile Update", "path": "Administration.Profile Update", "enabled": false, "displayName": "Profile Update", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661870478	1778661870478
 537b9dfc-219e-48b0-bc75-578f872fa716	cids61812	696	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 696, "url": "/user/_details", "code": "null", "name": "Get User", "path": "Administration.Get User", "enabled": false, "displayName": "Get User Details", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661870590	1778661870590
 8634c092-0782-4301-bb0c-60404f349c10	cids61812	695	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 695, "url": "/user/v1/_search", "code": "null", "name": "Search User Details", "path": "Administration.Search User Details", "enabled": false, "displayName": "Search User Details", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661870702	1778661870702
@@ -12877,21 +13138,6 @@ dc7658e6-a1d2-4792-9ec9-a5b6e5a31f75	cids61812	CITIZEN.1936	ACCESSCONTROL-ROLEAC
 61f9dc30-24f2-4487-923d-0cc10510464f	cids61812	CITIZEN.1899	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 289, "actionid": 1899, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661897142	1778661897142
 00f50901-f7c0-47d0-8bfc-ec8415ff582d	cids61812	CITIZEN.1900	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 288, "actionid": 1900, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661897255	1778661897255
 d4874523-1ab9-47da-96d3-28965904c131	cids61812	SUPERUSER.1934	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 287, "actionid": 1934, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661897368	1778661897368
-829007c8-a19d-469f-981a-642c3664fa29	cids61812	EMPLOYEE.1934	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 286, "actionid": 1934, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661897479	1778661897479
-7bfb9992-515f-4516-9c2e-32e62f682f09	cids61812	SUPERUSER.1933	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 285, "actionid": 1933, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661897593	1778661897593
-08a7e8dd-8d6c-4096-9161-f9fedfc8f074	cids61812	CSR.1927	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 278, "actionid": 1927, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661897711	1778661897711
-92c89104-36ef-4a00-b3db-a8f92fdefde7	cids61812	SUPERUSER.697	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 34, "actionid": 697, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661914708	1778661914708
-c6e8e3f5-192a-46c8-820e-1f42e75e8255	cids61812	SUPERUSER.290	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 32, "actionid": 290, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661914825	1778661914825
-149b8b88-c54e-45c3-a255-f1bfae35e19a	cids61812	SUPERUSER.696	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 31, "actionid": 696, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661914938	1778661914938
-7ae9128f-578d-4925-8bee-c057eec70f49	cids61812	SUPERUSER.695	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 30, "actionid": 695, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915051	1778661915051
-b97fcd8c-d509-4a91-b982-1fc4717cf1c9	cids61812	CITIZEN.694	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 29, "actionid": 694, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915165	1778661915165
-75d9f9ad-f2fc-47d7-9009-b7abc6b64c6d	cids61812	SUPERUSER.694	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 28, "actionid": 694, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915278	1778661915278
-c194f0ad-be04-4cf0-b517-10f84268f865	cids61812	SUPERUSER.278	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 27, "actionid": 278, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915393	1778661915393
-e26194c9-47ea-4c65-b00d-32f928400dd6	cids61812	SUPERUSER.277	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 26, "actionid": 277, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915506	1778661915506
-b8c8f427-632e-449c-9001-aac220cd129f	cids61812	SUPERUSER.276	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 25, "actionid": 276, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915617	1778661915617
-bbb5ed61-3798-4327-8605-754606b209c8	cids61812	SUPERUSER.693	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 24, "actionid": 693, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915730	1778661915730
-1b5f4c5e-c41d-4b2c-aaf6-13b60efe9f3a	cids61812	SUPERUSER.692	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 23, "actionid": 692, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915843	1778661915843
-101b2285-4e6d-412e-a631-24b838f938c6	cids61812	SUPERUSER.691	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 22, "actionid": 691, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661915957	1778661915957
 3f0ea1d4-8d7f-4088-9566-791bc1b27b1d	cids61812	SUPERUSER.266	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 14, "actionid": 266, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661916070	1778661916070
 6f688db6-6371-4ca1-8593-392a53635406	ciwfi61938	rt.service_tax_gst_of_rent_of_mc_properties.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "rt.service_tax_gst_of_rent_of_mc_properties.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661941327	1778661941327
 14e12060-6cba-42c4-a13d-506b7913b855	ciwfi61938	nks.noc_completion_of_building_approval.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.noc_completion_of_building_approval.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661941438	1778661941438
@@ -13057,6 +13303,7 @@ be399538-e708-49e3-a420-42dc58d40a9c	cids61812	SUPERUSER.253	ACCESSCONTROL-ROLEA
 726f98a3-c54e-4536-afc6-46c6358107a3	cids61812	CSR.1729	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 745, "actionid": 1729, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661917651	1778661917651
 6959567b-61f2-494c-941d-caa7cc66433b	cids61812	PGR_LME.1729	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 745, "actionid": 1729, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661917765	1778661917765
 6fcf161a-8da8-4b50-ac74-e8780670689f	cids61812	RAINMAKER-PGR.inbox-pgr-services	INBOX.InboxQueryConfiguration	{"index": "inbox-pgr-services", "module": "RAINMAKER-PGR", "sortBy": {"path": "Data.service.auditDetails.createdTime", "defaultOrder": "ASC"}, "sourceFilterPathList": ["Data.currentProcessInstance", "Data.service.serviceRequestId", "Data.service.address.locality.code", "Data.service.applicationStatus", "Data.service.citizen", "Data.service.auditDetails.createdTime", "Data.auditDetails", "Data.tenantId"], "allowedSearchCriteria": [{"name": "area", "path": "Data.service.address.locality.code.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "status", "path": "Data.currentProcessInstance.state.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignedToMe", "path": "Data.workflow.assignes.*.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "fromDate", "path": "Data.service.auditDetails.createdTime", "operator": "GTE", "isMandatory": false}, {"name": "toDate", "path": "Data.service.auditDetails.createdTime", "operator": "LTE", "isMandatory": false}, {"name": "complaintNumber", "path": "Data.service.serviceRequestId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "mobileNumber", "path": "Data.service.citizen.mobileNumber.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "tenantId", "path": "Data.service.tenantId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignee", "path": "Data.currentProcessInstance.assignes.uuid.keyword", "operator": "EQUAL", "isMandatory": false}]}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661917882	1778661917882
+b5a8363b-4238-404d-8db8-747ee2bd8cda	ciwfi61938	EMPLOYEE.623	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 481, "actionid": 623, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662018125	1778662018125
 24faf8a0-194c-4c11-8e3a-7ba235ecf1ab	cids61812	pgr-services.inbox-pgr-services	INBOX.InboxQueryConfiguration	{"index": "inbox-pgr-services", "module": "pgr-services", "sortBy": {"path": "Data.service.auditDetails.createdTime", "defaultOrder": "ASC"}, "sourceFilterPathList": ["Data.currentProcessInstance", "Data.service.serviceRequestId", "Data.service.address.locality.code", "Data.service.applicationStatus", "Data.service.citizen", "Data.service.auditDetails.createdTime", "Data.auditDetails", "Data.tenantId"], "allowedSearchCriteria": [{"name": "area", "path": "Data.service.address.locality.code.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "status", "path": "Data.currentProcessInstance.state.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignedToMe", "path": "Data.workflow.assignes.*.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "fromDate", "path": "Data.service.auditDetails.createdTime", "operator": "GTE", "isMandatory": false}, {"name": "toDate", "path": "Data.service.auditDetails.createdTime", "operator": "LTE", "isMandatory": false}, {"name": "complaintNumber", "path": "Data.service.serviceRequestId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "mobileNumber", "path": "Data.service.citizen.mobileNumber.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "tenantId", "path": "Data.service.tenantId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignee", "path": "Data.currentProcessInstance.assignes.uuid.keyword", "operator": "EQUAL", "isMandatory": false}]}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661918005	1778661918005
 fccf92ae-16be-403f-9043-4435a2c5e97c	cids61812	Workbench	tenant.citymodule	{"code": "Workbench", "order": 13, "active": true, "module": "Workbench", "tenants": []}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661918775	1778661918775
 8ca6e767-c2f1-4dfe-a60f-4f36f59b089c	cids61812	HRMS	tenant.citymodule	{"code": "HRMS", "order": 2, "active": true, "module": "HRMS", "tenants": [{"code": "cids61812.security"}]}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661918785	1778661918961
@@ -13371,6 +13618,7 @@ d4c095ac-b486-428c-bf77-fa7f59e35ca6	ciwfi61938	EMPLOYEE	ACCESSCONTROL-ROLES.rol
 04aee01a-8736-4639-9f63-258aa81fb33f	ciwfi61938	INTERNAL_MICROSERVICE_ROLE	ACCESSCONTROL-ROLES.roles	{"code": "INTERNAL_MICROSERVICE_ROLE", "name": "Internal Microservice Role", "description": "Internal role for plain access"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661967734	1778661967734
 4bc2418c-e310-4973-9dbf-9468acb1bfe6	ciwfi61938	TICKET_REPORT_VIEWER	ACCESSCONTROL-ROLES.roles	{"code": "TICKET_REPORT_VIEWER", "name": "Report Viewer", "description": "One who will view the reports of tickets"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661967847	1778661967847
 728def46-2e09-4710-b3c6-e991ac5d5613	ciwfi61938	IllegalShopsOnFootPath	RAINMAKER-PGR.ServiceDefs	{"name": "Illegal shops on footpath", "active": true, "keywords": "illegal, shop, footpath, violation, property, public, space, land, unathourised, site, construction, wrong", "menuPath": "LandViolations", "slaHours": 336, "department": "DEPT_6", "serviceCode": "IllegalShopsOnFootPath"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661967964	1778661967964
+2c1d301c-8eac-4a4c-bc85-7b1bd6026ced	cids62080	EMPLOYEE.2558	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1100, "actionid": 2558, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662145686	1778662145686
 bd13d311-20e8-4983-ad23-91d017beb1f4	ciwfi61938	ParkRequiresMaintenance	RAINMAKER-PGR.ServiceDefs	{"name": "Park requires maintenance", "active": true, "keywords": "open, defecation, waste, human, privy, toilet", "menuPath": "Parks", "slaHours": 336, "department": "DEPT_5", "serviceCode": "ParkRequiresMaintenance"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661968075	1778661968075
 63252c6e-7213-4f5c-9fed-7ce87d400a55	ciwfi61938	RequestSprayingOrFoggingOperation	RAINMAKER-PGR.ServiceDefs	{"name": "Request spraying/ fogging operations", "active": true, "keywords": "mosquito, menace, fog, spray, kill, health, dengue, malaria, disease, clean", "menuPath": "Mosquitos", "slaHours": 336, "department": "DEPT_3", "serviceCode": "RequestSprayingOrFoggingOperation"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661968187	1778661968187
 33e75de2-7b9f-4f50-919c-08fef549ac1c	ciwfi61938	NoStreetlight	RAINMAKER-PGR.ServiceDefs	{"name": "No streetlight", "active": true, "keywords": "streetlight, light, repair, work, pole, electric, power, repair, damage, fix", "menuPath": "StreetLights", "slaHours": 336, "department": "DEPT_1", "serviceCode": "NoStreetlight"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661968299	1778661968299
@@ -13423,6 +13671,8 @@ d1c6f4f1-1efb-45bf-a3b1-584ecfb63ce6	ciwf61970	nks.malba_fees.receipt.id	common-
 01e5a2f5-47e4-42e7-99f9-f0d7ba191df2	ciwf61970	snt.dead_animals_contract.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "snt.dead_animals_contract.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661975967	1778661975967
 07260ba8-466f-410d-a1cd-b2418cdb0232	ciwfi61938	2036	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2036, "url": "/collection-services/payments/WS/_search", "code": "null", "name": "WS Payment search", "path": "", "enabled": false, "displayName": "WS Payment search", "orderNumber": 1, "serviceCode": "", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661975968	1778661975968
 f9ee70d9-246d-49ad-9662-9b6a023cc1c0	ciwf61970	rt.street_vendor_icard_certificate_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "rt.street_vendor_icard_certificate_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661976305	1778661976305
+512d7b62-57e0-4c08-8da8-2246b5185f5e	ciwf61970	1954	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1954, "url": "/pt-calculator-v2/billingslab/mutation/_create", "code": "null", "name": "MutationBillingSlabCreate", "path": "", "enabled": false, "displayName": "Draft Search", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662018350	1778662018350
+2c32c66c-52ea-4d65-8818-1ebda5ebf191	ciwfi61938	CITIZEN.2003	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 479, "actionid": 2003, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662018353	1778662018353
 6eb3844f-3d1a-4b5b-8ac6-adbd0150a765	ciwfi61938	all-services	common-masters.uiHomePage	{"redirectURL": "all-services", "appBannerMobile": {"code": "APP_BANNER_MOBILE", "name": "App Banner Mobile View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"}, "appBannerDesktop": {"code": "APP_BANNER_DESKTOP", "name": "App Banner Desktop View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"}, "citizenServicesCard": {"code": "HOME_CITIZEN_SERVICES_CARD", "name": "Home Citizen services Card", "props": [{"code": "ACTION_TEST_MCOLLECT", "name": "Miscellaneous Collection", "label": "ACTION_TEST_MCOLLECT", "enabled": true, "navigationUrl": "/digit-ui/citizen/mcollect-home"}, {"code": "CITIZEN_SERVICE_PT", "name": "Property Tax", "label": "MODULE_PT", "enabled": true, "navigationUrl": "/digit-ui/citizen/pt-home"}, {"code": "CITIZEN_SERVICE_TL", "name": "Trade Licence", "label": "MODULE_TL", "enabled": true, "navigationUrl": "/digit-ui/citizen/tl-home"}, {"code": "ACTION_TEST_BPA_STAKEHOLDER_HOME", "name": "Online Building Permit System", "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME", "enabled": true, "navigationUrl": "/digit-ui/citizen/obps-home"}, {"code": "ACTION_TEST_WATER_AND_SEWERAGE", "name": "Water & Sewerage", "label": "ACTION_TEST_WATER_AND_SEWERAGE", "enabled": true, "navigationUrl": "/digit-ui/citizen/ws-home"}, {"code": "ACTION_TEST_FIRE_NOC", "name": "Fire No Objection Certificate", "label": "ACTION_TEST_FIRE_NOC", "enabled": true, "navigationUrl": "/citizen/fire-noc/home"}, {"code": "ACTION_TEST_BIRTH_CERTIFICATE", "name": "Birth Certificate", "label": "ACTION_TEST_BIRTH_CERTIFICATE", "enabled": true, "navigationUrl": "/digit-ui/citizen/birth-citizen/home"}, {"code": "ACTION_TEST_DEATH_CERTIFICATE", "name": "Death Certificate", "label": "ACTION_TEST_DEATH_CERTIFICATE", "enabled": true, "navigationUrl": "/digit-ui/citizen/death-citizen/home"}], "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": "/digit-ui/citizen/all-services"}, "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"}, "whatsNewSection-disabled": {"code": "WHATSNEW", "name": "What's New", "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/whats-new"}, "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"}, "informationAndUpdatesCard": {"code": "HOME_CITIZEN_INFO_UPDATE_CARD", "name": "Home Citizen Information and Updates card", "props": [{"code": "CITIZEN_MY_CITY", "name": "My City", "label": "CS_HEADER_MYCITY", "enabled": true, "navigationUrl": ""}, {"code": "CITIZEN_EVENTS", "name": "Events", "label": "EVENTS_EVENTS_HEADER", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/events"}, {"code": "CITIZEN_DOCUMENTS", "name": "Documents", "label": "CS_COMMON_DOCUMENTS", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/docs"}, {"code": "CITIZEN_SURVEYS", "name": "Surveys", "label": "CS_COMMON_SURVEYS", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"}], "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": ""}, "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"}, "whatsAppBannerMobile-disabled": {"code": "WHATSAPP_BANNER_MOBILE", "name": "WhatsApp Banner Mobile View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg", "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"}, "whatsAppBannerDesktop-disabled": {"code": "WHATSAPP_BANNER_DESKTOP", "name": "WhatsApp Banner Desktop View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg", "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"}}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661971665	1778661971665
 8f95cf27-f59e-4476-975c-0760e3302ed5	ciwf61970	birth_cert.receipt.id	common-masters.IdFormat	{"format": "BR/[CITY.CODE]/[cb.name]/[fy:yyyy]/[SEQ_EGOV_COMMON]", "idname": "birth_cert.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661971710	1778661971710
 830a531f-9141-457b-af6a-1e6bdd3faa61	ciwfi61938	33	common-masters.wfSlaConfig	{"slotPercentage": 33, "middleSlabColor": "#EEA73A", "negativeSlabColor": "#F44336", "positiveSlabColor": "#4CAF50"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661971781	1778661971781
@@ -13479,6 +13729,7 @@ b0da44a4-d7b5-4780-a325-929c715494c2	ciwf61970	bpa.permitnumber	common-masters.I
 e181c1a6-3530-48c6-9042-95ff0b2def93	ciwfi61938	2009	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2009, "url": "/pgr-services/v2/request/_count", "code": "null", "name": "Search PGR Request", "path": "", "enabled": false, "displayName": "Count PGR Request", "orderNumber": 0, "serviceCode": "pgr-services", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661975184	1778661975184
 7fa065ed-f08b-4dd8-9600-f632e48bab44	ciwf61970	rev_grants.receipt.id	common-masters.IdFormat	{"format": "[cy:MM]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON", "idname": "rev_grants.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661975186	1778661975186
 d01e60f8-03b1-46c5-911c-938a672f04dd	ciwf61970	waterservice.connection.id	common-masters.IdFormat	{"format": "WS/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_WS_CON_[TENANT_ID]]", "idname": "waterservice.connection.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661975297	1778661975297
+bfe62207-a3d3-4a09-b4be-66ee708423de	cids62080	EMPLOYEE.2557	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1099, "actionid": 2557, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662145798	1778662145798
 8f649154-ba56-4f0f-923f-1530985badd9	ciwfi61938	874	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 874, "url": "/egov-location/hierarchytypes/_search", "code": "null", "name": "SearchHierarchyTypes", "path": "Location.SearchHierarchyTypes", "enabled": false, "displayName": "Search HierarchyTypes", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661975297	1778661975297
 16db4181-cf10-40b6-a018-163c2f917b1e	ciwf61970	nks.sub_division_charges_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.sub_division_charges_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661975409	1778661975409
 c7c110c1-d338-4ef4-8458-f2cfa4cf203f	ciwfi61938	1955	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1955, "url": "/pt-calculator-v2/billingslab/mutation/_search", "code": "null", "name": "MutationBillingSlabSearch", "path": "", "enabled": false, "displayName": "Draft Search", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661975409	1778661975409
@@ -13689,6 +13940,7 @@ a27420aa-36fb-41e0-8f65-912a9639e4bc	ciwf61970	other.dog_registration.receipt.id
 09502540-b986-4544-841b-8e1ecd48fc35	ciwf61970	ftp.leave_encashment_and_gratuty.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "ftp.leave_encashment_and_gratuty.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661987442	1778661987442
 58a68aa3-5b08-4546-aaee-b597b5055941	cids62080	TRANSGENDER	common-masters.GenderType	{"code": "TRANSGENDER", "active": true}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662105698	1778662105698
 f2b464db-8f98-43e8-94be-e200aa09b0c2	ciwfi61938	2031	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2031, "url": "card", "code": "", "name": "ReceiptCancellation", "path": "receipts", "enabled": false, "leftIcon": "action:receipt", "rightIcon": "", "displayName": "ReceiptCancellation", "orderNumber": 25, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "receipts/search"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661987443	1778661987443
+eaeb5528-034d-49ef-b01a-883ba652b256	cids62080	PGR_LME.2557	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1098, "actionid": 2557, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662145911	1778662145911
 d53a2315-0a2b-4b0e-8c9d-992c9f8f3944	ciwfi61938	1936	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1936, "url": "/ws-calculator/meterConnection/_search", "code": "null", "name": "Search Meter Reading", "path": "", "enabled": false, "displayName": "Search Meter Reading", "orderNumber": 0, "serviceCode": "ws-calculator"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661987669	1778661987669
 60de0a60-07f8-46da-a640-5d9476cbb8b5	ciwf61970	tx.property tax_dishonoured_cheque_payment.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "tx.property tax_dishonoured_cheque_payment.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661987669	1778661987669
 737d0cba-c77f-46f5-839f-22cd481dafac	ciwfi61938	1989	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1989, "url": "/land-services/v1/land/_update", "code": "null", "name": "BPA-Land-Update", "path": "", "enabled": false, "displayName": "Land Update", "orderNumber": 0, "serviceCode": "BPA"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661987890	1778661987890
@@ -13726,6 +13978,7 @@ b361a7df-b2c8-431f-aaac-a58a68c52d3b	ciwf61970	waterservice.application.id	commo
 2f7d8a2c-5910-4e44-9237-86413fd235b9	ciwf61970	css.labor_cess.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "css.labor_cess.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661989920	1778661989920
 a2158b7b-1d80-426e-8c2a-da871e4490f8	ciwfi61938	2540	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2540, "url": "/mdms-v2/v2/_update/ACCESSCONTROL-ROLES.rolesroles", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Update ACCESSCONTROL-ROLES rolesroles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661989920	1778661989920
 acdd735c-ab87-4163-8fa2-1b73f60922e6	ciwf61970	nks.naksha_changes.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.naksha_changes.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661989466	1778661989466
+50b6a8e3-ea62-4d88-b01f-2aeccd935a6a	cids62080	GRO.2557	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1097, "actionid": 2557, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146024	1778662146024
 b6038f44-da95-4d20-96c0-5e26c3ded221	ciwfi61938	2529	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2529, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ACTIONS-TESTactions-test", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Actions test", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ACTIONS-TEST&masterName=actions-test"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661989469	1778661989469
 34283135-6035-4ffa-b3f8-77553cd3a83e	ciwf61970	bpareg.receipt.id	common-masters.IdFormat	{"format": "BPAREG/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "bpareg.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661989582	1778661989582
 4c1d9698-9408-4bc4-bcc1-cb4e08f338e4	ciwfi61938	1942	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1942, "url": "/egov-searcher/locality/BPAREG/_get", "code": "null", "name": "Locality searcher endpoint for BPA Reg", "path": "", "enabled": false, "displayName": "BPA locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661989583	1778661989583
@@ -13745,6 +13998,7 @@ c58075c7-bda9-4d67-bcf7-13d9b8d7bb2d	ciwf61970	DEPT_13	common-masters.Department
 f3d7732c-3a3f-4a15-846e-01bbf983516f	ciwf61970	DEPT_4	common-masters.Department	{"code": "DEPT_4", "name": "Operation & Maintenance", "active": true}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661991388	1778661991388
 908b889c-dd3f-4af6-8d68-f924d2ad4698	ciwf61970	DESIG_20	common-masters.Designation	{"code": "DESIG_20", "name": "Asst. Town Planner", "active": true, "description": "Asst. Town Planner"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661992630	1778661992630
 1451cc72-85ac-4802-9d00-84a8bd283d27	ciwfi61938	1991	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1991, "url": "/egov-pdf/download/PAYMENT/consolidatedreceipt", "code": "null", "name": "consolidatedreceipt search", "path": "", "enabled": false, "displayName": "consolidatedreceipt search", "orderNumber": 1, "serviceCode": "egov-pdf"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661990150	1778661990150
+7da191b4-0c0d-4ed9-858c-6b8c584e7b8c	cids62080	CSR.2557	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1096, "actionid": 2557, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146137	1778662146137
 4fa87a75-86eb-40f5-904e-141a34c59117	ciwfi61938	2561	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2561, "url": "/boundary-service/boundary/_create", "code": "null", "name": "Create boundary entity", "path": "", "enabled": false, "displayName": "Create boundary entity", "orderNumber": 0, "serviceCode": "boundary-hierarchy"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661990262	1778661990262
 1b30cf7f-645d-4629-bf31-a766b5f37bed	ciwf61970	ch.plastic_challan.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "ch.plastic_challan.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661990262	1778661990262
 5c589eb9-38f5-4984-9b3e-710e9cb607a7	ciwfi61938	693	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 693, "url": "/otp/v1/_search", "code": "null", "name": "SearchOtp", "path": "Otp.SearchOtp", "enabled": false, "displayName": "Search Otp", "orderNumber": 1, "serviceCode": "OTP", "parentModule": "247"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661990373	1778661990373
@@ -13806,6 +14060,7 @@ e41f9356-2731-4c90-88d7-0be165d9f10e	ciwf61970	DESIG_10	common-masters.Designati
 88b2594a-2599-4b80-9969-a16a6928f4b3	ciwfi61938	1950	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1950, "url": "quickAction", "name": "search BPA application", "path": "Building Plan Approval.Search Application", "enabled": false, "leftIcon": "communication:business", "tenantId": "pg", "createdBy": null, "rightIcon": "", "createdDate": null, "displayName": "Search Application", "orderNumber": 1, "queryParams": "", "quickAction": false, "serviceCode": "", "parentModule": "", "navigationURL": "egov-bpa/search", "lastModifiedBy": null, "lastModifiedDate": null}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661993312	1778661993312
 c80f0d72-ab48-4c31-8f1d-e2145fcb4a60	ciwf61970	COMM	common-masters.Designation	{"code": "COMM", "name": "Commissioner", "active": true, "description": "Commissioner"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661993312	1778661993312
 af19befa-07c9-48b0-96b9-9647bf27ff8d	ciwf61970	AO	common-masters.Designation	{"code": "AO", "name": "Accounts Officer", "active": true, "description": "Accounts Officer"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661993544	1778661993544
+bc18f1d7-440a-4a05-bcf4-92a898b72fbf	cids62080	SUPERUSER.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1095, "actionid": 2556, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146251	1778662146251
 5ae12f48-1270-4fdd-84bf-2084d3235edd	ciwfi61938	1925	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1925, "url": "quickAction", "code": "null", "name": "CreateComplaint", "path": "Complaints.CreateComplaint", "enabled": false, "leftIcon": "content:add", "rightIcon": "", "displayName": "File Complaint", "orderNumber": 1, "quickAction": false, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee/pgr/complaint/create"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661993557	1778661993557
 c1986ef1-b5e5-4f7a-b4fc-163eba11d9bf	ciwf61970	DESIG_47	common-masters.Designation	{"code": "DESIG_47", "name": "Superintendent", "active": true, "description": "Superintendent"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661993659	1778661993659
 85128254-c7aa-4134-87c3-b93891148a3f	ciwf61970	DESIG_24	common-masters.Designation	{"code": "DESIG_24", "name": "Assistant Commissioner", "active": true, "description": "Assistant Commissioner"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778661994232	1778661994232
@@ -13944,6 +14199,7 @@ f623ae33-5ceb-475a-b553-0f28b45d9dd1	ciwf61970	OverflowingOrBlockedDrain	RAINMAK
 fe0270f9-c234-49ec-aff3-15e8f684574d	ciwfi61938	SUPERUSER.2564	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1101, "actionid": 2564, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662003302	1778662003302
 fdf5eb4d-67d1-4532-bdc9-2239b8af5ff8	ciwfi61938	EMPLOYEE.2558	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1100, "actionid": 2558, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662003867	1778662003867
 6ea62ce9-2765-4c1e-8d54-5177f52a2501	ciwfi61938	GRO.2557	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1097, "actionid": 2557, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662004216	1778662004216
+beec8675-9f80-4250-a811-b3f65fd47631	cids62080	EMPLOYEE.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1094, "actionid": 2556, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146363	1778662146363
 14f39c4e-a32a-4630-8737-beab9a679f03	ciwf61970	2539	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2539, "url": "/mdms-v2/v2/_create/ACCESSCONTROL-ROLES.rolesroles", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create AACCESSCONTROL-ROLES rolesroles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662007074	1778662007074
 08d6e896-4a64-418e-85b8-7cd83bf18881	ciwf61970	2537	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2537, "url": "/mdms-v2/v2/_update/ACCESSCONTROL-ROLEACTIONS.roleactions", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Update ACCESSCONTROL-ROLEACTIONS roleactions", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662007297	1778662007297
 e68cb556-dacd-451b-9ee9-8656c011e53e	ciwf61970	2536	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2536, "url": "/mdms-v2/v2/_create/ACCESSCONTROL-ROLEACTIONS.roleactions", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create ACCESSCONTROL-ROLEACTIONS roleactions", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662007411	1778662007411
@@ -13997,6 +14253,7 @@ bcca9349-98c2-4330-892e-7cddabb055a1	ciwf61970	2556	ACCESSCONTROL-ACTIONS-TEST.a
 73ee9e11-680b-4c2e-882b-2bf3b0225658	ciwfi61938	PGR_LME.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1065, "actionid": 604, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662006388	1778662006388
 08735c92-57ff-422f-bac0-1ad9ea956053	ciwfi61938	GRO.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1064, "actionid": 604, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662006504	1778662006504
 2ff876bf-cd63-4757-bb9b-8ccd67166fd0	ciwfi61938	CSR.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1063, "actionid": 604, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662006620	1778662006620
+567bef45-a592-4556-8024-88f4a40a2255	cids62080	PGR_LME.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1093, "actionid": 2556, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146476	1778662146476
 2321b53a-426e-41f8-bb10-449bebce8af9	ciwf61970	2540	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2540, "url": "/mdms-v2/v2/_update/ACCESSCONTROL-ROLES.rolesroles", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Update ACCESSCONTROL-ROLES rolesroles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662006963	1778662006963
 7b7c0d79-8a69-43ed-909a-1ce110088b71	ciwf61970	2538	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2538, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ROLESrolesroles", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Roleactions Roles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ROLES&masterName=rolesroles"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662007186	1778662007186
 acf3e720-a9de-468b-bb0d-b15c8a98db8f	ciwf61970	2533	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2533, "url": "/mdms-v2/v2/_create/ACCESSCONTROL-ROLES.roles", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create ACCESSCONTROL-ROLES roles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662007753	1778662007753
@@ -14193,9 +14450,6 @@ bbaead56-8df9-45fa-b009-502824fa66fd	ciwfi61938	CITIZEN.1998	ACCESSCONTROL-ROLEA
 9a07a47d-a222-40e6-b17a-836d2880153b	ciwf61970	1960	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1960, "url": "/egov-searcher/bill-genie/waterbills/_get", "code": "null", "name": "Search Water Bill", "path": "", "enabled": false, "displayName": "Search Water Bill", "orderNumber": 1, "serviceCode": "Searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662017787	1778662017787
 5d530f86-e13e-4326-a586-a9aa86b7730f	ciwfi61938	CITIZEN.2006	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 488, "actionid": 2006, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662017788	1778662017788
 60883177-a2d2-4ec3-836e-7da1270c425e	ciwf61970	1956	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1956, "url": "/pt-calculator-v2/billingslab/mutation/_update", "code": "null", "name": "MutationBillingSlabUpdate", "path": "", "enabled": false, "displayName": "Mutation Billing Slab Update", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662018125	1778662018125
-b5a8363b-4238-404d-8db8-747ee2bd8cda	ciwfi61938	EMPLOYEE.623	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 481, "actionid": 623, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662018125	1778662018125
-512d7b62-57e0-4c08-8da8-2246b5185f5e	ciwf61970	1954	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1954, "url": "/pt-calculator-v2/billingslab/mutation/_create", "code": "null", "name": "MutationBillingSlabCreate", "path": "", "enabled": false, "displayName": "Draft Search", "orderNumber": 1, "serviceCode": "pt-calculator-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662018350	1778662018350
-2c32c66c-52ea-4d65-8818-1ebda5ebf191	ciwfi61938	CITIZEN.2003	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 479, "actionid": 2003, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662018353	1778662018353
 74c28e8a-41dc-438c-b31d-8fcfa02f1189	ciwf61970	1950	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1950, "url": "quickAction", "name": "search BPA application", "path": "Building Plan Approval.Search Application", "enabled": false, "leftIcon": "communication:business", "tenantId": "pg", "createdBy": null, "rightIcon": "", "createdDate": null, "displayName": "Search Application", "orderNumber": 1, "queryParams": "", "quickAction": false, "serviceCode": "", "parentModule": "", "navigationURL": "egov-bpa/search", "lastModifiedBy": null, "lastModifiedDate": null}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662018463	1778662018463
 c83734f7-e1f2-427a-87eb-a342d0c6e210	ciwfi61938	CITIZEN.2001	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 477, "actionid": 2001, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662018464	1778662018464
 f5b90490-8f84-45f6-97f1-daffc034010e	ciwf61970	1949	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1949, "url": "url", "code": "null", "name": "Dashboard Overview", "path": "Dashboard.Overview", "enabled": false, "leftIcon": "places:business-center", "rightIcon": "", "displayName": "Overview", "orderNumber": 3, "serviceCode": "DSS", "parentModule": "dss-dashboard", "navigationURL": "integration/dss/overview"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662018575	1778662018575
@@ -14234,6 +14488,7 @@ a5d108ae-0d17-4966-bde0-5e9e019b9256	ciwfi61938	CITIZEN.1938	ACCESSCONTROL-ROLEA
 18673fd5-0db7-4434-94ec-7cc4bf2bcaa7	ciwfi61938	CITIZEN.1991	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 427, "actionid": 1991, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662019922	1778662019922
 6da81386-96cd-4bd3-9829-85529c64b402	ciwf61970	1899	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1899, "url": "/ws-services/wc/_create", "code": "null", "name": "Create Water Connection", "path": "", "enabled": false, "displayName": "Create Water COnnection", "orderNumber": 0, "serviceCode": "ws-services"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662020366	1778662020366
 f2f567be-9856-4c0b-b7fc-95d1ab16bff8	ciwfi61938	CITIZEN.1942	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 416, "actionid": 1942, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662020597	1778662020597
+0e5bb23d-c38a-44eb-8576-b45856fd6a4d	cids62080	GRO.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1092, "actionid": 2556, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146589	1778662146589
 7ac81368-d0e5-4c1b-81d4-3d659ebdee14	ciwf61970	1926	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1926, "url": "quickAction", "name": "Assess And Search Properties", "path": "Property Tax.Assess And Search Properties", "enabled": false, "leftIcon": "communication:business", "tenantId": "pg", "createdBy": null, "rightIcon": "", "createdDate": null, "displayName": "Search Property", "orderNumber": 1, "queryParams": "", "quickAction": false, "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/pt/inbox", "lastModifiedBy": null, "lastModifiedDate": null}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662021155	1778662021155
 18ddecae-f562-447b-84eb-0b46e9ea7adb	ciwfi61938	SUPERUSER.1970	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 391, "actionid": 1970, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662021159	1778662021159
 1082e4f1-c47d-4b70-9438-d465662f544b	ciwf61970	1925	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1925, "url": "quickAction", "code": "null", "name": "CreateComplaint", "path": "Complaints.CreateComplaint", "enabled": false, "leftIcon": "content:add", "rightIcon": "", "displayName": "File Complaint", "orderNumber": 1, "quickAction": false, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee/pgr/complaint/create"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662021273	1778662021273
@@ -14308,6 +14563,7 @@ f49ed507-2d1d-4a87-8b07-910d4636d8b1	ciwfi61938	EMPLOYEE.1752	ACCESSCONTROL-ROLE
 fcb1f835-c5c8-4f2c-8a18-40f72baac824	ciwfi61938	CITIZEN.1834	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 267, "actionid": 1834, "rolecode": "CITIZEN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662024421	1778662024421
 1320adc0-c0ee-4fd9-a492-912b33287e92	ciwfi61938	SUPERUSER.1872	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 266, "actionid": 1872, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662024533	1778662024533
 973e4022-5254-48e0-95b1-f956a0a05964	ciwf61970	1556	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1556, "url": "url", "code": "null", "name": "Home", "path": "Home", "enabled": true, "leftIcon": "action:home", "rightIcon": "", "displayName": "Home", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662024533	1778662024533
+3c092c78-fef4-4a5b-89cf-2fec6bffd2d8	cids62080	CSR.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1091, "actionid": 2556, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146701	1778662146701
 f71d23b4-6a0e-4592-8b51-2821905af5b3	ciwf61970	1531	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1531, "url": "/localization/messages/v1/_search", "code": "null", "name": "LocalizationMessagesSearch", "path": "", "enabled": false, "displayName": "Localization Messages Search", "orderNumber": 1, "serviceCode": "filestore url", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662024645	1778662024645
 aedbd9a3-34db-427a-9a81-e44b38ef3503	ciwfi61938	EMPLOYEE.1872	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 265, "actionid": 1872, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662024645	1778662024645
 95e93d4b-d861-4924-b9b6-6dc1347b55b2	ciwf61970	1530	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1530, "url": "/localization/messages/v1/_update", "code": "null", "name": "LocalizationMessagesUpdate", "path": "", "enabled": false, "displayName": "Localization Messages Update", "orderNumber": 1, "serviceCode": "filestore url", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662024757	1778662024757
@@ -14327,6 +14583,7 @@ dcc8fdf2-aaa9-4075-b76d-8977ced671a2	ciwf61970	797	ACCESSCONTROL-ACTIONS-TEST.ac
 20607a9f-37ca-4280-8dd9-efce883f8b1c	cids62080	DECEASED	egov-hrms.EmployeeStatus	{"code": "DECEASED", "active": true}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662106374	1778662106374
 8e466a83-63fd-43d7-9cda-8c1a317610ec	ciwf61970	1221	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1221, "url": "/access/v1/roles/mdms/_search", "name": "Get Roles from MDMS", "path": "AccessControl", "enabled": false, "displayName": "Get Roles from MDMS", "orderNumber": 0, "serviceCode": "AccessControl"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662025989	1778662025989
 64c2ad02-eb32-42f8-b170-b5a6a1254ef4	ciwfi61938	GRO.1775	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 247, "actionid": 1775, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662025990	1778662025990
+87c0a3ec-4b59-4457-a62c-9248cc30af58	cids62080	PGR_LME.1556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1087, "actionid": 1556, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146813	1778662146813
 f9bbffb7-ea2f-4ace-a842-1cd0db1b8d23	ciwf61970	870	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 870, "url": "/access/v1/actions/mdms/_get", "code": "null", "name": "Get Actions from MDMS", "path": "Access Control.Get Actions from MDMS", "enabled": false, "displayName": "Get Actions from mdms", "orderNumber": 1, "serviceCode": "AccessControl", "parentModule": "221"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662026100	1778662026100
 09fec907-9895-4495-9936-282c30d47244	ciwfi61938	PGR_LME.1752	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 246, "actionid": 1752, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662026101	1778662026101
 3c8a27ec-e5ec-45a2-81e4-03832512e5c9	ciwf61970	979	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 979, "url": "/egov-location/hierarchytypes/{code}", "code": "null", "name": "Update HierarchyType", "path": "Location.Update HierarchyType", "enabled": false, "displayName": "Update HierarchyType", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662026211	1778662026211
@@ -14406,6 +14663,7 @@ a1126c2e-dde2-4b40-bea1-182aa468a280	ciwf61970	353	ACCESSCONTROL-ACTIONS-TEST.ac
 399d50c7-3c75-4cff-a051-fbf50b7b4960	ciwf61970	290	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 290, "url": "/boundarys", "code": "null", "name": "BoundarySearch", "path": "Location.BoundarySearch", "enabled": false, "displayName": "BoundarySearch", "orderNumber": 0, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662030688	1778662030688
 741cc00a-634e-490b-a300-2a4babf93ea6	ciwfi61938	GRO.1429	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 160, "actionid": 1429, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662030690	1778662030690
 1237c79d-164e-4321-8025-840ac1a58952	ciwf61970	623	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 623, "url": "/egov-idgen/id/_generate", "code": "null", "name": "GenerateNumber", "path": "Administration.GenerateNumber", "enabled": false, "displayName": "Generate Number", "orderNumber": 1, "serviceCode": "ADMIN"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662029902	1778662029902
+b0bc65dc-f922-4317-b426-4d8a74b8d24c	cids62080	CSR.1556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1085, "actionid": 1556, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146925	1778662146925
 99d733f9-7e5f-4869-8c2b-0e3ebb09bbc9	ciwf61970	582	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 582, "url": "/egov-common-masters/categories/_search", "code": "null", "name": "SearchCategories", "path": "Employee Management.Employee Masters.Category.SearchCategories", "enabled": false, "displayName": "Search Categories", "orderNumber": 0, "serviceCode": "Category"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662030350	1778662030350
 c550e60b-97a4-4464-8740-100ce69deb36	ciwfi61938	GRO.1557	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 163, "actionid": 1557, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662030352	1778662030352
 6e0db939-e5f1-43ad-814f-55ec07863641	ciwf61970	278	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 278, "url": "/v1/files/tag", "code": "null", "name": "filesearchbytag", "path": "", "enabled": false, "displayName": "filesearchbytag", "orderNumber": 1, "serviceCode": "filesearchbytag", "parentModule": "76"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662030801	1778662030801
@@ -14937,6 +15195,8 @@ d6e466b8-d4d4-47fb-9aae-4d7ef057087f	ciwf61970	SUPERUSER.255	ACCESSCONTROL-ROLEA
 7ca82249-2c16-4130-8fce-08c439b3eaec	ciwf61970	CSR.1729	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 745, "actionid": 1729, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662076147	1778662076147
 284136f4-091b-4348-bbab-eb475f3147c2	ciwf61970	PGR_LME.1729	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 745, "actionid": 1729, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662076263	1778662076263
 878a6b34-eaa2-42d2-88b7-b10c798846da	ciwf61970	RAINMAKER-PGR.inbox-pgr-services	INBOX.InboxQueryConfiguration	{"index": "inbox-pgr-services", "module": "RAINMAKER-PGR", "sortBy": {"path": "Data.service.auditDetails.createdTime", "defaultOrder": "ASC"}, "sourceFilterPathList": ["Data.currentProcessInstance", "Data.service.serviceRequestId", "Data.service.address.locality.code", "Data.service.applicationStatus", "Data.service.citizen", "Data.service.auditDetails.createdTime", "Data.auditDetails", "Data.tenantId"], "allowedSearchCriteria": [{"name": "area", "path": "Data.service.address.locality.code.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "status", "path": "Data.currentProcessInstance.state.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignedToMe", "path": "Data.workflow.assignes.*.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "fromDate", "path": "Data.service.auditDetails.createdTime", "operator": "GTE", "isMandatory": false}, {"name": "toDate", "path": "Data.service.auditDetails.createdTime", "operator": "LTE", "isMandatory": false}, {"name": "complaintNumber", "path": "Data.service.serviceRequestId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "mobileNumber", "path": "Data.service.citizen.mobileNumber.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "tenantId", "path": "Data.service.tenantId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignee", "path": "Data.currentProcessInstance.assignes.uuid.keyword", "operator": "EQUAL", "isMandatory": false}]}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662076382	1778662076382
+e7969b74-a0f6-46df-8465-6882c7499301	cids62080	PGR_LME.1429	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1082, "actionid": 1429, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662147263	1778662147263
+bd195b69-9307-411a-b6bc-ec199e0c81cb	cids62080	SUPERUSER.2025	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1076, "actionid": 2025, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662147375	1778662147375
 9cce5b59-32e4-4a25-8a36-d584bacd1191	ciwf61970	pgr-services.inbox-pgr-services	INBOX.InboxQueryConfiguration	{"index": "inbox-pgr-services", "module": "pgr-services", "sortBy": {"path": "Data.service.auditDetails.createdTime", "defaultOrder": "ASC"}, "sourceFilterPathList": ["Data.currentProcessInstance", "Data.service.serviceRequestId", "Data.service.address.locality.code", "Data.service.applicationStatus", "Data.service.citizen", "Data.service.auditDetails.createdTime", "Data.auditDetails", "Data.tenantId"], "allowedSearchCriteria": [{"name": "area", "path": "Data.service.address.locality.code.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "status", "path": "Data.currentProcessInstance.state.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignedToMe", "path": "Data.workflow.assignes.*.uuid.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "fromDate", "path": "Data.service.auditDetails.createdTime", "operator": "GTE", "isMandatory": false}, {"name": "toDate", "path": "Data.service.auditDetails.createdTime", "operator": "LTE", "isMandatory": false}, {"name": "complaintNumber", "path": "Data.service.serviceRequestId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "mobileNumber", "path": "Data.service.citizen.mobileNumber.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "tenantId", "path": "Data.service.tenantId.keyword", "operator": "EQUAL", "isMandatory": false}, {"name": "assignee", "path": "Data.currentProcessInstance.assignes.uuid.keyword", "operator": "EQUAL", "isMandatory": false}]}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662076502	1778662076502
 ca716987-f11e-4dd4-b772-0fa825d502fc	ciwf61970	Workbench	tenant.citymodule	{"code": "Workbench", "order": 13, "active": true, "module": "Workbench", "tenants": [{"code": "ciwf61970"}]}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662077267	1778662077267
 3eaecafa-cfcd-4f23-9396-a90236d53126	ciwf61970	HRMS	tenant.citymodule	{"code": "HRMS", "order": 2, "active": true, "module": "HRMS", "tenants": [{"code": "ciwf61970"}, {"code": "ciwf61970.workflow"}]}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662077279	1778662077453
@@ -15050,6 +15310,7 @@ a359022c-5b20-4432-8477-d26b8403888d	cids62080	om.sewerage_disconnection_connect
 6e53c3fb-8434-4759-a306-633a336ec42a	cids62080	nks.economics_weaker_section_scheme_charges.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.economics_weaker_section_scheme_charges.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662090975	1778662090975
 238c70d8-810a-410f-a8cf-b51851f14419	cids62080	wf.ofc_permission_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "wf.ofc_permission_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662091088	1778662091088
 26dc0cb8-2b73-4134-91a1-c6bc8bf40818	cids62080	nks.naksha_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.naksha_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662091201	1778662091201
+f80c71bc-17c9-41aa-bbde-64dfd2ee3d7f	cids62080	EMPLOYEE.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1066, "actionid": 604, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662148050	1778662148050
 0e977c50-a0a2-4cd7-86d6-9cbc9b8aca2b	cids62080	nks.colony_sambandhi_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.colony_sambandhi_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662091314	1778662091314
 150bc0c4-ebb0-4c9f-9c03-c64f28a3e667	cids62080	nks.no_due_certificate_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.no_due_certificate_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662091425	1778662091425
 b0bb8403-9491-42b0-ba40-244ba5e13b61	cids62080	nks.hadud_certificate_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.hadud_certificate_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662091538	1778662091538
@@ -15210,6 +15471,7 @@ ad4e05b7-42d5-418c-bcf7-e548ff425735	cids62080	DamagedRoad	RAINMAKER-PGR.Service
 72e1aeb2-7792-4795-87df-5f5dd9b23696	cids62080	illegalDischargeOfSewage	RAINMAKER-PGR.ServiceDefs	{"name": "Illegal discharge of sewage", "active": true, "keywords": "water, supply, connection, damage, repair, broken, pipe, piping, tap", "menuPath": "WaterandSewage", "slaHours": 336, "department": "DEPT_4", "serviceCode": "illegalDischargeOfSewage"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662112678	1778662112678
 285d06f3-fca4-446f-8db4-c1b870b52808	cids62080	OverflowingOrBlockedDrain	RAINMAKER-PGR.ServiceDefs	{"name": "Overflowing/Blocked drain", "active": true, "keywords": "drain, block, clean, debris, silt, drainage, water, clean, roadside, flow, remove, waste, garbage, clear, overflow, canal, fill, stagnate, rain, sanitation, sand, pipe, clog, stuck", "menuPath": "Drains", "slaHours": 336, "department": "DEPT_4", "serviceCode": "OverflowingOrBlockedDrain"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662112792	1778662112792
 142452b0-b568-4554-beee-44b16f861948	cids62080	BurningOfGarbage	RAINMAKER-PGR.ServiceDefs	{"name": "Burning of garbage", "active": true, "keywords": "garbage, remove, burn, fire, health, waste, smoke, plastic, illegal", "menuPath": "Garbage", "slaHours": 336, "department": "DEPT_3", "serviceCode": "BurningOfGarbage"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662112905	1778662112905
+ea962baf-37b6-4565-a7b4-5c88d0cce7e2	cids62080	PGR_LME.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1065, "actionid": 604, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662148163	1778662148163
 57a47104-3e60-4628-a7dc-3da35d5e264d	cids62080	DamagedGarbageBin	RAINMAKER-PGR.ServiceDefs	{"name": "Damaged garbage bin", "active": true, "keywords": "garbage, waste, bin, dustbin, clean, remove, sanitation, overflow, smell, health, throw, dispose", "menuPath": "Garbage", "slaHours": 336, "department": "DEPT_3", "serviceCode": "DamagedGarbageBin"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662113017	1778662113017
 2eddfbaa-55d4-4faa-89cd-c12b464601fd	cids62080	GarbageNeedsTobeCleared	RAINMAKER-PGR.ServiceDefs	{"name": "Garbage needs to be cleared", "order": 4, "active": true, "keywords": "garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw", "menuPath": "Garbage", "slaHours": 336, "department": "DEPT_3", "serviceCode": "GarbageNeedsTobeCleared"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662113129	1778662113129
 d5654c58-d148-49dc-b64e-4043b87405ee	cids62080	StreetLightNotWorking	RAINMAKER-PGR.ServiceDefs	{"name": "Streetlight not working", "order": 1, "active": true, "keywords": "streetlight, light, repair, work, pole, electric, power, repair, fix", "menuPath": "StreetLights", "slaHours": 336, "department": "DEPT_1", "serviceCode": "StreetLightNotWorking"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662113243	1778662113243
@@ -15240,6 +15502,7 @@ fbdcefce-dcd0-48be-98f4-82afe8429b50	cids62080	2540	ACCESSCONTROL-ACTIONS-TEST.a
 32968aa2-f86d-4d51-a7de-4d031a7893c2	cids62080	2536	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2536, "url": "/mdms-v2/v2/_create/ACCESSCONTROL-ROLEACTIONS.roleactions", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create ACCESSCONTROL-ROLEACTIONS roleactions", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662116973	1778662116973
 a5199d1b-7ab3-4890-aaf4-37a6e3fe4513	ciwfi62206	DEPT_25	common-masters.Department	{"code": "DEPT_25", "name": "Accounts Branch", "active": true}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662227319	1778662227319
 8e218f18-210a-47d8-96cf-22a3faf02a54	cids62080	2535	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2535, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ROLEACTIONSroleactions", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Roleactions", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ROLEACTIONS&masterName=roleactions"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662117085	1778662117085
+cb136ca6-5656-40d0-80d9-90e991b87d19	cids62080	GRO.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1064, "actionid": 604, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662148275	1778662148275
 238f5bb2-e6a4-4a55-94e0-f1e769be858a	cids62080	2534	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2534, "url": "/mdms-v2/v2/_update/ACCESSCONTROL-ROLES.roles", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Update ACCESSCONTROL-ROLES roles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662117199	1778662117199
 37d4e081-33e8-4762-a7d9-b8d8d9635a1a	cids62080	2533	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2533, "url": "/mdms-v2/v2/_create/ACCESSCONTROL-ROLES.roles", "code": "null", "name": "MDMS", "path": "", "enabled": false, "displayName": "Create ACCESSCONTROL-ROLES roles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662117310	1778662117310
 8ee1d22b-1ea3-49d2-bbf9-ee3bb018d98c	cids62080	2532	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2532, "url": "url", "code": "null", "name": "MDMS", "path": "9MDMS.ACCESSCONTROL-ROLESroles", "enabled": false, "leftIcon": "dynamic:ContractIcon", "displayName": "Roles", "orderNumber": 1, "serviceCode": "MDMS", "parentModule": "", "navigationURL": "/workbench-ui/employee/workbench/mdms-search-v2?moduleName=ACCESSCONTROL-ROLES&masterName=roles"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662117421	1778662117421
@@ -15272,6 +15535,7 @@ e0cae420-54db-45ef-b816-68f8c8eb63f5	cids62080	2029	ACCESSCONTROL-ACTIONS-TEST.a
 d591702b-4ca8-41b3-8554-8ef41a12b75c	cids62080	2028	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2028, "url": "/collection-services/payments/PT/_workflow", "code": "null", "name": "PT Receipt Update", "path": "", "enabled": false, "displayName": "PT Receipt Update", "orderNumber": 1, "serviceCode": "", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662120468	1778662120468
 8ca920ee-c0fc-438f-8c10-89c034ae66d1	cids62080	2027	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2027, "url": "/egov-workflow-v2/egov-wf/process/_count", "code": "null", "name": "WorkflowProcessCount", "path": "", "enabled": false, "displayName": "Workflow Count", "orderNumber": 1, "serviceCode": "", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662120579	1778662120579
 f10597da-f13b-4372-b83f-0940c7e84814	cids62080	1972	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1972, "url": "/bpa-services/v1/bpa/_permitorderedcr", "code": "null", "name": "BPA-PermitOrderEDCR Report", "path": "", "enabled": false, "displayName": "Apply", "orderNumber": 0, "serviceCode": "BPA"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662126080	1778662126080
+8bc55776-580e-49be-a929-5dd09ba8d7af	cids62080	CSR.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1063, "actionid": 604, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662148387	1778662148387
 cda2ef79-4935-4790-82df-13f1967b6274	cids62080	2024	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2024, "url": "url", "code": "null", "name": "BillAmendment", "path": "", "enabled": false, "leftIcon": "action:receipt", "displayName": "BillAmendment", "orderNumber": 23, "serviceCode": "", "parentModule": "", "navigationURL": "bill-amend/search"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662120691	1778662120691
 91d2ea99-c91b-44fd-8d35-70ee0ae7f78a	cids62080	2023	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2023, "url": "/sw-calculator/sewerageCalculator/_applyAdhocTax", "code": "null", "name": "Add adhoc tax to sewerage", "path": "", "enabled": false, "displayName": "Add adhoc tax", "orderNumber": 0, "serviceCode": "sw-calculator"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662120805	1778662120805
 fadce149-ca72-4b48-83e8-3840dfed5b33	cids62080	2022	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2022, "url": "/ws-calculator/waterCalculator/_applyAdhocTax", "code": "null", "name": "Add adhoc tax", "path": "", "enabled": false, "displayName": "Add adhoc tax", "orderNumber": 0, "serviceCode": "ws-calculator"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662120917	1778662120917
@@ -15514,24 +15778,6 @@ a5471559-01de-40e1-a6c1-9ff0bb86897c	cids62080	GRO.2560	ACCESSCONTROL-ROLEACTION
 a600244d-451a-4d00-9cbd-d9f0e4a428a2	cids62080	PGR_LME.2564	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1101, "actionid": 2564, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662145348	1778662145348
 4987a783-8877-49d6-b4d1-cdcf9ddf7da6	cids62080	GRO.2564	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1101, "actionid": 2564, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662145461	1778662145461
 861f3038-7e70-432c-9d7f-ff91cca43cac	cids62080	CSR.2564	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1101, "actionid": 2564, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662145573	1778662145573
-2c1d301c-8eac-4a4c-bc85-7b1bd6026ced	cids62080	EMPLOYEE.2558	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1100, "actionid": 2558, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662145686	1778662145686
-bfe62207-a3d3-4a09-b4be-66ee708423de	cids62080	EMPLOYEE.2557	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1099, "actionid": 2557, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662145798	1778662145798
-eaeb5528-034d-49ef-b01a-883ba652b256	cids62080	PGR_LME.2557	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1098, "actionid": 2557, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662145911	1778662145911
-50b6a8e3-ea62-4d88-b01f-2aeccd935a6a	cids62080	GRO.2557	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1097, "actionid": 2557, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146024	1778662146024
-7da191b4-0c0d-4ed9-858c-6b8c584e7b8c	cids62080	CSR.2557	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1096, "actionid": 2557, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146137	1778662146137
-bc18f1d7-440a-4a05-bcf4-92a898b72fbf	cids62080	SUPERUSER.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1095, "actionid": 2556, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146251	1778662146251
-beec8675-9f80-4250-a811-b3f65fd47631	cids62080	EMPLOYEE.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1094, "actionid": 2556, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146363	1778662146363
-567bef45-a592-4556-8024-88f4a40a2255	cids62080	PGR_LME.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1093, "actionid": 2556, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146476	1778662146476
-0e5bb23d-c38a-44eb-8576-b45856fd6a4d	cids62080	GRO.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1092, "actionid": 2556, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146589	1778662146589
-3c092c78-fef4-4a5b-89cf-2fec6bffd2d8	cids62080	CSR.2556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1091, "actionid": 2556, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146701	1778662146701
-87c0a3ec-4b59-4457-a62c-9248cc30af58	cids62080	PGR_LME.1556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1087, "actionid": 1556, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146813	1778662146813
-b0bc65dc-f922-4317-b426-4d8a74b8d24c	cids62080	CSR.1556	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1085, "actionid": 1556, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662146925	1778662146925
-e7969b74-a0f6-46df-8465-6882c7499301	cids62080	PGR_LME.1429	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1082, "actionid": 1429, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662147263	1778662147263
-bd195b69-9307-411a-b6bc-ec199e0c81cb	cids62080	SUPERUSER.2025	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1076, "actionid": 2025, "rolecode": "SUPERUSER", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662147375	1778662147375
-f80c71bc-17c9-41aa-bbde-64dfd2ee3d7f	cids62080	EMPLOYEE.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1066, "actionid": 604, "rolecode": "EMPLOYEE", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662148050	1778662148050
-ea962baf-37b6-4565-a7b4-5c88d0cce7e2	cids62080	PGR_LME.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1065, "actionid": 604, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662148163	1778662148163
-cb136ca6-5656-40d0-80d9-90e991b87d19	cids62080	GRO.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1064, "actionid": 604, "rolecode": "GRO", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662148275	1778662148275
-8bc55776-580e-49be-a929-5dd09ba8d7af	cids62080	CSR.604	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1063, "actionid": 604, "rolecode": "CSR", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662148387	1778662148387
 661cec5a-527a-4bf6-99d7-e91b3ca2bcdc	cids62080	MDMS_ADMIN.2540	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1050, "actionid": 2540, "rolecode": "MDMS_ADMIN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662149517	1778662149517
 a87b948a-4561-4ec1-a6f3-42b3c299d11d	cids62080	MDMS_ADMIN.2539	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1049, "actionid": 2539, "rolecode": "MDMS_ADMIN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662149630	1778662149630
 a339aa4b-63bc-4541-acf8-e0cc17aa890d	cids62080	MDMS_ADMIN.2538	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1048, "actionid": 2538, "rolecode": "MDMS_ADMIN", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662149744	1778662149744
@@ -15900,6 +16146,7 @@ bd539bd1-930e-49d4-a4ea-158c9657dff1	ciwfi62206	nks.building_safety_certificate_
 294da442-6422-4da3-b719-cca4f798931e	ciwfi62206	nks.information_certificate_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.information_certificate_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662209536	1778662209536
 da693bad-db16-421b-b850-8392d4f2a539	ciwfi62206	nks.sub_division_charges_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.sub_division_charges_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662209647	1778662209647
 1d3f9ec6-0735-4bfb-9923-972434b82d9a	ciwfi62206	ch.burning_of_waste_challan_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "ch.burning_of_waste_challan_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662209760	1778662209760
+59c16200-eb6a-4b66-a01a-13eeeeed78eb	ciwf62322	nks.no_due_certificate_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.no_due_certificate_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333529	1778662333529
 def6c674-659a-4a82-a4cc-a38f559ba858	ciwfi62206	ch.collection_and_demolition_waste_challan_fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "ch.collection_and_demolition_waste_challan_fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662209871	1778662209871
 ca6190bd-4582-476a-afac-f65bb9428d38	ciwfi62206	fn.security_deposit_fee_refundable fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "fn.security_deposit_fee_refundable fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662209984	1778662209984
 65f6598d-78ea-4ccb-bcd9-d72bba7988cc	ciwfi62206	fn.tender_earnest_money_deposit_refundable fee.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "fn.tender_earnest_money_deposit_refundable fee.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662210094	1778662210094
@@ -16140,6 +16387,7 @@ fc52b29a-3bfa-4d4d-b805-c26a16b5de4a	ciwfi62206	ANONYMOUS	ACCESSCONTROL-ROLES.ro
 b6f581f7-7150-4c22-b403-9a6533657f09	ciwfi62206	WORKFLOW_ADMIN	ACCESSCONTROL-ROLES.roles	{"code": "WORKFLOW_ADMIN", "name": "WORKFLOW ADMIN", "description": "WORKFLOW User that can create and search Workflow"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662235997	1778662235997
 6fc8d3d3-588d-4c00-a55c-c4408e8c642e	ciwfi62206	RequestSprayingOrFoggingOperation	RAINMAKER-PGR.ServiceDefs	{"name": "Request spraying/ fogging operations", "active": true, "keywords": "mosquito, menace, fog, spray, kill, health, dengue, malaria, disease, clean", "menuPath": "Mosquitos", "slaHours": 336, "department": "DEPT_3", "serviceCode": "RequestSprayingOrFoggingOperation"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662236113	1778662236113
 eb296aff-e6b1-40c1-91ad-d165ae1a7f9e	ciwfi62206	Others	RAINMAKER-PGR.ServiceDefs	{"name": "Others", "order": 6, "active": true, "keywords": "other, miscellaneous,ad,playgrounds,burial,slaughterhouse, misc, tax, revenue", "menuPath": "", "slaHours": 336, "department": "DEPT_10", "serviceCode": "Others"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662236224	1778662236224
+e1785027-44e2-410c-a9fd-245d9216b33e	ciwf62322	nks.hadud_certificate_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.hadud_certificate_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333644	1778662333644
 504fe794-a4e2-45cb-8f07-239cc6eafcf5	ciwfi62206	ParkRequiresMaintenance	RAINMAKER-PGR.ServiceDefs	{"name": "Park requires maintenance", "active": true, "keywords": "open, defecation, waste, human, privy, toilet", "menuPath": "Parks", "slaHours": 336, "department": "DEPT_5", "serviceCode": "ParkRequiresMaintenance"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662236335	1778662236335
 fbcf004a-960f-4586-845c-33cef3e179af	ciwfi62206	OpenDefecation	RAINMAKER-PGR.ServiceDefs	{"name": "Open Defecation", "active": true, "keywords": "open, defecation, waste, human, privy, toilet", "menuPath": "OpenDefecation", "slaHours": 336, "department": "DEPT_3", "serviceCode": "OpenDefecation"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662236446	1778662236446
 2bcb2fa8-8492-4197-b25b-e88b84387a5d	ciwfi62206	CuttingOrTrimmingOfTreeRequired	RAINMAKER-PGR.ServiceDefs	{"name": "Cutting/trimming of tree required", "active": true, "keywords": "tree, remove, trim, fallen, cut, plant, branch", "menuPath": "Trees", "slaHours": 336, "department": "DEPT_5", "serviceCode": "CuttingOrTrimmingOfTreeRequired"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662236559	1778662236559
@@ -16173,6 +16421,7 @@ f449a397-733b-472d-9949-310b0aaae775	ciwfi62206	GarbageNeedsTobeCleared	RAINMAKE
 d2190738-903f-47a6-9213-940cf2a0ca2f	ciwfi62206	StreetLightNotWorking	RAINMAKER-PGR.ServiceDefs	{"name": "Streetlight not working", "order": 1, "active": true, "keywords": "streetlight, light, repair, work, pole, electric, power, repair, fix", "menuPath": "StreetLights", "slaHours": 336, "department": "DEPT_1", "serviceCode": "StreetLightNotWorking"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662239485	1778662239485
 715632a1-7355-486c-9b15-0d3074d97ec6	ciwfi62206	NonSweepingOfRoad	RAINMAKER-PGR.ServiceDefs	{"name": "Non sweeping of road", "order": 5, "active": true, "keywords": "garbage, collect, litter, clean, door, waste, remove, sweeper, sanitation, dump, health, debris, throw", "menuPath": "Garbage", "slaHours": 336, "department": "DEPT_3", "serviceCode": "NonSweepingOfRoad"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662239597	1778662239597
 35fdc9f5-6e8d-4dd9-b186-00eafc21bf36	ciwfi62206	NoStreetlight	RAINMAKER-PGR.ServiceDefs	{"name": "No streetlight", "active": true, "keywords": "streetlight, light, repair, work, pole, electric, power, repair, damage, fix", "menuPath": "StreetLights", "slaHours": 336, "department": "DEPT_1", "serviceCode": "NoStreetlight"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662239709	1778662239709
+4f385ca5-95ee-4486-88a9-775cefe3280c	ciwf62322	tx.house_tax.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "tx.house_tax.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333758	1778662333758
 fb825b08-87c2-4312-b997-bc4c24aeb9db	ciwfi62206	all-services	common-masters.uiHomePage	{"redirectURL": "all-services", "appBannerMobile": {"code": "APP_BANNER_MOBILE", "name": "App Banner Mobile View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"}, "appBannerDesktop": {"code": "APP_BANNER_DESKTOP", "name": "App Banner Desktop View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"}, "citizenServicesCard": {"code": "HOME_CITIZEN_SERVICES_CARD", "name": "Home Citizen services Card", "props": [{"code": "ACTION_TEST_MCOLLECT", "name": "Miscellaneous Collection", "label": "ACTION_TEST_MCOLLECT", "enabled": true, "navigationUrl": "/digit-ui/citizen/mcollect-home"}, {"code": "CITIZEN_SERVICE_PT", "name": "Property Tax", "label": "MODULE_PT", "enabled": true, "navigationUrl": "/digit-ui/citizen/pt-home"}, {"code": "CITIZEN_SERVICE_TL", "name": "Trade Licence", "label": "MODULE_TL", "enabled": true, "navigationUrl": "/digit-ui/citizen/tl-home"}, {"code": "ACTION_TEST_BPA_STAKEHOLDER_HOME", "name": "Online Building Permit System", "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME", "enabled": true, "navigationUrl": "/digit-ui/citizen/obps-home"}, {"code": "ACTION_TEST_WATER_AND_SEWERAGE", "name": "Water & Sewerage", "label": "ACTION_TEST_WATER_AND_SEWERAGE", "enabled": true, "navigationUrl": "/digit-ui/citizen/ws-home"}, {"code": "ACTION_TEST_FIRE_NOC", "name": "Fire No Objection Certificate", "label": "ACTION_TEST_FIRE_NOC", "enabled": true, "navigationUrl": "/citizen/fire-noc/home"}, {"code": "ACTION_TEST_BIRTH_CERTIFICATE", "name": "Birth Certificate", "label": "ACTION_TEST_BIRTH_CERTIFICATE", "enabled": true, "navigationUrl": "/digit-ui/citizen/birth-citizen/home"}, {"code": "ACTION_TEST_DEATH_CERTIFICATE", "name": "Death Certificate", "label": "ACTION_TEST_DEATH_CERTIFICATE", "enabled": true, "navigationUrl": "/digit-ui/citizen/death-citizen/home"}], "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": "/digit-ui/citizen/all-services"}, "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"}, "whatsNewSection-disabled": {"code": "WHATSNEW", "name": "What's New", "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/whats-new"}, "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"}, "informationAndUpdatesCard": {"code": "HOME_CITIZEN_INFO_UPDATE_CARD", "name": "Home Citizen Information and Updates card", "props": [{"code": "CITIZEN_MY_CITY", "name": "My City", "label": "CS_HEADER_MYCITY", "enabled": true, "navigationUrl": ""}, {"code": "CITIZEN_EVENTS", "name": "Events", "label": "EVENTS_EVENTS_HEADER", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/events"}, {"code": "CITIZEN_DOCUMENTS", "name": "Documents", "label": "CS_COMMON_DOCUMENTS", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/docs"}, {"code": "CITIZEN_SURVEYS", "name": "Surveys", "label": "CS_COMMON_SURVEYS", "enabled": true, "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"}], "enabled": true, "sideOption": {"name": "DASHBOARD_VIEW_ALL_LABEL", "enabled": true, "navigationUrl": ""}, "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"}, "whatsAppBannerMobile-disabled": {"code": "WHATSAPP_BANNER_MOBILE", "name": "WhatsApp Banner Mobile View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg", "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"}, "whatsAppBannerDesktop-disabled": {"code": "WHATSAPP_BANNER_DESKTOP", "name": "WhatsApp Banner Desktop View", "enabled": true, "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg", "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"}}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662239830	1778662239830
 cfbb7154-95b2-4b32-8a80-cc656f917dc7	ciwfi62206	33	common-masters.wfSlaConfig	{"slotPercentage": 33, "middleSlabColor": "#EEA73A", "negativeSlabColor": "#F44336", "positiveSlabColor": "#4CAF50"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662239945	1778662239945
 7da2f5bb-c56a-4366-9fff-c853e842e82a	ciwfi62206	2568	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2568, "url": "/egov-user-event/v1/events/notifications/_count", "code": "null", "name": "mSeva Event Count", "path": "", "enabled": false, "displayName": "mSeva Event Notification", "orderNumber": 1, "serviceCode": "msea-event-notification"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662240307	1778662240307
@@ -16268,6 +16517,7 @@ c47ea278-f94a-45ae-850b-ad96ff0927cc	ciwfi62206	1993	ACCESSCONTROL-ACTIONS-TEST.
 342ac7fe-bca7-4365-9597-43ed28fd2c63	ciwfi62206	1992	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1992, "url": "/egov-pdf/download/BILL/consolidatedbill", "code": "null", "name": "consolidatedbill search", "path": "", "enabled": false, "displayName": "consolidatedbill search", "orderNumber": 2, "serviceCode": "egov-pdf"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662250881	1778662250881
 27c6e7ae-246d-471c-acfa-6b427784cf94	ciwfi62206	1991	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1991, "url": "/egov-pdf/download/PAYMENT/consolidatedreceipt", "code": "null", "name": "consolidatedreceipt search", "path": "", "enabled": false, "displayName": "consolidatedreceipt search", "orderNumber": 1, "serviceCode": "egov-pdf"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662250993	1778662250993
 5f733f21-2486-465a-8302-891248365f4a	ciwfi62206	1985	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1985, "url": "/egov-searcher/locality/ws-services/_get", "code": "null", "name": "Locality searcher endpoint for WS", "path": "", "enabled": false, "displayName": "WS-Service locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662251104	1778662251104
+f2d46722-5fd0-43bd-8f7a-3d9a4cedcdf0	ciwf62322	fn.recovery_employee_contractor.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "fn.recovery_employee_contractor.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333870	1778662333870
 fa856b89-62cb-4a08-b63f-f7d56ee14bee	ciwfi62206	1984	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1984, "url": "/egov-searcher/locality/sw-services/_get", "code": "null", "name": "Locality searcher endpoint for SW", "path": "", "enabled": false, "displayName": "SW-Service locality searcher", "orderNumber": 0, "serviceCode": "egov-searcher"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662251215	1778662251215
 4a6efd6f-f95e-4ca6-bcf0-bbcfbf2141cc	ciwfi62206	1983	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1983, "url": "url", "code": "null", "name": "Remittance Pending Report", "path": "Finance.Reports.Revenue Reports.Remittance Pending Report", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Remittance Pending Report", "orderNumber": 6, "serviceCode": "FinanceReport", "parentModule": "", "navigationURL": "services/EGF/report/remittance/pending/form"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662251326	1778662251326
 253b1767-f119-4241-89ba-9d7a2cbeb14b	ciwfi62206	1982	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1982, "url": "url", "code": "null", "name": "Dishonored Cheque Report ", "path": "Finance.Reports.MIS Reports.Dishonored Cheque Report", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Dishonored Cheque Report ", "orderNumber": 7, "serviceCode": "FinanceReport", "parentModule": "", "navigationURL": "services/collection/report/dishonouredcheque/searchform"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662251438	1778662251438
@@ -16330,6 +16580,7 @@ adfc0381-39e3-4f63-a6de-ff17ad285b1c	ciwfi62206	1807	ACCESSCONTROL-ACTIONS-TEST.
 8c147457-0e30-4732-a297-60e4c2071f4b	ciwfi62206	1806	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1806, "url": "url", "name": "PropertyTax", "path": "Property Tax", "enabled": false, "leftIcon": "communication:business", "rightIcon": "", "displayName": "Property Tax", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/citizen"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662257716	1778662257716
 d3ef8da6-7059-4e5b-997c-9654765a1739	ciwfi62206	1805	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1805, "url": "url", "code": "null", "name": "Complaints", "path": "Complaints", "enabled": false, "leftIcon": "custom:account-alert", "rightIcon": "", "displayName": "Complaints", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/citizen/pgr/complaints"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662257828	1778662257828
 2f958596-8158-4aae-a427-b8db4a4c464c	ciwfi62206	1779	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1779, "url": "card", "code": "", "name": "rainmaker-common-hrms", "path": "", "enabled": false, "leftIcon": "social:people", "rightIcon": "", "displayName": "HRMS", "orderNumber": 2, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/hrms/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662257939	1778662257939
+effdce9e-4542-43c5-8b1f-ca0db625e620	ciwf62322	nks.noc_completion_of_building_approval.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.noc_completion_of_building_approval.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333981	1778662333981
 44a955c5-bbf1-4ff5-91d1-65c398b4b8b9	ciwfi62206	1775	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1775, "url": "card", "code": "", "name": "rainmaker-common-complaints", "path": "", "enabled": false, "leftIcon": "action:announcement", "rightIcon": "", "displayName": "Complaints", "orderNumber": 2, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/pgr/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662258052	1778662258052
 827f212b-75d3-46f1-8fcd-34d15acde212	ciwfi62206	1773	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1773, "url": "url", "code": "null", "name": "HRMS", "path": "HRMS.Search", "enabled": false, "leftIcon": "social:people", "displayName": "Search Employee", "orderNumber": 2, "serviceCode": "HRMS", "parentModule": "", "navigationURL": "/digit-ui/employee/hrms/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662258164	1778662258164
 d4f31787-b717-4764-acd3-27b177eb0582	ciwfi62206	1752	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1752, "url": "/egov-hrms/employees/_search", "code": "null", "name": "Employee Search", "path": "", "enabled": false, "displayName": "Employee Search", "orderNumber": 0, "serviceCode": "egov-hrms", "parentModule": "egov-hrms"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662258277	1778662258277
@@ -16903,11 +17154,6 @@ a7639150-5ab2-4be2-b430-b2985030914b	ciwf62322	nks.economics_weaker_section_proj
 82816367-5c8c-4d55-9e29-db931c3ba553	ciwf62322	wf.ofc_permission_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "wf.ofc_permission_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333193	1778662333193
 b7360aeb-1c0d-469f-8fd7-7f5afb13ecd4	ciwf62322	nks.naksha_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.naksha_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333303	1778662333303
 c76a38ea-a469-4241-9f64-6fdcf4fada1a	ciwf62322	nks.colony_sambandhi_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.colony_sambandhi_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333415	1778662333415
-59c16200-eb6a-4b66-a01a-13eeeeed78eb	ciwf62322	nks.no_due_certificate_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.no_due_certificate_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333529	1778662333529
-e1785027-44e2-410c-a9fd-245d9216b33e	ciwf62322	nks.hadud_certificate_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.hadud_certificate_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333644	1778662333644
-4f385ca5-95ee-4486-88a9-775cefe3280c	ciwf62322	tx.house_tax.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "tx.house_tax.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333758	1778662333758
-f2d46722-5fd0-43bd-8f7a-3d9a4cedcdf0	ciwf62322	fn.recovery_employee_contractor.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "fn.recovery_employee_contractor.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333870	1778662333870
-effdce9e-4542-43c5-8b1f-ca0db625e620	ciwf62322	nks.noc_completion_of_building_approval.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "nks.noc_completion_of_building_approval.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662333981	1778662333981
 41338020-6dc6-4dbe-bf6a-52a158964b02	ciwf62322	om.water_connection_disconnection_fees.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "om.water_connection_disconnection_fees.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662334092	1778662334092
 afaeb863-b698-4bdb-9d16-77837387501d	ciwf62322	advt.wall_paint_advertisement.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "advt.wall_paint_advertisement.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662334204	1778662334204
 a0db11e9-2d00-4f27-bb0d-2544f1fcb647	ciwf62322	advt.light_wala_board.receipt.id	common-masters.IdFormat	{"format": "MP/[CITY.CODE]/[fy:yyyy-yy]/[SEQ_EGOV_COMMON]", "idname": "advt.light_wala_board.receipt.id"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662334316	1778662334316
@@ -17161,6 +17407,7 @@ b9b22c9a-18fa-4c4f-b208-d48ba1f4ff0f	ciwf62322	2028	ACCESSCONTROL-ACTIONS-TEST.a
 97ab2a69-14ce-42b6-9cf0-a7a7ffde103b	ciwf62322	2156	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2156, "url": "/egov-workflow-v2/egov-wf/escalate/_search", "code": "null", "name": "Workflow Escalation search", "path": "", "enabled": false, "displayName": "Workflow Escalation search", "orderNumber": 0, "serviceCode": "egov-workflow-v2", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662361222	1778662361222
 49ebb157-807c-43a9-a1ba-dbd37a96ea05	ciwf62322	2149	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2149, "url": "/egov-hrms/employees/_count", "code": "null", "name": "Employee Count", "path": "", "enabled": false, "displayName": "Employee Count", "orderNumber": 0, "serviceCode": "egov-hrms", "parentModule": "egov-hrms"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662361334	1778662361334
 2b5a110b-1e3d-4af5-b5cf-b3d8eb220ec4	ciwf62322	2086	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2086, "url": "/egov-enc-service/crypto/v1/_encrypt", "code": "null", "name": "Encrypt", "path": "Enc.Encrypt", "enabled": false, "displayName": "Encrypt", "orderNumber": 1, "serviceCode": "Enc"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662361445	1778662361445
+d01ffaa1-641d-437e-9dde-998c6a688af6	cids62432	262	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 262, "url": "/hierarchytypes/{code}", "code": "null", "name": "Get Heirarchy Type By Code", "path": "Location.Get Heirarchy Type By Code", "enabled": false, "displayName": "Get Heirarchy Type By Code", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662493483	1778662493483
 2678d777-bb5e-444f-8b4d-e075cee07183	ciwf62322	1555	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1555, "url": "url", "code": "null", "name": "AllComplaints", "path": "AllComplaints", "enabled": false, "leftIcon": "custom:open-complaints", "rightIcon": "", "displayName": "All Complaints", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee/pgr/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662361668	1778662361668
 bc050703-30a1-4c3e-a7dd-dd7c92915a54	ciwf62322	2036	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 2036, "url": "/collection-services/payments/WS/_search", "code": "null", "name": "WS Payment search", "path": "", "enabled": false, "displayName": "WS Payment search", "orderNumber": 1, "serviceCode": "", "parentModule": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662361780	1778662361780
 4c128e13-e0bf-4fd4-95d2-35b55d67ba1d	ciwf62322	1971	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1971, "url": "url", "code": "null", "name": "Reopening Closed Period", "path": "Finance.Period End Activities.Close Period", "enabled": false, "leftIcon": "editor:insert-chart", "displayName": "Reopening Closed Period", "orderNumber": 4, "serviceCode": "FinanceMaster", "parentModule": "", "navigationURL": "services/EGF/closedperiod/search/reopen"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662368426	1778662368426
@@ -17416,6 +17663,7 @@ da63b328-470a-4347-a4d8-f48af9eb84ad	cids62432	1677	ACCESSCONTROL-ACTIONS-TEST.a
 cfe886b8-01dc-472c-9444-826be167d9ab	cids62432	1676	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1676, "url": "/egov-common-masters/businessDetails/_search", "code": "null", "name": "businessDetails search", "path": "", "enabled": false, "displayName": "", "orderNumber": 0, "serviceCode": "Collections", "parentModule": "", "navigationURL": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662485805	1778662485805
 c30d002a-f53f-41bd-a907-cb87e315f94c	cids62432	1675	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1675, "url": "/egov-common-masters/businessCategory/_search", "code": "null", "name": "business category search", "path": "", "enabled": false, "displayName": "business category search", "orderNumber": 0, "serviceCode": "Collections", "parentModule": "", "navigationURL": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662485921	1778662485921
 6be6a2e4-c480-42d1-aec7-1525b2abef43	cids62432	1577	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1577, "url": "url", "name": "Assess New Property", "path": "Property Tax.Assess New Property", "enabled": false, "leftIcon": "communication:business", "tenantId": "pg", "createdBy": null, "rightIcon": "", "createdDate": null, "displayName": "Assess New Property", "orderNumber": 1, "queryParams": "", "serviceCode": "", "parentModule": "", "navigationURL": "/digit-ui/employee/pt/inbox", "lastModifiedBy": null, "lastModifiedDate": null}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662486036	1778662486036
+8dedc43b-9b24-4e74-b7ad-8017ad9d2f62	cids62432	261	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 261, "url": "/hierarchytypes", "code": "null", "name": "Get Heirarchy Type", "path": "Location.Get Heirarchy Type", "enabled": false, "displayName": "Get Heirarchy Type", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662493595	1778662493595
 f8694c27-0935-409d-947a-ee31267faf0b	cids62432	1559	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1559, "url": "url", "code": "null", "name": "CreateComplaint", "path": "Complaints.CreateComplaint", "enabled": false, "leftIcon": "content:add", "rightIcon": "", "displayName": "Create Complaint", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee/pgr/complaint/create"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662486148	1778662486148
 a2625c41-a380-428f-b926-cac347b5cef8	cids62432	1557	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1557, "url": "url", "code": "null", "name": "OpenComplaints", "path": "Complaints.MyComplaints", "enabled": false, "leftIcon": "action:announcement", "rightIcon": "", "displayName": "Open Complaints", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee/pgr/inbox"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662486260	1778662486260
 6a10ca1c-5587-414a-91d4-ca030426328a	cids62432	1556	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 1556, "url": "url", "code": "null", "name": "Home", "path": "Home", "enabled": true, "leftIcon": "action:home", "rightIcon": "", "displayName": "Home", "orderNumber": 1, "serviceCode": "PGR", "parentModule": "rainmaker-pgr", "navigationURL": "/digit-ui/employee"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662486379	1778662486379
@@ -18201,8 +18449,6 @@ eb4ef9fc-5795-4891-84a4-b440b5f7a33c	cids62432	266	ACCESSCONTROL-ACTIONS-TEST.ac
 ade02f1c-b9d1-4abb-b25b-24a750596c2f	cids62432	264	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 264, "url": "/crosshierarchys/{code}", "code": "null", "name": "Get Cross Hierarchy By Code", "path": "Location.Get Cross Hierarchy By Code", "enabled": false, "displayName": "Get Cross Hierarchy By Code", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662493254	1778662493254
 28c205a2-f4d4-4157-ab00-9a45654d8897	cids62432	263	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 263, "url": "/egov-location/crosshierarchys", "code": "null", "name": "Cross Hierarchys", "path": "Location.Cross Hierarchys", "enabled": false, "displayName": "Cross Hierarchys", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662493369	1778662493369
 daa71f85-1667-44af-93f0-9f6195c2ee3b	cids62432	PGR_LME.2567	ACCESSCONTROL-ROLEACTIONS.roleactions	{"id": 1101, "actionid": 2567, "rolecode": "PGR_LME", "tenantId": "pg", "actioncode": ""}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662496108	1778662496108
-d01ffaa1-641d-437e-9dde-998c6a688af6	cids62432	262	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 262, "url": "/hierarchytypes/{code}", "code": "null", "name": "Get Heirarchy Type By Code", "path": "Location.Get Heirarchy Type By Code", "enabled": false, "displayName": "Get Heirarchy Type By Code", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662493483	1778662493483
-8dedc43b-9b24-4e74-b7ad-8017ad9d2f62	cids62432	261	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 261, "url": "/hierarchytypes", "code": "null", "name": "Get Heirarchy Type", "path": "Location.Get Heirarchy Type", "enabled": false, "displayName": "Get Heirarchy Type", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662493595	1778662493595
 c99c07b3-e42c-4957-8bc4-0b5a8bdb94cc	cids62432	260	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 260, "url": "/city/getCitybyCityRequest", "code": "null", "name": "Get City By City Request", "path": "Location.Get City By City Request", "enabled": false, "displayName": "Get City By City Request", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662493710	1778662493710
 8923cc98-c2af-44ca-9adf-5aa7b9670a09	cids62432	259	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 259, "url": "/city", "code": "null", "name": "Get City", "path": "Location.Get City", "enabled": false, "displayName": "Get City", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662493825	1778662493825
 e5400e1e-5279-49f2-b1ae-f60a1e96ccc5	cids62432	258	ACCESSCONTROL-ACTIONS-TEST.actions-test	{"id": 258, "url": "/egov-location/boundarytypes/getByHierarchyType", "code": "null", "name": "Get BoundaryTypes By Heirarchy Type", "path": "Location.Get BoundaryTypes By Heirarchy Type", "enabled": false, "displayName": "Get BoundaryTypes By Heirarchy Type", "orderNumber": 1, "serviceCode": "LOCATION_MS", "parentModule": "67"}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662493936	1778662493936
@@ -19510,7 +19756,7 @@ f5f27b3d-865c-4327-823c-65b2b359265b	pg.citest	DESIG_1003	common-masters.Designa
 81dd9ccb-61de-449d-bdf9-61bb19821484	pg.citest	TabBroken	RAINMAKER-PGR.ServiceDefs	{"name": "tab broken", "active": true, "keywords": "", "menuPath": "Water not coming", "slaHours": 1, "department": "DEPT_36", "serviceCode": "TabBroken"}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664446999	1778664446999
 7030dafd-802c-42be-a222-93f15ee78e8a	pg.citest	DEPT_5	common-masters.Department	{"code": "DEPT_5", "name": "Horticulture", "active": true}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664447391	1778664447391
 7e623113-912c-471c-90cd-a44b4fa05d61	pg	CFC	ACCESSCONTROL-ROLES.roles	{"code": "CFC", "name": "CFC", "description": "CFC"}	t	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	1778664447418	1778664447418
-theme-config-data-001	pg	themeconfig	common-masters.ThemeConfig	{"id": "themeconfig", "code": "themeconfig", "name": "themeconfig", "version": "1", "colors": {"grey": {"bg": "#E6E6E6", "mid": "#EEEEEE", "dark": "#787878", "light": "#FAFAFA", "lighter": "#F2F2F2", "disabled": "#C5C5C5"}, "link": {"hover": "#204F37", "normal": "#204F37"}, "text": {"muted": "#787878", "heading": "#204F37", "primary": "#1D2433", "secondary": "#5F5C62"}, "error": "#E02D3A", "border": "#D6D5D4", "digitv2": {"chart-1": "#204F37", "chart-2": "#FEC931", "chart-3": "#2A5084", "chart-4": "#E02D3C", "chart-5": "#128F21", "alert-info": "#2A5084", "primary-bg": "#FFF4D6", "alert-info-bg": "#EAF1F5", "alert-error-bg": "#FEF1F2", "header-sidenav": "#204F37", "alert-success-bg": "#E0F2E1", "text-color-disabled": "#B1B4B6"}, "primary": {"dark": "#204F37", "main": "#FEC931", "light": "#FFF4D6", "accent": "#204F37", "selected-bg": "#FFF4D6"}, "success": "#128F21", "info-dark": "#2A5084", "secondary": "#1D2433", "error-dark": "#8B0000", "input-border": "#E1E6EF", "warning-dark": "#9E5F00"}}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
+theme-config-data-001	pg	themeconfig	common-masters.ThemeConfig	{"id": "themeconfig", "code": "themeconfig", "name": "themeconfig", "colors": {"grey": {"bg": "#E6E6E6", "mid": "#EEEEEE", "dark": "#787878", "light": "#FAFAFA", "lighter": "#F2F2F2", "disabled": "#C5C5C5"}, "link": {"hover": "#204F37", "normal": "#204F37"}, "text": {"muted": "#787878", "heading": "#204F37", "primary": "#1D2433", "secondary": "#5F5C62"}, "error": "#E02D3A", "border": "#D6D5D4", "digitv2": {"chart-1": "#204F37", "chart-2": "#FEC931", "chart-3": "#2A5084", "chart-4": "#E02D3C", "chart-5": "#128F21", "alert-info": "#2A5084", "primary-bg": "#FFF4D6", "alert-info-bg": "#EAF1F5", "alert-error-bg": "#FEF1F2", "header-sidenav": "#204F37", "alert-success-bg": "#E0F2E1", "text-color-disabled": "#B1B4B6"}, "primary": {"dark": "#204F37", "main": "#FEC931", "light": "#FFF4D6", "accent": "#204F37", "selected-bg": "#FFF4D6"}, "success": "#128F21", "info-dark": "#2A5084", "secondary": "#1D2433", "error-dark": "#8B0000", "input-border": "#E1E6EF", "warning-dark": "#9E5F00"}, "version": "1"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
 14382e2e-9112-4902-95d5-56b1cf6109bc	pg	CMS|All	CMS-BOUNDARY.HierarchySchema	{"hierarchy": "ADMIN", "department": "All", "moduleName": "CMS", "lowestHierarchy": "Locality", "highestHierarchy": "Zone"}	t	system	system	1781073905029	1781073905029
 19cef8a4-ac24-45ef-9c4e-19c9ece74d87	pg	HRMS|All	CMS-BOUNDARY.HierarchySchema	{"hierarchy": "ADMIN", "department": "All", "moduleName": "HRMS", "lowestHierarchy": "Locality", "highestHierarchy": "Zone"}	t	system	system	1781073905029	1781073905029
 95952ec6-63c6-4b0d-a2c7-43c009d53a43	pg	CRS_BOUNDARY_DATA	CRS-ADMIN-CONSOLE.adminSchema	{"title": "CRS_BOUNDARY_DATA", "properties": {"numberProperties": [{"name": "CRS_LAT", "type": "number", "isRequired": true, "description": "Latitude", "orderNumber": 2}, {"name": "CRS_LONG", "type": "number", "isRequired": true, "description": "Longitude", "orderNumber": 3}], "stringProperties": [{"name": "CRS_BOUNDARY_CODE", "type": "string", "isRequired": true, "description": "Boundary Code", "orderNumber": 1, "freezeColumn": true}]}, "campaignType": "all"}	t	system	system	1781073905029	1781073905029
@@ -19521,7 +19767,7 @@ a51e8099-4433-4409-b0ac-5b5873d78957	pg.citya	HRMS|All	CMS-BOUNDARY.HierarchySch
 
 
 --
--- Data for Name: eg_mdms_schema_definition; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_mdms_schema_definition; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_mdms_schema_definition (id, tenantid, code, description, definition, isactive, createdby, lastmodifiedby, createdtime, lastmodifiedtime) FROM stdin;
@@ -20118,7 +20364,7 @@ d3055d8b-c78c-4f0e-907f-a3fadfc3f83d	ciwfi62563	Workflow.BusinessService	Workflo
 1b462622-fa68-440a-ae6f-00901a98efb7	ciwfi62563	Workflow.BusinessServiceConfig	Workflow.BusinessServiceConfig	{"type": "object", "title": "Generated schema for Root", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["code", "isStateLevel"], "x-unique": ["code"], "properties": {"code": {"type": "string"}, "isStateLevel": {"type": "boolean"}}, "x-ref-schema": [], "additionalProperties": false}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662563186	1778662563186
 4e716f27-3967-47c8-a740-9e6b41256ab7	ciwfi62563	DataSecurity.DecryptionABAC	DataSecurity.DecryptionABAC	{"type": "object", "title": "Generated schema for Root", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["key", "roleAttributeAccessList"], "x-unique": ["key"], "properties": {"key": {"type": "string"}, "roleAttributeAccessList": {"type": "array", "items": {"type": "object", "required": ["roleCode", "attributeAccessList"], "properties": {"roleCode": {"type": "string"}, "attributeAccessList": {"type": "array", "items": {"type": "object", "required": ["attribute", "accessType"], "properties": {"attribute": {"type": "object", "required": ["jsonPath"], "properties": {"jsonPath": {"type": "string"}, "maskingTechnique": {"type": "string"}}}, "accessType": {"type": "string"}}}}}}}}, "x-ref-schema": [], "additionalProperties": false}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662563190	1778662563190
 74855623-c023-405a-965f-60ea91982d08	ciwfi62563	DataSecurity.EncryptionPolicy	DataSecurity.EncryptionPolicy	{"type": "object", "title": "Generated schema for Root", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["key", "attributeList"], "x-unique": ["key"], "properties": {"key": {"type": "string"}, "attributeList": {"type": "array", "items": {"type": "object", "required": ["jsonPath", "type"], "properties": {"type": {"type": "string"}, "jsonPath": {"type": "string"}}}}}, "x-ref-schema": [], "additionalProperties": false}	t	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	dc71bb18-4bb9-4f26-8746-56f6c68cd48a	1778662563193	1778662563193
-theme-config-schema-001	pg	common-masters.ThemeConfig	UI theme colour tokens	{"type": "object", "$schema": "http://json-schema.org/draft-07/schema#", "x-unique": ["code"], "required": ["code", "name", "version", "colors"], "properties": {"code": {"type": "string"}, "name": {"type": "string"}, "version": {"type": "string"}, "colors": {"type": "object"}}, "additionalProperties": true}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
+theme-config-schema-001	pg	common-masters.ThemeConfig	UI theme colour tokens	{"type": "object", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["code", "name", "version", "colors"], "x-unique": ["code"], "properties": {"code": {"type": "string"}, "name": {"type": "string"}, "colors": {"type": "object"}, "version": {"type": "string"}}, "additionalProperties": true}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
 69453dca-fbd2-4eb9-a832-4de259739b4b	pg	CMS-BOUNDARY.HierarchySchema	Configuration to show boundary hierarchy levels in CMS UI	{"type": "object", "title": "Generated schema for Root", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["moduleName", "department", "hierarchy", "highestHierarchy", "lowestHierarchy"], "x-unique": ["moduleName", "department"], "properties": {"hierarchy": {"type": "string"}, "department": {"type": "string"}, "moduleName": {"type": "string"}, "lowestHierarchy": {"type": "string"}, "highestHierarchy": {"type": "string"}}, "x-ref-schema": [], "additionalProperties": false}	t	system	system	1781073674409	1781073674409
 ad6bdc36-6445-4608-9a06-1786eb300e91	pg	CRS-ADMIN-CONSOLE.adminSchema	CRS Admin Console Schema for boundary management	{"type": "object", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["title", "campaignType"], "x-unique": ["title"], "properties": {"title": {"type": "string", "maxLength": 200, "minLength": 1}, "properties": {"type": "object", "properties": {"numberProperties": {"type": "array"}, "stringProperties": {"type": "array"}}, "additionalProperties": false}, "campaignType": {"type": "string", "maxLength": 100, "minLength": 1}}, "x-ref-schema": [], "additionalProperties": false}	t	system	system	1781073674409	1781073674409
 16496067-588a-4d1c-871b-2955cea9e8d8	pg.citya	CMS-BOUNDARY.HierarchySchema	Configuration to show boundary hierarchy levels in CMS UI	{"type": "object", "title": "Generated schema for Root", "$schema": "http://json-schema.org/draft-07/schema#", "required": ["moduleName", "department", "hierarchy", "highestHierarchy", "lowestHierarchy"], "x-unique": ["moduleName", "department"], "properties": {"hierarchy": {"type": "string"}, "department": {"type": "string"}, "moduleName": {"type": "string"}, "lowestHierarchy": {"type": "string"}, "highestHierarchy": {"type": "string"}}, "x-ref-schema": [], "additionalProperties": false}	t	system	system	1781074295688	1781074295688
@@ -20127,7 +20373,7 @@ f9ac4504-91dc-4e53-b8bf-dc25e4460687	pg.citya	CRS-ADMIN-CONSOLE.adminSchema	CRS 
 
 
 --
--- Data for Name: eg_ms_role; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_ms_role; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_ms_role (name, code, description, createddate, createdby, lastmodifiedby, lastmodifieddate, version) FROM stdin;
@@ -20135,7 +20381,7 @@ COPY public.eg_ms_role (name, code, description, createddate, createdby, lastmod
 
 
 --
--- Data for Name: eg_pgr_address_v2; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_pgr_address_v2; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_pgr_address_v2 (tenantid, id, parentid, doorno, plotno, buildingname, street, landmark, city, pincode, locality, district, region, state, country, latitude, longitude, createdby, createdtime, lastmodifiedby, lastmodifiedtime, additionaldetails) FROM stdin;
@@ -20145,7 +20391,7 @@ pg.citest	ffc16bde-152f-4c00-8499-caf83f51b8a6	6a63f17f-7c15-4432-98ca-ea625840d
 
 
 --
--- Data for Name: eg_pgr_service_v2; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_pgr_service_v2; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_pgr_service_v2 (id, tenantid, servicecode, servicerequestid, description, accountid, additionaldetails, applicationstatus, rating, source, createdby, createdtime, lastmodifiedby, lastmodifiedtime, active) FROM stdin;
@@ -20155,7 +20401,7 @@ COPY public.eg_pgr_service_v2 (id, tenantid, servicecode, servicerequestid, desc
 
 
 --
--- Data for Name: eg_role; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_role; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_role (name, code, description, createddate, createdby, lastmodifiedby, lastmodifieddate, version, tenantid, id) FROM stdin;
@@ -20163,7 +20409,7 @@ COPY public.eg_role (name, code, description, createddate, createdby, lastmodifi
 
 
 --
--- Data for Name: eg_roleaction; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_roleaction; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_roleaction (rolecode, actionid, tenantid) FROM stdin;
@@ -20171,7 +20417,15 @@ COPY public.eg_roleaction (rolecode, actionid, tenantid) FROM stdin;
 
 
 --
--- Data for Name: eg_url_shortener; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_token; Type: TABLE DATA; Schema: public; Owner: egov
+--
+
+COPY public.eg_token (id, tenantid, tokennumber, tokenidentity, validated, ttlsecs, createddate, lastmodifieddate, createdby, lastmodifiedby, version, createddatenew) FROM stdin;
+\.
+
+
+--
+-- Data for Name: eg_url_shortener; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_url_shortener (id, validform, validto, url) FROM stdin;
@@ -20179,41 +20433,41 @@ COPY public.eg_url_shortener (id, validform, validto, url) FROM stdin;
 
 
 --
--- Data for Name: eg_user; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_user; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
-COPY public.eg_user (title, salutation, dob, locale, username, password, pwdexpirydate, mobilenumber, altcontactnumber, emailid, createddate, lastmodifieddate, createdby, lastmodifiedby, active, name, gender, pan, aadhaarnumber, type, version, guardian, guardianrelation, signature, accountlocked, bloodgroup, photo, identificationmark, tenantid, id, uuid, accountlockeddate, alternatemobilenumber) FROM stdin;
-\N	\N	\N	\N	489366|G0/w3vPTuvMVAWkFYIgjXgs97GHSfarXKMKbCd4=	$2a$10$lVGJ27y7QRJ0f46z4d6uDeTml6nt9cMaoc7XpUZ.ZhrEranpNPQ8W	2026-05-10 05:25:11.553	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	\N	2026-02-09 05:25:11.563	2026-02-09 05:25:11.563	\N	\N	t	489366|G2/Q/tPzmtNqGVMjQL+zclwglO6ImyjeulzdbteyJ/LZvBbUx2SFWEKY	2	\N	\N	SYSTEM	0	\N		\N	f		\N	\N	pg	3	f80147a7-9711-4a56-9bd3-da4733a59df4	\N	\N
-\N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$KEb3Bn4z0EsYncupCms3XeOwFKxLYLw73mksi027n2f7/r1gaU8Ze	2026-05-10 05:25:58.69	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	489366|M2XJ8s/dn9YtPU5uXaKnPPlR7p7fWgomRH6FKcUg4g==	2026-02-09 05:25:58.701	2026-02-09 05:25:58.701	1	1	t	489366|E2XJ8s9gS+D3IcvHyR2Z81qfGuv1	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.g	4	8534247c-3cc8-4603-8c2a-7caf120e0957	\N	\N
-\N	\N	\N	\N	489366|ZDSRrpSozop/YTf54rdZcLWuIv4slYqFiQI=	$2a$10$BvTNYiGWRCPOBSo1v26Lp.ZvYht6xF4ROWmIOx0tvpqHP7e4dHnKS	2026-05-10 05:31:34.777	489366|ZDSRrpSozop/YTf54rdZcLWuIv4slYqFiQI=	\N	\N	2026-02-09 05:31:34.786	2026-02-09 05:31:34.786	93	93	t	489366|MWjQ8tv4lWkyLi0fUf1qb4uaOvQ19dk=	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	statea	5	ba6854ed-0759-4c4c-abd8-eee43b667e5c	\N	\N
-\N	\N	\N	\N	489366|AVT03vPcv/IDGpA/uJmSv6W4lNviFmsuNkc=	$2a$10$JseUGq1pVy7VFHWeTAi7Iu3EgmnO0iz./5DCBCV/t0d7IjGHRJ0Gi	2026-05-10 05:31:35.396	489366|azidopikwoZzZTgWBSvknn1na4BXpD8kFCw=	\N	\N	2026-02-09 05:31:35.403	2026-02-09 05:31:36.02	128	128	t	489366|AXTU/tO9uvsHHXRgZ6OlZZuUNSX+0plnnYK20nQuGvQ=	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea	6	2f21ba69-7737-4ec4-b2b4-95b0b1576797	0	\N
-\N	\N	\N	\N	489366|EUjwwuDZtvYEaVAvoJY1uVzolQQkobtqgQ==	$2a$10$mxbArx3E0lFFO2fpS3APkulETNvYzBDCZ406bj4KjRbQb7AZSPHkm	2026-05-10 05:31:36.246	489366|azidopikwoZzZovKj8EiSYKcAawyvuSUa+0=	\N	\N	2026-02-09 05:31:36.254	2026-02-09 05:31:36.444	128	128	t	489366|EWjQ4oHcv/IDGhoVQbWyCRNIlF87l8TzwpqLpBS2Pw==	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	7	4a74668a-cceb-4c36-9903-f7c586e94763	0	\N
-\N	\N	\N	\N	489366|ZDSRrpSozot+YFiSfx4DPm/FPDCwuoaAT5s=	$2a$10$3QI9zQnBoCzm7sT70lRFNu10.y8nr/bwCfqtJP42CESNqoRbj6vRS	2026-05-10 05:31:36.809	489366|ZDSRrpSozot+YFiSfx4DPm/FPDCwuoaAT5s=	\N	\N	2026-02-09 05:31:36.817	2026-02-09 05:31:36.817	128	128	t	489366|MWjQ8tv4lWkyLi0fUf1qb4uaOvQ19dk=	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	statea	8	60376026-0ec5-45fc-ac96-f2527f80c159	\N	\N
-\N	\N	\N	\N	489366|E0/r1fjQtOoZ9AfhrhcQjHYrUsF1tmRKSw==	$2a$10$SXEswIVLqZbSesVwUcpXO.Q9.2gZg/ZbFx1AB8aZq6HBcxng7veB6	2026-05-10 05:31:36.948	489366|ZDKUrJmszIt5ZHl/k5qpKv4Ig+4NoM6qJl4=	\N	\N	2026-02-09 05:31:36.955	2026-02-09 05:31:36.955	128	128	t	489366|NmTJ9JCsyvTLc0jcWwl5F3GI40omf9U=	0	\N	\N	SYSTEM	0	\N		\N	f		\N	\N	statea	9	9e856e7e-6c5f-44bf-8bda-ef35a1d64c9c	\N	\N
-\N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$Qu6OngjZwnw5NMR.aYm7BOePOG6zv1Y/54RQcxZi66KPn5xyUe51a	2026-05-10 05:31:37.685	489366|azidopikwoZ6YKnHDkSIGZ18EM+8iUKL0aY=	\N	\N	2026-02-09 05:31:37.692	2026-02-09 05:31:37.919	128	128	t	489366|E0Xp0u+9rswvJvN9Ott/Acvq0qFUqpWauuQ=	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	10	40888a69-1340-4090-8570-ddb851b4de4a	0	\N
-\N	\N	\N	\N	489366|Hkzhu/LRzZqA4ss3bLg+0yhO3o1m9A==	$2a$10$Lh4K1WBu1ZLSalcTy1/bd.LXLzdQKgoq4txf/Xp7lKhuo.OZ7JlSu	2026-05-10 05:31:38.127	489366|azidopikwoZ6Z2LKYjdH+zfcHXNVtUN7BJo=	\N	\N	2026-02-09 05:31:38.133	2026-02-09 05:31:38.33	128	128	t	489366|Hkzhu/LpidovIHYpVbi0ZBHJAKkv/q30MzHREeSLHxE=	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	11	d179f9c3-d736-4057-819b-9134b0986882	0	\N
-\N	\N	\N	\N	489366|Hkzhu+bfxl/jWwLyA3N/M4pNLI4/Dg==	$2a$10$aGqNnIVh7QAqkGkEAkVoo.za0wqh41akqTpaRHlAIYxAa1PpzEV0e	2026-05-10 05:31:38.532	489366|azidopikwoZ7ZzCzxHUKrmEF+VBcA9NRu8k=	\N	\N	2026-02-09 05:31:38.539	2026-02-09 05:31:38.758	128	128	t	489366|Hkzhu+b8id0rM1/wqpSQmjhb0u0Jh2LHphxS	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	12	6d808579-cec1-4657-b937-71458dd9a3fb	0	\N
-\N	\N	\N	\N	489366|EVL2QkiEht6PHVuvLb9myIu24A==	$2a$10$14CYdSni/j.c7wPBce0xx.eYUxkzZptvYfL7sxMOW.Dsc/gZp8oNi	2026-05-10 05:31:38.961	489366|azidopikwoZ6Zb+ikXvDYZ1xrrsTpi5bUeQ=	\N	\N	2026-02-09 05:31:38.968	2026-02-09 05:31:39.123	128	128	t	489366|EVL2u/TOvu1NID6z60Q0FhFKJuyI/lRF	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	13	42c21e9b-9d03-4f57-8ab6-65d042775f94	0	\N
-\N	\N	\N	\N	489366|FVPru/LRHUT/OXi33eWaZ0Xl472x2Q==	$2a$10$Yvs1mDZE6Jitf9YybT77nupxJ7npP5TrKWVzMr7ZUhHRr5nwteLwK	2026-05-10 05:31:39.323	489366|azidopikwoZ6Zgx+G5EFtmKKxJd2vPXrLiU=	\N	\N	2026-02-09 05:31:39.328	2026-02-09 05:31:39.487	128	128	t	489366|FVPru/LpidovIHYpVbi0ZMEXf3Kcfhypl4W8utm7yDw=	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	14	083429e1-a3fc-4fb5-8295-cd94b8b54aa6	0	\N
-\N	\N	\N	\N	489366|FVPru+bfFoGcgLFysi7bh+fmEb7oIw==	$2a$10$KOskQCfkT.1iCHvbvwQjBu4yzvXo0BoEU4.qD8u9mvew8WJvd0jh.	2026-05-10 05:31:39.676	489366|azidopikwoZ7Zl4HvdNI4zRTILR/CmXBkXY=	\N	\N	2026-02-09 05:31:39.682	2026-02-09 05:31:39.852	128	128	t	489366|FVPru+b8id0rM18gdOtLKbjqj0m96sn6lst/	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	15	4040dbd4-1124-4224-b597-1bb4e9873272	0	\N
-\N	\N	2000-01-01 00:00:00	\N	489366|EE7p3vXCuvsHHXTHUV9pq9oyKc9eyrCZJWje	$2a$10$ED/lERx81LO62qZw4BGLsee0QeWICjg9/irOyicqzh401i0FPSpxu	2026-08-11 06:52:25	489366|azCUq5Gty496Z50BwapANN3w0H3JdPBTVqY=	\N	\N	2026-05-13 06:52:25.735	2026-05-13 08:51:46.641	1	1	t	489366|EG7J/tW9utsnPVQOX82PMpsBO7Gwvt0cI5pL	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	ke.nairobi	16	2c28d95f-136f-46b6-892f-49e5245ebc59	0	\N
-\N	\N	\N	\N	489366|azCdopity496ZfhgAQ5+0yAxSEfcptqMf5g=	$2a$10$/9V2we5wSPBznvsdIFb2Sej6TNphPoTQkzLjrMolCakeVoq54S5Ky	2026-08-11 06:52:27.265	489366|azCdopity496ZfhgAQ5+0yAxSEfcptqMf5g=	\N	\N	2026-05-13 06:52:27.272	2026-05-13 06:52:27.272	16	16	t	489366|BmTX74HekssjLl8u04xBRqk0hKAg4QWUvCqrEA==	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	ke	17	1a1c9303-020e-419d-a0fd-a26c8b237a9b	\N	\N
-\N	\N	\N	\N	489366|EUiJ1e7ftfszFz8XkJgHH5VEsgnjYtMf	$2a$10$vlULNoGcqrkZUwlVA3ctaePPXNUkc3fXbcRH1iAznPaPpxcsCqdcu	2026-08-11 06:54:34.388	489366|azidopity49zbXdWQCH/xz9r2fYjwnn2gJE=	\N	489366|MWiJ9c7/ldsKMFMnW6TueFwx+NGWFZtBc/em4fGtGo10xQ==	2026-05-13 06:54:34.396	2026-05-13 06:54:34.396	1	1	t	489366|HG6E2c7oldsrJkNgZ6OlZd95K0bZYSQTmI6Oyzwfqpw=	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.cibndauth	18	394d099c-1eb4-4543-ba08-5717c1bd2764	\N	\N
-\N	\N	\N	\N	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	$2a$10$mTSUgBqj8PrnfqHZ31yg1uxhAt19WvCNhzFBntdZXHavnr9aWZ5X6	2026-08-11 07:01:10.605	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	\N	\N	2026-05-13 07:01:10.612	2026-05-13 07:01:10.612	16	16	t	489366|FzPhu/X4iMtqF1M0W6qleTcTtLM+WxdO6pbvEslTY5M=	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	ke	19	66be47f2-9764-42e5-9308-7c5b6c870c42	\N	\N
-\N	\N	\N	\N	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	$2a$10$bpX.KI6M/WMsvI.1GdX3HeuRKI9F6Pc3gsfGyMtmuvJlnILvNkjfS	2026-08-11 09:00:05.401	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	\N	\N	2026-05-13 09:00:05.411	2026-05-13 09:00:05.411	1	1	t	489366|FmTK9cju7EANPhIaVBscUvwIL/2nOQ==	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	pg	20	f1a94c66-a4b5-46da-9492-07b7db54c69f	\N	\N
-\N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$opgEKfQzL.6wLhDP2B8lRecOXULN4/jbP98BZoqzE1CHncrNTCh8W	2026-08-11 09:13:47.739	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	489366|M2XJ8s/dn9YtPU5uXaKnPPlR7p7fWgomRH6FKcUg4g==	2026-05-13 09:13:47.751	2026-05-13 09:13:47.751	\N	\N	t	489366|AXjX78Tw2/4uOVMuW6O0ZU8ikv+3vqdnrPqDLNOqg3BOKBcr	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg	29	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	\N
-\N	\N	\N	\N	489366|FVPrc8+W0tEEmddkOwLAZ8SpFw==	$2a$10$chtt2RDmJMpYdUM/e/s4pO9bDWiRnhFb2yVKm0hXTGtia76.iFL62	2026-08-11 09:13:47.87	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	\N	489366|NXPL28X0nNY+elUyVWeN//gkQZ3g6/hN99nZqhA=	2026-05-13 09:13:47.879	2026-05-13 09:13:47.879	\N	\N	t	489366|FXPN/tf8ldwvdHUmVLmjclxXMWHIYelOp2vLJmx3Op4M	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg	30	198368f3-d3ac-4e71-969d-6cb63417b312	\N	\N
-\N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$4erG5jF0AYVzhraRcIFD8.ue8yQkzztjpXosWYmxthdPRbURfoPLG	2026-08-11 09:13:47.986	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	489366|M2XJ8s/dn9YtPU5uXaKnPPlR7p7fWgomRH6FKcUg4g==	2026-05-13 09:13:47.995	2026-05-13 09:13:47.995	\N	\N	t	489366|AXjX78Tw2/4uOVMuW6O0ZU8ikv+3vqdnrPqDLNOqg3BOKBcr	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.citya	31	b2632798-952e-42cd-b896-0152c2847479	\N	\N
-\N	\N	\N	\N	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	$2a$10$9LGDN4AAX.miuiBfhW8R9.OKIKCdvmoSh74mrUpbNHjjXXTternZ.	2026-08-11 09:07:17.241	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	\N	\N	2026-05-13 09:07:17.251	2026-05-13 09:07:17.251	10	10	t	489366|FmTK9cju7EANPhIaVBscUvwIL/2nOQ==	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	statea	25	30cc47cf-56af-4b32-9d70-3fd2997bfa2f	\N	\N
-\N	\N	2000-01-01 00:00:00	\N	489366|EUiJ2uXQsvHEbcRjDh/UcPOGAzQmkeoS	$2a$10$NQAxOXiDx8KjjopRWWYhkOlz1NL.UcN8Z0rtqxsATpWtjwcIKF.hW	2026-08-11 09:27:27	489366|azidopity496ZQFBGUPKUnXL0+x/jdwIkKM=	\N	\N	2026-05-13 09:27:27.572	2026-05-13 09:27:28.041	29	29	t	489366|EUiE2sXwktGCnQMzpcVqpMu1YuSA0hyD	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.citest	35	79006ea0-100c-4332-8390-60edff9328c1	0	\N
-\N	\N	\N	\N	489366|FVPrc8+W0tEEmddkOwLAZ8SpFw==	$2a$10$Xcm1/lgF.QkGzTRU0ojEd.R8fqgyrM65/4Cb3m4MTHuwOqBieQoFO	2026-08-11 09:13:48.129	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	\N	489366|NXPL28X0nNY+elUyVWeN//gkQZ3g6/hN99nZqhA=	2026-05-13 09:13:48.138	2026-05-13 09:13:48.138	\N	\N	t	489366|FXPN/tf8ldwvdHUmVLmjclxXMWHIYelOp2vLJmx3Op4M	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.citya	32	4990dce4-66a4-4752-85a3-7999e81245e5	\N	\N
-\N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$v0Zr0y8aZAnKyhV0lEkpdu4gpK1Ahv8F2ekdJ.wGBtE5N5DTvLbwq	2026-08-11 09:13:48.248	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	489366|M2XJ8s/dn9YtPU5uXaKnPPlR7p7fWgomRH6FKcUg4g==	2026-05-13 09:13:48.258	2026-05-13 09:13:48.258	\N	\N	t	489366|AXjX78Tw2/4uOVMuW6O0ZU8ikv+3vqdnrPqDLNOqg3BOKBcr	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.cityb	33	717d427c-e470-4ffd-86ab-683d6c97e0e2	\N	\N
-\N	\N	\N	\N	489366|FVPrc8+W0tEEmddkOwLAZ8SpFw==	$2a$10$gberk1ZRaqm7gb6/mGZcqOyHZ78h.PY2X52MSsSxhbvNCd2Mya3xq	2026-08-11 09:13:48.376	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	\N	489366|NXPL28X0nNY+elUyVWeN//gkQZ3g6/hN99nZqhA=	2026-05-13 09:13:48.384	2026-05-13 09:13:48.384	\N	\N	t	489366|FXPN/tf8ldwvdHUmVLmjclxXMWHIYelOp2vLJmx3Op4M	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.cityb	34	2fca228c-6cc1-4f85-a82f-96d77d4cb61c	\N	\N
+COPY public.eg_user (title, salutation, dob, locale, username, password, pwdexpirydate, mobilenumber, altcontactnumber, emailid, createddate, lastmodifieddate, createdby, lastmodifiedby, active, name, gender, pan, aadhaarnumber, type, version, guardian, guardianrelation, signature, accountlocked, bloodgroup, photo, identificationmark, tenantid, id, uuid, accountlockeddate, alternatemobilenumber, countrycode) FROM stdin;
+\N	\N	\N	\N	489366|G0/w3vPTuvMVAWkFYIgjXgs97GHSfarXKMKbCd4=	$2a$10$lVGJ27y7QRJ0f46z4d6uDeTml6nt9cMaoc7XpUZ.ZhrEranpNPQ8W	2026-05-10 05:25:11.553	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	\N	2026-02-09 05:25:11.563	2026-02-09 05:25:11.563	\N	\N	t	489366|G2/Q/tPzmtNqGVMjQL+zclwglO6ImyjeulzdbteyJ/LZvBbUx2SFWEKY	2	\N	\N	SYSTEM	0	\N		\N	f		\N	\N	pg	3	f80147a7-9711-4a56-9bd3-da4733a59df4	\N	\N	\N
+\N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$KEb3Bn4z0EsYncupCms3XeOwFKxLYLw73mksi027n2f7/r1gaU8Ze	2026-05-10 05:25:58.69	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	489366|M2XJ8s/dn9YtPU5uXaKnPPlR7p7fWgomRH6FKcUg4g==	2026-02-09 05:25:58.701	2026-02-09 05:25:58.701	1	1	t	489366|E2XJ8s9gS+D3IcvHyR2Z81qfGuv1	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.g	4	8534247c-3cc8-4603-8c2a-7caf120e0957	\N	\N	\N
+\N	\N	\N	\N	489366|ZDSRrpSozop/YTf54rdZcLWuIv4slYqFiQI=	$2a$10$BvTNYiGWRCPOBSo1v26Lp.ZvYht6xF4ROWmIOx0tvpqHP7e4dHnKS	2026-05-10 05:31:34.777	489366|ZDSRrpSozop/YTf54rdZcLWuIv4slYqFiQI=	\N	\N	2026-02-09 05:31:34.786	2026-02-09 05:31:34.786	93	93	t	489366|MWjQ8tv4lWkyLi0fUf1qb4uaOvQ19dk=	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	statea	5	ba6854ed-0759-4c4c-abd8-eee43b667e5c	\N	\N	\N
+\N	\N	\N	\N	489366|AVT03vPcv/IDGpA/uJmSv6W4lNviFmsuNkc=	$2a$10$JseUGq1pVy7VFHWeTAi7Iu3EgmnO0iz./5DCBCV/t0d7IjGHRJ0Gi	2026-05-10 05:31:35.396	489366|azidopikwoZzZTgWBSvknn1na4BXpD8kFCw=	\N	\N	2026-02-09 05:31:35.403	2026-02-09 05:31:36.02	128	128	t	489366|AXTU/tO9uvsHHXRgZ6OlZZuUNSX+0plnnYK20nQuGvQ=	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea	6	2f21ba69-7737-4ec4-b2b4-95b0b1576797	0	\N	\N
+\N	\N	\N	\N	489366|EUjwwuDZtvYEaVAvoJY1uVzolQQkobtqgQ==	$2a$10$mxbArx3E0lFFO2fpS3APkulETNvYzBDCZ406bj4KjRbQb7AZSPHkm	2026-05-10 05:31:36.246	489366|azidopikwoZzZovKj8EiSYKcAawyvuSUa+0=	\N	\N	2026-02-09 05:31:36.254	2026-02-09 05:31:36.444	128	128	t	489366|EWjQ4oHcv/IDGhoVQbWyCRNIlF87l8TzwpqLpBS2Pw==	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	7	4a74668a-cceb-4c36-9903-f7c586e94763	0	\N	\N
+\N	\N	\N	\N	489366|ZDSRrpSozot+YFiSfx4DPm/FPDCwuoaAT5s=	$2a$10$3QI9zQnBoCzm7sT70lRFNu10.y8nr/bwCfqtJP42CESNqoRbj6vRS	2026-05-10 05:31:36.809	489366|ZDSRrpSozot+YFiSfx4DPm/FPDCwuoaAT5s=	\N	\N	2026-02-09 05:31:36.817	2026-02-09 05:31:36.817	128	128	t	489366|MWjQ8tv4lWkyLi0fUf1qb4uaOvQ19dk=	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	statea	8	60376026-0ec5-45fc-ac96-f2527f80c159	\N	\N	\N
+\N	\N	\N	\N	489366|E0/r1fjQtOoZ9AfhrhcQjHYrUsF1tmRKSw==	$2a$10$SXEswIVLqZbSesVwUcpXO.Q9.2gZg/ZbFx1AB8aZq6HBcxng7veB6	2026-05-10 05:31:36.948	489366|ZDKUrJmszIt5ZHl/k5qpKv4Ig+4NoM6qJl4=	\N	\N	2026-02-09 05:31:36.955	2026-02-09 05:31:36.955	128	128	t	489366|NmTJ9JCsyvTLc0jcWwl5F3GI40omf9U=	0	\N	\N	SYSTEM	0	\N		\N	f		\N	\N	statea	9	9e856e7e-6c5f-44bf-8bda-ef35a1d64c9c	\N	\N	\N
+\N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$Qu6OngjZwnw5NMR.aYm7BOePOG6zv1Y/54RQcxZi66KPn5xyUe51a	2026-05-10 05:31:37.685	489366|azidopikwoZ6YKnHDkSIGZ18EM+8iUKL0aY=	\N	\N	2026-02-09 05:31:37.692	2026-02-09 05:31:37.919	128	128	t	489366|E0Xp0u+9rswvJvN9Ott/Acvq0qFUqpWauuQ=	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	10	40888a69-1340-4090-8570-ddb851b4de4a	0	\N	\N
+\N	\N	\N	\N	489366|Hkzhu/LRzZqA4ss3bLg+0yhO3o1m9A==	$2a$10$Lh4K1WBu1ZLSalcTy1/bd.LXLzdQKgoq4txf/Xp7lKhuo.OZ7JlSu	2026-05-10 05:31:38.127	489366|azidopikwoZ6Z2LKYjdH+zfcHXNVtUN7BJo=	\N	\N	2026-02-09 05:31:38.133	2026-02-09 05:31:38.33	128	128	t	489366|Hkzhu/LpidovIHYpVbi0ZBHJAKkv/q30MzHREeSLHxE=	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	11	d179f9c3-d736-4057-819b-9134b0986882	0	\N	\N
+\N	\N	\N	\N	489366|Hkzhu+bfxl/jWwLyA3N/M4pNLI4/Dg==	$2a$10$aGqNnIVh7QAqkGkEAkVoo.za0wqh41akqTpaRHlAIYxAa1PpzEV0e	2026-05-10 05:31:38.532	489366|azidopikwoZ7ZzCzxHUKrmEF+VBcA9NRu8k=	\N	\N	2026-02-09 05:31:38.539	2026-02-09 05:31:38.758	128	128	t	489366|Hkzhu+b8id0rM1/wqpSQmjhb0u0Jh2LHphxS	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	12	6d808579-cec1-4657-b937-71458dd9a3fb	0	\N	\N
+\N	\N	\N	\N	489366|EVL2QkiEht6PHVuvLb9myIu24A==	$2a$10$14CYdSni/j.c7wPBce0xx.eYUxkzZptvYfL7sxMOW.Dsc/gZp8oNi	2026-05-10 05:31:38.961	489366|azidopikwoZ6Zb+ikXvDYZ1xrrsTpi5bUeQ=	\N	\N	2026-02-09 05:31:38.968	2026-02-09 05:31:39.123	128	128	t	489366|EVL2u/TOvu1NID6z60Q0FhFKJuyI/lRF	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	13	42c21e9b-9d03-4f57-8ab6-65d042775f94	0	\N	\N
+\N	\N	\N	\N	489366|FVPru/LRHUT/OXi33eWaZ0Xl472x2Q==	$2a$10$Yvs1mDZE6Jitf9YybT77nupxJ7npP5TrKWVzMr7ZUhHRr5nwteLwK	2026-05-10 05:31:39.323	489366|azidopikwoZ6Zgx+G5EFtmKKxJd2vPXrLiU=	\N	\N	2026-02-09 05:31:39.328	2026-02-09 05:31:39.487	128	128	t	489366|FVPru/LpidovIHYpVbi0ZMEXf3Kcfhypl4W8utm7yDw=	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	14	083429e1-a3fc-4fb5-8295-cd94b8b54aa6	0	\N	\N
+\N	\N	\N	\N	489366|FVPru+bfFoGcgLFysi7bh+fmEb7oIw==	$2a$10$KOskQCfkT.1iCHvbvwQjBu4yzvXo0BoEU4.qD8u9mvew8WJvd0jh.	2026-05-10 05:31:39.676	489366|azidopikwoZ7Zl4HvdNI4zRTILR/CmXBkXY=	\N	\N	2026-02-09 05:31:39.682	2026-02-09 05:31:39.852	128	128	t	489366|FVPru+b8id0rM18gdOtLKbjqj0m96sn6lst/	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	statea.citya	15	4040dbd4-1124-4224-b597-1bb4e9873272	0	\N	\N
+\N	\N	2000-01-01 00:00:00	\N	489366|EE7p3vXCuvsHHXTHUV9pq9oyKc9eyrCZJWje	$2a$10$ED/lERx81LO62qZw4BGLsee0QeWICjg9/irOyicqzh401i0FPSpxu	2026-08-11 06:52:25	489366|azCUq5Gty496Z50BwapANN3w0H3JdPBTVqY=	\N	\N	2026-05-13 06:52:25.735	2026-05-13 08:51:46.641	1	1	t	489366|EG7J/tW9utsnPVQOX82PMpsBO7Gwvt0cI5pL	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	ke.nairobi	16	2c28d95f-136f-46b6-892f-49e5245ebc59	0	\N	\N
+\N	\N	\N	\N	489366|azCdopity496ZfhgAQ5+0yAxSEfcptqMf5g=	$2a$10$/9V2we5wSPBznvsdIFb2Sej6TNphPoTQkzLjrMolCakeVoq54S5Ky	2026-08-11 06:52:27.265	489366|azCdopity496ZfhgAQ5+0yAxSEfcptqMf5g=	\N	\N	2026-05-13 06:52:27.272	2026-05-13 06:52:27.272	16	16	t	489366|BmTX74HekssjLl8u04xBRqk0hKAg4QWUvCqrEA==	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	ke	17	1a1c9303-020e-419d-a0fd-a26c8b237a9b	\N	\N	\N
+\N	\N	\N	\N	489366|EUiJ1e7ftfszFz8XkJgHH5VEsgnjYtMf	$2a$10$vlULNoGcqrkZUwlVA3ctaePPXNUkc3fXbcRH1iAznPaPpxcsCqdcu	2026-08-11 06:54:34.388	489366|azidopity49zbXdWQCH/xz9r2fYjwnn2gJE=	\N	489366|MWiJ9c7/ldsKMFMnW6TueFwx+NGWFZtBc/em4fGtGo10xQ==	2026-05-13 06:54:34.396	2026-05-13 06:54:34.396	1	1	t	489366|HG6E2c7oldsrJkNgZ6OlZd95K0bZYSQTmI6Oyzwfqpw=	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.cibndauth	18	394d099c-1eb4-4543-ba08-5717c1bd2764	\N	\N	\N
+\N	\N	\N	\N	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	$2a$10$mTSUgBqj8PrnfqHZ31yg1uxhAt19WvCNhzFBntdZXHavnr9aWZ5X6	2026-08-11 07:01:10.605	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	\N	\N	2026-05-13 07:01:10.612	2026-05-13 07:01:10.612	16	16	t	489366|FzPhu/X4iMtqF1M0W6qleTcTtLM+WxdO6pbvEslTY5M=	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	ke	19	66be47f2-9764-42e5-9308-7c5b6c870c42	\N	\N	\N
+\N	\N	\N	\N	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	$2a$10$bpX.KI6M/WMsvI.1GdX3HeuRKI9F6Pc3gsfGyMtmuvJlnILvNkjfS	2026-08-11 09:00:05.401	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	\N	\N	2026-05-13 09:00:05.411	2026-05-13 09:00:05.411	1	1	t	489366|FmTK9cju7EANPhIaVBscUvwIL/2nOQ==	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	pg	20	f1a94c66-a4b5-46da-9492-07b7db54c69f	\N	\N	\N
+\N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$opgEKfQzL.6wLhDP2B8lRecOXULN4/jbP98BZoqzE1CHncrNTCh8W	2026-08-11 09:13:47.739	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	489366|M2XJ8s/dn9YtPU5uXaKnPPlR7p7fWgomRH6FKcUg4g==	2026-05-13 09:13:47.751	2026-05-13 09:13:47.751	\N	\N	t	489366|AXjX78Tw2/4uOVMuW6O0ZU8ikv+3vqdnrPqDLNOqg3BOKBcr	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg	29	8155a8e1-86bb-4e5f-9450-f2f7ab2004de	\N	\N	\N
+\N	\N	\N	\N	489366|FVPrc8+W0tEEmddkOwLAZ8SpFw==	$2a$10$chtt2RDmJMpYdUM/e/s4pO9bDWiRnhFb2yVKm0hXTGtia76.iFL62	2026-08-11 09:13:47.87	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	\N	489366|NXPL28X0nNY+elUyVWeN//gkQZ3g6/hN99nZqhA=	2026-05-13 09:13:47.879	2026-05-13 09:13:47.879	\N	\N	t	489366|FXPN/tf8ldwvdHUmVLmjclxXMWHIYelOp2vLJmx3Op4M	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg	30	198368f3-d3ac-4e71-969d-6cb63417b312	\N	\N	\N
+\N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$4erG5jF0AYVzhraRcIFD8.ue8yQkzztjpXosWYmxthdPRbURfoPLG	2026-08-11 09:13:47.986	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	489366|M2XJ8s/dn9YtPU5uXaKnPPlR7p7fWgomRH6FKcUg4g==	2026-05-13 09:13:47.995	2026-05-13 09:13:47.995	\N	\N	t	489366|AXjX78Tw2/4uOVMuW6O0ZU8ikv+3vqdnrPqDLNOqg3BOKBcr	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.citya	31	b2632798-952e-42cd-b896-0152c2847479	\N	\N	\N
+\N	\N	\N	\N	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	$2a$10$9LGDN4AAX.miuiBfhW8R9.OKIKCdvmoSh74mrUpbNHjjXXTternZ.	2026-08-11 09:07:17.241	489366|azidopGtwoZzbe5t1+8lCqiXt891ZJ2s2P4=	\N	\N	2026-05-13 09:07:17.251	2026-05-13 09:07:17.251	10	10	t	489366|FmTK9cju7EANPhIaVBscUvwIL/2nOQ==	0	\N	\N	CITIZEN	0	\N		\N	f		\N	\N	statea	25	30cc47cf-56af-4b32-9d70-3fd2997bfa2f	\N	\N	\N
+\N	\N	2000-01-01 00:00:00	\N	489366|EUiJ2uXQsvHEbcRjDh/UcPOGAzQmkeoS	$2a$10$NQAxOXiDx8KjjopRWWYhkOlz1NL.UcN8Z0rtqxsATpWtjwcIKF.hW	2026-08-11 09:27:27	489366|azidopity496ZQFBGUPKUnXL0+x/jdwIkKM=	\N	\N	2026-05-13 09:27:27.572	2026-05-13 09:27:28.041	29	29	t	489366|EUiE2sXwktGCnQMzpcVqpMu1YuSA0hyD	0	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.citest	35	79006ea0-100c-4332-8390-60edff9328c1	0	\N	\N
+\N	\N	\N	\N	489366|FVPrc8+W0tEEmddkOwLAZ8SpFw==	$2a$10$Xcm1/lgF.QkGzTRU0ojEd.R8fqgyrM65/4Cb3m4MTHuwOqBieQoFO	2026-08-11 09:13:48.129	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	\N	489366|NXPL28X0nNY+elUyVWeN//gkQZ3g6/hN99nZqhA=	2026-05-13 09:13:48.138	2026-05-13 09:13:48.138	\N	\N	t	489366|FXPN/tf8ldwvdHUmVLmjclxXMWHIYelOp2vLJmx3Op4M	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.citya	32	4990dce4-66a4-4752-85a3-7999e81245e5	\N	\N	\N
+\N	\N	\N	\N	489366|E0Xp0u9xguIYIEtxo8vkVboLM/Ku	$2a$10$v0Zr0y8aZAnKyhV0lEkpdu4gpK1Ahv8F2ekdJ.wGBtE5N5DTvLbwq	2026-08-11 09:13:48.248	489366|azidopikwoZzbcm1yBn29NfRpKFP6YulQdY=	\N	489366|M2XJ8s/dn9YtPU5uXaKnPPlR7p7fWgomRH6FKcUg4g==	2026-05-13 09:13:48.258	2026-05-13 09:13:48.258	\N	\N	t	489366|AXjX78Tw2/4uOVMuW6O0ZU8ikv+3vqdnrPqDLNOqg3BOKBcr	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.cityb	33	717d427c-e470-4ffd-86ab-683d6c97e0e2	\N	\N	\N
+\N	\N	\N	\N	489366|FVPrc8+W0tEEmddkOwLAZ8SpFw==	$2a$10$gberk1ZRaqm7gb6/mGZcqOyHZ78h.PY2X52MSsSxhbvNCd2Mya3xq	2026-08-11 09:13:48.376	489366|azmco5mlw4dybCPvBaRbi88jU/qEZG8nzpQ=	\N	489366|NXPL28X0nNY+elUyVWeN//gkQZ3g6/hN99nZqhA=	2026-05-13 09:13:48.384	2026-05-13 09:13:48.384	\N	\N	t	489366|FXPN/tf8ldwvdHUmVLmjclxXMWHIYelOp2vLJmx3Op4M	2	\N	\N	EMPLOYEE	0	\N		\N	f		\N	\N	pg.cityb	34	2fca228c-6cc1-4f85-a82f-96d77d4cb61c	\N	\N	\N
 \.
 
 
 --
--- Data for Name: eg_user_address; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_user_address; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_user_address (id, version, createddate, lastmodifieddate, createdby, lastmodifiedby, type, address, city, pincode, userid, tenantid) FROM stdin;
@@ -20253,7 +20507,7 @@ COPY public.eg_user_address (id, version, createddate, lastmodifieddate, created
 
 
 --
--- Data for Name: eg_user_audit_table; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_user_audit_table; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_user_audit_table (id, title, salutation, dob, locale, username, password, pwdexpirydate, mobilenumber, altcontactnumber, emailid, active, name, gender, pan, aadhaarnumber, type, version, guardian, guardianrelation, signature, accountlocked, bloodgroup, photo, identificationmark, tenantid, uuid, auditcreatedby, auditcreatedtime) FROM stdin;
@@ -20275,7 +20529,7 @@ COPY public.eg_user_audit_table (id, title, salutation, dob, locale, username, p
 
 
 --
--- Data for Name: eg_user_login_failed_attempts; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_user_login_failed_attempts; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_user_login_failed_attempts (user_uuid, ip, attempt_date, active) FROM stdin;
@@ -20288,7 +20542,7 @@ COPY public.eg_user_login_failed_attempts (user_uuid, ip, attempt_date, active) 
 
 
 --
--- Data for Name: eg_userrole; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_userrole; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_userrole (roleid, roleidtenantid, userid, tenantid, lastmodifieddate) FROM stdin;
@@ -20296,7 +20550,7 @@ COPY public.eg_userrole (roleid, roleidtenantid, userid, tenantid, lastmodifiedd
 
 
 --
--- Data for Name: eg_userrole_v1; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_userrole_v1; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_userrole_v1 (role_code, role_tenantid, user_id, user_tenantid, lastmodifieddate) FROM stdin;
@@ -20396,7 +20650,7 @@ DGRO	pg	35	pg.citest	2026-05-13 09:27:27.577
 
 
 --
--- Data for Name: eg_wf_action_v2; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_wf_action_v2; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_wf_action_v2 (uuid, tenantid, currentstate, action, nextstate, roles, createdby, createdtime, lastmodifiedby, lastmodifiedtime, active) FROM stdin;
@@ -20461,7 +20715,7 @@ d05728de-3da4-4887-ac13-db9fdcf053e4	pg	fd16c395-bcaa-4f9c-a452-33e4a3d5acd0	REO
 
 
 --
--- Data for Name: eg_wf_assignee_v2; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_wf_assignee_v2; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_wf_assignee_v2 (processinstanceid, tenantid, assignee, createdby, lastmodifiedby, createdtime, lastmodifiedtime) FROM stdin;
@@ -20475,7 +20729,7 @@ e0a56869-1433-4d06-b8e7-04e132ea7279	pg.citest	79006ea0-100c-4332-8390-60edff932
 
 
 --
--- Data for Name: eg_wf_businessservice_v2; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_wf_businessservice_v2; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_wf_businessservice_v2 (businessservice, business, tenantid, uuid, geturi, posturi, createdby, createdtime, lastmodifiedby, lastmodifiedtime, businessservicesla) FROM stdin;
@@ -20486,7 +20740,7 @@ PGR	pgr-services	pg	7b38c57c-ce17-43c5-91a8-1ef737a693b6	\N	\N	dc71bb18-4bb9-4f2
 
 
 --
--- Data for Name: eg_wf_document_v2; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_wf_document_v2; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_wf_document_v2 (id, tenantid, documenttype, documentuid, filestoreid, processinstanceid, active, createdby, lastmodifiedby, createdtime, lastmodifiedtime) FROM stdin;
@@ -20502,7 +20756,7 @@ e6cee572-a7a4-414d-abe3-888ee8679211	pg.citest	PHOTO			8a840e0d-2623-456d-803b-c
 
 
 --
--- Data for Name: eg_wf_processinstance_v2; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_wf_processinstance_v2; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_wf_processinstance_v2 (id, tenantid, businessservice, businessid, action, status, comment, assigner, assignee, statesla, previousstatus, createdby, lastmodifiedby, createdtime, lastmodifiedtime, modulename, businessservicesla, rating, escalated) FROM stdin;
@@ -20538,7 +20792,7 @@ cb276065-655b-442a-a203-3d9731470804	pg.citest	PGR	PG-PGR-2026-05-13-000185	RATE
 
 
 --
--- Data for Name: eg_wf_state_v2; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: eg_wf_state_v2; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.eg_wf_state_v2 (uuid, tenantid, businessserviceid, state, applicationstatus, sla, docuploadrequired, isstartstate, isterminatestate, createdby, createdtime, lastmodifiedby, lastmodifiedtime, seq, isstateupdatable) FROM stdin;
@@ -20579,152 +20833,184 @@ f4209bfa-9abe-4da9-b80f-3f43fced607c	pg	7b38c57c-ce17-43c5-91a8-1ef737a693b6	RES
 
 
 --
--- Data for Name: egov_idgen_schema_version; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: egov-url-shortening_schema; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
-COPY public.egov_idgen_schema_version (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
-1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-02-09 05:24:18.434683	0	t
-2	20170614121459	DDL id generation create ddl	SQL	V20170614121459__DDL_id_generation_create_ddl.sql	-276506180	egov	2026-02-09 05:24:18.491978	15	t
-3	20170630130913	create collection seq ddl	SQL	V20170630130913__create_collection_seq_ddl.sql	584536344	egov	2026-02-09 05:24:18.550469	5	t
-4	20170713115259	create upicnum seq ddl	SQL	V20170713115259__create_upicnum_seq_ddl.sql	-226250147	egov	2026-02-09 05:24:18.571319	3	t
-5	20170731222759	create noticeno seq ddl	SQL	V20170731222759__create_noticeno_seq_ddl.sql	1729453706	egov	2026-02-09 05:24:18.584096	5	t
-6	20170816191759	create tl num seq ddl	SQL	V20170816191759__create_tl_num_seq_ddl.sql	-1703806072	egov	2026-02-09 05:24:18.59986	3	t
-7	20170817164130	create employee code number seq ddl	SQL	V20170817164130__create_employee_code_number_seq_ddl.sql	-196105635	egov	2026-02-09 05:24:18.613793	2	t
-8	20170826133659	create tl application num seq ddl	SQL	V20170826133659__create_tl_application_num_seq_ddl.sql	725879278	egov	2026-02-09 05:24:18.623792	2	t
-9	20171020231917	create swm transaction num seq ddl	SQL	V20171020231917__create_swm_transaction_num_seq_ddl.sql	-267295984	egov	2026-02-09 05:24:18.632437	2	t
-10	20171030111720	create lcms seq ddl	SQL	V20171030111720__create_lcms_seq_ddl.sql	-1131314050	egov	2026-02-09 05:24:18.64079	5	t
-11	20171031140120	create lcms seq voucher ddl	SQL	V20171031140120__create_lcms_seq_voucher_ddl.sql	-898624016	egov	2026-02-09 05:24:18.654453	4	t
-12	20171031155035	create lcms seq parawise comments	SQL	V20171031155035__create_lcms_seq_parawise_comments.sql	1312025724	egov	2026-02-09 05:24:18.669501	5	t
-13	20171103163310	create swm contract num seq ddl	SQL	V20171103163310__create_swm_contract_num_seq_ddl.sql	200369660	egov	2026-02-09 05:24:18.684013	3	t
-14	20171103163443	create swm vendor num seq ddl	SQL	V20171103163443__create_swm_vendor_num_seq_ddl.sql	-762706488	egov	2026-02-09 05:24:18.696332	2	t
-15	20171103164912	create swm contractor num seq ddl	SQL	V20171103164912__create_swm_contractor_num_seq_ddl.sql	-631302095	egov	2026-02-09 05:24:18.70685	3	t
-16	20171104162601	create swm vendor contract num seq ddl	SQL	V20171104162601__create_swm_vendor_contract_num_seq_ddl.sql	2110220476	egov	2026-02-09 05:24:18.718384	2	t
-17	20171108112621	create reference evidence seq ddl	SQL	V20171108112621__create_reference_evidence_seq_ddl.sql	-129584516	egov	2026-02-09 05:24:18.729233	3	t
-18	20171109001824	create swm vehicle schedule transaction num seq ddl	SQL	V20171109001824__create_swm_vehicle_schedule_transaction_num_seq_ddl.sql	-2021827066	egov	2026-02-09 05:24:18.740664	4	t
-19	20171109145848	create swm supplier num seq ddl	SQL	V20171109145848__create_swm_supplier_num_seq_ddl.sql	583388728	egov	2026-02-09 05:24:18.754528	3	t
-20	20171110163419	create swm trip num seq ddl	SQL	V20171110163419__create_swm_trip_num_seq_ddl.sql	-1570619200	egov	2026-02-09 05:24:18.767156	2	t
-21	20171113174232	create swm vendor paymentdetails seq ddl	SQL	V20171113174232__create_swm_vendor_paymentdetails_seq_ddl.sql	762717103	egov	2026-02-09 05:24:18.777951	3	t
-22	20171113175600	create swm sanitationstaff target number seq ddl	SQL	V20171113175600__create_swm_sanitationstaff_target_number_seq_ddl.sql	265986491	egov	2026-02-09 05:24:18.789782	4	t
-23	20171113233008	create swm staff transaction number seq ddl	SQL	V20171113233008__create_swm_staff_transaction_number_seq_ddl.sql	2110317753	egov	2026-02-09 05:24:18.803276	3	t
-24	20171114104545	create personal details seq	SQL	V20171114104545__create_personal_details_seq.sql	-1866233071	egov	2026-02-09 05:24:18.814415	2	t
-25	20171114104620	create agency seq	SQL	V20171114104620__create_agency_seq.sql	-653967466	egov	2026-02-09 05:24:18.822647	3	t
-26	20171115210014	create event seq	SQL	V20171115210014__create_event_seq.sql	-1138671054	egov	2026-02-09 05:24:18.832341	2	t
-27	20171223074921	create egf bill default number format seq ddl	SQL	V20171223074921__create_egf_bill_default_number_format_seq_ddl.sql	1544476819	egov	2026-02-09 05:24:18.841319	2	t
-28	20180206121802	create swm vehicle maintenance repair transaction number ddl	SQL	V20180206121802__create_swm_vehicle_maintenance_repair_transaction_number_ddl.sql	513099893	egov	2026-02-09 05:24:18.850668	2	t
-29	20180207123336	create swm shift code ddl	SQL	V20180207123336__create_swm_shift_code_ddl.sql	1730375649	egov	2026-02-09 05:24:18.860894	2	t
-30	20180531123523	create propertytax ack ddl	SQL	V20180531123523__create_propertytax_ack_ddl.sql	102790456	egov	2026-02-09 05:24:18.870472	3	t
-31	20180607123336	create pg txn id ddl	SQL	V20180607123336__create_pg_txn_id_ddl.sql	936381812	egov	2026-02-09 05:24:18.881659	2	t
-32	20180709180520	create propertytax assess ddl	SQL	V20180709180520__create_propertytax_assess_ddl.sql	1893633814	egov	2026-02-09 05:24:18.891172	2	t
-33	20180920115635	create tl seq ddl	SQL	V20180920115635__create_tl_seq_ddl.sql	1504691701	egov	2026-02-09 05:24:18.89965	3	t
-34	20181030123635	DELETE DUPLICATES AND ALTER PRIMARYKEY ID GEN ddl	SQL	V20181030123635__DELETE_DUPLICATES_AND_ALTER_PRIMARYKEY_ID_GEN_ddl.sql	-2137616238	egov	2026-02-09 05:24:18.909443	6	t
-35	20190129174853	create hrms empcode ddl	SQL	V20190129174853__create_hrms_empcode_ddl.sql	-1425111802	egov	2026-02-09 05:24:18.923726	2	t
-36	20190520164710	UC SEQ ddl	SQL	V20190520164710__UC_SEQ_ddl.sql	1153445194	egov	2026-02-09 05:24:18.932039	2	t
+COPY public."egov-url-shortening_schema" (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
+1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-07-10 10:44:39.758823	0	t
+2	20190624185601	eg  ddl	SQL	V20190624185601__eg__ddl.sql	1797967045	egov	2026-07-10 10:44:39.856418	20	t
 \.
 
 
 --
--- Data for Name: egov_localization_schema_version; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: egov_enc_service_schema; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
-COPY public.egov_localization_schema_version (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
-1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-02-09 05:24:20.539974	0	t
-2	20170502122717	localization create message	SQL	V20170502122717__localization_create_message.sql	-651873868	egov	2026-02-09 05:24:20.581967	23	t
-3	20170614170306	localization message alter add module	SQL	V20170614170306__localization_message_alter_add_module.sql	-1138292234	egov	2026-02-09 05:24:20.631429	7	t
-4	20170625193803	add audit columns to message table	SQL	V20170625193803__add_audit_columns_to_message_table.sql	424158717	egov	2026-02-09 05:24:20.653787	5	t
-5	20181218164449	alter msg alter id column ddl	SQL	V20181218164449__alter_msg_alter_id_column_ddl.sql	-1867784919	egov	2026-02-09 05:24:20.670128	10	t
+COPY public.egov_enc_service_schema (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
+1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-07-10 10:44:19.355979	0	t
+2	20180607185601	eg enc	SQL	V20180607185601__eg_enc.sql	-710801463	egov	2026-07-10 10:44:19.450171	47	t
 \.
 
 
 --
--- Data for Name: egov_url_shortening_schema_version; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: egov_filestore_schema; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
-COPY public.egov_url_shortening_schema_version (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
-1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-02-09 05:24:22.16261	0	t
-2	20190624185601	eg  ddl	SQL	V20190624185601__eg__ddl.sql	1797967045	egov	2026-02-09 05:24:22.211192	24	t
+COPY public.egov_filestore_schema (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
+1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-07-10 10:44:26.462534	0	t
+2	20170420135841	egfilestore tenant ddl	SQL	V20170420135841__egfilestore_tenant_ddl.sql	882190174	egov	2026-07-10 10:44:26.565706	24	t
+3	20180319162241	eg filestore alter ddl	SQL	V20180319162241__eg_filestore_alter_ddl.sql	994763967	egov	2026-07-10 10:44:26.690135	2	t
+4	20181126143300	egfilestore filename dml	SQL	V20181126143300__egfilestore_filename_dml.sql	-798099361	egov	2026-07-10 10:44:26.704902	4	t
+5	20200712143311	egfilestore audit details	SQL	V20200712143311__egfilestore_audit_details.sql	749086971	egov	2026-07-10 10:44:26.723058	4	t
 \.
 
 
 --
--- Data for Name: egov_user_schema_version; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: egov_hrms_schema; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
-COPY public.egov_user_schema_version (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
-1	20170223150524	create eg user table	SQL	V20170223150524__create_eg_user_table.sql	-473117120	egov	2026-02-09 05:24:16.26987	25	t
-2	20170223151046	create eg address table	SQL	V20170223151046__create_eg_address_table.sql	-773357059	egov	2026-02-09 05:24:16.329698	10	t
-3	20170223151145	create eg role table	SQL	V20170223151145__create_eg_role_table.sql	-1566976242	egov	2026-02-09 05:24:16.358567	9	t
-4	20170223151229	create eg user role table	SQL	V20170223151229__create_eg_user_role_table.sql	-1457999063	egov	2026-02-09 05:24:16.385755	4	t
-5	20170223151230	eg user drop FK PK recreate	SQL	V20170223151230__eg_user_drop_FK_PK_recreate.sql	-1065901777	egov	2026-02-09 05:24:16.401792	20	t
-6	20170404154844	create role sequence	SQL	V20170404154844__create_role_sequence.sql	-674780019	egov	2026-02-09 05:24:16.439145	3	t
-7	20170417165545	create unique username tenant constraint	SQL	V20170417165545__create_unique_username_tenant_constraint.sql	-1047782019	egov	2026-02-09 05:24:16.452819	7	t
-8	20170417165956	create unique role code tenant constraint	SQL	V20170417165956__create_unique_role_code_tenant_constraint.sql	792682044	egov	2026-02-09 05:24:16.470862	7	t
-9	20170423025220	alter table eg user to increase signature length	SQL	V20170423025220__alter_table_eg_user_to_increase_signature_length.sql	725199194	egov	2026-02-09 05:24:16.486629	4	t
-10	20170423025221	alter table eg user to reset signature length	SQL	V20170423025221__alter_table_eg_user_to_reset_signature_length.sql	-2104479543	egov	2026-02-09 05:24:16.502066	23	t
-11	20170428175632	recreate user address table	SQL	V20170428175632__recreate_user_address_table.sql	408456665	egov	2026-02-09 05:24:16.535846	17	t
-12	20170509172805	recreate role and user role table with tenantid	SQL	V20170509172805__recreate_role_and_user_role_table_with_tenantid.sql	1202567563	egov	2026-02-09 05:24:16.565082	13	t
-13	20170516145558	alter userrole add lastmodifieddate	SQL	V20170516145558__alter_userrole_add_lastmodifieddate.sql	-30454711	egov	2026-02-09 05:24:16.587947	3	t
-14	20170823203553	dropping not null for mobilenumber in eg user	SQL	V20170823203553__dropping_not_null_for_mobilenumber_in_eg_user.sql	1587712007	egov	2026-02-09 05:24:16.599379	2	t
-15	20180313150524	added uuid user table	SQL	V20180313150524__added_uuid_user_table.sql	-1031804668	egov	2026-02-09 05:24:16.610986	3	t
-16	20180725165212	alter eg role name	SQL	V20180725165212__alter_eg_role_name.sql	682532180	egov	2026-02-09 05:24:16.623292	7	t
-17	20180731215511	fix constraint names	SQL	V20180731215511__fix_constraint_names.sql	-1751041311	egov	2026-02-09 05:24:16.642367	6	t
-18	20180731215512	alter eg role address fk	SQL	V20180731215512__alter_eg_role_address_fk.sql	1357995898	egov	2026-02-09 05:24:16.659903	12	t
-19	20181108160312	create indices eg user role	SQL	V20181108160312__create_indices_eg_user_role.sql	93267122	egov	2026-02-09 05:24:16.681773	21	t
-20	20190204144112	create eg userrole v1	SQL	V20190204144112__create_eg_userrole_v1.sql	1977171559	egov	2026-02-09 05:24:16.721341	9	t
-21	20190222121612	create eg user failed login attempts	SQL	V20190222121612__create_eg_user_failed_login_attempts.sql	-1392078543	egov	2026-02-09 05:24:16.741215	8	t
-22	20190313165702	alter eg user address extend	SQL	V20190313165702__alter_eg_user_address_extend.sql	-1928243385	egov	2026-02-09 05:24:16.758002	6	t
-23	20190402123143	create indices eg user eg userrole v1 	SQL	V20190402123143__create_indices_eg_user_eg_userrole_v1 .sql	-1249412585	egov	2026-02-09 05:24:16.776195	15	t
-24	20210908231720	alter table eg user alternate number	SQL	V20210908231720__alter_table_eg_user_alternate_number.sql	1743363820	egov	2026-02-09 05:24:16.79945	2	t
-25	20211029155746	create table user audit	SQL	V20211029155746__create_table_user_audit.sql	-894464608	egov	2026-02-09 05:24:16.8096	6	t
-26	20211029171730	modified auditby	SQL	V20211029171730__modified_auditby.sql	-672564999	egov	2026-02-09 05:24:16.823352	5	t
-27	20211029175430	modified username audit	SQL	V20211029175430__modified_username_audit.sql	-1616300745	egov	2026-02-09 05:24:16.83662	6	t
+COPY public.egov_hrms_schema (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
+1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-07-10 10:44:49.131566	0	t
+2	20190122152236	create hrms employee table ddl	SQL	V20190122152236__create_hrms_employee_table_ddl.sql	-1554243231	egov	2026-07-10 10:44:49.226602	90	t
+3	20190130120650	alter assgnmt add currentassgmt ddl	SQL	V20190130120650__alter_assgnmt_add_currentassgmt_ddl.sql	-1748589821	egov	2026-07-10 10:44:49.412741	1	t
+4	20190204154948	create position sequence ddl	SQL	V20190204154948__create_position_sequence_ddl.sql	1748624915	egov	2026-07-10 10:44:49.424562	2	t
+5	20190204163735	alter deactivation rename remarks ddl	SQL	V20190204163735__alter_deactivation_rename_remarks_ddl.sql	447036466	egov	2026-07-10 10:44:49.436661	1	t
+6	20190204172710	secondary indexes ddl	SQL	V20190204172710__secondary_indexes_ddl.sql	1918652612	egov	2026-07-10 10:44:49.446344	20	t
+7	20190215120811	alter uk constraint dml	SQL	V20190215120811__alter_uk_constraint_dml.sql	-83927431	egov	2026-07-10 10:44:49.475572	5	t
+8	20190219163221	alter remove phone name clm dml	SQL	V20190219163221__alter_remove_phone_name_clm_dml.sql	541612396	egov	2026-07-10 10:44:49.489169	2	t
+9	20190301154105	alter add isactive ddl	SQL	V20190301154105__alter_add_isactive_ddl.sql	1284528784	egov	2026-07-10 10:44:49.501328	2	t
+10	20201005230836	eg hrms employee index ddl	SQL	V20201005230836__eg_hrms_employee_index_ddl.sql	508211693	egov	2026-07-10 10:44:49.511624	4	t
+11	20201223230836	eg hrms employee reactivation details index ddl	SQL	V20201223230836__eg_hrms_employee_reactivation_details_index_ddl.sql	-839388452	egov	2026-07-10 10:44:49.524387	9	t
+12	20201228172710	reactivation indexes ddl	SQL	V20201228172710__reactivation_indexes_ddl.sql	-1000031729	egov	2026-07-10 10:44:49.540489	5	t
 \.
 
 
 --
--- Data for Name: enc_schema_version; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: egov_idgen_schema; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
-COPY public.enc_schema_version (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
-1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-02-09 05:24:46.802907	0	t
-2	20180607185601	eg enc	SQL	V20180607185601__eg_enc.sql	-710801463	egov	2026-02-09 05:24:46.975064	65	t
+COPY public.egov_idgen_schema (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
+1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-07-10 10:44:04.917181	0	t
+2	20170614121459	DDL id generation create ddl	SQL	V20170614121459__DDL_id_generation_create_ddl.sql	-276506180	egov	2026-07-10 10:44:05.011728	16	t
+3	20170630130913	create collection seq ddl	SQL	V20170630130913__create_collection_seq_ddl.sql	584536344	egov	2026-07-10 10:44:05.107913	2	t
+4	20170713115259	create upicnum seq ddl	SQL	V20170713115259__create_upicnum_seq_ddl.sql	-226250147	egov	2026-07-10 10:44:05.12231	3	t
+5	20170731222759	create noticeno seq ddl	SQL	V20170731222759__create_noticeno_seq_ddl.sql	1729453706	egov	2026-07-10 10:44:05.137212	1	t
+6	20170816191759	create tl num seq ddl	SQL	V20170816191759__create_tl_num_seq_ddl.sql	-1703806072	egov	2026-07-10 10:44:05.149294	3	t
+7	20170817164130	create employee code number seq ddl	SQL	V20170817164130__create_employee_code_number_seq_ddl.sql	-196105635	egov	2026-07-10 10:44:05.16411	2	t
+8	20170826133659	create tl application num seq ddl	SQL	V20170826133659__create_tl_application_num_seq_ddl.sql	725879278	egov	2026-07-10 10:44:05.176155	1	t
+9	20171020231917	create swm transaction num seq ddl	SQL	V20171020231917__create_swm_transaction_num_seq_ddl.sql	-267295984	egov	2026-07-10 10:44:05.185514	1	t
+10	20171030111720	create lcms seq ddl	SQL	V20171030111720__create_lcms_seq_ddl.sql	-1131314050	egov	2026-07-10 10:44:05.195376	4	t
+11	20171031140120	create lcms seq voucher ddl	SQL	V20171031140120__create_lcms_seq_voucher_ddl.sql	-898624016	egov	2026-07-10 10:44:05.207811	2	t
+12	20171031155035	create lcms seq parawise comments	SQL	V20171031155035__create_lcms_seq_parawise_comments.sql	1312025724	egov	2026-07-10 10:44:05.218269	3	t
+13	20171103163310	create swm contract num seq ddl	SQL	V20171103163310__create_swm_contract_num_seq_ddl.sql	200369660	egov	2026-07-10 10:44:05.231684	3	t
+14	20171103163443	create swm vendor num seq ddl	SQL	V20171103163443__create_swm_vendor_num_seq_ddl.sql	-762706488	egov	2026-07-10 10:44:05.245037	1	t
+15	20171103164912	create swm contractor num seq ddl	SQL	V20171103164912__create_swm_contractor_num_seq_ddl.sql	-631302095	egov	2026-07-10 10:44:05.255582	2	t
+16	20171104162601	create swm vendor contract num seq ddl	SQL	V20171104162601__create_swm_vendor_contract_num_seq_ddl.sql	2110220476	egov	2026-07-10 10:44:05.265875	1	t
+17	20171108112621	create reference evidence seq ddl	SQL	V20171108112621__create_reference_evidence_seq_ddl.sql	-129584516	egov	2026-07-10 10:44:05.275762	2	t
+18	20171109001824	create swm vehicle schedule transaction num seq ddl	SQL	V20171109001824__create_swm_vehicle_schedule_transaction_num_seq_ddl.sql	-2021827066	egov	2026-07-10 10:44:05.289	1	t
+19	20171109145848	create swm supplier num seq ddl	SQL	V20171109145848__create_swm_supplier_num_seq_ddl.sql	583388728	egov	2026-07-10 10:44:05.298564	1	t
+20	20171110163419	create swm trip num seq ddl	SQL	V20171110163419__create_swm_trip_num_seq_ddl.sql	-1570619200	egov	2026-07-10 10:44:05.308565	1	t
+21	20171113174232	create swm vendor paymentdetails seq ddl	SQL	V20171113174232__create_swm_vendor_paymentdetails_seq_ddl.sql	762717103	egov	2026-07-10 10:44:05.316745	2	t
+22	20171113175600	create swm sanitationstaff target number seq ddl	SQL	V20171113175600__create_swm_sanitationstaff_target_number_seq_ddl.sql	265986491	egov	2026-07-10 10:44:05.326059	2	t
+23	20171113233008	create swm staff transaction number seq ddl	SQL	V20171113233008__create_swm_staff_transaction_number_seq_ddl.sql	2110317753	egov	2026-07-10 10:44:05.336019	2	t
+24	20171114104545	create personal details seq	SQL	V20171114104545__create_personal_details_seq.sql	-1866233071	egov	2026-07-10 10:44:05.345818	1	t
+25	20171114104620	create agency seq	SQL	V20171114104620__create_agency_seq.sql	-653967466	egov	2026-07-10 10:44:05.35577	2	t
+26	20171115210014	create event seq	SQL	V20171115210014__create_event_seq.sql	-1138671054	egov	2026-07-10 10:44:05.366963	1	t
+27	20171223074921	create egf bill default number format seq ddl	SQL	V20171223074921__create_egf_bill_default_number_format_seq_ddl.sql	1544476819	egov	2026-07-10 10:44:05.375634	1	t
+28	20180206121802	create swm vehicle maintenance repair transaction number ddl	SQL	V20180206121802__create_swm_vehicle_maintenance_repair_transaction_number_ddl.sql	513099893	egov	2026-07-10 10:44:05.384635	1	t
+29	20180207123336	create swm shift code ddl	SQL	V20180207123336__create_swm_shift_code_ddl.sql	1730375649	egov	2026-07-10 10:44:05.392305	1	t
+30	20180531123523	create propertytax ack ddl	SQL	V20180531123523__create_propertytax_ack_ddl.sql	102790456	egov	2026-07-10 10:44:05.399732	1	t
+31	20180607123336	create pg txn id ddl	SQL	V20180607123336__create_pg_txn_id_ddl.sql	936381812	egov	2026-07-10 10:44:05.409013	1	t
+32	20180709180520	create propertytax assess ddl	SQL	V20180709180520__create_propertytax_assess_ddl.sql	1893633814	egov	2026-07-10 10:44:05.417675	1	t
+33	20180920115635	create tl seq ddl	SQL	V20180920115635__create_tl_seq_ddl.sql	1504691701	egov	2026-07-10 10:44:05.426038	1	t
+34	20181030123635	DELETE DUPLICATES AND ALTER PRIMARYKEY ID GEN ddl	SQL	V20181030123635__DELETE_DUPLICATES_AND_ALTER_PRIMARYKEY_ID_GEN_ddl.sql	-2137616238	egov	2026-07-10 10:44:05.435499	8	t
+35	20190129174853	create hrms empcode ddl	SQL	V20190129174853__create_hrms_empcode_ddl.sql	-1425111802	egov	2026-07-10 10:44:05.453808	1	t
+36	20190520164710	UC SEQ ddl	SQL	V20190520164710__UC_SEQ_ddl.sql	1153445194	egov	2026-07-10 10:44:05.462061	1	t
 \.
 
 
 --
--- Data for Name: filestore_schema_version; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: egov_localization_schema; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
-COPY public.filestore_schema_version (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
-1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-02-09 05:24:48.602634	0	t
-2	20170420135841	egfilestore tenant ddl	SQL	V20170420135841__egfilestore_tenant_ddl.sql	882190174	egov	2026-02-09 05:24:48.784481	38	t
-3	20180319162241	eg filestore alter ddl	SQL	V20180319162241__eg_filestore_alter_ddl.sql	994763967	egov	2026-02-09 05:24:48.949942	5	t
-4	20181126143300	egfilestore filename dml	SQL	V20181126143300__egfilestore_filename_dml.sql	-798099361	egov	2026-02-09 05:24:49.007027	9	t
-5	20200712143311	egfilestore audit details	SQL	V20200712143311__egfilestore_audit_details.sql	749086971	egov	2026-02-09 05:24:49.049517	17	t
+COPY public.egov_localization_schema (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
+1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-07-10 10:44:12.313328	0	t
+2	20170502122717	localization create message	SQL	V20170502122717__localization_create_message.sql	-651873868	egov	2026-07-10 10:44:12.419373	30	t
+3	20170614170306	localization message alter add module	SQL	V20170614170306__localization_message_alter_add_module.sql	-1138292234	egov	2026-07-10 10:44:12.505649	7	t
+4	20170625193803	add audit columns to message table	SQL	V20170625193803__add_audit_columns_to_message_table.sql	424158717	egov	2026-07-10 10:44:12.527457	3	t
+5	20181218164449	alter msg alter id column ddl	SQL	V20181218164449__alter_msg_alter_id_column_ddl.sql	-1867784919	egov	2026-07-10 10:44:12.545569	25	t
 \.
 
 
 --
--- Data for Name: hrms_schema_version; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: egov_otp_schema; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
-COPY public.hrms_schema_version (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
-1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-02-09 05:25:17.779033	0	t
-2	20190122152236	create hrms employee table ddl	SQL	V20190122152236__create_hrms_employee_table_ddl.sql	-1554243231	egov	2026-02-09 05:25:17.832158	55	t
-3	20190130120650	alter assgnmt add currentassgmt ddl	SQL	V20190130120650__alter_assgnmt_add_currentassgmt_ddl.sql	-1748589821	egov	2026-02-09 05:25:17.915952	3	t
-4	20190204154948	create position sequence ddl	SQL	V20190204154948__create_position_sequence_ddl.sql	1748624915	egov	2026-02-09 05:25:17.928502	2	t
-5	20190204163735	alter deactivation rename remarks ddl	SQL	V20190204163735__alter_deactivation_rename_remarks_ddl.sql	447036466	egov	2026-02-09 05:25:17.939616	3	t
-6	20190204172710	secondary indexes ddl	SQL	V20190204172710__secondary_indexes_ddl.sql	1918652612	egov	2026-02-09 05:25:17.953533	10	t
-7	20190215120811	alter uk constraint dml	SQL	V20190215120811__alter_uk_constraint_dml.sql	-83927431	egov	2026-02-09 05:25:17.973588	9	t
-8	20190219163221	alter remove phone name clm dml	SQL	V20190219163221__alter_remove_phone_name_clm_dml.sql	541612396	egov	2026-02-09 05:25:17.994063	4	t
-9	20190301154105	alter add isactive ddl	SQL	V20190301154105__alter_add_isactive_ddl.sql	1284528784	egov	2026-02-09 05:25:18.009579	4	t
-10	20201005230836	eg hrms employee index ddl	SQL	V20201005230836__eg_hrms_employee_index_ddl.sql	508211693	egov	2026-02-09 05:25:18.023397	4	t
-11	20201223230836	eg hrms employee reactivation details index ddl	SQL	V20201223230836__eg_hrms_employee_reactivation_details_index_ddl.sql	-839388452	egov	2026-02-09 05:25:18.035858	8	t
-12	20201228172710	reactivation indexes ddl	SQL	V20201228172710__reactivation_indexes_ddl.sql	-1000031729	egov	2026-02-09 05:25:18.056141	6	t
+COPY public.egov_otp_schema (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
+1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-07-10 10:44:33.064253	0	t
+2	20170303153029	otp create token table	SQL	V20170303153029__otp_create_token_table.sql	-1720445245	egov	2026-07-10 10:44:33.163858	25	t
+3	20170921000000	otp alter token table	SQL	V20170921000000__otp_alter_token_table.sql	385472944	egov	2026-07-10 10:44:33.266857	3	t
 \.
 
 
 --
--- Data for Name: id_generator; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: egov_user_schema; Type: TABLE DATA; Schema: public; Owner: egov
+--
+
+COPY public.egov_user_schema (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
+1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-07-10 10:43:55.175837	0	t
+2	20170223150524	create eg user table	SQL	V20170223150524__create_eg_user_table.sql	-473117120	egov	2026-07-10 10:43:55.28074	20	t
+3	20170223151046	create eg address table	SQL	V20170223151046__create_eg_address_table.sql	-773357059	egov	2026-07-10 10:43:55.369435	19	t
+4	20170223151145	create eg role table	SQL	V20170223151145__create_eg_role_table.sql	-1566976242	egov	2026-07-10 10:43:55.401246	14	t
+5	20170223151229	create eg user role table	SQL	V20170223151229__create_eg_user_role_table.sql	-1457999063	egov	2026-07-10 10:43:55.432387	3	t
+6	20170223151230	eg user drop FK PK recreate	SQL	V20170223151230__eg_user_drop_FK_PK_recreate.sql	-1065901777	egov	2026-07-10 10:43:55.446955	13	t
+7	20170404154844	create role sequence	SQL	V20170404154844__create_role_sequence.sql	-674780019	egov	2026-07-10 10:43:55.474404	1	t
+8	20170417165545	create unique username tenant constraint	SQL	V20170417165545__create_unique_username_tenant_constraint.sql	-1047782019	egov	2026-07-10 10:43:55.4837	6	t
+9	20170417165956	create unique role code tenant constraint	SQL	V20170417165956__create_unique_role_code_tenant_constraint.sql	792682044	egov	2026-07-10 10:43:55.499215	6	t
+10	20170423025220	alter table eg user to increase signature length	SQL	V20170423025220__alter_table_eg_user_to_increase_signature_length.sql	725199194	egov	2026-07-10 10:43:55.514392	1	t
+11	20170423025221	alter table eg user to reset signature length	SQL	V20170423025221__alter_table_eg_user_to_reset_signature_length.sql	-2104479543	egov	2026-07-10 10:43:55.524523	30	t
+12	20170428175632	recreate user address table	SQL	V20170428175632__recreate_user_address_table.sql	408456665	egov	2026-07-10 10:43:55.563917	23	t
+13	20170509172805	recreate role and user role table with tenantid	SQL	V20170509172805__recreate_role_and_user_role_table_with_tenantid.sql	1202567563	egov	2026-07-10 10:43:55.595655	17	t
+14	20170516145558	alter userrole add lastmodifieddate	SQL	V20170516145558__alter_userrole_add_lastmodifieddate.sql	-30454711	egov	2026-07-10 10:43:55.6233	2	t
+15	20170823203553	dropping not null for mobilenumber in eg user	SQL	V20170823203553__dropping_not_null_for_mobilenumber_in_eg_user.sql	1587712007	egov	2026-07-10 10:43:55.634627	1	t
+16	20180313150524	added uuid user table	SQL	V20180313150524__added_uuid_user_table.sql	-1031804668	egov	2026-07-10 10:43:55.642766	1	t
+17	20180725165212	alter eg role name	SQL	V20180725165212__alter_eg_role_name.sql	682532180	egov	2026-07-10 10:43:55.650837	5	t
+18	20180731215512	alter eg role address fk	SQL	V20180731215512__alter_eg_role_address_fk.sql	1212019426	egov	2026-07-10 10:43:55.668514	7	t
+19	20181108160312	create indices eg user role	SQL	V20181108160312__create_indices_eg_user_role.sql	93267122	egov	2026-07-10 10:43:55.684368	27	t
+20	20190204144112	create eg userrole v1	SQL	V20190204144112__create_eg_userrole_v1.sql	1977171559	egov	2026-07-10 10:43:55.719315	6	t
+21	20190222121612	create eg user failed login attempts	SQL	V20190222121612__create_eg_user_failed_login_attempts.sql	-1392078543	egov	2026-07-10 10:43:55.733471	9	t
+22	20190313165702	alter eg user address extend	SQL	V20190313165702__alter_eg_user_address_extend.sql	-1928243385	egov	2026-07-10 10:43:55.750647	3	t
+23	20190402123143	create indices eg user eg userrole v1 	SQL	V20190402123143__create_indices_eg_user_eg_userrole_v1 .sql	-1249412585	egov	2026-07-10 10:43:55.762299	23	t
+24	20210908231720	alter table eg user alternate number	SQL	V20210908231720__alter_table_eg_user_alternate_number.sql	1743363820	egov	2026-07-10 10:43:55.794548	1	t
+25	20211029155746	create table user audit	SQL	V20211029155746__create_table_user_audit.sql	-894464608	egov	2026-07-10 10:43:55.801975	5	t
+26	20211029171730	modified auditby	SQL	V20211029171730__modified_auditby.sql	-672564999	egov	2026-07-10 10:43:55.815311	6	t
+27	20211029175430	modified username audit	SQL	V20211029175430__modified_username_audit.sql	-1616300745	egov	2026-07-10 10:43:55.82878	7	t
+\.
+
+
+--
+-- Data for Name: egov_workflow_v2_schema; Type: TABLE DATA; Schema: public; Owner: egov
+--
+
+COPY public.egov_workflow_v2_schema (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
+1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-07-10 10:44:42.078089	0	t
+2	20181204120036	wf create ddl	SQL	V20181204120036__wf_create_ddl.sql	-943671309	egov	2026-07-10 10:44:42.189763	76	t
+3	20181226133033	wf alter table ddl	SQL	V20181226133033__wf_alter_table_ddl.sql	-1846206951	egov	2026-07-10 10:44:42.347753	3	t
+4	20190117125333	wf state action alter table ddl	SQL	V20190117125333__wf_state_action_alter_table_ddl.sql	-1913967942	egov	2026-07-10 10:44:42.363411	22	t
+5	20190322143035	wf add seq ddl	SQL	V20190322143035__wf_add_seq_ddl.sql	327804453	egov	2026-07-10 10:44:42.40017	2	t
+6	20190411170435	wf add isStateUpdatable ddl	SQL	V20190411170435__wf_add_isStateUpdatable_ddl.sql	457550658	egov	2026-07-10 10:44:42.411309	2	t
+7	20191211105434	wf modified assignee ddl	SQL	V20191211105434__wf_modified_assignee_ddl.sql	1176859445	egov	2026-07-10 10:44:42.422753	3	t
+8	20200925153931	wf missing index ddl	SQL	V20200925153931__wf_missing_index_ddl.sql	1207664085	egov	2026-07-10 10:44:42.435793	5	t
+9	20201030131738	wf comment size ddl	SQL	V20201030131738__wf_comment_size_ddl.sql	-1475905560	egov	2026-07-10 10:44:42.448266	5	t
+10	20210111134335	wf added assignee idx ddl	SQL	V20210111134335__wf_added_assignee_idx_ddl.sql	-2022994724	egov	2026-07-10 10:44:42.460788	4	t
+11	20210203112523	wf alter table ddl	SQL	V20210203112523__wf_alter_table_ddl.sql	366659182	egov	2026-07-10 10:44:42.471744	2	t
+12	20210423102936	wf alter table active ddl	SQL	V20210423102936__wf_alter_table_active_ddl.sql	-1560113142	egov	2026-07-10 10:44:42.482939	2	t
+13	20210817103463	wf alter table escalated ddl	SQL	V20210817103463__wf_alter_table_escalated_ddl.sql	2103718292	egov	2026-07-10 10:44:42.493279	1	t
+\.
+
+
+--
+-- Data for Name: id_generator; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.id_generator (id, idname, tenantid, format, sequencenumber) FROM stdin;
@@ -20732,18 +21018,18 @@ COPY public.id_generator (id, idname, tenantid, format, sequencenumber) FROM std
 
 
 --
--- Data for Name: mdms_schema_version; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: mdms_v2_schema; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
-COPY public.mdms_schema_version (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
-1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-02-09 05:24:20.751674	0	t
-2	20230531114515	schema definition ddl	SQL	V20230531114515__schema_definition_ddl.sql	-2105460030	egov	2026-02-09 05:24:20.821189	11	t
-3	20230531144020	mdms data create ddl	SQL	V20230531144020__mdms_data_create_ddl.sql	-1027512135	egov	2026-02-09 05:24:20.865694	9	t
+COPY public.mdms_v2_schema (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
+1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-07-10 10:43:57.958088	0	t
+2	20230531114515	schema definition ddl	SQL	V20230531114515__schema_definition_ddl.sql	-2105460030	egov	2026-07-10 10:43:58.061052	14	t
+3	20230531144020	mdms data create ddl	SQL	V20230531144020__mdms_data_create_ddl.sql	-1027512135	egov	2026-07-10 10:43:58.164044	13	t
 \.
 
 
 --
--- Data for Name: message; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: message; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.message (id, locale, code, message, tenantid, module, createdby, createddate, lastmodifiedby, lastmodifieddate) FROM stdin;
@@ -21108,6 +21394,7 @@ d76885cc-a1be-451b-a071-5815932a25bc	en_IN	TRADELICENSE_DOCUMENTOBJ_DOCUMENTTYPE
 defe0c3a-8d09-4b1b-b825-0d4f73f926fb	en_IN	TRADELICENSE_DOCUMENTOBJ_REQUIRED	required	ciregtest	rainmaker-workbench	1	2026-05-13 06:54:24.783	\N	\N
 1eea2b50-a6aa-415b-b832-159d76240023	en_IN	TRADELICENSE_DOCUMENTOBJ_TRADETYPE	tradeType	ciregtest	rainmaker-workbench	1	2026-05-13 06:54:24.783	\N	\N
 8ceaced0-9ebf-4f13-90a8-ee1a79928c69	en_IN	TRADELICENSE_DOCUMENTS_ACTIVE	active	ciregtest	rainmaker-workbench	1	2026-05-13 06:54:24.783	\N	\N
+627708e1-31d8-46c3-8ae5-b17de0015701	default	COMMON_MASTERS_UOM_CODE	Code	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
 7106730b-a89e-421e-b739-37919a6964d6	hi_IN	EGOV_HRMS_EMPLOYEESTATUS_RETIRED	सेवानिवृत	statea	rainmaker-hr	128	2026-02-09 05:27:46.356	128	2026-05-13 07:03:50.583
 3bbd668c-9c6e-4827-b41b-4368d151d4c8	hi_IN	EGOV_HRMS_EMPLOYEESTATUS_SUSPENDED	बर्खास्त	statea	rainmaker-hr	128	2026-02-09 05:27:46.356	128	2026-05-13 07:03:50.583
 df17cc64-7a69-4007-96a1-df36fce856f3	hi_IN	EGOV_HRMS_EMPLOYEESTATUS_TERMINATED	समाप्त	statea	rainmaker-hr	128	2026-02-09 05:27:46.356	128	2026-05-13 07:03:50.583
@@ -21282,6 +21569,7 @@ b9d92149-b0f9-42b6-918d-2135e3774532	hi_IN	revenue.locality.SUN62	एकता �
 899d1665-8153-45ef-b2b7-e32bd4625b75	hi_IN	revenue.locality.SUN84	गुरुद्वारा न्याय साहिब सड़क 1	statea	rainmaker-pgr	128	2026-02-09 05:27:48.225	\N	\N
 76f16ead-2d48-4a32-b26b-56c6b4ae05ea	hi_IN	2 Star or below	2 स्टार या नीचे	statea	rainmaker-common	128	2026-02-09 05:27:48.225	\N	\N
 562b7bb8-23d4-4ad5-a9c0-e4e1354f37c6	hi_IN	3 Star and Above	3 स्टार और ऊपर	statea	rainmaker-common	128	2026-02-09 05:27:48.225	\N	\N
+fa661665-2e0e-4059-aba8-dadbcb4d045b	default	CS_VILLAGE_NAME	Village Name	statea	rainmaker-common	128	2026-02-09 05:27:50.614	128	2026-05-13 07:03:51.85
 a438a7ad-fcb5-48b9-97a4-f6010b6d0e14	hi_IN	ABG_ABG_GENERATE_NEW_BILL	नया बिल जनरेट करें	statea	rainmaker-common	128	2026-02-09 05:27:48.225	\N	\N
 15f3a1a7-fad9-438d-ae21-39f964f6a79e	hi_IN	ABG_ABG_PAY	भुगतन करे	statea	rainmaker-common	128	2026-02-09 05:27:48.225	\N	\N
 91c7a40f-4af5-4524-9c04-f51372891f1c	hi_IN	ABG_COMMON_TABLE_COL_ACTION	कार्यवाही	statea	rainmaker-common	128	2026-02-09 05:27:48.225	\N	\N
@@ -21941,6 +22229,8 @@ e23da2ec-f098-4e70-957d-34833000e85f	en_IN	ERR_HRMS_INVALID_BOUNDARY_TYPE_HEIRAR
 e0e3bf87-a411-4351-a271-695b97552e08	en_IN	ERR_HRMS_INVALID_DATE_OF_APPOINTMENT	Invalid employee date of appointment entered by the user.	statea	rainmaker-hr	128	2026-02-09 05:27:52.28	\N	\N
 88d134a9-7ec0-47fb-9fa8-9a097261ca4f	default	EGOV_HRMS_EMPLOYEESTATUS_EMPLOYED	EMPLOYED	statea	rainmaker-hr	128	2026-02-09 05:27:46.33	128	2026-05-13 07:03:50.463
 50b726db-c946-4987-b057-cdb7e1113feb	default	EGOV_HRMS_EMPLOYEESTATUS_RESIGNED	RESIGNED	statea	rainmaker-hr	128	2026-02-09 05:27:46.33	128	2026-05-13 07:03:50.463
+11ef8365-1a32-4716-80bb-54fb9bdcc981	default	HR_ASMT_TO_DATE_PLACEHOLDER	Assigned To Date	statea	rainmaker-hr	128	2026-02-09 05:27:46.695	128	2026-05-13 07:03:50.51
+5b92404d-6465-4730-93b4-508be68f4fea	default	HR_ASSIGN_DET_HEADER	Assignment Details	statea	rainmaker-hr	128	2026-02-09 05:27:46.695	128	2026-05-13 07:03:50.51
 6b3a10a0-ed51-4032-b9e2-585192098d59	hi_IN	pgr.sms.notification.reopen.employee	श्री {emp_name}  {complaint_type} की शिकायत आईडी {id} के साथ नागरिक द्वारा फिर से खोल दी गयी है। इसकी नियुक्त अधिकारी द्वारा समीक्षा की जा रही है - {ulb}\n\nEGOVS	statea	rainmaker-pgr	128	2026-02-09 05:27:47.968	128	2026-05-13 07:03:51.117
 e1173790-e56e-4eb7-80f1-3a937c7d48ae	default	EGOV_HRMS_EMPLOYEESTATUS_RETIRED	RETIRED	statea	rainmaker-hr	128	2026-02-09 05:27:46.33	128	2026-05-13 07:03:50.463
 e2f1b781-9f49-423a-b90d-b192b5ef4883	default	EGOV_HRMS_EMPLOYEESTATUS_SUSPENDED	SUSPENDED	statea	rainmaker-hr	128	2026-02-09 05:27:46.33	128	2026-05-13 07:03:50.463
@@ -22448,8 +22738,6 @@ fa0d8975-c699-40a9-a100-5eec9c761fcc	default	HR_APPROVAL_UPLOAD_HEAD	Supporting 
 8b70e733-f40d-439d-a296-8b30e72b7563	default	HR_ASMT_FROM_DATE_PLACEHOLDER	Assigned From Date	statea	rainmaker-hr	128	2026-02-09 05:27:46.695	128	2026-05-13 07:03:50.51
 10a8f76f-5cf0-43c9-8df7-2cedaeb59f8a	default	HR_ASMT_TO_DATE_LABEL	Assigned To Date	statea	rainmaker-hr	128	2026-02-09 05:27:46.695	128	2026-05-13 07:03:50.51
 e5861dea-5497-439e-b992-b832d345dcf9	default	HR_ASMT_TO_DATE_LABEL_PLACEHOLDER	Assigned To Date	statea	rainmaker-hr	128	2026-02-09 05:27:46.695	128	2026-05-13 07:03:50.51
-11ef8365-1a32-4716-80bb-54fb9bdcc981	default	HR_ASMT_TO_DATE_PLACEHOLDER	Assigned To Date	statea	rainmaker-hr	128	2026-02-09 05:27:46.695	128	2026-05-13 07:03:50.51
-5b92404d-6465-4730-93b4-508be68f4fea	default	HR_ASSIGN_DET_HEADER	Assignment Details	statea	rainmaker-hr	128	2026-02-09 05:27:46.695	128	2026-05-13 07:03:50.51
 9ba51d35-49f6-4841-839f-b83294f5422c	default	HR_ASSIGN_DET_SUB_HEADER	Verify entered details before submission. Assignment details cannot be edited once submitted.	statea	rainmaker-hr	128	2026-02-09 05:27:46.695	128	2026-05-13 07:03:50.51
 01b0c2b9-4a9f-4e48-95d2-53638646da21	default	HR_ASSIGNMENT	Assignment	statea	rainmaker-hr	128	2026-02-09 05:27:46.695	128	2026-05-13 07:03:50.51
 1eb649da-34d5-490a-91cf-6d09799b4f01	default	HR_BIRTH_DATE_LABEL	Date of Birth	statea	rainmaker-hr	128	2026-02-09 05:27:46.695	128	2026-05-13 07:03:50.51
@@ -22757,6 +23045,7 @@ dc57d6a3-c3de-4d3b-86d8-5a59559751d0	hi_IN	ACCESSCONTROL_ROLES_ROLES_SW_DOC_VERI
 d043595d-2de7-470d-af63-01df27df594d	hi_IN	ACCESSCONTROL_ROLES_ROLES_WS_FIELD_INSPECTOR	जल और सीवरेज फील्ड इंस्पेक्टर	statea	rainmaker-hr	128	2026-02-09 05:27:46.355	128	2026-05-13 07:03:50.583
 97fbc561-ebf4-4cfa-97d5-ada627b48ae3	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_BODY	body	ke.nairobi	rainmaker-workbench	1	2026-05-13 07:55:06.259	\N	\N
 2760d1c2-e485-4c36-b2dc-75e48f6e329b	hi_IN	ACTION_TEST_EMPLOYEE_REPORT	कर्मचारी की रिपोर्ट	statea	rainmaker-hr	128	2026-02-09 05:27:46.355	128	2026-05-13 07:03:50.583
+5bd9240c-8561-4961-b80f-34b1bf986716	hi_IN	SERVICEDEFS.DAMAGED	क्षतिग्रस्त	statea	rainmaker-pgr	128	2026-02-09 05:27:47.561	128	2026-05-13 07:03:50.98
 5a596c38-8b8e-402a-bab3-31577c603613	hi_IN	reports.common.CollectionRegister.transactions	ट्रांज़ैक्शन की संख्या	statea	rainmaker-common	128	2026-02-09 05:28:01.343	\N	\N
 08d9d2db-8180-427d-91b6-4465e45a488c	hi_IN	reports.common.CollectionRegister.ulb	निकाय	statea	rainmaker-common	128	2026-02-09 05:28:01.343	\N	\N
 6f0480ec-22eb-427b-a0c6-cecb5676c647	hi_IN	reports.hrms.status	कार्यरत	statea	rainmaker-common	128	2026-02-09 05:28:01.343	\N	\N
@@ -23200,6 +23489,7 @@ a866bc18-18ce-4204-a232-1d461f0337d8	default	CCF_DATA_COLLECTION_SHARING_INFO_LA
 fe1cc8d2-310c-426b-b810-1e9d1a90c769	default	CCF_I_AGREE_THE_DIGITS_	I agree to the DIGIT's	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
 77665d5a-72e0-4f7c-831c-4d7454d7b72d	default	CCF_POLICY_BE_CHANGED_INFO_LABEL	Yes, this policy is subject to change at any time and without active notice. This page will be updated with any such modified policy, and such changes will not be deemed to take effect until and unless they are shown on this page.	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
 58919ede-33ae-4420-8dbc-d8aa43dfe89b	default	CCF_POLICY_BE_CHANGED_LABEL	CAN THIS POLICY BE CHANGED?	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
+59c6e663-73aa-4caf-b26f-384baf2515df	hi_IN	COMMON_MASTERS_DEPARTMENT_DEPT_35	वर्क्स शाखा	statea	rainmaker-common	128	2026-02-09 05:27:49.353	128	2026-05-13 07:03:51.713
 5808e266-a933-4efc-b599-02a8ad3cd9ca	default	CCF_PP_ADHERENCE_TO_DATA_INFO_LABEL	We adhere to the principles of accountability, transparency, purposeful and proportional collection, usage, storage and disclosure of personally identifiable information (“PII”).	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
 b7871d43-4c00-44a0-a7fd-63dbc9e6da21	default	CCF_PP_ADHERENCE_TO_DATA_LABEL	ADHERENCE TO DATA PRIVACY PRINCIPLES	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
 f506e013-c8f4-4536-99cc-a58d56dd2a10	default	CCF_PP_CAN_THIS_POLICY_CHANGED_INFO_LABEL	Yes, this policy is subject to change at any time and without active notice. This page will be updated with any such modified policy, and such changes will not be deemed to take effect until and unless they are shown on this page.	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
@@ -23249,6 +23539,7 @@ c6b38080-0f19-4a0a-8de2-048897ea7529	default	CCF_PRIVACY_PLOICY_DESCRIBES_LABEL	
 a6d491af-e775-4735-af0c-657775ecbd5f	default	CCF_PRIVACYPOLICY_HEADER	Privacy Policy	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
 ba516697-e098-4e3b-b641-43cd8e8c2042	default	CCF_PROCESS_DISCLOSE_SHARE_CONDUCTING_LABEL	Conducting research or analysing of the user preferences and demographics as statistical-masked data and not as individual data.	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
 3735baac-8f7f-418e-b358-b5afb38b957d	default	CCF_PROCESS_DISCLOSE_SHARE_DETECTING_LABEL	Detecting, investigating and preventing activities that may violate our policies or that may be illegal or unlawful.	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
+c9f5904c-f054-4568-a5d0-8006f63b30f5	hi_IN	SERVICEDEFS.DIRTYORSMELLYPUBLICTOILETS	गंदा या बदबूदार सार्वजनिक शौचालय	statea	rainmaker-pgr	128	2026-02-09 05:27:47.703	128	2026-05-13 07:03:51.026
 49ec48a3-7c9d-41f7-9738-7ed76171153e	default	CCF_PROCESS_DISCLOSE_SHARE_EMPLOYEES_LABEL	We may disclose or share this data to/with employees and/or contractors of the urban local body, state government, or other government agencies, service providers, whose role requires them to view or use this information in order to perform their official duties, including providing you the service(s) you are requesting. 	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
 af550ea3-76f2-446d-88d8-daaefe355876	default	CCF_PROCESS_DISCLOSE_SHARE_INFO_LABEL	We use this data to serve you with the best civic experience, such as providing digital grievance redressal systems, efficient service delivery, creating dashboards of ULB activities, etc. Data is only processed on the basis of a legal mandate and for a legitimate and necessary purpose (to deliver to you the services you are requesting, and to make improvements in service delivery and administration, as well as any other purposes specified by law).	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
 85d5810d-0707-4e51-9b03-5ccc74944416	default	CCF_PROCESS_DISCLOSE_SHARE_LABEL	WHY AND HOW DO WE PROCESS, DISCLOSE, AND/OR SHARE THIS DATA?	statea	rainmaker-common	128	2026-02-09 05:27:48.769	128	2026-05-13 07:03:51.297
@@ -24048,8 +24339,6 @@ b85903bf-1ec4-4662-a54b-7dcc6ad24377	en_IN	SCHEMA_TRADELICENSE_REMINDERPERIODS	R
 85c5d4b3-3759-4c34-ae74-dd95455a1154	en_IN	SCHEMA_TRADELICENSE_TRADETYPE	TradeType	cids59125	rainmaker-workbench	1	2026-05-13 08:00:31.799	\N	\N
 4acf27ac-57f5-421a-a73c-19484b7fc80e	en_IN	SERVICEDEFS_TABBROKEN	tab broken	cids59125	rainmaker-pgr	1	2026-05-13 08:00:31.799	\N	\N
 32dccc4b-f19b-4cdb-83f3-d7752ebd8771	en_IN	SERVICEDEFS_TABBROKEN.DEPT_36	tab broken	cids59125	rainmaker-pgr	1	2026-05-13 08:00:31.799	\N	\N
-5bd9240c-8561-4961-b80f-34b1bf986716	hi_IN	SERVICEDEFS.DAMAGED	क्षतिग्रस्त	statea	rainmaker-pgr	128	2026-02-09 05:27:47.561	128	2026-05-13 07:03:50.98
-c9f5904c-f054-4568-a5d0-8006f63b30f5	hi_IN	SERVICEDEFS.DIRTYORSMELLYPUBLICTOILETS	गंदा या बदबूदार सार्वजनिक शौचालय	statea	rainmaker-pgr	128	2026-02-09 05:27:47.703	128	2026-05-13 07:03:51.026
 850f46ab-3801-4d1f-8ccd-b5ca6fbaa210	hi_IN	SERVICEDEFS.DIRTYWATERSUPPLY	गंदे पानी की आपूर्ति	statea	rainmaker-pgr	128	2026-02-09 05:27:47.703	128	2026-05-13 07:03:51.026
 2b8ec841-7d83-41bd-ae4d-83ab7e4461a1	hi_IN	SERVICEDEFS.DRAINS	नालियां	statea	rainmaker-pgr	128	2026-02-09 05:27:47.703	128	2026-05-13 07:03:51.026
 9aa313ea-ebbe-4bba-9d67-fa3d99dcda31	hi_IN	SERVICEDEFS.DUMPING	ढेर लगाना	statea	rainmaker-pgr	128	2026-02-09 05:27:47.703	128	2026-05-13 07:03:51.026
@@ -25882,6 +26171,7 @@ e665ac21-a10b-4bca-8360-f4bf29b35d93	hi_IN	CITIZEN_SUCCESS_ADVT_HOARDINGS_PAYMEN
 57dee99c-810a-4687-8000-b0acc99fdf9e	hi_IN	CITIZEN_SUCCESS_ADVT_HOARDINGS_PAYMENT_RECEIPT_NO	रसीद नंबर	statea	rainmaker-common	128	2026-02-09 05:27:49.037	128	2026-05-13 07:03:51.583
 719ceb0a-2883-46fc-aeb4-d654637a251f	hi_IN	CITIZEN_SUCCESS_ADVT_LIGHT_WALA_BOARD_PAYMENT_MESSAGE	भुगतान सफ़लतापूर्वक प्राप्त किया गया	statea	rainmaker-common	128	2026-02-09 05:27:49.037	128	2026-05-13 07:03:51.583
 e8083852-23ed-44f1-a7fd-936a1df23074	hi_IN	CITIZEN_SUCCESS_BPA_NC_APP_FEE_PAYMENT_MESSAGE_DETAIL	भुगतान के सम्बन्ध में सूचना उपयोगकर्ता / मालिक के पंजीकृत मोबाइल नंबर पर भेज दी गयी है	statea	rainmaker-common	128	2026-02-09 05:27:49.211	128	2026-05-13 07:03:51.646
+44a1ff82-7df0-4885-8112-2c9896588b4d	hi_IN	COMMON_MASTERS_DEPARTMENT_DEPT_36	जीआईएस शाखा	statea	rainmaker-common	128	2026-02-09 05:27:49.353	128	2026-05-13 07:03:51.713
 6b595737-13fa-44d2-8d8d-f1c5b75c7b8c	hi_IN	CITIZEN_SUCCESS_BPA_NC_APP_FEE_PAYMENT_RECEIPT_NO	भुगतान रसीद नंबर	statea	rainmaker-common	128	2026-02-09 05:27:49.211	128	2026-05-13 07:03:51.646
 b42ee6bb-2259-42f3-98dc-80bdca7a6f11	hi_IN	CITIZEN_SUCCESS_BPA_NC_OC_APP_FEE_PAYMENT_MESSAGE	राशि का सफलतापूर्वक भुगतान किया गया	statea	rainmaker-common	128	2026-02-09 05:27:49.211	128	2026-05-13 07:03:51.646
 d995c93d-1caa-4a07-9917-28fe10b1f868	hi_IN	CITIZEN_SUCCESS_DEFALUT_PAYMENT_MESSAGE_DETAIL	भुगतान के संबंध में एक अधिसूचना आवेदक के मोबाइल नंबर पर भेज दी गई है।	statea	rainmaker-common	128	2026-02-09 05:27:49.211	128	2026-05-13 07:03:51.646
@@ -27121,8 +27411,6 @@ e70be03c-d462-4601-b26b-4b8065a998d6	hi_IN	COMMON_MASTERS_DESIGNATION_CLERK	क�
 7f5c0c0e-db49-4cd7-abd3-eb4f9347bb2c	hi_IN	COMMON_MASTERS_DEPARTMENT_DEPT_32	भूमि शाखा	statea	rainmaker-common	128	2026-02-09 05:27:49.353	128	2026-05-13 07:03:51.713
 0324855a-daff-4f12-84c1-483280ec15da	hi_IN	COMMON_MASTERS_DEPARTMENT_DEPT_33	संपत्ति कर शाखा	statea	rainmaker-common	128	2026-02-09 05:27:49.353	128	2026-05-13 07:03:51.713
 e8aa31c8-1136-4a7f-9cd9-49e480b408cb	hi_IN	COMMON_MASTERS_DEPARTMENT_DEPT_34	स्थापना शाखा	statea	rainmaker-common	128	2026-02-09 05:27:49.353	128	2026-05-13 07:03:51.713
-59c6e663-73aa-4caf-b26f-384baf2515df	hi_IN	COMMON_MASTERS_DEPARTMENT_DEPT_35	वर्क्स शाखा	statea	rainmaker-common	128	2026-02-09 05:27:49.353	128	2026-05-13 07:03:51.713
-44a1ff82-7df0-4885-8112-2c9896588b4d	hi_IN	COMMON_MASTERS_DEPARTMENT_DEPT_36	जीआईएस शाखा	statea	rainmaker-common	128	2026-02-09 05:27:49.353	128	2026-05-13 07:03:51.713
 52f38ac3-c139-4df9-98fe-aca6fc0aad17	hi_IN	COMMON_MASTERS_DEPARTMENT_DEPT_37	विद्युत शाखा	statea	rainmaker-common	128	2026-02-09 05:27:49.353	128	2026-05-13 07:03:51.713
 0f9ca609-e2b7-4dab-9049-bbd0f0f34af4	hi_IN	COMMON_MASTERS_DEPARTMENT_DEPT_38	जनरल शाखा	statea	rainmaker-common	128	2026-02-09 05:27:49.353	128	2026-05-13 07:03:51.713
 0c71f00a-b90c-4f6c-927d-65a02ae2c81c	en_IN	TENANT_TENANTS_PG_CIEMP59246	pg.ciemp59246	pg	rainmaker-common	1	2026-05-13 08:00:47.098	\N	\N
@@ -28144,6 +28432,7 @@ cdafc6f7-f18b-4f61-86c3-fd623438cdf9	en_IN	PG_BRHMAPUR_REVENUE_VIL37	Gola Raghun
 afac1bd6-b860-4051-a507-09486c14a306	en_IN	PG_BRHMAPUR_REVENUE_VIL38	Ananda Nagar. Canal Street, Sramika Nagar, Duduman Colony, Kasi Nagar, Mhurikalua Street, Panigrahi Nagar, Gayatri Nagar, digapahani Road. 1St GateBurma Colone, Kathamentu road, Aska Road Near 1St Gate. Ambica nagar, Laxminarasing Street, Haridakhandi road.	statea.g	rainmaker-common	4	2026-02-09 05:29:48.614	\N	\N
 7e8881e3-c0e9-41da-a03a-a4b30f065d06	en_IN	PG_BRHMAPUR_REVENUE_VIL39	Raghupati Nagar, aska road, Dhobandha Huda, Gurumurtipeta, Narayan Nagar, Cement Road Street, Chaitany Nagar, Ganapati Nagar, Khandiakumuti Sahi, Aska Road, Kansari Street, New Kalupatra Street.	statea.g	rainmaker-common	4	2026-02-09 05:29:48.614	\N	\N
 45bdd2c6-60c3-422a-b455-249d469fc1af	en_IN	PG_BRHMAPUR_REVENUE_VIL40	Forest Colony, New Raja Street, Sri Ramanagar (all area), Ratha Street, Adarsh Marg, Dashagharia Street, Pandara Bada Street, Brajaraj Nagar, Anandanagar, Nelia Bandha, Harsh Vihar.	statea.g	rainmaker-common	4	2026-02-09 05:29:48.614	\N	\N
+f75b2ed4-7c34-4c75-9e5b-6da9904f9a3c	default	COMMON_MASTERS_UOMCATEGORY_TENANTID	Tenantid	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
 2e222e9e-cba2-4dfd-acc1-8bdbc19d3fcf	en_IN	PG_BRHMAPUR_REVENUE_VIL41	Samanath Nagar All area, Aska road Main Road in front of Chatrubhuja Petrol Pump, Niladri Vihar (all area), Trinath Nagar, Tulasi Nagar (all area). Suraj Vihar, Subham Bihar, Bishnu Nagar, Aska Road	statea.g	rainmaker-common	4	2026-02-09 05:29:48.614	\N	\N
 fe8bacb2-fb46-4c9e-8dab-e7b050cdc4aa	en_IN	PG_BRHMAPUR_REVENUE_VIL42	Rampa Street, Padma Nagar, Brudabati Nagar, Gate Bazar, Bank Colony, Bhabani Nagar, Burma Nagar, Banka Bihari Nagar, Radhakrushna Billa Street, Mukteswar Billa Street	statea.g	rainmaker-common	4	2026-02-09 05:29:48.614	\N	\N
 2e6306bc-af14-407b-b9e8-42e5744033b4	en_IN	PG_BRHMAPUR_REVENUE_VIL43	Baria Billo Street, Padma nagar, Sarojini Peta, Balaki Peta, Govardhana Peta, dera Street, Sandha Mahanti Street, Aska Road, (South Side) Gramadevati Street, Police Colony, Taluka Police Colony, Kalupatra Sahi, Adua Street, Kedarswar Peta, Trimurty Jaganath Temple Street, Sankarpur Street, Sitaram Street, Jena Street, Pandara Street, Panigrahipentha Street, Aska Road.	statea.g	rainmaker-common	4	2026-02-09 05:29:48.614	\N	\N
@@ -28185,6 +28474,7 @@ a7725b50-4533-4e45-821c-4cce98deab27	default	CS_CF_RATE_US	Rate Us	statea	rainma
 b68d30fb-7d8a-4551-a5f0-49c62e02f2fc	default	CS_CF_TRACK	Track	statea	rainmaker-common	128	2026-02-09 05:27:50.102	128	2026-05-13 07:03:51.71
 872f13c0-4fbe-4ae0-8520-492b6347bc1b	default	CS_CF_VIEW	View	statea	rainmaker-common	128	2026-02-09 05:27:50.102	128	2026-05-13 07:03:51.71
 b3f96436-4281-4f0c-9cf6-d623e5c27807	default	CS_CHECK_CHECK_YOUR_ANSWERS	Check Your Answers	statea	rainmaker-common	128	2026-02-09 05:27:50.102	128	2026-05-13 07:03:51.71
+08423470-673d-4199-9213-633941046a6a	default	COMMON_MASTERS_UOMCATEGORY_TODATE	Todate	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
 80054a99-6e74-4aa1-8596-e8fe5226a941	default	CS_CHECK_CHECK_YOUR_ANSWERS_TEXT	If you want to modify any value, click on change in the respective step. It will redirect you to the concerned step where you can make your changes.	statea	rainmaker-common	128	2026-02-09 05:27:50.102	128	2026-05-13 07:03:51.71
 90bd583a-ad38-4528-901e-9ee828a2b784	default	CS_COMMON_ACTION	Action	statea	rainmaker-common	128	2026-02-09 05:27:50.102	128	2026-05-13 07:03:51.71
 f81eda25-c008-45dc-8c99-b26526baaa6f	default	CS_COMMON_APPROVE	Approve	statea	rainmaker-common	128	2026-02-09 05:27:50.102	128	2026-05-13 07:03:51.71
@@ -30015,6 +30305,7 @@ c7f9e4b3-3160-470d-a72c-3d63e7637ad1	hi_IN	CS_EVENT_DETAILS	इवेंट क�
 710b78f4-bcd7-4c8d-8adf-88c68df693b0	hi_IN	CS_FILE_APPLICATION_PROPERTY_LOCATION_CITY_MOHALLA...	नीचे दी गयी सूची से संपत्ति का इलाका/ मोहल्ला चुने...	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
 86a0bd9d-5567-4b90-907c-030ec79827ed	hi_IN	CS_FILE_APPLICATION_PROPERTY_LOCATION_CITY_MOHALLA_TEXT	नीचे दी गयी सूची से संपत्ति का इलाका/ मोहल्ला चुनें	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
 a8d6b6d7-b8d3-481b-a962-5a37d451a272	hi_IN	CS_FILE_APPLICATION_PROPERTY_LOCATION_DOOR_NO_LABEL	दरवाजा नंबर	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
+4f12cbff-d44b-450e-9043-057ecf158782	default	COMMON_MASTERS_UOMCATEGORY_UOMCATEGORY	Uomcategory	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
 9f7bb18e-5075-4b0e-934b-ba6545e821f8	hi_IN	CS_FILE_APPLICATION_PROPERTY_LOCATION_PROVIDE_LANDMARK_TEXT	कृपया संपत्ति पर आसानी से पहुँचने के लिए कोई सीमा-चिन्ह बताएं	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
 7ad87892-29b6-4ec8-9ebf-1b8383a3ea6d	hi_IN	CS_FILE_APPLICATION_PROPERTY_LOCATION_PROVIDE_LANDMARK_TITLE	सीमा-चिह्न प्रदान करें	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
 60c06d55-8136-48da-b5ec-1e357c72ebdf	hi_IN	CS_FILE_APPLICATION_PROPERTY_LOCATION_STREET_NAME_LABEL	सड़क का नाम	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
@@ -30099,10 +30390,6 @@ c0403204-0d62-4df2-9b7c-e56d87afcbf4	default	COMMON_MASTERS_UOMCATEGORY_CODE	Cod
 50a65420-405e-4b19-ab12-8a4b90936de6	default	COMMON_MASTERS_UOMCATEGORY_FROMDATE	Fromdate	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
 40bff39a-dcdf-4074-8a76-529c6c1e5909	default	COMMON_MASTERS_UOMCATEGORY_ID	Id	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
 f8022649-f8cd-4e9b-93f5-81b0e20e65cf	default	COMMON_MASTERS_UOMCATEGORY_NAME	Name	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
-f75b2ed4-7c34-4c75-9e5b-6da9904f9a3c	default	COMMON_MASTERS_UOMCATEGORY_TENANTID	Tenantid	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
-08423470-673d-4199-9213-633941046a6a	default	COMMON_MASTERS_UOMCATEGORY_TODATE	Todate	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
-4f12cbff-d44b-450e-9043-057ecf158782	default	COMMON_MASTERS_UOMCATEGORY_UOMCATEGORY	Uomcategory	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
-627708e1-31d8-46c3-8ae5-b17de0015701	default	COMMON_MASTERS_UOM_CODE	Code	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
 4e5feb4f-a38e-49e9-97be-7275e43f587c	default	COMMON_MASTERS_WFSLACONFIG_ID	Id	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
 92f10c30-b027-4f56-bf2b-bb4ebe052230	default	COMMON_MASTERS_WFSLACONFIG_MIDDLESLABCOLOR	Middleslabcolor	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
 9aa0eb82-ef59-45c7-b5f2-1ae9ecf77e08	default	COMMON_MASTERS_WFSLACONFIG_NEGATIVESLABCOLOR	Negativeslabcolor	statea	rainmaker-workbench	128	2026-02-09 05:27:51.176	128	2026-05-13 07:03:51.951
@@ -30892,6 +31179,7 @@ d470e18b-d3c4-4a9c-91ce-b39c54925115	default	WORKFLOW_BUSINESSSERVICE_ISSTARTSTA
 bddb7741-de92-4f58-93d5-31bd82aeffa6	default	WORKFLOW_BUSINESSSERVICEMASTERCONFIG_BUSINESSSERVICE	businessService	statea	rainmaker-workbench	128	2026-02-09 05:27:52.071	128	2026-05-13 07:03:52.165
 97b83313-bd2e-499f-b3af-be17ead73812	default	WORKFLOW_BUSINESSSERVICEMASTERCONFIG_ISSTATELEVEL	isStatelevel	statea	rainmaker-workbench	128	2026-02-09 05:27:52.071	128	2026-05-13 07:03:52.165
 9597fe33-9f83-4eea-99f6-9a7b67ab5b51	default	WBH_MDMS_SEARCH_VALIDATION_FIELD_VALUE_PAIR	Please enter both field and value	statea	rainmaker-workbench	128	2026-02-09 05:27:52.071	128	2026-05-13 07:03:52.165
+1b52c137-a388-439b-a37c-02cbc891f544	hi_IN	PG_CITYA_ADMIN_JLC756	न्यू प्रेम नगर	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 37c1b5f2-ba7d-4f40-9a5e-70751a7da436	default	CS_COMMON_TRACK_COMPLAINT_TEXT	The notification along with complaint number is sent to your registered mobile number. You can track the complaint status using mobile or web app.	statea	rainmaker-pgr	128	2026-02-09 05:27:47.28	128	2026-05-13 07:03:50.733
 9aacc203-0fa2-461b-a66b-18893a958bcd	default	CS_COMMON_UPLOAD_PHOTOS	UPLOAD PHOTOS	statea	rainmaker-pgr	128	2026-02-09 05:27:47.28	128	2026-05-13 07:03:50.733
 a5965129-6824-44c7-ab2f-77362188457e	default	CS_COMPLAINT_ADDTIONAL_DETAILS	Additional Details	statea	rainmaker-pgr	128	2026-02-09 05:27:47.28	128	2026-05-13 07:03:50.733
@@ -31226,6 +31514,7 @@ c18c530b-cfaf-4527-a99c-5ceda03e2923	hi_IN	EVENTS_MESSAGE_LABEL	संदेश	
 1ff4f67c-055e-4fdf-8601-6083711a4e1a	hi_IN	EVENTS_NAME_ADDRESS_PLACEHOLDER	ईवेंट का पता दर्ज करें	statea	rainmaker-common	128	2026-02-09 05:27:50.643	128	2026-05-13 07:03:52.236
 08ed51ae-54f9-45cb-bb44-65d04268374f	hi_IN	EVENTS_NAME_LABEL	इवेंट का नाम	statea	rainmaker-common	128	2026-02-09 05:27:50.643	128	2026-05-13 07:03:52.236
 8c8d3045-8ceb-44c5-a387-b60806ca620c	hi_IN	EVENTS_NAME_PLACEHOLDER	ईवेंट का नाम दर्ज करें	statea	rainmaker-common	128	2026-02-09 05:27:50.643	128	2026-05-13 07:03:52.236
+5fe4d1a1-10f3-43af-a65a-688575676677	default	CS_COMPLAINT_PIN_COMPLAINT_LOCATION_TEXT	Click and hold to drop the pin to complaint location. If you are not able to pin the location you can skip the continue for next step.	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
 6b6d1bb6-e6f7-4b89-bfa1-3202b94fa43b	hi_IN	CS_ADDCOMPLAINT_UPLOAD_PHOTO_TEXT	सबूत के तौर पर शिकायत के फोटो अपलोड करने के लिए नीचे दिए गए आइकन पर क्लिक करें। आप अपने कैमरे के माध्यम से सीधे तस्वीरें खींच सकते हैं या गैलरी से अपलोड कर सकते हैं।अगर शिकायत में फ़ोटो की जरूरत नहीं है, तो आप छोड़ कर आगे बढ़ सकते हैं।	statea	rainmaker-pgr	128	2026-02-09 05:27:47.18	128	2026-05-13 07:03:50.832
 a666206b-0a1a-4b95-8abb-a933854cb84f	hi_IN	CS_ADDCOMPLAINT_YOU_RATED	आपने रेट किया	statea	rainmaker-pgr	128	2026-02-09 05:27:47.18	128	2026-05-13 07:03:50.832
 22f4d4bf-cff9-4287-9ead-3bf25c7f5e7c	hi_IN	CS_COMMON_ACCUMULATION_LITTER	कूड़े का संचय	statea	rainmaker-pgr	128	2026-02-09 05:27:47.18	128	2026-05-13 07:03:50.832
@@ -31348,6 +31637,7 @@ f652585e-b7c7-485d-b0a9-f7019341f2cc	en_IN	HR_ADD_QUALIFICATIONS	ADD QUALIFICATI
 a22d70aa-e317-4537-9f5b-d8998aa3330b	en_IN	HR_ADD_SERVICE_ENTRY	ADD SERVICE ENTRY	statea	rainmaker-hr	128	2026-02-09 05:27:52.469	128	2026-05-13 07:03:52.247
 7ad948a3-e110-4100-ad36-01e8ad4cdef1	en_IN	HR_ADD_TEST	ADD TEST	statea	rainmaker-hr	128	2026-02-09 05:27:52.469	128	2026-05-13 07:03:52.247
 75ef1a4a-a4b6-41be-b3f3-48bc3fd8d466	en_IN	HR_APPOINTMENT_DATE_LABEL	Date of Appointment	statea	rainmaker-hr	128	2026-02-09 05:27:52.469	128	2026-05-13 07:03:52.247
+a95e3621-dcc1-4c40-b35b-1e2132d0c4c9	default	CS_COMPLAINT_TYPE_OTHERS	Others	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
 78b2d585-da79-45b4-9766-c94a480aa93a	en_IN	CS_COMMON_PGR_STATE_CLOSEDAFTERREJECTION	Closed after rejection	statea	rainmaker-pgr	128	2026-02-09 05:27:53.338	128	2026-05-13 07:03:52.404
 71fc8895-513c-40fa-be65-6c15135048c3	en_IN	CS_COMMON_PGR_STATE_CLOSEDAFTERRESOLUTION	Closed after resolution	statea	rainmaker-pgr	128	2026-02-09 05:27:53.338	128	2026-05-13 07:03:52.404
 eeb38447-7d1d-4f6e-852d-df48f609684a	en_IN	WBH_MDMS_TRADELICENSE_DOCUMENTOBJ	documentObj	ciwf61702	rainmaker-workbench	1	2026-05-13 08:43:28.586	\N	\N
@@ -31622,6 +31912,7 @@ dd5d4afc-7912-4a1d-bb4c-34ed459197c1	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_SKIPT
 df0c1ef5-d247-44e1-8820-11dce34ad33d	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_SUBMITBARLABEL	submitBarLabel	cids61812	rainmaker-workbench	1	2026-05-13 08:45:18.142	\N	\N
 f011bf9a-7f90-4afd-ac7e-03b940c4f1cb	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_TEXTS	texts	cids61812	rainmaker-workbench	1	2026-05-13 08:45:18.142	\N	\N
 1e1fd6cc-d6c5-4ae3-954c-525466d25f01	en_IN	TRADELICENSE_COMMONFIELDSCONFIG_TYPE	type	cids61812	rainmaker-workbench	1	2026-05-13 08:45:18.142	\N	\N
+8fe2baae-a14c-435d-a4cf-beabd79d7346	default	CS_COMPLAINT_TYPE_PUBLIC_HEALTH_HYGIENE	Public Health & Hygiene	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
 3bbd9b9d-4aaf-4224-9846-d82694cd30f5	hi_IN	CORE_CHANGEPASSWORD_EXISTINGPASSWORD	वर्तमान पासवर्ड	statea	rainmaker-common	128	2026-02-09 05:27:49.675	128	2026-05-13 07:03:51.843
 b5d6c477-41a2-457d-9490-80241440debc	en_IN	HR_MOBILE_NO_CHECK	Please enter a 10 digit number starting with 6/7/8/9	statea	rainmaker-hr	128	2026-02-09 05:27:52.648	128	2026-05-13 07:03:52.29
 4f4d4d68-7b12-469c-b9ea-db8395aa7922	en_IN	HR_MOB_NO_PLACEHOLDER	Enter Mobile No.	statea	rainmaker-hr	128	2026-02-09 05:27:52.648	128	2026-05-13 07:03:52.29
@@ -31874,6 +32165,7 @@ d289dc62-44fa-4378-af16-f3a3ea7e0525	en_IN	TRADELICENSE_TRADETYPE_CODE	code	cids
 d3c335c8-c94a-490d-a6e7-f7aa200ef826	en_IN	TRADELICENSE_TRADETYPE_NAME	name	cids61812	rainmaker-workbench	1	2026-05-13 08:45:18.142	\N	\N
 09fabd66-7865-451b-ab67-44961fe1113e	en_IN	TRADELICENSE_TRADETYPE_TYPE	type	cids61812	rainmaker-workbench	1	2026-05-13 08:45:18.142	\N	\N
 a9765fc7-8aa5-4dbd-aa08-67e2cd365323	en_IN	TRADELICENSE_TRADETYPE_UOM	uom	cids61812	rainmaker-workbench	1	2026-05-13 08:45:18.142	\N	\N
+87909fa8-f4e2-4db8-b9b4-e996aec16911	default	CS_COMPLAINT_TYPE_PUBLIC_LAND_PROPERTY	Public Land & Property	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
 6dc9d607-7a82-4837-bfea-bfc1b8b85109	hi_IN	MODULE_NKS_NOC/COMPLETION_OF_BUILDING_APPROVAL	अनापत्ति प्रमाणपत्र/निर्माण स्वीकृति का समापन	statea	rainmaker-common	128	2026-02-09 05:27:51.016	128	2026-05-13 07:03:52.367
 d59d61f1-0633-4551-89a7-44dbf5ff26d2	hi_IN	MODULE_NKS_NOC_COMPLETION_OF_BUILDING_APPROVAL	निर्माण स्वीकृति की अनापत्ति प्रमाणपत्र पूरी हुई	statea	rainmaker-common	128	2026-02-09 05:27:51.016	128	2026-05-13 07:03:52.367
 181899a9-b139-4e10-b462-571e00190417	hi_IN	MODULE_NKS_NO_DUE_CERTIFICATE_FEES	नो ड्यूस प्रमाण पत्र	statea	rainmaker-common	128	2026-02-09 05:27:51.016	128	2026-05-13 07:03:52.367
@@ -32463,6 +32755,7 @@ bd2af8db-d57c-4666-9b38-7937409fd7f5	hi_IN	PAID	भुगतान किया 
 39442dcf-3aed-4011-b996-ad8e52d01bdb	en_IN	ES_DIALOG_SORT_BY	Sort By	statea	rainmaker-pgr	128	2026-02-09 05:27:54.195	128	2026-05-13 07:03:52.587
 46cc8bab-f899-435f-b8f9-1515fb6bf8ca	en_IN	PGR_ACTION_RESOLVE	Resolve Complaint	statea	rainmaker-pgr	128	2026-02-09 05:27:54.195	128	2026-05-13 07:03:52.587
 3417f4d1-3400-432f-bd5e-9a1b284a176b	en_IN	PGR_APPLY_PENDINGFORASSIGNMENT_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} has been submitted with ID {id} on {date}. You can track your complaint status on the web portal.\n\nEGOVS	statea	rainmaker-pgr	128	2026-02-09 05:27:54.195	128	2026-05-13 07:03:52.587
+e47842e4-ba85-437a-86c0-ec6213150efa	default	CS_COMPLAINT_TYPE_SEARCH_PLACEHOLDER	Search	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
 ff1a57bc-f702-43ab-8ba7-0b3a51704e99	en_IN	PGR_ASSIGN_CITIZEN_PENDINGATLME_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS	statea	rainmaker-pgr	128	2026-02-09 05:27:54.195	128	2026-05-13 07:03:52.587
 164f5aa6-67c1-42bc-afa3-51bf9ec9d634	en_IN	PGR_CITIZEN_REASSIGN_PENDINGATLME_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal. \n\nEGOVS	statea	rainmaker-pgr	128	2026-02-09 05:27:54.195	128	2026-05-13 07:03:52.587
 5b03de53-331e-4704-b4a0-2c8013e266ab	en_IN	PGR_CITIZEN_REASSIGN_PENDINGFORREASSIGNMENT_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been re-assigned to {emp_name}, {emp_designation}, {emp_department}. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS	statea	rainmaker-pgr	128	2026-02-09 05:27:54.195	128	2026-05-13 07:03:52.587
@@ -32687,11 +32980,6 @@ f9253f54-88fa-4fb5-b940-e6ce33e332dc	en_IN	pgr.complaint.category.DRAINS	Drains	
 1b1d25bc-e734-4eac-a72e-d2a74b276dd3	default	CS_COMPLAINT_LOCALITY	Locality	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
 0cb14aa9-1a79-4d1c-9d13-aa10e4752403	default	CS_COMPLAINT_LOCATION_DETAILS	Location Details	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
 3c9a973c-1a5b-4ae3-9cf1-c0f27a4cc0fa	default	CS_COMPLAINT_NO_ERROR_TEXT	Complaint No should be minimum 6 digits	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
-5fe4d1a1-10f3-43af-a65a-688575676677	default	CS_COMPLAINT_PIN_COMPLAINT_LOCATION_TEXT	Click and hold to drop the pin to complaint location. If you are not able to pin the location you can skip the continue for next step.	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
-a95e3621-dcc1-4c40-b35b-1e2132d0c4c9	default	CS_COMPLAINT_TYPE_OTHERS	Others	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
-8fe2baae-a14c-435d-a4cf-beabd79d7346	default	CS_COMPLAINT_TYPE_PUBLIC_HEALTH_HYGIENE	Public Health & Hygiene	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
-87909fa8-f4e2-4db8-b9b4-e996aec16911	default	CS_COMPLAINT_TYPE_PUBLIC_LAND_PROPERTY	Public Land & Property	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
-e47842e4-ba85-437a-86c0-ec6213150efa	default	CS_COMPLAINT_TYPE_SEARCH_PLACEHOLDER	Search	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
 fc0c1e7a-73bf-4c34-96bd-c249619f5a0b	default	CS_COMPLAINT_TYPE_STREET_LIGHTS	Street Lights	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
 a27a629c-6753-4292-b3b0-37133a34fd05	default	CS_COMPLAINT_TYPE_TEXT	Select the option related to your complaint from the list given below. If the complaint type you are looking for is not listed select others.	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
 76b0e0a0-c071-4cea-800d-fa6400e9bf0d	default	CS_COMPLAINT_TYPE_WATER	Water	statea	rainmaker-pgr	128	2026-02-09 05:27:47.546	128	2026-05-13 07:03:50.857
@@ -32727,6 +33015,7 @@ f8b42561-2fe2-4e86-b1c0-b862e6d978e2	hi_IN	PDF_STATIC_LABEL_CONSOLIDATED_BILL_PA
 6b032a96-2f60-41a4-9fd7-2d4abe9b3161	hi_IN	PDF_STATIC_LABEL_CONSOLIDATED_BILL_REBATE	छूट	statea	rainmaker-common	128	2026-02-09 05:27:51.705	128	2026-05-13 07:03:52.642
 14a3aa85-6ad4-4eee-b3a1-d25e10171b43	hi_IN	PDF_STATIC_LABEL_CONSOLIDATED_BILL_RECEIVERS_SIGNATURE	रिसीवर के हस्ताक्षर एवं मोबाइल नंबर	statea	rainmaker-common	128	2026-02-09 05:27:51.705	128	2026-05-13 07:03:52.642
 65535f01-d9be-4675-b3d5-8156fd654d2a	hi_IN	PDF_STATIC_LABEL_CONSOLIDATED_BILL_SCAN_PAY	भुगतान करने के लिए कोड स्कैन करें	statea	rainmaker-common	128	2026-02-09 05:27:51.705	128	2026-05-13 07:03:52.642
+ba9c86c3-6fed-4268-a5d7-ae6d0b1c7a0c	hi_IN	PG_CITYA_ADMIN_JLC757	शनि नगर	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 d9bde17e-c407-40bb-b0d4-5a6bf0903e2c	hi_IN	PDF_STATIC_LABEL_CONSOLIDATED_BILL_THIS_DOCUMENT	2. संपत्ति कर का इन माध्यमों से भुगतान किया जा सकता है: eSeva में नकद या चेक, ऑनलाइन या mSeva केंद्र या नगर कार्यालय में क्रेडिट कार्ड / डेबिट कार्ड / नेट बैंकिंग के माध्यम से	statea	rainmaker-common	128	2026-02-09 05:27:51.705	128	2026-05-13 07:03:52.642
 468ce452-0266-4a20-8e4a-e3cff65f8221	hi_IN	PDF_STATIC_LABEL_CONSOLIDATED_BILL_THIS_IS	वर्तमान वित्तीय वर्ष के लिए बिना ब्याज के संपत्ति कर का भुगतान करने की अंतिम तिथि: प्रथम अर्ध वर्ष 30 जून, द्वितीय अर्ध वर्ष 31 दिसंबर	statea	rainmaker-common	128	2026-02-09 05:27:51.705	128	2026-05-13 07:03:52.642
 64565919-00f9-4d72-bf06-c1aaa71cd504	hi_IN	PDF_STATIC_LABEL_CONSOLIDATED_BILL_TIME_INTEREST	समय ब्याज	statea	rainmaker-common	128	2026-02-09 05:27:51.705	128	2026-05-13 07:03:52.642
@@ -32963,6 +33252,7 @@ e00ed688-208d-4d0d-b3ca-365e6a4d3c1c	en_IN	COMMON_MASTERS_DESIGNATION_DESIG_1002
 d6e30929-b5b4-4ae7-8a69-2237fd460469	hi_IN	CS_COMPLAINT_FILED_DATE	दाखिल करने की तारीख़	statea	rainmaker-pgr	128	2026-02-09 05:27:47.298	128	2026-05-13 07:03:50.883
 ae9e5547-5cee-4ebe-bc13-e8e28f460efa	hi_IN	CS_COMPLAINT_NO_ERROR_TEXT	शिकायत नंबर में न्यूनतम 6 अंक होने चाहिए	statea	rainmaker-pgr	128	2026-02-09 05:27:47.298	128	2026-05-13 07:03:50.883
 893ddcab-c9e8-4ff0-bd4e-299112ff47ae	hi_IN	CS_COMPLAINT_PIN_COMPLAINT_LOCATION_TEXT	शिकायत स्थल को पिन करने के लिए क्लिक और होल्ड करें। अगर आप पिन नहीं कर पा रहे हैं तो छोड़ कर आगे बढ़ सकते हैं	statea	rainmaker-pgr	128	2026-02-09 05:27:47.298	128	2026-05-13 07:03:50.883
+27f8a80e-4d00-4035-8a89-3d86c93d8db4	hi_IN	PG_CITYA_ADMIN_JLC758	चंदन नगर	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 92f815c2-9a6c-4005-b973-ca373404a385	hi_IN	CS_COMPLAINT_RATE_HELP_TEXT	आप हमारे साथ अपने अनुभव को कितनी रेटिंग देंगे ?	statea	rainmaker-pgr	128	2026-02-09 05:27:47.298	128	2026-05-13 07:03:50.883
 e71b2e46-2ada-46fd-8503-3f4de3782c29	hi_IN	CS_COMPLAINT_RATE_TEXT	आप हमारे साथ अपने अनुभव को कितनी रेटिंग देंगे ?	statea	rainmaker-pgr	128	2026-02-09 05:27:47.298	128	2026-05-13 07:03:50.883
 38bf7504-5f4c-4bf8-a082-0b0b296ca309	hi_IN	CS_COMPLAINT_SUBMITTED_COMPLAINT_NO	शिकायत नंबर	statea	rainmaker-pgr	128	2026-02-09 05:27:47.298	128	2026-05-13 07:03:50.883
@@ -33431,6 +33721,8 @@ e8dfd9a2-5ec5-4f4c-8abd-0292591b426b	default	WBH_MDMS_EGF_MASTER_FINANCIALYEAR	F
 842f155b-99b5-451f-8f67-e0f1d3131ea6	en_IN	pgr.complaint.category.SUPPORTHELP	Support / Help	statea	rainmaker-pgr	128	2026-02-09 05:27:55.448	128	2026-05-13 07:03:52.821
 b0a8956c-2691-4866-aea1-ce0479be4cad	en_IN	WBH_MDMS_TRADELICENSE_TRADETYPE	TradeType	ciwfi61938	rainmaker-workbench	1	2026-05-13 08:47:24.243	\N	\N
 b3259a24-cbfc-4540-b5a6-a571a41db3be	en_IN	CCF_COLLECT_IP_SERVICES_USED_LABEL	The information collected by us shall depend on the services being used by you and may vary from time to time, which will be informed through changes in this policy.	statea	rainmaker-common	128	2026-02-09 05:27:55.916	128	2026-05-13 07:03:52.9
+14baf852-ee6a-4446-bbd4-5437f5e12f34	hi_IN	PG_CITYA_ADMIN_JLC759	फतेह पुरी	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
+4e707693-f4dd-489d-8aa7-4cd558ea98a6	hi_IN	PG_CITYA_ADMIN_JLC76	ग्रीन काउंटी	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 0111afe0-e88b-464b-8bc1-426b25f53ad9	en_IN	CCF_COLLECT_THIS_DATA_INFO_LABEL	We collect data directly from you (when you use our services) as and when you register and login into the app/website. We may also collect data from Union, State, and Local governments, including their agents/employees, as well as receive data that is available openly for public use.	statea	rainmaker-common	128	2026-02-09 05:27:55.916	128	2026-05-13 07:03:52.9
 9f5eb936-f92a-4e92-983a-887c52b4eb42	en_IN	CCF_DATA_COLLECTION_SHARING_INFO_LABEL	By using this service, you confirm that you have read, understood, and accepted this Policy, and that we may collect, process, disclose, and/or share your data as described in this Policy.	statea	rainmaker-common	128	2026-02-09 05:27:55.916	128	2026-05-13 07:03:52.9
 27176a00-5e2a-473f-b231-05755494ff6c	en_IN	CCF_DATA_COLLECTION_SHARING_LABEL	YOUR CONSENT TO DATA COLLECTION, PROCESSING, DISCLOSURE, AND/OR SHARING.	statea	rainmaker-common	128	2026-02-09 05:27:55.916	128	2026-05-13 07:03:52.9
@@ -35190,6 +35482,7 @@ c9f17729-5703-48d6-8ffe-0c441c570c2a	en_IN	CS_INFO_DELETE	Delete	statea	rainmake
 f3f482a4-f3a6-47f4-89be-e4259c5a6a5c	en_IN	CS_LANDING_PAGE_COMPLAINTS_DESCRIPTION	DIGIT Complaints offers an easy to use interface which enables you to lodge civic works related complaints. It also lets you track the status of your complaint and facilitates direct interaction with your municipality till its resolution.	statea	rainmaker-common	128	2026-02-09 05:27:58.86	128	2026-05-13 07:03:53.406
 a43a7bef-302c-47bb-abef-ccfd57132e98	en_IN	CS_LANDING_PAGE_NOC_DESCRIPTION	You can apply for Pre-construction (Provisional) and Post Construction (New) Fire NOC online and track status of your application.	statea	rainmaker-common	128	2026-02-09 05:27:58.86	128	2026-05-13 07:03:53.406
 8e359fb7-a19a-4359-94df-70aba206b97a	en_IN	CS_LANDING_PAGE_PROPERTY_TAX_DESCRIPTION	Assess	statea	rainmaker-common	128	2026-02-09 05:27:58.86	128	2026-05-13 07:03:53.406
+4112d871-e90e-46e0-8b17-3e699b7d5131	hi_IN	PG_CITYA_ADMIN_JLC760	विक्रमपुरा 	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 6b1bc390-1d8c-4c81-80dd-0d28785b48c9	en_IN	CS_LANDING_PAGE_TRADE_LICENSE_DESCRIPTION	A licensed trade will always enjoy a greater goodwill and attract more customers and investors than unregistered entities. Help your city to plan and support your business. Apply for your Trade License Now!	statea	rainmaker-common	128	2026-02-09 05:27:58.86	128	2026-05-13 07:03:53.406
 174e5fba-5496-42d2-b7a6-affa3f538f5e	en_IN	CS_LANDING_PAGE_WELCOME_TEXT	Welcome	statea	rainmaker-common	128	2026-02-09 05:27:58.86	128	2026-05-13 07:03:53.406
 52940027-d2fb-42ea-b637-dca277279f71	en_IN	CS_LINK_DSO_DASHBOARD	DSO Login/ Dashboard	statea	rainmaker-common	128	2026-02-09 05:27:58.86	128	2026-05-13 07:03:53.406
@@ -35318,12 +35611,6 @@ b2fa2583-e892-4e03-a4ab-9565f1f35180	hi_IN	PG_CITYA_ADMIN_JLC75	इंडिय�
 075b19c1-689b-4ac3-8155-8f3b5d34395c	hi_IN	PG_CITYA_ADMIN_JLC753	सूडान चौक	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 47b9880f-15a1-4892-8f66-fe7b0f90324f	hi_IN	PG_CITYA_ADMIN_JLC754	दीन दयाल नगर	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 fc0d541d-aacf-46e5-ae89-f1aeb5ea459e	hi_IN	PG_CITYA_ADMIN_JLC755	प्रेम नगर	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
-1b52c137-a388-439b-a37c-02cbc891f544	hi_IN	PG_CITYA_ADMIN_JLC756	न्यू प्रेम नगर	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
-ba9c86c3-6fed-4268-a5d7-ae6d0b1c7a0c	hi_IN	PG_CITYA_ADMIN_JLC757	शनि नगर	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
-27f8a80e-4d00-4035-8a89-3d86c93d8db4	hi_IN	PG_CITYA_ADMIN_JLC758	चंदन नगर	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
-14baf852-ee6a-4446-bbd4-5437f5e12f34	hi_IN	PG_CITYA_ADMIN_JLC759	फतेह पुरी	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
-4e707693-f4dd-489d-8aa7-4cd558ea98a6	hi_IN	PG_CITYA_ADMIN_JLC76	ग्रीन काउंटी	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
-4112d871-e90e-46e0-8b17-3e699b7d5131	hi_IN	PG_CITYA_ADMIN_JLC760	विक्रमपुरा 	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 79fc937a-dd7e-4f63-9495-ab6dbf271d31	hi_IN	PG_CITYA_ADMIN_JLC761	सुभाष नगर	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 031a6c4c-8203-4450-8292-89339cdc2801	hi_IN	PG_CITYA_ADMIN_JLC762	प्रताप नगर	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 eceefa4e-2e2b-4fdf-8abc-4a5cfbb9a6f3	hi_IN	PG_CITYA_ADMIN_JLC763	पुरानी कचहरी 	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
@@ -36139,6 +36426,8 @@ fe58a4c9-86bb-4949-bcff-fc253dbd5b74	en_IN	TENANT_TENANTINFO_LANGUAGESSPOKEN	Lan
 9f897f4e-7690-4ed2-a420-eabdc4242a85	en_IN	TENANT_TENANTINFO_MALEPOPULATION	Malepopulation	statea	rainmaker-workbench	128	2026-02-09 05:28:00.696	128	2026-05-13 07:03:53.674
 87be15da-b632-44ef-b2e9-ddfcfe38c0e8	en_IN	TENANT_TENANTINFO_POPULATION	Population	statea	rainmaker-workbench	128	2026-02-09 05:28:00.696	128	2026-05-13 07:03:53.674
 60389690-7c3a-45f8-adf6-05a50e00d5f9	default	PGR_CITIZEN_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been Re-opened as per your request. You can track your complaint status and connect with our officials on the web portal.\n\nEGOVS	statea	rainmaker-pgr	128	2026-02-09 05:27:47.806	128	2026-05-13 07:03:50.959
+37b79a76-774f-415f-82a8-26a3547f5a6d	hi_IN	UC_COMMON_TABLE_COL_AMOUNT	राशि भुगतान [INR]	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
+aa638899-ddfb-4c7a-9412-91d47e843d32	hi_IN	UC_COMMON_TABLE_COL_DATE	रसीद तारीख	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
 26d2c23d-d4bd-4678-92cc-fc9ad5f94d6e	default	PGR_CITIZEN_RESOLVE_RESOLVED_SMS_MESSAGE	Dear Citizen, Your complaint for {complaint_type} with ID {id} submitted on {date} has been resolved by {emp_name}. If you are not satisfied with service you can RE-OPEN complaint through web portal or by calling your nearest municipal office.\n\nEGOVS	statea	rainmaker-pgr	128	2026-02-09 05:27:47.806	128	2026-05-13 07:03:50.959
 590325f8-9509-4b5e-9cd4-8869753f4ba7	en_IN	employee.TechnicalQualification.fields.remarks	Remarks	statea	rainmaker-pgr	128	2026-02-09 05:27:54.984	128	2026-05-13 07:03:52.728
 d12652da-f300-44ab-848b-b1125bcc1299	en_IN	pgr.complaint.category.BINNOTEMPTY	Bin Not Empty	statea	rainmaker-pgr	128	2026-02-09 05:27:55.189	128	2026-05-13 07:03:52.771
@@ -37157,6 +37446,7 @@ c3fa856d-9ef8-4916-85b5-9dde23e4e595	en_IN	CITIZEN_SUCCESS_BPA_NC_OC_APP_FEE_PAY
 fe9119e0-e6e8-4a73-a970-932c8151fc23	en_IN	CITIZEN_SUCCESS_BPA_NC_OC_APP_FEE_PAYMENT_MESSAGE_DETAIL	A notification regarding Payment has been sent to the registered Mobile No. of the user/owner.	statea	rainmaker-common	128	2026-02-09 05:27:56.53	128	2026-05-13 07:03:52.992
 397d1aa2-e5c6-4d25-9a68-9f990146696c	en_IN	CITIZEN_SUCCESS_BPA_NC_OC_APP_FEE_PAYMENT_RECEIPT_NO	Payment Receipt No.	statea	rainmaker-common	128	2026-02-09 05:27:56.53	128	2026-05-13 07:03:52.992
 b7957c40-bb77-4f2d-b195-b8bc88868da3	en_IN	CITIZEN_SUCCESS_BPA_NC_OC_SAN_FEE_PAYMENT_MESSAGE	Payment has been paid successfully!	statea	rainmaker-common	128	2026-02-09 05:27:56.53	128	2026-05-13 07:03:52.992
+9c81cb09-89d2-4439-a15c-2cfb495366e8	hi_IN	UC_COMMON_TABLE_COL_STATUS	स्थिति	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
 b61881bd-11d3-49d1-96b3-f01572f963e6	en_IN	CITIZEN_SUCCESS_BPA_NC_OC_SAN_FEE_PAYMENT_MESSAGE_DETAIL	A notification regarding Payment has been sent to the registered Mobile No. of the user/owner.	statea	rainmaker-common	128	2026-02-09 05:27:56.53	128	2026-05-13 07:03:52.992
 b7e8375d-137b-4173-98b2-ea0ecd80612e	hi_IN	PG_CITYB_ADMIN_SUN12	पिछली साइड 66 केवीए ग्रिड पटियाला रोड	statea	rainmaker-common	128	2026-02-09 05:27:57.698	128	2026-05-13 07:03:54.351
 a1f2d63a-47a6-41c1-995f-6ec605c0a0fc	hi_IN	PG_CITYB_ADMIN_SUN13	पिछली साइड सिविल न्यायालय कॉलोनी	statea	rainmaker-common	128	2026-02-09 05:27:57.698	128	2026-05-13 07:03:54.351
@@ -37226,6 +37516,7 @@ dc32cbc5-177c-455d-82e9-7552a0646ff2	hi_IN	PGR_EMPLOYEE_RATE_CLOSEDAFTERREJECTIO
 35eb789c-10da-4139-8af7-accd307484de	hi_IN	PGR_EMPLOYEE_REASSIGN_PENDINGATLME_SMS_MESSAGE	श्री {emp_name} {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, आपके निवेदन अनुसार फिर से नियुक्त की गयी है। {ao_designation} - {ulb}. \n\nEGOVS	statea	rainmaker-pgr	128	2026-02-09 05:27:47.561	128	2026-05-13 07:03:50.98
 02f09aa9-6836-40fc-a34e-02896f3411c6	hi_IN	PGR_EMPLOYEE_REASSIGN_PENDINGFORREASSIGNMENT_SMS_MESSAGE	श्री {emp_name} {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, आपके निवेदन अनुसार फिर से नियुक्त की गयी है। {ao_designation} - {ulb}. \n\nEGOVS	statea	rainmaker-pgr	128	2026-02-09 05:27:47.561	128	2026-05-13 07:03:50.98
 84a16d22-eba2-48ed-ba8b-2e81ff6b70cc	hi_IN	PGR_EMPLOYEE_REOPEN_PENDINGFORASSIGNMENT_SMS_MESSAGE	श्री {emp_name} {complaint_type} की शिकायत आईडी {id} के साथ नागरिक द्वारा फिर से खोल दी गयी है। इसकी नियुक्त अधिकारी द्वारा समीक्षा की जा रही है - {ulb}.\n\nEGOVS	statea	rainmaker-pgr	128	2026-02-09 05:27:47.561	128	2026-05-13 07:03:50.98
+1ba14844-411c-428f-9688-c6202465f4c1	hi_IN	UC_COMMON_TABLE_COL_PAYEE_NAME	उपभोक्ता का नाम	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
 6511590e-4f61-411d-a019-3ed9c4f296ce	hi_IN	PGR_REASSIGN_EMPLOYEE_PENDINGATLME_SMS_MESSAGE	श्री {emp_name} {complaint_type} की शिकायत, जिसकी शिकायत आईडी {id} है, आपके निवेदन अनुसार फिर से नियुक्त की गयी है। {ao_designation} - {ulb}.\n\nEGOVS	statea	rainmaker-pgr	128	2026-02-09 05:27:47.561	128	2026-05-13 07:03:50.98
 b0762e39-f996-41e2-aeb0-7e7627105f69	hi_IN	PG_CITYA_ADMIN_JLC250	गंगा अपार्टमेंट	statea	rainmaker-common	128	2026-02-09 05:27:53.109	128	2026-05-13 07:03:53.102
 eb0c1237-8c97-42da-adb5-8b5077ba0daa	hi_IN	PG_CITYA_ADMIN_JLC251	नकोदर रोड बाजार	statea	rainmaker-common	128	2026-02-09 05:27:53.109	128	2026-05-13 07:03:53.102
@@ -37621,6 +37912,7 @@ f634ccc1-aecf-4a1b-b669-6df4d1b7343d	hi_IN	TENANT_TENANTS_PG_CITYD	शहर ड
 8a3a6609-089e-46de-86d4-89c753a99712	hi_IN	TENANT_TENANTS_PG_DHENKANAL	ढेंकनाल	statea	rainmaker-common	128	2026-02-09 05:27:59.204	128	2026-05-13 07:03:54.764
 dc250616-dc2b-4653-80cc-62de6fa59715	hi_IN	TENANT_TENANTS_PG_DHENKANAL_MUNICIPALITY	ढेंकनाल	statea	rainmaker-common	128	2026-02-09 05:27:59.204	128	2026-05-13 07:03:54.764
 590d263a-e110-4396-96e3-eef3cc972a03	hi_IN	TIME_ANSWER_TYPE	समय	statea	rainmaker-common	128	2026-02-09 05:27:59.204	128	2026-05-13 07:03:54.764
+0c509a71-204b-4713-a8b2-d5962d302af0	hi_IN	UC_COMMON_TABLE_COL_RECEIPT_NO	रसीद नंबर	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
 372dba4d-97b9-437d-9f76-2748c70b0192	hi_IN	TIP_DSS_PT_SLA_ACHIEVED	(निर्धारित समय में स्वीकृत कुल आवेदन / कुल स्वीकृत आवेदन) x 100	statea	rainmaker-common	128	2026-02-09 05:27:59.204	128	2026-05-13 07:03:54.764
 ed9b488c-b65d-4d5f-a834-27619239dac1	hi_IN	TIP_NATIONAL_DSS_OVERVIEW_CITIZEN_FEEDBACK_SCORE	(नागरिक रेटिंग का योग / अनुरोधों की कुल संख्या जिसके लिए रेटिंग प्रदान की गई थी)	statea	rainmaker-common	128	2026-02-09 05:27:59.204	128	2026-05-13 07:03:54.764
 b6142b06-c171-4683-b08d-b28082919f0a	hi_IN	TIP_NATIONAL_DSS_OVERVIEW_PENDANCY	(कुल प्राप्त आवेदन - कुल हल किए गए आवेदन / कुल प्राप्त आवेदन) x 100	statea	rainmaker-common	128	2026-02-09 05:27:59.204	128	2026-05-13 07:03:54.764
@@ -37933,11 +38225,6 @@ d472ed08-d8d8-4f22-8a20-d07427577e2a	hi_IN	UC_CHALLAN_NO_LABEL	चालान �
 984e55b2-a902-4707-a863-60f9c2208817	hi_IN	UC_COMMON_HEADER_SEARCH	एम कलेक्ट	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
 209f5252-ba0e-4aa7-9e6b-eb0337b01cd8	hi_IN	UC_COMMON_NOT_PAID	भुगतान नहीं किया गया	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
 2b7b55ce-018a-4f37-9640-80e8b19ba221	hi_IN	UC_COMMON_PAID_SUCCESS	सफलतापूर्वक भुगतान किया गया	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
-37b79a76-774f-415f-82a8-26a3547f5a6d	hi_IN	UC_COMMON_TABLE_COL_AMOUNT	राशि भुगतान [INR]	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
-aa638899-ddfb-4c7a-9412-91d47e843d32	hi_IN	UC_COMMON_TABLE_COL_DATE	रसीद तारीख	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
-1ba14844-411c-428f-9688-c6202465f4c1	hi_IN	UC_COMMON_TABLE_COL_PAYEE_NAME	उपभोक्ता का नाम	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
-0c509a71-204b-4713-a8b2-d5962d302af0	hi_IN	UC_COMMON_TABLE_COL_RECEIPT_NO	रसीद नंबर	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
-9c81cb09-89d2-4439-a15c-2cfb495366e8	hi_IN	UC_COMMON_TABLE_COL_STATUS	स्थिति	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
 57ff8ead-0e2b-4edb-aa21-2e184e265df8	hi_IN	UC_DOOR_NO_LABEL	दरवाजा नंबर	statea	rainmaker-common	128	2026-02-09 05:28:00.088	128	2026-05-13 07:03:54.953
 5ede8b3f-2995-480b-96d7-e0205cb53bb6	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_36	WATER DEPARTMENT	pg.ciemp62553	rainmaker-common	1	2026-05-13 08:55:56.398	\N	\N
 992a5c22-faa9-4171-8d0e-f2a4be9faada	en_IN	COMMON_MASTERS_DEPARTMENT_DEPT_37	ELECTRIC DEPARTMENT	pg.ciemp62553	rainmaker-common	1	2026-05-13 08:55:56.398	\N	\N
@@ -38819,6 +39106,7 @@ d44ace4d-9e52-4bd5-b1ca-aaa3598c72b2	hi_IN	SERVICEDEFS.PUBLICTOILETISDAMAGED	स
 80f9b05b-dbdd-4d81-9cd2-4266719454e6	hi_IN	SERVICEDEFS.PUBLICTOILETISNOTWORKINGPROPERLY	सार्वजनिक शौचालय ठीक से काम नहीं कर रहा है	statea	rainmaker-pgr	128	2026-02-09 05:27:47.703	128	2026-05-13 07:03:51.026
 5993db33-b985-4572-b69e-29a8662b0767	hi_IN	SERVICEDEFS.PUBLICTOILETS	सार्वजनिक शौचालय	statea	rainmaker-pgr	128	2026-02-09 05:27:47.703	128	2026-05-13 07:03:51.026
 4a418ace-c1c4-4ec7-b323-c86ab342cd18	hi_IN	SERVICEDEFS.REMOVEGARBAGEORWATER	कचरा या पानी निकालें	statea	rainmaker-pgr	128	2026-02-09 05:27:47.703	128	2026-05-13 07:03:51.026
+8cb421a7-a21b-43e3-a846-d694b08231a2	default	CS_SURVEY_RESPONDED	Already Responded	statea	rainmaker-common	128	2026-02-09 05:27:50.455	128	2026-05-13 07:03:51.804
 35207d94-b882-49df-bb82-750bedd07c2b	hi_IN	SERVICEDEFS.REPLACEORPROVIDEGARBAGEBIN	कूड़ादान बदलें / प्रदान करें	statea	rainmaker-pgr	128	2026-02-09 05:27:47.703	128	2026-05-13 07:03:51.026
 e63dab26-efbc-4b0a-a2e7-064be660c3b4	hi_IN	SERVICEDEFS.REPLACE/PROVIDEGARBAGEBIN	कूड़ादान बदलें / प्रदान करें	statea	rainmaker-pgr	128	2026-02-09 05:27:47.703	128	2026-05-13 07:03:51.026
 de2eab33-6381-4a06-aadb-973f418fd648	hi_IN	SERVICEDEFS.REPLACEPROVIDEGARBAGEBIN	कूड़ादान बदलें / प्रदान करें	statea	rainmaker-pgr	128	2026-02-09 05:27:47.703	128	2026-05-13 07:03:51.026
@@ -38948,6 +39236,7 @@ f4e4b789-1fa7-48f0-bfa2-d08206a4a5e9	hi_IN	SCHEMA_TENANT_ASSESSMENTCONFIG	मू
 69d8b271-4ddd-43df-be9c-bf79c4e92b37	hi_IN	SCHEMA_TENANT_NATIONALINFO	NationalInfo	statea	rainmaker-workbench	128	2026-02-09 05:28:04.256	128	2026-05-13 07:03:55.574
 a5e0011d-c940-4d50-8628-5af9cf8a9a2a	hi_IN	SCHEMA_TENANT_REASSESSMENTCONFIG	Reassessmentconfig	statea	rainmaker-workbench	128	2026-02-09 05:28:04.256	128	2026-05-13 07:03:55.574
 f475a356-09c7-4e39-9aed-4c3889d9808d	hi_IN	SCHEMA_TENANT_TENANTINFO	टेनेंटिनफो	statea	rainmaker-workbench	128	2026-02-09 05:28:04.256	128	2026-05-13 07:03:55.574
+3dc78acf-fab2-4cc5-8c5b-1a3a2b96c329	default	CS_SURVEY_RESULTS	Survey results	statea	rainmaker-common	128	2026-02-09 05:27:50.455	128	2026-05-13 07:03:51.804
 e93b4f39-6207-40ca-a8bb-153a27ac98b8	hi_IN	SCHEMA_TENANT_TENANTS	किरायेदार मास्टर	statea	rainmaker-workbench	128	2026-02-09 05:28:04.256	128	2026-05-13 07:03:55.574
 ca6327f0-bde4-46eb-b9ff-be4a97f99f39	hi_IN	SCHEMA_TRADELICENSE_ACCESSORIESCATEGORY	Accessoriescategory	statea	rainmaker-workbench	128	2026-02-09 05:28:04.256	128	2026-05-13 07:03:55.574
 891d1d12-ef54-45fb-9277-edb5593c41b1	hi_IN	SCHEMA_TRADELICENSE_APPLICATIONTYPE	अनुप्रयोग टाइप	statea	rainmaker-workbench	128	2026-02-09 05:28:04.256	128	2026-05-13 07:03:55.574
@@ -40457,6 +40746,7 @@ be6fd14a-6e7a-406c-933b-41174c53c339	default	CS_COMMON_INBOX_PT.CREATE	New Prope
 0008358e-abdf-445f-9a8e-90a049c57460	hi_IN	CS_COMMON_INBOX_PGR	पीजीआर	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
 04c4bdcd-cf6d-4691-a09e-ad9d7ac8fa50	hi_IN	CS_COMMON_INBOX_PT	पीटी	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
 a7294d15-7ec7-4e3a-a93c-3e5b2a6406b3	hi_IN	CS_COMMON_INBOX_PT.CREATE	नई प्रॉपर्टी	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
+ebd82514-d61e-490f-b5f7-a471860d93f2	default	CS_TITLE_APPLICATION_DETAILS	Application Details	statea	rainmaker-common	128	2026-02-09 05:27:50.455	128	2026-05-13 07:03:51.804
 a01e0a45-6847-48fc-8364-c75ceec9bca3	hi_IN	CS_COMMON_INBOX_PT.MUTATION	स्वामित्व का हस्तांतरण	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
 c5ab504d-1e1b-4807-8c48-721c74323770	hi_IN	CS_COMMON_INBOX_PT.UPDATE	स्वामित्व का हस्तांतरण	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
 d87c8a0c-74b7-4963-8106-3bb16f609347	hi_IN	CS_COMMON_INBOX_STRUCTURALENGINEER	संरचनात्मक इंजीनियर	statea	rainmaker-common	128	2026-02-09 05:27:49.979	128	2026-05-13 07:03:51.972
@@ -40574,10 +40864,6 @@ c9542c4c-2fd6-490c-9661-a904274b3a05	default	CS_SLA_TIME	{0} hrs ago	statea	rain
 c5e50fad-210a-4e58-9415-245508ee93d8	default	CS_SLA_WEEK	{0} weeks ago	statea	rainmaker-common	128	2026-02-09 05:27:50.455	128	2026-05-13 07:03:51.804
 63974693-4820-40cb-8952-94cb97c66bec	default	CS_SLA_WEEK_ONE	1 week ago	statea	rainmaker-common	128	2026-02-09 05:27:50.455	128	2026-05-13 07:03:51.804
 a2e81b1b-2472-45a0-9594-66f7f2fc2ede	default	CS_STAKEHOLDER_APPLICATION_FAILED	Stakeholder Registration Failed	statea	rainmaker-common	128	2026-02-09 05:27:50.455	128	2026-05-13 07:03:51.804
-8cb421a7-a21b-43e3-a846-d694b08231a2	default	CS_SURVEY_RESPONDED	Already Responded	statea	rainmaker-common	128	2026-02-09 05:27:50.455	128	2026-05-13 07:03:51.804
-3dc78acf-fab2-4cc5-8c5b-1a3a2b96c329	default	CS_SURVEY_RESULTS	Survey results	statea	rainmaker-common	128	2026-02-09 05:27:50.455	128	2026-05-13 07:03:51.804
-ebd82514-d61e-490f-b5f7-a471860d93f2	default	CS_TITLE_APPLICATION_DETAILS	Application Details	statea	rainmaker-common	128	2026-02-09 05:27:50.455	128	2026-05-13 07:03:51.804
-fa661665-2e0e-4059-aba8-dadbcb4d045b	default	CS_VILLAGE_NAME	Village Name	statea	rainmaker-common	128	2026-02-09 05:27:50.614	128	2026-05-13 07:03:51.85
 31aef21a-cb08-4e82-b866-0e8c3fcc2228	default	CITIZEN_SUCCESS_BPA_NC_OC_SAN_FEE_PAYMENT_RECEIPT_NO	Payment Receipt No.	statea	rainmaker-common	128	2026-02-09 05:27:49.037	128	2026-05-13 07:03:51.391
 89ce8c0c-1fc2-4517-9aea-cd72e162af22	default	CITIZEN_SUCCESS_BPA_NC_SAN_FEE_PAYMENT_MESSAGE	Payment has been paid successfully!	statea	rainmaker-common	128	2026-02-09 05:27:49.037	128	2026-05-13 07:03:51.391
 f7c2d768-2bd7-4280-acbf-112c35832abe	default	CITIZEN_SUCCESS_BPA_NC_SAN_FEE_PAYMENT_MESSAGE_DETAIL	A notification regarding Payment has been sent to the registered Mobile No. of the user/owner.	statea	rainmaker-common	128	2026-02-09 05:27:49.037	128	2026-05-13 07:03:51.391
@@ -40725,6 +41011,7 @@ be448c1c-684a-417d-b4b1-e01a8d00f09f	default	DASHBOARD_WHATS_NEW_LABEL	What’s 
 e44cdbc9-a76d-4162-a82e-468b85da3307	hi_IN	FIRENOC_BUILDINGTYPE_GROUP_D_ASSEMBLY	ग्रुप डी विधानसभा	statea	rainmaker-common	128	2026-02-09 05:27:50.643	128	2026-05-13 07:03:52.236
 2f40671e-7bb3-42fe-8888-ab457e804f7f	hi_IN	FIRENOC_BUILDINGTYPE_GROUP_D_ASSEMBLY_SUBDIVISIOND_1	उपखंड डी -1 एक नाटकीय या मोशन पिक्चर या कोई अन्य मंच एवं 1000 से अधिक व्यक्तियों के लिए तय सीटों वाली इमारतें	statea	rainmaker-common	128	2026-02-09 05:27:50.643	128	2026-05-13 07:03:52.236
 3d8bcf4a-f0d5-488f-ac30-f7dea2729f36	hi_IN	FIRENOC_BUILDINGTYPE_GROUP_D_ASSEMBLY_SUBDIVISIOND_2	उपखंड डी -2 एक नाटकीय या मोशन पिक्चर या कोई अन्य मंच एवं 1000 से अधिक व्यक्तियों के लिए तय सीटों वाली इमारतें	statea	rainmaker-common	128	2026-02-09 05:27:50.643	128	2026-05-13 07:03:52.236
+1f4e5b48-478c-4654-bc83-70bf761f95a7	hi_IN	PROPERTYTAX_MUTATIONDOCUMENTS_HASDROPDOWN	हसदार	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
 f4d7af12-4c53-43ee-9d16-ad5ec166df58	hi_IN	FIRENOC_BUILDINGTYPE_GROUP_D_ASSEMBLY_SUBDIVISIOND_3	उपखंड डी -3 एक अस्थायी मंच एवं 300 या इससे अधिक व्यक्तियों के लिए बिना स्थाई बैठक व्यवस्था वाली आवासीय इमारतें	statea	rainmaker-common	128	2026-02-09 05:27:50.643	128	2026-05-13 07:03:52.236
 491e6697-a5fb-4506-87d3-0224df168094	hi_IN	FIRENOC_BUILDINGTYPE_GROUP_D_ASSEMBLY_SUBDIVISIOND_4	उपखंड डी -4 एक अस्थायी मंच एवं 300 या इससे अधिक व्यक्तियों के लिए बिना स्थाई बैठक व्यवस्था वाली आवासीय इमारतें	statea	rainmaker-common	128	2026-02-09 05:27:50.643	128	2026-05-13 07:03:52.236
 dae5d4b4-07bc-4086-9f77-cf56d318b334	hi_IN	FIRENOC_BUILDINGTYPE_GROUP_D_ASSEMBLY_SUBDIVISIOND_5	उपखंड डी 5 - अन्य सभी संरचनाएँ जिनमें लोगों की सभा के लिए बनायी गयी वो अस्थायी संरचनाएँ शामिल हैं जो उपखण्ड डी1 से डी4 में नहीं हैं, जमीनी स्तर पर	statea	rainmaker-common	128	2026-02-09 05:27:50.643	128	2026-05-13 07:03:52.236
@@ -41435,6 +41722,7 @@ f7de9e6a-e3bf-4644-b624-299d38086681	hi_IN	PG_CITYA_ADMIN_JLC16	कालिय�
 d2221b2a-e299-4c6e-8acc-43a3b921f31e	hi_IN	PG_CITYA_ADMIN_JLC715	सनराइज होटल से प्रताप बाग तक 	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 cfaf9f66-7599-4f79-a054-f2fec115af94	hi_IN	PG_CITYA_ADMIN_JLC726	खोड़िया मोहल्ला	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 9d5a1fec-b1a6-4db2-91af-c70c016a2ca7	hi_IN	PG_CITYA_ADMIN_JLC727	कोटपक्षीय 	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
+9235fc35-5f7f-4791-8d79-419f69d91cad	hi_IN	PROPERTYTAX_MUTATIONDOCUMENTS_REQUIRED	आवश्यक	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
 2b48d933-d766-4ea5-a169-18449e366cf9	hi_IN	PG_CITYA_ADMIN_JLC728	होटल राज महल गुरुद्वारा और गली के पिछली तरफ़	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 d162f2fc-e381-4eb4-a11f-08dbc209ba37	hi_IN	PG_CITYA_ADMIN_JLC729	पक्का बाग	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
 ada40369-64b3-4ddd-a306-27a6a436eca8	hi_IN	PG_CITYA_ADMIN_JLC73	मान सिंह नगर	statea	rainmaker-common	128	2026-02-09 05:27:54.189	128	2026-05-13 07:03:53.429
@@ -41565,6 +41853,7 @@ a12ce70e-569d-4478-af07-0429e1d1fec6	en_IN	CATEGORY_FORMS	Forms	statea	rainmaker
 2d54b48f-42c8-4699-996a-e689ad26bbc6	en_IN	CCF_ADHERENCE_TO_DATA_PRINCIPLES_LABEL	ADHERENCE TO DATA PRIVACY PRINCIPLES	statea	rainmaker-common	128	2026-02-09 05:27:55.916	128	2026-05-13 07:03:52.9
 46bba729-75a5-4b7f-825f-edeb157657ed	en_IN	CCF_AND_	 and 	statea	rainmaker-common	128	2026-02-09 05:27:55.916	128	2026-05-13 07:03:52.9
 d25aec40-b581-448e-9a93-7056d4b698b6	en_IN	CCF_COLLECT_AND_PROGRAM_LABEL	WHAT DATA DO WE COLLECT? / WHAT IS ‘DATA’ UNDER THIS ‘PROGRAM’?	statea	rainmaker-common	128	2026-02-09 05:27:55.916	128	2026-05-13 07:03:52.9
+9060ac51-6e93-476c-967b-eb1338d3ab39	hi_IN	PROPERTYTAX_MUTATIONPENALTY_FLATAMOUNT	सीधी रकम	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
 a96de9c1-ba22-43cb-a0a1-43444875f8e5	en_IN	CCF_COLLECT_INFO_ADMINISTRATIVE_LABEL	Data from administrative record systems, such as revenue survey number or other property identifier, connection number, meter number etc. may also be recorded. In the event a person makes payments to the local government, information related to the payment, such as transaction number may also be recorded.	statea	rainmaker-common	128	2026-02-09 05:27:55.916	128	2026-05-13 07:03:52.9
 c22fd6f0-785a-41d4-9680-03a6ab6270d0	en_IN	CCF_COLLECT_INFO_IMPROVE_LABEL	We collect information/data (“data”) to improve and provide better services to you. We collect and process PII such as your first name, last name, parent’s / guardian’s name, address, email address, telephone number, age, gender, identification documents. We may collect your educational, demographic, location, device and other similar information.	statea	rainmaker-common	128	2026-02-09 05:27:55.916	128	2026-05-13 07:03:52.9
 839a9620-0da3-475b-a4cb-fbb7c08623f3	en_IN	CCF_COLLECT_IP_ADDRESS_LABEL	We collect information such as Internet Protocol (IP) addresses, domain name, browser type, Operating System, Date and Time of the visit, pages visited, IMEI/IMSI number, device ID, location information, language settings, handset make & model etc. However, no attempt is made to link these with the true identity of individuals visiting Urban DIGIT app, website, Whatsapp Chatbot etc.	statea	rainmaker-common	128	2026-02-09 05:27:55.916	128	2026-05-13 07:03:52.9
@@ -42660,6 +42949,11 @@ ffef029c-0aae-42ec-98c9-de859709f2bd	en_IN	TOTAL_PGR	Total	statea	rainmaker-comm
 37240ee7-b01c-4922-a78f-b653d6c524ef	en_IN	TRANSGENDER	Transgender	statea	rainmaker-common	128	2026-02-09 05:27:59.46	128	2026-05-13 07:03:53.509
 5ce30883-01c6-46a6-abc8-e43d61fc6797	en_IN	ULBGRADE_MC_CLASS	MUNICIPAL COUNCIL	statea	rainmaker-common	128	2026-02-09 05:27:59.46	128	2026-05-13 07:03:53.509
 d8e8e58a-78d5-43bc-b3a3-90b1b8bfe919	en_IN	ULBGRADE_MC_CLASS_I	MUNICIPAL COUNCIL	statea	rainmaker-common	128	2026-02-09 05:27:59.46	128	2026-05-13 07:03:53.509
+828413a8-1808-4b05-88ca-908abd8f719b	hi_IN	PROPERTYTAX_MUTATIONPENALTY_FROMFY	Fromfy	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
+ba5a10d4-f585-4314-b702-307b03fd20cb	hi_IN	PROPERTYTAX_MUTATIONPENALTY_MINAMOUNT	मिनामाउंट	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
+33805b31-472a-4707-8108-b93e000857b5	hi_IN	PROPERTYTAX_MUTATIONPENALTY_MUTATIONPAYMENTPERIODINMONTH	उत्परिवर्तन	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
+aec9f29c-03ad-4a48-8e94-b19dd9bf659d	hi_IN	PROPERTYTAX_MUTATIONPENALTY_RATE	दर	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
+73c7191a-91d3-492d-a777-453c67e00906	hi_IN	PROPERTYTAX_MUTATIONPENALTY_STARTINGDAY	प्रारंभिक दिन	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
 74c9d742-b7da-4394-9d7f-1b0632f17215	hi_IN	TL_FAQ_ANS_THREE	उ. अपनी साख के साथ लॉग इन करने के बाद, मेरे आवेदन पर क्लिक करें। सूचीबद्ध सभी आवेदनों में, वह खोजें जिसकी स्थिति 'स्वीकृत' है और 'विवरण देखें' पर क्लिक करें। अगले पृष्ठ पर, ऊपरी दाएं कोने में 'डाउनलोड' बटन पर क्लिक करें। स्वीकृत आवेदनों के मामले में, ट्रेड लाइसेंस प्रमाणपत्र और भुगतान रसीद ड्रॉप-डाउन में दिखाई जाएगी और डाउनलोड करने के लिए संबंधित पर क्लिक करें। 	statea	rainmaker-common	128	2026-02-09 05:27:59.459	128	2026-05-13 07:03:54.829
 798b25ac-7a0b-4aee-a683-d2ebd3081535	hi_IN	TL_LOCALIZATION_ADHOC_PENALTY	एडहॉक जुर्माना	statea	rainmaker-common	128	2026-02-09 05:27:59.459	128	2026-05-13 07:03:54.829
 64f27b95-9e8f-4b50-b27d-2e0c0470918b	hi_IN	TL_LOCALIZATION_ADHOC_REBATE	एडहॉक छूट	statea	rainmaker-common	128	2026-02-09 05:27:59.459	128	2026-05-13 07:03:54.829
@@ -42979,6 +43273,8 @@ f16a43fc-37dd-4a52-97af-296651ef2f7f	hi_IN	WS_COMMON_TABLE_COL_DUE_DATE_LABEL	�
 17aea083-b73d-4f84-8302-f015a194485d	hi_IN	WS_COMMON_TABLE_COL_SERVICE_LABEL	सर्विस	statea	rainmaker-common	128	2026-02-09 05:28:01.097	128	2026-05-13 07:03:55.147
 6ef08904-0e12-4ff9-9a8b-24e91eedd51f	hi_IN	WS_COMMON_TABLE_COL_STATUS_LABEL	कनेक्शन स्थिति	statea	rainmaker-common	128	2026-02-09 05:28:01.097	128	2026-05-13 07:03:55.147
 5b1933ad-b123-4d76-898a-b9b91f6b58e7	hi_IN	WS_CONSUMPTION_DETAILS_ERRO_MSG	वर्तमान मीटर रीडिंग अंतिम मीटर रीडिंग के बराबर या उससे अधिक होनी चाहिए	statea	rainmaker-common	128	2026-02-09 05:28:01.097	128	2026-05-13 07:03:55.147
+d94de962-cc36-466c-b95d-b66a90d129df	hi_IN	PROPERTYTAX_MUTATIONREASON_ACTIVE	सक्रिय	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
+6ef54866-3e73-4201-9be0-c9fa6e330a4d	hi_IN	PROPERTYTAX_MUTATIONREASON_CODE	कोड	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
 8a30025c-00ae-4036-b85a-d7986a42de18	hi_IN	WS_FAQ_ANS_ONE	उ. नए पानी या सीवरेज कनेक्शन का लाभ उठाने के लिए, आवेदन एक नागरिक खाते के माध्यम से और साथ ही शहरी स्थानीय निकाय में जाकर ऑनलाइन जमा किया जा सकता है।	statea	rainmaker-common	128	2026-02-09 05:28:01.097	128	2026-05-13 07:03:55.147
 cec32557-6105-44fd-b6a8-f63cf7b7b1f0	hi_IN	WS_FAQ_QUES_ONE	प्र. मैं नए पानी के कनेक्शन के लिए कैसे आवेदन करूं?	statea	rainmaker-common	128	2026-02-09 05:28:01.097	128	2026-05-13 07:03:55.147
 4af3f8be-f5cb-4aaf-b05a-f9a8bbebc4ad	hi_IN	WF_FSM_ASSING_DSO	डी.एस.ओ. नियुक्ति के लिए रुका हुआ	statea	rainmaker-common	128	2026-02-09 05:28:00.785	128	2026-05-13 07:03:55.082
@@ -43194,16 +43490,6 @@ cf13cf3f-2635-41e7-ac71-7d5c7bfa4ea4	hi_IN	FSM_COMMONFIELDSCONFIG_SKIPTEXT	स�
 7930233e-58a4-4d70-a361-57c4a2ae92f0	hi_IN	PROPERTYTAX_MUTATIONDOCUMENTS_DESCRIPTION	विवरण	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
 b0b300c8-60ad-47b6-9a9c-044eb88a995d	hi_IN	PROPERTYTAX_MUTATIONDOCUMENTS_DOCUMENTTYPE	दस्तावेज़	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
 374320a5-8e00-4786-88e1-81b4176f92c9	hi_IN	PROPERTYTAX_MUTATIONDOCUMENTS_DROPDOWNDATA	ड्रॉपडाउनडाटा	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
-1f4e5b48-478c-4654-bc83-70bf761f95a7	hi_IN	PROPERTYTAX_MUTATIONDOCUMENTS_HASDROPDOWN	हसदार	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
-9235fc35-5f7f-4791-8d79-419f69d91cad	hi_IN	PROPERTYTAX_MUTATIONDOCUMENTS_REQUIRED	आवश्यक	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
-9060ac51-6e93-476c-967b-eb1338d3ab39	hi_IN	PROPERTYTAX_MUTATIONPENALTY_FLATAMOUNT	सीधी रकम	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
-828413a8-1808-4b05-88ca-908abd8f719b	hi_IN	PROPERTYTAX_MUTATIONPENALTY_FROMFY	Fromfy	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
-ba5a10d4-f585-4314-b702-307b03fd20cb	hi_IN	PROPERTYTAX_MUTATIONPENALTY_MINAMOUNT	मिनामाउंट	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
-33805b31-472a-4707-8108-b93e000857b5	hi_IN	PROPERTYTAX_MUTATIONPENALTY_MUTATIONPAYMENTPERIODINMONTH	उत्परिवर्तन	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
-aec9f29c-03ad-4a48-8e94-b19dd9bf659d	hi_IN	PROPERTYTAX_MUTATIONPENALTY_RATE	दर	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
-73c7191a-91d3-492d-a777-453c67e00906	hi_IN	PROPERTYTAX_MUTATIONPENALTY_STARTINGDAY	प्रारंभिक दिन	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
-d94de962-cc36-466c-b95d-b66a90d129df	hi_IN	PROPERTYTAX_MUTATIONREASON_ACTIVE	सक्रिय	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
-6ef54866-3e73-4201-9be0-c9fa6e330a4d	hi_IN	PROPERTYTAX_MUTATIONREASON_CODE	कोड	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
 abf199e1-d6aa-4cd0-a69c-6df3366a94ca	hi_IN	PROPERTYTAX_MUTATIONREBATE_ENDINGDAY	समाप्ति का दिन	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
 a3f7f5e7-5bd7-4452-bcfd-3daddec84c8b	hi_IN	PROPERTYTAX_MUTATIONREBATE_FLATAMOUNT	सीधी रकम	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
 fb04b39d-30b7-47ff-974a-054e9267c191	hi_IN	PROPERTYTAX_MUTATIONREBATE_FROMFY	Fromfy	statea	rainmaker-workbench	128	2026-02-09 05:28:03.433	128	2026-05-13 07:03:55.484
@@ -43812,7 +44098,7 @@ ee6929f1-8971-4a00-8bf9-807c61194433	en_IN	WBH_MDMS_TRADELICENSE_TRADETYPE	Trade
 
 
 --
--- Data for Name: pgr_services_schema; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: pgr_services_schema; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.pgr_services_schema (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
@@ -43824,7 +44110,7 @@ COPY public.pgr_services_schema (installed_rank, version, description, type, scr
 
 
 --
--- Data for Name: service; Type: TABLE DATA; Schema: public; Owner: -
+-- Data for Name: service; Type: TABLE DATA; Schema: public; Owner: egov
 --
 
 COPY public.service (id, code, name, enabled, contextroot, displayname, ordernumber, parentmodule, tenantid) FROM stdin;
@@ -43832,455 +44118,434 @@ COPY public.service (id, code, name, enabled, contextroot, displayname, ordernum
 
 
 --
--- Data for Name: workflow_schema_version; Type: TABLE DATA; Schema: public; Owner: -
---
-
-COPY public.workflow_schema_version (installed_rank, version, description, type, script, checksum, installed_by, installed_on, execution_time, success) FROM stdin;
-1	1	<< Flyway Baseline >>	BASELINE	<< Flyway Baseline >>	\N	egov	2026-02-09 05:25:00.918144	0	t
-2	20181204120036	wf create ddl	SQL	V20181204120036__wf_create_ddl.sql	-943671309	egov	2026-02-09 05:25:00.974874	42	t
-3	20181226133033	wf alter table ddl	SQL	V20181226133033__wf_alter_table_ddl.sql	-1846206951	egov	2026-02-09 05:25:01.06321	3	t
-4	20190117125333	wf state action alter table ddl	SQL	V20190117125333__wf_state_action_alter_table_ddl.sql	-1913967942	egov	2026-02-09 05:25:01.076426	26	t
-5	20190322143035	wf add seq ddl	SQL	V20190322143035__wf_add_seq_ddl.sql	327804453	egov	2026-02-09 05:25:01.115516	3	t
-6	20190411170435	wf add isStateUpdatable ddl	SQL	V20190411170435__wf_add_isStateUpdatable_ddl.sql	457550658	egov	2026-02-09 05:25:01.129665	2	t
-7	20191211105434	wf modified assignee ddl	SQL	V20191211105434__wf_modified_assignee_ddl.sql	1176859445	egov	2026-02-09 05:25:01.139524	3	t
-8	20200925153931	wf missing index ddl	SQL	V20200925153931__wf_missing_index_ddl.sql	1207664085	egov	2026-02-09 05:25:01.151551	4	t
-9	20201030131738	wf comment size ddl	SQL	V20201030131738__wf_comment_size_ddl.sql	-1475905560	egov	2026-02-09 05:25:01.164046	7	t
-10	20210111134335	wf added assignee idx ddl	SQL	V20210111134335__wf_added_assignee_idx_ddl.sql	-2022994724	egov	2026-02-09 05:25:01.18104	4	t
-11	20210203112523	wf alter table ddl	SQL	V20210203112523__wf_alter_table_ddl.sql	366659182	egov	2026-02-09 05:25:01.191404	1	t
-12	20210423102936	wf alter table active ddl	SQL	V20210423102936__wf_alter_table_active_ddl.sql	-1560113142	egov	2026-02-09 05:25:01.200292	2	t
-13	20210817103463	wf alter table escalated ddl	SQL	V20210817103463__wf_alter_table_escalated_ddl.sql	2103718292	egov	2026-02-09 05:25:01.210414	2	t
-\.
-
-
---
--- Name: eg_address_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: eg_address_id_seq; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.eg_address_id_seq', 1, false);
 
 
 --
--- Name: eg_enc_asymmetric_keys_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: eg_enc_asymmetric_keys_id_seq; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.eg_enc_asymmetric_keys_id_seq', 5, true);
 
 
 --
--- Name: eg_enc_symmetric_keys_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: eg_enc_symmetric_keys_id_seq; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.eg_enc_symmetric_keys_id_seq', 5, true);
 
 
 --
--- Name: eg_hrms_position; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: eg_hrms_position; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.eg_hrms_position', 13, true);
 
 
 --
--- Name: eg_url_shorter_id; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: eg_url_shorter_id; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.eg_url_shorter_id', 1, false);
 
 
 --
--- Name: id_generator_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: id_generator_id_seq; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.id_generator_id_seq', 1, false);
 
 
 --
--- Name: seq_ack_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_ack_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_ack_num', 1, false);
 
 
 --
--- Name: seq_advocate_code; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_advocate_code; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_advocate_code', 1, false);
 
 
 --
--- Name: seq_advocatepayment_code; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_advocatepayment_code; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_advocatepayment_code', 1, false);
 
 
 --
--- Name: seq_agency; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_agency; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_agency', 1, false);
 
 
 --
--- Name: seq_assesmnt_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_assesmnt_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_assesmnt_num', 1, false);
 
 
 --
--- Name: seq_case_advocate; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_case_advocate; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_case_advocate', 1, false);
 
 
 --
--- Name: seq_case_reference; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_case_reference; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_case_reference', 1, false);
 
 
 --
--- Name: seq_coll_rcpt_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_coll_rcpt_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_coll_rcpt_num', 1, false);
 
 
 --
--- Name: seq_eg_action; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_action; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_action', 1, false);
 
 
 --
--- Name: seq_eg_filestoremap; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_filestoremap; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_filestoremap', 8, true);
 
 
 --
--- Name: seq_eg_hrms_emp_code; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_hrms_emp_code; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_hrms_emp_code', 1, false);
 
 
 --
--- Name: seq_eg_ms_role; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_ms_role; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_ms_role', 1, false);
 
 
 --
--- Name: seq_eg_pg_txn; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_pg_txn; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_pg_txn', 1, false);
 
 
 --
--- Name: seq_eg_pgr_id; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_pgr_id; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_pgr_id', 188, true);
 
 
 --
--- Name: seq_eg_pt_ack; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_pt_ack; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_pt_ack', 1, false);
 
 
 --
--- Name: seq_eg_pt_assm; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_pt_assm; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_pt_assm', 1, false);
 
 
 --
--- Name: seq_eg_pt_ln; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_pt_ln; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_pt_ln', 1, false);
 
 
 --
--- Name: seq_eg_pt_ptid; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_pt_ptid; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_pt_ptid', 1, false);
 
 
 --
--- Name: seq_eg_role; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_role; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_role', 1, false);
 
 
 --
--- Name: seq_eg_tl_apl; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_tl_apl; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_tl_apl', 1, false);
 
 
 --
--- Name: seq_eg_user; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_user; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_user', 35, true);
 
 
 --
--- Name: seq_eg_user_address; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_user_address; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_user_address', 70, true);
 
 
 --
--- Name: seq_eg_wf_state_v2; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_eg_wf_state_v2; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_eg_wf_state_v2', 33, true);
 
 
 --
--- Name: seq_egf_bill_dft_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_egf_bill_dft_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_egf_bill_dft_num', 1, false);
 
 
 --
--- Name: seq_employee_code; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_employee_code; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_employee_code', 1, false);
 
 
 --
--- Name: seq_event; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_event; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_event', 1, false);
 
 
 --
--- Name: seq_hearing_details; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_hearing_details; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_hearing_details', 1, false);
 
 
 --
--- Name: seq_message; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_message; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_message', 1, false);
 
 
 --
--- Name: seq_notice; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_notice; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_notice', 1, false);
 
 
 --
--- Name: seq_opinion_code; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_opinion_code; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_opinion_code', 1, false);
 
 
 --
--- Name: seq_parawise_comments; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_parawise_comments; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_parawise_comments', 1, false);
 
 
 --
--- Name: seq_personal_details; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_personal_details; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_personal_details', 1, false);
 
 
 --
--- Name: seq_reference_evidence; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_reference_evidence; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_reference_evidence', 1, false);
 
 
 --
--- Name: seq_register; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_register; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_register', 1, false);
 
 
 --
--- Name: seq_service; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_service; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_service', 1, false);
 
 
 --
--- Name: seq_summon_code; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_summon_code; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_summon_code', 1, false);
 
 
 --
--- Name: seq_summon_reference; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_summon_reference; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_summon_reference', 1, false);
 
 
 --
--- Name: seq_swm_ctrt_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_ctrt_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_ctrt_num', 1, false);
 
 
 --
--- Name: seq_swm_shift_code_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_shift_code_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_shift_code_num', 1, false);
 
 
 --
--- Name: seq_swm_snts_trgt_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_snts_trgt_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_snts_trgt_num', 1, false);
 
 
 --
--- Name: seq_swm_splr_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_splr_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_splr_num', 1, false);
 
 
 --
--- Name: seq_swm_stf_trn_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_stf_trn_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_stf_trn_num', 1, false);
 
 
 --
--- Name: seq_swm_trn_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_trn_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_trn_num', 1, false);
 
 
 --
--- Name: seq_swm_vendor_payment_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_vendor_payment_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_vendor_payment_num', 1, false);
 
 
 --
--- Name: seq_swm_vhl_trip_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_vhl_trip_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_vhl_trip_num', 1, false);
 
 
 --
--- Name: seq_swm_vmr_trn_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_vmr_trn_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_vmr_trn_num', 1, false);
 
 
 --
--- Name: seq_swm_vndr_ctrt_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_vndr_ctrt_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_vndr_ctrt_num', 1, false);
 
 
 --
--- Name: seq_swm_vndr_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_vndr_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_vndr_num', 1, false);
 
 
 --
--- Name: seq_swm_vs_trn_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_swm_vs_trn_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_swm_vs_trn_num', 1, false);
 
 
 --
--- Name: seq_tl_app_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_tl_app_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_tl_app_num', 1, false);
 
 
 --
--- Name: seq_tl_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_tl_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_tl_num', 1, false);
 
 
 --
--- Name: seq_uc_demand_consumer_code; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_uc_demand_consumer_code; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_uc_demand_consumer_code', 1, false);
 
 
 --
--- Name: seq_ulb_code; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_ulb_code; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_ulb_code', 1, false);
 
 
 --
--- Name: seq_upic_num; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_upic_num; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_upic_num', 1, false);
 
 
 --
--- Name: seq_voucher_code; Type: SEQUENCE SET; Schema: public; Owner: -
+-- Name: seq_voucher_code; Type: SEQUENCE SET; Schema: public; Owner: egov
 --
 
 SELECT pg_catalog.setval('public.seq_voucher_code', 1, false);
 
 
 --
--- Name: accesscontrol_schema_version accesscontrol_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: accesscontrol_schema_version accesscontrol_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.accesscontrol_schema_version
@@ -44288,7 +44553,7 @@ ALTER TABLE ONLY public.accesscontrol_schema_version
 
 
 --
--- Name: boundary boundary_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: boundary boundary_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.boundary
@@ -44296,15 +44561,15 @@ ALTER TABLE ONLY public.boundary
 
 
 --
--- Name: boundary_schema_version boundary_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: boundary_service_schema boundary_service_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
-ALTER TABLE ONLY public.boundary_schema_version
-    ADD CONSTRAINT boundary_schema_version_pk PRIMARY KEY (installed_rank);
+ALTER TABLE ONLY public.boundary_service_schema
+    ADD CONSTRAINT boundary_service_schema_pk PRIMARY KEY (installed_rank);
 
 
 --
--- Name: eg_action eg_action_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_action eg_action_name_key; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_action
@@ -44312,7 +44577,7 @@ ALTER TABLE ONLY public.eg_action
 
 
 --
--- Name: eg_action eg_action_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_action eg_action_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_action
@@ -44320,7 +44585,7 @@ ALTER TABLE ONLY public.eg_action
 
 
 --
--- Name: eg_action eg_action_url_queryparams_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_action eg_action_url_queryparams_key; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_action
@@ -44328,7 +44593,7 @@ ALTER TABLE ONLY public.eg_action
 
 
 --
--- Name: eg_address eg_address_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_address eg_address_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_address
@@ -44336,7 +44601,7 @@ ALTER TABLE ONLY public.eg_address
 
 
 --
--- Name: eg_bm_generated_template eg_bm_generated_template_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_bm_generated_template eg_bm_generated_template_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_bm_generated_template
@@ -44344,7 +44609,7 @@ ALTER TABLE ONLY public.eg_bm_generated_template
 
 
 --
--- Name: eg_bm_processed_template eg_bm_processed_template_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_bm_processed_template eg_bm_processed_template_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_bm_processed_template
@@ -44352,7 +44617,7 @@ ALTER TABLE ONLY public.eg_bm_processed_template
 
 
 --
--- Name: eg_enc_asymmetric_keys eg_enc_asymmetric_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_enc_asymmetric_keys eg_enc_asymmetric_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_enc_asymmetric_keys
@@ -44360,7 +44625,7 @@ ALTER TABLE ONLY public.eg_enc_asymmetric_keys
 
 
 --
--- Name: eg_enc_symmetric_keys eg_enc_symmetric_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_enc_symmetric_keys eg_enc_symmetric_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_enc_symmetric_keys
@@ -44368,7 +44633,7 @@ ALTER TABLE ONLY public.eg_enc_symmetric_keys
 
 
 --
--- Name: eg_role eg_role_pk; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_role eg_role_pk; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_role
@@ -44376,7 +44641,7 @@ ALTER TABLE ONLY public.eg_role
 
 
 --
--- Name: eg_roleaction eg_roleaction_ukey_tenantid; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_roleaction eg_roleaction_ukey_tenantid; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_roleaction
@@ -44384,7 +44649,7 @@ ALTER TABLE ONLY public.eg_roleaction
 
 
 --
--- Name: eg_role eg_roles_code_tenant; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_role eg_roles_code_tenant; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_role
@@ -44392,7 +44657,7 @@ ALTER TABLE ONLY public.eg_role
 
 
 --
--- Name: eg_ms_role eg_roles_role_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_ms_role eg_roles_role_name_key; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_ms_role
@@ -44400,7 +44665,7 @@ ALTER TABLE ONLY public.eg_ms_role
 
 
 --
--- Name: service eg_service_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: service eg_service_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.service
@@ -44408,7 +44673,7 @@ ALTER TABLE ONLY public.service
 
 
 --
--- Name: service eg_service_ukey_tenantid; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: service eg_service_ukey_tenantid; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.service
@@ -44416,940 +44681,7 @@ ALTER TABLE ONLY public.service
 
 
 --
--- Name: eg_url_shortener eg_url_shortener_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_url_shortener
-    ADD CONSTRAINT eg_url_shortener_pkey PRIMARY KEY (id);
-
-
---
--- Name: eg_user_address eg_user_address_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_user_address
-    ADD CONSTRAINT eg_user_address_pkey PRIMARY KEY (id);
-
-
---
--- Name: eg_user_address eg_user_address_type_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_user_address
-    ADD CONSTRAINT eg_user_address_type_unique UNIQUE (userid, tenantid, type);
-
-
---
--- Name: eg_user eg_user_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_user
-    ADD CONSTRAINT eg_user_pkey PRIMARY KEY (id, tenantid);
-
-
---
--- Name: eg_user eg_user_user_name_tenant; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_user
-    ADD CONSTRAINT eg_user_user_name_tenant UNIQUE (username, type, tenantid);
-
-
---
--- Name: egov_idgen_schema_version egov_idgen_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.egov_idgen_schema_version
-    ADD CONSTRAINT egov_idgen_schema_version_pk PRIMARY KEY (installed_rank);
-
-
---
--- Name: egov_localization_schema_version egov_localization_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.egov_localization_schema_version
-    ADD CONSTRAINT egov_localization_schema_version_pk PRIMARY KEY (installed_rank);
-
-
---
--- Name: egov_url_shortening_schema_version egov_url_shortening_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.egov_url_shortening_schema_version
-    ADD CONSTRAINT egov_url_shortening_schema_version_pk PRIMARY KEY (installed_rank);
-
-
---
--- Name: egov_user_schema_version egov_user_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.egov_user_schema_version
-    ADD CONSTRAINT egov_user_schema_version_pk PRIMARY KEY (installed_rank);
-
-
---
--- Name: enc_schema_version enc_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.enc_schema_version
-    ADD CONSTRAINT enc_schema_version_pk PRIMARY KEY (installed_rank);
-
-
---
--- Name: filestore_schema_version filestore_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.filestore_schema_version
-    ADD CONSTRAINT filestore_schema_version_pk PRIMARY KEY (installed_rank);
-
-
---
--- Name: hrms_schema_version hrms_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.hrms_schema_version
-    ADD CONSTRAINT hrms_schema_version_pk PRIMARY KEY (installed_rank);
-
-
---
--- Name: mdms_schema_version mdms_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.mdms_schema_version
-    ADD CONSTRAINT mdms_schema_version_pk PRIMARY KEY (installed_rank);
-
-
---
--- Name: message message_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.message
-    ADD CONSTRAINT message_pkey PRIMARY KEY (id);
-
-
---
--- Name: pgr_services_schema pgr_services_schema_pk; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.pgr_services_schema
-    ADD CONSTRAINT pgr_services_schema_pk PRIMARY KEY (installed_rank);
-
-
---
--- Name: boundary_hierarchy pk_boundary_hierarchy; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.boundary_hierarchy
-    ADD CONSTRAINT pk_boundary_hierarchy PRIMARY KEY (id);
-
-
---
--- Name: boundary_relationship pk_boundary_relationship; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.boundary_relationship
-    ADD CONSTRAINT pk_boundary_relationship PRIMARY KEY (tenantid, code, hierarchytype);
-
-
---
--- Name: eg_mdms_data pk_eg_mdms_data; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_mdms_data
-    ADD CONSTRAINT pk_eg_mdms_data PRIMARY KEY (tenantid, schemacode, uniqueidentifier);
-
-
---
--- Name: eg_pgr_address_v2 pk_eg_pgr_address_v2; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_pgr_address_v2
-    ADD CONSTRAINT pk_eg_pgr_address_v2 PRIMARY KEY (id);
-
-
---
--- Name: eg_pgr_service_v2 pk_eg_pgr_servicereq_v2; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_pgr_service_v2
-    ADD CONSTRAINT pk_eg_pgr_servicereq_v2 PRIMARY KEY (tenantid, servicerequestid);
-
-
---
--- Name: eg_mdms_schema_definition pk_eg_schema_definition; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_mdms_schema_definition
-    ADD CONSTRAINT pk_eg_schema_definition PRIMARY KEY (tenantid, code);
-
-
---
--- Name: eg_wf_businessservice_v2 pk_eg_wf_businessservice; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_wf_businessservice_v2
-    ADD CONSTRAINT pk_eg_wf_businessservice PRIMARY KEY (uuid);
-
-
---
--- Name: eg_wf_state_v2 pk_eg_wf_state_v2; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_wf_state_v2
-    ADD CONSTRAINT pk_eg_wf_state_v2 PRIMARY KEY (uuid);
-
-
---
--- Name: eg_hrms_assignment pk_eghrms_assignment; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_assignment
-    ADD CONSTRAINT pk_eghrms_assignment PRIMARY KEY (uuid);
-
-
---
--- Name: eg_hrms_deactivationdetails pk_eghrms_deactivationdetails; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_deactivationdetails
-    ADD CONSTRAINT pk_eghrms_deactivationdetails PRIMARY KEY (uuid);
-
-
---
--- Name: eg_hrms_departmentaltests pk_eghrms_departmentaltests; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_departmentaltests
-    ADD CONSTRAINT pk_eghrms_departmentaltests PRIMARY KEY (uuid);
-
-
---
--- Name: eg_hrms_educationaldetails pk_eghrms_educationaldetails; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_educationaldetails
-    ADD CONSTRAINT pk_eghrms_educationaldetails PRIMARY KEY (uuid);
-
-
---
--- Name: eg_hrms_empdocuments pk_eghrms_empdocuments; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_empdocuments
-    ADD CONSTRAINT pk_eghrms_empdocuments PRIMARY KEY (uuid);
-
-
---
--- Name: eg_hrms_employee pk_eghrms_employee; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_employee
-    ADD CONSTRAINT pk_eghrms_employee PRIMARY KEY (uuid);
-
-
---
--- Name: eg_hrms_jurisdiction pk_eghrms_jurisdiction; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_jurisdiction
-    ADD CONSTRAINT pk_eghrms_jurisdiction PRIMARY KEY (uuid);
-
-
---
--- Name: eg_hrms_reactivationdetails pk_eghrms_reactivationdetails; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_reactivationdetails
-    ADD CONSTRAINT pk_eghrms_reactivationdetails PRIMARY KEY (uuid);
-
-
---
--- Name: eg_hrms_servicehistory pk_eghrms_servicehistory; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_servicehistory
-    ADD CONSTRAINT pk_eghrms_servicehistory PRIMARY KEY (uuid);
-
-
---
--- Name: eg_filestoremap pk_filestoremap; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_filestoremap
-    ADD CONSTRAINT pk_filestoremap PRIMARY KEY (id);
-
-
---
--- Name: id_generator pk_id_generator; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.id_generator
-    ADD CONSTRAINT pk_id_generator PRIMARY KEY (idname, tenantid);
-
-
---
--- Name: boundary_hierarchy uk_boundary_hierarchy; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.boundary_hierarchy
-    ADD CONSTRAINT uk_boundary_hierarchy UNIQUE (tenantid, hierarchytype);
-
-
---
--- Name: boundary_relationship uk_boundary_relationship; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.boundary_relationship
-    ADD CONSTRAINT uk_boundary_relationship UNIQUE (id);
-
-
---
--- Name: eg_mdms_data uk_eg_mdms_data; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_mdms_data
-    ADD CONSTRAINT uk_eg_mdms_data UNIQUE (id);
-
-
---
--- Name: eg_pgr_service_v2 uk_eg_pgr_service_v2; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_pgr_service_v2
-    ADD CONSTRAINT uk_eg_pgr_service_v2 UNIQUE (id);
-
-
---
--- Name: eg_wf_action_v2 uk_eg_wf_action; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_wf_action_v2
-    ADD CONSTRAINT uk_eg_wf_action PRIMARY KEY (uuid);
-
-
---
--- Name: eg_wf_businessservice_v2 uk_eg_wf_businessservice; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_wf_businessservice_v2
-    ADD CONSTRAINT uk_eg_wf_businessservice UNIQUE (tenantid, businessservice);
-
-
---
--- Name: eg_wf_document_v2 uk_eg_wf_document; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_wf_document_v2
-    ADD CONSTRAINT uk_eg_wf_document PRIMARY KEY (id);
-
-
---
--- Name: eg_wf_processinstance_v2 uk_eg_wf_processinstance; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_wf_processinstance_v2
-    ADD CONSTRAINT uk_eg_wf_processinstance UNIQUE (id);
-
-
---
--- Name: eg_wf_state_v2 uk_eg_wf_state_v2; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_wf_state_v2
-    ADD CONSTRAINT uk_eg_wf_state_v2 UNIQUE (state, businessserviceid);
-
-
---
--- Name: eg_hrms_employee uk_eghrms_employee_code; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_employee
-    ADD CONSTRAINT uk_eghrms_employee_code UNIQUE (code, tenantid);
-
-
---
--- Name: eg_filestoremap uk_filestoremap_filestoreid; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_filestoremap
-    ADD CONSTRAINT uk_filestoremap_filestoreid UNIQUE (filestoreid);
-
-
---
--- Name: eg_filestoremap uk_filestoremap_fsid_tenant; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_filestoremap
-    ADD CONSTRAINT uk_filestoremap_fsid_tenant UNIQUE (filestoreid, tenantid);
-
-
---
--- Name: boundary unique_code_tenantid; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.boundary
-    ADD CONSTRAINT unique_code_tenantid UNIQUE (code, tenantid);
-
-
---
--- Name: message unique_message_entry; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.message
-    ADD CONSTRAINT unique_message_entry UNIQUE (tenantid, locale, module, code);
-
-
---
--- Name: workflow_schema_version workflow_schema_version_pk; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.workflow_schema_version
-    ADD CONSTRAINT workflow_schema_version_pk PRIMARY KEY (installed_rank);
-
-
---
--- Name: accesscontrol_schema_version_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX accesscontrol_schema_version_s_idx ON public.accesscontrol_schema_version USING btree (success);
-
-
---
--- Name: active_tenant_asymmetric_keys; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX active_tenant_asymmetric_keys ON public.eg_enc_asymmetric_keys USING btree (tenant_id) WHERE (active IS TRUE);
-
-
---
--- Name: active_tenant_symmetric_keys; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX active_tenant_symmetric_keys ON public.eg_enc_symmetric_keys USING btree (tenant_id) WHERE (active IS TRUE);
-
-
---
--- Name: boundary_schema_version_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX boundary_schema_version_s_idx ON public.boundary_schema_version USING btree (success);
-
-
---
--- Name: code_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX code_idx ON public.eg_hrms_employee USING btree (code);
-
-
---
--- Name: dept_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX dept_idx ON public.eg_hrms_assignment USING btree (department);
-
-
---
--- Name: desg_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX desg_idx ON public.eg_hrms_assignment USING btree (designation);
-
-
---
--- Name: eg_asymmetric_key_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX eg_asymmetric_key_id ON public.eg_enc_asymmetric_keys USING btree (key_id);
-
-
---
--- Name: eg_symmetric_key_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX eg_symmetric_key_id ON public.eg_enc_symmetric_keys USING btree (key_id);
-
-
---
--- Name: egov_idgen_schema_version_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX egov_idgen_schema_version_s_idx ON public.egov_idgen_schema_version USING btree (success);
-
-
---
--- Name: egov_localization_schema_version_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX egov_localization_schema_version_s_idx ON public.egov_localization_schema_version USING btree (success);
-
-
---
--- Name: egov_url_shortening_schema_version_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX egov_url_shortening_schema_version_s_idx ON public.egov_url_shortening_schema_version USING btree (success);
-
-
---
--- Name: egov_user_schema_version_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX egov_user_schema_version_s_idx ON public.egov_user_schema_version USING btree (success);
-
-
---
--- Name: enc_schema_version_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX enc_schema_version_s_idx ON public.enc_schema_version USING btree (success);
-
-
---
--- Name: filestore_schema_version_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX filestore_schema_version_s_idx ON public.filestore_schema_version USING btree (success);
-
-
---
--- Name: hrms_schema_version_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX hrms_schema_version_s_idx ON public.hrms_schema_version USING btree (success);
-
-
---
--- Name: idx_bm_gen_template_tenant_hierarchy; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_bm_gen_template_tenant_hierarchy ON public.eg_bm_generated_template USING btree (tenantid, hierarchytype);
-
-
---
--- Name: idx_bm_proc_template_tenant_hierarchy; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_bm_proc_template_tenant_hierarchy ON public.eg_bm_processed_template USING btree (tenantid, hierarchytype);
-
-
---
--- Name: idx_boundary_hierarchy_tenantid_hierarchytype; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_boundary_hierarchy_tenantid_hierarchytype ON public.boundary_hierarchy USING btree (tenantid, hierarchytype);
-
-
---
--- Name: idx_boundary_tenantid_code; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_boundary_tenantid_code ON public.boundary USING btree (tenantid, code);
-
-
---
--- Name: idx_eg_hrms_employee_tenantid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_hrms_employee_tenantid ON public.eg_hrms_employee USING btree (tenantid);
-
-
---
--- Name: idx_eg_role_code; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_role_code ON public.eg_role USING btree (code);
-
-
---
--- Name: idx_eg_user_active; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_user_active ON public.eg_user USING btree (active);
-
-
---
--- Name: idx_eg_user_address_tenantid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_user_address_tenantid ON public.eg_user_address USING btree (tenantid);
-
-
---
--- Name: idx_eg_user_failed_attempts_user_attemptdate; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_user_failed_attempts_user_attemptdate ON public.eg_user_login_failed_attempts USING btree (attempt_date);
-
-
---
--- Name: idx_eg_user_failed_attempts_user_uuid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_user_failed_attempts_user_uuid ON public.eg_user_login_failed_attempts USING btree (user_uuid);
-
-
---
--- Name: idx_eg_user_mobile; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_user_mobile ON public.eg_user USING btree (mobilenumber);
-
-
---
--- Name: idx_eg_user_name; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_user_name ON public.eg_user USING btree (name);
-
-
---
--- Name: idx_eg_user_tenantid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_user_tenantid ON public.eg_user USING btree (tenantid);
-
-
---
--- Name: idx_eg_user_type; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_user_type ON public.eg_user USING btree (type);
-
-
---
--- Name: idx_eg_user_username; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_user_username ON public.eg_user USING btree (username);
-
-
---
--- Name: idx_eg_user_uuid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_user_uuid ON public.eg_user USING btree (uuid);
-
-
---
--- Name: idx_eg_userrole_v1_rolecode; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_userrole_v1_rolecode ON public.eg_userrole_v1 USING btree (role_code);
-
-
---
--- Name: idx_eg_userrole_v1_roletenantid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_userrole_v1_roletenantid ON public.eg_userrole_v1 USING btree (role_tenantid);
-
-
---
--- Name: idx_eg_userrole_v1_userid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_userrole_v1_userid ON public.eg_userrole_v1 USING btree (user_id);
-
-
---
--- Name: idx_eg_userrole_v1_usertenantid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_userrole_v1_usertenantid ON public.eg_userrole_v1 USING btree (user_tenantid);
-
-
---
--- Name: idx_eg_wf_assignee_v2_assignee; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_eg_wf_assignee_v2_assignee ON public.eg_wf_assignee_v2 USING btree (tenantid, assignee);
-
-
---
--- Name: idx_pi_wf_action; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_pi_wf_action ON public.eg_wf_action_v2 USING btree (action);
-
-
---
--- Name: idx_pi_wf_businessservice_v2; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_pi_wf_businessservice_v2 ON public.eg_wf_businessservice_v2 USING btree (businessservice);
-
-
---
--- Name: idx_pi_wf_processinstance_v2; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_pi_wf_processinstance_v2 ON public.eg_wf_processinstance_v2 USING btree (businessid, lastmodifiedtime);
-
-
---
--- Name: idx_pi_wf_state_v2; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_pi_wf_state_v2 ON public.eg_wf_state_v2 USING btree (state);
-
-
---
--- Name: idx_processinstanceid_eg_wf_assignee_v2; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_processinstanceid_eg_wf_assignee_v2 ON public.eg_wf_assignee_v2 USING btree (processinstanceid);
-
-
---
--- Name: idx_tenant_status_eg_wf_processinstance_v2; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_tenant_status_eg_wf_processinstance_v2 ON public.eg_wf_processinstance_v2 USING btree (((((tenantid)::text || ':'::text) || (status)::text)));
-
-
---
--- Name: index_eg_pgr_address_v2_locality; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_eg_pgr_address_v2_locality ON public.eg_pgr_address_v2 USING btree (locality);
-
-
---
--- Name: index_eg_pgr_service_v2_accountid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_eg_pgr_service_v2_accountid ON public.eg_pgr_service_v2 USING btree (accountid);
-
-
---
--- Name: index_eg_pgr_service_v2_applicationstatus; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_eg_pgr_service_v2_applicationstatus ON public.eg_pgr_service_v2 USING btree (applicationstatus);
-
-
---
--- Name: index_eg_pgr_service_v2_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_eg_pgr_service_v2_id ON public.eg_pgr_service_v2 USING btree (id);
-
-
---
--- Name: index_eg_pgr_service_v2_servicecode; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_eg_pgr_service_v2_servicecode ON public.eg_pgr_service_v2 USING btree (servicecode);
-
-
---
--- Name: index_eg_pgr_service_v2_tenantid_servicerequestid; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_eg_pgr_service_v2_tenantid_servicerequestid ON public.eg_pgr_service_v2 USING btree (tenantid, servicerequestid);
-
-
---
--- Name: mdms_schema_version_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX mdms_schema_version_s_idx ON public.mdms_schema_version USING btree (success);
-
-
---
--- Name: message_locale_tenant; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX message_locale_tenant ON public.message USING btree (locale, tenantid);
-
-
---
--- Name: pgr_services_schema_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX pgr_services_schema_s_idx ON public.pgr_services_schema USING btree (success);
-
-
---
--- Name: posn_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX posn_idx ON public.eg_hrms_assignment USING btree ("position");
-
-
---
--- Name: reactivation_employeeid_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX reactivation_employeeid_idx ON public.eg_hrms_reactivationdetails USING btree (employeeid);
-
-
---
--- Name: workflow_schema_version_s_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX workflow_schema_version_s_idx ON public.workflow_schema_version USING btree (success);
-
-
---
--- Name: eg_user_address eg_user_address_user_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_user_address
-    ADD CONSTRAINT eg_user_address_user_fkey FOREIGN KEY (userid, tenantid) REFERENCES public.eg_user(id, tenantid) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
---
--- Name: eg_userrole eg_userrole_roleid_roleidtenantid_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_userrole
-    ADD CONSTRAINT eg_userrole_roleid_roleidtenantid_fkey FOREIGN KEY (roleid, roleidtenantid) REFERENCES public.eg_role(id, tenantid);
-
-
---
--- Name: eg_userrole eg_userrole_userid_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_userrole
-    ADD CONSTRAINT eg_userrole_userid_fkey FOREIGN KEY (userid, tenantid) REFERENCES public.eg_user(id, tenantid) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
---
--- Name: eg_pgr_address_v2 fk_eg_pgr_address_v2; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_pgr_address_v2
-    ADD CONSTRAINT fk_eg_pgr_address_v2 FOREIGN KEY (parentid) REFERENCES public.eg_pgr_service_v2(id);
-
-
---
--- Name: eg_wf_action_v2 fk_eg_wf_action_v2; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_wf_action_v2
-    ADD CONSTRAINT fk_eg_wf_action_v2 FOREIGN KEY (currentstate) REFERENCES public.eg_wf_state_v2(uuid);
-
-
---
--- Name: eg_wf_assignee_v2 fk_eg_wf_assignee_v2; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_wf_assignee_v2
-    ADD CONSTRAINT fk_eg_wf_assignee_v2 FOREIGN KEY (processinstanceid) REFERENCES public.eg_wf_processinstance_v2(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
---
--- Name: eg_wf_document_v2 fk_eg_wf_document; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_wf_document_v2
-    ADD CONSTRAINT fk_eg_wf_document FOREIGN KEY (processinstanceid) REFERENCES public.eg_wf_processinstance_v2(id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
---
--- Name: eg_wf_state_v2 fk_eg_wf_state; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_wf_state_v2
-    ADD CONSTRAINT fk_eg_wf_state FOREIGN KEY (businessserviceid) REFERENCES public.eg_wf_businessservice_v2(uuid) ON UPDATE CASCADE ON DELETE CASCADE;
-
-
---
--- Name: eg_hrms_assignment fk_eghrms_assignment_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_assignment
-    ADD CONSTRAINT fk_eghrms_assignment_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
-
-
---
--- Name: eg_hrms_deactivationdetails fk_eghrms_deactivationdetails_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_deactivationdetails
-    ADD CONSTRAINT fk_eghrms_deactivationdetails_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
-
-
---
--- Name: eg_hrms_departmentaltests fk_eghrms_departmentaltests_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_departmentaltests
-    ADD CONSTRAINT fk_eghrms_departmentaltests_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
-
-
---
--- Name: eg_hrms_educationaldetails fk_eghrms_educationaldetails_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_educationaldetails
-    ADD CONSTRAINT fk_eghrms_educationaldetails_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
-
-
---
--- Name: eg_hrms_empdocuments fk_eghrms_empdocuments_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_empdocuments
-    ADD CONSTRAINT fk_eghrms_empdocuments_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
-
-
---
--- Name: eg_hrms_jurisdiction fk_eghrms_jurisdiction_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_jurisdiction
-    ADD CONSTRAINT fk_eghrms_jurisdiction_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
-
-
---
--- Name: eg_hrms_reactivationdetails fk_eghrms_reactivationdetails_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_reactivationdetails
-    ADD CONSTRAINT fk_eghrms_reactivationdetails_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
-
-
---
--- Name: eg_hrms_servicehistory fk_eghrms_servicehistory_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_hrms_servicehistory
-    ADD CONSTRAINT fk_eghrms_servicehistory_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
-
-
---
--- Name: eg_userrole_v1 fk_user_role_v1; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.eg_userrole_v1
-    ADD CONSTRAINT fk_user_role_v1 FOREIGN KEY (user_id, user_tenantid) REFERENCES public.eg_user(id, tenantid);
-
-
---
--- Name: eg_token; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.eg_token (
-    id character(36) NOT NULL,
-    tenantid character varying(256) NOT NULL,
-    tokennumber character varying(128) NOT NULL,
-    tokenidentity character varying(100) NOT NULL,
-    validated character(1) DEFAULT 'N'::bpchar NOT NULL,
-    ttlsecs bigint NOT NULL,
-    createddate timestamp without time zone NOT NULL,
-    lastmodifieddate timestamp without time zone,
-    createdby bigint NOT NULL,
-    lastmodifiedby bigint,
-    version bigint,
-    createddatenew bigint
-);
-
-
---
--- Name: eg_token eg_token_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: eg_token eg_token_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
 --
 
 ALTER TABLE ONLY public.eg_token
@@ -45357,15 +44689,943 @@ ALTER TABLE ONLY public.eg_token
 
 
 --
--- Name: idx_token_number_identity_tenant; Type: INDEX; Schema: public; Owner: -
+-- Name: eg_url_shortener eg_url_shortener_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_url_shortener
+    ADD CONSTRAINT eg_url_shortener_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: eg_user_address eg_user_address_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_user_address
+    ADD CONSTRAINT eg_user_address_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: eg_user_address eg_user_address_type_unique; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_user_address
+    ADD CONSTRAINT eg_user_address_type_unique UNIQUE (userid, tenantid, type);
+
+
+--
+-- Name: eg_user eg_user_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_user
+    ADD CONSTRAINT eg_user_pkey PRIMARY KEY (id, tenantid);
+
+
+--
+-- Name: eg_user eg_user_user_name_tenant; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_user
+    ADD CONSTRAINT eg_user_user_name_tenant UNIQUE (username, type, tenantid);
+
+
+--
+-- Name: egov-url-shortening_schema egov-url-shortening_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public."egov-url-shortening_schema"
+    ADD CONSTRAINT "egov-url-shortening_schema_pk" PRIMARY KEY (installed_rank);
+
+
+--
+-- Name: egov_enc_service_schema egov_enc_service_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.egov_enc_service_schema
+    ADD CONSTRAINT egov_enc_service_schema_pk PRIMARY KEY (installed_rank);
+
+
+--
+-- Name: egov_filestore_schema egov_filestore_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.egov_filestore_schema
+    ADD CONSTRAINT egov_filestore_schema_pk PRIMARY KEY (installed_rank);
+
+
+--
+-- Name: egov_hrms_schema egov_hrms_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.egov_hrms_schema
+    ADD CONSTRAINT egov_hrms_schema_pk PRIMARY KEY (installed_rank);
+
+
+--
+-- Name: egov_idgen_schema egov_idgen_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.egov_idgen_schema
+    ADD CONSTRAINT egov_idgen_schema_pk PRIMARY KEY (installed_rank);
+
+
+--
+-- Name: egov_localization_schema egov_localization_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.egov_localization_schema
+    ADD CONSTRAINT egov_localization_schema_pk PRIMARY KEY (installed_rank);
+
+
+--
+-- Name: egov_otp_schema egov_otp_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.egov_otp_schema
+    ADD CONSTRAINT egov_otp_schema_pk PRIMARY KEY (installed_rank);
+
+
+--
+-- Name: egov_user_schema egov_user_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.egov_user_schema
+    ADD CONSTRAINT egov_user_schema_pk PRIMARY KEY (installed_rank);
+
+
+--
+-- Name: egov_workflow_v2_schema egov_workflow_v2_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.egov_workflow_v2_schema
+    ADD CONSTRAINT egov_workflow_v2_schema_pk PRIMARY KEY (installed_rank);
+
+
+--
+-- Name: mdms_v2_schema mdms_v2_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.mdms_v2_schema
+    ADD CONSTRAINT mdms_v2_schema_pk PRIMARY KEY (installed_rank);
+
+
+--
+-- Name: message message_pkey; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.message
+    ADD CONSTRAINT message_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pgr_services_schema pgr_services_schema_pk; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.pgr_services_schema
+    ADD CONSTRAINT pgr_services_schema_pk PRIMARY KEY (installed_rank);
+
+
+--
+-- Name: boundary_hierarchy pk_boundary_hierarchy; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.boundary_hierarchy
+    ADD CONSTRAINT pk_boundary_hierarchy PRIMARY KEY (id);
+
+
+--
+-- Name: boundary_relationship pk_boundary_relationship; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.boundary_relationship
+    ADD CONSTRAINT pk_boundary_relationship PRIMARY KEY (tenantid, code, hierarchytype);
+
+
+--
+-- Name: eg_mdms_data pk_eg_mdms_data; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_mdms_data
+    ADD CONSTRAINT pk_eg_mdms_data PRIMARY KEY (tenantid, schemacode, uniqueidentifier);
+
+
+--
+-- Name: eg_pgr_address_v2 pk_eg_pgr_address_v2; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_pgr_address_v2
+    ADD CONSTRAINT pk_eg_pgr_address_v2 PRIMARY KEY (id);
+
+
+--
+-- Name: eg_pgr_service_v2 pk_eg_pgr_servicereq_v2; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_pgr_service_v2
+    ADD CONSTRAINT pk_eg_pgr_servicereq_v2 PRIMARY KEY (tenantid, servicerequestid);
+
+
+--
+-- Name: eg_mdms_schema_definition pk_eg_schema_definition; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_mdms_schema_definition
+    ADD CONSTRAINT pk_eg_schema_definition PRIMARY KEY (tenantid, code);
+
+
+--
+-- Name: eg_wf_businessservice_v2 pk_eg_wf_businessservice; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_wf_businessservice_v2
+    ADD CONSTRAINT pk_eg_wf_businessservice PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_wf_state_v2 pk_eg_wf_state_v2; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_wf_state_v2
+    ADD CONSTRAINT pk_eg_wf_state_v2 PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_hrms_assignment pk_eghrms_assignment; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_assignment
+    ADD CONSTRAINT pk_eghrms_assignment PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_hrms_deactivationdetails pk_eghrms_deactivationdetails; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_deactivationdetails
+    ADD CONSTRAINT pk_eghrms_deactivationdetails PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_hrms_departmentaltests pk_eghrms_departmentaltests; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_departmentaltests
+    ADD CONSTRAINT pk_eghrms_departmentaltests PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_hrms_educationaldetails pk_eghrms_educationaldetails; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_educationaldetails
+    ADD CONSTRAINT pk_eghrms_educationaldetails PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_hrms_empdocuments pk_eghrms_empdocuments; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_empdocuments
+    ADD CONSTRAINT pk_eghrms_empdocuments PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_hrms_employee pk_eghrms_employee; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_employee
+    ADD CONSTRAINT pk_eghrms_employee PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_hrms_jurisdiction pk_eghrms_jurisdiction; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_jurisdiction
+    ADD CONSTRAINT pk_eghrms_jurisdiction PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_hrms_reactivationdetails pk_eghrms_reactivationdetails; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_reactivationdetails
+    ADD CONSTRAINT pk_eghrms_reactivationdetails PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_hrms_servicehistory pk_eghrms_servicehistory; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_servicehistory
+    ADD CONSTRAINT pk_eghrms_servicehistory PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_filestoremap pk_filestoremap; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_filestoremap
+    ADD CONSTRAINT pk_filestoremap PRIMARY KEY (id);
+
+
+--
+-- Name: id_generator pk_id_generator; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.id_generator
+    ADD CONSTRAINT pk_id_generator PRIMARY KEY (idname, tenantid);
+
+
+--
+-- Name: boundary_hierarchy uk_boundary_hierarchy; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.boundary_hierarchy
+    ADD CONSTRAINT uk_boundary_hierarchy UNIQUE (tenantid, hierarchytype);
+
+
+--
+-- Name: boundary_relationship uk_boundary_relationship; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.boundary_relationship
+    ADD CONSTRAINT uk_boundary_relationship UNIQUE (id);
+
+
+--
+-- Name: eg_mdms_data uk_eg_mdms_data; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_mdms_data
+    ADD CONSTRAINT uk_eg_mdms_data UNIQUE (id);
+
+
+--
+-- Name: eg_pgr_service_v2 uk_eg_pgr_service_v2; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_pgr_service_v2
+    ADD CONSTRAINT uk_eg_pgr_service_v2 UNIQUE (id);
+
+
+--
+-- Name: eg_wf_action_v2 uk_eg_wf_action; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_wf_action_v2
+    ADD CONSTRAINT uk_eg_wf_action PRIMARY KEY (uuid);
+
+
+--
+-- Name: eg_wf_businessservice_v2 uk_eg_wf_businessservice; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_wf_businessservice_v2
+    ADD CONSTRAINT uk_eg_wf_businessservice UNIQUE (tenantid, businessservice);
+
+
+--
+-- Name: eg_wf_document_v2 uk_eg_wf_document; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_wf_document_v2
+    ADD CONSTRAINT uk_eg_wf_document PRIMARY KEY (id);
+
+
+--
+-- Name: eg_wf_processinstance_v2 uk_eg_wf_processinstance; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_wf_processinstance_v2
+    ADD CONSTRAINT uk_eg_wf_processinstance UNIQUE (id);
+
+
+--
+-- Name: eg_wf_state_v2 uk_eg_wf_state_v2; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_wf_state_v2
+    ADD CONSTRAINT uk_eg_wf_state_v2 UNIQUE (state, businessserviceid);
+
+
+--
+-- Name: eg_hrms_employee uk_eghrms_employee_code; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_employee
+    ADD CONSTRAINT uk_eghrms_employee_code UNIQUE (code, tenantid);
+
+
+--
+-- Name: eg_filestoremap uk_filestoremap_filestoreid; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_filestoremap
+    ADD CONSTRAINT uk_filestoremap_filestoreid UNIQUE (filestoreid);
+
+
+--
+-- Name: eg_filestoremap uk_filestoremap_fsid_tenant; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_filestoremap
+    ADD CONSTRAINT uk_filestoremap_fsid_tenant UNIQUE (filestoreid, tenantid);
+
+
+--
+-- Name: boundary unique_code_tenantid; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.boundary
+    ADD CONSTRAINT unique_code_tenantid UNIQUE (code, tenantid);
+
+
+--
+-- Name: message unique_message_entry; Type: CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.message
+    ADD CONSTRAINT unique_message_entry UNIQUE (tenantid, locale, module, code);
+
+
+--
+-- Name: accesscontrol_schema_version_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX accesscontrol_schema_version_s_idx ON public.accesscontrol_schema_version USING btree (success);
+
+
+--
+-- Name: active_tenant_asymmetric_keys; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE UNIQUE INDEX active_tenant_asymmetric_keys ON public.eg_enc_asymmetric_keys USING btree (tenant_id) WHERE (active IS TRUE);
+
+
+--
+-- Name: active_tenant_symmetric_keys; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE UNIQUE INDEX active_tenant_symmetric_keys ON public.eg_enc_symmetric_keys USING btree (tenant_id) WHERE (active IS TRUE);
+
+
+--
+-- Name: boundary_service_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX boundary_service_schema_s_idx ON public.boundary_service_schema USING btree (success);
+
+
+--
+-- Name: code_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX code_idx ON public.eg_hrms_employee USING btree (code);
+
+
+--
+-- Name: dept_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX dept_idx ON public.eg_hrms_assignment USING btree (department);
+
+
+--
+-- Name: desg_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX desg_idx ON public.eg_hrms_assignment USING btree (designation);
+
+
+--
+-- Name: eg_asymmetric_key_id; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE UNIQUE INDEX eg_asymmetric_key_id ON public.eg_enc_asymmetric_keys USING btree (key_id);
+
+
+--
+-- Name: eg_symmetric_key_id; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE UNIQUE INDEX eg_symmetric_key_id ON public.eg_enc_symmetric_keys USING btree (key_id);
+
+
+--
+-- Name: egov-url-shortening_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX "egov-url-shortening_schema_s_idx" ON public."egov-url-shortening_schema" USING btree (success);
+
+
+--
+-- Name: egov_enc_service_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX egov_enc_service_schema_s_idx ON public.egov_enc_service_schema USING btree (success);
+
+
+--
+-- Name: egov_filestore_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX egov_filestore_schema_s_idx ON public.egov_filestore_schema USING btree (success);
+
+
+--
+-- Name: egov_hrms_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX egov_hrms_schema_s_idx ON public.egov_hrms_schema USING btree (success);
+
+
+--
+-- Name: egov_idgen_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX egov_idgen_schema_s_idx ON public.egov_idgen_schema USING btree (success);
+
+
+--
+-- Name: egov_localization_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX egov_localization_schema_s_idx ON public.egov_localization_schema USING btree (success);
+
+
+--
+-- Name: egov_otp_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX egov_otp_schema_s_idx ON public.egov_otp_schema USING btree (success);
+
+
+--
+-- Name: egov_user_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX egov_user_schema_s_idx ON public.egov_user_schema USING btree (success);
+
+
+--
+-- Name: egov_workflow_v2_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX egov_workflow_v2_schema_s_idx ON public.egov_workflow_v2_schema USING btree (success);
+
+
+--
+-- Name: idx_bm_gen_template_tenant_hierarchy; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_bm_gen_template_tenant_hierarchy ON public.eg_bm_generated_template USING btree (tenantid, hierarchytype);
+
+
+--
+-- Name: idx_bm_proc_template_tenant_hierarchy; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_bm_proc_template_tenant_hierarchy ON public.eg_bm_processed_template USING btree (tenantid, hierarchytype);
+
+
+--
+-- Name: idx_boundary_hierarchy_tenantid_hierarchytype; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_boundary_hierarchy_tenantid_hierarchytype ON public.boundary_hierarchy USING btree (tenantid, hierarchytype);
+
+
+--
+-- Name: idx_boundary_tenantid_code; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_boundary_tenantid_code ON public.boundary USING btree (tenantid, code);
+
+
+--
+-- Name: idx_eg_hrms_employee_tenantid; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_hrms_employee_tenantid ON public.eg_hrms_employee USING btree (tenantid);
+
+
+--
+-- Name: idx_eg_role_code; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_role_code ON public.eg_role USING btree (code);
+
+
+--
+-- Name: idx_eg_user_active; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_user_active ON public.eg_user USING btree (active);
+
+
+--
+-- Name: idx_eg_user_address_tenantid; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_user_address_tenantid ON public.eg_user_address USING btree (tenantid);
+
+
+--
+-- Name: idx_eg_user_failed_attempts_user_attemptdate; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_user_failed_attempts_user_attemptdate ON public.eg_user_login_failed_attempts USING btree (attempt_date);
+
+
+--
+-- Name: idx_eg_user_failed_attempts_user_uuid; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_user_failed_attempts_user_uuid ON public.eg_user_login_failed_attempts USING btree (user_uuid);
+
+
+--
+-- Name: idx_eg_user_mobile; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_user_mobile ON public.eg_user USING btree (mobilenumber);
+
+
+--
+-- Name: idx_eg_user_name; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_user_name ON public.eg_user USING btree (name);
+
+
+--
+-- Name: idx_eg_user_tenantid; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_user_tenantid ON public.eg_user USING btree (tenantid);
+
+
+--
+-- Name: idx_eg_user_type; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_user_type ON public.eg_user USING btree (type);
+
+
+--
+-- Name: idx_eg_user_username; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_user_username ON public.eg_user USING btree (username);
+
+
+--
+-- Name: idx_eg_user_uuid; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_user_uuid ON public.eg_user USING btree (uuid);
+
+
+--
+-- Name: idx_eg_userrole_v1_rolecode; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_userrole_v1_rolecode ON public.eg_userrole_v1 USING btree (role_code);
+
+
+--
+-- Name: idx_eg_userrole_v1_roletenantid; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_userrole_v1_roletenantid ON public.eg_userrole_v1 USING btree (role_tenantid);
+
+
+--
+-- Name: idx_eg_userrole_v1_userid; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_userrole_v1_userid ON public.eg_userrole_v1 USING btree (user_id);
+
+
+--
+-- Name: idx_eg_userrole_v1_usertenantid; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_userrole_v1_usertenantid ON public.eg_userrole_v1 USING btree (user_tenantid);
+
+
+--
+-- Name: idx_eg_wf_assignee_v2_assignee; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_eg_wf_assignee_v2_assignee ON public.eg_wf_assignee_v2 USING btree (tenantid, assignee);
+
+
+--
+-- Name: idx_pi_wf_action; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_pi_wf_action ON public.eg_wf_action_v2 USING btree (action);
+
+
+--
+-- Name: idx_pi_wf_businessservice_v2; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_pi_wf_businessservice_v2 ON public.eg_wf_businessservice_v2 USING btree (businessservice);
+
+
+--
+-- Name: idx_pi_wf_processinstance_v2; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_pi_wf_processinstance_v2 ON public.eg_wf_processinstance_v2 USING btree (businessid, lastmodifiedtime);
+
+
+--
+-- Name: idx_pi_wf_state_v2; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_pi_wf_state_v2 ON public.eg_wf_state_v2 USING btree (state);
+
+
+--
+-- Name: idx_processinstanceid_eg_wf_assignee_v2; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_processinstanceid_eg_wf_assignee_v2 ON public.eg_wf_assignee_v2 USING btree (processinstanceid);
+
+
+--
+-- Name: idx_tenant_status_eg_wf_processinstance_v2; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX idx_tenant_status_eg_wf_processinstance_v2 ON public.eg_wf_processinstance_v2 USING btree (((((tenantid)::text || ':'::text) || (status)::text)));
+
+
+--
+-- Name: idx_token_number_identity_tenant; Type: INDEX; Schema: public; Owner: egov
 --
 
 CREATE INDEX idx_token_number_identity_tenant ON public.eg_token USING btree (tokennumber, tokenidentity, tenantid);
 
 
 --
+-- Name: index_eg_pgr_address_v2_locality; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX index_eg_pgr_address_v2_locality ON public.eg_pgr_address_v2 USING btree (locality);
+
+
+--
+-- Name: index_eg_pgr_service_v2_accountid; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX index_eg_pgr_service_v2_accountid ON public.eg_pgr_service_v2 USING btree (accountid);
+
+
+--
+-- Name: index_eg_pgr_service_v2_applicationstatus; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX index_eg_pgr_service_v2_applicationstatus ON public.eg_pgr_service_v2 USING btree (applicationstatus);
+
+
+--
+-- Name: index_eg_pgr_service_v2_id; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX index_eg_pgr_service_v2_id ON public.eg_pgr_service_v2 USING btree (id);
+
+
+--
+-- Name: index_eg_pgr_service_v2_servicecode; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX index_eg_pgr_service_v2_servicecode ON public.eg_pgr_service_v2 USING btree (servicecode);
+
+
+--
+-- Name: index_eg_pgr_service_v2_tenantid_servicerequestid; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX index_eg_pgr_service_v2_tenantid_servicerequestid ON public.eg_pgr_service_v2 USING btree (tenantid, servicerequestid);
+
+
+--
+-- Name: mdms_v2_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX mdms_v2_schema_s_idx ON public.mdms_v2_schema USING btree (success);
+
+
+--
+-- Name: message_locale_tenant; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX message_locale_tenant ON public.message USING btree (locale, tenantid);
+
+
+--
+-- Name: pgr_services_schema_s_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX pgr_services_schema_s_idx ON public.pgr_services_schema USING btree (success);
+
+
+--
+-- Name: posn_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX posn_idx ON public.eg_hrms_assignment USING btree ("position");
+
+
+--
+-- Name: reactivation_employeeid_idx; Type: INDEX; Schema: public; Owner: egov
+--
+
+CREATE INDEX reactivation_employeeid_idx ON public.eg_hrms_reactivationdetails USING btree (employeeid);
+
+
+--
+-- Name: eg_user_address eg_user_address_user_fkey; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_user_address
+    ADD CONSTRAINT eg_user_address_user_fkey FOREIGN KEY (userid, tenantid) REFERENCES public.eg_user(id, tenantid) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: eg_userrole eg_userrole_roleid_roleidtenantid_fkey; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_userrole
+    ADD CONSTRAINT eg_userrole_roleid_roleidtenantid_fkey FOREIGN KEY (roleid, roleidtenantid) REFERENCES public.eg_role(id, tenantid);
+
+
+--
+-- Name: eg_userrole eg_userrole_userid_fkey; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_userrole
+    ADD CONSTRAINT eg_userrole_userid_fkey FOREIGN KEY (userid, tenantid) REFERENCES public.eg_user(id, tenantid) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: eg_pgr_address_v2 fk_eg_pgr_address_v2; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_pgr_address_v2
+    ADD CONSTRAINT fk_eg_pgr_address_v2 FOREIGN KEY (parentid) REFERENCES public.eg_pgr_service_v2(id);
+
+
+--
+-- Name: eg_wf_action_v2 fk_eg_wf_action_v2; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_wf_action_v2
+    ADD CONSTRAINT fk_eg_wf_action_v2 FOREIGN KEY (currentstate) REFERENCES public.eg_wf_state_v2(uuid);
+
+
+--
+-- Name: eg_wf_assignee_v2 fk_eg_wf_assignee_v2; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_wf_assignee_v2
+    ADD CONSTRAINT fk_eg_wf_assignee_v2 FOREIGN KEY (processinstanceid) REFERENCES public.eg_wf_processinstance_v2(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: eg_wf_document_v2 fk_eg_wf_document; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_wf_document_v2
+    ADD CONSTRAINT fk_eg_wf_document FOREIGN KEY (processinstanceid) REFERENCES public.eg_wf_processinstance_v2(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: eg_wf_state_v2 fk_eg_wf_state; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_wf_state_v2
+    ADD CONSTRAINT fk_eg_wf_state FOREIGN KEY (businessserviceid) REFERENCES public.eg_wf_businessservice_v2(uuid) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: eg_hrms_assignment fk_eghrms_assignment_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_assignment
+    ADD CONSTRAINT fk_eghrms_assignment_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
+
+
+--
+-- Name: eg_hrms_deactivationdetails fk_eghrms_deactivationdetails_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_deactivationdetails
+    ADD CONSTRAINT fk_eghrms_deactivationdetails_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
+
+
+--
+-- Name: eg_hrms_departmentaltests fk_eghrms_departmentaltests_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_departmentaltests
+    ADD CONSTRAINT fk_eghrms_departmentaltests_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
+
+
+--
+-- Name: eg_hrms_educationaldetails fk_eghrms_educationaldetails_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_educationaldetails
+    ADD CONSTRAINT fk_eghrms_educationaldetails_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
+
+
+--
+-- Name: eg_hrms_empdocuments fk_eghrms_empdocuments_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_empdocuments
+    ADD CONSTRAINT fk_eghrms_empdocuments_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
+
+
+--
+-- Name: eg_hrms_jurisdiction fk_eghrms_jurisdiction_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_jurisdiction
+    ADD CONSTRAINT fk_eghrms_jurisdiction_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
+
+
+--
+-- Name: eg_hrms_reactivationdetails fk_eghrms_reactivationdetails_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_reactivationdetails
+    ADD CONSTRAINT fk_eghrms_reactivationdetails_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
+
+
+--
+-- Name: eg_hrms_servicehistory fk_eghrms_servicehistory_employeeid; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_hrms_servicehistory
+    ADD CONSTRAINT fk_eghrms_servicehistory_employeeid FOREIGN KEY (employeeid) REFERENCES public.eg_hrms_employee(uuid) ON DELETE CASCADE;
+
+
+--
+-- Name: eg_userrole_v1 fk_user_role_v1; Type: FK CONSTRAINT; Schema: public; Owner: egov
+--
+
+ALTER TABLE ONLY public.eg_userrole_v1
+    ADD CONSTRAINT fk_user_role_v1 FOREIGN KEY (user_id, user_tenantid) REFERENCES public.eg_user(id, tenantid);
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict XCN8W99QyqbCXmfs0qAeFgB8W0g9mhulyxVgFl6MmobAdASkh4xR96gpgnjnR3i
+\unrestrict khfTsZ1ktr0RAULBk6Bs28kBqKU4Bfrmf02yBc0FejfEp5oIZSwwvgwBY2kwXs5
 

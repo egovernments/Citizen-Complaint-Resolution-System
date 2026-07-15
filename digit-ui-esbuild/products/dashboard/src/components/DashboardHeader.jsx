@@ -37,14 +37,28 @@ function buildRowScope(scope) {
   return { deptLabel, areaLabel, hasDepartments: departments.length > 0 };
 }
 
-function formatDisplayDate(iso) {
+/**
+ * Render a filter ISO date (yyyy-mm-dd) in the ACTIVE locale's numeric order —
+ * hardcoding `${m}/${d}/${y}` printed US dates under every locale (06/13/2026
+ * where French expects 13/06/2026). `language` is the DIGIT locale
+ * (en_IN / fr_FR); underscore→hyphen makes it a BCP 47 tag.
+ */
+function formatDisplayDate(iso, language) {
   if (!iso) return "";
   const [y, m, d] = iso.split("-");
   if (!y || !m || !d) return iso;
-  return `${m}/${d}/${y}`;
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  if (Number.isNaN(date.getTime())) return iso;
+  const opts = { day: "2-digit", month: "2-digit", year: "numeric" };
+  try {
+    return date.toLocaleDateString(language?.replace("_", "-"), opts);
+  } catch (e) {
+    // Malformed stored locale tag — let the browser default decide.
+    return date.toLocaleDateString(undefined, opts);
+  }
 }
 
-function buildSubtitle(filters, filterOptions, t) {
+function buildSubtitle(filters, filterOptions, t, language) {
   const geoOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
   const geoId = filters?.geography;
   // The geography chip is a raw boundary code — route it through the
@@ -56,10 +70,8 @@ function buildSubtitle(filters, filterOptions, t) {
         t("DASHBOARD_HEADER_ALL_LOCALITIES", "All Localities");
 
   let period = t("DASHBOARD_HEADER_LAST_7_DAYS", "Last 7 days");
-  if (filters?.dateRangeActive && filters?.dateFrom && filters?.dateTo) {
-    period = `${formatDisplayDate(filters.dateFrom)} – ${formatDisplayDate(filters.dateTo)}`;
-  } else if (filters?.dateFrom && filters?.dateTo) {
-    period = `${formatDisplayDate(filters.dateFrom)} – ${formatDisplayDate(filters.dateTo)}`;
+  if (filters?.dateFrom && filters?.dateTo) {
+    period = `${formatDisplayDate(filters.dateFrom, language)} – ${formatDisplayDate(filters.dateTo, language)}`;
   }
 
   return `${geo} · ${period}`;
@@ -101,15 +113,25 @@ const DashboardHeader = ({
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
   const addKpiRef = useRef(null);
-  const { t, language } = useDashboardT();
+  const { t, exists, language, i18nTick } = useDashboardT();
   const productLabel = useMemo(() => getProductLabel(), []);
-  // `language` re-keys the memos on language switch (t itself is stable).
-  const rowScope = useMemo(() => buildRowScope(scope), [scope, language]);
+  // `language` re-keys the memos on language switch; `i18nTick` re-keys them
+  // when a locale bundle arrives asynchronously after the switch (t is stable).
+  const rowScope = useMemo(() => buildRowScope(scope), [scope, language, i18nTick]);
   const subtitle = useMemo(
-    () => buildSubtitle(filters, filterOptions, t),
-    [filters, filterOptions, t, language]
+    () => buildSubtitle(filters, filterOptions, t, language),
+    [filters, filterOptions, t, language, i18nTick]
   );
-  const title = productLabel.toLowerCase().includes("pgr")
+  // ONE full-phrase key wins when seeded — splicing the DASHBOARD_PRODUCT_LABEL
+  // globalConfig onto a translated "Operations" produced mixed-language titles
+  // ("Complaint Resolution Opérations"); word order/agreement can't survive
+  // per-word translation. The legacy composition stays as the unseeded fallback,
+  // so tenants that brand via DASHBOARD_PRODUCT_LABEL and don't seed
+  // DASHBOARD_HEADER_TITLE keep their branded English title; branded tenants
+  // that localize should carry the brand inside the seeded message itself.
+  const title = exists("DASHBOARD_HEADER_TITLE")
+    ? t("DASHBOARD_HEADER_TITLE", "Complaint Resolution Operations")
+    : productLabel.toLowerCase().includes("pgr")
     ? t("DASHBOARD_HEADER_PGR_OPERATIONS", "PGR Operations")
     : `${productLabel} ${t("DASHBOARD_HEADER_OPERATIONS", "Operations")}`;
 
