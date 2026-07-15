@@ -274,6 +274,10 @@
         "jurisdictionScoped": {
           "type": "boolean",
           "description": "AND the jurisdiction axis onto every predicate (Step 2)."
+        },
+        "serverSide": {
+          "type": "boolean",
+          "description": "Resolve visibility in pgr-services (/request/inbox/_search, reportee-aware Step-2 resolver) instead of composing it client-side. Requires PGR_VISIBILITY_ENABLED on the deployment. Default false."
         }
       },
       "x-ref-schema": [],

@@ -1323,6 +1323,12 @@ services:
       PGR_STATELEVEL_TENANTID: pg
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
+      # Visibility V1 Step-2 (reportee-scoped inbox tabs). Deploy-level
+      # switch for the /request/inbox/_search|_count endpoints + the HRMS
+      # projection consumer/rebuild; per-tenant enablement (and the
+      # client->server cutover) stays in MDMS
+      # RAINMAKER-PGR.InboxVisibilityConfig (enabled / serverSide).
+      PGR_VISIBILITY_ENABLED: 'true'
       JAVA_OPTS: '-Xmx384m -Xms384m'
       JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       OTEL_TRACES_EXPORTER: otlp

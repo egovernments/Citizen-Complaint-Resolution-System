@@ -167,6 +167,10 @@ public class PGRConstants {
 
     public static final String MDMS_ESCALATION_CONFIG = "EscalationConfig";
 
+    public static final String MDMS_INBOX_VISIBILITY_CONFIG = "InboxVisibilityConfig";
+
+    public static final String MDMS_INBOX_VISIBILITY_CONFIG_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.InboxVisibilityConfig";
+
     public static final String MDMS_ESCALATION_CONFIG_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.EscalationConfig";
 
     public static final String HRMS_REPORTING_TO_JSONPATH = "$.Employees[0].assignments[?(@.isCurrentAssignment==true)].reportingTo";

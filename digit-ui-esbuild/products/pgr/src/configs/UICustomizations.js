@@ -1657,7 +1657,13 @@ export const UICustomizations = {
       // (this is the design matrix's V2 "My", pulled forward — see design §3).
       // All = every open complaint; a GRO's unassigned assignment queue
       // therefore lives in All, not My (accepted tradeoff).
-      if (activeTab === "MY") {
+      //
+      // Server mode (InboxVisibilityConfig.serverSide): pgr-services resolves
+      // the tab scope from the `tab` param — MY = assignee-me, ALL = reportee
+      // subtree + unassigned queues — so the client sends no assignee.
+      if (additionalDetails?.serverSide) {
+        if (activeTab) params.tab = activeTab;
+      } else if (activeTab === "MY") {
         const userInfo = Digit.UserService.getUser()?.info;
         if (userInfo?.uuid) {
           params.assignee = [userInfo.uuid];

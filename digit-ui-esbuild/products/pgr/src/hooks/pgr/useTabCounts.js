@@ -42,7 +42,7 @@ const safeSet = (k, v) => {
   }
 };
 
-const useTabCounts = ({ tenantId, allStates, enabled = true }) => {
+const useTabCounts = ({ tenantId, allStates, enabled = true, serverSide = false }) => {
   const uuid = Digit.UserService.getUser()?.info?.uuid || "anon";
   const keyFor = (tab) => `pgr.inbox.lastSeen.${tenantId}.${tab}.${uuid}`;
 
@@ -51,7 +51,9 @@ const useTabCounts = ({ tenantId, allStates, enabled = true }) => {
     ALL: Number(safeGet(keyFor("ALL"))) || 0,
   }));
 
-  const countUrl = Urls.pgr.search.replace("_search", "_count");
+  // Server mode counts through the visibility-aware endpoint (the server
+  // resolves the tab's assignee/reportee scope from the `tab` param).
+  const countUrl = serverSide ? Urls.pgr.visibilityCount : Urls.pgr.search.replace("_search", "_count");
 
   const rawCount = async (params) => {
     try {
@@ -66,15 +68,20 @@ const useTabCounts = ({ tenantId, allStates, enabled = true }) => {
     if (!allStates?.length) return { newCount: 0 };
     const since = seen[tab];
     const params = { tenantId, applicationStatus: allStates };
-    // MY is the assignee axis; requires the count-parity fix in
-    // pgr-services PGRService.count() (same assignee resolution as search).
-    if (tab === "MY") params.assignee = [uuid];
+    if (serverSide) {
+      // the server resolves the tab's visibility scope
+      params.tab = tab;
+    } else if (tab === "MY") {
+      // MY is the assignee axis; requires the count-parity fix in
+      // pgr-services PGRService.count() (same assignee resolution as search).
+      params.assignee = [uuid];
+    }
     if (since) params.fromDate = since;
     return { newCount: await rawCount(params) };
   };
 
   const { data, refetch } = useQuery(
-    ["pgrTabCounts", tenantId, JSON.stringify(allStates), uuid, seen.MY, seen.ALL],
+    ["pgrTabCounts", tenantId, JSON.stringify(allStates), uuid, seen.MY, seen.ALL, serverSide],
     async () => {
       const [my, all] = await Promise.all([countsFor("MY"), countsFor("ALL")]);
       return { my, all };

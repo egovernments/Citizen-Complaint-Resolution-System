@@ -21,7 +21,16 @@ const useInboxVisibility = () => {
     retry: false,
   });
 
-  return { enabled: data?.enabled === true, config: data, isLoading };
+  return {
+    enabled: data?.enabled === true,
+    // serverSide: resolve visibility in pgr-services (/request/inbox/_search,
+    // reportee-aware) instead of composing it client-side. Default false so
+    // tenants opt in only once their backend carries the Step-2 endpoints
+    // (PGR_VISIBILITY_ENABLED).
+    serverSide: data?.enabled === true && data?.serverSide === true,
+    config: data,
+    isLoading,
+  };
 };
 
 export default useInboxVisibility;

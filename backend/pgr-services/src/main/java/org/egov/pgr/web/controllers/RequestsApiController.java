@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.response.ResponseInfo;
 import org.egov.pgr.service.DashboardService;
 import org.egov.pgr.service.PGRService;
+import org.egov.pgr.service.VisibilityService;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.egov.pgr.util.PGRConstants;
 import org.egov.pgr.util.ResponseInfoFactory;
 import org.egov.pgr.web.models.*;
@@ -37,13 +39,17 @@ public class RequestsApiController{
 
     private DashboardService dashboardService;
 
+    private VisibilityService visibilityService;
+
     @Autowired
     public RequestsApiController(ObjectMapper objectMapper, PGRService pgrService,
-                                 ResponseInfoFactory responseInfoFactory, DashboardService dashboardService) {
+                                 ResponseInfoFactory responseInfoFactory, DashboardService dashboardService,
+                                 VisibilityService visibilityService) {
         this.objectMapper = objectMapper;
         this.pgrService = pgrService;
         this.responseInfoFactory = responseInfoFactory;
         this.dashboardService = dashboardService;
+        this.visibilityService = visibilityService;
     }
 
 
@@ -102,6 +108,28 @@ public class RequestsApiController{
         CountResponse response = CountResponse.builder().responseInfo(responseInfo).count(count).build();
         return new ResponseEntity<>(response, HttpStatus.OK);
 
+    }
+
+    /**
+     * Visibility-aware inbox search (Visibility V1 Step-2, design §4.1): same
+     * criteria surface as /request/_search plus a `tab` param; the visibility
+     * scope (MY = assignee-me, ALL = reportee subtree + unassigned queues,
+     * with tenant-wide fallback) is resolved server-side before the search.
+     */
+    @RequestMapping(value="/request/inbox/_search", method = RequestMethod.POST)
+    public ResponseEntity<ServiceResponse> inboxSearchPost(@Valid @RequestBody RequestInfoWrapper requestInfoWrapper,
+                                                           @Valid @ModelAttribute RequestSearchCriteria criteria,
+                                                           @RequestParam(value = "tab", defaultValue = "MY") String tab) {
+        visibilityService.resolve(requestInfoWrapper.getRequestInfo(), criteria, tab);
+        return requestsSearchPost(requestInfoWrapper, criteria);
+    }
+
+    @RequestMapping(value="/request/inbox/_count", method = RequestMethod.POST)
+    public ResponseEntity<CountResponse> inboxCountPost(@Valid @RequestBody RequestInfoWrapper requestInfoWrapper,
+                                                        @Valid @ModelAttribute RequestSearchCriteria criteria,
+                                                        @RequestParam(value = "tab", defaultValue = "MY") String tab) {
+        visibilityService.resolve(requestInfoWrapper.getRequestInfo(), criteria, tab);
+        return requestsCountPost(requestInfoWrapper, criteria);
     }
 
     @GetMapping("/dashboard")

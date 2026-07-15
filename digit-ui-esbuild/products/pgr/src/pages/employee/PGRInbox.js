@@ -8,6 +8,7 @@ import useBusinessServiceStates from "../../hooks/pgr/useBusinessServiceStates";
 import useTabCounts from "../../hooks/pgr/useTabCounts";
 import useInboxVisibility from "../../hooks/pgr/useInboxVisibility";
 import PGRInboxTabs from "../../components/PGRInboxTabs";
+import Urls from "../../utils/urls";
 
 /**
  * PGRSearchInbox - Complaint Search Inbox Screen
@@ -56,7 +57,7 @@ const PGRSearchInbox = () => {
   // MDMS). Flag OFF (or master absent) renders the LEGACY inbox — no tabs,
   // assigned-to-me radio restored, OPEN_STATES default — and skips the
   // workflow/_count requests entirely.
-  const { enabled: visibilityEnabled, isLoading: visLoading } = useInboxVisibility();
+  const { enabled: visibilityEnabled, serverSide: visibilityServerSide, isLoading: visLoading } = useInboxVisibility();
   const [activeTab, setActiveTab] = useState("MY");
   // Both tabs share the same status scope (all open/actionable states); they
   // differ on the assignee axis — My = assigned to me, All = everyone's
@@ -65,7 +66,7 @@ const PGRSearchInbox = () => {
     enabled: visibilityEnabled,
   });
 
-  const { counts, markSeen } = useTabCounts({ tenantId, allStates, enabled: visibilityEnabled });
+  const { counts, markSeen } = useTabCounts({ tenantId, allStates, enabled: visibilityEnabled, serverSide: visibilityServerSide });
 
   // A tab is "seen" once it's the visible tab -> its badge clears, and the other
   // tab's badge keeps surfacing newly-arrived complaints.
@@ -166,9 +167,16 @@ const PGRSearchInbox = () => {
       ...(c.additionalDetails || {}),
       activeTab,
       allStates,
+      serverSide: visibilityServerSide,
     };
+    // Server mode (InboxVisibilityConfig.serverSide): point the composer at
+    // the visibility-aware endpoint; pgr-services resolves the tab scope
+    // (MY = assignee-me, ALL = reportee subtree + unassigned queues).
+    if (visibilityServerSide && c.apiDetails) {
+      c.apiDetails.serviceName = Urls.pgr.visibilitySearch;
+    }
     return c;
-  }, [updatedConfig, activeTab, allStates]);
+  }, [updatedConfig, activeTab, allStates, visibilityServerSide]);
 
   /**
    * Reset or refresh config when the route changes — and when the visibility

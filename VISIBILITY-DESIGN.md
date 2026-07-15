@@ -213,11 +213,22 @@ pull-based (its views are dynamic/derived, so precomputed per-user counters aren
 {
   "code": "INBOX_VISIBILITY",
   "enabled": true,
+  "serverSide": false,
   "version": "v1",
   "reporteeDepth": 1,
   "jurisdictionScoped": true
 }
 ```
+`serverSide` is the client→server cutover switch: when true (and the deployment has
+`PGR_VISIBILITY_ENABLED`), the FE points at `/request/inbox/_search|_count` with a `tab` param and
+sends no assignee — pgr-services' `VisibilityService` resolves the scope (My = assignee-me; All =
+reportee subtree + unassigned queues, tenant-wide fallback when the projected subtree is empty).
+When false, the FE composes visibility client-side exactly as Step 1 shipped.
+
+> **Ops note (bomet):** the live `InboxVisibilityConfig` schema on bomet was registered before
+> `serverSide` existed and mdms-v2 schemas are immutable via API — flipping bomet to server mode
+> later needs a direct `eg_mdms_schema_definition` row update (same workaround as the MapConfig
+> rogue-schema case) before the data record can carry `serverSide: true`.
 Moving a tenant V1→V2→V3 is a `version` bump + the matching backend capability being deployed —
 no frontend fork (consistent with MDMS-over-code / holistic fixes).
 

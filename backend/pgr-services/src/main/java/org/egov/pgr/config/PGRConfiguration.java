@@ -246,6 +246,17 @@ public class PGRConfiguration {
     @Value("${complaints.domain.events.default.locale:en_IN}")
     private String complaintsDomainEventDefaultLocale;
 
+    // Visibility (V1 Step-2 reportee core) — deploy-level kill switch plus
+    // resolver defaults; the per-tenant switch is MDMS InboxVisibilityConfig.
+    @Value("${pgr.visibility.enabled:false}")
+    private Boolean visibilityEnabled;
+
+    @Value("${pgr.visibility.reportee.depth.default:1}")
+    private Integer visibilityReporteeDepthDefault;
+
+    @Value("#{'${pgr.visibility.unassigned.states:PENDINGFORASSIGNMENT,PENDINGFORREASSIGNMENT}'.split(',')}")
+    private java.util.List<String> visibilityUnassignedStates;
+
     // Escalation
     @Value("${pgr.escalation.enabled}")
     private Boolean escalationEnabled;
