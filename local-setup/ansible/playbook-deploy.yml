@@ -1856,6 +1856,7 @@
           mode: '0644'
         notify: Reload nginx
         when: not (nginx_preserve_vhost | default(false))
+        tags: ['nginx']
 
       - name: "Host nginx — enable site"
         ansible.builtin.file:
@@ -1865,6 +1866,7 @@
           force: yes   # convert pre-existing regular-file copies (older deploys) into a symlink
         notify: Reload nginx
         when: not (nginx_preserve_vhost | default(false))
+        tags: ['nginx']
 
       - name: "Host nginx — remove default site"
         ansible.builtin.file:
@@ -1872,9 +1874,11 @@
           state: absent
         notify: Reload nginx
         when: not (nginx_preserve_vhost | default(false))
+        tags: ['nginx']
 
       - name: "Host nginx — flush handlers so reload happens before validation"
         ansible.builtin.meta: flush_handlers
+        tags: ['nginx']
 
     # macOS thin path: run nginx as a container instead of host nginx.
     # Renders the same template (upstream host -> host.docker.internal so

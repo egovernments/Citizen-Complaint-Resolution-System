@@ -42,17 +42,29 @@ sudo grep -RnE "location .*/digit-ui|alias|proxy_pass" /etc/nginx/ | grep -i dig
 
 ## Deploy — ansible-managed box (recommended)
 
-```bash
-# 1. on your workstation / CI: merge this PR, then on the box:
-cd ~/Citizen-Complaint-Resolution-System && git pull
+Use `deploy.sh` — it regenerates the inventory (`inventory/hosts.yml`, which is
+NOT checked in) from `inventory/host_vars/` and then runs the playbook. The
+host-nginx render tasks carry a `nginx` tag, so a surgical reload is:
 
-# 2. re-render the host nginx site + reload (regenerates from nginx-site.conf.j2):
-#    run the site-config play (adjust inventory/limit to the target host)
-ansible-playbook -i local-setup/ansible/inventory.yml \
-  local-setup/ansible/playbook-deploy.yml --tags nginx --limit <host>
-#    (if the play has no nginx tag, run the nginx template task or the relevant play;
-#     it ends with `nginx -t && systemctl reload nginx`.)
+```bash
+# 1. pull the merged change onto wherever you run ansible from:
+cd <repo> && git pull
+
+# 2. re-render just the host nginx site config + reload, for one host:
+cd local-setup/ansible
+./deploy.sh <host> --tags nginx
+#   deploy.sh → ansible-playbook -i inventory/hosts.yml --limit <host> \
+#               playbook-deploy.yml --tags nginx
+#   the tagged tasks render templates/nginx-site.conf.j2 and notify the
+#   `Reload nginx` handler (which runs `nginx -t` then reloads).
 ```
+
+> ⚠️ **`nginx_preserve_vhost` hosts skip this.** On any host with
+> `nginx_preserve_vhost: true` in its `host_vars` (hand-crafted vhost — e.g.
+> Bomet), the render task is `when: not nginx_preserve_vhost`, so ansible will
+> report `ok=0 changed=0` and touch nothing. Confirm with
+> `grep -r nginx_preserve_vhost local-setup/ansible/inventory/host_vars/<host>.yml`;
+> if it's set, use the **manual** path below.
 
 ## Deploy — manual (if the box's nginx isn't ansible-rendered)
 
