@@ -1,4 +1,4 @@
-name: Flyway dump alignment
+name: DB migration — Flyway history-table ↔ dump alignment
 
 # Deployment-parity item #10: the compose stack boots from a prebuilt dump and
 # then runs Flyway incrementally on top. Each Flyway-enabled service must point
