@@ -19,7 +19,7 @@ frontend. Two audiences:
 | expose a KPI to anonymous/public | add `"PUBLIC"` to `visibleTo` | **No** | [20](20-packs-and-rbac.md) §2 |
 | which rows a user's tiles aggregate (department scoping) | HRMS assignments (+ role choice) | **No** | [20](20-packs-and-rbac.md) layer 1 |
 | home card for the dashboard | MDMS `tenant.citymodule` (`Dashboard` row) | **No** | [30-view-access.md](30-view-access.md) §1a |
-| which roles can *open* the view (card + deep-link route) | `products/dashboard/roles.js` `DASHBOARD_ROLES` | **Yes** (FE bundle) | [70-esbuild-embedding.md](70-esbuild-embedding.md) §4 |
+| which roles can *open* the view (card + deep-link route) | MDMS `dss.DashboardConfig` `allowedRoles` (fallback: `products/dashboard/roles.js` `DASHBOARD_ROLES`) | **No** | [70-esbuild-embedding.md](70-esbuild-embedding.md) §4 |
 | how the dashboard is mounted inside digit-ui | esbuild product module + always-on route fallback | — | [70-esbuild-embedding.md](70-esbuild-embedding.md) |
 | sidebar entry + role gating of the view | MDMS `ACCESSCONTROL-ACTIONS-TEST` + `ACCESSCONTROL-ROLEACTIONS` | **No** | [30-view-access.md](30-view-access.md) |
 | menu/card labels | localization `_upsert` + cache bust | **No** | [30](30-view-access.md) §3–4 |
