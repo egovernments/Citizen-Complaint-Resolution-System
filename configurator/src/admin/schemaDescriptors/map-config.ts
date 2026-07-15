@@ -22,6 +22,7 @@ import type { SchemaDescriptor } from './types';
  */
 export const mapConfigDescriptor: SchemaDescriptor = {
   schema: 'RAINMAKER-PGR.MapConfig',
+  customEditor: 'map-config',
   groups: [
     { title: 'Identity', fields: ['code'] },
     { title: 'Basemap', fields: ['baseMapTheme', 'tileUrl', 'tileAttribution', 'wardHighlightColor'] },
