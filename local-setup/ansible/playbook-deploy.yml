@@ -281,6 +281,40 @@
         src: ../docker-compose.fast-path.yml
         dest: "{{ digit_dir }}/docker-compose.fast-path.yml"
 
+    # ── DB-migration overlay (item #10) ────────────────────────────────────────
+    # Per-service Flyway init containers + the db-history-normalize guard that
+    # runs ahead of them. Always layered: it IS the migration model (it turns the
+    # apps' embedded Flyway off and gates them on their migrator), so a deploy
+    # without it silently falls back to embedded Flyway and, on an
+    # operator-supplied dump, can destroy data. See docs/db-migration-flow.md.
+    #
+    # db/ is already synchronized below (digit_config_dirs), which carries
+    # db/normalize/ (the guard's build context) and db/flyway-history-map.yml.
+    - name: Copy DB-migration overlay
+      copy:
+        src: ../docker-compose.migrations.yml
+        dest: "{{ digit_dir }}/docker-compose.migrations.yml"
+
+    # The overlay's three in-repo migrators (pgr-services, novu-bridge,
+    # digit-config-service) build from ../backend/<svc>/src/main/resources/db.
+    # That path exists in the repo but NOT on a deployed host, so sync those
+    # contexts under docker/ (the existing build-context convention) and repoint
+    # them with an Ansible-only overlay. docker-compose.migrations.yml itself
+    # stays valid for anyone running compose straight from the repo.
+    - name: Synchronize in-repo migrator build contexts
+      synchronize:
+        src: "../../backend/{{ item }}/src/main/resources/db/"
+        dest: "{{ digit_dir }}/docker/{{ item }}-db/"
+      loop:
+        - pgr-services
+        - novu-bridge
+        - digit-config-service
+
+    - name: Copy DB-migration overlay (Ansible build-context paths)
+      copy:
+        src: ../docker-compose.migrations.ansible.yml
+        dest: "{{ digit_dir }}/docker-compose.migrations.ansible.yml"
+
     # Per-tenant compose overlay convention. If a file named
     # local-setup/docker-compose.<inventory_hostname>.yml exists on the
     # controller, copy it to the target and include it in every compose
@@ -565,12 +599,17 @@
     # Tenants opt into the DB fast-path with `db_fast_path: true` in their
     # host_vars. When on, layer the overlay onto every compose invocation
     # below (pull, up, recreate). Default off — never touches live tenants.
-    - name: "Compute compose -f flags (fast-path + per-tenant overlay opt-in)"
+    # The migration overlay is layered ALWAYS (see "Copy DB-migration overlay"):
+    # it is the migration model, not an opt-in extra. It must come BEFORE the
+    # per-tenant overlay so a tenant can still override a migrator if it has to.
+    - name: "Compute compose -f flags (fast-path + migrations + per-tenant overlay)"
       ansible.builtin.set_fact:
         compose_files: >-
           {{
             '-f docker-compose.egov-digit.yaml' +
             (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
+            ' -f docker-compose.migrations.yml' +
+            ' -f docker-compose.migrations.ansible.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
