@@ -24,6 +24,18 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_TIMELINE_ATTACHMENT",
+        "message": "Anexo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_TIMELINE_ATTACHMENTS",
+        "message": "Anexos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_INBOX",
         "message": "Caixa de Reclamações",
         "module": "rainmaker-pgr",

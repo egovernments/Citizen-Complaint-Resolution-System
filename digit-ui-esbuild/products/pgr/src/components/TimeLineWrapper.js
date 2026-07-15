@@ -34,6 +34,83 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
 
     // Manage timeline data
     const [timelineSteps, setTimelineSteps] = useState([]);
+    // CCSD-1965: fileStoreId -> viewable URL, resolved once per workflow load.
+    const [docUrls, setDocUrls] = useState({});
+
+    // Resolve viewable URLs for EVERY document across ALL workflow steps in one
+    // pass. Attachments live under the complaint's (city) tenant and Filefetch
+    // is tenant-scoped, so group by each instance's tenantId before fetching.
+    useEffect(() => {
+        const instances = workflowData?.ProcessInstances || [];
+        const byTenant = {};
+        instances.forEach((inst) => {
+            (inst?.documents || []).forEach((d) => {
+                if (!d?.fileStoreId) return;
+                const tid = inst?.tenantId || tenantId;
+                (byTenant[tid] = byTenant[tid] || []).push(d.fileStoreId);
+            });
+        });
+        const tenants = Object.keys(byTenant);
+        if (!tenants.length) { setDocUrls({}); return; }
+        let cancelled = false;
+        (async () => {
+            const map = {};
+            for (const tid of tenants) {
+                try {
+                    const res = await Digit.UploadServices.Filefetch(byTenant[tid], tid);
+                    const entries = Array.isArray(res?.data?.fileStoreIds) ? res.data.fileStoreIds : [];
+                    entries.forEach((e) => {
+                        // url is a comma-joined variant list; first = full file.
+                        const first = typeof e?.url === "string" ? e.url.split(",")[0].trim() : "";
+                        if (e?.id && first) map[e.id] = first;
+                    });
+                } catch (e) {
+                    /* leave those ids unresolved — chip still renders as a plain link */
+                }
+            }
+            if (!cancelled) setDocUrls(map);
+        })();
+        return () => { cancelled = true; };
+    }, [workflowData, tenantId]);
+
+    // A compact per-step attachments row (thumbnails for images, a labelled
+    // chip otherwise). Returns null when the step has no documents.
+    const renderStepDocs = (documents) => {
+        if (!Array.isArray(documents) || documents.length === 0) return null;
+        const isImage = (url, doc) =>
+            /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(url || "") ||
+            (doc?.documentType || "").toUpperCase() === "PHOTO";
+        return (
+            <div key="docs" style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
+                <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary, #64748b)", width: "100%" }}>
+                    {t("CS_TIMELINE_ATTACHMENTS")}
+                </span>
+                {documents.map((doc, i) => {
+                    const url = docUrls[doc?.fileStoreId];
+                    const label = `${t("CS_TIMELINE_ATTACHMENT")} ${i + 1}`;
+                    if (url && isImage(url, doc)) {
+                        return (
+                            <a key={i} href={url} target="_blank" rel="noopener noreferrer" title={label}>
+                                <img src={url} alt={label}
+                                    style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6, border: "1px solid var(--color-border, #e2e8f0)" }} />
+                            </a>
+                        );
+                    }
+                    return (
+                        <a key={i} href={url || undefined} target="_blank" rel="noopener noreferrer"
+                            style={{
+                                display: "inline-flex", alignItems: "center", gap: "0.3rem",
+                                fontSize: "0.78rem", padding: "0.2rem 0.5rem", borderRadius: 6,
+                                border: "1px solid var(--color-border, #cbd5e1)", color: "var(--color-primary-1, #c84c0e)",
+                                pointerEvents: url ? "auto" : "none", opacity: url ? 1 : 0.6,
+                            }}>
+                            📎 {label}
+                        </a>
+                    );
+                })}
+            </div>
+        );
+    };
 
     useEffect(() => {
         if (workflowData && workflowData.ProcessInstances) {
@@ -115,6 +192,12 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                         contactLine,
                         formatComment(instance?.comment),
                     ].filter(Boolean),
+                    // CCSD-1965: the attachments uploaded AT this workflow step
+                    // (verificationDocuments persist per transition). Rendered
+                    // per-step below so the timeline keeps the FULL history, not
+                    // just the latest upload — same on citizen + employee UIs.
+                    documents: Array.isArray(instance?.documents) ? instance.documents : [],
+                    documentTenantId: instance?.tenantId || tenantId,
                     showConnector: true,
                 };
             });
@@ -125,18 +208,25 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
     return (
         isWorkFlowLoading ? <Loader /> :
             <TimelineMolecule key="timeline" initialVisibleCount={4} hidePastLabel={timelineSteps.length < 5}>
-                {timelineSteps.map((step, index) => (
-                    <Timeline
-                        key={index}
-                        label={step.label}
-                        // currentStateChildren renders inside the FIRST (current-state) row —
-                        // the citizen action links/rating live in the timeline, like the
-                        // legacy checkpoints did.
-                        subElements={index === 0 && currentStateChildren ? [...step.subElements, currentStateChildren] : step.subElements}
-                        variant={step.variant}
-                        showConnector={step.showConnector}
-                    />
-                ))}
+                {timelineSteps.map((step, index) => {
+                    // Base sub-elements + this step's attachments (CCSD-1965) +
+                    // current-state children on the first row.
+                    const docsNode = renderStepDocs(step.documents);
+                    const subElements = [
+                        ...step.subElements,
+                        ...(docsNode ? [docsNode] : []),
+                        ...(index === 0 && currentStateChildren ? [currentStateChildren] : []),
+                    ];
+                    return (
+                        <Timeline
+                            key={index}
+                            label={step.label}
+                            subElements={subElements}
+                            variant={step.variant}
+                            showConnector={step.showConnector}
+                        />
+                    );
+                })}
             </TimelineMolecule>
     );
 };
