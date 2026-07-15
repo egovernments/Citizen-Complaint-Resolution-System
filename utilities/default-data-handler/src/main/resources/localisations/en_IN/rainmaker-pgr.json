@@ -2898,6 +2898,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "CS_UPLOAD_INVALID_FORMAT",
+        "message": "This file type is not allowed. Allowed formats: {formats}.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "CS_UPLOAD_RESTRICTIONS",
         "message": "**Upload restrictions",
         "module": "rainmaker-pgr",
@@ -6673,7 +6679,7 @@
     },
     {
         "code": "CS_UPLOAD_HINT",
-        "message": "Images, PDF, DOC, audio or video up to 5 MB each. You can upload up to 5 files.",
+        "message": "Allowed formats: {formats}. Up to 5 MB per file.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

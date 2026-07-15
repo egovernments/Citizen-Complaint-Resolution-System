@@ -49,6 +49,9 @@ var globalConfigs = (function () {
   // Boundary hierarchy config for generic boundary component
   var pgrBoundaryLowestLevel = "Ward";
   var pgrBoundaryHighestLevel = "County";
+  // PGR complaint attachments: allowed extensions + per-file size (MB).
+  // Must stay a SUBSET of the filestore ALLOWED_FORMATS_MAP (see local-setup compose).
+  var pgrUploadConfigs = { extensions: ["pdf", "doc", "docx", "jpg", "jpeg", "png"], maxSizeMB: 5, maxFiles: 5 };
   var hierarchyType = "ADMIN";
   var boundaryType = "Ward";
 
@@ -73,6 +76,7 @@ var globalConfigs = (function () {
     else if (key === "INVALIDROLES") return invalidEmployeeRoles;
     else if (key === "AUTH_PROVIDER") return authProvider;
     else if (key === "PGR_BOUNDARY_LOWEST_LEVEL") return pgrBoundaryLowestLevel;
+    else if (key === "PGR_UPLOAD_CONFIGS") return pgrUploadConfigs;
     else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") return pgrBoundaryHighestLevel;
     else if (key === "HIERARCHY_TYPE") return hierarchyType;
     else if (key === "BOUNDARY_TYPE") return boundaryType;

@@ -24,6 +24,36 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_FILE_TOO_LARGE",
+        "message": "O ficheiro é demasiado grande (máx. 5 MB).",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FILE_UPLOAD_FAILED",
+        "message": "Falha ao carregar o ficheiro.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_UPLOAD_HINT",
+        "message": "Formatos permitidos: {formats}. Até 5 MB por ficheiro.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_UPLOAD_INVALID_FORMAT",
+        "message": "Tipo de ficheiro não permitido. Formatos permitidos: {formats}.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_UPLOAD_MAX_FILES",
+        "message": "Pode carregar até 5 ficheiros.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_INBOX",
         "message": "Caixa de Reclamações",
         "module": "rainmaker-pgr",

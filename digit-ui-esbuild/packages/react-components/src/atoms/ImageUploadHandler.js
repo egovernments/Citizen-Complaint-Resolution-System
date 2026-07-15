@@ -85,7 +85,9 @@ export const ImageUploadHandler = (props) => {
         err?.response?.data?.Errors?.[0]?.message ||
         err?.response?.data?.message ||
         err?.message;
-      setError(t("CS_FILE_UPLOAD_FAILED") || apiMessage || "File upload failed");
+      // Server reason first — t() echoes its key when unlocalized, so putting it
+      // first made apiMessage dead code and hid EG_FILESTORE errors (CCSD-1950).
+      setError(apiMessage || t("CS_FILE_UPLOAD_FAILED") || "File upload failed");
     }
   }, [addUploadedImageIds, image, t]);
 

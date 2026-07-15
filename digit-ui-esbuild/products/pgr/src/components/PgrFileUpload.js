@@ -12,12 +12,29 @@ import React from "react";
 // class names/rules as the wizard's WIZARD_CSS block, so double-injection on
 // the citizen page is harmless).
 
-// Per the Moz feedback doc (CCSD-1971): PDF, DOC, images, audio and video up
-// to 5 MB each. Server-side, filestore's allowed-format list for module
-// "property-upload" must also permit these (platform config).
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB per file
-const DEFAULT_ACCEPT =
-  "image/*,.pdf,.doc,.docx,.mp3,.wav,.m4a,.aac,.mp4,.mov,.avi,.mkv";
+// CCSD-1950: the allowed list + size come from PGR_UPLOAD_CONFIGS in
+// globalConfigs (one deploy-level knob per environment) with the ticket's
+// list as the built-in default. It must stay a SUBSET of the filestore's
+// global ALLOWED_FORMATS_MAP — the platform has no per-module server list,
+// so the FE enforces the product list and the server acts as the superset
+// gate. Extension validation below also covers drag-and-drop, which the
+// <input accept> attribute alone never restricted.
+const UPLOAD_CFG = (() => {
+  const cfg = (typeof window !== "undefined" && window?.globalConfigs?.getConfig?.("PGR_UPLOAD_CONFIGS")) || {};
+  const extensions =
+    Array.isArray(cfg.extensions) && cfg.extensions.length
+      ? cfg.extensions.map((e) => String(e).toLowerCase().replace(/^\./, ""))
+      : ["pdf", "doc", "docx", "jpg", "jpeg", "png"];
+  return {
+    extensions,
+    maxBytes: (Number(cfg.maxSizeMB) > 0 ? Number(cfg.maxSizeMB) : 5) * 1024 * 1024,
+    maxFiles: Number(cfg.maxFiles) > 0 ? Number(cfg.maxFiles) : 5,
+  };
+})();
+const MAX_BYTES = UPLOAD_CFG.maxBytes;
+const DEFAULT_ACCEPT = UPLOAD_CFG.extensions.map((e) => `.${e}`).join(",");
+const EXT_LIST = UPLOAD_CFG.extensions.map((e) => e.toUpperCase()).join(", ");
+const extensionOf = (name) => String(name || "").split(".").pop().toLowerCase();
 
 function tr(t, key, fallback) {
   const v = typeof t === "function" ? t(key) : key;
@@ -207,6 +224,16 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAUL
     }
     const accepted = [];
     for (const f of files.slice(0, room)) {
+      // Extension gate (also covers drag-and-drop, which bypasses <input accept>).
+      if (!UPLOAD_CFG.extensions.includes(extensionOf(f.name))) {
+        setError(
+          tr(t, "CS_UPLOAD_INVALID_FORMAT", "This file type is not allowed. Allowed formats: {formats}.").replace(
+            "{formats}",
+            EXT_LIST
+          )
+        );
+        continue;
+      }
       if (f.size > MAX_BYTES) {
         setError(tr(t, "CS_FILE_TOO_LARGE", "File is too large (max 5 MB)."));
         continue;
@@ -284,7 +311,10 @@ const PgrFileUpload = ({ t, tenantId, value, onSelect, fieldKey, accept = DEFAUL
         {busy ? tr(t, "CS_UPLOADING", "Uploading…") : tr(t, "CS_UPLOAD_CHOOSE", "Choose files")}
       </span>
       <p className="pgr-upload-hint">
-        {hint || tr(t, "CS_UPLOAD_HINT", `Images, PDF, DOC, audio or video up to 5 MB each. You can upload up to ${maxFiles} files.`)}
+        {hint ||
+          tr(t, "CS_UPLOAD_HINT", "Allowed formats: {formats}. Up to 5 MB per file.")
+            .replace("{formats}", EXT_LIST)
+            .replace("5 MB", `${MAX_BYTES / (1024 * 1024)} MB`)}
       </p>
     </div>
   );

@@ -42,6 +42,8 @@ var globalConfigs = (function () {
   var citizenAuthProvider = {{ (citizen_auth_provider | default(auth_provider)) | to_json }};
   var employeeAuthProvider = {{ (employee_auth_provider | default('digit')) | to_json }};
   var pgrBoundaryHighestLevel = {{ pgr_boundary_highest_level | to_json }};
+  {# PGR complaint attachments; override via inventory pgr_upload_configs. Keep a SUBSET of the filestore ALLOWED_FORMATS_MAP. #}
+  var pgrUploadConfigs = {{ pgr_upload_configs | default({'extensions': ['pdf','doc','docx','jpg','jpeg','png'], 'maxSizeMB': 5, 'maxFiles': 5}) | to_json }};
   var pgrBoundaryLowestLevel = {{ pgr_boundary_lowest_level | to_json }};
   var boundaryType = {{ boundary_type | to_json }};
   var hierarchyType = {{ hierarchy_type | default('ADMIN') | to_json }};
@@ -117,6 +119,8 @@ var globalConfigs = (function () {
       return employeeAuthProvider;
     } else if (key === "INVALIDROLES") {
       return invalidEmployeeRoles;
+    } else if (key === "PGR_UPLOAD_CONFIGS") {
+      return pgrUploadConfigs;
     } else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") {
       return pgrBoundaryHighestLevel;
     } else if (key === "PGR_BOUNDARY_LOWEST_LEVEL") {

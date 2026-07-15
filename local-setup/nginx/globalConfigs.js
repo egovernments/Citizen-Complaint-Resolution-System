@@ -16,6 +16,9 @@ var globalConfigs = (function () {
   var invalidEmployeeRoles = ["SYSTEM"];
   var authProvider = "digit";
   var pgrBoundaryHighestLevel = "County";
+  // PGR complaint attachments: allowed extensions + per-file size (MB).
+  // Must stay a SUBSET of the filestore ALLOWED_FORMATS_MAP (see local-setup compose).
+  var pgrUploadConfigs = { extensions: ["pdf", "doc", "docx", "jpg", "jpeg", "png"], maxSizeMB: 5, maxFiles: 5 };
   var pgrBoundaryLowestLevel = "Ward";
   var mapCenter = { lat: -1.0, lng: 37.0 };
   var useInboxV1 = true;
@@ -109,6 +112,8 @@ var globalConfigs = (function () {
       return useInboxV1;
     } else if (key === "CORE_MOBILE_CONFIGS") {
       return coreMobileConfigs;
+    } else if (key === "PGR_UPLOAD_CONFIGS") {
+      return pgrUploadConfigs;
     }
   };
 
