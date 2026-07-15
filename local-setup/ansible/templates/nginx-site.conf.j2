@@ -410,6 +410,22 @@ server {
   location /digit-ui/ {
     alias /opt/digit-ui-esbuild/build/;
     try_files $uri $uri/ /digit-ui/index.html;
+
+    # gzip is SCOPED to this static-UI location ONLY (not server-level), so no
+    # Kong-proxied API route is affected — this location serves files from disk
+    # (the ~7-8 MB bundle + CSS), never proxies. ~4x smaller over the wire.
+    # sub_filter runs before gzip, so the globalConfigs.js/theme HTML injection
+    # is unaffected. text/html is gzip's built-in default (not re-listed).
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 5;
+    gzip_types text/css application/javascript text/javascript application/json image/svg+xml;
+
+    # Non-hashed bundle (fixed index.js): revalidate every load (cheap ETag
+    # 304), so a redeploy is picked up immediately with no stale-cache risk.
+    # Do NOT switch to immutable/long max-age until filenames are hashed.
+    add_header Cache-Control "no-cache" always;
     sub_filter_once on;
     sub_filter_types text/html;
     # Inject globalConfigs.js + (optional) tenant theme tokens into <head>. Theme
