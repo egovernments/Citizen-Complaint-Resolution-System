@@ -60,9 +60,24 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                     const res = await Digit.UploadServices.Filefetch(byTenant[tid], tid);
                     const entries = Array.isArray(res?.data?.fileStoreIds) ? res.data.fileStoreIds : [];
                     entries.forEach((e) => {
-                        // url is a comma-joined variant list; first = full file.
-                        const first = typeof e?.url === "string" ? e.url.split(",")[0].trim() : "";
-                        if (e?.id && first) map[e.id] = first;
+                        // `url` is a comma-joined variant list. The filestore emits
+                        // several variants (full,large,medium,small,…) ONLY for
+                        // images; non-image files (PDF/doc/…) come back as a single
+                        // URL. So multiple variants ⟹ image, and we can pick a
+                        // "small" variant for the 44x44 thumbnail (mirrors
+                        // ComplaintPhotos.js). We deliberately do NOT trust the
+                        // document's `documentType` here — the generic action
+                        // uploader (ActionUploadComponent) stamps every file as
+                        // "PHOTO" regardless of its real type.
+                        const variants = typeof e?.url === "string"
+                            ? e.url.split(",").map((u) => u.trim()).filter(Boolean)
+                            : [];
+                        const full = variants[0] || "";
+                        if (!e?.id || !full) return;
+                        const thumb = variants.find((u) => /small/i.test(u)) || full;
+                        const isImage = variants.length > 1 ||
+                            /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(full);
+                        map[e.id] = { full, thumb, isImage };
                     });
                 } catch (e) {
                     /* leave those ids unresolved — chip still renders as a plain link */
@@ -77,21 +92,19 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
     // chip otherwise). Returns null when the step has no documents.
     const renderStepDocs = (documents) => {
         if (!Array.isArray(documents) || documents.length === 0) return null;
-        const isImage = (url, doc) =>
-            /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(url || "") ||
-            (doc?.documentType || "").toUpperCase() === "PHOTO";
         return (
             <div key="docs" style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
                 <span style={{ fontSize: "0.78rem", color: "var(--color-text-secondary, #64748b)", width: "100%" }}>
                     {t("CS_TIMELINE_ATTACHMENTS")}
                 </span>
                 {documents.map((doc, i) => {
-                    const url = docUrls[doc?.fileStoreId];
+                    const entry = docUrls[doc?.fileStoreId];
+                    const url = entry?.full;
                     const label = `${t("CS_TIMELINE_ATTACHMENT")} ${i + 1}`;
-                    if (url && isImage(url, doc)) {
+                    if (url && entry?.isImage) {
                         return (
                             <a key={i} href={url} target="_blank" rel="noopener noreferrer" title={label}>
-                                <img src={url} alt={label}
+                                <img src={entry.thumb || url} alt={label}
                                     style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6, border: "1px solid var(--color-border, #e2e8f0)" }} />
                             </a>
                         );
@@ -197,7 +210,6 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                     // per-step below so the timeline keeps the FULL history, not
                     // just the latest upload — same on citizen + employee UIs.
                     documents: Array.isArray(instance?.documents) ? instance.documents : [],
-                    documentTenantId: instance?.tenantId || tenantId,
                     showConnector: true,
                 };
             });
