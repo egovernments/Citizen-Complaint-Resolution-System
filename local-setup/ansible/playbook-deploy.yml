@@ -491,11 +491,15 @@
     # format regardless of its actual mobileNumberRegex/countryCode. No
     # bootstrap-order dependency here (unlike STATE_LEVEL_TENANT_ID above),
     # so this runs pre-boot alongside the other tenant-shaped literals.
+    # Same re.sub()-as-replacement-template hazard as the REGEX task below —
+    # double any backslashes in countryCode before it reaches `replace:`.
+    # A backslash in a country code is unlikely in practice, but the fix is
+    # free, so apply it here too for consistency.
     - name: Set EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE (egov-user) in compose
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: "^(\\s+)EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '\\+91'$"
-        replace: "\\1EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '{{ core_mobile_configs.countryCode | default('+91') }}'"
+        regexp: '^(\s+)EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: ''\+91''$'
+        replace: '\1EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: ''{{ core_mobile_configs.countryCode | default(''+91'') | replace(''\\'', ''\\\\'') }}'''
 
     # The `replace:` value below is fed straight into Python's re.sub() as
     # the replacement string, which treats backslash specially (\1, \g<...>
