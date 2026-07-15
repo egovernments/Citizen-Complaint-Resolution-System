@@ -166,7 +166,7 @@ function FieldInput({
   );
 }
 
-function MapPreview({ data }: { data: Obj }) {
+function MapPreview({ data, setField }: { data: Obj; setField: (path: string, value: unknown) => void }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const tileRef = useRef<L.TileLayer | null>(null);
@@ -179,9 +179,34 @@ function MapPreview({ data }: { data: Obj }) {
   const zoom = data.defaultZoom;
   const viewbox = data.searchViewbox as Obj | undefined;
 
+  const round = (n: number) => Math.round(n * 1e5) / 1e5;
+
+  // Capture what's framed on the map, so an operator sets the search area and the
+  // start point by looking at the map instead of guessing latitude/longitude.
+  const captureSearchArea = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    const b = map.getBounds();
+    setField('searchViewbox.minLon', round(b.getWest()));
+    setField('searchViewbox.minLat', round(b.getSouth()));
+    setField('searchViewbox.maxLon', round(b.getEast()));
+    setField('searchViewbox.maxLat', round(b.getNorth()));
+  };
+  const clearSearchArea = () => {
+    (['minLon', 'minLat', 'maxLon', 'maxLat'] as const).forEach((k) => setField(`searchViewbox.${k}`, undefined));
+  };
+  const captureStartPoint = () => {
+    const map = mapRef.current;
+    if (!map) return;
+    const c = map.getCenter();
+    setField('center.lat', round(c.lat));
+    setField('center.lng', round(c.lng));
+    setField('defaultZoom', map.getZoom());
+  };
+
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    const map = L.map(containerRef.current, { scrollWheelZoom: false, attributionControl: false });
+    const map = L.map(containerRef.current, { scrollWheelZoom: true, attributionControl: false });
     map.setView([0, 20], 2);
     mapRef.current = map;
     overlayRef.current = L.layerGroup().addTo(map);
@@ -200,12 +225,14 @@ function MapPreview({ data }: { data: Obj }) {
     tileRef.current.bringToBack();
   }, [theme, tileUrl]);
 
+  // Overlays only — redrawn on colour/position changes, never re-framing the map
+  // (so editing the ward colour doesn't yank the view around).
   useEffect(() => {
     const map = mapRef.current, overlay = overlayRef.current;
     if (!map || !overlay) return;
     overlay.clearLayers();
     const color = (typeof wardColor === 'string' && HEX.test(wardColor.trim())) ? wardColor.trim() : DEFAULT_WARD_COLOR;
-    const lat = num(center?.lat), lng = num(center?.lng), z = num(zoom);
+    const lat = num(center?.lat), lng = num(center?.lng);
     const b = viewbox && { minLon: num(viewbox.minLon), minLat: num(viewbox.minLat), maxLon: num(viewbox.maxLon), maxLat: num(viewbox.maxLat) };
     const hasBox = !!b && b.minLon != null && b.minLat != null && b.maxLon != null && b.maxLat != null && b.minLon < b.maxLon && b.minLat < b.maxLat;
 
@@ -217,19 +244,33 @@ function MapPreview({ data }: { data: Obj }) {
       L.circleMarker([lat, lng], { radius: 6, color, fillColor: color, fillOpacity: 0.9, weight: 2 }).bindTooltip('Map opens here').addTo(overlay);
       const d = 0.01;
       L.rectangle([[lat - d, lng - d], [lat + d, lng + d]], { color, weight: 2, fillColor: color, fillOpacity: 0.35 }).addTo(overlay);
-      map.setView([lat, lng], z ?? 12);
-    } else if (hasBox) {
-      map.fitBounds([[b!.minLat as number, b!.minLon as number], [b!.maxLat as number, b!.maxLon as number]], { padding: [12, 12] });
     }
-  }, [center, zoom, wardColor, viewbox]);
+  }, [center, wardColor, viewbox]);
+
+  // Framing: follow the start point (or the search box) when they change, but
+  // NOT on colour edits.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const lat = num(center?.lat), lng = num(center?.lng), z = num(zoom);
+    const b = viewbox && { minLon: num(viewbox.minLon), minLat: num(viewbox.minLat), maxLon: num(viewbox.maxLon), maxLat: num(viewbox.maxLat) };
+    const hasBox = !!b && b.minLon != null && b.minLat != null && b.maxLon != null && b.maxLat != null && b.minLon < b.maxLon && b.minLat < b.maxLat;
+    if (lat != null && lng != null) map.setView([lat, lng], z ?? map.getZoom());
+    else if (hasBox) map.fitBounds([[b!.minLat as number, b!.minLon as number], [b!.maxLat as number, b!.maxLon as number]], { padding: [12, 12] });
+  }, [center, zoom, viewbox]);
 
   return (
     <div>
       <div className="text-xs font-medium text-muted-foreground mb-2">Live preview</div>
       <div ref={containerRef} className="rounded-lg border border-border overflow-hidden" style={{ height: 340 }} />
       <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
-        The basemap, ward colour and starting position update as you edit.
+        Pan and zoom to frame your area, then capture it — no need to type coordinates.
       </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={captureStartPoint}>Set start point to map centre</Button>
+        <Button type="button" variant="outline" size="sm" onClick={captureSearchArea}>Set search area to this view</Button>
+        <Button type="button" variant="ghost" size="sm" onClick={clearSearchArea}>Clear search area</Button>
+      </div>
     </div>
   );
 }
@@ -351,7 +392,7 @@ export function MapConfigEditor() {
                 );
               })}
             </div>
-            <aside className="xl:sticky xl:top-4 self-start"><MapPreview data={data} /></aside>
+            <aside className="xl:sticky xl:top-4 self-start"><MapPreview data={data} setField={setField} /></aside>
           </div>
 
           <ActionBar>
