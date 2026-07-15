@@ -84,6 +84,16 @@ sudo cp /etc/nginx/sites-available/<file> /root/<file>.$(date +%F).bak
 sudo nginx -t && sudo systemctl reload nginx      # or: sudo docker exec <nginx> nginx -s reload
 ```
 
+> ⚠️ **`add_header` does not merge across scopes.** When a block declares its
+> own `add_header`, nginx **replaces** the entire inherited set for that block
+> rather than adding to it. If this box sets security headers at `server`/`http`
+> scope (e.g. `X-Frame-Options`, CSP, HSTS, `X-Content-Type-Options`), dropping
+> `add_header Cache-Control` into `location /digit-ui/ {}` silently strips **all**
+> of them for that location — and `nginx -t` gives no warning. Re-declare any
+> such outer-level headers inside the block alongside `Cache-Control`. (The
+> repo's own `nginx-site.conf.j2` sets no server-scope headers, so
+> ansible-rendered boxes are unaffected — this only bites hand-configured hosts.)
+
 ## Verify
 
 ```bash
