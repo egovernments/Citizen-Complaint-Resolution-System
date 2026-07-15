@@ -1,4 +1,4 @@
-name: DB migration — Flyway history-table ↔ dump alignment
+name: DB migration — Flyway history-table NAME match (dump ↔ service config)
 
 # Deployment-parity item #10: the compose stack boots from a prebuilt dump and
 # then runs Flyway incrementally on top. Each Flyway-enabled service must point
@@ -44,7 +44,7 @@ jobs:
         run: pip install pyyaml pytest
       - name: Self-test the alignment check
         run: python3 .github/scripts/check-flyway-dump-alignment.py --self-test
-      - name: Check Flyway ↔ dump history-table alignment
+      - name: Check Flyway history-table NAMES match the dump
         run: python3 .github/scripts/check-flyway-dump-alignment.py
       # The decision table is where every safety property of db-history-normalize
       # lives — including "never drop a populated table". Pin it on every PR.
