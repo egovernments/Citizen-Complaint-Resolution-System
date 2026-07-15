@@ -105,12 +105,14 @@ function InfoTip({ text }: { text: string }) {
 
 function FieldShell({ spec, children }: { spec: FieldSpec; children: ReactNode }) {
   return (
-    <div>
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <Label className="text-sm font-medium text-foreground">{spec.label ?? spec.path}</Label>
-        {spec.help && <InfoTip text={spec.help} />}
+    <div className="flex flex-col">
+      {/* Reserve two lines so a one-line label and a wrapping one leave their
+          inputs at the same height across a grid row. */}
+      <div className="flex items-start gap-1.5 mb-1.5 min-h-[2.5rem]">
+        <Label className="text-sm font-medium text-foreground leading-snug">{spec.label ?? spec.path}</Label>
+        {spec.help && <span className="shrink-0 mt-0.5"><InfoTip text={spec.help} /></span>}
       </div>
-      {children}
+      <div className="mt-auto">{children}</div>
     </div>
   );
 }
