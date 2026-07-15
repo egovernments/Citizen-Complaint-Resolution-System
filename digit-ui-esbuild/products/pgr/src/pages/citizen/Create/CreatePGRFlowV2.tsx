@@ -263,9 +263,9 @@ function fieldsFromSchema(schema: any): TemplateField[] {
 }
 
 // Complaint-level declarations confirmed before submit (BRD).
-const REQUIRED_CONSENTS: ReadonlyArray<{ code: string; label: string }> = [
-  { code: "TRUTHFULNESS", label: "I declare that the information provided is true and accurate." },
-  { code: "DATA_PROCESSING", label: "I consent to my data being processed to handle this complaint." },
+const REQUIRED_CONSENTS: ReadonlyArray<{ code: string; labelKey: string; label: string }> = [
+  { code: "TRUTHFULNESS", labelKey: "PGR_CONSENT_TRUTHFULNESS_LABEL", label: "I declare that the information provided is true and accurate." },
+  { code: "DATA_PROCESSING", labelKey: "PGR_CONSENT_DATA_PROCESSING_LABEL", label: "I consent to my data being processed to handle this complaint." },
 ];
 
 // Consistent checkbox styling: fixed-size box with a theme-accent (centered native
@@ -407,9 +407,9 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any, d
       ...(formData.complainantName ? { complainantName: formData.complainantName } : {}),
       ...(formData.complainantAddress ? { complainantAddress: formData.complainantAddress } : {}),
       ...(formData.email ? { email: formData.email } : {}),
-      // Consent UI removed (QA) — submitting the complaint is implicit
-      // acceptance, so the codes are always sent to keep the backend contract.
-      consents: REQUIRED_CONSENTS.map((c) => c.code),
+      // Consent checkboxes are shown at create (explicit opt-in, gated on
+      // submit); the codes recorded here are the ones the citizen ticked.
+      consents: formData.consents || [],
       ...(formData.dynamicFields || {}),
     };
   }
@@ -1057,6 +1057,9 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
   const dyn = data.dynamicFields || {};
   const extended = !!data.caseRelatedTo; // dispatcher flow active
   const setDyn = (key: string, value: unknown) => patch({ dynamicFields: { ...dyn, [key]: value } });
+  const consents = data.consents || [];
+  const toggleConsent = (code: string, on: boolean) =>
+    patch({ consents: on ? [...consents, code] : consents.filter((c) => c !== code) });
 
   return (
     <StepShell
@@ -1160,11 +1163,26 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
 
         {extended ? (
           <div className="space-y-2">
-            {/* QA (Moz): the TRUTHFULNESS / DATA_PROCESSING consent checkboxes
-                are hidden — submitting the complaint carries them as implicitly
-                accepted (see mapFormDataToRequest). Only the confidential toggle
-                remains a visible choice. */}
-            <label className="flex items-start gap-2 text-sm">
+            {/* Consents are EXPLICIT at create (CCSD-1979 revisited: show at
+                create; hidden only on the details/view screens — CCSD-1988). */}
+            {REQUIRED_CONSENTS.map((c) => (
+              <label key={c.code} className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  style={CHECKBOX_STYLE}
+                  checked={consents.includes(c.code)}
+                  onChange={(e) => toggleConsent(c.code, e.target.checked)}
+                />
+                <span>
+                  {tr(t, c.labelKey, c.label)}
+                  {/* Same required marker the design-system Label renders. */}
+                  <span className="ml-0.5 text-destructive" style={{ color: "var(--color-error, #d4351c)" }} aria-hidden>
+                    *
+                  </span>
+                </span>
+              </label>
+            ))}
+            <label className="flex items-start gap-2 text-sm pt-2 border-t border-border">
               <input
                 type="checkbox"
                 style={CHECKBOX_STYLE}
@@ -1799,8 +1817,11 @@ const CreatePGRFlowV2: React.FC = () => {
         for (const f of templateFields) {
           if (f.mandatory && !String((formData.dynamicFields || {})[f.fieldKey] ?? "").trim()) return false;
         }
-        // Consent checkboxes are hidden (QA) — acceptance is implicit on
-        // submit, so there is no consent gate here anymore.
+        // Both consents are required once an authority/template is in play
+        // (checkboxes restored at create — CCSD-1979 revisited).
+        if (formData.caseRelatedTo && REQUIRED_CONSENTS.some((c) => !(formData.consents || []).includes(c.code))) {
+          return false;
+        }
         return true;
       }
       default:
