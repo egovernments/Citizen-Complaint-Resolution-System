@@ -83,7 +83,11 @@ const AddtionalDetails = (props) => {
   return (
     <React.Fragment>
       <Card>
-        <CardHeader>{t(`${LOCALIZATION_KEY.CS_ADDCOMPLAINT}_PROVIDE_ADDITIONAL_DETAILS`)}</CardHeader>
+        <CardHeader>
+          {t(`${LOCALIZATION_KEY.CS_ADDCOMPLAINT}_PROVIDE_ADDITIONAL_DETAILS`) +
+            // Free-text details are not required to reopen (CCSD-1955)
+            " " + (t("CS_OPTIONAL_SUFFIX") === "CS_OPTIONAL_SUFFIX" ? "(Optional)" : t("CS_OPTIONAL_SUFFIX"))}
+        </CardHeader>
         <CardText>{t(`${LOCALIZATION_KEY.CS_ADDCOMPLAINT}_ADDITIONAL_DETAILS_TEXT`)}</CardText>
         <TextArea name={"AdditionalDetails"} onChange={textInput}></TextArea>
         <div onClick={reopenComplaint}>
