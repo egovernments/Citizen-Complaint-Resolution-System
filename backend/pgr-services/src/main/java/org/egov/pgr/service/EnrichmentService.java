@@ -140,8 +140,17 @@ public class EnrichmentService {
             criteria.setUserIds(Collections.singleton(requestInfo.getUserInfo().getUuid()));
             criteria.setMobileNumber(null);
         } else if (criteria.getMobileNumber() != null) {
-            String tenantId = (criteria.getTenantId()!=null) ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
-            userService.enrichUserIds(tenantId, criteria);
+            // Derive the tenant for the mobileNumber -> userIds lookup. isPureCitizen() already
+            // returned false — which INCLUDES the null RequestInfo/UserInfo case — so guard the
+            // fallback to UserInfo.getTenantId() against an NPE, and skip enrichment when no
+            // tenant can be resolved (rather than crash). Valid requests are unaffected.
+            String tenantId = criteria.getTenantId();
+            if (tenantId == null && requestInfo != null && requestInfo.getUserInfo() != null) {
+                tenantId = requestInfo.getUserInfo().getTenantId();
+            }
+            if (tenantId != null) {
+                userService.enrichUserIds(tenantId, criteria);
+            }
         }
 
         if(criteria.getLimit()==null)
