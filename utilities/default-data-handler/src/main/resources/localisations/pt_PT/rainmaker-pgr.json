@@ -36,6 +36,24 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_OPTIONAL_SUFFIX",
+        "message": "(Opcional)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CONSENT_DATA_PROCESSING_LABEL",
+        "message": "Autorizo o tratamento dos meus dados pessoais para a tramitação desta manifestação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CONSENT_TRUTHFULNESS_LABEL",
+        "message": "Declaro que as informações prestadas são verdadeiras e exactas.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_INBOX",
         "message": "Caixa de Reclamações",
         "module": "rainmaker-pgr",

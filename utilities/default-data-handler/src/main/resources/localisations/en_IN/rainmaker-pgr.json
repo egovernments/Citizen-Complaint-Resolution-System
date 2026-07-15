@@ -3636,6 +3636,18 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_CONSENT_DATA_PROCESSING_LABEL",
+        "message": "I consent to my data being processed to handle this complaint.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_CONSENT_TRUTHFULNESS_LABEL",
+        "message": "I declare that the information provided is true and accurate.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_DEFAULT_CITIZEN_SMS_MESSAGE",
         "message": "Your current complaint status is {status}. You can track your complaint status on the mSeva app or your local government web portal.\n\nEGOVS",
         "module": "rainmaker-pgr",
