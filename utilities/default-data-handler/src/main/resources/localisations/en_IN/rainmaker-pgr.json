@@ -2898,6 +2898,18 @@
         "locale": "en_IN"
     },
     {
+        "code": "CS_TIMELINE_ATTACHMENT",
+        "message": "Attachment",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_TIMELINE_ATTACHMENTS",
+        "message": "Attachments",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "CS_UPLOAD_RESTRICTIONS",
         "message": "**Upload restrictions",
         "module": "rainmaker-pgr",
