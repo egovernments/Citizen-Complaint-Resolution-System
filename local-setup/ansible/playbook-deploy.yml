@@ -497,11 +497,17 @@
         regexp: "^(\\s+)EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '\\+91'$"
         replace: "\\1EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: '{{ core_mobile_configs.countryCode | default('+91') }}'"
 
+    # The `replace:` value below is fed straight into Python's re.sub() as
+    # the replacement string, which treats backslash specially (\1, \g<...>
+    # are backreferences; any other \<letter> — e.g. a tenant's regex using
+    # \d or \w shorthand instead of [0-9]/[A-Za-z0-9_] — raises "bad escape").
+    # Double every backslash in the tenant's mobileNumberRegex first so it
+    # survives re.sub() and lands in the compose file unchanged.
     - name: Set EGOV_MOBILE_VALIDATION_DEFAULT_REGEX (egov-user) in compose
       replace:
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: "^(\\s+)EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '\\^\\[6-9\\]\\[0-9\\]\\{9\\}\\$'$"
-        replace: "\\1EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: '{{ core_mobile_configs.mobileNumberRegex | default('^[6-9][0-9]{9}$') }}'"
+        regexp: '^(\s+)EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: ''\^\[6-9\]\[0-9\]\{9\}\$''$'
+        replace: '\1EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: ''{{ core_mobile_configs.mobileNumberRegex | default(''^[6-9][0-9]{9}$'') | replace(''\\'', ''\\\\'') }}'''
 
     # ==================== Publish digit-mcp image ====================
     # digit-mcp ships from the same registry as every other DIGIT image
