@@ -50,8 +50,9 @@ public class UserService {
     /**
      * Calls user search to fetch the list of user and enriches it in serviceWrappers
      * @param serviceWrappers
+     * @param requestInfo RequestInfo from the caller, passed to user service so enc-service applies correct role-based masking
      */
-    public void enrichUsers(List<ServiceWrapper> serviceWrappers){
+    public void enrichUsers(List<ServiceWrapper> serviceWrappers, RequestInfo requestInfo){
 
         Set<String> uuids = new HashSet<>();
 
@@ -59,7 +60,7 @@ public class UserService {
             uuids.add(serviceWrapper.getService().getAccountId());
         });
 
-        Map<String, User> idToUserMap = searchBulkUser(new LinkedList<>(uuids));
+        Map<String, User> idToUserMap = searchBulkUser(new LinkedList<>(uuids), requestInfo);
 
         serviceWrappers.forEach(serviceWrapper -> {
             serviceWrapper.getService().setCitizen(idToUserMap.get(serviceWrapper.getService().getAccountId()));
@@ -80,7 +81,7 @@ public class UserService {
         User userServiceResponse = null;
 
         // Search on mobile number as user name
-        UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),null, user.getMobileNumber());
+        UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),null, user.getMobileNumber(),request.getRequestInfo());
         if (!userDetailResponse.getUser().isEmpty()) {
             User userFromSearch = userDetailResponse.getUser().get(0);
             if(!user.getName().equalsIgnoreCase(userFromSearch.getName())){
@@ -107,7 +108,7 @@ public class UserService {
         String accountId = request.getService().getAccountId();
         String tenantId = request.getService().getTenantId();
 
-        UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),accountId,null);
+        UserDetailResponse userDetailResponse = searchUser(userUtils.getStateLevelTenant(tenantId),accountId,null,requestInfo);
 
         if(userDetailResponse.getUser().isEmpty())
             throw new CustomException("INVALID_ACCOUNTID","No user exist for the given accountId");
@@ -165,14 +166,16 @@ public class UserService {
      * @param stateLevelTenant
      * @param accountId
      * @param userName
+     * @param requestInfo forwarded so enc-service applies role-based masking
      * @return
      */
-    private UserDetailResponse searchUser(String stateLevelTenant, String accountId, String userName){
+    private UserDetailResponse searchUser(String stateLevelTenant, String accountId, String userName, RequestInfo requestInfo){
 
         UserSearchRequest userSearchRequest =new UserSearchRequest();
         userSearchRequest.setActive(true);
         userSearchRequest.setUserType(USERTYPE_CITIZEN);
         userSearchRequest.setTenantId(stateLevelTenant);
+        userSearchRequest.setRequestInfo(requestInfo);
 
         if(StringUtils.isEmpty(accountId) && StringUtils.isEmpty(userName))
             return null;
@@ -191,13 +194,15 @@ public class UserService {
     /**
      * calls the user search API based on the given list of user uuids
      * @param uuids
+     * @param requestInfo forwarded so user service passes caller's roles to enc-service for role-based masking
      * @return
      */
-    private Map<String,User> searchBulkUser(List<String> uuids){
+    private Map<String,User> searchBulkUser(List<String> uuids, RequestInfo requestInfo){
 
         UserSearchRequest userSearchRequest =new UserSearchRequest();
         userSearchRequest.setActive(true);
         userSearchRequest.setUserType(USERTYPE_CITIZEN);
+        userSearchRequest.setRequestInfo(requestInfo);
 
 
         if(!CollectionUtils.isEmpty(uuids))
@@ -235,6 +240,28 @@ public class UserService {
         if (response == null || CollectionUtils.isEmpty(response.getUser())) return null;
         List<Role> roles = response.getUser().get(0).getRoles();
         return CollectionUtils.isEmpty(roles) ? null : roles.get(0).getName();
+    }
+
+    public void updateUserContactDetails(String accountId, String email, String address,
+                                         String tenantId, RequestInfo requestInfo) {
+        if (email == null && address == null) return;
+
+        UserDetailResponse userDetailResponse =
+                searchUser(userUtils.getStateLevelTenant(tenantId), accountId, null, requestInfo);
+
+        if (userDetailResponse == null || userDetailResponse.getUser().isEmpty()) {
+            return;
+        }
+
+        User user = userDetailResponse.getUser().get(0);
+
+        if (email != null) user.setEmailId(email);
+        if (address != null) user.setCorrespondenceAddress(address);
+
+        StringBuilder uri = new StringBuilder(config.getUserHost())
+                .append(config.getUserContextPath())
+                .append(config.getUserUpdateEndpoint());
+        userUtils.userCall(new org.egov.pgr.web.models.user.CreateUserRequest(requestInfo, user), uri);
     }
 
     /**

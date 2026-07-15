@@ -154,6 +154,27 @@ async function createData(record: MdmsRecordRaw): Promise<void> {
   });
 }
 
+// --- Step 3.5: register the tenant with egov-enc-service -----------------
+
+// egov-enc-service discovers tenants via an MDMS search scoped to its own
+// STATE_LEVEL_TENANT_ID env var — a brand-new state root is invisible to it
+// until this is called, so provisionAdmin()'s _createnovalidate (which
+// encrypts the user's PII) would otherwise fail with "Tenant Id not found"
+// even though every step above succeeded. Idempotent (created:false when a
+// key already exists). Non-fatal: swallow failures here and let Step 4
+// surface the real error if enc-service is genuinely unreachable.
+async function registerEncKey(target: string): Promise<void> {
+  try {
+    await apiClient.post(ENDPOINTS.ENC_GENERATE_KEY, {
+      RequestInfo: apiClient.buildRequestInfo(),
+      tenantId: target,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[bootstrap] enc-service key generation for ${target} failed: ${msg}`);
+  }
+}
+
 // --- Step 4: ADMIN user at new tenant -----------------------------------
 
 async function provisionAdmin(target: string): Promise<{ uuid: string } | null> {
@@ -352,6 +373,10 @@ export async function bootstrapStateRoot(
     workflow: { copied: [], failed: [] },
     localization: { success: 0, failed: 0 },
   };
+
+  // Step 0: register the target with egov-enc-service before anything below
+  // needs to encrypt/decrypt for it (Step 4's ADMIN user creation, in particular).
+  await registerEncKey(target);
 
   // Step 1: schemas
   const sourceSchemas = await searchSchemas(source);

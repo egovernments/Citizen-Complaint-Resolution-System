@@ -58,7 +58,7 @@ export const newConfig = [
           populators: {
             name: "phno",
             // Kenya fallback regex: `^0?[17][0-9]{8}$` clamped to minLength 10.
-            // MDMS ValidationConfigs.mobileNumberValidation overrides this at
+            // MDMS common-masters.MobileNumberValidation overrides this at
             // runtime via useMobileValidation (see CitizenCreate.js).
             error: "Please enter a valid 10-digit Kenyan mobile number",
             validation: {

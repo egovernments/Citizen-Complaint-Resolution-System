@@ -74,11 +74,11 @@ const CreateComplaint = () => {
                     prefix:validationRules.prefix,
                     validation: {
                       required: true,
-                      minlength: validationRules.minLength,
-                      maxlength: validationRules.maxLength,
-                      min: min,
-                      max: max,
-                      pattern: validationRules.pattern,
+                      minLength: validationRules.minLength,
+                      maxLength: validationRules.maxLength,
+                      pattern: validationRules.pattern
+                        ? new RegExp(validationRules.pattern)
+                        : undefined,
                     },
                     error: validationRules.errorMessage || "CORE_COMMON_MOBILE_ERROR",
                   },

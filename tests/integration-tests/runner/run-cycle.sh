@@ -51,8 +51,13 @@ rm -rf playwright-report test-results report.json
 
 # ---- run ---- (nice'd so the live DIGIT stack on this box keeps priority)
 phase "running"
+# --global-timeout fires BEFORE the shell `timeout` SIGKILL, so Playwright's json
+# reporter still flushes report.json (written at onEnd) with the partial results
+# gathered so far. A slow run then degrades to a partial dashboard update instead
+# of blanking it entirely (#907). Keep it comfortably under the shell timeout.
 timeout 90m nice -n 10 npx playwright test \
-  || echo "[run-cycle] playwright exited non-zero (some tests failed); continuing to catalog"
+  --global-timeout="${PW_GLOBAL_TIMEOUT_MS:-4800000}" \
+  || echo "[run-cycle] playwright exited non-zero (failures or global-timeout reached); continuing to catalog"
 
 # ---- catalog ----
 phase "catalog"
@@ -89,8 +94,25 @@ rsync -a --delete --exclude=run.log --exclude=phase \
 rsync -a --delete test-results "$RUN_DIR/" 2>/dev/null \
   || cp -rf test-results "$RUN_DIR/"
 
-# Prune older runs to RUN_LIMIT (newest kept).
-( cd "$WEBROOT/runs" && ls -1t | tail -n +"$((RUN_LIMIT+1))" | xargs -r rm -rf ) || true
+# Prune runs/ to exactly the set the dashboard references — the run ids in the
+# history.json we just published. This keeps runs/ in lockstep with the catalog:
+# a failed-no-report run creates a runs/<id>/ folder but never a catalog entry,
+# and the old mtime-based prune ("newest RUN_LIMIT folders") let those
+# newer-but-reportless folders evict the runs the catalog still pointed at — so
+# the dashboard showed a stale "last run" and 404'd on it (#907 skew).
+# build-catalog already dropped dead ids from history, so honouring that set here
+# converges disk == catalog. Falls back to the recency prune if the ids can't be
+# read (missing/old node, malformed json).
+KEEP_IDS="$(node -e 'const fs=require("fs");try{const h=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write((h.runs||[]).map(r=>r.id).join("\n"))}catch(e){}' "$WEBROOT/history.json" 2>/dev/null)"
+if [[ -n "$KEEP_IDS" ]]; then
+  ( shopt -s nullglob; cd "$WEBROOT/runs" 2>/dev/null || exit 0
+    for d in */; do
+      id="${d%/}"
+      grep -qxF -- "$id" <<<"$KEEP_IDS" || rm -rf -- "$id"
+    done ) || true
+else
+  ( cd "$WEBROOT/runs" && ls -1t | tail -n +"$((RUN_LIMIT+1))" | xargs -r rm -rf ) || true
+fi
 
 phase "done"
 echo "[run-cycle] done — RUN_ID=$RUN_ID"

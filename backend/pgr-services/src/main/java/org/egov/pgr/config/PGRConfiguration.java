@@ -257,6 +257,22 @@ public class PGRConfiguration {
     @Value("#{'${pgr.visibility.unassigned.states:PENDINGFORASSIGNMENT,PENDINGFORREASSIGNMENT}'.split(',')}")
     private java.util.List<String> visibilityUnassignedStates;
 
+    // Config-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate)
+    @Value("${pgr.notification.config.driven:false}")
+    private Boolean notificationConfigDriven;
+
+    @Value("${pgr.notification.default.locale:en_IN}")
+    private String notificationDefaultLocale;
+
+    @Value("${pgr.notification.rolepool.page.size:100}")
+    private Integer notificationRolePoolPageSize;
+
+    @Value("${pgr.notification.rolepool.max.pages:10}")
+    private Integer notificationRolePoolMaxPages;
+
+    @Value("${pgr.notification.mdms.cache.ttl.ms:60000}")
+    private Long notificationMdmsCacheTtlMs;
+
     // Escalation
     @Value("${pgr.escalation.enabled}")
     private Boolean escalationEnabled;
@@ -282,5 +298,15 @@ public class PGRConfiguration {
 
     @Value("${pgr.dashboard.refresh.interval.ms:300000}")
     private Long dashboardRefreshIntervalMs;
+
+    // Encryption (egov-enc-service) — no keyId; resolved by tenantId inside the service
+    @Value("${egov.enc.host:http://egov-enc-service:1234}")
+    private String encHost;
+
+    @Value("${egov.enc.encrypt.endpoint:/egov-enc-service/crypto/v1/_encrypt}")
+    private String encEncryptEndpoint;
+
+    @Value("${egov.enc.decrypt.endpoint:/egov-enc-service/crypto/v1/_decrypt}")
+    private String encDecryptEndpoint;
 
 }

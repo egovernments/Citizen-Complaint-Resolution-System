@@ -53,8 +53,16 @@ const initializePGRModule = async ({ tenantId }) => {
       throw new Error("Couldn't fetch boundary data");
     }
 
-    // Extract the order of boundary types using a depth-first traversal
-    const boundaryHierarchyOrder = getBoundaryTypeOrder(fetchBoundaryData?.TenantBoundary?.[0]?.boundary);
+    // Extract the order of boundary types using a depth-first traversal.
+    // Guard against an empty/unexpected response shape — if boundary is
+    // missing, skip rather than crashing (which would leave
+    // boundaryHierarchyOrder unset and the dropdown silently blank).
+    const rootBoundary = fetchBoundaryData?.TenantBoundary?.[0]?.boundary;
+    if (!Array.isArray(rootBoundary) || rootBoundary.length === 0) {
+      console.warn("PGR init: boundary-relationships returned no boundary nodes for", hierarchyType, tenantId);
+      return;
+    }
+    const boundaryHierarchyOrder = getBoundaryTypeOrder(rootBoundary);
 
     // Store the ordered boundary types in session storage for use in dropdown components
     Digit.SessionStorage.set("boundaryHierarchyOrder", boundaryHierarchyOrder);

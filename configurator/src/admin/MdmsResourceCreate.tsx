@@ -3,7 +3,8 @@ import { DigitCreate } from './DigitCreate';
 import { DigitFormInput } from './DigitFormInput';
 import { WidgetForFieldSpec } from './widgets';
 import { useResourceContext, useInput, required } from 'ra-core';
-import { getResourceConfig, getResourceLabel } from '@/providers/bridge';
+import { getResourceConfig } from '@/providers/bridge';
+import { useResourceLabel } from '@/providers/useResourceLabel';
 import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
 import { orderFields, formatFieldLabel } from './schemaUtils';
 import { Label } from '@/components/ui/label';
@@ -102,7 +103,7 @@ function MdmsCreateFields({
 export function MdmsResourceCreate() {
   const resource = useResourceContext() ?? '';
   const config = getResourceConfig(resource);
-  const label = getResourceLabel(resource);
+  const label = useResourceLabel()(resource);
   const { definition } = useSchemaDefinition(config?.schema);
   const descriptor = getDescriptor(config?.schema);
 

@@ -153,6 +153,7 @@ const PGRSearchInboxConfig = (visibilityEnabled = true) => {
                     enableGlobalSearch: false,
                     enableColumnSort: true,
                     resultsJsonPath: "items",
+                    totalCountJsonPath: "totalCount",
                 },
                 children: {},
                 show: true

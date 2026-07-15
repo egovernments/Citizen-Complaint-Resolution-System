@@ -3,8 +3,18 @@ const MS_PER_DAY = 86400000;
 
 export const SLA_STATUS_LABELS = {
   breached: "Breached",
-  approaching: "Nearing breach",
+  nearing: "Nearing breach",
 };
+
+export const WORKFLOW_STATUS_LABELS = {
+  reopened: "Reopened",
+  in_progress: "In progress",
+  assigned: "Assigned",
+  open: "Open",
+};
+
+const OPEN_STATUS_KEYS = new Set(["PENDINGFORASSIGNMENT", "OPEN"]);
+const ASSIGNED_STATUS_KEYS = new Set(["PENDINGATLME", "ASSIGNED"]);
 
 export function formatBreachDurationCompact(ms) {
   const n = Number(ms);
@@ -24,7 +34,7 @@ export function formatBreachDurationCompact(ms) {
 export function resolveSlaRiskPresentation(bucket) {
   const normalized = String(bucket ?? "").toLowerCase();
   if (normalized === "approaching") {
-    return { slaLabel: SLA_STATUS_LABELS.approaching, slaLevel: "nearing" };
+    return { slaLabel: SLA_STATUS_LABELS.nearing, slaLevel: "nearing" };
   }
   return { slaLabel: SLA_STATUS_LABELS.breached, slaLevel: "breached" };
 }
@@ -44,15 +54,30 @@ export function complaintDetailHref(serviceRequestId) {
 }
 
 export function formatWorkflowStatusLabel(status) {
-  return String(status ?? "—")
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  const key = normalizeWorkflowStatusKey(status);
+  return WORKFLOW_STATUS_LABELS[key] ?? WORKFLOW_STATUS_LABELS.in_progress;
 }
 
 export function normalizeWorkflowStatusKey(status) {
-  const normalized = String(status ?? "").toLowerCase();
-  if (normalized.includes("reopen")) return "reopened";
-  if (normalized.includes("assign")) return "assigned";
-  if (normalized.includes("open") || normalized.includes("pending")) return "open";
+  const key = String(status ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s_-]+/g, "");
+
+  if (!key) return "in_progress";
+  if (key.includes("REOPEN")) return "reopened";
+  if (ASSIGNED_STATUS_KEYS.has(key) || (key.includes("ASSIGN") && !key.includes("PENDINGFORASSIGNMENT"))) {
+    return "assigned";
+  }
+  if (OPEN_STATUS_KEYS.has(key) || key === "PENDINGFORASSIGNMENT") return "open";
+  if (key.includes("INPROGRESS") || key.includes("PROGRESS")) return "in_progress";
+  if (
+    key.includes("PENDING") ||
+    key.includes("SUPERVISOR") ||
+    key.includes("REASSIGN") ||
+    key.includes("ESCALAT")
+  ) {
+    return "in_progress";
+  }
   return "in_progress";
 }

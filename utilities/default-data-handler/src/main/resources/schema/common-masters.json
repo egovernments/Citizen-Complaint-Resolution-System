@@ -662,63 +662,34 @@
   },
   {
     "tenantId": "{tenantid}",
-    "code": "common-masters.UserValidation",
-    "description": "common-masters.UserValidation",
+    "code": "common-masters.MobileNumberValidation",
+    "description": "Mobile Number Validation Configuration",
     "isActive": true,
     "definition": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Mobile Number Validation Configuration",
+      "title": "Mobile Number Validation",
       "type": "object",
-      "properties": {
-        "zone": {
-          "type": "string"
-        },
-        "fieldType": {
-          "type": "string"
-        },
-        "rules": {
-          "type": "object",
-          "properties": {
-            "minLength": {
-              "type": "number"
-            },
-            "maxLength": {
-              "type": "number"
-            },
-            "pattern": {
-              "type": "string"
-            },
-            "allowedStartingCharacters": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "errorMessage": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "pattern"
-          ]
-        },
-        "attributes": {
-          "type": "object",
-          "properties": {
-            "prefix": {
-              "type": "string"
-            }
-          }
-        }
-      },
       "required": [
-        "fieldType",
-        "zone",
-        "rules"
+        "countryCode",
+        "mobileNumberRegex"
       ],
       "x-unique": [
-        "zone"
-      ]
+        "countryCode"
+      ],
+      "properties": {
+        "countryCode": {
+          "type": "string"
+        },
+        "mobileNumberRegex": {
+          "type": "string"
+        },
+        "default": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
     }
   }
 ]

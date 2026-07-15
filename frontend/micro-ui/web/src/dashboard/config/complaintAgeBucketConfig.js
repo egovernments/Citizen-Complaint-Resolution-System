@@ -44,8 +44,11 @@ const LEGACY_AGING_BUCKET_TO_ID = new Map([
   [">7d", "14d+"],
 ]);
 
+const CANONICAL_BUCKET_IDS = new Set(OPEN_COMPLAINT_AGE_BUCKETS.map((bucket) => bucket.id));
+
 export function resolveOpenComplaintAgeBucketId(agingBucket) {
   const key = String(agingBucket ?? "").trim();
   if (!key) return null;
+  if (CANONICAL_BUCKET_IDS.has(key)) return key;
   return LEGACY_AGING_BUCKET_TO_ID.get(key) ?? null;
 }

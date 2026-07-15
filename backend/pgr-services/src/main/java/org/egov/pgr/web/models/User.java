@@ -21,11 +21,9 @@ public class User {
     private String mobileNumber;
     private String countryCode;
     private String emailId;
+    private String correspondenceAddress;
     private List<Role> roles;
     private String tenantId;
     private String uuid;
     private Boolean active;
-
-
-
 }

@@ -1,7 +1,10 @@
 # Complaint Hierarchy Migration — Operator Runbook (2-level → N-level)
 
-> **Status:** PROVEN end-to-end on the local `ke` stack (2026-06-24).
+> **Status:** PROVEN end-to-end on the local `ke` stack (2026-06-24) **and live on bomet (2026-06-25)**.
 > This is the *battle-tested* step-by-step, including every gotcha we hit.
+> Server operators: read the [Production cutover notes](#appendix--production-cutover-notes-bomet-2026-06-25)
+> appendix first — the live path differs from the local steps (pgr-services IS built by the nightly, migrate
+> `ke` only, the employee UI is `digit-ui-esbuild`).
 > For the design rationale see [complaint-type-2level-to-Nlevel.md](./complaint-type-2level-to-Nlevel.md) (§8 is the canonical lockstep).
 
 ## What this migrates
@@ -139,10 +142,18 @@ docker exec -i docker-postgres pg_restore -U egov -d egov --clean --if-exists < 
   `STATE_TENANT=<self>` and do not export `TENANTS`. (`run-data-migration.sh` handles this.)
 - **(G3) x-ref-schema `{}` quirk.** MDMS schema create persists `x-ref-schema: []` as `{}` → first data write
   400s. Fix in SQL after every schema (re)create; `_update` is 501 so it can't be fixed via API.
-- **(G4) serviceCode == menuPath collisions.** A malformed `ServiceDef` whose `serviceCode` equals its
-  `menuPath` (e.g. seed `OpenDefecation` at `ke`/`pg`) collides (leaf code == category code). Blank the
-  `menuPath` (`UPDATE eg_mdms_data SET data=jsonb_set(data,'{menuPath}','""') WHERE ...`) or migrate that
-  tenant scoped so it isn't pulled in.
+- **(G4) leaf-code == category-code collisions.** Two shapes, both caught by preflight (`❌ N serviceCode(s)
+  collide with an interior node code`):
+  - *Same-row:* a malformed `ServiceDef` whose own `serviceCode` equals its own `menuPath` (e.g. seed
+    `OpenDefecation` at `ke`/`pg`). Blank the `menuPath`
+    (`UPDATE eg_mdms_data SET data=jsonb_set(data,'{menuPath}','""') WHERE ...`) or migrate that tenant scoped.
+  - *Cross-row (hit on bomet `ke`):* one row is a leaf `serviceCode=X`, while *other* rows use `menuPath=X` as
+    their category — so `X` would be BOTH a leaf and an interior node in the merged keyspace. Per design doc §391
+    **re-code the interior node, never the leaf** (leaf codes are sacrosanct — historical complaints reference
+    them). Rename the category `menuPath` (+ `menuPathName` label) on the offending rows, e.g.
+    `UPDATE eg_mdms_data SET data=jsonb_set(jsonb_set(data,'{menuPath}','"WaterOutageGroup"'),'{menuPathName}','"Water Outage"') WHERE schemacode='RAINMAKER-PGR.ServiceDefs' AND tenantid='ke' AND data->>'menuPath'='WaterOutage';`
+    This edits the migration INPUT (ServiceDefs); converge does not re-run `migrate.cjs`, so it's a one-time fix —
+    but if you ever re-run the migration, re-apply it first. (bomet hit this on `WaterOutage` + `StaffMisconduct`.)
 - **(G5) `deploy.sh bomet` builds everything EXCEPT pgr-services.** host_vars `build_*: true` cover
   digit-ui/configurator/DDH/mcp; pgr-services is *run* from the `pgr-services-dev:2master` image — build it
   manually first (step 3a) or you deploy a stale backend.
@@ -159,3 +170,37 @@ docker exec -i docker-postgres pg_restore -U egov -d egov --clean --if-exists < 
 - **Deploy:** replace `deploy.sh bomet` / local docker steps with your CD/helm pipeline (deploy pgr-services,
   digit-ui, configurator, default-data-handler from the release).
 - **Same everywhere:** the data migration (steps 1–2, 4–6) and all gotchas above.
+
+---
+
+## Appendix — Production cutover notes (bomet, 2026-06-25)
+First real-server run after the local proof. Where the live path differed from the steps above:
+
+- **pgr-services IS built on the server (G5 inverted).** On bomet the nightly wrapper (`bomet-redeploy.sh`)
+  runs `nightly-build-push.sh` which builds **every CCRS-owned image — including pgr-services** — from the
+  `develop` checkout and pushes `nightly-develop`; host_vars pin the services to that tag. So step 3a's manual
+  `docker build` is NOT needed here — the build is the nightly. G5 ("deploy.sh does not build pgr-services")
+  is true for a *bare* `./deploy.sh` but not for the bomet wrapper path. The verify in 3a (8 `ComplaintHierarchy`
+  classes in the jar) is still the right check against the resulting image.
+- **State-tenant scoping ⇒ migrate `ke` only.** pgr-services resolves the hierarchy at the **state tenant**
+  (`MDMSUtils.mDMSCall` → `getStateLevelTenant`). bomet's only state-root with real complaints is `ke`, and
+  every city (`ke.bomet`, `ke.nairobi`, …) is a strict subset — so migrating **`ke` scoped** covers all of them.
+  18 junk single-segment test tenants (zero complaints) were deliberately skipped, incl. `pg` (the G4 same-row
+  tenant). Don't blindly migrate "every tenant in ServiceDefs".
+- **G3 was a no-op.** The x-ref-schema fix UPDATE'd 0 rows — current `develop` DDH already seeds it correctly.
+  Still run it (idempotent, cheap insurance), but don't expect it to change anything.
+- **Row counts are data-dependent.** bomet `ke` = **446** (195 interior + 251 leaf) — not the local proof's
+  `ke=249`. The "proven result" numbers in step 2 are a local-stack subset; expect your own counts.
+- **digit-ui check is wrong for the esbuild UI.** The bomet *employee* SPA is `digit-ui-esbuild`, a host-built
+  bundle served by nginx from `/opt/ccrs/digit-ui-esbuild/build/` — NOT the `digit-ui` container. Step 3c's
+  `docker exec digit-ui grep …COMPLAINT_HIERARCHY` checks the wrong artifact. Verify instead with
+  `grep -l COMPLAINT_HIERARCHY /opt/ccrs/digit-ui-esbuild/build/index.js`. Rebuild via
+  `bash local-setup/ansible/files/digit-ui-build.sh /opt/ccrs/digit-ui-esbuild -`.
+- **The N-level UI commit shipped a build-breaker.** PR #917 split the identifier `isCurrentAssignment` across
+  two lines in `createComplaintForm.js`, failing the esbuild build (`Expected ")" but found "Assignment"`).
+  Fixed in PR #935. If the employee picker is stale post-cutover, check the esbuild build actually succeeded.
+- **Old masters kept (per step 5).** `ServiceDefs`/`ClassificationNode`/`ComplaintTypeDepartments` left intact
+  as the rollback path + so the legacy 2-level picker keeps emitting valid codes until the N-level UI is verified.
+- **Timing matters vs. the nightly cron.** bomet redeploys nightly at 15:30 UTC (deploys code, **never** runs the
+  data migration). Run the data migration BEFORE the nightly fires — if the nightly deploys the repointed
+  pgr-services against an un-migrated `ke`, all PGR breaks (G7). We ran the full lockstep manually ahead of it.
