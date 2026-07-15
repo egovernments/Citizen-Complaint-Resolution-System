@@ -1230,327 +1230,327 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
     "message": "Average resolution time",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME_SUBTITLE",
     "message": "Avg. time to resolve",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
     "message": "Complaints by type",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
     "message": "Complaints filed, by type",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME",
     "message": "Complaints over time",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME_SUBTITLE",
     "message": "Created, resolved and open per day",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER",
     "message": "Breach rate vs caseload by department",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER_SUBTITLE",
     "message": "Open caseload vs breach rate at period end",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO",
     "message": "Flow ratio by department",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO_SUBTITLE",
     "message": "Resolved ÷ created",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
     "message": "Department-wise resolution rate",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE_SUBTITLE",
     "message": "Resolved ÷ filed per department",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENTS_BY_TYPE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENTS_BY_TYPE",
     "message": "Complaints by departments",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
     "message": "Employees with most open complaints",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OFFICER_SLA_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OFFICER_SLA_SUBTITLE",
     "message": "Open complaints by SLA state per officer",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE",
     "message": "Complaints by age",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE_SUBTITLE",
     "message": "Open complaints by age bucket",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL",
     "message": "Complaints by channel",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL_SUBTITLE",
     "message": "Open complaints by intake channel",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE",
     "message": "Open Complaints by Workflow Stage",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
     "message": "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in.",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_CREATED_DAILY",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_CREATED_DAILY",
     "message": "Complaints over time",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
     "message": "Open complaints over time (daily)",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA",
     "message": "Complaints by Wards",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA_SUBTITLE",
     "message": "All complaints by SLA state — per ward",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
     "message": "Complaints created today",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CSAT_AVG",
     "message": "Citizen satisfaction",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CSAT_AVG_SUBTITLE",
     "message": "Avg. rating on resolved complaints",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
     "message": "First-assignment rate",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT_SUBTITLE",
     "message": "Never reassigned ÷ assigned",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
     "message": "Flow ratio",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT_SUBTITLE",
     "message": "Resolved in period ÷ created in period",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_COMPLAINT_PINS",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_MAP_COMPLAINT_PINS",
     "message": "Complaint locations",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
     "message": "Complaint map (week-over-week)",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
     "message": "New complaints created",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
     "message": "Oldest complaint",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE_SUBTITLE",
     "message": "Earliest open complaint",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
     "message": "Open complaints",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
     "message": "Reopen rate",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT_SUBTITLE",
     "message": "Reopened ÷ resolved",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
     "message": "Resolution rate",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
     "message": "Resolved complaints",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
     "message": "Resolved on time rate",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
     "message": "SLA compliance rate",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT_SUBTITLE",
     "message": "Resolved within SLA ÷ all filed",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT",
     "message": "SLA non-compliance rate",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT_SUBTITLE",
     "message": "Breached SLA ÷ all complaints",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
     "message": "Complaint type details",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS_SUBTITLE",
     "message": "Resolution, SLA and reopen metrics per complaint type - all complaints, narrowed by the date filter",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK",
     "message": "Complaints at risk",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK_SUBTITLE",
     "message": "Open complaints nearing or past SLA",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
     "message": "Recurring complaints by ward & sub-type",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
     "message": "Ward × subtype pairs with ≥ 3 complaints in period",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL",
     "message": "Service quality by channel",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL_SUBTITLE",
     "message": "Volume, resolution rate and CSAT by intake channel",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE",
     "message": "Complaint sub-type performance",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE_SUBTITLE",
     "message": "Share, resolution time and SLA by subtype",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
     "message": "Open complaints by ward (daily)",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE",
     "message": "Ward performance",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE_SUBTITLE",
     "message": "Created, open, reopen, on-time and CSAT by ward",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT",
     "message": "Total complaints",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT_SUBTITLE",
     "message": "Complaints filed in period",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE",
     "message": "Employee performance",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE_SUBTITLE",
     "message": "Workload and quality metrics per officer",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_RS_BREACH_TOTAL",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_RS_BREACH_TOTAL",
     "message": "Breached SLA (open)",
     "module": "rainmaker-dashboard"
   }
@@ -2779,327 +2779,327 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
     "message": "Tempo médio de resolução",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME_SUBTITLE",
     "message": "Tempo médio para resolver",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
     "message": "Reclamações por tipo",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
     "message": "Reclamações registadas, por tipo",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME",
     "message": "Reclamações ao longo do tempo",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME_SUBTITLE",
     "message": "Criadas, resolvidas e abertas por dia",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER",
     "message": "Taxa de incumprimento vs carga de trabalho por departamento",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER_SUBTITLE",
     "message": "Carga aberta vs taxa de incumprimento no fim do período",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO",
     "message": "Rácio de fluxo por departamento",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO_SUBTITLE",
     "message": "Resolvidas ÷ criadas",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
     "message": "Taxa de resolução por departamento",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE_SUBTITLE",
     "message": "Resolvidas ÷ registadas por departamento",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENTS_BY_TYPE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENTS_BY_TYPE",
     "message": "Reclamações por departamento",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
     "message": "Funcionários com mais reclamações abertas",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OFFICER_SLA_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OFFICER_SLA_SUBTITLE",
     "message": "Reclamações abertas por estado de SLA por funcionário",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE",
     "message": "Reclamações por antiguidade",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE_SUBTITLE",
     "message": "Reclamações abertas por faixa de antiguidade",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL",
     "message": "Reclamações por canal",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL_SUBTITLE",
     "message": "Reclamações abertas por canal de entrada",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE",
     "message": "Reclamações Abertas por Fase do Fluxo de Trabalho",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
     "message": "Subtipos com mais reclamações abertas, cada um discriminado pela fase do fluxo de trabalho em que estão retidas.",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_CREATED_DAILY",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_CREATED_DAILY",
     "message": "Reclamações ao longo do tempo",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
     "message": "Reclamações abertas ao longo do tempo (diário)",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA",
     "message": "Reclamações por Bairro",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA_SUBTITLE",
     "message": "Todas as reclamações por estado de SLA — por bairro",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
     "message": "Reclamações criadas hoje",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CSAT_AVG",
     "message": "Satisfação do cidadão",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CSAT_AVG_SUBTITLE",
     "message": "Classificação média das reclamações resolvidas",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
     "message": "Taxa de primeira atribuição",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT_SUBTITLE",
     "message": "Nunca reatribuídas ÷ atribuídas",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
     "message": "Rácio de fluxo",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT_SUBTITLE",
     "message": "Resolvidas no período ÷ criadas no período",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_COMPLAINT_PINS",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_MAP_COMPLAINT_PINS",
     "message": "Localizações das reclamações",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
     "message": "Mapa de reclamações (semana a semana)",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
     "message": "Novas reclamações criadas",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
     "message": "Reclamação mais antiga",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE_SUBTITLE",
     "message": "Reclamação aberta mais antiga",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
     "message": "Reclamações abertas",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
     "message": "Taxa de reabertura",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT_SUBTITLE",
     "message": "Reabertas ÷ resolvidas",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
     "message": "Taxa de resolução",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
     "message": "Reclamações resolvidas",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
     "message": "Taxa de resolução dentro do prazo",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
     "message": "Taxa de cumprimento de SLA",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT_SUBTITLE",
     "message": "Resolvidas dentro do SLA ÷ todas as registadas",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT",
     "message": "Taxa de incumprimento de SLA",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT_SUBTITLE",
     "message": "SLA violado ÷ todas as reclamações",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
     "message": "Detalhes por tipo de reclamação",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS_SUBTITLE",
     "message": "Métricas de resolução, SLA e reabertura por tipo de reclamação - todas as reclamações, restringidas pelo filtro de datas",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK",
     "message": "Reclamações em risco",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK_SUBTITLE",
     "message": "Reclamações abertas perto ou fora do SLA",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
     "message": "Reclamações recorrentes por bairro e subtipo",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
     "message": "Pares bairro × subtipo com ≥ 3 reclamações no período",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL",
     "message": "Qualidade do serviço por canal",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL_SUBTITLE",
     "message": "Volume, taxa de resolução e CSAT por canal de entrada",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE",
     "message": "Desempenho por subtipo de reclamação",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE_SUBTITLE",
     "message": "Quota, tempo de resolução e SLA por subtipo",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
     "message": "Reclamações abertas por bairro (diário)",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE",
     "message": "Desempenho por bairro",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE_SUBTITLE",
     "message": "Criadas, abertas, reabertas, dentro do prazo e CSAT por bairro",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT",
     "message": "Total de reclamações",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT_SUBTITLE",
     "message": "Reclamações registadas no período",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE",
     "message": "Desempenho dos funcionários",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE_SUBTITLE",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE_SUBTITLE",
     "message": "Métricas de carga de trabalho e qualidade por funcionário",
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "RAINMAKER-PGR.DASHBOARD_KPI_RS_BREACH_TOTAL",
+    "code": "CMS-DASHBOARD.DASHBOARD_KPI_RS_BREACH_TOTAL",
     "message": "SLA violado (abertas)",
     "module": "rainmaker-dashboard"
   }

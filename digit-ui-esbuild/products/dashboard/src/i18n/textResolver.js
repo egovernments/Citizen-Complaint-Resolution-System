@@ -15,7 +15,7 @@ import { translate as t, exists } from "./localeRuntime";
 
 /**
  * Title resolution for the inverted catalog. `titleKey` (a raw
- * RAINMAKER-PGR.DASHBOARD_KPI_* localization code) wins when its message is
+ * CMS-DASHBOARD.DASHBOARD_KPI_* localization code) wins when its message is
  * seeded; otherwise the human `viz.title` from the MDMS def is the source of
  * truth, and the prettified key remains the last-resort fallback — never
  * rendered verbatim.
@@ -33,7 +33,7 @@ export function resolveTitle(def) {
 }
 
 /**
- * Subtitle: `viz.subtitleKey` (RAINMAKER-PGR.DASHBOARD_KPI_<ID>_SUBTITLE) wins
+ * Subtitle: `viz.subtitleKey` (CMS-DASHBOARD.DASHBOARD_KPI_<ID>_SUBTITLE) wins
  * when seeded, else the legacy viz.subtitle / description / contextLabel chain.
  */
 export function resolveSubtitle(viz) {
