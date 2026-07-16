@@ -165,6 +165,10 @@ const customEnglishMessages: TranslationMessages = {
       reset: 'Reset',
       rows_per_page: 'Rows per page:',
     },
+    forms: {
+      // Field help text shown under form inputs.
+      citizen_login_username_help: "Used as the citizen's login username.",
+    },
     providers: {
       // Notification Providers screen — self-service actions.
       add: 'Add Provider',
