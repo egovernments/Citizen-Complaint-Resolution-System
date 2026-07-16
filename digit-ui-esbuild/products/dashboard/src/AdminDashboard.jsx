@@ -30,6 +30,7 @@ import { useCatalog } from "./hooks/useCatalog";
 import { useCatalogLayout } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
+import * as dashboardMetrics from "./services/dashboardMetrics";
 import { GRID_COLS, KPI_ROW_HEIGHT } from "./constants/layoutConfig";
 import {
   isCardKind,
@@ -179,6 +180,19 @@ function persistHierOverrides(overrides) {
 }
 
 /**
+ * Errored-widget count for dashboard.error_widgets.count (#1110): companion
+ * refs (__prior/__series/__pins) collapse to their base kpiId so a tile whose
+ * base AND companion queries failed still counts as ONE broken widget; a
+ * whole-batch failure (`__batch`) counts every laid-out tile.
+ */
+function countErrorWidgets(errors, tileCount) {
+  const keys = Object.keys(errors || {});
+  if (!keys.length) return 0;
+  if (keys.includes("__batch")) return tileCount;
+  return new Set(keys.map((k) => k.replace(/__(prior|series|pins)$/, ""))).size;
+}
+
+/**
  * Assemble the single result object KpiTile expects for one tile, merging the
  * base result with its __prior / __series companions.
  *
@@ -297,6 +311,16 @@ function seriesToPoints(rows, viz, valueKey, columns) {
 /* -------------------------------------------------------------------------- */
 
 const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
+  // Render-lag instrumentation (#1110): begin the load SYNCHRONOUSLY at mount,
+  // BEFORE useCatalog/useFilterOptions fire their fetches, so every request of
+  // this load carries the load's traceparent/x-trace-id (useState initializer
+  // runs during the first render; the hooks' effects run after it).
+  useState(() => {
+    dashboardMetrics.beginLoad();
+    return null;
+  });
+  // Soft-nav away: ship whatever telemetry is still pending for this load.
+  useEffect(() => () => dashboardMetrics.flush("unmount"), []);
   const { t, language, i18nTick } = useDashboardT();
   const { filters, setFilter, clearFilters, applyFilterOptions } =
     useDashboardFilters();
@@ -411,6 +435,9 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     }
     const refs = buildRefs(tiles, kpis, filters, hierOverrides);
     const reqId = ++reqIdRef.current;
+    // A new batch actually fired: opens a pending interaction window (R6) —
+    // an intent whose filter change didn't change refsKey never reaches here.
+    dashboardMetrics.markBatchStart(reqId);
     setBatch((prev) => ({ ...prev, loading: true }));
 
     runKpiBatch(refs, tenantId)
@@ -422,6 +449,12 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           errors: res?.errors || null,
           partial: Boolean(res?.partial),
         });
+        // AFTER the staleness guard; companion-ref errors (__prior/__series/
+        // __pins) collapse to their base kpiId so one broken tile counts once.
+        dashboardMetrics.markAllWidgetsReady(
+          countErrorWidgets(res?.errors, tiles.length),
+          reqId
+        );
       })
       .catch((err) => {
         if (reqId !== reqIdRef.current) return;
@@ -431,6 +464,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           errors: { __batch: err?.message || t("DASHBOARD_COMMON_BATCH_FAILED", "Batch query failed") },
           partial: true,
         });
+        // Whole-batch failure: every laid-out tile is an errored widget.
+        dashboardMetrics.markAllWidgetsReady(tiles.length, reqId);
       });
     // refsKey captures both the tile set and the resolved params.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -530,6 +565,24 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     URL.revokeObjectURL(url);
   }, [layout, kpis, batch.results, t]);
 
+  // Filter interactions register an intent with the metrics module first (the
+  // window only opens if the change actually re-fires the batch — R6); the
+  // filters hook itself stays untouched.
+  const handleFilterChange = useCallback(
+    (...args) => {
+      dashboardMetrics.markInteraction("filter");
+      return setFilter(...args);
+    },
+    [setFilter]
+  );
+  const handleClearFilters = useCallback(
+    (...args) => {
+      dashboardMetrics.markInteraction("filter");
+      return clearFilters(...args);
+    },
+    [clearFilters]
+  );
+
   const showEmpty = !catalogLoading && pack && layout.length === 0;
 
   return (
@@ -545,8 +598,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       onSearchQueryChange={setSearchQuery}
       onExport={handleExport}
       filters={filters}
-      onFilterChange={setFilter}
-      onClearFilters={clearFilters}
+      onFilterChange={handleFilterChange}
+      onClearFilters={handleClearFilters}
       filterOptions={filterOptions}
       filterOptionsLoading={filterOptionsLoading}
       kpiCardData={{}}

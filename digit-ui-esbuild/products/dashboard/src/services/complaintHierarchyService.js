@@ -1,5 +1,6 @@
 import { getTenantId, hasAuth } from "./analyticsService";
 import { selectHierarchyDefinition, orderedLevels } from "../utils/hierLevelGrouping";
+import { withTraceHeaders } from "./dashboardMetrics";
 
 /**
  * MDMS context path from globalConfigs (deployments serve MDMS under
@@ -116,7 +117,7 @@ export async function fetchComplaintTypeIndex() {
   try {
     const response = await fetch(getMdmsSearchUrl(), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withTraceHeaders({ "Content-Type": "application/json" }),
       credentials: "omit",
       body: JSON.stringify({
         RequestInfo: buildRequestInfo(),
