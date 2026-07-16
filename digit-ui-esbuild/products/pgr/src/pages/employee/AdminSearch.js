@@ -421,7 +421,7 @@ const PGRAdminSearch = () => {
   };
 
   const deptCell = (raw) => {
-    if (!raw || raw === "NA") return { label: tr("ES_PGR_ADMIN_DEPT_NA", "Not Assigned"), code: "NA" };
+    if (!raw || raw === "NA") return { label: tr("ES_PGR_ADMIN_DEPT_NA", "No Department Assigned"), code: "NA" };
     const hit = deptOptions.map[raw];
     return hit || { label: raw, code: raw };
   };
