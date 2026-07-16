@@ -193,7 +193,7 @@
     },
     {
         "code": "CS_DESC_MIN_CHARS",
-        "message": "Descreva o problema em 20 a 1000 caracteres (use palavras, nao apenas numeros).",
+        "message": "Descreva o problema em 20 a 1000 caracteres (use palavras, não apenas números).",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
