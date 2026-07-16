@@ -23,6 +23,10 @@ WORK="$(mktemp -d)"
 trap 'docker rm -f it-pos it-neg >/dev/null 2>&1 || true; docker network rm $NET >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
 
 MIGRATORS=(
+  # audit-service was never covered here: its migrator used to live in the base
+  # compose rather than the overlay, so it fell outside this list. Both now live
+  # in docker-compose.migrations.yml.
+  "audit-service|audit-service-db:v2.9.2-4a60f20|audit_service_schema"
   "boundary-service|boundary-service-db:v2.9.2-4a60f20|boundary_service_schema"
   "egov-user|egov-user-db:master-d69ce29|egov_user_schema"
   "mdms-backend|mdms-v2-db:v2.9.2-4a60f20|mdms_v2_schema"
@@ -107,7 +111,7 @@ echo "  rebuild path: ${REBUILT:-<none>}"
 # install"), so they are not in REBUILT — but their migrator still legitimately
 # applies from empty. Demanding a no-op from them would be wrong for the same
 # reason it is wrong for REBUILT, just via a different path.
-BASELINE_FRESH="egov-indexer"
+BASELINE_FRESH="egov-indexer audit-service"
 echo "  baseline-fresh: ${BASELINE_FRESH:-<none>}"
 
 # Idempotency: a second run must change nothing and still exit 0.

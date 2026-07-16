@@ -222,7 +222,7 @@ migrator's `SCHEMA_TABLE` has no map entry.
 ./local-setup/db/normalize/test-integration.sh /path/to/dump.sql
 ```
 
-It loads the dump into a throwaway database, normalizes, runs all fourteen pinned `-db`
+It loads the dump into a throwaway database, normalizes, runs all fifteen pinned `-db`
 migrators, and asserts every pre-existing table is byte-identical afterwards. It also
 runs the same dump *without* the normalizer and asserts the data IS destroyed — if
 that half ever stops failing, the guard has been silently disabled.

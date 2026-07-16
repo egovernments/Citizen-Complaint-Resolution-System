@@ -144,6 +144,31 @@ services:
   # migration rows under the K8s <service>_schema names → the migrators no-op on
   # the fast path. Env matches the -db images' migrate.sh contract.
 
+  # audit-service (item #13) arrived with its migrator declared in the BASE compose
+  # rather than here — the same pattern in two homes, which is exactly the kind of
+  # split that makes "where does this service's schema come from?" unanswerable by
+  # grep. Moved here verbatim so every migrator lives in one file. Note it takes no
+  # SCHEMA_NAME (its migrate.sh does not read one); that is preserved from the
+  # original, not an omission.
+  audit-service-migration:
+    image: egovio/audit-service-db:v2.9.2-4a60f20
+    container_name: audit-service-migration
+    depends_on:
+      postgres-db: { condition: service_healthy }
+      db-history-normalize: { condition: service_completed_successfully }
+    environment:
+      DB_URL: jdbc:postgresql://postgres-db:5432/egov
+      SCHEMA_TABLE: audit_service_schema
+      FLYWAY_USER: egov
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_VALIDATE_ON_MIGRATE: "false"
+    restart: "no"
+    networks: [egov-network]
+  audit-service:
+    environment: { SPRING_FLYWAY_ENABLED: "false" }
+    depends_on: { audit-service-migration: { condition: service_completed_successfully } }
+
   boundary-service-migration:
     image: egovio/boundary-service-db:v2.9.2-4a60f20
     container_name: boundary-service-migration
