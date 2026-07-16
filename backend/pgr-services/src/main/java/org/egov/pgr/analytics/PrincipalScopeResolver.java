@@ -52,6 +52,17 @@ public class PrincipalScopeResolver {
     /** Sentinel department for a denied principal — matches no real row (fail-closed). */
     private static final String DENY_ALL_DEPARTMENT = "__scope_denied__";
 
+    /**
+     * Employee base-role markers. In DIGIT, HRMS stamps {@code EMPLOYEE} (and {@code COMMON_EMPLOYEE})
+     * on every employee principal in addition to their functional roles (GRO, PGR_LME, admin, …); a
+     * citizen never carries these. Holding any of them disqualifies a principal from being a pure
+     * citizen, regardless of what other (citizen-side) roles they also hold.
+     */
+    private static final Set<String> EMPLOYEE_ROLE_CODES = Set.of("EMPLOYEE", "COMMON_EMPLOYEE");
+
+    /** The citizen role code every self-registered citizen carries. */
+    private static final String CITIZEN_ROLE_CODE = "CITIZEN";
+
     private final PGRConfiguration config;
     private final RestTemplate restTemplate;
     private final ObjectMapper mapper;
@@ -83,28 +94,32 @@ public class PrincipalScopeResolver {
     }
 
     /**
-     * A "pure citizen" is a principal of type CITIZEN that holds no employee role. Such a
-     * principal is locked to their OWN records everywhere — analytics self-scope here, and
-     * complaint-search ownership scoping in {@code EnrichmentService.enrichSearchRequest}. This
-     * is the single source of truth for that security-relevant classification, so the two call
-     * sites cannot drift.
+     * A "pure citizen" is a principal that HOLDS the {@code CITIZEN} role and holds NO employee
+     * role (see {@link #EMPLOYEE_ROLE_CODES}). Such a principal is locked to their OWN records
+     * everywhere — analytics self-scope here, and complaint-search ownership scoping in
+     * {@code EnrichmentService.enrichSearchRequest}. This is the single source of truth for that
+     * security-relevant classification, so the two call sites cannot drift.
+     *
+     * <p>Classification is role-based, NOT "type CITIZEN with only the CITIZEN role". A citizen may
+     * legitimately carry additional non-employee (citizen-side) roles; requiring CITIZEN to be the
+     * SOLE role would misclassify those principals as employees and push them down the HRMS employee
+     * path where they fail-close. Conversely, an employee who also holds the CITIZEN role is still
+     * an employee (they carry {@code EMPLOYEE}) and is not self-scoped.
      */
     public boolean isPureCitizen(RequestInfo requestInfo) {
         User u = requestInfo == null ? null : requestInfo.getUserInfo();
-        if (u == null || !"CITIZEN".equalsIgnoreCase(u.getType()))
+        if (u == null || u.getRoles() == null)
             return false;
-        List<Role> roles = u.getRoles();
-        if (roles != null) for (Role r : roles) {
-            String c = r.getCode() == null ? "" : r.getCode().toUpperCase();
-            // TODO(#1071): this classifies ANY role other than CITIZEN as an employee role,
-            // i.e. it assumes a citizen principal carries ONLY the CITIZEN role. If a citizen
-            // can legitimately hold an additional NON-employee role (e.g. a future citizen-side
-            // role), that principal would be misclassified as an employee here and lose self-
-            // scoping. Harden this with an explicit employee-role set (or an isEmployee flag on
-            // the principal) rather than "anything != CITIZEN" before such roles are introduced.
-            if (!c.equals("CITIZEN")) return false; // holds an employee role → not a pure citizen
+
+        boolean hasCitizenRole = false;
+        boolean hasEmployeeRole = false;
+        for (Role r : u.getRoles()) {
+            if (r == null || r.getCode() == null) continue;
+            String c = r.getCode().trim().toUpperCase();
+            if (c.equals(CITIZEN_ROLE_CODE)) hasCitizenRole = true;
+            else if (EMPLOYEE_ROLE_CODES.contains(c)) hasEmployeeRole = true;
         }
-        return true;
+        return hasCitizenRole && !hasEmployeeRole;
     }
 
     /**
