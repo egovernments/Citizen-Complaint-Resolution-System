@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useRouteMatch } from "react-router-dom";
 import { default as EmployeeApp } from "./pages/employee";
 import PGRCard from "./components/PGRCard";
+import PGRAdminSearch from "./pages/employee/AdminSearch";
 import { overrideHooks, updateCustomConfigs } from "./utils";
 import { ProviderContext } from "./utils/context";
 import BoundaryComponent from "./components/BoundaryComponent";
@@ -112,6 +113,7 @@ const componentsToRegister = {
   PGRVerificationDocsComponent: VerificationDocsComponent,
   PGRActionUploadComponent: ActionUploadComponent,
   PGRSearchInbox,
+  PGRAdminSearch,
   PGRCreateComplaint: CreateComplaint,
   PGRResponse: Response,
   PGRBreadCrumbs: BreadCrumbs,

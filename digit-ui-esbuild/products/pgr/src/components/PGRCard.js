@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 const ROLES = {
   // CMS_* roles (mz.igsae multi-tier workflow) added alongside the standard PGR roles — additive.
-  PGR: ["GRO", "PGR_LME", "CSR", "CMS_RECEPTION_OFFICER", "CMS_SCREENING_OFFICER", "CMS_SUPERVISOR", "CMS_CASE_MANAGER", "CMS_VIEWER"],
+  PGR: ["GRO", "PGR_LME", "CSR", "SUPERUSER", "CMS_ADMIN", "CMS_RECEPTION_OFFICER", "CMS_SCREENING_OFFICER", "CMS_SUPERVISOR", "CMS_CASE_MANAGER", "CMS_VIEWER"],
 };
 
 const PGRCard = () => {
@@ -37,6 +37,8 @@ const PGRCard = () => {
   let links = [
     generateLink("ACTION_TEST_CREATE_COMPLAINT", "create-complaint", ["CSR", "CMS_RECEPTION_OFFICER"]),
     generateLink("ACTION_TEST_SEARCH_COMPLAINT", "inbox-v2"),
+    // Cross-department admin search (backend: _admin/_search) — SUPERUSER + CMS_ADMIN
+    generateLink("ES_PGR_ADMIN_SEARCH", "admin-search", ["SUPERUSER", "CMS_ADMIN"]),
   ];
   const hasRequiredRoles = (link) => { 
     if (!link?.roles?.length) return true;

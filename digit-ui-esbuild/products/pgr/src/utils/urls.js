@@ -9,6 +9,8 @@ const Urls = {
   pgr: {
     inboxSearch: `/inbox/v2/_search`,
     search: `/pgr-services/v2/request/_search`,
+    // SUPERUSER cross-department search (backend PR #1260); returns ServiceWrappers + totalCount
+    adminSearch: `/pgr-services/v2/request/_admin/_search`,
     create: `/pgr-services/v2/request/_create`,
     update: `/pgr-services/v2/request/_update`,
   },
