@@ -14,6 +14,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import org.egov.novubridge.web.models.Contact;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -50,7 +51,8 @@ public class NovuClient {
      */
     public NovuResponse identifyThenTrigger(String subscriberId, Contact contact, String channel,
                                             String renderedBody, String renderedSubject,
-                                            String transactionId, Map<String, Object> data) {
+                                            String transactionId, Map<String, Object> data,
+                                            String templateId, Map<String, Object> contentVariables) {
         identify(subscriberId, contact);
 
         String workflowId = config.getNovuWorkflowId(channel);
@@ -66,7 +68,47 @@ public class NovuClient {
             payload.put("subject", renderedSubject);
         }
 
+        // Provider-template delivery (WHATSAPP): PGR resolved an approved Content SID for this
+        // routing key. Pass it + positional contentVariables as a Twilio provider override so Novu
+        // sends the approved template rather than the free-form body. The integration supplies the
+        // sender/credentials; we only add the template. SMS/EMAIL keep the free-form path.
+        if (StringUtils.hasText(templateId)) {
+            Map<String, Object> overrides = buildProviderTemplateOverrides(templateId, contentVariables);
+            return trigger(workflowId, subscriberId, phone, payload, transactionId, overrides, null);
+        }
+
         return trigger(workflowId, subscriberId, phone, email, payload, transactionId);
+    }
+
+    private static final ObjectMapper CONTENT_VAR_MAPPER = new ObjectMapper();
+
+    /**
+     * The exact {@code {providers:{twilio:{_passthrough:{body:{contentSid, contentVariables}}}}}}
+     * override envelope Novu's Twilio provider consumes for an approved Content template — matching
+     * {@code TwilioProviderStrategy.buildProviderConfig}. {@code contentVariables} is a JSON string
+     * (Twilio requirement). No sender/credentials here — those live in the Novu integration.
+     */
+    private Map<String, Object> buildProviderTemplateOverrides(String contentSid,
+                                                               Map<String, Object> contentVariables) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("contentSid", contentSid);
+        if (contentVariables != null && !contentVariables.isEmpty()) {
+            try {
+                body.put("contentVariables", CONTENT_VAR_MAPPER.writeValueAsString(contentVariables));
+            } catch (Exception e) {
+                throw new CustomException("NB_TWILIO_CONTENT_VARS_SERIALIZE",
+                        "Failed to serialize contentVariables for Twilio: " + e.getMessage());
+            }
+        }
+        Map<String, Object> passthrough = new HashMap<>();
+        passthrough.put("body", body);
+        Map<String, Object> twilio = new HashMap<>();
+        twilio.put("_passthrough", passthrough);
+        Map<String, Object> providers = new HashMap<>();
+        providers.put("twilio", twilio);
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put("providers", providers);
+        return overrides;
     }
 
     /**
