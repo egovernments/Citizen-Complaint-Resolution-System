@@ -33,7 +33,6 @@ import java.util.*;
 public class DispatchPipelineService {
 
     private static final Set<String> KNOWN_CHANNELS = Set.of("SMS", "WHATSAPP", "EMAIL");
-    private static final String WHATSAPP_PREFIX = "whatsapp:";
 
     private final EnvelopeValidator envelopeValidator;
     private final PreferenceServiceClient preferenceServiceClient;
@@ -151,59 +150,12 @@ public class DispatchPipelineService {
                     .build();
         }
 
-        // For WHATSAPP: normalize 'to' phone (adds whatsapp: prefix) and build 'from' override.
-        Contact finalContact = contact;
-        Map<String, Object> overrides = null;
-
-        if ("WHATSAPP".equalsIgnoreCase(channel) && StringUtils.hasText(contact.getPhone())) {
-            try {
-                String toPhone = formatRecipientPhone(
-                        contact.getPhone(), event.getTenantId(), channel, null);
-                finalContact = Contact.builder()
-                        .userId(contact.getUserId()).type(contact.getType())
-                        .name(contact.getName()).phone(toPhone)
-                        .email(contact.getEmail()).locale(contact.getLocale())
-                        .build();
-            } catch (Exception e) {
-                log.warn("Phone normalization failed for eventId={}, tenantId={}: {}",
-                        event.getEventId(), event.getTenantId(), e.getMessage());
-            }
-
-            String senderNumber = mdmsServiceClient.getWhatsappSenderNumber(event.getTenantId());
-            if (StringUtils.hasText(senderNumber)) {
-                if (!senderNumber.startsWith(WHATSAPP_PREFIX)) {
-                    senderNumber = WHATSAPP_PREFIX + senderNumber;
-                }
-                Map<String, Object> twilioConfig = new HashMap<>();
-                twilioConfig.put("from", senderNumber);
-                Map<String, Object> providers = new HashMap<>();
-                providers.put("twilio", twilioConfig);
-                overrides = new HashMap<>();
-                overrides.put("providers", providers);
-                log.debug("WHATSAPP dispatch: from override={}", senderNumber);
-            } else {
-                log.warn("WHATSAPP dispatch: no senderNumber in MDMS ProviderDetail for tenantId={}; " +
-                        "Novu will fall back to integration credentials.from", event.getTenantId());
-            }
-        }
-
         NovuClient.NovuResponse response;
         try {
-            if ("WHATSAPP".equalsIgnoreCase(channel)) {
-                String workflowId = config.getNovuWorkflowId(channel);
-                Map<String, Object> payload = new HashMap<>();
-                if (event.getData() != null) payload.putAll(event.getData());
-                payload.put("body", context.getRenderedBody());
-                if (context.getRenderedSubject() != null) payload.put("subject", context.getRenderedSubject());
-                novuClient.identify(subscriberId, finalContact);
-                response = novuClient.trigger(workflowId, subscriberId, finalContact.getPhone(),
-                        payload, context.getTransactionId(), overrides);
-            } else {
-                response = novuClient.identifyThenTrigger(
-                        subscriberId, finalContact, channel,
-                        context.getRenderedBody(), context.getRenderedSubject(),
-                        context.getTransactionId(), event.getData());
-            }
+            response = novuClient.identifyThenTrigger(
+                    subscriberId, contact, channel,
+                    context.getRenderedBody(), context.getRenderedSubject(),
+                    context.getTransactionId(), event.getData(), event.getTenantId());
         } catch (CustomException ce) {
             persist(event, context, "FAILED", ce.getCode(), ce.getMessage(), null, 1);
             throw ce;   // consumer logs + DLQs as before
