@@ -3348,6 +3348,378 @@
         "locale": "en_IN"
     },
     {
+        "code": "ES_PGR_ADMIN_ACTIONS",
+        "message": "Actions",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ASC",
+        "message": "Asc",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_BACK",
+        "message": "Back to Dashboard",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CLEAR",
+        "message": "Clear",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CNO_PH",
+        "message": "Enter complaint number",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_COMPLAINTS",
+        "message": "Complaints",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_COMPLAINT_NO_INVALID",
+        "message": "Invalid complaint number format",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CREATED_DATE",
+        "message": "Created Date",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DEPARTMENTS",
+        "message": "Departments",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DEPT_NA",
+        "message": "No Department Assigned",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DESC",
+        "message": "Desc",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ENTRIES",
+        "message": "entries",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERROR",
+        "message": "Something went wrong fetching complaints.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERR_FUTURE",
+        "message": "From date cannot be in the future",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERR_RANGE_ORDER",
+        "message": "To date must be on or after the from date",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERR_RANGE_SPAN",
+        "message": "Date range cannot exceed 365 days",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_FROM_DATE",
+        "message": "From Date",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_1",
+        "message": "Select at least one search criteria",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_2",
+        "message": "Date range cannot exceed 365 days",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_3",
+        "message": "To date should be greater than or equal to From date",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_TITLE",
+        "message": "Search Guidelines",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_HEADER_DEPARTMENT",
+        "message": "Department",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_CLOSED",
+        "message": "Closed",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_INPROGRESS",
+        "message": "In Progress",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_OPEN",
+        "message": "Open",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_RESOLVED",
+        "message": "Resolved",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_TOTAL",
+        "message": "Total Complaints",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_TOTAL_SUB",
+        "message": "Across all departments",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_LAST_MODIFIED",
+        "message": "Last Modified",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_NO_RESULTS",
+        "message": "No complaints found matching your criteria.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_OF",
+        "message": "of",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_REFRESH",
+        "message": "Refresh",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RESULTS",
+        "message": "Results",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RETRY",
+        "message": "Retry",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ROWS_PER_PAGE",
+        "message": "Rows per page",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH",
+        "message": "Admin Complaint Search",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH_SUB",
+        "message": "Search and view complaints across all departments",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SELECT_DEPARTMENTS",
+        "message": "Select departments",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SHOWING",
+        "message": "Showing",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SORT_BY",
+        "message": "Sort by",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_TO",
+        "message": "to",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_TO_DATE",
+        "message": "To Date",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_VIEW",
+        "message": "View",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH_FILTERS",
+        "message": "Search Filters",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH_RESULTS",
+        "message": "Search Results",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORT",
+        "message": "Export",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORTING",
+        "message": "Exporting…",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DATE_RANGE",
+        "message": "Date Range",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CREATED_ON",
+        "message": "Created On",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CREATED_TIME",
+        "message": "Created Time",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_TENANT_BANNER",
+        "message": "You are viewing data for",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RESULTS_WORD",
+        "message": "results",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_COMPLAINTS_FOUND",
+        "message": "Complaints Found",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_UPDATED",
+        "message": "Updated",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SECS_AGO",
+        "message": "sec ago",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_MINS_AGO",
+        "message": "min ago",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_HOURS_AGO",
+        "message": "hr ago",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DATE_RANGE_PH",
+        "message": "Select date range",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DEPT_SEARCH_PH",
+        "message": "Search departments",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RECENT",
+        "message": "Recent searches",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORT_CAPPED",
+        "message": "Exported the first 500 rows only",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORT_FAILED",
+        "message": "Export failed — please try again",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "ES_PGR_FILTER_STATUS",
         "message": "Status",
         "module": "rainmaker-pgr",

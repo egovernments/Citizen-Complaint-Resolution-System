@@ -24,6 +24,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_COMPLAINT_DETAILS_CURRENT_STATUS",
+        "message": "Estado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_TIMELINE_ATTACHMENT",
         "message": "Anexo",
         "module": "rainmaker-pgr",
@@ -38,6 +44,378 @@
     {
         "code": "CS_OPTIONAL_SUFFIX",
         "message": "(Opcional)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ACTIONS",
+        "message": "Acções",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ASC",
+        "message": "Asc",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_BACK",
+        "message": "Voltar ao Painel",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CLEAR",
+        "message": "Limpar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CNO_PH",
+        "message": "Introduza o número da manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_COMPLAINTS",
+        "message": "Manifestações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_COMPLAINT_NO_INVALID",
+        "message": "Formato de número de manifestação inválido",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CREATED_DATE",
+        "message": "Data de Criação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DEPARTMENTS",
+        "message": "Departamentos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DEPT_NA",
+        "message": "Sem Departamento Atribuído",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DESC",
+        "message": "Desc",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ENTRIES",
+        "message": "registos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERROR",
+        "message": "Ocorreu um erro ao obter as manifestações.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERR_FUTURE",
+        "message": "A data inicial não pode ser no futuro",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERR_RANGE_ORDER",
+        "message": "A data final deve ser igual ou posterior à data inicial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERR_RANGE_SPAN",
+        "message": "O intervalo de datas não pode exceder 365 dias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_FROM_DATE",
+        "message": "Data Inicial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_1",
+        "message": "Seleccione pelo menos um critério de pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_2",
+        "message": "O intervalo de datas não pode exceder 365 dias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_3",
+        "message": "A data final deve ser igual ou posterior à data inicial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_TITLE",
+        "message": "Orientações de Pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_HEADER_DEPARTMENT",
+        "message": "Departamento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_CLOSED",
+        "message": "Encerradas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_INPROGRESS",
+        "message": "Em Andamento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_OPEN",
+        "message": "Abertas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_RESOLVED",
+        "message": "Resolvidas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_TOTAL",
+        "message": "Total de Manifestações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_TOTAL_SUB",
+        "message": "Em todos os departamentos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_LAST_MODIFIED",
+        "message": "Última Actualização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_NO_RESULTS",
+        "message": "Não foram encontradas manifestações para os critérios indicados.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_OF",
+        "message": "de",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_REFRESH",
+        "message": "Actualizar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RESULTS",
+        "message": "Resultados",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RETRY",
+        "message": "Tentar novamente",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ROWS_PER_PAGE",
+        "message": "Linhas por página",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH",
+        "message": "Pesquisa Administrativa de Manifestações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH_SUB",
+        "message": "Pesquise e consulte manifestações de todos os departamentos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SELECT_DEPARTMENTS",
+        "message": "Selecionar departamentos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SHOWING",
+        "message": "A mostrar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SORT_BY",
+        "message": "Ordenar por",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_TO",
+        "message": "a",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_TO_DATE",
+        "message": "Data Final",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_VIEW",
+        "message": "Ver",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH_FILTERS",
+        "message": "Filtros de Pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH_RESULTS",
+        "message": "Resultados da Pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORT",
+        "message": "Exportar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORTING",
+        "message": "A exportar…",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DATE_RANGE",
+        "message": "Intervalo de Datas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CREATED_ON",
+        "message": "Criado Em",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CREATED_TIME",
+        "message": "Data de Criação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_TENANT_BANNER",
+        "message": "Está a visualizar dados de",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RESULTS_WORD",
+        "message": "resultados",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_COMPLAINTS_FOUND",
+        "message": "Manifestações Encontradas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_UPDATED",
+        "message": "Actualizado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SECS_AGO",
+        "message": "seg atrás",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_MINS_AGO",
+        "message": "min atrás",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_HOURS_AGO",
+        "message": "h atrás",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DATE_RANGE_PH",
+        "message": "Seleccione o intervalo de datas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DEPT_SEARCH_PH",
+        "message": "Pesquisar departamentos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RECENT",
+        "message": "Pesquisas recentes",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORT_CAPPED",
+        "message": "Exportadas apenas as primeiras 500 linhas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORT_FAILED",
+        "message": "A exportação falhou — tente novamente",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
