@@ -99,7 +99,7 @@ const EmployeeApp = ({ path, stateCode, userType, tenants }) => {
           component={() => <PGRSearchInbox />}
         />
 
-        {/* SUPERUSER-only admin cross-department search (role re-checked inside the page) */}
+        {/* Admin cross-department search — SUPERUSER + CMS_ADMIN (role re-checked inside the page) */}
         <PrivateRoute
           path={`${path}/admin-search`}
           component={() => <PGRAdminSearch />}

@@ -10,7 +10,7 @@ import Urls from "../../utils/urls";
 import { complaintLabel } from "../../utils/complaintLabel";
 
 /**
- * PGRAdminSearch — SUPERUSER-only cross-department complaint search
+ * PGRAdminSearch — cross-department complaint search (SUPERUSER + CMS_ADMIN)
  * (/employee/pgr/admin-search), custom UI replicating the approved design:
  * tenant banner top-right; single-row filter bar (complaint no with search/#
  * adornments, department multi-select with in-field chips capped at 3 + "+N"
@@ -263,7 +263,9 @@ const PGRAdminSearch = () => {
   injectCss();
 
   const roles = Digit.UserService.getUser()?.info?.roles?.map((r) => r?.code) || [];
-  const isSuperUser = roles.includes("SUPERUSER");
+  // Roles allowed on this screen (must mirror the PGRCard link roles).
+  const ADMIN_SEARCH_ROLES = ["SUPERUSER", "CMS_ADMIN"];
+  const isSuperUser = roles.some((r) => ADMIN_SEARCH_ROLES.includes(r));
 
   const lang = String(i18n?.language || "en").startsWith("pt") ? "pt-PT" : "en-GB";
   const fmtDT = (epoch) => {
