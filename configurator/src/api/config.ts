@@ -16,6 +16,7 @@ export const ENDPOINTS = {
   // MDMS
   MDMS_SEARCH: '/mdms-v2/v2/_search',
   MDMS_CREATE: '/mdms-v2/v2/_create',
+  MDMS_UPDATE: '/mdms-v2/v2/_update',
   MDMS_SCHEMA_SEARCH: '/mdms-v2/schema/v1/_search',
   MDMS_SCHEMA_CREATE: '/mdms-v2/schema/v1/_create',
 
@@ -70,6 +71,7 @@ export const MDMS_SCHEMAS = {
   // RAINMAKER-PGR.ServiceDefs / .ClassificationNode masters are gone.
   COMPLAINT_HIERARCHY: 'RAINMAKER-PGR.ComplaintHierarchy',
   TENANT: 'tenant.tenants',
+  MAP_CONFIG: 'RAINMAKER-PGR.MapConfig',
 };
 
 // OAuth credentials
