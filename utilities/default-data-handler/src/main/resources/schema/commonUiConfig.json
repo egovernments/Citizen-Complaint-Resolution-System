@@ -1,0 +1,32 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "commonUiConfig.PrivacyPolicy",
+    "description": "Login/consent privacy policy content (localization keys)",
+    "definition": {
+      "type": "object",
+      "properties": {
+        "module": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "header": {
+          "type": "string"
+        },
+        "contents": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "module",
+        "header"
+      ],
+      "x-unique": [
+        "module"
+      ]
+    },
+    "isActive": true
+  }
+]
