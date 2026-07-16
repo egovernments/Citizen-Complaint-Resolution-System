@@ -47,13 +47,16 @@ public class AnalyticsController {
     }
 
     @PostMapping("/_query")
-    public ResponseEntity<Map<String,Object>> query(@RequestBody JsonNode body){
+    public ResponseEntity<Map<String,Object>> query(@RequestBody JsonNode body,
+            // #1110: correlation FALLBACK only — when the OTEL javaagent is attached, the
+            // active span's trace id (W3C traceparent, propagated by Kong) takes precedence.
+            @RequestHeader(value = "x-trace-id", required = false) String xTraceId){
         try {
             RequestInfo requestInfo = body.has("RequestInfo")
                     ? mapper.convertValue(body.get("RequestInfo"), RequestInfo.class) : null;
             String tenantId = body.hasNonNull("tenantId") ? body.get("tenantId").asText() : null;
             int stateLen = config.getStateLevelTenantIdLength() == null ? 1 : config.getStateLevelTenantIdLength();
-            Map<String,Object> result = service.query(body, requestInfo, tenantId, stateLen);
+            Map<String,Object> result = service.query(body, requestInfo, tenantId, stateLen, xTraceId);
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e));
@@ -103,6 +106,15 @@ public class AnalyticsController {
             out.put("tiles", tiles);
             out.put("defaultLayout", pack.map(DashboardPack::getLayout).orElse(Collections.emptyList()));
             out.put("asOf", System.currentTimeMillis());
+            // #1110: additive fields the dashboard reads defensively (null until data exists).
+            // packId -> layout_id tag; persona -> the server's ACTUAL pack-match decision
+            // (first pack-role the caller holds, in the pack's declared role order — same
+            // semantics as DashboardPack.matchesRoles); recordCount -> record_count_tier tag
+            // (tenant corpus on complaint_facts, NOT the caller's ABAC-visible subset).
+            out.put("packId", pack.map(DashboardPack::getId).orElse(null));
+            out.put("persona", pack.map(p -> matchingRole(p, callerRoles)).orElse(null));
+            int stateLen = config.getStateLevelTenantIdLength() == null ? 1 : config.getStateLevelTenantIdLength();
+            out.put("recordCount", service.recordCount(tenantId, stateLen));
             return ResponseEntity.ok(out);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e));
@@ -144,6 +156,17 @@ public class AnalyticsController {
     }
 
     // ---- helpers ----
+
+    /**
+     * The role that made the pack match (#1110/R9-C7): first role in the PACK's declared
+     * roles list that the caller holds. Deterministic (pack order, not set order) and
+     * consistent with {@link DashboardPack#matchesRoles} — a non-null result is exactly
+     * "this pack matched". Returned as the {@code persona} tag source for the FE.
+     */
+    private String matchingRole(DashboardPack pack, Set<String> callerRoles) {
+        if (pack.getRoles() == null || callerRoles == null) return null;
+        return pack.getRoles().stream().filter(callerRoles::contains).findFirst().orElse(null);
+    }
 
     /** Serializes a KpiDefinition for external consumption: includes viz/params but NEVER query or rbac. */
     private Map<String,Object> safeTile(KpiDefinition def) {
