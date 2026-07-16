@@ -33,6 +33,7 @@ import {
   SlidersHorizontal,
   MessageCircle,
   UserCog,
+  Map,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -63,6 +64,7 @@ const navGroups = [
       { id: 'departments', nameKey: 'app.nav.departments', path: '/manage/departments', icon: Briefcase },
       { id: 'designations', nameKey: 'app.nav.designations', path: '/manage/designations', icon: Award },
       { id: 'boundary-hierarchies', nameKey: 'app.nav.hierarchies', path: '/manage/boundary-hierarchies', icon: GitBranch },
+      { id: 'map-config', nameKey: 'app.nav.map_config', path: '/manage/map-config', icon: Map },
     ],
   },
   {
