@@ -254,6 +254,14 @@ public class PGRService {
      * @return
      */
     public Integer count(RequestInfo requestInfo, RequestSearchCriteria criteria){
+
+        // CCRS #1071: /_count shares RequestSearchCriteria and PGRQueryBuilder with /_search, so it
+        // needs the same record-level ownership scoping — otherwise a citizen counts every complaint
+        // in the tenant, and can use serviceRequestId/ids as an existence oracle for other citizens'
+        // complaints. Only the scoping half of the enrichment applies here: the count query wraps the
+        // search query including its LIMIT, so applying the pagination defaults would cap the count.
+        enrichmentService.scopeSearchCriteria(requestInfo, criteria);
+
         criteria.setIsPlainSearch(false);
         Integer count = repository.getCount(criteria);
         return count;

@@ -1,5 +1,7 @@
 package org.egov.pgr.analytics;
 
+import static org.egov.pgr.util.PGRConstants.USERTYPE_CITIZEN;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -105,21 +107,33 @@ public class PrincipalScopeResolver {
      * SOLE role would misclassify those principals as employees and push them down the HRMS employee
      * path where they fail-close. Conversely, an employee who also holds the CITIZEN role is still
      * an employee (they carry {@code EMPLOYEE}) and is not self-scoped.
+     *
+     * <p>Roles decide first, but a principal carrying NO employee role and no recognisable CITIZEN
+     * role falls back to the declared user type so that an abnormal role state (role-sync gap, a
+     * legacy/OTP session with empty roles, a citizen role coded differently) cannot silently demote
+     * a citizen out of self-scoping. That fallback is what keeps this fail-CLOSED: without it such a
+     * principal matches neither branch in {@code enrichSearchRequest}, userIds stays empty, and the
+     * query builder drops the ownership clause entirely — reopening #1071.
      */
     public boolean isPureCitizen(RequestInfo requestInfo) {
         User u = requestInfo == null ? null : requestInfo.getUserInfo();
-        if (u == null || u.getRoles() == null)
+        if (u == null)
             return false;
 
         boolean hasCitizenRole = false;
         boolean hasEmployeeRole = false;
-        for (Role r : u.getRoles()) {
-            if (r == null || r.getCode() == null) continue;
-            String c = r.getCode().trim().toUpperCase();
-            if (c.equals(CITIZEN_ROLE_CODE)) hasCitizenRole = true;
-            else if (EMPLOYEE_ROLE_CODES.contains(c)) hasEmployeeRole = true;
+        if (u.getRoles() != null) {
+            for (Role r : u.getRoles()) {
+                if (r == null || r.getCode() == null) continue;
+                String c = r.getCode().trim().toUpperCase();
+                if (c.equals(CITIZEN_ROLE_CODE)) hasCitizenRole = true;
+                else if (EMPLOYEE_ROLE_CODES.contains(c)) hasEmployeeRole = true;
+            }
         }
-        return hasCitizenRole && !hasEmployeeRole;
+
+        if (hasEmployeeRole) return false;
+        if (hasCitizenRole) return true;
+        return USERTYPE_CITIZEN.equalsIgnoreCase(u.getType());
     }
 
     /**

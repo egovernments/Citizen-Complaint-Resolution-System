@@ -130,12 +130,43 @@ public class EnrichmentService {
      */
     public void enrichSearchRequest(RequestInfo requestInfo, RequestSearchCriteria criteria){
 
-        // CCRS #1071: a pure citizen may only see their OWN complaints. The query builder scopes
-        // results with `ser.accountId IN (userIds)`, so force userIds to the authenticated uuid and
-        // drop any client-supplied mobileNumber. Without this a citizen could search by another
-        // user's mobileNumber (reading their complaints — an IDOR) or omit all filters and read
-        // every complaint (unscoped). Employees / internal principals are unaffected and may still
-        // look up complaints by mobileNumber.
+        scopeSearchCriteria(requestInfo, criteria);
+
+        if(criteria.getLimit()==null)
+            criteria.setLimit(config.getDefaultLimit());
+
+        if(criteria.getOffset()==null)
+            criteria.setOffset(config.getDefaultOffset());
+
+        if(criteria.getLimit()!=null && criteria.getLimit() > config.getMaxLimit())
+            criteria.setLimit(config.getMaxLimit());
+
+    }
+
+    /**
+     * Derives record-level ownership scoping (userIds) for a search. Split out of
+     * {@link #enrichSearchRequest} so the /_count path can apply the SAME scoping without also
+     * picking up the pagination defaults — the count query wraps the search query including its
+     * LIMIT, so defaulting the limit there would cap the returned count.
+     *
+     * @param requestInfo the authenticated principal
+     * @param criteria the search criteria, mutated in place
+     */
+    public void scopeSearchCriteria(RequestInfo requestInfo, RequestSearchCriteria criteria){
+
+        // userIds is the ownership axis (`ser.accountId IN (userIds)`) and is derived here from the
+        // authenticated principal — it is NEVER an input. It carries @JsonIgnore, but the search
+        // endpoints bind RequestSearchCriteria with @ModelAttribute (raw query params), where
+        // @JsonIgnore has no effect, so a caller can otherwise pass userIds=<victim-uuid> straight
+        // into that clause. Drop anything inbound first so ownership holds by construction rather
+        // than relying on a later branch happening to overwrite the field.
+        criteria.setUserIds(null);
+
+        // CCRS #1071: a pure citizen may only see their OWN complaints. Force userIds to the
+        // authenticated uuid and drop any client-supplied mobileNumber. Without this a citizen could
+        // search by another user's mobileNumber (reading their complaints — an IDOR) or omit all
+        // filters and read every complaint (unscoped). Employees / internal principals are unaffected
+        // and may still look up complaints by mobileNumber.
         if (principalScopeResolver.isPureCitizen(requestInfo)) {
             criteria.setUserIds(Collections.singleton(requestInfo.getUserInfo().getUuid()));
             criteria.setMobileNumber(null);
@@ -152,16 +183,6 @@ public class EnrichmentService {
                 userService.enrichUserIds(tenantId, criteria);
             }
         }
-
-        if(criteria.getLimit()==null)
-            criteria.setLimit(config.getDefaultLimit());
-
-        if(criteria.getOffset()==null)
-            criteria.setOffset(config.getDefaultOffset());
-
-        if(criteria.getLimit()!=null && criteria.getLimit() > config.getMaxLimit())
-            criteria.setLimit(config.getMaxLimit());
-
     }
 
 
