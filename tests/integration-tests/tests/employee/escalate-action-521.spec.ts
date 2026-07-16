@@ -149,11 +149,14 @@ test.describe('employee — manual Escalate action #521', () => {
     // ever coincided here because bomet is flat (TENANT === ROOT_TENANT).
     // On a city sub-tenant deployment the complaint's process lives at the
     // city, and ROOT_TENANT would silently search the wrong tenant.
+    // process/_search needs an auth token — an empty RequestInfo 401s. Reuse the
+    // LME's token (the persona already logged in above); this step was only ever
+    // reached now that Take Action renders, so the missing auth had been masked.
     const wfResp = await page.request.post(
       `${BASE_URL}/egov-workflow-v2/egov-wf/process/_search?businessIds=${COMPLAINT_ID}&tenantId=${TENANT}`,
       {
         headers: { 'Content-Type': 'application/json' },
-        data: { RequestInfo: {} },
+        data: { RequestInfo: { apiId: 'Rainmaker', authToken: lme.token } },
       },
     );
     expect(wfResp.ok()).toBeTruthy();

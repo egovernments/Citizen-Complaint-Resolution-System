@@ -175,7 +175,16 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     expect(defaultRows.every((r) => r.status !== rejectedLabel), 'default view excludes REJECTED').toBeTruthy();
 
     // Apply REJECTED (value-based selector — localization-independent).
-    await page.locator('input[type="checkbox"][value="REJECTED"]').check({ force: true });
+    // The digit-ui CheckBox (digit-ui-components/atoms/CheckBox.js) renders the
+    // real <input> visually hidden (opacity:0) and the clickable square as a
+    // sibling `<label class="digit-custom-checkbox" htmlFor=...>`. Clicking the
+    // raw input does nothing; the label is what toggles it via native htmlFor.
+    const rejInput = page.locator('input[type="checkbox"][value="REJECTED"]');
+    if (!(await rejInput.isChecked())) {
+      const container = rejInput.locator('xpath=ancestor::*[contains(@class,"digit-checkbox-container")][1]');
+      await container.locator('label.digit-custom-checkbox').first().click();
+    }
+    await expect(rejInput, 'REJECTED filter checkbox toggled on').toBeChecked();
     const url = await applyFilter(page);
     expect(url).toContain('applicationStatus=REJECTED');
     expect(url).not.toContain('applicationStatus=PENDINGFORASSIGNMENT');
