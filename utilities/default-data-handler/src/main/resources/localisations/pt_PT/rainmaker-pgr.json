@@ -1000,5 +1000,53 @@
         "message": "Não foi possível pesquisar a localização",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CANCELLED",
+        "message": "Cancelado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_INFOFROMCITIZEN",
+        "message": "Aguarda Informação do Cidadão",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PENDINGATSUPERVISOR",
+        "message": "Pendente com o supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGATLME",
+        "message": "Funcionário pendente na última etapa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGATSUPERVISOR",
+        "message": "Pendente no Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_RESOLVEDBYSUPERVISOR",
+        "message": "Resolvida pelo Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_REFERRED",
+        "message": "Encaminhada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_RESOLVEDBYSUPERVISOR",
+        "message": "Resolvido pelo supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
     }
 ]

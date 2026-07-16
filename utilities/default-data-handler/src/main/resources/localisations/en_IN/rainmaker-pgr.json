@@ -7696,5 +7696,29 @@
         "message": "Could not search the location",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_AWAITINGINFORMATION",
+        "message": "Awaiting Information",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_INFOFROMCITIZEN",
+        "message": "Awaiting information from citizen",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_INVESTIGATION",
+        "message": "Under Investigation",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_REFERRED",
+        "message": "Referred",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]
