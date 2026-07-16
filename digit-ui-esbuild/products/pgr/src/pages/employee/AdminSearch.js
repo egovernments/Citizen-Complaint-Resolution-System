@@ -588,6 +588,7 @@ const PGRAdminSearch = () => {
               <input id="adm-cno" type="text" ref={bareInput} placeholder={tr("ES_PGR_ADMIN_CNO_PH", "Enter complaint number")}
                 value={filters.complaintNumber} autoComplete="off"
                 onFocus={() => setCnoOpen(true)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSearch(); } }}
                 onChange={(e) => { setFilters((f) => ({ ...f, complaintNumber: e.target.value })); setCnoOpen(true); }} />
               <span className="hash" aria-hidden>#</span>
             </div>
@@ -632,6 +633,7 @@ const PGRAdminSearch = () => {
                     <IcSearch />
                     <input type="text" ref={bareInput} autoFocus value={deptQuery}
                       placeholder={tr("ES_PGR_ADMIN_DEPT_SEARCH_PH", "Search departments")}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setDeptOpen(false); setDeptQuery(""); onSearch(); } }}
                       onChange={(e) => setDeptQuery(e.target.value)} />
                   </div>
                   {deptOptions.opts
