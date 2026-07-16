@@ -7,9 +7,21 @@
 #      each reports "No migration necessary" (except services that legitimately
 #      migrate from empty), and a row-count + content-checksum snapshot of every
 #      table is byte-identical before/after.
-# B) NEGATIVE — dump + migrators, normalizer SKIPPED:
-#      data IS destroyed. If this ever stops failing, the guard has been silently
-#      disabled and the positive test alone would not tell us.
+# B) THE GUARD — on an OPERATOR-style dump (legacy history names):
+#      B1 without the normalizer, data IS destroyed  -> the guard is NEEDED
+#      B2 with it, the renames happen and data survives -> the guard WORKS
+#
+#      Flyway finds its logbook BY NAME. Our shipped dump files its logbooks under
+#      the CURRENT names (item #10 re-baked it), so on our dump the normalizer has
+#      nothing to rename — part A reports "renamed 0". The input this component
+#      exists for is an OPERATOR's dump, still using the LEGACY names: Flyway does
+#      not find the logbook, concludes it has never run, and replays from V1 —
+#      whose first statement, for egov-localization and egov-enc-service, is
+#      DROP TABLE IF EXISTS. 23k messages and the PII encryption keys, exit 0.
+#
+#      So B synthesises that dump by renaming our logbooks BACKWARDS. Testing this
+#      against our own dump proves nothing (it is the safe input) — that is exactly
+#      how this section silently rotted after the re-bake.
 # C) CONVERGENCE — fast path (dump + migrators) vs slow path (EMPTY + migrators):
 #      both must end at an IDENTICAL schema — same columns, indexes, and
 #      materialized-view definitions. The dump is a shortcut for DATA and TIME; it
@@ -34,7 +46,7 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 PG_IMAGE="registry.preview.egov.theflywheel.in/postgres:16"
 NET=normalize-it
 WORK="$(mktemp -d)"
-trap 'docker rm -f it-pos it-neg it-slow >/dev/null 2>&1 || true; docker network rm $NET >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
+trap 'docker rm -f it-pos it-neg it-slow it-grd >/dev/null 2>&1 || true; docker network rm $NET >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
 
 # Migrators built from the repo rather than pulled. Part C needs them: without
 # them the slow path would lack pgr/novu/config tables that the dump HAS, and the
@@ -269,29 +281,109 @@ echo "  PASS: fast and slow paths converge to an identical schema"
 
 echo
 
-# ── B) NEGATIVE ───────────────────────────────────────────────────────────────
-echo "=== B) NEGATIVE: dump -> migrators, normalizer SKIPPED (must destroy data) ==="
-start_db it-neg
-snapshot it-neg > "$WORK/neg-before.txt"
-run_migrators it-neg >/dev/null
-snapshot it-neg > "$WORK/neg-after.txt"
+# ── B) THE GUARD ──────────────────────────────────────────────────────────────
+# See the header. Both halves run against a SYNTHESISED operator dump, because our
+# own dump is the safe input and proves nothing here.
+echo "=== B) THE GUARD: against an OPERATOR-style dump (legacy history names) ==="
 
+# canonical -> legacy pairs, straight from the map. Never hardcode them: the map is
+# the single source of truth, and a hardcoded copy would drift out of sync silently.
+alias_pairs() {
+  docker run --rm -v "$MAP:/map.yml:ro" --entrypoint python3 db-history-normalize:test -c '
+import yaml
+for spec in (yaml.safe_load(open("/map.yml")) or {}).values():
+    a = spec.get("aliases") or []
+    if a:
+        print(spec["canonical"], a[0])
+'
+}
+
+# Turn our (canonical) dump back into the operator dump we protect against.
+#
+# The indexes MUST be renamed alongside the table. Flyway names a history table's
+# constraint/index after the table (<table>_pk, <table>_s_idx), and Postgres's
+# ALTER TABLE ... RENAME does NOT rename them. Renaming only the table produces a
+# state that cannot occur naturally — table "x_version" whose PK is still "x_pk" —
+# and Flyway then dies on "relation x_pk already exists" while trying to baseline,
+# rather than replaying. The run FAILS instead of destroying data, and the test
+# reads as "the guard isn't needed" for entirely the wrong reason.
+#
+# A genuine legacy dump has no such collision: Flyway created the table AS
+# "x_version", so its PK is "x_version_pk".
+legacy_ify() {  # $1 = db container
+  local canon alias n=0
+  while read -r canon alias; do
+    [ -z "${canon:-}" ] && continue
+    docker exec "$1" psql -U egov -d egov -q -v ON_ERROR_STOP=1 \
+      -c "ALTER TABLE public.\"$canon\" RENAME TO \"$alias\";" \
+      -c "ALTER INDEX IF EXISTS public.\"${canon}_pk\" RENAME TO \"${alias}_pk\";" \
+      -c "ALTER INDEX IF EXISTS public.\"${canon}_s_idx\" RENAME TO \"${alias}_s_idx\";" \
+      || { echo "FAIL: could not rename $canon -> $alias"; exit 1; }
+    n=$((n + 1))
+  done < <(alias_pairs)
+  [ "$n" -gt 0 ] || { echo "FAIL: the map yielded no aliases — nothing to synthesise"; exit 1; }
+  echo "  synthesised operator dump: $n history tables (+ their indexes) renamed to legacy names"
+}
+
+rows() {  # $1 = db, $2 = table -> row count, or "GONE" if the table no longer exists
+  docker exec "$1" psql -U egov -d egov -tAc "SELECT count(*) FROM public.$2" 2>/dev/null || echo GONE
+}
+
+# The two services whose V1 starts with DROP TABLE IF EXISTS. If a replay happens,
+# these die first — and eg_enc_* are the keys that decrypt every user's PII.
+CANARIES="message eg_enc_symmetric_keys eg_enc_asymmetric_keys"
+
+# ── B1) unguarded — the data MUST die ─────────────────────────────────────────
+echo "--- B1) legacy dump + migrators, normalizer SKIPPED (must destroy data) ---"
+start_db it-neg
+legacy_ify it-neg
+for t in $CANARIES; do printf "  before  %-24s %s\n" "$t" "$(rows it-neg "$t")"; done
+run_migrators it-neg >/dev/null
 destroyed=0
-for t in message eg_enc_symmetric_keys eg_enc_asymmetric_keys; do
-  before=$(awk -F'|' -v t="$t" '$1==t {print $2}' "$WORK/neg-before.txt")
-  after=$(awk -F'|' -v t="$t" '$1==t {print $2}' "$WORK/neg-after.txt")
-  printf "  %-24s %s -> %s\n" "$t" "${before:-?}" "${after:-?}"
-  if [ -n "$before" ] && [ "$before" -gt 0 ] && [ "$after" = "0" ]; then
-    destroyed=$((destroyed + 1))
-  fi
+for t in $CANARIES; do
+  after="$(rows it-neg "$t")"
+  printf "  after   %-24s %s\n" "$t" "$after"
+  case "$after" in 0|GONE) destroyed=$((destroyed + 1)) ;; esac
 done
 [ "$destroyed" = "3" ] || {
   echo "FAIL: the unguarded run did NOT destroy data as expected."
-  echo "      Either the migration images changed, or the guard is being applied"
-  echo "      when it should not be. Do not ship until this is understood."
+  echo "      Either the migration images changed, or legacy_ify no longer produces"
+  echo "      the dangerous input. Do not ship until this is understood — this test"
+  echo "      passing is the only evidence the guard is worth running."
   exit 1
 }
-echo "  PASS: unguarded run destroys data — the guard is doing real work"
+echo "  PASS: unguarded run destroys data — the guard is NEEDED"
 
-echo "ALL PASS: normalizer makes the dump safe; without it the data is destroyed;"
-echo "          and dump-built and empty-built schemas are identical."
+# ── B2) guarded — the renames happen and the data survives ────────────────────
+# This is the case the whole component exists for, and the ONLY test that executes
+# its rename path against a real database (part A's dump is already canonical, so
+# it reports "renamed 0").
+echo "--- B2) legacy dump + normalizer + migrators (must rename, must preserve) ---"
+start_db it-grd
+legacy_ify it-grd
+snapshot it-grd > "$WORK/grd-before.txt"
+normalize it-grd | tee "$WORK/grd-normalize.log"
+renamed="$(sed -n 's/^ok: renamed \([0-9]*\).*/\1/p' "$WORK/grd-normalize.log")"
+[ "${renamed:-0}" -ge 1 ] || {
+  echo "FAIL: normalizer renamed NOTHING on a legacy dump. Its rename path did not"
+  echo "      run, so this test proves nothing about the code it exists to cover."
+  exit 1
+}
+echo "  normalizer renamed $renamed history table(s)"
+fail=0
+while read -r name rc verdict; do
+  [ "$rc" = "0" ] || { echo "    FAIL: $name exited $rc after normalization"; fail=1; }
+done < <(run_migrators it-grd)
+[ "$fail" = "0" ] || { echo "FAIL: a migrator failed on a normalized legacy dump"; exit 1; }
+for t in $CANARIES; do printf "  survived %-24s %s\n" "$t" "$(rows it-grd "$t")"; done
+snapshot it-grd > "$WORK/grd-after.txt"
+if ! join -t'|' -j1 <(sort -t'|' -k1,1 "$WORK/grd-before.txt") <(sort -t'|' -k1,1 "$WORK/grd-after.txt") \
+     | awk -F'|' '$2!=$4 || $3!=$5 {print "    CHANGED: "$0; bad=1} END {exit bad?1:0}'; then
+  echo "FAIL: the guarded run changed pre-existing data — the guard did not protect it"
+  exit 1
+fi
+echo "  PASS: guarded run renames and preserves every row — the guard WORKS"
+
+echo "ALL PASS: on an operator dump the guard is both NEEDED (B1) and WORKS (B2);"
+echo "          our own dump is safe (A); and dump-built and empty-built schemas"
+echo "          are identical (C)."

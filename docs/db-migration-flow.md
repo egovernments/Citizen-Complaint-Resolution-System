@@ -229,6 +229,20 @@ newer than the dump applies). It also runs the same dump *without* the normalize
 asserts the data IS destroyed — if that half ever stops failing, the guard has been
 silently disabled.
 
+It also proves the guard on a **synthesised operator dump** (our dump with its history
+tables renamed back to the legacy names — our own dump is already canonical, so it is
+the *safe* input and proves nothing here): without the normalizer the data is destroyed
+(so the guard is needed); with it, the renames happen and every row survives (so the
+guard works). That second half is the only test that exercises the rename path against
+a real database.
+
+> Note the simulation renames each history table's **indexes** too. Flyway names them
+> after the table (`<table>_pk`, `<table>_s_idx`) and Postgres's `ALTER TABLE ... RENAME`
+> does not touch them. Renaming only the table yields a state that cannot occur
+> naturally, and Flyway then dies on `relation <x>_pk already exists` instead of
+> replaying — the run fails rather than destroying data, and the test reads as
+> "the guard isn't needed" for entirely the wrong reason.
+
 It then runs the **convergence** check: build the schema a second time from an EMPTY
 database with every migrator, and assert the two paths end at an identical schema —
 same columns, indexes, and matview definitions.
