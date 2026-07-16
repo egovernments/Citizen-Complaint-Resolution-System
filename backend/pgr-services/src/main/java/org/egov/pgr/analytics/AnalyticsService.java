@@ -203,10 +203,11 @@ public class AnalyticsService {
         // Precedence: explicit caller param > declared default > the def's baked query.
         JsonNode effectiveParams = withDeclaredDefaults(def.get(), queryNode.get("params"));
 
-        // C1: validate the EFFECTIVE window param against the def's params.allowed allow-list
-        // (the def is in scope here). An out-of-list window must be a per-entry invalid_param,
-        // not silently honoured by the composer/planner (which accept any well-formed window).
-        validateWindowParam(def.get(), effectiveParams);
+        // C1 (generalized in #1111/R3): validate EVERY effective param against the def's declared
+        // params.allowed allow-list (the def is in scope here). An out-of-list value (window,
+        // hierLevel, ...) must be a per-entry invalid_param, not silently honoured by the
+        // composer/planner (which accept any well-formed value).
+        validateAllowedParams(def.get(), effectiveParams);
 
         JsonNode storedQuery = def.get().getQuery();
         if (storedQuery == null || storedQuery.isNull())
@@ -245,25 +246,26 @@ public class AnalyticsService {
     }
 
     /**
-     * C1 — window allow-list enforcement. If the request {@code params} carries a {@code window}
-     * and the def declares a {@code window} param with a non-empty {@code allowed} list, the value
-     * must be in that list. Out-of-list (incl. arbitrary {@code last_Nd}) → {@code invalid_param}.
-     * No-op when the def declares no allow-list for {@code window} (open window).
+     * C1, generalized in #1111/R3 — allow-list enforcement for ANY declared param. For each of the
+     * def's declared params carrying a non-empty {@code allowed} list, an effective (caller-sent or
+     * defaulted) value must be in that list. Out-of-list (incl. arbitrary {@code last_Nd} windows,
+     * out-of-range {@code hierLevel}s) → {@code invalid_param}. No-op for params the def declares
+     * without an allow-list (open values) and for undeclared params (composer vocabulary applies).
+     * Runs on BOTH the normal kpiId path and the compose path (each calls this on its own def).
      */
-    private void validateWindowParam(KpiDefinition def, JsonNode reqParams) {
-        if (reqParams == null || !reqParams.hasNonNull("window")) return;
-        String requested = reqParams.get("window").asText();
-        if (requested.isEmpty()) return;
-        if (def.getParams() == null) return;
+    void validateAllowedParams(KpiDefinition def, JsonNode reqParams) {
+        if (reqParams == null || def.getParams() == null) return;
         for (KpiDefinition.KpiParam p : def.getParams()) {
-            if (p != null && "window".equals(p.getName())) {
-                List<String> allowed = p.getAllowed();
-                if (allowed != null && !allowed.isEmpty() && !allowed.contains(requested))
-                    throw new IllegalArgumentException(
-                            "invalid_param: window '" + requested + "' is not allowed for KPI '" + def.getId()
-                                    + "'; allowed=" + allowed);
-                return;
-            }
+            if (p == null || p.getName() == null) continue;
+            List<String> allowed = p.getAllowed();
+            if (allowed == null || allowed.isEmpty()) continue;
+            if (!reqParams.hasNonNull(p.getName())) continue;
+            String requested = reqParams.get(p.getName()).asText();
+            if (requested.isEmpty()) continue;
+            if (!allowed.contains(requested))
+                throw new IllegalArgumentException(
+                        "invalid_param: " + p.getName() + " '" + requested + "' is not allowed for KPI '"
+                                + def.getId() + "'; allowed=" + allowed);
         }
     }
 
@@ -295,8 +297,9 @@ public class AnalyticsService {
         // so a bare {kpiId} compose ref honours its declared defaults too (explicit caller wins).
         JsonNode params = withDeclaredDefaults(def, queryNode.get("params"));
 
-        // C1: the compose def's window allow-list still applies to the effective params.
-        validateWindowParam(def, params);
+        // C1 (generalized, #1111/R3): the compose def's declared allow-lists still apply to the
+        // effective params before they propagate to every source KPI.
+        validateAllowedParams(def, params);
 
         JsonNode compose = def.getViz().getCompose();
         String type = compose.get("type").asText();
