@@ -753,6 +753,7 @@ async function phaseBanner() {
       if (!r.ok && !r.exists) return record('banner', OUTCOME.FAILED, `schema create: HTTP ${r.code}`, 'CITYMODULE_SCHEMA_CREATE', truncate(r.body, 200));
       ok('tenant.citymodule schema registered (incl. bannerImage)');
       warn('restart egov-mdms-service if data creates 400 (schema definitions are cached)');
+      await sleep(3000); // async persister grace before the row creates below
     }
   } else if (live.definition && live.definition.properties && live.definition.properties.bannerImage) {
     ok('schema present with bannerImage');
@@ -861,11 +862,22 @@ async function phaseGzip() {
     return record('gzip', OUTCOME.PARTIAL, `${conf} already carries the ccrs-gzip block but the probe shows no gzip`, 'GZIP_CONFIGURED_NOT_ACTIVE',
       'Run: sudo nginx -t && sudo systemctl reload nginx (or the container equivalent), then re-run --phases gzip.');
   }
-  const m = cur.match(/^[ \t]*location [^{]*\/digit-ui[^{]*\{/m);
-  if (!m) {
-    return record('gzip', OUTCOME.PARTIAL, `no "location /digit-ui" block in ${conf}`, 'GZIP_LOCATION_NOT_FOUND', `Apply manually per ${RUNBOOK}.`);
+  // Pick the location block that actually SERVES /digit-ui — the repo's own
+  // nginx template starts with a `location = /digit-ui { return 302 ... }`
+  // redirect stub which must NOT receive the gzip block.
+  const locRe = /^[ \t]*location [^{]*\/digit-ui[^{]*\{/gm;
+  let at = -1, fallbackAt = -1, m;
+  while ((m = locRe.exec(cur)) !== null) {
+    const end = m.index + m[0].length;
+    const body = cur.slice(end, cur.indexOf('}', end) === -1 ? end + 600 : cur.indexOf('}', end));
+    if (/return\s+30\d/.test(body)) continue; // redirect stub
+    if (/(alias|root|proxy_pass|try_files)/.test(body)) { at = end; break; }
+    if (fallbackAt === -1) fallbackAt = end;
   }
-  const at = cur.indexOf(m[0]) + m[0].length;
+  if (at === -1) at = fallbackAt;
+  if (at === -1) {
+    return record('gzip', OUTCOME.PARTIAL, `no serving "location /digit-ui" block in ${conf}`, 'GZIP_LOCATION_NOT_FOUND', `Apply manually per ${RUNBOOK}.`);
+  }
   // Proxy-mode locations must fetch identity from the upstream so the edge can gzip.
   const proxied = /proxy_pass/.test(cur.slice(at, at + 800));
   const block = '\n' + GZIP_BLOCK + (proxied ? '\n        proxy_set_header Accept-Encoding "";' : '');
