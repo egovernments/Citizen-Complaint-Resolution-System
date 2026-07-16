@@ -451,7 +451,7 @@ const ComplaintDetailsPage = () => {
             {(() => {
               // Read-only "Additional Details" — just fetch service.extendedAttributes
               // and show it; the backend already returns masked ("****") values.
-              const extAttrRows = buildExtendedAttributeRows(complaintDetails?.service?.extendedAttributes);
+              const extAttrRows = buildExtendedAttributeRows(complaintDetails?.service?.extendedAttributes, t);
               return extAttrRows.length > 0 ? (
                 <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
                   <SectionTitle>{tr("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS", "Additional Details")}</SectionTitle>

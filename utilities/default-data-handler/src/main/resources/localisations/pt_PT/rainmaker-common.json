@@ -34,5 +34,89 @@
         "message": "Selecionar instituição",
         "module": "rainmaker-common",
         "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_BOTTOM_NAVIGATION_HOME",
+        "message": "Início",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_PERSONAL_DETAILS",
+        "message": "Detalhes Pessoais",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EDIT_PROFILE",
+        "message": "Actualizar Perfil",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "DIGIT_TABLE_OF_CONTENTS",
+        "message": "Índice",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "DIGIT_I_ACCEPT",
+        "message": "Aceito",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "DIGIT_I_DO_NOT_ACCEPT",
+        "message": "Não Aceito",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CCRS_PRIVACY_HEADER",
+        "message": "Política de Privacidade",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CCRS_PRIVACY_SECTION_1",
+        "message": "Política de Privacidade",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CCRS_PRIVACY_P1",
+        "message": "A Plataforma Fala Cidadão está empenhada em proteger a sua privacidade e em assegurar que as suas informações pessoais são tratadas de forma segura, transparente e em conformidade com a legislação aplicável.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CCRS_PRIVACY_P2",
+        "message": "Ao utilizar esta Plataforma, o utilizador consente na recolha e no tratamento das informações que fornece para efeitos de registo, investigação, gestão e resolução da sua reclamação, petições, queixas e denúncia. As informações recolhidas podem incluir o seu nome, dados de contacto, elementos de identificação quando aplicável, detalhes da reclamação, documentos de suporte, fotografias e outras provas que decida apresentar.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CCRS_PRIVACY_P3",
+        "message": "As suas informações pessoais apenas serão acedidas por funcionários e instituições do Governo devidamente autorizados e responsáveis pelo tratamento da sua reclamação. Não serão partilhadas com terceiros não autorizados nem utilizadas para fins comerciais ou de marketing. Nos casos previstos pela Plataforma, as reclamações submetidas como confidenciais terão a identidade do autor protegida, sendo esta divulgada apenas para um grupo restrito e senior de funcionários ou quando exigido por lei.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CCRS_PRIVACY_P4",
+        "message": "A Plataforma implementa medidas técnicas e organizativas adequadas para salvaguardar as suas informações contra o acesso, alteração, divulgação ou perda não autorizados. Podem igualmente ser recolhidas informações técnicas, tais como dados do dispositivo, endereço IP e utilização do sistema, com o objetivo de melhorar a segurança, o desempenho do sistema e a qualidade do serviço.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CCRS_PRIVACY_P5",
+        "message": "As suas informações serão conservadas apenas durante o período necessário para processar a sua reclamação, cumprir obrigações legais e manter os registos oficiais do Governo. O utilizador pode solicitar o acesso às suas informações pessoais ou a respetiva correção, sujeito à legislação aplicável e a quaisquer restrições necessárias para proteger investigações em curso.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CCRS_PRIVACY_P6",
+        "message": "Ao selecionar «Concordo com a Política de Privacidade», o utilizador confirma que as informações fornecidas são exatas e que compreende e aceita a recolha, utilização, armazenamento e tratamento dos seus dados pessoais para os fins acima descritos.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
     }
 ]

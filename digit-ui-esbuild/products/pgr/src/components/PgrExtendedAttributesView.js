@@ -42,16 +42,27 @@ function formatValue(v) {
   return String(v);
 }
 
+// fieldKey -> the PGR_EXT_<SNAKE>_LABEL localization key the MDMS schemas use
+// (instituteName -> PGR_EXT_INSTITUTE_NAME_LABEL). Same convention as the
+// x-label-key values in ComplaintExtendedAttributeSchema.
+const labelKeyOf = (k) => `PGR_EXT_${k.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase()}_LABEL`;
+
 // Map a flat service.extendedAttributes object to ordered { fieldKey, label,
 // value } rows. Returns [] when there is nothing to show, so callers render
 // nothing (graceful gating — safe before the backend read side ships).
-export function buildExtendedAttributeRows(extendedAttributes) {
+// Pass t to localize the labels; the prettified English key remains the
+// fallback whenever a PGR_EXT_* key is not in the loaded bundle.
+export function buildExtendedAttributeRows(extendedAttributes, t) {
   if (!extendedAttributes || typeof extendedAttributes !== "object") return [];
   return Object.keys(extendedAttributes)
     .filter((k) => !SKIP_KEYS.has(k))
-    .map((k) => ({
-      fieldKey: k,
-      label: prettifyKey(k),
-      value: formatValue(extendedAttributes[k]),
-    }));
+    .map((k) => {
+      const lk = labelKeyOf(k);
+      const translated = typeof t === "function" ? t(lk) : lk;
+      return {
+        fieldKey: k,
+        label: translated !== lk ? translated : prettifyKey(k),
+        value: formatValue(extendedAttributes[k]),
+      };
+    });
 }
