@@ -607,12 +607,23 @@ const CreateComplaintForm = ({
    */
   const handleResponseForCreateComplaint = async (payload) => {
 
+    // A submit ATTEMPT (either outcome) invalidates the persisted draft:
+    // coming back to this page must show a blank form. On failure the
+    // IN-MEMORY values stay on screen so the operator can correct and
+    // resubmit immediately — and because draftJsonRef already equals the
+    // current form JSON, the change-guard in onFormValueChange won't
+    // re-persist them until the operator actually edits something.
+    const dropDraft = () => {
+      clearSessionFormData();
+    };
     await CreateComplaintMutation(payload, {
       onError: async () => {
+        dropDraft();
         setToast({ show: true, label: t("FAILED_TO_CREATE_COMPLAINT"), type: "error" });
       },
       onSuccess: async (responseData) => {
         if (responseData?.ResponseInfo?.Errors) {
+          dropDraft();
           setToast({ show: true, label: t("FAILED_TO_CREATE_COMPLAINT"), type: "error" });
         } else {
           // Clear both the sessionStorage cache and the in-memory form
