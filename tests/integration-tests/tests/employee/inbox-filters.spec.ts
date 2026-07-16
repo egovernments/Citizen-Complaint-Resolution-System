@@ -22,7 +22,7 @@
  * and each test self-skips with a clear reason when the deployment can't
  * support the case (e.g. a single-complaint-type or single-locality tenant).
  *
- * Auth: getPersona('employee') logs into the inbox UI; the default
+ * Auth: getPersona('inbox-viewer') logs into the inbox UI; the default
  * "Assigned to All" radio means it sees every complaint, not just its own.
  */
 import { test, expect, type Page } from '@playwright/test';
@@ -81,7 +81,7 @@ test.beforeAll(async () => {
   const plan = await resolveSeedPlan();
   if ('error' in plan) { seedSkip = plan.error; return; }
   try {
-    const employee = await getPersona('employee');
+    const employee = await getPersona('inbox-viewer');
     admin = toPrincipal(employee);
     gro = toPrincipal(plan.actor);
 
@@ -107,7 +107,7 @@ test.beforeAll(async () => {
 });
 
 async function openInbox(page: Page): Promise<void> {
-  const employee = await getPersona('employee');
+  const employee = await getPersona('inbox-viewer');
   const ok = await loginEmployeeBrowser(page, employee.username, employee.password);
   test.skip(!ok, `employee ${employee.username} login failed on this deployment`);
   await Promise.all([

@@ -49,7 +49,7 @@ test.beforeAll(async () => {
 });
 
 async function openInbox(page: Page): Promise<void> {
-  const employee = await getPersona('employee');
+  const employee = await getPersona('inbox-viewer');
   const ok = await loginEmployeeBrowser(page, employee.username, employee.password);
   test.skip(!ok, `employee ${employee.username} login failed`);
   await Promise.all([

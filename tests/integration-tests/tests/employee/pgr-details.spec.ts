@@ -83,7 +83,7 @@ async function openDetails(page: Page, srid: string): Promise<void> {
   // after 30s, disguising a missing fixture as a UI regression.
   test.skip(!!FIXTURE_SKIP, FIXTURE_SKIP);
 
-  const employee = await getPersona('employee');
+  const employee = await getPersona('inbox-viewer'); // needs nextActions (GRO+jurisdiction) for the 5.24b Take-Action gate
   await loginViaApi(page, {
     // `tenant` is what gets injected into Employee.* localStorage (the
     // complaint's own tenant, so pgr-services/workflow calls resolve
