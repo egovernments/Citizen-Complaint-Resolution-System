@@ -245,7 +245,7 @@ public class PGRService {
 			// A restored value may be real confidential data the caller isn't cleared to see —
 			// persist it correctly either way, but don't leak it back in this response.
 			if (updatedExt.getIsConfidentialSafe() && !isAuthorizedForConfidential(request.getRequestInfo(), updateService, cfg))
-				encryptionDecryptionService.maskAll(plainExt);
+				encryptionDecryptionService.maskAllPlaintext(plainExt, cfg);
 			updateService.setExtendedAttributes(
 					encryptionDecryptionService.encrypt(updatedExt, cfg, tenantId));
 			enrichmentService.enrichUserContactDetails(request);
@@ -446,11 +446,11 @@ public class PGRService {
             ComplaintTemplateTypeConfig cfg = configCache.get(svc.getExtendedAttributes().getCaseRelatedTo());
             if (cfg == null) {
                 if (svc.getExtendedAttributes().getIsConfidentialSafe())
-                    encryptionDecryptionService.maskAll(svc.getExtendedAttributes());
+                    encryptionDecryptionService.maskAll(svc.getExtendedAttributes(), null);
                 continue;
             }
             if (svc.getExtendedAttributes().getIsConfidentialSafe() && !isAuthorizedForConfidential(requestInfo, svc, cfg)) {
-                encryptionDecryptionService.maskAll(svc.getExtendedAttributes());
+                encryptionDecryptionService.maskAll(svc.getExtendedAttributes(), cfg);
             } else {
                 encryptionDecryptionService.decrypt(svc.getExtendedAttributes(), cfg);
             }

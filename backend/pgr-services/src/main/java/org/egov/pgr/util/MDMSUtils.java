@@ -452,6 +452,7 @@ public class MDMSUtils {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> schema = (Map<String, Object>) schemaObj;
                             cfg.setXSecurity(asStringList(schema.get("x-security")));
+                            cfg.setNoMaskFields(asStringList(schema.get("x-no-mask")));
                             cfg.setFields(parseFieldDefinitions(schema));
                         }
                     }
