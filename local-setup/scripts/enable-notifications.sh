@@ -125,9 +125,15 @@ KONG_CONTAINER="${KONG_CONTAINER:-kong-gateway}"          # Kong container to re
 # Step 5 ingress: auto | true | false. auto = validate only, mutate nothing.
 ENABLE_INGRESS="${ENABLE_INGRESS:-auto}"
 
-# Behaviour flags (also settable via CLI: --dry-run / --yes / --no-color).
+# Behaviour flags (also settable via CLI: --dry-run / --yes / --no-color / --local).
 DRY_RUN="${DRY_RUN:-false}"                               # true = print commands, run nothing
 ASSUME_YES="${ASSUME_YES:-false}"                         # true = don't pause at manual/showcase steps
+PUBLIC_URL_LOCAL_OK="${PUBLIC_URL_LOCAL_OK:-false}"       # true (or --local) = allow a localhost PUBLIC_URL.
+                                                          # Without it, preflight STOPS if PUBLIC_URL resolves to a
+                                                          # localhost/127.0.0.1 origin — otherwise an external operator
+                                                          # silently gets localhost dashboard/verify URLs (DIGIT_URL's
+                                                          # :18000 default falls through to PUBLIC_URL) while this
+                                                          # host-local reachability probe still passes.
 
 # -----------------------------------------------------------------------------
 # The Basic auth for the DIGIT oauth client: `egov-user-client:` (empty secret),
@@ -221,6 +227,10 @@ container_of() { ( cd "$DIGIT_HOME" && eval "${DC} ps -q $1" 2>/dev/null | head 
 http_code()      { curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$1" 2>/dev/null || echo 000; }
 http_reachable() { [[ "$(http_code "$1")" != "000" ]]; }          # anything but a connect failure
 http_ok()        { [[ "$(http_code "$1")" =~ ^[23] ]]; }          # 2xx / 3xx
+# _is_local_origin <url> — true if the origin is loopback (localhost/127.0.0.1/0.0.0.0).
+# A host-local reachability probe passes for these even though they are useless as the
+# EXTERNAL origin baked into dashboard/verify URLs — hence the preflight opt-in guard.
+_is_local_origin() { [[ "$1" =~ ^[Hh][Tt][Tt][Pp][Ss]?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:[0-9]+)?(/.*)?$ ]]; }
 
 # --- container-state predicates (used by many verifies) ---------------------
 _svc_running() {
@@ -361,10 +371,18 @@ do_step1() {
 do_step2() {
   step step2 "$(step_title step2)"
 
-  # pre: the base bridge image must be pullable or already present. (WhatsApp adds a
-  # stricter gate below — the Content-SID bridge image must resolve.)
-  require "base bridge image available (registry pull OR already present)" \
-    "sudo docker pull '$NOVU_BRIDGE_IMAGE' >/dev/null 2>&1 || sudo docker image inspect '$NOVU_BRIDGE_IMAGE' >/dev/null 2>&1"
+  # pre: the image we are about to PIN must be pullable or already present. The gate
+  # is on the WhatsApp path when WHATSAPP is enabled — a fresh box may have NO access
+  # to the base preview registry at all, so requiring the base image there is wrong.
+  #   WHATSAPP on  → require ONLY the Content-SID bridge image (public Docker Hub).
+  #   WHATSAPP off → require the base bridge image, as before.
+  if _wa_enabled; then
+    require "WhatsApp Content-SID bridge image available (Docker Hub pull OR already present)" \
+      "sudo docker pull '$NOVU_BRIDGE_IMAGE_WA' >/dev/null 2>&1 || sudo docker image inspect '$NOVU_BRIDGE_IMAGE_WA' >/dev/null 2>&1"
+  else
+    require "base bridge image available (registry pull OR already present)" \
+      "sudo docker pull '$NOVU_BRIDGE_IMAGE' >/dev/null 2>&1 || sudo docker image inspect '$NOVU_BRIDGE_IMAGE' >/dev/null 2>&1"
+  fi
 
   log "Pinning the bridge image…"
   # When WHATSAPP is enabled we PULL + PIN the Content-SID bridge and FAIL LOUDLY
@@ -717,6 +735,9 @@ do_step9() {
 
   note "SENT = Novu accepted the trigger — NOT proof of delivery. Drive a real"
   note "complaint through PGR to populate this log (that's a separate action)."
+  note "WhatsApp shows up as channel=sms in Novu (complaints-whatsapp is an sms-type"
+  note "step), so ?channel=whatsapp returns 0 — split SMS vs WhatsApp by the"
+  note "transactionId suffix (…:WHATSAPP vs …:SMS), not by Novu's channel field."
 
   # nb_dispatch_log.status=SENT only means Novu ACCEPTED the async trigger — Novu
   # can still fail the actual send. Ask Novu itself: read recent messages and check
@@ -739,9 +760,13 @@ if isinstance(msgs,dict): msgs=msgs.get(\"data\",[])
 bad=0
 for m in (msgs or []):
  st=str(m.get(\"status\",\"\")); ch=m.get(\"channel\",\"\")
+ # Novu labels WhatsApp sends as channel=sms (complaints-whatsapp is an sms-type
+ # step); the true channel is the transactionId suffix (…:WHATSAPP vs …:SMS).
+ tx=str(m.get(\"transactionId\",\"\"))
+ lbl=tx.rsplit(\":\",1)[-1] if \":\" in tx else ch
  eid=m.get(\"errorId\") or (m.get(\"providerResponse\") or {}).get(\"errorId\")
  if st==\"error\": bad+=1
- print(\"     %-9s %-8s %s\"%(ch,st,(\"errorId=%s\"%eid) if eid else \"\"))
+ print(\"     %-9s %-8s %s\"%(lbl,st,(\"errorId=%s\"%eid) if eid else \"\"))
 if bad: sys.stderr.write(\"     %d Novu message(s) in ERROR — see errorId above (NOT delivered)\\n\"%bad)'"
       unset nkey
     fi
@@ -777,6 +802,19 @@ preflight() {
     if [[ "$perms" == "600" ]]; then ok "precondition: .env is mode 600"; else warn ".env is mode ${perms} (expected 600)"; fi
   fi
 
+  # PUBLIC_URL localhost guard. DIGIT_URL's :18000 default silently becomes PUBLIC_URL,
+  # so an external operator gets localhost dashboard/verify URLs while this host-local
+  # probe still passes. Require an explicit opt-in (--local / PUBLIC_URL_LOCAL_OK=1).
+  if [[ "$DRY_RUN" != true ]] && _is_local_origin "$PUBLIC_URL" && [[ "$PUBLIC_URL_LOCAL_OK" != true ]]; then
+    err "PRECONDITION FAILED: PUBLIC_URL is a localhost origin (${PUBLIC_URL})."
+    err "That bakes localhost into the dashboard/verify URLs — wrong for an external operator,"
+    err "even though this host-local reachability probe would pass."
+    err "Set PUBLIC_URL to your external origin (e.g. http://<host>.nip.io) and re-run:"
+    err "    PUBLIC_URL=http://<host>.nip.io ./enable-notifications.sh"
+    err "…or pass --local (or PUBLIC_URL_LOCAL_OK=1) if this box IS the public origin."
+    return 1
+  fi
+
   if [[ "$DRY_RUN" != true ]] && ! http_reachable "$PUBLIC_URL"; then
     err "PRECONDITION FAILED: public gateway not reachable at PUBLIC_URL=${PUBLIC_URL}"
     err "PUBLIC_URL has no safe default. Set it to your EXTERNAL origin and re-run, e.g.:"
@@ -809,6 +847,7 @@ OPTIONS:
   --only  <step[,...]>  Run only these steps (e.g. --only step6 or --only step6,step8).
   --dry-run             Print what would run; execute nothing.
   --yes                 Do not pause at the showcase step (5).
+  --local               Allow a localhost PUBLIC_URL (else preflight stops on one).
   --no-color            Disable coloured output (also honours NO_COLOR).
 
 STEPS (run in order by default; preflight always runs first):
@@ -825,7 +864,8 @@ KEY ENV VARS (override on the command line; defaults are the reference-box value
   PUBLIC_URL=$PUBLIC_URL   (external origin — oauth + seed + ingress verify)
                           NO SAFE DEFAULT — set to your external origin, e.g.
                           PUBLIC_URL=http://<host>.nip.io ; preflight stops non-zero
-                          if it is unreachable.
+                          if it is unreachable OR a localhost origin (pass --local /
+                          PUBLIC_URL_LOCAL_OK=1 to allow localhost intentionally).
   NOTIF_TENANT=$NOTIF_TENANT   ADMIN_USER=$ADMIN_USER   ADMIN_PASS=******
   NOVU_API_LOCAL=$NOVU_API_LOCAL
   NOVU_BASE_URL=$NOVU_BASE_URL   (bootstrap-novu-whatsapp.sh target — step8)
@@ -869,6 +909,7 @@ main() {
       --only)     ONLY="$2"; shift 2 ;;
       --dry-run)  DRY_RUN=true; shift ;;
       --yes)      ASSUME_YES=true; shift ;;
+      --local)    PUBLIC_URL_LOCAL_OK=true; shift ;;
       --no-color) NO_COLOR=1; shift ;;
       *) echo "unknown option: $1 (try --help)" >&2; exit 2 ;;
     esac

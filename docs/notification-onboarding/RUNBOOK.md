@@ -12,11 +12,11 @@ tenants inherit.
 
 | Service | Does | Env to set | Image |
 |---|---|---|---|
-| **pgr-services** | Brain: reads the routing/template MDMS, renders one message per (recipient × channel), emits to Kafka `complaints.domain.events` | `PGR_NOTIFICATION_CONFIG_DRIVEN=true` | current develop (needs the **Content-SID-pipeline** build for WhatsApp *templates*) |
-| **novu-bridge** | Hands: consumes Kafka → triggers Novu per channel → logs `nb_dispatch_log`; also serves the configurator's `/novu-adapter/v1/*` API | `NOVU_API_KEY`, `NOVU_BRIDGE_CHANNELS_ENABLED`, `NOVU_BRIDGE_PROXY_ALLOWED_ROLES` | **pin a current `develop-YYYYMMDD` tag — NOT `:latest`** (it goes months stale) |
+| **pgr-services** | Brain: reads the routing/template MDMS, renders one message per (recipient × channel), emits to Kafka `complaints.domain.events` | `PGR_NOTIFICATION_CONFIG_DRIVEN=true` | `egovio/pgr-services:whatsapp-contentsid-pipeline-f76f6ea` (public Docker Hub, multi-arch — has the Content-SID path). The base `develop-*` images do **not**. |
+| **novu-bridge** | Hands: consumes Kafka → triggers Novu per channel → logs `nb_dispatch_log`; also serves the configurator's `/novu-adapter/v1/*` API | `NOVU_API_KEY`, `NOVU_BRIDGE_CHANNELS_ENABLED`, `NOVU_BRIDGE_PROXY_ALLOWED_ROLES` | `egovio/novu-bridge:whatsapp-contentsid-pipeline-f76f6ea` (public Docker Hub, multi-arch). The base `develop-*` tags lack the Content-SID WhatsApp path. |
 | **digit-config-service** | backs the configurator provider/template screens | — | current develop |
 | **novu-mongo / novu-api / novu-worker** | Novu core; `novu-worker` is what actually calls Twilio/SMTP | — | `ghcr.io/novuhq/novu/*:2.3.0` |
-| **novu-dashboard / novu-ws** | Novu admin UI (enter creds, watch delivery) | dashboard public-URL envs (§5) | `ghcr.io/novuhq/novu/*:2.3.0` |
+| **novu-dashboard / novu-ws** | Novu admin UI (enter creds, watch delivery) | dashboard public-URL envs (§2 step 5) | `ghcr.io/novuhq/novu/*:2.3.0` |
 
 Skip `digit-user-preferences-service` unless you want per-user consent — the preference
 gate defaults **off** (and is fail-closed if on with no seeded consent).
@@ -24,6 +24,13 @@ gate defaults **off** (and is fail-closed if on with no seeded consent).
 ---
 
 ## 2. Enable — the steps
+
+**Primary path: run the installer.** [`local-setup/scripts/enable-notifications.sh`](../../local-setup/scripts/enable-notifications.sh)
+is the self-narrating, resumable, validated form of everything below — it pins the Content-SID
+images, mints the Novu key, opens the channel gate, seeds the masters, and bootstraps Novu, with
+loud-failing pre/postconditions. Export the three `TWILIO_*` vars and your external `PUBLIC_URL`
+(pass `--local` only if the box itself is the public origin), then `./enable-notifications.sh`.
+The steps below are the same thing by hand, for when you need to do one piece.
 
 Compose helper (**name services explicitly** — a bare `up -d` revives `default-data-handler`, which re-seeds MDMS):
 ```bash
@@ -39,7 +46,10 @@ eval "$C up -d pgr-services"
 
 **2 — Pin the bridge + bring up the Novu stack**
 ```bash
-sudo sed -i 's|^NOVU_BRIDGE_IMAGE=.*|NOVU_BRIDGE_IMAGE=<registry>/egovio/novu-bridge:develop-YYYYMMDD|' /opt/digit/.env
+# Content-SID WhatsApp needs THIS image (public Docker Hub, multi-arch); the base
+# develop-* tags lack the Content-SID path. Pin the matching pgr-services image too.
+sudo sed -i 's|^NOVU_BRIDGE_IMAGE=.*|NOVU_BRIDGE_IMAGE=egovio/novu-bridge:whatsapp-contentsid-pipeline-f76f6ea|' /opt/digit/.env
+sudo sed -i 's|^PGR_SERVICES_IMAGE=.*|PGR_SERVICES_IMAGE=egovio/pgr-services:whatsapp-contentsid-pipeline-f76f6ea|' /opt/digit/.env
 eval "$C up -d novu-mongo novu-api novu-worker novu-ws novu-dashboard novu-bridge \
               digit-config-service novu-bridge-migration digit-config-service-migration"
 ```
@@ -78,6 +88,10 @@ for W in complaints-sms:sms complaints-email:email complaints-whatsapp:sms; do
   curl -s -X POST http://localhost:14002/v2/workflows -H "Authorization: ApiKey $KEY" -H 'Content-Type: application/json' -d "{\"workflowId\":\"$ID\",\"name\":\"$ID\",\"active\":true,\"validatePayload\":false,\"steps\":[{\"name\":\"s\",\"type\":\"$T\",\"controlValues\":{\"body\":\"{{ payload.body }}\"}}]}" | grep -o '"workflowId":"[^"]*"' | head -1
 done
 ```
+Or run [`bootstrap-novu-whatsapp.sh`](../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh),
+which also creates the Twilio integration. **For a standalone run you must set
+`NOVU_BASE_URL=http://localhost:14002`** — its built-in default is `:1336` (wrong for this stack;
+`enable-notifications.sh` passes `:14002` for you, so this only bites a bare `bash bootstrap-novu-whatsapp.sh`).
 
 **9 — Drive a complaint, then verify**
 ```bash
@@ -93,6 +107,10 @@ curl -s "http://localhost:14002/v1/messages?limit=20" -H "Authorization: ApiKey 
 ```
 **`SENT` in `nb_dispatch_log` ≠ delivered** — the Novu message status (and the handset/inbox, or the
 Twilio Messages API) is the truth.
+
+> **WhatsApp shows up as `channel=sms` in Novu.** `complaints-whatsapp` is an sms-type Novu step, so
+> `GET /v1/messages` labels WhatsApp sends `channel=sms` and `?channel=whatsapp` returns 0. Split
+> SMS vs WhatsApp by the **`transactionId` suffix** (`…:WHATSAPP` vs `…:SMS`), not by Novu's channel.
 
 ---
 
@@ -145,10 +163,68 @@ not a create.
 
 ---
 
-## 5. Channel status
+## 5. WhatsApp last-mile — templates → SIDs → test-send → drive a complaint
 
-- **SMS + Email** — fully pipeline-wired; work once the masters are seeded and a provider is added.
-- **WhatsApp** — needs (a) the **Content-SID-pipeline** build of pgr-services + novu-bridge (so
-  the pipeline sends the approved template, not free-form; free-form is rejected `63016`), and
-  (b) `NotificationProviderTemplate` rows pointing at **your** account's approved Content SIDs.
-  Business-initiated WhatsApp without an approved template = SKIP, by design.
+SMS/email work once §4 is seeded and a provider added (§2.7). WhatsApp needs three more things:
+your **approved Content templates**, their **SIDs persisted into MDMS**, and a **real send verified**.
+The `<token>` below is an employee/admin Bearer token; `<host>` is your external origin.
+
+### 5.0 Author your Content templates FIRST
+A fresh Twilio account has **zero** approved templates → every WhatsApp leg comes back
+`SKIPPED / NB_TEMPLATE_NOT_APPROVED`. Before anything else you must build the ~14 Content templates
+in **Twilio's Content Template Builder** and get each one **Meta-approved**. Use the seed JSON
+[`RAINMAKER-PGR.NotificationProviderTemplate.json`](../../utilities/default-data-handler/src/main/resources/mdmsData-dev/RAINMAKER-PGR/RAINMAKER-PGR.NotificationProviderTemplate.json)
+as the canonical reference for which events exist and the ordered `variables` each template expects
+(`[complaint_type, id, date, …]` → Twilio `{{1}},{{2}},…`). It carries the naming/variable layout,
+**not** approved bodies — you author those in Twilio.
+
+### 5.1 Pull the templates your account exposes
+```bash
+curl -H "Authorization: Bearer <token>" \
+  http://<host>/novu-bridge/novu-adapter/v1/providers/twilio-templates
+```
+Returns your account's Content templates (Content SID + friendly name + variables).
+
+### 5.2 Persist your SIDs into MDMS
+Match each pulled template to a routing key and upsert `RAINMAKER-PGR.NotificationProviderTemplate`
+with **your** Content SIDs. Scripted:
+[`local-setup/scripts/persist-provider-templates.py`](../../local-setup/scripts/persist-provider-templates.py)
+(pulls the matched templates → upserts the MDMS master).
+
+### 5.3 Test-send
+```bash
+curl -X POST -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' \
+  http://<host>/novu-bridge/novu-adapter/v1/providers/test-send \
+  -d '{"channel":"WHATSAPP","to":{"phone":"+2547XXXXXXXX"},"contentSid":"HXxxxxxxxx","variables":["Garbage","CMP-123","2026-07-17"]}'
+```
+Bearer auth; writes one `TEST`-tagged `nb_dispatch_log` row. A `SKIPPED/NB_TEMPLATE_NOT_APPROVED`
+here means §5.0 isn't done for that template.
+
+### 5.4 Drive a real complaint and verify
+End-to-end proof: [`local-setup/scripts/drive-test-complaint.py`](../../local-setup/scripts/drive-test-complaint.py)
+— fully scripted (creates a citizen, files a complaint, verifies the dispatch). The manual
+equivalent is a single create, then re-run the §2 step-9 checks:
+```bash
+curl -X POST -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' \
+  http://<host>/pgr-services/v2/request/_create \
+  -d '{"RequestInfo":{"authToken":"<token>"},"service":{"tenantId":"<root>","serviceCode":"GarbageNeedsTobeCleared","description":"test","source":"web","phone":"+2547XXXXXXXX"},"workflow":{"action":"APPLY"}}'
+```
+
+---
+
+## 6. Channel status
+
+- **SMS** — fully pipeline-wired; works once the masters are seeded (§4) and a Twilio provider added (§2.7).
+- **Email** — the pipeline and the `complaints-email` workflow are wired, **but delivery still needs a
+  Novu SMTP integration added by hand** in the Novu dashboard. `bootstrap-novu-whatsapp.sh` creates the
+  Twilio integration + the email *workflow* only — **no SMTP provider**. Until you add one, email
+  triggers "succeed" (workflow fires) but nothing is delivered; only **SMS + WhatsApp** actually send.
+- **WhatsApp** — needs (a) the **Content-SID-pipeline** images of pgr-services + novu-bridge (so
+  the pipeline sends the approved template, not free-form; free-form is rejected `63016`),
+  (b) `NotificationProviderTemplate` rows pointing at **your** account's approved Content SIDs, and
+  (c) the §5 last-mile done. Business-initiated WhatsApp without an approved template = SKIP, by design.
+
+> **Reference box (8c24g):** it runs **hand-built local image tags**
+> (`pgr-services:wa-contentsid` / `novu-bridge:wa-sync`) of the **same commit** as the published
+> `egovio/{pgr-services,novu-bridge}:whatsapp-contentsid-pipeline-f76f6ea` images — so the "running
+> images" there won't literally match the published tag names, though the code is identical.
