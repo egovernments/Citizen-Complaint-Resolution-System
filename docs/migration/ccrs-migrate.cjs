@@ -766,14 +766,24 @@ async function phaseBanner() {
   let wanted = [];
   try { wanted = JSON.parse(JSON.stringify(readJson(SEED.citymoduleRows)).split('{tenantid}').join(CFG.state)); }
   catch (e) { return record('banner', OUTCOME.FAILED, `cannot read citymodule row seed: ${e.message}`, 'SEED_FILE_MISSING', `Expected ${SEED.citymoduleRows}.`); }
-  const { rows } = await mdmsSearch(CFG.state, SCHEMA);
-  const byCode = new Map((rows || []).filter((m) => m.isActive).map((m) => [m.data && m.data.code, m]));
+  // NB: mdmsSearch().rows strips each record down to .data — the FULL rows
+  // (id/uniqueIdentifier/isActive, required by _update) come back in .raw.
+  const fullRows = (schemaCode) => mdmsSearch(CFG.state, schemaCode).then((r) => (r.raw || []).filter((m) => m.isActive));
+  let live2 = await fullRows(SCHEMA);
+  let byCode = new Map(live2.map((m) => [m.data && m.data.code, m]));
+  let createdNow = false;
   for (const w of wanted) {
     if (byCode.has(w.code)) { info(`row ${w.code} exists — untouched`); continue; }
     if (CFG.dryRun) { info(`dry-run: would create citymodule row ${w.code}`); continue; }
     const res = await mdmsCreate(CFG.state, SCHEMA, w.code, w);
     if (!res.ok && !res.exists) failures.push(`row ${w.code}: HTTP ${res.code} ${truncate(res.body, 80)}`);
-    else ok(`row ${w.code} created`);
+    else if (res.exists) info(`row ${w.code} already exists (lagged search) — untouched`);
+    else { ok(`row ${w.code} created`); createdNow = true; }
+  }
+  if (createdNow && CFG.bannerUrl) { // pick up rows created seconds ago so the banner sets in ONE pass
+    await sleep(2000);
+    live2 = await fullRows(SCHEMA);
+    byCode = new Map(live2.map((m) => [m.data && m.data.code, m]));
   }
 
   // 3) PGR bannerImage: opt-in via --banner-url, and ONLY filled when empty —
@@ -787,7 +797,7 @@ async function phaseBanner() {
   } else if (schemaDrift) {
     warn('cannot set bannerImage while the schema lacks the property');
   } else if (!pgr) {
-    if (!CFG.dryRun) warn('PGR row was created this run — re-run the phase to set bannerImage (search-then-update needs the stored row)');
+    if (!CFG.dryRun) warn('PGR row not readable back yet (async persister) — re-run --phases banner to set bannerImage');
   } else if (CFG.dryRun) {
     info(`dry-run: would set PGR bannerImage = ${CFG.bannerUrl}`);
   } else {
@@ -801,7 +811,8 @@ async function phaseBanner() {
   if (schemaDrift) return record('banner', OUTCOME.PARTIAL, 'schema lacks bannerImage (rows ensured)', 'CITYMODULE_SCHEMA_DRIFT',
     'No schema-update API exists — run docs/migration/fix-citymodule.sh ON the box (PR #1210), restart egov-mdms-service, then re-run --phases banner.');
   if (failures.length) return record('banner', OUTCOME.PARTIAL, `${failures.length} step(s) failed`, 'BANNER_STEP_FAILED', failures.slice(0, 4).join(' | '));
-  return record('banner', OUTCOME.OK, 'citymodule schema/rows ensured' + (CFG.bannerUrl ? ' · bannerImage ensured' : ''));
+  const bannerNote = !CFG.bannerUrl ? '' : current ? ' · bannerImage already set' : (pgr ? ' · bannerImage set' : ' · bannerImage PENDING (re-run)');
+  return record('banner', OUTCOME.OK, 'citymodule schema/rows ensured' + bannerNote);
 }
 
 /* ════════════════════════════ PHASE: gzip ═════════════════════════════ */
