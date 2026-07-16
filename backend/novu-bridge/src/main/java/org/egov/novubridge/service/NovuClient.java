@@ -53,7 +53,16 @@ public class NovuClient {
                                             String renderedBody, String renderedSubject,
                                             String transactionId, Map<String, Object> data,
                                             String templateId, Map<String, Object> contentVariables) {
-        identify(subscriberId, contact);
+        // Channel-scope the Novu subscriber. The SMS and WHATSAPP legs of one complaint arrive with
+        // the SAME base subscriberId (tenantId:userUuid) but need DIFFERENT recipient formats — SMS
+        // the bare "+E164", WhatsApp "whatsapp:+E164". A single Novu subscriber's phone field can
+        // hold only one; the two legs then clobber each other's phone (and the identify TTL cache
+        // skips the second identify), so WhatsApp goes out as the bare number and Twilio rejects it
+        // (unexpected_sms_error / undelivered). Isolating the subscriber per channel gives each leg
+        // its own subscriber carrying the correctly-formatted phone.
+        String scopedSubscriberId = StringUtils.hasText(channel)
+                ? subscriberId + ":" + channel : subscriberId;
+        identify(scopedSubscriberId, contact);
 
         String workflowId = config.getNovuWorkflowId(channel);
         String phone = contact != null ? contact.getPhone() : null;
@@ -74,10 +83,10 @@ public class NovuClient {
         // sender/credentials; we only add the template. SMS/EMAIL keep the free-form path.
         if (StringUtils.hasText(templateId)) {
             Map<String, Object> overrides = buildProviderTemplateOverrides(templateId, contentVariables);
-            return trigger(workflowId, subscriberId, phone, payload, transactionId, overrides, null);
+            return trigger(workflowId, scopedSubscriberId, phone, payload, transactionId, overrides, null);
         }
 
-        return trigger(workflowId, subscriberId, phone, email, payload, transactionId);
+        return trigger(workflowId, scopedSubscriberId, phone, email, payload, transactionId);
     }
 
     private static final ObjectMapper CONTENT_VAR_MAPPER = new ObjectMapper();
