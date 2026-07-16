@@ -75,47 +75,8 @@ Pairs with the FAQ test — both pages are listed in CCRS#12 as the broken aux s
     ).not.toContainText('Something went wrong');
   });
 
-  test.fixme('HELPLINE sidebar item is reachable + click-actionable', {
-    annotation: {
-      type: 'description',
-      description: `Catches CCRS#12 (third sub-issue): the HELPLINE sidebar item used to render but its click handler is dead. The test asserts the link is visible AND that clicking it produces ANY observable side effect — a navigation, a JS dialog, or a DOM modal.
-
-Steps:
-1. setTimeout 60s; OTP-login as a fresh citizen.
-2. Wait 3s, locate the HELPLINE sidebar item; assert it is visible.
-3. Capture beforeUrl, attach a page.on('dialog') listener, click HELPLINE.
-4. Wait 2s; capture afterUrl, count modal-shaped elements ([role="dialog"], .modal, [class*="Modal"]).
-5. Assert that hasObservableEffect — beforeUrl !== afterUrl OR dialogFired OR modalAppeared > 0.
-
-Loose assertion intentionally — the spec doesn't care HOW HELPLINE responds, just that it responds at all. Currently red until the handler is wired.`,
-    },
-    tag: ['@area:pgr', '@ccrs:12', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
-    test.setTimeout(60_000);
-    await citizenOtpLogin(page);
-    await page.waitForTimeout(3000);
-
-    const helpline = page.locator('text=HELPLINE').first();
-    await expect(helpline, 'HELPLINE sidebar item should render').toBeVisible({ timeout: 5_000 });
-
-    // Click → assert *some* observable effect: either a navigation, a
-    // modal, or a tel:/href trigger. Today the click does nothing
-    // (issue #12); this assertion fails until the handler is wired.
-    const beforeUrl = page.url();
-    let dialogFired = false;
-    page.on('dialog', () => {
-      dialogFired = true;
-    });
-
-    await helpline.click();
-    await page.waitForTimeout(2000);
-
-    const afterUrl = page.url();
-    const modalAppeared = await page.locator('[role="dialog"], .modal, [class*="Modal"]').count();
-    const hasObservableEffect = beforeUrl !== afterUrl || dialogFired || modalAppeared > 0;
-
-    expect(
-      hasObservableEffect,
-      'HELPLINE click should produce a navigation, dialog, or modal — currently dead per issue #12',
-    ).toBe(true);
-  });
+  // The HELPLINE-sidebar test was removed: its click handler is a dead product
+  // surface (CCRS#12, third sub-issue) with no owner to implement, so the test
+  // could only ever be a permanent .fixme. The two error-fallback guards above
+  // remain as the live CCRS#12 signal.
 });
