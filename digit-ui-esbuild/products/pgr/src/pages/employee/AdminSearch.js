@@ -97,11 +97,13 @@ const CSS = `
 @media (max-width: 1200px) { .pgr-adm-frow { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) { .pgr-adm-frow { grid-template-columns: 1fr; } }
 .pgr-adm-field > label { display: block; font-size: .8rem; font-weight: 600; margin-bottom: .3rem; }
-.pgr-adm-cno { position: relative; }
-.pgr-adm-cno input { width: 100%; min-height: 42px; padding: .5rem 1.8rem .5rem 2rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; font-size: .85rem; background: #fff; }
-.pgr-adm-cno .mag { position: absolute; left: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#94a3b8); display: inline-flex; }
-.pgr-adm-cno .hash { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#94a3b8); font-size: .9rem; }
-.pgr-adm-cno input:focus, .pgr-adm-msd-field:focus-within, .pgr-adm-date input:focus { outline: none; border-color: var(--color-input-border-focus, var(--color-primary-1,#c84c0e)); }
+/* icon + input as flex SIBLINGS inside a bordered wrapper — the platform's global input rules
+   override padding on inputs, so absolutely-positioned icons would overlap the text */
+.pgr-adm-cno { display: flex; align-items: center; gap: .45rem; min-height: 42px; padding: 0 .6rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; }
+.pgr-adm-cno input { flex: 1; min-width: 0; border: none; outline: none; box-shadow: none; background: transparent; font-size: .85rem; padding: .5rem 0; min-height: 0; }
+.pgr-adm-cno .mag { color: var(--color-text-secondary,#94a3b8); display: inline-flex; flex: none; }
+.pgr-adm-cno .hash { color: var(--color-text-secondary,#94a3b8); font-size: .9rem; flex: none; }
+.pgr-adm-cno:focus-within, .pgr-adm-msd-field:focus-within, .pgr-adm-date:focus-within { outline: none; border-color: var(--color-input-border-focus, var(--color-primary-1,#c84c0e)); }
 .pgr-adm-msd { position: relative; }
 .pgr-adm-msd-field { min-height: 42px; width: 100%; display: flex; flex-wrap: nowrap; align-items: center; gap: .35rem; padding: .3rem 2rem .3rem .5rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; cursor: pointer; position: relative; overflow: hidden; }
 .pgr-adm-msd-field .ph { color: var(--color-text-secondary,#94a3b8); font-size: .85rem; padding-left: .1rem; }
@@ -115,10 +117,10 @@ const CSS = `
 .pgr-adm-msd-opt { display: flex; gap: .5rem; align-items: center; padding: .4rem .6rem; font-size: .85rem; cursor: pointer; }
 .pgr-adm-msd-opt:hover { background: var(--color-surface-secondary,#f1f5f9); }
 .pgr-adm-dates { display: flex; align-items: center; gap: .5rem; }
-.pgr-adm-date { position: relative; flex: 1; }
-.pgr-adm-date input { width: 100%; min-height: 42px; padding: .5rem .5rem .5rem 2.2rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; font-size: .82rem; background: #fff; color: inherit; cursor: pointer; }
+.pgr-adm-date { display: flex; align-items: center; gap: .45rem; flex: 1; min-height: 42px; padding: 0 .6rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; cursor: pointer; }
+.pgr-adm-date input { flex: 1; min-width: 0; border: none; outline: none; box-shadow: none; background: transparent; font-size: .82rem; padding: .5rem 0; min-height: 0; color: inherit; cursor: pointer; }
 .pgr-adm-date input::-webkit-calendar-picker-indicator { display: none; }
-.pgr-adm-date svg { position: absolute; left: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#94a3b8); pointer-events: none; }
+.pgr-adm-date svg { flex: none; color: var(--color-text-secondary,#94a3b8); pointer-events: none; }
 .pgr-adm-dates .dash { color: var(--color-text-secondary,#94a3b8); }
 .pgr-adm-fbtns { display: flex; gap: .6rem; margin-top: 1.45rem; }
 .pgr-adm-err { color: var(--color-error,#b3261e); font-size: .78rem; padding: 0 1rem .75rem; }
