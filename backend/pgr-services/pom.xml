@@ -117,6 +117,16 @@
             <version>2.9.0-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
+        <!-- #1110: analytics query metrics. API-only — the OTEL javaagent (v2.11.0, see
+             otel/download-agent.sh) bridges GlobalOpenTelemetry to its SDK at runtime;
+             without the agent every call is a no-op (tests/CI safe). Version pinned to
+             the SDK bundled by javaagent 2.11.0. Boot 3.2.2 manages an older otel BOM,
+             so the explicit version here is required. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+            <version>1.45.0</version>
+        </dependency>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
