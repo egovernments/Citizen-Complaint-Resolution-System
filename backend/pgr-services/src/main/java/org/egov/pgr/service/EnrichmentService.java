@@ -155,11 +155,11 @@ public class EnrichmentService {
     public void scopeSearchCriteria(RequestInfo requestInfo, RequestSearchCriteria criteria){
 
         // userIds is the ownership axis (`ser.accountId IN (userIds)`) and is derived here from the
-        // authenticated principal — it is NEVER an input. It carries @JsonIgnore, but the search
-        // endpoints bind RequestSearchCriteria with @ModelAttribute (raw query params), where
-        // @JsonIgnore has no effect, so a caller can otherwise pass userIds=<victim-uuid> straight
-        // into that clause. Drop anything inbound first so ownership holds by construction rather
-        // than relying on a later branch happening to overwrite the field.
+        // authenticated principal — it is NEVER an input. RequestsApiController's @InitBinder already
+        // disallows binding it (@JsonIgnore alone does NOT stop @ModelAttribute query-param binding),
+        // so this is the service-layer backstop: any entry point added without that binder config
+        // would otherwise let a client-supplied userIds ride straight into the clause. Clearing it
+        // here keeps ownership true by construction rather than by convention.
         criteria.setUserIds(null);
 
         // CCRS #1071: a pure citizen may only see their OWN complaints. Force userIds to the

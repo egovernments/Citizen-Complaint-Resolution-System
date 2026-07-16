@@ -33,6 +33,10 @@ import static org.egov.pgr.util.PGRConstants.MDMS_DATA_SERVICE_CODE_KEYWORD;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_RELATED_TO_MAP;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_TEMPLATE_TYPE;
 import static org.egov.pgr.util.PGRConstants.MDMS_COMPLAINT_SCHEMA;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_MASTER;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_MASTER;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_JSONPATH;
 
 @Slf4j
 @Component
@@ -52,6 +56,22 @@ public class MDMSUtils {
     // #432). Cache lives for the process lifetime — slaHours changes in MDMS need a
     // pgr-services restart to take effect, same staleness window the migration map had.
     private final Map<String, Map<String, Long>> serviceCodeToSlaCache = new ConcurrentHashMap<>();
+
+    // Config-driven notification masters, cached per state-level tenant with a short TTL
+    // (pgr.notification.mdms.cache.ttl.ms, default 60s). Configurator edits to
+    // NotificationRouting/NotificationTemplate become visible within that window without a
+    // pgr-services restart. Only NON-EMPTY results are cached, so a transient MDMS miss is
+    // retried on the next event rather than caching an empty result; during an MDMS outage the
+    // last-known non-empty entry is served stale (past its TTL) so notifications keep flowing
+    // with the last good config instead of being dropped.
+    private static final class TimedRows {
+        final List<Object> rows;
+        final long fetchedAt;
+        TimedRows(List<Object> rows) { this.rows = rows; this.fetchedAt = System.currentTimeMillis(); }
+        boolean fresh(long ttlMs) { return System.currentTimeMillis() - fetchedAt < ttlMs; }
+    }
+    private final Map<String, TimedRows> notificationRoutingCache = new ConcurrentHashMap<>();
+    private final Map<String, TimedRows> notificationTemplateCache = new ConcurrentHashMap<>();
 
     /**
      * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ComplaintHierarchy leaf rows'
@@ -81,6 +101,79 @@ public class MDMSUtils {
                     + "to the business-level SLA", stateTenant, e);
         }
         return map;
+    }
+
+    /**
+     * Notification routing rows (RAINMAKER-PGR.NotificationRouting) for the tenant, cached per
+     * state-level tenant with a short TTL (pgr.notification.mdms.cache.ttl.ms). Returns an empty
+     * list (never null) on MDMS failure; callers DROP the event's notifications in that case —
+     * there is no legacy fallback when the config-driven flag is on. During an MDMS outage a
+     * last-known non-empty entry is served stale rather than dropping notifications.
+     */
+    public List<Object> getNotificationRouting(String tenantId) {
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        long ttl = config.getNotificationMdmsCacheTtlMs();
+        TimedRows cached = notificationRoutingCache.get(stateTenant);
+        if (cached != null && cached.fresh(ttl)) return cached.rows;
+        List<Object> fetched = fetchNotificationMaster(stateTenant,
+                MDMS_NOTIFICATION_ROUTING_MASTER, MDMS_NOTIFICATION_ROUTING_JSONPATH);
+        if (!fetched.isEmpty()) {
+            notificationRoutingCache.put(stateTenant, new TimedRows(fetched));
+            return fetched;
+        }
+        // Empty fetch = transient MDMS miss OR genuinely unseeded tenant. Never cache empties
+        // (retry next event); serve a stale non-empty entry if we have one rather than dropping
+        // notifications during an MDMS blip.
+        return cached != null ? cached.rows : fetched;
+    }
+
+    /**
+     * Notification template rows (RAINMAKER-PGR.NotificationTemplate) for the tenant, cached per
+     * state-level tenant with a short TTL (pgr.notification.mdms.cache.ttl.ms). Returns an empty
+     * list (never null) on MDMS failure; there is no legacy fallback when the config-driven flag
+     * is on. During an MDMS outage a last-known non-empty entry is served stale.
+     */
+    public List<Object> getNotificationTemplates(String tenantId) {
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        long ttl = config.getNotificationMdmsCacheTtlMs();
+        TimedRows cached = notificationTemplateCache.get(stateTenant);
+        if (cached != null && cached.fresh(ttl)) return cached.rows;
+        List<Object> fetched = fetchNotificationMaster(stateTenant,
+                MDMS_NOTIFICATION_TEMPLATE_MASTER, MDMS_NOTIFICATION_TEMPLATE_JSONPATH);
+        if (!fetched.isEmpty()) {
+            notificationTemplateCache.put(stateTenant, new TimedRows(fetched));
+            return fetched;
+        }
+        // Empty fetch = transient MDMS miss OR genuinely unseeded tenant. Never cache empties
+        // (retry next event); serve a stale non-empty entry if we have one rather than dropping
+        // notifications during an MDMS blip.
+        return cached != null ? cached.rows : fetched;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> fetchNotificationMaster(String stateTenant, String masterName, String jsonPath) {
+        try {
+            MdmsCriteriaReq req = getNotificationModuleRequest(new RequestInfo(), stateTenant, masterName);
+            Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), req);
+            List<Object> rows = JsonPath.read(result, jsonPath);
+            return rows != null ? rows : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to load notification master {} for tenant {} — there is NO legacy fallback "
+                    + "when pgr.notification.config.driven=true: notifications for this tenant will be "
+                    + "DROPPED (or served from a stale cache entry) until MDMS recovers or the tenant is seeded",
+                    masterName, stateTenant, e);
+            return Collections.emptyList();
+        }
+    }
+
+    private MdmsCriteriaReq getNotificationModuleRequest(RequestInfo requestInfo, String tenantId, String masterName) {
+        List<MasterDetail> masterDetails = new ArrayList<>();
+        masterDetails.add(MasterDetail.builder().name(masterName).build());
+        ModuleDetail moduleDetail = ModuleDetail.builder().masterDetails(masterDetails)
+                .moduleName(MDMS_MODULE_NAME).build();
+        MdmsCriteria mdmsCriteria = MdmsCriteria.builder()
+                .moduleDetails(Collections.singletonList(moduleDetail)).tenantId(tenantId).build();
+        return MdmsCriteriaReq.builder().mdmsCriteria(mdmsCriteria).requestInfo(requestInfo).build();
     }
 
 
@@ -262,9 +355,11 @@ public class MDMSUtils {
                     .name(MDMS_COMPLAINT_TEMPLATE_TYPE)
                     .filter("$.[?(@.active==true && @.caseRelatedTo=='" + caseRelatedTo + "')]")
                     .build(),
+                // ComplaintExtendedAttributeSchema rows carry no top-level "active" flag —
+                // fetch unfiltered, same as the citizen/employee UI does, and match by
+                // schemaRef below.
                 MasterDetail.builder()
                     .name(MDMS_COMPLAINT_SCHEMA)
-                    .filter("$.[?(@.active==true)]")
                     .build()
             );
             MdmsCriteriaReq req = MdmsCriteriaReq.builder()
@@ -291,16 +386,19 @@ public class MDMSUtils {
                 try {
                     String safeSchemaRef = cfg.getSchemaRef().replace("'", "\\'");
                     String schemaPath = "$.MdmsRes.RAINMAKER-PGR." + MDMS_COMPLAINT_SCHEMA
-                            + "[?(@.name=='" + safeSchemaRef + "')]";
+                            + "[?(@.schemaRef=='" + safeSchemaRef + "')]";
                     List<Object> rawSchemas = JsonPath.read(mdmsResult, schemaPath);
                     if (rawSchemas != null && !rawSchemas.isEmpty()) {
-                        ComplaintTemplateTypeConfig schema = objectMapper.convertValue(
-                                rawSchemas.get(0), ComplaintTemplateTypeConfig.class);
-                        cfg.setXSecurity(schema.getXSecurity());
-                        cfg.setFields(schema.getFields());
+                        Object schemaObj = ((Map<?, ?>) rawSchemas.get(0)).get("schema");
+                        if (schemaObj instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> schema = (Map<String, Object>) schemaObj;
+                            cfg.setXSecurity(asStringList(schema.get("x-security")));
+                            cfg.setFields(parseFieldDefinitions(schema));
+                        }
                     }
                 } catch (Exception e) {
-                    log.warn("ComplaintSchema '{}' not found for tenant '{}'", cfg.getSchemaRef(), tenantId);
+                    log.warn("ComplaintExtendedAttributeSchema '{}' not found for tenant '{}'", cfg.getSchemaRef(), tenantId);
                 }
             }
 
@@ -309,6 +407,49 @@ public class MDMSUtils {
             log.error("Failed to fetch ComplaintTemplateTypeConfig for caseRelatedTo={} tenant={}", caseRelatedTo, tenantId, e);
             return null;
         }
+    }
+
+    /**
+     * Converts a draft-07 JSON Schema's "properties" map (+ "required" array) into the
+     * flat FieldDefinition list ExtendedAttributesValidationService/EncryptionDecryptionService
+     * expect. Mirrors the transform the citizen/employee UI applies to the same MDMS row —
+     * "mandatory" comes from membership in "required", "dataType" from "format"/"type", and
+     * "label" falls back to the raw x-label-key (an i18n key, not resolved text) since the
+     * backend has no localization context; this only surfaces in validation error messages.
+     */
+    @SuppressWarnings("unchecked")
+    private List<ComplaintTemplateTypeConfig.FieldDefinition> parseFieldDefinitions(Map<String, Object> schema) {
+        Object propertiesObj = schema.get("properties");
+        if (!(propertiesObj instanceof Map)) return Collections.emptyList();
+
+        Set<String> required = new HashSet<>(asStringList(schema.get("required")));
+        List<ComplaintTemplateTypeConfig.FieldDefinition> fields = new ArrayList<>();
+
+        ((Map<String, Object>) propertiesObj).forEach((fieldKey, rawProperty) -> {
+            if (!(rawProperty instanceof Map)) return;
+            Map<String, Object> property = (Map<String, Object>) rawProperty;
+
+            ComplaintTemplateTypeConfig.FieldDefinition fd = new ComplaintTemplateTypeConfig.FieldDefinition();
+            fd.setFieldKey(fieldKey);
+            Object labelKey = property.get("x-label-key");
+            fd.setLabel(labelKey != null ? labelKey.toString() : fieldKey);
+            fd.setDataType("date".equals(property.get("format")) ? "date"
+                    : property.get("type") != null ? property.get("type").toString() : "string");
+            fd.setMandatory(required.contains(fieldKey));
+            if (property.get("maxLength") instanceof Number)
+                fd.setMaxLength(((Number) property.get("maxLength")).intValue());
+            if (property.get("x-order") instanceof Number)
+                fd.setOrder(((Number) property.get("x-order")).intValue());
+            fields.add(fd);
+        });
+        return fields;
+    }
+
+    private List<String> asStringList(Object raw) {
+        if (!(raw instanceof List)) return Collections.emptyList();
+        List<String> out = new ArrayList<>();
+        for (Object o : (List<?>) raw) out.add(String.valueOf(o));
+        return out;
     }
 
 }

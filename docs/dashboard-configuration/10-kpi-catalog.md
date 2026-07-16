@@ -6,7 +6,9 @@ collapsed to its root before the MDMS lookup — `KpiCatalogService.getVisibleDe
 `MultiStateInstanceUtil.getStateLevelTenant`), so definitions are authored once per state root
 (e.g. `ke`), never per city.
 
-- Live seed example: `ansible/nairobi-mdms/mdms/dss/KpiDefinition.json` (28 defs on `ke`)
+- Live seed example: `ansible/nairobi-mdms/mdms/dss/KpiDefinition.json` (authored source). The
+  **deployed** catalog on bomet serves **37 published defs** to a superset-role user (measured
+  2026-07-09); the seed file and the live records can diverge — see `80-live-bomet-state.md` §4.
 - Loader: `backend/pgr-services/src/main/java/org/egov/pgr/analytics/KpiCatalogService.java`
 - POJO / accepted fields: `backend/pgr-services/src/main/java/org/egov/pgr/analytics/model/KpiDefinition.java`
 - Query grammar reference (authoritative): `backend/pgr-services/ANALYTICS-QUERY-API.md`
@@ -91,8 +93,9 @@ time-bounded.
 
 ## 3. The `viz` block — rendering contract
 
-The FE render engine is `frontend/micro-ui/web/src/dashboard/components/KpiTile.jsx`
-(`renderByKind`). Every `viz.kind` it dispatches:
+The FE render engine is `digit-ui-esbuild/products/dashboard/src/components/KpiTile.jsx`
+(`renderByKind`; the deployed location post-#1062 — see `70-esbuild-embedding.md` §7). Every
+`viz.kind` it dispatches:
 
 | `viz.kind` (aliases) | renders as | key extra fields |
 |---|---|---|
@@ -118,7 +121,7 @@ passed through verbatim** (`KpiDefinition.KpiViz.extra`, `@JsonAnySetter`) — `
 schema change**, only a KpiTile capability.
 
 **Titles / localization**: the FE currently prefers the human `viz.title` string
-(`KpiTile.resolveTitle`); `viz.titleKey` (convention `RAINMAKER-PGR.DASHBOARD_KPI_<ID>`) is
+(`KpiTile.resolveTitle`); `viz.titleKey` (convention `CMS-DASHBOARD.DASHBOARD_KPI_<ID>`) is
 retained for a future i18n layer and is only ever *prettified* as a last-resort fallback, never
 rendered verbatim. Ship both: `title` for today, `titleKey` so the def is i18n-ready.
 
@@ -213,7 +216,7 @@ Goal: a "Complaints via WhatsApp (last 30d)" number card for supervisors.
        "accent": "blue",
        "group": "complaint-landscape",
        "title": "WhatsApp complaints",
-       "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_WHATSAPP_COUNT",
+       "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_WHATSAPP_COUNT",
        "delta": { "compare": "prior" },
        "deltaLabel": "vs prior period"
      },

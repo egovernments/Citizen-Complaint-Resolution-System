@@ -49,24 +49,4 @@ public class NovuProviderStrategyFactory {
         log.info("No specific strategy found for provider {}, using generic strategy", providerName);
         return genericStrategy;
     }
-    
-    /**
-     * Get strategy by provider name (for testing/debugging)
-     */
-    public NovuProviderStrategy getStrategyByName(String providerName) {
-        return strategies.stream()
-                .filter(s -> s.supports(providerName))
-                .findFirst()
-                .orElse(genericStrategy);
-    }
-    
-    /**
-     * List all available provider strategies
-     */
-    public List<String> getAvailableProviders() {
-        return strategies.stream()
-                .filter(s -> !s.getClass().equals(GenericProviderStrategy.class))
-                .map(NovuProviderStrategy::getProviderName)
-                .toList();
-    }
 }

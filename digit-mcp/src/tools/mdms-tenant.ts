@@ -12,6 +12,7 @@ import { applyFieldMask } from '../utils/field-mask.js';
 import { probeServices } from '../utils/probe.js';
 import type { ProbeReport } from '../utils/probe.js';
 import { loadFromXlsx } from '../utils/xlsx-loader.js';
+import { DASHBOARD_L10N_PACKS } from './dashboard-l10n-seed.js';
 
 /**
  * True for error messages that indicate a record already exists (duplicate / unique
@@ -79,21 +80,61 @@ async function evictValidationCache(tenantId: string): Promise<void> {
  * Returns `preferred` if it already matches; else the first-valid-lead-digit +
  * a repeated tail padded to `length` that the regex accepts; else best-effort.
  */
+/**
+ * Rotate '0123456789' to start at seed's leading digit.
+ *
+ * Two calls deriving a fallback mobile for the same regex with different
+ * `preferred` values (e.g. ADMIN's '8888888888' vs an HRMS employee's
+ * '9999999999') should diverge instead of both walking the exhaustive lead x
+ * fill sweep in the same 0..9 order and returning the same first match.
+ * Seeding the order from `preferred` makes them diverge whenever the regex
+ * admits more than one lead/fill combination at a given length; regexes with
+ * a fixed multi-character literal prefix (e.g. `^77[0-9]{6}$`) admit exactly
+ * one combination regardless of search order, so those still collide.
+ */
+function seededDigitOrder(seed?: string): string {
+  const digits = '0123456789';
+  if (!seed || !digits.includes(seed[0])) return digits;
+  const i = digits.indexOf(seed[0]);
+  return digits.slice(i) + digits.slice(0, i);
+}
+
 export function deriveValidMobile(regex: string, length: number, preferred?: string): string {
   let re: RegExp | null = null;
   try { re = new RegExp(regex); } catch { re = null; }
   const matches = (s?: string): s is string => !!s && (!re || re.test(s));
+  const preferredFill = preferred ? preferred[preferred.length - 1] : undefined;
   if (matches(preferred)) return preferred;
   const n = length && length > 0 ? length : 10;
   // Try every lead digit x fill digit at length n (and n+1 / n-1, since
   // patterns like ^0?[17][0-9]{8}$ accept 9 OR 10 digits). Looping the lead
   // digit instead of parsing it handles optional prefixes like `0?` and
   // character classes uniformly.
-  for (const len of [n, n + 1, n - 1]) {
+  //
+  // Search a wide window around n, closest lengths first, so a tenant whose
+  // mobileNumberRegex requires a length far from the hinted default (e.g. 8
+  // for `^77[0-9]{6}$`, vs the default n=10) still derives a match instead of
+  // exhausting n-1/n/n+1 and falling through to an unmatched placeholder.
+  const lengths = Array.from(new Set([...Array.from({ length: 10 }, (_, i) => i + 6), n, n + 1, n - 1]))
+    .sort((a, b) => Math.abs(a - n) - Math.abs(b - n));
+
+  // Within each length, try the caller's own fill digit first (e.g. '9' for
+  // '9999999999', '8' for '8888888888') before the rest of digitOrder, so
+  // several distinct users on the same target tenant (ADMIN, HRMS employee,
+  // ...) with different `preferred` values diverge instead of both landing
+  // on the same lead x fill candidate. This must stay a single pass over
+  // `lengths` — trying preferredFill across *every* length before the
+  // fallback fill sweep gets a turn would let a farther length "win" over a
+  // closer one that only works with a different fill, breaking the
+  // closest-length-first guarantee documented above.
+  const digitOrder = seededDigitOrder(preferred);
+  const fills = [...(preferredFill ? [preferredFill] : []), ...digitOrder.split('').filter((d) => d !== preferredFill)];
+
+  for (const len of lengths) {
     if (len <= 0) continue;
-    for (const f of '0123456789') {
-      for (const d of '0123456789') {
-        const cand = f + d.repeat(len - 1);
+    for (const f of fills) {
+      for (const d of digitOrder) {
+        const cand = d + f.repeat(len - 1);
         if (cand.length === len && matches(cand)) return cand;
       }
     }
@@ -1326,6 +1367,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         'Workflow.AutoEscalationStatesToIgnore',
         // ── inbox ──
         'INBOX.InboxQueryConfiguration',
+        // ── dashboard analytics catalog ──
+        // KPI defs and packs are platform-level definitions (queries + viz +
+        // role visibility) with no tenant identity inside — without them a new
+        // root gets a working dashboard shell but an empty catalog ("no tiles
+        // in the catalog pack for this role"). Complaint-type–specific data
+        // (ServiceDefs/ComplaintHierarchy) stays operator-owned; these are not.
+        'dss.KpiDefinition',
+        'dss.DashboardPack',
         'ACCESSCONTROL-ROLEACTIONS.roleactions',
       ];
 
@@ -1962,6 +2011,20 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               }
             } catch {
               // Tenant may not have this locale — that's expected. Skip.
+            }
+          }
+          // Static floor: the dashboard's repo-shipped message packs. Fresh
+          // installs have no source tenant carrying rainmaker-dashboard yet
+          // (the module was introduced with the dashboard localization work),
+          // so without this a from-scratch bootstrap renders raw DASHBOARD_*
+          // keys. Applied per locale for every locale that has a pack
+          // (en_IN, pt_PT, ...). Live-tenant copies win (first-writer-wins,
+          // same as above).
+          const dashboardPack = DASHBOARD_L10N_PACKS[locale];
+          if (dashboardPack) {
+            for (const m of dashboardPack) {
+              const key = `${m.module}::${m.code}`;
+              if (!byKey.has(key)) byKey.set(key, m);
             }
           }
           const messages = Array.from(byKey.values());

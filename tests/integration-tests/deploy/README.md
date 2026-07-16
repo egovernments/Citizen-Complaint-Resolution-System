@@ -55,5 +55,5 @@ ssh bomet '
 | persona users | BOMET_LME etc. | **same** | already default in `tests/utils/env.ts` |
 
 Specs `enc-key-drift-622` (skipped), `boundary-jurisdiction-496`, and the
-`complaint-attachment-555` detail half are **red by design** on bomet — they
+`complaint-attachment` detail half are **red by design** on bomet — they
 are open-bug regression catchers, not failures to "fix".

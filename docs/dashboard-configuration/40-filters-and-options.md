@@ -6,13 +6,13 @@ params merge server-side).
 
 FE anatomy:
 
-- `frontend/micro-ui/web/src/dashboard/components/DashboardFilters.jsx` — the bar
-- `frontend/micro-ui/web/src/dashboard/config/globalFilterGroups.js` — field definitions
+- `digit-ui-esbuild/products/dashboard/src/components/DashboardFilters.jsx` — the bar
+- `digit-ui-esbuild/products/dashboard/src/config/globalFilterGroups.js` — field definitions
   (`GLOBAL_FILTER_FIELDS`: dateFrom/dateTo/geography/complaintType), placeholder option lists,
   and the sanitizer
-- `frontend/micro-ui/web/src/dashboard/config/dashboardFilters.js` — load/persist/reconcile
-- `frontend/micro-ui/web/src/dashboard/hooks/useDashboardFilters.js` — the store
-- `frontend/micro-ui/web/src/dashboard/hooks/useFilterOptions.js` — server-scoped option fetch
+- `digit-ui-esbuild/products/dashboard/src/config/dashboardFilters.js` — load/persist/reconcile
+- `digit-ui-esbuild/products/dashboard/src/hooks/useDashboardFilters.js` — the store
+- `digit-ui-esbuild/products/dashboard/src/hooks/useFilterOptions.js` — server-scoped option fetch
   *(changed in PR #1075 — new file; before it the bar showed only the static "All wards"/"All
   types" placeholders and `applyFilterOptions` was never invoked)*
 
@@ -36,7 +36,7 @@ label-sorted, and each list is prepended with its "all" sentinel. On failure the
 their placeholder lists — the dashboard is never blocked on options. *(Changed in PR #1075.)*
 
 **Labels**: option labels are derived from the code via the shared humanizer
-(`frontend/micro-ui/web/src/dashboard/config/labelFormat.js` `formatDimensionLabel`), because
+(`digit-ui-esbuild/products/dashboard/src/config/labelFormat.js` `formatDimensionLabel`), because
 `ward_name` is not a groupable facts column. Complaint-type **labels and grouping** for tenants
 running the N-level taxonomy come from `RAINMAKER-PGR.ComplaintHierarchy` (node `name`/`path`);
 the dashboard FE does not read that master directly today — the grains bake its grouping in as
