@@ -4,6 +4,7 @@
 
 import { getChartColor, resolveDashboardCssColor } from "./chartColors";
 import { wrapChartLabelToLines } from "../utils/chartLabelWrap";
+import { translate } from "../i18n/localeRuntime";
 
 export const PIE_CHART_VIEWBOX = { width: 320, height: 230 };
 export const PIE_CHART_CX = 160;
@@ -107,7 +108,7 @@ export function normalizePieChartData(data = []) {
     const hoverPoint = polarOnPie(PIE_CHART_CX, PIE_CHART_CY, PIE_CHART_OUTER_R + 8, mid);
 
     return {
-      label: String(item.label ?? "Unknown"),
+      label: String(item.label ?? translate("DASHBOARD_COMMON_UNKNOWN", "Unknown")),
       count,
       color,
       index,

@@ -53,6 +53,7 @@ const customEnglishMessages: TranslationMessages = {
       departments: 'Departments',
       designations: 'Designations',
       hierarchies: 'Hierarchies',
+      map_config: 'Map Configuration',
       complaint_management: 'Complaint Management',
       complaint_hierarchies: 'Complaint Hierarchies',
       complaint_types: 'Complaint Types',
@@ -144,6 +145,7 @@ const customEnglishMessages: TranslationMessages = {
       request_id: 'Request ID',
       citizen: 'Citizen',
       locality: 'Locality',
+      mobile_login_username_help: "Used as the citizen's login username.",
     },
     list: {
       refresh: 'Refresh',
@@ -164,10 +166,6 @@ const customEnglishMessages: TranslationMessages = {
       show_columns: 'Show columns',
       reset: 'Reset',
       rows_per_page: 'Rows per page:',
-    },
-    forms: {
-      // Field help text shown under form inputs.
-      citizen_login_username_help: "Used as the citizen's login username.",
     },
     providers: {
       // Notification Providers screen — self-service actions.

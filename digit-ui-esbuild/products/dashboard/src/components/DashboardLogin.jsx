@@ -5,6 +5,7 @@ import {
   getStateLabel,
   getBrandTheme,
 } from "../config/dashboardConfig";
+import useDashboardT from "../i18n/useDashboardT";
 
 /**
  * Self-contained employee login for the standalone dashboard build.
@@ -27,10 +28,23 @@ import {
 // Basic egov-user-client: (empty secret), base64 of "egov-user-client:"
 const OAUTH_BASIC = "Basic ZWdvdi11c2VyLWNsaWVudDo=";
 
+// label/hint are functions of t so they resolve at render time (never frozen at import).
 const DEMO_USERS = [
-  { label: "Supervisor", username: "DEMO_SUPERVISOR", hint: "all departments" },
-  { label: "Water officer", username: "DEMO_WATER", hint: "Water dept only" },
-  { label: "Health officer", username: "DEMO_HEALTH", hint: "Medical dept only" },
+  {
+    label: (t) => t("DASHBOARD_LOGIN_DEMO_SUPERVISOR", "Supervisor"),
+    username: "DEMO_SUPERVISOR",
+    hint: (t) => t("DASHBOARD_LOGIN_DEMO_SUPERVISOR_HINT", "all departments"),
+  },
+  {
+    label: (t) => t("DASHBOARD_LOGIN_DEMO_WATER", "Water officer"),
+    username: "DEMO_WATER",
+    hint: (t) => t("DASHBOARD_LOGIN_DEMO_WATER_HINT", "Water dept only"),
+  },
+  {
+    label: (t) => t("DASHBOARD_LOGIN_DEMO_HEALTH", "Health officer"),
+    username: "DEMO_HEALTH",
+    hint: (t) => t("DASHBOARD_LOGIN_DEMO_HEALTH_HINT", "Medical dept only"),
+  },
 ];
 
 /** Order roles so the first non-EMPLOYEE role leads (drives the scoping badge). */
@@ -74,6 +88,7 @@ const inputStyle = {
 };
 
 const DashboardLogin = ({ onLogin }) => {
+  const { t } = useDashboardT();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -94,7 +109,7 @@ const DashboardLogin = ({ onLogin }) => {
   async function signIn(e) {
     if (e) e.preventDefault();
     if (!username || !password) {
-      setError("Enter a username and password.");
+      setError(t("DASHBOARD_LOGIN_ENTER_CREDENTIALS", "Enter a username and password."));
       return;
     }
     setSubmitting(true);
@@ -117,7 +132,7 @@ const DashboardLogin = ({ onLogin }) => {
         body,
       });
       if (!res.ok) {
-        let msg = `Sign-in failed (${res.status}).`;
+        let msg = `${t("DASHBOARD_LOGIN_SIGN_IN_FAILED", "Sign-in failed")} (${res.status}).`;
         try {
           const j = await res.json();
           msg = j.error_description || j.error || msg;
@@ -135,7 +150,7 @@ const DashboardLogin = ({ onLogin }) => {
       window.localStorage.setItem("token", JSON.stringify(data.access_token));
       if (onLogin) onLogin(userInfo);
     } catch (err) {
-      setError(err.message || "Sign-in failed.");
+      setError(err.message || `${t("DASHBOARD_LOGIN_SIGN_IN_FAILED", "Sign-in failed")}.`);
     } finally {
       setSubmitting(false);
     }
@@ -190,7 +205,7 @@ const DashboardLogin = ({ onLogin }) => {
             {productLabel}
           </h1>
           <p style={{ margin: "0.25rem 0 0", fontSize: "12px", color: "var(--chrome-muted)" }}>
-            Sign in to the operations dashboard
+            {t("DASHBOARD_LOGIN_SUBTITLE", "Sign in to the operations dashboard")}
           </p>
         </div>
 
@@ -206,7 +221,7 @@ const DashboardLogin = ({ onLogin }) => {
                   color: "var(--muted-foreground)",
                 }}
               >
-                Username
+                {t("DASHBOARD_LOGIN_USERNAME", "Username")}
               </span>
               <input
                 type="text"
@@ -214,7 +229,7 @@ const DashboardLogin = ({ onLogin }) => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 style={inputStyle}
-                placeholder="e.g. DEMO_SUPERVISOR"
+                placeholder={t("DASHBOARD_LOGIN_USERNAME_PLACEHOLDER", "e.g. DEMO_SUPERVISOR")}
               />
             </label>
 
@@ -228,7 +243,7 @@ const DashboardLogin = ({ onLogin }) => {
                   color: "var(--muted-foreground)",
                 }}
               >
-                Password
+                {t("DASHBOARD_LOGIN_PASSWORD", "Password")}
               </span>
               <input
                 type="password"
@@ -271,7 +286,9 @@ const DashboardLogin = ({ onLogin }) => {
                 opacity: submitting ? 0.6 : 1,
               }}
             >
-              {submitting ? "Signing in…" : "Sign in"}
+              {submitting
+                ? t("DASHBOARD_LOGIN_SIGNING_IN", "Signing in…")
+                : t("DASHBOARD_LOGIN_SIGN_IN", "Sign in")}
             </button>
           </form>
 
@@ -286,7 +303,7 @@ const DashboardLogin = ({ onLogin }) => {
                 color: "var(--muted-foreground)",
               }}
             >
-              Demo logins (tenant {tenantId})
+              {t("DASHBOARD_LOGIN_DEMO_LOGINS", "Demo logins")} ({t("DASHBOARD_LOGIN_TENANT", "tenant")} {tenantId})
             </p>
             <div style={{ display: "flex", gap: "0.5rem" }}>
               {DEMO_USERS.map((u) => (
@@ -298,7 +315,7 @@ const DashboardLogin = ({ onLogin }) => {
                     setPassword("eGov@123");
                     setError(null);
                   }}
-                  title={`Fill ${u.username}`}
+                  title={`${t("DASHBOARD_LOGIN_FILL", "Fill")} ${u.username}`}
                   style={{
                     flex: 1,
                     display: "flex",
@@ -314,8 +331,8 @@ const DashboardLogin = ({ onLogin }) => {
                     cursor: "pointer",
                   }}
                 >
-                  <span style={{ fontSize: "12px", fontWeight: 600 }}>{u.label}</span>
-                  <span style={{ fontSize: "10px", color: "var(--muted-foreground)" }}>{u.hint}</span>
+                  <span style={{ fontSize: "12px", fontWeight: 600 }}>{u.label(t)}</span>
+                  <span style={{ fontSize: "10px", color: "var(--muted-foreground)" }}>{u.hint(t)}</span>
                 </button>
               ))}
             </div>

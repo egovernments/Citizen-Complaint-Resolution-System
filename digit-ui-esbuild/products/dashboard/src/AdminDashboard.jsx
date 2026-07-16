@@ -21,6 +21,8 @@ import DashboardLogin, {
   clearDashboardSession,
 } from "./components/DashboardLogin";
 
+import useDashboardT from "./i18n/useDashboardT";
+import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useFilterOptions } from "./hooks/useFilterOptions";
 import { useCatalog } from "./hooks/useCatalog";
@@ -68,18 +70,21 @@ const RemoveIcon = () => (
   </svg>
 );
 
-const WidgetRemoveButton = ({ label, onClick }) => (
-  <button
-    type="button"
-    title="Remove from dashboard"
-    onMouseDown={(e) => e.stopPropagation()}
-    onClick={onClick}
-    className="dashboard-widget-remove-btn"
-    aria-label={label}
-  >
-    <RemoveIcon />
-  </button>
-);
+const WidgetRemoveButton = ({ label, onClick }) => {
+  const { t } = useDashboardT();
+  return (
+    <button
+      type="button"
+      title={t("DASHBOARD_COMMON_REMOVE_FROM_DASHBOARD", "Remove from dashboard")}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={onClick}
+      className="dashboard-widget-remove-btn"
+      aria-label={label}
+    >
+      <RemoveIcon />
+    </button>
+  );
+};
 
 /**
  * AdminDashboard — a PARALLEL, pure-engine dashboard.
@@ -329,6 +334,7 @@ function seriesToPoints(rows, viz, valueKey, columns) {
 /* -------------------------------------------------------------------------- */
 
 const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
+  const { t, language, i18nTick } = useDashboardT();
   const { filters, setFilter, clearFilters, applyFilterOptions } =
     useDashboardFilters();
   const { options: filterOptions, loading: filterOptionsLoading } =
@@ -369,29 +375,36 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   );
 
   // Title-based tile search: dim tiles whose title doesn't match the query.
+  // Matches against the LOCALIZED title (what the user sees on the tile).
   const matchesSearch = useCallback(
     (kpiId) => {
       const q = searchQuery.trim().toLowerCase();
       if (!q) return true;
-      const title = (kpis[kpiId]?.viz?.title || kpiId).toLowerCase();
+      const title = (resolveTitle(kpis[kpiId]) || kpiId).toLowerCase();
       return title.includes(q);
     },
-    [searchQuery, kpis]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nTick re-resolves titles on late bundle arrival
+    [searchQuery, kpis, i18nTick]
   );
 
   // Add-KPI picker source: every role-visible catalog tile (already filtered
   // server-side), shaped to the picker's { id, metric, type, itemType } contract.
+  // `language` re-localizes the resolved names on a language switch; `i18nTick`
+  // covers the async gap behind it — the host fires i18next.changeLanguage
+  // BEFORE the new locale's bundles finish fetching, so the names must also
+  // re-resolve when the messages actually land ("added" store event).
   const catalogItems = useMemo(
     () =>
       Object.values(kpis)
         .filter((def) => !def.viz?.internal) // hide internal companion sources (e.g. map pins)
         .map((def) => ({
           id: def.kpiId,
-          metric: def.viz?.title || def.kpiId,
+          metric: resolveTitle(def) || def.kpiId,
           type: def.viz?.kind,
           itemType: isCardKind(def.viz?.kind) ? "kpi" : "widget",
         })),
-    [kpis]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nTick re-resolves titles on late bundle arrival
+    [kpis, language, i18nTick]
   );
 
   // Re-run the batch whenever the catalog resolves or the filters change.
@@ -432,7 +445,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         setBatch({
           loading: false,
           results: {},
-          errors: { __batch: err?.message || "Batch query failed" },
+          errors: { __batch: err?.message || t("DASHBOARD_COMMON_BATCH_FAILED", "Batch query failed") },
           partial: true,
         });
       });
@@ -442,13 +455,13 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
 
   const lastUpdatedLabel = useMemo(
     () =>
-      new Date().toLocaleString(undefined, {
+      new Date().toLocaleString(language?.replace("_", "-"), {
         day: "numeric",
         month: "short",
         hour: "numeric",
         minute: "2-digit",
       }),
-    [batch.results]
+    [batch.results, language]
   );
 
   // RGL reads min/max W/H straight off each layout item (the hook bakes in the
@@ -489,11 +502,19 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         assembled?.value != null
           ? assembled.value
           : assembled?.rows
-          ? `${assembled.rows.length} rows`
+          ? `${assembled.rows.length} ${t("DASHBOARD_EXPORT_ROWS", "rows")}`
           : "";
-      return [def?.viz?.title || item.i, item.i, value];
+      return [resolveTitle(def) || item.i, item.i, value];
     });
-    const csv = ["Title,KPI,Value", ...rows.map((r) => r.map(csvEscape).join(","))].join("\n");
+    // Column headers go through t() like the tile titles (resolveTitle above);
+    // the filename stays ASCII-English on purpose — a stable machine-facing
+    // identifier, not display copy.
+    const header = [
+      t("DASHBOARD_EXPORT_COL_TITLE", "Title"),
+      t("DASHBOARD_EXPORT_COL_KPI", "KPI"),
+      t("DASHBOARD_EXPORT_COL_VALUE", "Value"),
+    ];
+    const csv = [header, ...rows].map((r) => r.map(csvEscape).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -501,7 +522,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     a.download = "dashboard-export.csv";
     a.click();
     URL.revokeObjectURL(url);
-  }, [layout, kpis, batch.results]);
+  }, [layout, kpis, batch.results, t]);
 
   const showEmpty = !catalogLoading && pack && layout.length === 0;
 
@@ -533,7 +554,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     >
       {catalogError && (
         <div className="tw-mb-4 tw-rounded-md tw-border tw-border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] tw-bg-status-breach-bg tw-px-4 tw-py-3 tw-text-sm tw-text-destructive">
-          Catalog unavailable: {catalogError}
+          {t("DASHBOARD_COMMON_CATALOG_UNAVAILABLE", "Catalog unavailable")}: {catalogError}
         </div>
       )}
       {batch.errors && batch.errors.__batch && (
@@ -545,7 +566,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       {showEmpty ? (
         <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface tw-py-16 tw-text-center">
           <p className="tw-text-[12px] tw-text-muted-foreground">
-            No tiles in the catalog pack for this role.
+            {t("DASHBOARD_COMMON_NO_TILES_FOR_ROLE", "No tiles in the catalog pack for this role.")}
           </p>
         </div>
       ) : (
@@ -568,7 +589,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
             const removeBtn = (
               <WidgetRemoveButton
-                label={`Remove ${kpis[item.i]?.viz?.title || item.i}`}
+                label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${resolveTitle(kpis[item.i]) || item.i}`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -597,6 +618,11 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             const vizType = KIND_TO_VIZTYPE[kind] || kind;
             const isTable = TABLE_KINDS.has(kind);
             const selfHeaders = kind === "map" || kind === "choropleth-map";
+            // Header text resolves through the i18n seam (titleKey/subtitleKey
+            // win when seeded, else the catalog's English) — same pipeline as
+            // the card tiles' KpiTile resolvers.
+            const headerTitle = resolveTitle(kpis[item.i]) || item.i;
+            const headerSubtitle = resolveSubtitle(viz);
             return (
               <section
                 key={item.i}
@@ -607,10 +633,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                   <header className={`${buildWidgetHeaderClassName(vizType)} tw-min-w-0`}>
                     <div className="tw-min-w-0 tw-flex-1">
                       <h2 className={`${SHARED_CHROME.dragHandleTitle} tw-truncate`}>
-                        {viz.title || item.i}
+                        {headerTitle}
                       </h2>
-                      {viz.subtitle && (
-                        <p className={SHARED_CHROME.dragHandleSubtitle}>{viz.subtitle}</p>
+                      {headerSubtitle && (
+                        <p className={SHARED_CHROME.dragHandleSubtitle}>{headerSubtitle}</p>
                       )}
                     </div>
                   </header>

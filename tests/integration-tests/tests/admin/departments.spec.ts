@@ -17,8 +17,11 @@ import {
 } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
 import { cleanupMdms } from '../utils/manage/teardown';
+import { ROOT_TENANT } from '../utils/env';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+// Root (state) tenant, sourced from env (ROOT_TENANT / DIGIT_TENANT) so the
+// suite is deployment-portable — no hardcoded 'ke'.
+const TENANT_CODE = ROOT_TENANT;
 const SCHEMA = 'common-masters.Department';
 const LIST_PATH = '/configurator/manage/departments';
 
@@ -117,14 +120,14 @@ Filters should compose; the test resets search before testing status to keep the
   test('2. single create → edit → deactivate round-trip', {
     annotation: {
       type: 'description',
-      description: `Drives a full UI lifecycle on a Department record: create → show → edit description → deactivate (with DeactivationGuard banner check) → confirm row appears under the Inactive status filter. Catches regressions in any of the four CRUD-ish surfaces in one walk.
+      description: `Drives a full UI lifecycle on a Department record: create → show → edit name → deactivate (with DeactivationGuard banner check) → confirm row appears under the Inactive status filter. Catches regressions in any of the four CRUD-ish surfaces in one walk. The Department schema only allows {code, name, active} (additionalProperties:false), so the form has no Description field — the edit round-trip mutates the name instead.
 
 Steps:
 1. Generate a unique code + name; track for cleanup.
-2. Create: navigate to /create; fill Name + Code (force PW_ value) + Description; click Create; wait for navigation back to LIST_PATH.
+2. Create: navigate to /create; fill Name + Code (force PW_ value); click Create; wait for navigation back to LIST_PATH.
 3. Verify in list: search for code, click matching row.
-4. Show: assert text 'Created by Playwright' is visible.
-5. Edit: click Edit; fill Description with 'Edited by Playwright'; Save; assert new text is visible.
+4. Show: assert the created name is visible.
+5. Edit: click Edit; change Name to "<name> edited"; Save; assert new name is visible.
 6. Deactivate: click Edit again; uncheck Active; assert a deactivation banner matching /depend|in use|will affect/i is visible within 10s; click Save.
 7. Back at the list, if Status filter exists, switch to Inactive; search for code; assert the row is visible.
 
@@ -143,7 +146,8 @@ Guard banner check is loose because exact wording depends on dependency type and
     const codeInput = page.getByLabel(/^Code/i);
     await codeInput.fill('');
     await codeInput.fill(code);
-    await page.getByLabel(/^Description/i).fill('Created by Playwright');
+    // No Description field — the Department schema only allows {code, name,
+    // active} (additionalProperties:false), so the form dropped it.
 
     await Promise.all([
       page.waitForURL(LIST_PATH, { timeout: 30_000 }),
@@ -157,16 +161,18 @@ Guard banner check is loose because exact wording depends on dependency type and
     await expect(row).toBeVisible();
     await row.click();
 
-    // Show page — verify the description we wrote.
-    await expect(page.getByText('Created by Playwright')).toBeVisible();
+    // Show page — verify the name we created. The list row that led us here
+    // stays mounted, so the name can resolve to >1 node; assert on the first.
+    await expect(page.getByText(name).first()).toBeVisible();
 
-    // --- Edit description ---
+    // --- Edit the name (the only editable free-text field) ---
+    const editedName = `${name} edited`;
     await page.getByRole('button', { name: /^Edit$/i }).click();
-    const desc = page.getByLabel(/^Description/i);
-    await desc.fill('Edited by Playwright');
+    const nameInput = page.getByLabel(/^Name/i);
+    await nameInput.fill(editedName);
 
     await page.getByRole('button', { name: /^Save$/i }).click();
-    await expect(page.getByText('Edited by Playwright')).toBeVisible();
+    await expect(page.getByText(editedName).first()).toBeVisible();
 
     // --- Deactivate ---
     await page.getByRole('button', { name: /^Edit$/i }).click();
@@ -286,10 +292,11 @@ Catches a regression where the dup detection fails and all 3 rows would be sent 
     const auth = loadAuth();
     const existingCode = testCode(testInfo, 'DEPT_EXIST');
     createdCodes.add(existingCode);
+    // Department schema is additionalProperties:false — no `description` key
+    // (the sibling configurator-mdms-fixes spec asserts that rejection).
     await mdmsCreate(auth, TENANT_CODE, SCHEMA, existingCode, {
       code: existingCode,
       name: 'PW Existing',
-      description: 'Pre-existing for duplicate test',
       active: true,
     });
 
@@ -388,10 +395,10 @@ Tests both halves of the guard's data dependencies in one walk.`,
     const auth = loadAuth();
     const deptCode = testCode(testInfo, 'DEPT_GUARD');
     createdCodes.add(deptCode);
+    // No `description` — Department schema is additionalProperties:false.
     await mdmsCreate(auth, TENANT_CODE, SCHEMA, deptCode, {
       code: deptCode,
       name: `PW Guard Dept ${deptCode}`,
-      description: 'For guard probe',
       active: true,
     });
     const desigCode = testCode(testInfo, 'DEPT_GUARD_DESIG');
@@ -435,29 +442,29 @@ Tests both halves of the guard's data dependencies in one walk.`,
 
 Steps:
 1. Generate a unique code; track for cleanup.
-2. mdmsCreate a Department with description 'Initial description'.
+2. mdmsCreate a Department with name 'PW Audit <code>' (schema only allows {code, name, active}).
 3. mdmsSearch for [code]; capture pre record.
 4. Assert pre.auditDetails is truthy.
-5. Dynamically import mdmsUpdate; mutate pre.data.description to 'Edited description via API'.
+5. Dynamically import mdmsUpdate; mutate pre.data.name to 'PW Audit Edited via API'.
 6. mdmsUpdate(auth, pre, true); capture updated.
-7. Assert updated.data.description === 'Edited description via API'.
+7. Assert updated.data.name === 'PW Audit Edited via API'.
 8. If both lastModifiedTime and createdTime are present, assert lastModifiedTime >= createdTime.
 
-Pure-API — exercises the dataProvider logic the UI uses for save without going through the form.`,
+Pure-API — exercises the dataProvider logic the UI uses for save without going through the form. Uses the name field (not the dropped description) as the mutated field.`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({}, testInfo) => {
     const auth = loadAuth();
     const code = testCode(testInfo, 'DEPT_AUDIT');
     createdCodes.add(code);
 
+    // No `description` — Department schema is additionalProperties:false.
     await mdmsCreate(auth, TENANT_CODE, SCHEMA, code, {
       code,
       name: `PW Audit ${code}`,
-      description: 'Initial description',
       active: true,
     });
 
-    // Fetch — bump description via the UI-equivalent update path.
+    // Fetch — bump the name via the UI-equivalent update path.
     const pre = (
       await mdmsSearch(auth, TENANT_CODE, SCHEMA, { uniqueIdentifiers: [code] })
     )[0];
@@ -466,10 +473,10 @@ Pure-API — exercises the dataProvider logic the UI uses for save without going
 
     // Import on demand — keeps top-level imports tidy.
     const { mdmsUpdate } = await import('../utils/manage/api');
-    pre.data = { ...pre.data, description: 'Edited description via API' };
+    pre.data = { ...pre.data, name: 'PW Audit Edited via API' };
     const updated = await mdmsUpdate(auth, pre, true);
-    expect((updated.data as Record<string, unknown>).description).toBe(
-      'Edited description via API',
+    expect((updated.data as Record<string, unknown>).name).toBe(
+      'PW Audit Edited via API',
     );
     // lastModifiedTime should advance (>= previous createdTime).
     const audit = updated.auditDetails as Record<string, number> | undefined;

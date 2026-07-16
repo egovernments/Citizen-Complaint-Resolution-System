@@ -33,6 +33,7 @@ import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
 import { buildOsmBoundaries, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
+import { deriveMapPosition } from '@/utils/mapConfigFromBoundaries';
 import osmtogeojson from 'osmtogeojson';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
 
@@ -157,6 +158,31 @@ async function runPostCreatePipeline(
   }
 
   await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
+
+  // The boundaries just onboarded describe exactly the area this tenant serves,
+  // so they already answer where the citizen map should open, how far in, and
+  // which extent the address search may return results from. Derive all three
+  // rather than asking an admin to type eight numbers they cannot sanity-check
+  // without a map in front of them — and note a wrong search extent is not
+  // cosmetic: Nominatim's bounded search DISCARDS anything outside the box.
+  //
+  // Best-effort. Boundaries are the operator's real work here; failing Phase 2
+  // over a map default would be a poor trade. An unwritten MapConfig just means
+  // the map keeps its built-in defaults.
+  try {
+    const derived = deriveMapPosition(created);
+    if (derived) {
+      await mdmsService.upsertMapConfig(tenantId, {
+        ...derived,
+        // The wards the map draws are the ones we just created, for this tenant.
+        boundaryTenantId: tenantId,
+      });
+    } else {
+      console.warn('[Phase 2] no boundary geometry — leaving MapConfig at its defaults');
+    }
+  } catch (e) {
+    console.warn('[Phase 2] map position not written (non-fatal)', e);
+  }
 
   // Clear ancestralmaterializedpath so boundary-service includeChildren=true
   // doesn't combine two overlapping queries and return each node twice in the

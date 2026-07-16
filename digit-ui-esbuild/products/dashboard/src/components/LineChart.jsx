@@ -21,6 +21,7 @@ import {
   setLineChartMarkersVisible,
 } from "../config/lineChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE, SHARED_CHROME } from "../config/visualizationStyles";
+import { translate } from "../i18n/localeRuntime";
 import { useChartContainerSize } from "../hooks/useChartContainerSize";
 import ViewToggle from "./demo/ViewToggle";
 
@@ -232,7 +233,10 @@ const LineChart = ({
           value={period}
           onChange={handlePeriodChange}
           variant="primary"
-          options={LINE_CHART_PERIOD_OPTIONS}
+          options={LINE_CHART_PERIOD_OPTIONS.map((opt) => ({
+            ...opt,
+            label: translate(opt.labelKey, opt.label),
+          }))}
         />
       </header>
       <div className={lineStyles.widgetBody}>{chart}</div>

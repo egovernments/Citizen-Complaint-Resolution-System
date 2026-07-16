@@ -1,0 +1,27 @@
+# Ansible-only companion to docker-compose.migrations.yml.
+#
+# Three migrators (pgr-services, novu-bridge, digit-config-service) build from
+# the in-repo path ../backend/<svc>/src/main/resources/db. That resolves when you
+# run compose from local-setup/ in a repo checkout, but a deployed host has no
+# backend/ tree — so the playbook syncs those contexts to docker/<svc>-db/ and
+# this overlay repoints the builds at them.
+#
+# Layered by the playbook immediately AFTER docker-compose.migrations.yml. Nothing
+# else here: the 11 core migrators pull pinned egovio/*-db images and need no
+# build context, and db-history-normalize builds from ./db/normalize, which is
+# already synced as part of db/.
+#
+# If you are running compose straight from the repo, you do NOT want this file —
+# docker-compose.migrations.yml is already correct on its own.
+services:
+  pgr-services-migration:
+    build:
+      context: ./docker/pgr-services-db
+
+  novu-bridge-migration:
+    build:
+      context: ./docker/novu-bridge-db
+
+  digit-config-service-migration:
+    build:
+      context: ./docker/digit-config-service-db

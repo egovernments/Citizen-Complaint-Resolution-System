@@ -187,7 +187,7 @@ const CreateComplaintForm = ({
         updateDependent: [
           {
             key: "SelectComplaintType",
-            value: [getUniqueMenuPaths(serviceDefs) ? getUniqueMenuPaths(serviceDefs) : []],
+            value: [getUniqueMenuPaths(serviceDefs || [])],
           },
           {
             key: "SelectSubComplaintType",

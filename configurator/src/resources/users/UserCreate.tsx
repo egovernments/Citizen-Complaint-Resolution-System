@@ -31,6 +31,10 @@ export function UserCreate() {
   // No hardcoded per-country regex here.
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
   const translate = useTranslate();
+  const loginUsernameHelp = translate('app.fields.mobile_login_username_help', {
+    _: "Used as the citizen's login username.",
+  });
+
   return (
     <DigitCreate title="Create User" record={defaultRecord} transform={transform}>
       <DigitFormInput source="name" label="Name" validate={v.name} />
@@ -38,9 +42,8 @@ export function UserCreate() {
         source="mobileNumber"
         label="Mobile Number"
         validate={mobileValidate}
-        help={`${mobileRules.errorMessage}. ${translate('app.forms.citizen_login_username_help', {
-          _: "Used as the citizen's login username.",
-        })}`}
+        maxLength={mobileRules.maxLength}
+        help={loginUsernameHelp}
       />
       <DigitFormInput source="emailId" label="Email" validate={v.emailOptional} />
       <DigitFormSelect

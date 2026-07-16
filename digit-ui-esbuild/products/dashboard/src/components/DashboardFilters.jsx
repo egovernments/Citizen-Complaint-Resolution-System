@@ -5,6 +5,7 @@ import {
   GLOBAL_FILTER_FIELDS,
   hasActiveFilters,
 } from "../config/globalFilterGroups";
+import useDashboardT from "../i18n/useDashboardT";
 
 const FunnelIcon = () => (
   <svg
@@ -74,6 +75,7 @@ const DashboardFilters = ({
   filterOptions,
   filterOptionsLoading = false,
 }) => {
+  const { t } = useDashboardT();
   const canClear = hasActiveFilters(filters);
 
   const geographyOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
@@ -104,7 +106,7 @@ const DashboardFilters = ({
         <div className="dashboard-filters-row">
         <div className="dashboard-filters-heading">
           <FunnelIcon />
-          <span className="dashboard-filters-title">Filters</span>
+          <span className="dashboard-filters-title">{t("DASHBOARD_FILTERS_TITLE", "Filters")}</span>
         </div>
 
         <div className="dashboard-filters-date-range">
@@ -114,7 +116,7 @@ const DashboardFilters = ({
               value={dateFrom}
               onChange={(e) => onFilterChange("dateFrom", e.target.value)}
               onClick={(e) => openCalendar(e.currentTarget)}
-              aria-label="From date"
+              aria-label={t("DASHBOARD_FILTERS_FROM_DATE", "From date")}
               className="dashboard-filter-inline-date"
             />
           </div>
@@ -127,7 +129,7 @@ const DashboardFilters = ({
               value={dateTo}
               onChange={(e) => onFilterChange("dateTo", e.target.value)}
               onClick={(e) => openCalendar(e.currentTarget)}
-              aria-label="To date"
+              aria-label={t("DASHBOARD_FILTERS_TO_DATE", "To date")}
               className="dashboard-filter-inline-date"
             />
           </div>
@@ -138,11 +140,11 @@ const DashboardFilters = ({
             value={filterOptionsLoading && geographyOptions.length <= 1 ? "" : geography}
             disabled={filterOptionsLoading && geographyOptions.length <= 1}
             onChange={(e) => onFilterChange("geography", e.target.value)}
-            aria-label="Ward filter"
+            aria-label={t("DASHBOARD_FILTERS_WARD_FILTER", "Ward filter")}
             className="dashboard-filter-inline-select"
           >
             {filterOptionsLoading && geographyOptions.length <= 1 ? (
-              <option value="">Loading…</option>
+              <option value="">{t("DASHBOARD_COMMON_LOADING", "Loading…")}</option>
             ) : (
               geographyOptions.map((opt) => (
                 <option key={opt.id} value={opt.id}>
@@ -158,11 +160,11 @@ const DashboardFilters = ({
             value={filterOptionsLoading && complaintTypeOptions.length <= 1 ? "" : complaintType}
             disabled={filterOptionsLoading && complaintTypeOptions.length <= 1}
             onChange={(e) => onFilterChange("complaintType", e.target.value)}
-            aria-label="Complaint type filter"
+            aria-label={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
             className="dashboard-filter-inline-select"
           >
             {filterOptionsLoading && complaintTypeOptions.length <= 1 ? (
-              <option value="">Loading…</option>
+              <option value="">{t("DASHBOARD_COMMON_LOADING", "Loading…")}</option>
             ) : (
               renderGroupedOptions(complaintTypeOptions)
             )}
@@ -176,7 +178,7 @@ const DashboardFilters = ({
           className="dashboard-filters-clear-inline"
           aria-disabled={!canClear}
         >
-          Clear
+          {t("DASHBOARD_FILTERS_CLEAR", "Clear")}
         </button>
         </div>
       </div>

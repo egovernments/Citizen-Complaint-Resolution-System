@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../App';
+import { useApp, SESSION_EXPIRED_KEY } from '../App';
 import { Eye, EyeOff, Loader2, Database, AlertCircle, HelpCircle, Rocket, Settings } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -38,6 +38,16 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Explain the bounce when an expired session sent the operator back here.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+        setError('Your session expired. Please log in again to continue.');
+        sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+      }
+    } catch { /* sessionStorage unavailable — skip the banner */ }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

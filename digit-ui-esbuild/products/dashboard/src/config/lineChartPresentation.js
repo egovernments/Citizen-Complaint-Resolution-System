@@ -39,9 +39,9 @@ export const LINE_CHART_LEGEND = {
 };
 
 export const LINE_CHART_PERIOD_OPTIONS = [
-  { id: "daily", label: "Daily" },
-  { id: "weekly", label: "Weekly" },
-  { id: "monthly", label: "Monthly" },
+  { id: "daily", labelKey: "DASHBOARD_PERIOD_DAILY", label: "Daily" },
+  { id: "weekly", labelKey: "DASHBOARD_PERIOD_WEEKLY", label: "Weekly" },
+  { id: "monthly", labelKey: "DASHBOARD_PERIOD_MONTHLY", label: "Monthly" },
 ];
 
 export function normalizeLineChartSeries(series = []) {

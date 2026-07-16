@@ -13,15 +13,13 @@
  * from a city-level search after a root-level create.
  */
 import { test, expect } from '@playwright/test';
-import ExcelJS from 'exceljs';
 import {
   loadAuth,
   mdmsCreate,
   mdmsSearch,
-  type AuthInfo,
   type MdmsRecord,
 } from '../utils/manage/api';
-import { testCode, testCodeIndexed } from '../utils/manage/codes';
+import { testCode } from '../utils/manage/codes';
 import { cleanupMdms } from '../utils/manage/teardown';
 import { ROOT_TENANT, CITY_TENANT } from '../utils/env';
 
@@ -33,7 +31,12 @@ const DEPT_SCHEMA = 'common-masters.Department';
 const LEAF_PARENT_CODE = 'Complaint';
 const LEAF_LEVEL_CODE = 'SUB_TYPE';
 const HIERARCHY_TYPE = 'PGR';
-const LIST_PATH = '/configurator/manage/complaint-types';
+// The complaint-type resource is registered in the configurator as
+// `complaint-hierarchy` (App.tsx <Resource name="complaint-hierarchy">, nav
+// DigitLayout links "Complaint Types" → /manage/complaint-hierarchy). The
+// legacy `/manage/complaint-types` path matches no react-admin resource and
+// renders a blank content pane, so drive the real route.
+const LIST_PATH = '/configurator/manage/complaint-hierarchy';
 
 const createdCodes = new Set<string>();
 
@@ -116,7 +119,7 @@ Healthy Nai Pepea tenant has 37 seeded types — the count check is loose (> 1) 
 Steps:
 1. test.skip if !liveDeptCode (beforeAll picks first active dept).
 2. Generate a unique code + name; track for cleanup.
-3. Navigate to /complaint-types/create; fill Name, Service Code, pick Department option, set SLA=24.
+3. Navigate to /complaint-types/create; fill Complaint Sub-Type (the field formerly labelled "Name"), Service Code, pick Department option, set SLA=24.
 4. Click Create; wait for navigation back to LIST_PATH.
 5. mdmsSearch at CITY_TENANT for [code]; assert at least 1 hit (proves root → city inheritance).
 6. Search for the code in the list; click the row to open detail.
@@ -138,7 +141,8 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
     createdCodes.add(code);
 
     await page.goto(`${LIST_PATH}/create`);
-    await page.getByLabel(/^Name/i).fill(name);
+    // The complaint-type name field was renamed "Name" → "Complaint Sub-Type".
+    await page.getByLabel(/^Complaint Sub-Type/i).fill(name);
 
     const codeInput = page.getByLabel(/Service Code/i);
     await codeInput.fill('');
@@ -196,81 +200,11 @@ Cleanup is API-only — soft-deletes via cleanupMdms in afterAll because there's
     expect((afterEdit[0].data as Record<string, unknown>).slaHours).toBe(72);
   });
 
-  test('3. bulk import — happy path creates 3 types, each carries SLA + dept', {
-    annotation: {
-      type: 'description',
-      description: `Drives the bulk-import flow on /complaint-types/bulk: upload a 3-row xlsx, verify the preview reports "3 valid", click Create, and confirm "3 created" + that all three records persist with the expected SLA (48h) and department.
-
-Steps:
-1. test.skip if !liveDeptCode.
-2. Generate 3 unique codes via testCodeIndexed; track for cleanup.
-3. Navigate to /complaint-types/bulk.
-4. Build xlsx buffer via buildComplaintTypeXlsx with rows containing serviceCode, name, department, slaHours=48, menuPath='Complaint'.
-5. Locate input[type="file"]; test.skip if missing (page may not be implemented on this build).
-6. setInputFiles with the xlsx buffer (mime type set explicitly).
-7. Wait for /3\\s*(valid|rows)/i text within 30s.
-8. Click button matching /Create\\s+\\d+/i.
-9. Wait for /3\\s*(created|success)/i within 60s.
-10. mdmsSearch for the three codes; assert all 3 returned with slaHours=48 and the correct department.
-
-Tolerant of UI variants (e.g. preview text could read "3 valid" or "3 rows") via the regex unions.`,
-    },
-    tag: ['@area:configurator-manage', '@area:pgr', '@kind:happy-path', '@layer:ui', '@persona:admin'] }, async ({
-    page,
-  }, testInfo) => {
-    if (!liveDeptCode) test.skip(true, 'No active department seeded on tenant');
-
-    const codes = Array.from({ length: 3 }, (_, i) =>
-      testCodeIndexed(testInfo, 'CTBulk', i + 1),
-    );
-    codes.forEach((c) => createdCodes.add(c));
-
-    await page.goto(`${LIST_PATH}/bulk`);
-
-    const buffer = await buildComplaintTypeXlsx(
-      codes.map((c, i) => ({
-        serviceCode: c,
-        name: `PW Bulk Type ${i + 1}`,
-        department: liveDeptCode!,
-        slaHours: 48,
-        menuPath: 'Complaint',
-      })),
-    );
-
-    const fileInput = page.locator('input[type="file"]').first();
-    if (!(await fileInput.count())) {
-      test.skip(true, 'No bulk import page for complaint-types on this build');
-    }
-    await fileInput.setInputFiles({
-      name: 'complaint-types.xlsx',
-      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      buffer,
-    });
-
-    await expect(page.getByText(/3\s*(valid|rows)/i).first()).toBeVisible({
-      timeout: 30_000,
-    });
-
-    const createBtn = page.getByRole('button', { name: /Create\s+\d+/i });
-    await createBtn.click();
-
-    await expect(page.getByText(/3\s*(created|success)/i).first()).toBeVisible({
-      timeout: 60_000,
-    });
-
-    // Sanity-check via MDMS
-    const auth = loadAuth();
-    const landed = await mdmsSearch(auth, TENANT_CODE, SCHEMA, {
-      uniqueIdentifiers: codes,
-      limit: codes.length + 5,
-    });
-    expect(landed.length).toBe(3);
-    for (const rec of landed) {
-      const data = rec.data as Record<string, unknown>;
-      expect(data.slaHours).toBe(48);
-      expect(data.department).toBe(liveDeptCode);
-    }
-  });
+  // NOTE: the former test 3 ("bulk import — happy path") was removed — there
+  // is no /complaint-types/bulk route (App.tsx only wires bulk import for
+  // employees, departments, designations, and localization). Complaint types
+  // are created one at a time via the ComplaintTypeCreate form (test 2) or
+  // seeded via MDMS directly (test 5).
 
   test('4. department reference filter narrows the list', {
     annotation: {
@@ -317,7 +251,7 @@ Loose label-match — works whether the row renders the dept code, dept name, or
     }
   });
 
-  test('5. tenant parity — api create at ke is visible at ke.nairobi', {
+  test('5. tenant parity — api create at root is visible at city tenant', {
     annotation: {
       type: 'description',
       description: `Pure-API check guarding TASKS.md §2.5: complaint types registered at root tenant must surface at city level via MDMS v2 inheritance. Skips the UI entirely so the test catches inheritance regressions even when the form is half-wired.
@@ -375,27 +309,3 @@ If atRoot=1 but atCity=0, MDMS v2 inheritance is broken for this schema — a se
     ).toBe(1);
   });
 });
-
-// --- Local helpers ---
-
-async function buildComplaintTypeXlsx(
-  rows: Array<{
-    serviceCode: string;
-    name: string;
-    department: string;
-    slaHours: number;
-    menuPath: string;
-  }>,
-): Promise<Buffer> {
-  const wb = new ExcelJS.Workbook();
-  const sheet = wb.addWorksheet('ComplaintType');
-  sheet.addRow(['serviceCode', 'name', 'department', 'slaHours', 'menuPath']);
-  for (const r of rows) {
-    sheet.addRow([r.serviceCode, r.name, r.department, r.slaHours, r.menuPath]);
-  }
-  const buf = await wb.xlsx.writeBuffer();
-  return Buffer.from(buf as ArrayBuffer);
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type _AuthShape = AuthInfo;

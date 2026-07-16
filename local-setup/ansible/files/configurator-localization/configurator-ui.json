@@ -4776,27 +4776,147 @@
     "locale": "pt_BR"
   },
   {
-    "code": "app.forms.citizen_login_username_help",
+    "code": "app.fields.mobile_login_username_help",
     "message": "Used as the citizen's login username.",
     "module": "configurator-ui",
     "locale": "en_IN"
   },
   {
-    "code": "app.forms.citizen_login_username_help",
+    "code": "app.fields.mobile_login_username_help",
     "message": "नागरिक के लॉगिन उपयोगकर्ता नाम के रूप में उपयोग किया जाता है।",
     "module": "configurator-ui",
     "locale": "hi_IN"
   },
   {
-    "code": "app.forms.citizen_login_username_help",
+    "code": "app.fields.mobile_login_username_help",
+    "message": "Utilisé comme nom d'utilisateur de connexion du citoyen.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.mobile_login_username_help",
     "message": "Usado como o nome de usuário de login do cidadão.",
     "module": "configurator-ui",
     "locale": "pt_BR"
   },
   {
-    "code": "app.forms.citizen_login_username_help",
-    "message": "Utilisé comme nom d'utilisateur de connexion du citoyen.",
+    "code": "ERR_INVALID_MOBILE_NUMBER",
+    "message": "Please enter a valid mobile number",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ERR_INVALID_MOBILE_NUMBER",
+    "message": "अमान्य मोबाइल नंबर",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ERR_INVALID_MOBILE_NUMBER",
+    "message": "Veuillez saisir un numéro de mobile valide",
     "module": "configurator-ui",
     "locale": "fr_FR"
+  },
+  {
+    "code": "ERR_INVALID_MOBILE_NUMBER",
+    "message": "Por favor, insira um número de celular válido",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_DIGITS",
+    "message": "digits",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_DIGITS",
+    "message": "अंक",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_DIGITS",
+    "message": "chiffres",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_DIGITS",
+    "message": "dígitos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_AT_LEAST",
+    "message": "at least",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_AT_LEAST",
+    "message": "कम से कम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_AT_LEAST",
+    "message": "au moins",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_AT_LEAST",
+    "message": "pelo menos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_STARTING_WITH",
+    "message": "starting with",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_STARTING_WITH",
+    "message": "से शुरू होकर",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_STARTING_WITH",
+    "message": "commençant par",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_STARTING_WITH",
+    "message": "começando com",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_OR",
+    "message": "or",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_OR",
+    "message": "या",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_OR",
+    "message": "ou",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_OR",
+    "message": "ou",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
   }
 ]
