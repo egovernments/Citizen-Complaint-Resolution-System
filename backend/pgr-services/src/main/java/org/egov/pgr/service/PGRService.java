@@ -155,7 +155,8 @@ public class PGRService {
             return new ArrayList<>();
 
         if (criteria.getAssignee() != null) {
-            String tenantId = criteria.getTenantId() != null ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+            String tenantId = criteria.getTenantId() != null ? criteria.getTenantId()
+                    : (requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getTenantId() : null);
             Set<String> serviceRequestIds = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
             if (serviceRequestIds.isEmpty()) {
                 return new ArrayList<>();
@@ -173,8 +174,8 @@ public class PGRService {
         userService.enrichUsers(serviceWrappers, requestInfo);
         List<ServiceWrapper> enrichedServiceWrappers = workflowService.enrichWorkflow(requestInfo,serviceWrappers);
 
-        String tenantIdForMdms = criteria.getTenantId() != null
-                ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+        String tenantIdForMdms = criteria.getTenantId() != null ? criteria.getTenantId()
+                : (requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getTenantId() : null);
         Map<String, ComplaintTemplateTypeConfig> configCache = buildConfigCache(requestInfo, tenantIdForMdms, enrichedServiceWrappers);
         applyDecryptOrMask(enrichedServiceWrappers, requestInfo, configCache);
 
@@ -260,6 +261,19 @@ public class PGRService {
      * @return
      */
     public Integer count(RequestInfo requestInfo, RequestSearchCriteria criteria){
+        // Mirror search()'s assignee handling: resolve the assignee to
+        // serviceRequestIds via workflow before counting. Without this the
+        // assignee param was silently ignored on _count, so count and search
+        // disagreed for assignee-scoped queries (e.g. the My-tab badge).
+        if (criteria.getAssignee() != null) {
+            String tenantId = criteria.getTenantId() != null ? criteria.getTenantId()
+                    : (requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getTenantId() : null);
+            Set<String> serviceRequestIds = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
+            if (CollectionUtils.isEmpty(serviceRequestIds)) {
+                return 0;
+            }
+            criteria.setServiceRequestIds(serviceRequestIds);
+        }
         criteria.setIsPlainSearch(false);
         Integer count = repository.getCount(criteria);
         return count;
