@@ -21,7 +21,8 @@
       },
       "required": [
         "module",
-        "header"
+        "header",
+        "contents"
       ],
       "x-unique": [
         "module"

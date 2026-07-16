@@ -97,7 +97,7 @@
     },
     {
         "code": "CCRS_PRIVACY_P3",
-        "message": "As suas informações pessoais apenas serão acedidas por funcionários e instituições do Governo devidamente autorizados e responsáveis pelo tratamento da sua reclamação. Não serão partilhadas com terceiros não autorizados nem utilizadas para fins comerciais ou de marketing. Nos casos previstos pela Plataforma, as reclamações submetidas como confidenciais terão a identidade do autor protegida, sendo esta divulgada apenas para um grupo restrito e senior de funcionarios ou quando exigido por lei.",
+        "message": "As suas informações pessoais apenas serão acedidas por funcionários e instituições do Governo devidamente autorizados e responsáveis pelo tratamento da sua reclamação. Não serão partilhadas com terceiros não autorizados nem utilizadas para fins comerciais ou de marketing. Nos casos previstos pela Plataforma, as reclamações submetidas como confidenciais terão a identidade do autor protegida, sendo esta divulgada apenas para um grupo restrito e senior de funcionários ou quando exigido por lei.",
         "module": "rainmaker-common",
         "locale": "pt_PT"
     },

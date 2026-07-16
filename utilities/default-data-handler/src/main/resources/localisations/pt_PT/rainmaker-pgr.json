@@ -199,7 +199,7 @@
     },
     {
         "code": "CS_DESC_NEEDS_WORDS",
-        "message": "Descreva o problema por palavras, nao apenas numeros.",
+        "message": "Descreva o problema por palavras, não apenas números.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1046,6 +1046,30 @@
     {
         "code": "CS_COMMON_RESOLVEDBYSUPERVISOR",
         "message": "Resolvido pelo supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_DATE_OF_FACT_LABEL",
+        "message": "Data do Facto",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_ENTITY_NAME_LABEL",
+        "message": "Nome da Entidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_ENTITY_ADDRESS_LABEL",
+        "message": "Endereço da Entidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINT_TYPE",
+        "message": "Tipo de Reclamação",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     }
