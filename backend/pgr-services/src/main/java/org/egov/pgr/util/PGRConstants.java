@@ -187,6 +187,11 @@ public class PGRConstants {
 
     public static final String ESCALATE = "ESCALATE";
 
+    // MDMS master under module RAINMAKER-PGR (mdms-v2 schema code
+    // RAINMAKER-PGR.MDMS_ESCALATION_CONFIG, seeded by default-data-handler):
+    // the per-tenant visibility feature flag + resolver config. The JSONPATH
+    // constant is where that master lands in an MdmsRes payload.
+    
     public static final String MDMS_ESCALATION_CONFIG = "EscalationConfig";
 
     // MDMS master under module RAINMAKER-PGR (mdms-v2 schema code
