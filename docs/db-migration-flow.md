@@ -223,6 +223,21 @@ migrator's `SCHEMA_TABLE` has no map entry.
 ```
 
 It loads the dump into a throwaway database, normalizes, runs all fifteen pinned `-db`
-migrators, and asserts every pre-existing table is byte-identical afterwards. It also
-runs the same dump *without* the normalizer and asserts the data IS destroyed — if
-that half ever stops failing, the guard has been silently disabled.
+migrators, and asserts every pre-existing **data** table is byte-identical afterwards
+(Flyway history tables are excluded — they legitimately gain a row when a migration
+newer than the dump applies). It also runs the same dump *without* the normalizer and
+asserts the data IS destroyed — if that half ever stops failing, the guard has been
+silently disabled.
+
+It then runs the **convergence** check: build the schema a second time from an EMPTY
+database with every migrator, and assert the two paths end at an identical schema —
+same columns, indexes, and matview definitions.
+
+> **Why this matters.** The dump is a shortcut for DATA and TIME. It is never a source
+> of schema truth. Anything the dump has that the migrations cannot reproduce is drift,
+> and it fails *silently*: from-empty builds lack it while the fast path keeps working
+> by accident. Neither the positive test (which only proves existing data survives) nor
+> the CI alignment check (which only compares history-table *names*) can see it.
+> This is not hypothetical — it caught `eg_user.countrycode`, which existed only in the
+> dump because the app ran `egov-user:mobilevalidation-*` while its migrator was pinned
+> to `master-d69ce29`, a lineage that predates the countrycode migration.

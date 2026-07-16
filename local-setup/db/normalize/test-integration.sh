@@ -3,12 +3,25 @@
 #
 #   ./test-integration.sh /path/to/dump.sql
 #
-# A) POSITIVE — dump + normalizer + all 11 migrators:
-#      every migrator reports "No migration necessary", and a row-count +
-#      content-checksum snapshot of every table is byte-identical before/after.
-# B) NEGATIVE — dump + all 11 migrators, normalizer SKIPPED:
+# A) POSITIVE — dump + normalizer + every pinned migrator:
+#      each reports "No migration necessary" (except services that legitimately
+#      migrate from empty), and a row-count + content-checksum snapshot of every
+#      table is byte-identical before/after.
+# B) NEGATIVE — dump + migrators, normalizer SKIPPED:
 #      data IS destroyed. If this ever stops failing, the guard has been silently
 #      disabled and the positive test alone would not tell us.
+# C) CONVERGENCE — fast path (dump + migrators) vs slow path (EMPTY + migrators):
+#      both must end at an IDENTICAL schema — same columns, indexes, and
+#      materialized-view definitions. The dump is a shortcut for DATA and TIME; it
+#      is never a source of schema truth. Anything the dump has that the migrations
+#      cannot reproduce is drift, and it breaks from-empty builds silently while the
+#      fast path keeps working by accident.
+#      This caught a real one: eg_user.countrycode existed only in the dump because
+#      the app was on egov-user:mobilevalidation-* while its migrator was pinned to
+#      master-d69ce29, which predates the countrycode migration. Neither (A), (B),
+#      nor the CI alignment check can see that class of bug — (A) only proves
+#      existing data survives, and the alignment check only compares history-table
+#      NAMES.
 #
 # Runs entirely in throwaway containers on their own network. Never touches a
 # running stack.
@@ -17,10 +30,20 @@ set -euo pipefail
 DUMP="${1:?usage: test-integration.sh /path/to/dump.sql}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MAP="$HERE/../flyway-history-map.yml"
+REPO="$(cd "$HERE/../../.." && pwd)"
 PG_IMAGE="registry.preview.egov.theflywheel.in/postgres:16"
 NET=normalize-it
 WORK="$(mktemp -d)"
-trap 'docker rm -f it-pos it-neg >/dev/null 2>&1 || true; docker network rm $NET >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
+trap 'docker rm -f it-pos it-neg it-slow >/dev/null 2>&1 || true; docker network rm $NET >/dev/null 2>&1 || true; rm -rf "$WORK"' EXIT
+
+# Migrators built from the repo rather than pulled. Part C needs them: without
+# them the slow path would lack pgr/novu/config tables that the dump HAS, and the
+# comparison would report false drift.
+BUILT_MIGRATORS=(
+  "pgr-services|$REPO/backend/pgr-services/src/main/resources/db|pgr_services_schema|"
+  "novu-bridge|$REPO/backend/novu-bridge/src/main/resources/db|novu_bridge_schema|"
+  "digit-config-service|$REPO/backend/digit-config-service/src/main/resources/db|digit_config_service_schema|public"
+)
 
 MIGRATORS=(
   # audit-service was never covered here: its migrator used to live in the base
@@ -28,7 +51,10 @@ MIGRATORS=(
   # in docker-compose.migrations.yml.
   "audit-service|audit-service-db:v2.9.2-4a60f20|audit_service_schema"
   "boundary-service|boundary-service-db:v2.9.2-4a60f20|boundary_service_schema"
-  "egov-user|egov-user-db:master-d69ce29|egov_user_schema"
+  # Lineage fix: the app is egov-user:mobilevalidation-*, so the migrator must be
+  # from that lineage too. master-d69ce29 predates the countrycode migration and
+  # left from-empty builds without eg_user.countrycode. See docker-compose.migrations.yml.
+  "egov-user|egov-user-db:mobile-validation-user-otp-9883730|egov_user_schema"
   "mdms-backend|mdms-v2-db:v2.9.2-4a60f20|mdms_v2_schema"
   "egov-idgen|egov-idgen-db:v2.9.2-4a60f20|egov_idgen_schema"
   "egov-localization|egov-localization-db:v2.9.2-4a60f20|egov_localization_schema"
@@ -46,13 +72,27 @@ MIGRATORS=(
   "egov-bndry-mgmnt|egov-bndry-mgmnt-db:bndry-mgmnt-3794b8c|egov-bndry-mgmnt_schema"
 )
 
-# Row count + content checksum for every table in public.
+# Row count + content checksum for every DATA table in public.
+#
+# Flyway history tables are EXCLUDED. This assertion is about data survival, and a
+# history table is bookkeeping: when a migrator legitimately applies a migration
+# newer than the dump (egov-user's countrycode), its history GAINS a row — correct
+# behaviour that would otherwise read as "pre-existing data changed". What each
+# migrator did is already reported above, per service, so nothing is lost by
+# leaving history out of this comparison.
+#
+# Identified by column signature, not by name — the name is precisely what we
+# cannot trust here (same rule as normalize.py).
 cat > "$WORK/snapshot.sql" <<'SQL'
 SELECT c.relname,
        (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from public.%I', c.relname), false,true,'')))[1]::text::bigint,
        (xpath('/row/c/text()', query_to_xml(format('select coalesce(md5(string_agg(t::text, E''\n'' ORDER BY t::text)),''EMPTY'') as c from public.%I t', c.relname), false,true,'')))[1]::text
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public' AND c.relkind = 'r'
+  AND NOT EXISTS (
+    SELECT 1 FROM pg_attribute a
+    WHERE a.attrelid = c.oid AND a.attname = 'installed_rank'
+  )
 ORDER BY 1;
 SQL
 
@@ -114,6 +154,15 @@ echo "  rebuild path: ${REBUILT:-<none>}"
 BASELINE_FRESH="egov-indexer audit-service"
 echo "  baseline-fresh: ${BASELINE_FRESH:-<none>}"
 
+# Services whose PINNED image carries migrations NEWER than the dump. They apply on
+# top; that is the fast path working exactly as designed (dump = baseline, Flyway
+# applies the delta), not a failure. egov-user is here because its migrator is now
+# pinned to the mobilevalidation lineage, whose countrycode migration postdates the
+# dump. Keep this list honest: an entry that stops applying means the dump has
+# caught up and the entry should go.
+NEWER_THAN_DUMP="egov-user"
+echo "  newer-than-dump: ${NEWER_THAN_DUMP:-<none>}"
+
 # Idempotency: a second run must change nothing and still exit 0.
 normalize it-pos > "$WORK/second-run.log"
 grep -q "renamed 0, rebuilt 0" "$WORK/second-run.log" || {
@@ -123,7 +172,7 @@ echo "  idempotent: second run renamed 0, rebuilt 0"
 fail=0
 while read -r name rc verdict; do
   expect=noop
-  case " $REBUILT $BASELINE_FRESH " in *" $name "*) expect=applied-or-failed ;; esac
+  case " $REBUILT $BASELINE_FRESH $NEWER_THAN_DUMP " in *" $name "*) expect=applied-or-failed ;; esac
   printf "  %-22s exit=%s %-18s (expect %s)\n" "$name" "$rc" "$verdict" "$expect"
   if [ "$rc" != "0" ]; then
     echo "    FAIL: $name exited $rc"; fail=1
@@ -141,6 +190,84 @@ if ! join -t'|' -j1 <(sort -t'|' -k1,1 "$WORK/pos-before.txt") <(sort -t'|' -k1,
   echo "FAIL: pre-existing data changed"; exit 1
 fi
 echo "  PASS: every pre-existing table byte-identical (rows + checksum)"
+
+# ── C) CONVERGENCE ────────────────────────────────────────────────────────────
+# Both paths must arrive at the SAME schema. See the header for why this exists.
+echo "=== C) CONVERGENCE: fast path (dump) vs slow path (empty) must match ==="
+
+build_migrator() {  # $1 = name, $2 = context -> echoes the built tag
+  docker build -q -t "it-$1-db:test" "$2" >/dev/null
+  echo "it-$1-db:test"
+}
+
+run_built() {  # $1 = db container
+  local m name ctx table schema img
+  for m in "${BUILT_MIGRATORS[@]}"; do
+    IFS='|' read -r name ctx table schema <<< "$m"
+    img="$(build_migrator "$name" "$ctx")"
+    docker run --rm --network $NET \
+      -e DB_URL="jdbc:postgresql://$1:5432/egov" ${schema:+-e SCHEMA_NAME=$schema} \
+      -e SCHEMA_TABLE="$table" -e FLYWAY_USER=egov -e FLYWAY_PASSWORD=egov123 \
+      -e FLYWAY_LOCATIONS=filesystem:/flyway/sql -e FLYWAY_VALIDATE_ON_MIGRATE=false \
+      "$img" > "$WORK/$1-$name.log" 2>&1 || {
+        echo "    FAIL: $name migrator exited non-zero on $1"; tail -5 "$WORK/$1-$name.log"; exit 1; }
+  done
+}
+
+# Snapshot the SHAPE of the schema (not the data): columns, indexes, and matview
+# definitions. Data is expected to differ — the dump has rows, an empty build does not.
+cat > "$WORK/shape.sql" <<'SQL'
+SELECT 'col|'||table_name||'.'||column_name||'|'||data_type||'|'
+       ||coalesce(character_maximum_length::text,'-')||'|'||is_nullable
+FROM information_schema.columns WHERE table_schema='public'
+UNION ALL
+SELECT 'idx|'||indexname||'|'||md5(indexdef) FROM pg_indexes WHERE schemaname='public'
+UNION ALL
+SELECT 'mv|'||matviewname||'|'||md5(definition) FROM pg_matviews WHERE schemaname='public'
+ORDER BY 1;
+SQL
+shape() { docker cp "$WORK/shape.sql" "$1:/tmp/shape.sql" >/dev/null
+          docker exec "$1" psql -U egov -d egov -tA -f /tmp/shape.sql | sed 's/ *$//' | sort; }
+
+# it-pos already has: dump + normalize + every PULLED migrator. Finish the fast
+# path by running the in-repo built ones on it too.
+run_built it-pos
+shape it-pos > "$WORK/shape-fast.txt"
+
+# Slow path: virgin DB, normalize (must be a no-op), then every migrator.
+docker rm -f it-slow >/dev/null 2>&1 || true
+docker run -d --name it-slow --network $NET \
+  -e POSTGRES_USER=egov -e POSTGRES_PASSWORD=egov123 -e POSTGRES_DB=egov "$PG_IMAGE" >/dev/null
+until docker exec it-slow pg_isready -U egov >/dev/null 2>&1; do sleep 2; done
+# pg_isready answers from initdb's TEMPORARY server first; wait for the real one.
+until docker logs it-slow 2>&1 | grep -q "PostgreSQL init process complete"; do sleep 1; done
+normalize it-slow > "$WORK/slow-normalize.log"
+grep -q "renamed 0, rebuilt 0" "$WORK/slow-normalize.log" || {
+  echo "FAIL: normalizer touched an EMPTY database — it must be a pure no-op there"
+  cat "$WORK/slow-normalize.log"; exit 1; }
+echo "  normalizer on empty DB: no-op (as required)"
+run_migrators it-slow > "$WORK/slow-migrators.txt"
+while read -r name rc verdict; do
+  [ "$rc" = "0" ] || { echo "    FAIL: $name exited $rc building from empty"; exit 1; }
+done < "$WORK/slow-migrators.txt"
+run_built it-slow
+shape it-slow > "$WORK/shape-slow.txt"
+
+echo "  fast path: $(grep -c '^col|' "$WORK/shape-fast.txt") columns, $(grep -c '^idx|' "$WORK/shape-fast.txt") indexes, $(grep -c '^mv|' "$WORK/shape-fast.txt") matviews"
+echo "  slow path: $(grep -c '^col|' "$WORK/shape-slow.txt") columns, $(grep -c '^idx|' "$WORK/shape-slow.txt") indexes, $(grep -c '^mv|' "$WORK/shape-slow.txt") matviews"
+
+if ! diff -u "$WORK/shape-fast.txt" "$WORK/shape-slow.txt" > "$WORK/shape.diff"; then
+  echo "FAIL: the two paths do NOT converge to the same schema."
+  echo "      '-' = in the dump but NOT reproducible from migrations (drift: from-empty"
+  echo "            builds silently lack it while the fast path works by accident)."
+  echo "      '+' = built from migrations but absent from the dump (the dump is stale;"
+  echo "            usually fine — it applies on top — but check it is intentional)."
+  grep -E '^[-+][^-+]' "$WORK/shape.diff" | head -30
+  exit 1
+fi
+echo "  PASS: fast and slow paths converge to an identical schema"
+
+echo
 
 # ── B) NEGATIVE ───────────────────────────────────────────────────────────────
 echo "=== B) NEGATIVE: dump -> migrators, normalizer SKIPPED (must destroy data) ==="
@@ -166,5 +293,5 @@ done
 }
 echo "  PASS: unguarded run destroys data — the guard is doing real work"
 
-echo
-echo "ALL PASS: normalizer makes the dump safe; without it the data is destroyed."
+echo "ALL PASS: normalizer makes the dump safe; without it the data is destroyed;"
+echo "          and dump-built and empty-built schemas are identical."

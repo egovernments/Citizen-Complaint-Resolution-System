@@ -189,8 +189,31 @@ services:
     environment: { SPRING_FLYWAY_ENABLED: "false" }
     depends_on: { boundary-service-migration: { condition: service_completed_successfully } }
 
+  # Lineage fix (NOT a routine bump). The app runs egov-user:mobilevalidation-*,
+  # which USES eg_user.countrycode, but this migrator was pinned to master-d69ce29,
+  # which predates V20260309120000__alter_eg_user_add_countrycode.sql. App and
+  # migrator were from different lineages — the exact thing the per-service pin is
+  # supposed to prevent.
+  #
+  # The fast path hid it: the dump was baked from an environment that had already
+  # run that migration, so `countrycode` is baked into the dump's CREATE TABLE while
+  # its history does NOT record the migration. A from-empty build therefore produced
+  # an eg_user with no countrycode under an app that expects one.
+  #
+  # mobile-validation-user-otp-9883730 is a strict superset of master-d69ce29
+  # (28 migrations = the same 27 + countrycode, no regressions) and the migration is
+  # ADD COLUMN IF NOT EXISTS, so it is safe both ways: on the dump it no-ops the
+  # ALTER and records the history row (26 eg_user rows verified untouched); on empty
+  # it creates the column. Verified: both paths then agree at 766 columns.
+  #
+  # K8s is NOT affected and needs no change — its chart pins the app AND the db to
+  # master-d69ce29, so it is self-consistent (on an older feature set). Only compose
+  # bumped the app without its -db.
+  #
+  # There is no -db tag matching the app's exact tag (the app is a custom preview
+  # build); this is the closest published tag in the same lineage.
   egov-user-migration:
-    image: egovio/egov-user-db:master-d69ce29
+    image: egovio/egov-user-db:mobile-validation-user-otp-9883730
     container_name: egov-user-migration
     depends_on:
       postgres-db: { condition: service_healthy }
