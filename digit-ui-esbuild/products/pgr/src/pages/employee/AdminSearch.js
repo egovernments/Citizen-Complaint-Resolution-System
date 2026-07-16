@@ -332,8 +332,14 @@ const PGRAdminSearch = () => {
     async () => {
       const res = await searchAdmin(buildParams(committed, page, pageSize));
       const all = res?.ServiceWrappers || [];
-      const hasMore = all.length > pageSize;
+      let hasMore = all.length > pageSize;
       const rows = hasMore ? all.slice(0, pageSize) : all;
+      // the backend clamps limit to 50, so at pageSize 50 the +1 over-fetch
+      // can't come back — probe the next offset with a 1-row request instead
+      if (!hasMore && all.length === pageSize) {
+        const probe = await searchAdmin({ ...buildParams(committed, page, pageSize), limit: 1, offset: (page + 1) * pageSize });
+        hasMore = (probe?.ServiceWrappers || []).length > 0;
+      }
       const backendTotal = Number(res?.totalCount);
       const trust = Number.isFinite(backendTotal) && backendTotal > all.length;
       const total = trust ? backendTotal : page * pageSize + rows.length + (hasMore ? 1 : 0);
