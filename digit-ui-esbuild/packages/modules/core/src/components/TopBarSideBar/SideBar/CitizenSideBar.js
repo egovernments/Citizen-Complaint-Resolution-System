@@ -419,7 +419,7 @@ export const CitizenSideBar = ({
 
   const hamburgerItems = [
     {
-      label: "HOME",
+      label: t("COMMON_BOTTOM_NAVIGATION_HOME"),
       value: "HOME",
       icon: "Home",
       // children: transformedSelectedCityData?.length>0 ? transformedSelectedCityData : undefined,

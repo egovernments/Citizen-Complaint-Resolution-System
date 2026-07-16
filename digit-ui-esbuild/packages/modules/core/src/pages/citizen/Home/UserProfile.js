@@ -902,7 +902,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
               lineHeight: 1.25,
             }}
           >
-            {tr("CORE_COMMON_PROFILE", "Edit Profile")}
+            {tr("EDIT_PROFILE", "Edit Profile")}
           </h1>
         </header>
         <div
@@ -1290,7 +1290,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
             lineHeight: 1.25,
           }}
         >
-          {tr("CORE_COMMON_PROFILE", "Edit Profile")}
+          {tr("EDIT_PROFILE", "Edit Profile")}
         </h1>
       </header>
 
