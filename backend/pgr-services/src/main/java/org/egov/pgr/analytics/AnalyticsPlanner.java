@@ -55,6 +55,17 @@ public class AnalyticsPlanner {
 
         // ---- dimensions ----
         if (q.has("dimensions")) for (JsonNode d : q.get("dimensions")) {
+            if (d.isObject()) {
+                // #1111/R1: the ONLY object dimension the grammar accepts is the composer-emitted
+                // hierarchy-level marker (nonce-gated; unreachable from request/MDMS JSON). It is
+                // aliased AS service_code so viz/sort/columns keep working unchanged, and grouped
+                // by ordinal below, so an expression dimension is safe.
+                String expr = hierLevelDimExpr(d, grainName);
+                selectExprs.add(expr + " AS service_code");
+                groupExprs.add(expr);
+                columns.add("service_code");
+                continue;
+            }
             String col = d.asText();
             if (!g.groupable.contains(col)) throw new IllegalArgumentException("unknown_column: dimension '" + col + "' not groupable on " + grainName);
             selectExprs.add(col + " AS " + col);
@@ -114,6 +125,31 @@ public class AnalyticsPlanner {
         List<Object> params = new ArrayList<>(selectParams);   // SELECT params precede WHERE params
         params.addAll(whereParams);
         return new Planned(sb.toString(), params, columns, grainName);
+    }
+
+    // ---------- #1111: hierarchy-level derived dimension (composer-internal) ----------
+
+    /**
+     * Validate a composer-emitted hierarchy-level dimension marker and return the fixed SQL
+     * expression from {@link AnalyticsCatalog#hierLevelExpr}. Rejects any object dimension whose
+     * {@code __token} is not this JVM's {@link AnalyticsCatalog#HIER_DIM_TOKEN} — external JSON
+     * (inline queries, MDMS defs) can never carry the nonce, so object dimensions remain outside
+     * the public grammar. The level must strictly parse to an int in 1..{@code MAX_HIER_LEVEL};
+     * it is interpolated by the catalog as a bare int, never string-concatenated raw input.
+     */
+    private String hierLevelDimExpr(JsonNode d, String grainName){
+        String token = d.path(AnalyticsCatalog.HIER_DIM_TOKEN_FIELD).asText(null);
+        if (!AnalyticsCatalog.HIER_DIM_TOKEN.equals(token))
+            throw new IllegalArgumentException("unknown_column: object dimensions are not part of the query grammar");
+        JsonNode lvl = d.get(AnalyticsCatalog.HIER_DIM_LEVEL_FIELD);
+        int level;
+        try {
+            level = Integer.parseInt(lvl == null ? "" : lvl.asText());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    "invalid_param: hierLevel must be an integer in 1.." + AnalyticsCatalog.MAX_HIER_LEVEL);
+        }
+        return catalog.hierLevelExpr(grainName, level);
     }
 
     // ---------- measures ----------
