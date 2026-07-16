@@ -306,6 +306,60 @@
         "locale": "pt_PT"
     },
     {
+        "code": "ES_PGR_ADMIN_SEARCH_FILTERS",
+        "message": "Filtros de Pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH_RESULTS",
+        "message": "Resultados da Pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORT",
+        "message": "Exportar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORTING",
+        "message": "A exportar…",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DATE_RANGE",
+        "message": "Intervalo de Datas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CREATED_ON",
+        "message": "Criado Em",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CREATED_TIME",
+        "message": "Data de Criação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_TENANT_BANNER",
+        "message": "Está a visualizar dados de",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RESULTS_WORD",
+        "message": "resultados",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_CONSENT_DATA_PROCESSING_LABEL",
         "message": "Autorizo o tratamento dos meus dados pessoais para a tramitação desta manifestação.",
         "module": "rainmaker-pgr",
