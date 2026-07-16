@@ -8,21 +8,29 @@
  * rejection reason (composed into the workflow comment as `[<CODE>] …` by
  * PGRDetails.handleActionSubmit) renders on the complaint timeline.
  *
- * Auth: EMPLOYEE_USER (GRO) — REJECT at PENDINGFORASSIGNMENT is a GRO action.
- * Deployment-portable: self-skips when no employee/GRO login is available or
- * no rejection reasons are seeded.
+ * Auth: resolveSeedPlan()'s actor (holds GRO) — REJECT at
+ * PENDINGFORASSIGNMENT is a GRO action, and unlike ASSIGN it needs no
+ * assignee at all, so the actor alone (no separate persona lookup) drives
+ * the whole flow here.
+ * Deployment-portable: self-skips when no GRO login is available or no
+ * rejection reasons are seeded.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { pgrCreate, resolveServiceCode, resolveLocalityCode } from '../utils/launch-fixes/api';
+import { BASE_URL, TENANT } from '../utils/env';
+import { resolveSeedPlan, type ResolvedPersona } from '../utils/personas';
+import { seedComplaintAsCitizen } from '../utils/seed';
 import {
-  BASE_URL, TENANT, EMPLOYEE_USER, EMPLOYEE_PASS, ADMIN_USER, ADMIN_PASS,
-  SERVICE_CODE, LOCALITY_CODE, generateCitizenPhone,
-} from '../utils/env';
-import {
-  getPrincipal, loginEmployeeBrowser, apiStatus, takeAction, type Principal,
+  loginEmployeeBrowser, apiStatus, takeAction, type Principal,
 } from '../utils/employee-ui';
 
-let admin: Principal | null = null;
+/** Adapt a personas.ts ResolvedPersona to employee-ui.ts's Principal shape. */
+function toPrincipal(p: ResolvedPersona): Principal {
+  return { token: p.token, userInfo: p.userInfo, roles: p.roles, authTenant: p.tenant };
+}
+
+let reader: Principal | null = null;
+let actorUser = '';
+let actorPass = '';
 let srid = '';
 let setupSkip = '';
 let reasonsSeeded = false;
@@ -38,21 +46,16 @@ async function fetchRejectionReasons(token: string): Promise<string[]> {
 }
 
 test.beforeAll(async () => {
-  admin = await getPrincipal(ADMIN_USER, ADMIN_PASS);
-  const gro = await getPrincipal(EMPLOYEE_USER, EMPLOYEE_PASS);
-  if (!admin) { setupSkip = `ADMIN (${ADMIN_USER}) login failed`; return; }
-  if (!gro || !gro.roles.includes('GRO')) { setupSkip = `${EMPLOYEE_USER} lacks a usable GRO token — cannot REJECT via UI`; return; }
-  reasonsSeeded = (await fetchRejectionReasons(admin.token)).length > 0;
+  const plan = await resolveSeedPlan();
+  if ('error' in plan) { setupSkip = plan.error; return; }
+  actorUser = plan.actor.username;
+  actorPass = plan.actor.password;
+  reader = toPrincipal(plan.actor);
+  reasonsSeeded = (await fetchRejectionReasons(plan.actor.token)).length > 0;
   try {
-    const serviceCode = await resolveServiceCode(BASE_URL, admin.token, TENANT, SERVICE_CODE);
-    const localityCode = await resolveLocalityCode(BASE_URL, admin.token, TENANT, LOCALITY_CODE);
-    const created = await pgrCreate({
-      baseUrl: BASE_URL, auth: { token: admin.token, userInfo: admin.userInfo }, tenantId: TENANT,
-      serviceCode, localityCode, description: `reject-ui seed ${new Date().toISOString()}`,
-      citizenName: 'Reject UI Seed', citizenPhone: generateCitizenPhone(),
-    });
-    srid = created.serviceRequestId;
-    if (created.applicationStatus !== 'PENDINGFORASSIGNMENT') setupSkip = `seed at ${created.applicationStatus}, not PENDINGFORASSIGNMENT`;
+    const created = await seedComplaintAsCitizen({ description: `reject-ui seed ${new Date().toISOString()}` });
+    srid = created.srid;
+    if (created.status !== 'PENDINGFORASSIGNMENT') setupSkip = `seed at ${created.status}, not PENDINGFORASSIGNMENT`;
   } catch (err: any) {
     setupSkip = `seed failed: ${err?.message?.slice(0, 200)}`;
   }
@@ -67,12 +70,12 @@ test.describe('employee PGR REJECT through the Take-Action UI', () => {
 
     const rejectComment = `UI-REJECT ${Date.now()}`;
 
-    const ok = await loginEmployeeBrowser(page, EMPLOYEE_USER, EMPLOYEE_PASS);
-    test.skip(!ok, `login failed for ${EMPLOYEE_USER}`);
+    const ok = await loginEmployeeBrowser(page, actorUser, actorPass);
+    test.skip(!ok, `login failed for ${actorUser}`);
     await page.goto(`${BASE_URL}/digit-ui/employee/pgr/complaint-details/${srid}`, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await page.locator('.digit-viewcard-field-pair, .v2-pgr-details').first().waitFor({ state: 'visible', timeout: 30_000 });
     await page.waitForTimeout(3_000);
-    expect(await apiStatus(admin!, srid)).toBe('PENDINGFORASSIGNMENT');
+    expect(await apiStatus(reader!, srid)).toBe('PENDINGFORASSIGNMENT');
 
     await takeAction(page, /^reject$/i);
     await expect(page.getByText(/PGR_ACTION_REJECT|Reject Complaint|Reject/i).first()).toBeVisible({ timeout: 10_000 });
@@ -88,7 +91,7 @@ test.describe('employee PGR REJECT through the Take-Action UI', () => {
     await page.locator('textarea').first().fill(rejectComment);
     await page.getByRole('button', { name: /^SUBMIT$|^Submit$/ }).first().click();
 
-    await expect.poll(async () => apiStatus(admin!, srid), { timeout: 25_000, intervals: [1500] })
+    await expect.poll(async () => apiStatus(reader!, srid), { timeout: 25_000, intervals: [1500] })
       .toBe('REJECTED');
 
     // Reason + comment render on the timeline. The reason code is composed into

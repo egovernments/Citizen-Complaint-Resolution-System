@@ -20,6 +20,7 @@ export default defineConfig({
     'fixtures/lifecycle.setup.ts',
     'fixtures/api.setup.ts',
     'fixtures/citizen.setup.ts',
+    'fixtures/profile.setup.ts',
   ],
   timeout: 120_000,
   expect: { timeout: 15_000 },
@@ -40,6 +41,15 @@ export default defineConfig({
   },
   projects: [
     {
+      // Runs before everything and depends on nothing: it interrogates the live
+      // deployment and writes deployment-profile.json, which utils/env.ts reads
+      // synchronously at import time. Every other project therefore depends on
+      // it, or their specs would import env.ts with no profile behind it and
+      // silently fall back to the legacy hardcoded defaults.
+      name: 'profile-setup',
+      testMatch: /tests\/fixtures\/profile\.setup\.ts$/,
+    },
+    {
       // Runs first — performs UI login and writes storageState to auth.json.
       name: 'setup',
       testMatch: /tests\/fixtures\/auth\.setup\.ts$/,
@@ -51,7 +61,7 @@ export default defineConfig({
       // specs that need a "pinned" SRID read from that file.
       name: 'lifecycle-setup',
       testMatch: /tests\/fixtures\/lifecycle\.setup\.ts$/,
-      dependencies: ['setup'],
+      dependencies: ['setup', 'profile-setup'],
     },
     {
       name: 'chromium',
@@ -59,9 +69,19 @@ export default defineConfig({
         browserName: 'chromium',
         storageState: 'auth.json',
       },
-      dependencies: ['setup', 'lifecycle-setup', 'citizen-setup'],
-      // Don't try to run setup itself as part of the chromium project.
-      testIgnore: /tests\/fixtures\/(auth|lifecycle|api|citizen)\.setup\.ts$/,
+      dependencies: ['setup', 'lifecycle-setup', 'citizen-setup', 'profile-setup'],
+      testIgnore: [
+        // Don't try to run setup itself as part of the chromium project.
+        /tests\/fixtures\/(auth|lifecycle|api|citizen|profile)\.setup\.ts$/,
+        // `testDir: 'tests'` (above) makes chromium discover EVERY spec tree,
+        // including tests/api and tests/smoke — which already have their own
+        // dedicated projects with token-injection auth (auth-api.json) and an
+        // `api-setup` dependency. Without this, all 38 api specs + the smoke
+        // spec ran a second time under chromium with the UI storage state,
+        // duplicating every api result in report.json (38 pass/fail/skip rows
+        // counted twice) and inflating suite runtime for zero added coverage.
+        /tests\/(api|smoke)\//,
+      ],
       grepInvert: EXCLUDE_LOCAL_ONLY,
     },
     {
@@ -77,12 +97,13 @@ export default defineConfig({
       // registering their own citizen — shared identity, single round-trip.
       name: 'citizen-setup',
       testMatch: /tests\/fixtures\/citizen\.setup\.ts$/,
+      dependencies: ['profile-setup'],
     },
     {
       name: 'smoke',
       testDir: 'tests/smoke',
       testMatch: /.*\.spec\.ts$/,
-      dependencies: ['api-setup'],
+      dependencies: ['api-setup', 'profile-setup'],
       grepInvert: EXCLUDE_LOCAL_ONLY,
       timeout: 30_000,
       use: {
@@ -93,7 +114,7 @@ export default defineConfig({
       name: 'api',
       testDir: 'tests/api',
       testMatch: /.*\.spec\.ts$/,
-      dependencies: ['api-setup'],
+      dependencies: ['api-setup', 'profile-setup'],
       grepInvert: EXCLUDE_LOCAL_ONLY,
       use: {
         storageState: 'auth-api.json',

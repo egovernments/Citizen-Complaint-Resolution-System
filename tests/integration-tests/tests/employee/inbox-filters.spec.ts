@@ -14,24 +14,30 @@
  *   • locality      — drill the boundary cascade to a leaf ward → every visible
  *                     row is in that locality.
  *
- * Deployment-portable: personas/codes come from env, the seed complaints are
- * created against the live deployment, and each test self-skips with a clear
- * reason when the deployment can't support the case (e.g. a single-complaint
- * -type or single-locality tenant).
+ * Deployment-portable: personas come from getPersona() (deployment-discovered,
+ * not hardcoded env usernames), complaints are always seeded as a CITIZEN via
+ * seed.ts (pgr-services' APPLY action is [CITIZEN, CSR] on every deployment —
+ * seeding with an employee token 400s "INVALID ROLE" the moment that employee
+ * isn't ALSO a citizen, which is only true by bootstrap accident on local),
+ * and each test self-skips with a clear reason when the deployment can't
+ * support the case (e.g. a single-complaint-type or single-locality tenant).
  *
- * Auth: EMP001 (GRO+EMPLOYEE) authenticates at the CITY tenant; the default
+ * Auth: getPersona('employee') logs into the inbox UI; the default
  * "Assigned to All" radio means it sees every complaint, not just its own.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { getDigitToken } from '../utils/auth';
-import { pgrCreate, resolveServiceCode, resolveLocalityCode } from '../utils/launch-fixes/api';
+import { BASE_URL, TENANT } from '../utils/env';
+import { getPersona, resolveSeedPlan, type ResolvedPersona } from '../utils/personas';
+import { seedComplaintAsCitizen } from '../utils/seed';
 import {
-  BASE_URL, TENANT, ROOT_TENANT, EMPLOYEE_USER, EMPLOYEE_PASS,
-  GRO_USER, GRO_PASS, ADMIN_USER, ADMIN_PASS, SERVICE_CODE, LOCALITY_CODE, generateCitizenPhone,
-} from '../utils/env';
-import {
-  getPrincipal, loginEmployeeBrowser, readInboxRows, apiReject, apiServiceCode, type Principal,
+  loginEmployeeBrowser, readInboxRows, apiReject, apiServiceCode, type Principal,
 } from '../utils/employee-ui';
+
+/** Adapt a personas.ts ResolvedPersona to employee-ui.ts's Principal shape —
+ *  same token/userInfo/roles, just `tenant` renamed `authTenant`. */
+function toPrincipal(p: ResolvedPersona): Principal {
+  return { token: p.token, userInfo: p.userInfo, roles: p.roles, authTenant: p.tenant };
+}
 
 const INBOX_URL = `${BASE_URL}/digit-ui/employee/pgr/inbox-v2`;
 const SEARCH_RE = /pgr-services\/v2\/request\/_search/;
@@ -59,34 +65,40 @@ async function fetchLeafServiceCodes(token: string): Promise<string[]> {
   } catch { return []; }
 }
 
-async function seedOpen(filer: Principal, serviceCode: string, localityCode: string): Promise<string> {
-  const created = await pgrCreate({
-    baseUrl: BASE_URL, auth: { token: filer.token, userInfo: filer.userInfo }, tenantId: TENANT,
+async function seedOpen(serviceCode: string, localityCode: string): Promise<string> {
+  const { srid } = await seedComplaintAsCitizen({
     serviceCode, localityCode, description: `inbox-filter seed ${serviceCode} ${Date.now()}`,
-    citizenName: 'Inbox Filter Seed', citizenPhone: generateCitizenPhone(),
   });
-  return created.serviceRequestId;
+  return srid;
 }
 
 test.beforeAll(async () => {
-  admin = await getPrincipal(ADMIN_USER, ADMIN_PASS);
-  gro = await getPrincipal(GRO_USER, GRO_PASS);
-  if (!admin) { seedSkip = `ADMIN (${ADMIN_USER}) login failed — cannot create complaints`; return; }
-  if (!gro) { seedSkip = `GRO (${GRO_USER}) login failed — cannot reject`; return; }
+  // resolveSeedPlan() picks the one (serviceCode, actor) pairing this
+  // deployment can actually ASSIGN — see personas.ts's persona-triple
+  // comment. We don't need the assignee here (nothing in this file drives
+  // ASSIGN), just serviceCodeA + the GRO actor for REJECT and a locality
+  // proven to exist in the live boundary tree.
+  const plan = await resolveSeedPlan();
+  if ('error' in plan) { seedSkip = plan.error; return; }
   try {
-    serviceCodeA = await resolveServiceCode(BASE_URL, admin.token, TENANT, SERVICE_CODE);
-    const localityA = await resolveLocalityCode(BASE_URL, admin.token, TENANT, LOCALITY_CODE);
+    const employee = await getPersona('employee');
+    admin = toPrincipal(employee);
+    gro = toPrincipal(plan.actor);
+
+    serviceCodeA = plan.serviceCode;
+    const localityA = plan.localityCode;
+
     // A second, distinct complaint type (for the complaint-type narrowing test).
-    const leaves = await fetchLeafServiceCodes(admin.token);
+    const leaves = await fetchLeafServiceCodes(employee.token);
     serviceCodeB = leaves.find((c) => c !== serviceCodeA) || '';
     secondTypeAvailable = !!serviceCodeB;
 
     // Guarantee ≥1 OPEN complaint of type A and (if available) type B.
-    await seedOpen(admin, serviceCodeA, localityA);
-    if (serviceCodeB) await seedOpen(admin, serviceCodeB, localityA);
+    await seedOpen(serviceCodeA, localityA);
+    if (serviceCodeB) await seedOpen(serviceCodeB, localityA);
 
     // A known REJECTED complaint (terminal) for the status filter.
-    rejectedSrid = await seedOpen(admin, serviceCodeA, localityA);
+    rejectedSrid = await seedOpen(serviceCodeA, localityA);
     const st = await apiReject(gro, rejectedSrid);
     if (st !== 'REJECTED') seedSkip = `seeded complaint did not reach REJECTED (got ${st})`;
   } catch (err: any) {
@@ -95,8 +107,9 @@ test.beforeAll(async () => {
 });
 
 async function openInbox(page: Page): Promise<void> {
-  const ok = await loginEmployeeBrowser(page, EMPLOYEE_USER, EMPLOYEE_PASS);
-  test.skip(!ok, `employee ${EMPLOYEE_USER} login failed on this deployment`);
+  const employee = await getPersona('employee');
+  const ok = await loginEmployeeBrowser(page, employee.username, employee.password);
+  test.skip(!ok, `employee ${employee.username} login failed on this deployment`);
   await Promise.all([
     page.waitForResponse((r) => SEARCH_RE.test(r.url()) && r.request().method() === 'POST', { timeout: 30_000 }).catch(() => null),
     page.goto(INBOX_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }),
@@ -259,7 +272,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     if (rows.length === 0) {
       // Nothing at that leaf yet — seed one and re-apply the (still-set) filter.
       try {
-        await seedOpen(admin!, serviceCodeA, leaf);
+        await seedOpen(serviceCodeA, leaf);
         url = await applyFilter(page);
         rows = await readInboxRows(page);
       } catch (err: any) {

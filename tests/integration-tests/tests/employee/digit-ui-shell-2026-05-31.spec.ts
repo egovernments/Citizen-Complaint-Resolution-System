@@ -20,12 +20,30 @@ import {
   EMPLOYEE_USER,
   EMPLOYEE_PASS,
   TENANT_LABEL,
-  ASSIGNED_COMPLAINT_ID,
 } from '../utils/env';
+import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 
 const LOGIN_URL = '/digit-ui/employee/user/login';
 const INBOX_URL = '/digit-ui/employee/pgr/inbox-v2';
 const GLOBAL_CONFIGS_URL = '/digit-ui/globalConfigs.js';
+
+const _fixtures = readLifecycleFixtures();
+/**
+ * A complaint known to sit in the logged-in employee's inbox, for the #344
+ * decrypt assertion. env.ts's own ASSIGNED_COMPLAINT_ID export is a dead
+ * naipepea literal (always truthy, so nothing downstream ever notices it's
+ * wrong) — this resolves it properly instead:
+ *   explicit env override
+ *   -> lifecycle.setup.ts's assigned_to_employee (the complaint it drives to
+ *      PENDINGATLME and leaves assigned, specifically so a spec like this one
+ *      has a real "assigned to an employee" SRID on the live deployment)
+ *   -> '' (no cross-deployment fallback — an SRID from a different tenant
+ *      renders "No Results Found" and burns the #344 assertion's whole
+ *      timeout waiting for content that was never going to appear; see
+ *      pgr-details.spec.ts for the same lesson learned the hard way).
+ */
+const ASSIGNED_COMPLAINT_ID =
+  process.env.ASSIGNED_COMPLAINT_ID || _fixtures?.complaints?.assigned_to_employee || '';
 
 test.describe('employee digit-ui shell bundle', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -44,6 +62,13 @@ test.describe('employee digit-ui shell bundle', () => {
     test.fixme(
       true,
       'onboarding-data gap: #505 brand chrome (banner color + 96x96 logo) requires tenant branding onboarded, and #344 needs a seeded ASSIGNED_COMPLAINT_ID in the employee inbox. Both are configurator-seed gaps, not code regressions.',
+    );
+    // Dead code while the fixme above stands, kept correct for when it's lifted:
+    // an empty resolution (no env override, no lifecycle fixture) must skip
+    // with the real cause rather than driving the UI at a blank/undefined SRID.
+    test.skip(
+      !ASSIGNED_COMPLAINT_ID,
+      'no assigned_to_employee complaint available — lifecycle.setup.ts did not seed one; set ASSIGNED_COMPLAINT_ID to override',
     );
 
     // ============ #592 globalConfigs.js ============

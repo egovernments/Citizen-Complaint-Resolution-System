@@ -22,17 +22,18 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { loginViaApi } from '../utils/auth';
-import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { BASE_URL, TENANT } from '../utils/env';
+import { getPersona } from '../utils/personas';
 
-// We authenticate the state-tenant ADMIN (passes at `ke`) and inject the
-// city tenant (`ke.nairobi`) into the Employee.* localStorage keys so
-// getCurrentTenantId() resolves to ke.nairobi for the pgr-services and
-// workflow calls. We previously tried EMP-KE_NAIROBI-000089 but its
-// password broke during the encryption key rotation (see memory:
-// project_naipepea_login_broken — 13 ke.nairobi users in the failing
-// bucket). ADMIN is the deployment's only resilient employee right now.
-const EMPLOYEE_USER = process.env.FLOW5_EMPLOYEE_USER || ADMIN_USER;
-const EMPLOYEE_PASS = process.env.FLOW5_EMPLOYEE_PASS || ADMIN_PASS;
+// getPersona('employee') asks the live deployment who actually holds
+// EMPLOYEE/SUPERUSER instead of assuming ADMIN — it tries FLOW5_EMPLOYEE_USER/
+// EMPLOYEE_USER/etc via personas.ts's candidate list first, and only falls
+// back to ADMIN when nothing else logs in, which is the same net effect the
+// old `FLOW5_EMPLOYEE_USER || ADMIN` fallback had for naipepea. (We
+// previously tried EMP-KE_NAIROBI-000089 there but its password broke during
+// the encryption key rotation — see memory: project_naipepea_login_broken —
+// 13 ke.nairobi users in the failing bucket. ADMIN survived; personas.ts's
+// login() probing CITY then ROOT is what makes that survive portably too.)
 
 // Fixture SRIDs — precedence:
 //   1. explicit env (TERMINAL_COMPLAINT_SRID / NONTERMINAL_COMPLAINT_SRID)
@@ -40,7 +41,16 @@ const EMPLOYEE_PASS = process.env.FLOW5_EMPLOYEE_PASS || ADMIN_PASS;
 //   3. lifecycle.setup.ts output (lifecycle-fixtures.json) — the suite
 //      seeds these against the configured tenant before chromium runs,
 //      so the SRIDs always match the live deployment
-//   4. naipepea defaults (last-resort)
+//
+// There is deliberately NO hardcoded last-resort default. There used to be a
+// pair of naipepea SRIDs here, which meant that on any deployment where
+// lifecycle.setup.ts fail-softed (bomet: ASSIGN 400s with DEPARTMENT_NOT_FOUND
+// because the ADMIN fallback actor has no HRMS department), every story in this
+// file navigated to a complaint that does not exist on the target, rendered
+// "No Results Found", and burned a 30s timeout waiting for a field-pair that
+// was never going to mount. Nine identical timeouts, all reported as UI
+// failures, all actually one missing fixture. A complaint id from a different
+// deployment is not a sane default — with no fixture we skip, naming the cause.
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 const _fixtures = readLifecycleFixtures();
 // NOTE: `?.complaints?.terminal_rated` — BOTH links optional-chained. When
@@ -51,18 +61,41 @@ const TERMINAL_COMPLAINT_ID =
   process.env.TERMINAL_COMPLAINT_SRID
   || process.env.FLOW5_TERMINAL_SRID
   || _fixtures?.complaints?.terminal_rated
-  || 'PG-PGR-2026-04-23-004403';
+  || '';
 const NONTERMINAL_COMPLAINT_ID =
   process.env.NONTERMINAL_COMPLAINT_SRID
   || process.env.FLOW5_NONTERMINAL_SRID
   || _fixtures?.complaints?.non_terminal
-  || 'PG-PGR-2026-05-06-023467';
+  || '';
+
+/** Why the lifecycle seed is unusable, or '' when the fixtures are good. */
+const FIXTURE_SKIP = (() => {
+  if (TERMINAL_COMPLAINT_ID && NONTERMINAL_COMPLAINT_ID) return '';
+  const reason = _fixtures?.skipped_reason
+    ? `lifecycle.setup.ts did not seed complaints: ${_fixtures.skipped_reason}`
+    : 'no lifecycle-fixtures.json on disk — lifecycle.setup.ts did not run';
+  return `${reason}. Override with TERMINAL_COMPLAINT_SRID / NONTERMINAL_COMPLAINT_SRID to pin explicit complaints.`;
+})();
 
 async function openDetails(page: Page, srid: string): Promise<void> {
+  // Skip rather than navigate to a complaint we know isn't there. Without this
+  // the page renders "No Results Found" and the field-pair wait below times out
+  // after 30s, disguising a missing fixture as a UI regression.
+  test.skip(!!FIXTURE_SKIP, FIXTURE_SKIP);
+
+  const employee = await getPersona('employee');
   await loginViaApi(page, {
+    // `tenant` is what gets injected into Employee.* localStorage (the
+    // complaint's own tenant, so pgr-services/workflow calls resolve
+    // correctly); `authTenant` is where the OAuth call itself is aimed.
+    // They can differ — loginViaApi defaults authTenant to root-derived-
+    // from-tenant, which breaks for a real onboarded employee that only
+    // exists at the city tenant. employee.tenant is the tenant
+    // personas.ts's login() actually proved this credential works at.
     tenant: TENANT,
-    username: EMPLOYEE_USER,
-    password: EMPLOYEE_PASS,
+    authTenant: employee.tenant,
+    username: employee.username,
+    password: employee.password,
   });
 
   await page.goto(

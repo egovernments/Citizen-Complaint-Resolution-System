@@ -10,115 +10,30 @@
  *   - The PGR workflow on the root tenant has PENDINGATLME → ESCALATE
  *     → PENDINGATSUPERVISOR with PGR_LME role (PR #635 / commit ce302053)
  *
+ * ESCALATE is a workflow-config capability, not app code, and the two
+ * shipped deployments disagree on it (maputo's pg-derived workflow has no
+ * manual ESCALATE at all; bomet's does) — see the persona-triple comment in
+ * personas.ts and deploy/expectations/*.json. requires() below is the single
+ * source of truth for that: it SKIPs on a deployment that declares ESCALATE
+ * 'absent' (maputo) and FAILs on one that declares it 'required' but it went
+ * missing (a real regression), instead of this file re-deriving the same
+ * answer from an ad-hoc businessService probe.
+ *
  * Setup: PENDINGATLME is a one-shot state, so a static historical
  * complaint can't be relied on to still be sitting there. Instead we seed
- * a FRESH complaint each run and drive it create → ASSIGN → PENDINGATLME,
- * assigning it to EMPLOYEE_USER so the Escalate action shows in their
- * inbox. Set ASSIGNED_COMPLAINT_ID to skip seeding and use a specific
+ * a FRESH complaint each run via seed.ts and drive it create → ASSIGN →
+ * PENDINGATLME. Set ASSIGNED_COMPLAINT_ID to skip seeding and use a specific
  * complaint you know is at PENDINGATLME. If seeding fails, the test
  * self-skips with a clear reason rather than pointing at a dead fixture.
  */
 import { test, expect } from '@playwright/test';
-import { getDigitToken } from '../utils/auth';
-import {
-  pgrCreate,
-  resolveServiceCode,
-  resolveLocalityCode,
-} from '../utils/launch-fixes/api';
-import {
-  BASE_URL,
-  TENANT,
-  ROOT_TENANT,
-  EMPLOYEE_USER,
-  EMPLOYEE_PASS,
-  GRO_USER,
-  GRO_PASS,
-  SERVICE_CODE,
-  LOCALITY_CODE,
-  TENANT_LABEL,
-  generateCitizenPhone,
-} from '../utils/env';
+import { requires, isPresent } from '../utils/capabilities';
+import { getPersona } from '../utils/personas';
+import { seedComplaintAsCitizen, driveToPendingAtLme } from '../utils/seed';
+import { BASE_URL, TENANT, TENANT_LABEL } from '../utils/env';
 
 const LOGIN_URL = '/digit-ui/employee/user/login';
-
-/** Fetch the full service object (needed as the _update body for ASSIGN). */
-async function fetchService(
-  token: string,
-  userInfo: Record<string, unknown>,
-  srid: string,
-): Promise<Record<string, unknown>> {
-  const resp = await fetch(
-    `${BASE_URL}/pgr-services/v2/request/_search?tenantId=${TENANT}&serviceRequestId=${srid}`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ RequestInfo: { apiId: 'Rainmaker', authToken: token, userInfo } }),
-    },
-  );
-  if (!resp.ok) throw new Error(`fetchService ${srid}: HTTP ${resp.status}`);
-  const data: any = await resp.json();
-  const service = data?.ServiceWrappers?.[0]?.service;
-  if (!service) throw new Error(`fetchService ${srid}: no service in response`);
-  return service;
-}
-
-/**
- * Seed a fresh complaint and drive it to PENDINGATLME, assigned to
- * EMPLOYEE_USER (the principal that logs in via the UI below). Returns the
- * new serviceRequestId. Reuses the shared PGR helpers so it stays
- * CRS/legacy-schema compatible across tenants.
- */
-async function seedPendingAtLme(): Promise<string> {
-  // Employee token — this user is BOTH the UI login and the ASSIGN target,
-  // so the seeded complaint lands in their inbox with the Escalate action.
-  const empResp = await getDigitToken({ tenant: ROOT_TENANT, username: EMPLOYEE_USER, password: EMPLOYEE_PASS });
-  const empToken = empResp.access_token;
-  const empUserInfo = (empResp.UserRequest || {}) as Record<string, unknown>;
-  const empUuid = empUserInfo.uuid as string | undefined;
-  if (!empToken || !empUuid) throw new Error(`employee ${EMPLOYEE_USER} login returned no token/uuid`);
-
-  // GRO token — the role the PGR workflow requires for the ASSIGN action.
-  const groResp = await getDigitToken({ tenant: ROOT_TENANT, username: GRO_USER, password: GRO_PASS });
-  const groToken = groResp.access_token;
-  const groUserInfo = (groResp.UserRequest || {}) as Record<string, unknown>;
-  if (!groToken) throw new Error(`GRO ${GRO_USER} login returned no token`);
-
-  // Resolve codes valid on the target tenant (env defaults are Nairobi-shaped).
-  const serviceCode = await resolveServiceCode(BASE_URL, empToken, TENANT, SERVICE_CODE);
-  const localityCode = await resolveLocalityCode(BASE_URL, empToken, TENANT, LOCALITY_CODE);
-
-  // Create (APPLY) — filed by the employee on behalf of a citizen.
-  const created = await pgrCreate({
-    baseUrl: BASE_URL,
-    auth: { token: empToken, userInfo: empUserInfo },
-    tenantId: TENANT,
-    serviceCode,
-    localityCode,
-    description: `#521 escalate seed — ${new Date().toISOString()}`,
-    citizenName: 'Escalate Seed Citizen',
-    citizenPhone: generateCitizenPhone(),
-  });
-  const srid = created.serviceRequestId;
-
-  // ASSIGN (GRO → LME) to move PENDINGFORASSIGNMENT → PENDINGATLME.
-  const fullService = await fetchService(groToken, groUserInfo, srid);
-  const assignResp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${groToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      RequestInfo: { apiId: 'Rainmaker', authToken: groToken, userInfo: groUserInfo },
-      service: fullService,
-      workflow: { action: 'ASSIGN', assignes: [empUuid], comments: '#521 escalate seed assign' },
-    }),
-  });
-  if (!assignResp.ok) {
-    throw new Error(`ASSIGN ${srid} failed: HTTP ${assignResp.status} ${(await assignResp.text()).slice(0, 300)}`);
-  }
-  const assignData: any = await assignResp.json();
-  const status = assignData?.ServiceWrappers?.[0]?.service?.applicationStatus;
-  if (status !== 'PENDINGATLME') throw new Error(`ASSIGN ${srid}: expected PENDINGATLME, got ${status}`);
-  return srid;
-}
+const CAPABILITY = 'workflow.pgr.actions.ESCALATE' as const;
 
 // Resolved at beforeAll time. An explicit ASSIGNED_COMPLAINT_ID env
 // override wins (operator supplied a known PENDINGATLME complaint);
@@ -129,14 +44,30 @@ let COMPLAINT_ID = '';
 let seedSkipReason = '';
 
 test.beforeAll(async () => {
+  // Seeding costs a live PGR create + ASSIGN round-trip. Skip that work when
+  // this deployment cannot show Escalate at all — requires() in the test
+  // body is what actually decides skip-vs-fail; this only avoids burning a
+  // seed + an idgen sequence number on a run that is going to skip anyway.
+  if (!isPresent(CAPABILITY)) return;
+
   if (process.env.ASSIGNED_COMPLAINT_ID) {
     COMPLAINT_ID = process.env.ASSIGNED_COMPLAINT_ID;
     console.log(`[escalate-521] using operator ASSIGNED_COMPLAINT_ID=${COMPLAINT_ID}`);
     return;
   }
   try {
-    COMPLAINT_ID = await seedPendingAtLme();
-    console.log(`[escalate-521] seeded ${COMPLAINT_ID} at PENDINGATLME (assignee=${EMPLOYEE_USER})`);
+    // seedComplaintAsCitizen always files as a CITIZEN — PGR's start-state
+    // APPLY action is restricted to roles [CITIZEN, CSR], so seeding with an
+    // employee token 400s "INVALID ROLE" on any employee that isn't also a
+    // citizen. (It survives on stock deployments only because bootstrap hands
+    // ADMIN the whole role bundle, CITIZEN included — a real onboarded
+    // employee has no such luck.) driveToPendingAtLme reuses the same
+    // (serviceCode, actor, assignee) triple the create used, so the ASSIGN
+    // that follows lines up on the department check instead of guessing.
+    const { srid } = await seedComplaintAsCitizen({ description: `#521 escalate seed — ${new Date().toISOString()}` });
+    await driveToPendingAtLme(srid);
+    COMPLAINT_ID = srid;
+    console.log(`[escalate-521] seeded ${COMPLAINT_ID} at PENDINGATLME`);
   } catch (err: any) {
     seedSkipReason = `could not seed a PENDINGATLME complaint: ${err?.message?.slice(0, 200)}`;
     console.log(`[escalate-521] ${seedSkipReason}`);
@@ -147,16 +78,28 @@ test.describe('employee — manual Escalate action #521', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('PENDINGATLME → Escalate → PENDINGATSUPERVISOR (workflow state moves)', async ({ page }) => {
+    requires(test, CAPABILITY, 'employee #521 escalate');
     test.skip(!!seedSkipReason, seedSkipReason);
     test.skip(!COMPLAINT_ID, 'no complaint at PENDINGATLME available (seed produced no id)');
+
+    // Whoever logs in here just needs the PGR_LME role, not to literally be
+    // the complaint's assignee: egov-workflow-v2's nextActions is computed
+    // from the CALLER's own roles against the businessService state config
+    // (the same fact seed.ts's driveToResolved leans on — "RESOLVE is
+    // role-gated, not assignee-gated"). That sidesteps the EMPLOYEE_USER
+    // env var entirely, which on bomet defaults to ADMIN and does not carry
+    // PGR_LME (see personas.ts's persona-triple comment: HS_GRO has GRO but
+    // not PGR_LME; DEMO_WATER has PGR_LME but no login is known for it).
+    // getPersona('lme') discovers a credentialed PGR_LME holder instead.
+    const lme = await getPersona('lme');
 
     // ============ digit-ui employee login ============
     await page.goto(`${BASE_URL}${LOGIN_URL}?cb=${Date.now()}`);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2_500);
 
-    await page.locator('input[type="text"]').first().pressSequentially(EMPLOYEE_USER, { delay: 60 });
-    await page.locator('input[type="password"]').first().pressSequentially(EMPLOYEE_PASS, { delay: 60 });
+    await page.locator('input[type="text"]').first().pressSequentially(lme.username, { delay: 60 });
+    await page.locator('input[type="password"]').first().pressSequentially(lme.password, { delay: 60 });
 
     const cityCombo = page.getByRole('combobox', { name: /City/i });
     if (!(await cityCombo.textContent())?.includes(TENANT_LABEL)) {
@@ -202,8 +145,12 @@ test.describe('employee — manual Escalate action #521', () => {
     await page.waitForTimeout(3_000);
 
     // ============ Verify workflow state via process-search ============
+    // tenantId is the complaint's own TENANT, not ROOT_TENANT: they only
+    // ever coincided here because bomet is flat (TENANT === ROOT_TENANT).
+    // On a city sub-tenant deployment the complaint's process lives at the
+    // city, and ROOT_TENANT would silently search the wrong tenant.
     const wfResp = await page.request.post(
-      `${BASE_URL}/egov-workflow-v2/egov-wf/process/_search?businessIds=${COMPLAINT_ID}&tenantId=${ROOT_TENANT}`,
+      `${BASE_URL}/egov-workflow-v2/egov-wf/process/_search?businessIds=${COMPLAINT_ID}&tenantId=${TENANT}`,
       {
         headers: { 'Content-Type': 'application/json' },
         data: { RequestInfo: {} },

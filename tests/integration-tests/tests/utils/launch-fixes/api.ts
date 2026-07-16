@@ -1,24 +1,22 @@
 // Direct REST helpers — let tests assert on the wire payload that's
 // actually traveling through the system, not just the rendered DOM.
-// All calls go through the public Kong gateway at naipepea.digit.org so
-// they exercise the same path the browser uses.
 
-// Deployment target. Prefer the suite-wide BASE_URL (set from the active
-// deploy's .env) so these helpers exercise the SAME stack every other spec
-// does. NAIPEPEA_BASE remains an explicit override for the (now-legacy)
-// naipepea demo host. Falls back to localhost, which exists on every
-// freshly-bootstrapped deployment.
-const BASE = process.env.NAIPEPEA_BASE ?? process.env.BASE_URL ?? 'http://localhost';
+// Deployment target + tenants come from env.ts, which resolves them
+// env var -> discovered deployment profile -> legacy default.
+//
+// This file used to re-derive both from process.env with its own
+// `?? 'ke.nairobi'` fallback, on the claim that it read "the same env vars
+// env.ts reads". That was true only while every deployment pinned DIGIT_TENANT:
+// once the pins came out and the profile became the source of truth, this copy
+// kept answering `ke` and every helper here authenticated against a tenant that
+// doesn't exist on a Mozambique stack — surfacing as a bare
+// "login failed: 400 Invalid login credentials" nowhere near the real cause.
+// Import the resolved values; never re-derive deployment shape locally.
+import { BASE_URL, ROOT_TENANT } from '../env';
+
+// NAIPEPEA_BASE remains an explicit override for the (now-legacy) naipepea host.
+const BASE = process.env.NAIPEPEA_BASE ?? BASE_URL;
 const KONG_BASIC = 'Basic ZWdvdi11c2VyLWNsaWVudDo='; // egov-user-client: (no secret) — Kong convention
-
-// Root (state-level) tenant for auth + RequestInfo.userInfo. Derived from the
-// same env vars env.ts reads, so a Kenya run authenticates against `ke` and a
-// Mozambique run against `mz` without any code change.
-const DEFAULT_TENANT =
-  process.env.DIGIT_TENANT ?? 'ke.nairobi';
-const ROOT_TENANT =
-  process.env.ROOT_TENANT ??
-  (DEFAULT_TENANT.includes('.') ? DEFAULT_TENANT.split('.')[0] : DEFAULT_TENANT);
 
 export type EmployeeAuth = {
   token: string;

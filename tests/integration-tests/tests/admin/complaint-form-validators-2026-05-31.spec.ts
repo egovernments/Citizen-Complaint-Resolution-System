@@ -20,19 +20,48 @@
  * combobox no longer exist.
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, TENANT } from '../utils/env';
+import { BASE_URL, TENANT, POSTAL_CODE_PATTERN, POSTAL_CODE_VALID } from '../utils/env';
 import { getMobileValidationRule, generateValidMobile } from '../utils/mdms-mobile';
 
 const USERS_URL = '/configurator/manage/users';
 const EMPLOYEES_URL = '/configurator/manage/employees';
 const COMPLAINT_CREATE_URL = '/configurator/manage/complaints/create';
 
-const POSTAL_ERR = /Enter a valid 5-digit postal code/i;
+// Tenant-agnostic: like MOBILE_ERR below, don't pin the (Kenya-only)
+// "5-digit" copy — configurator/src/admin/validation.ts's postalCode
+// validator sources both the pattern AND the message from
+// globalConfigs/MDMS per-tenant (Maputo's is 4-digit with an optional
+// suffix, `^[0-9]{4}(-[0-9]{2})?$`, not 5-digit), falling back to the
+// English default only when neither is configured. Match the stable
+// "postal code" substring so the assertion holds regardless of which rule
+// actually fired.
+const POSTAL_ERR = /postal code/i;
 // Tenant-agnostic: the complaint create form validates mobile via the
 // MDMS-driven `useMobileValidator` hook, whose message is "Please enter a
 // valid mobile number (…)" on every tenant. Match the stable substring
 // rather than pinning the (Kenya-only) copy the old test asserted.
 const MOBILE_ERR = /valid mobile/i;
+
+/**
+ * A postal-code value guaranteed to fail POSTAL_CODE_PATTERN on THIS
+ * deployment. The old literal '1234' assumed Kenya's 5-digit rule; on
+ * mz.maputo's `^[0-9]{4}(-[0-9]{2})?$` it's a VALID code (bare 4 digits,
+ * no suffix), so the NEG assertion below would never have fired there.
+ * Every postal rule we've seen is digits-only, so letters are a safe
+ * invalid probe — verified against the live pattern rather than assumed.
+ */
+function invalidPostalSample(): string {
+  let re: RegExp;
+  try {
+    re = new RegExp(POSTAL_CODE_PATTERN);
+  } catch {
+    return 'ABCDE';
+  }
+  for (const candidate of ['ABCDE', '1', '999999999999']) {
+    if (!re.test(candidate)) return candidate;
+  }
+  return 'ABCDE'; // last resort — some exotic pattern accepted every candidate above
+}
 
 test.describe('admin complaint create — validator bundle 2026-05-30', () => {
   test('users + edit + create + validators bidirectional', async ({ page }) => {
@@ -113,7 +142,7 @@ test.describe('admin complaint create — validator bundle 2026-05-30', () => {
     // ============ #478 postal + #447 mobile validators NEG ============
     const pincode = page.locator('input[name="address.pincode"]').first();
     await pincode.click();
-    await pincode.pressSequentially('1234', { delay: 120 });
+    await pincode.pressSequentially(invalidPostalSample(), { delay: 120 });
     await page.waitForTimeout(800);
 
     const mobile = page.locator('input[name="citizen.mobileNumber"]').first();
@@ -136,7 +165,7 @@ test.describe('admin complaint create — validator bundle 2026-05-30', () => {
     // ============ #478 + #447 validators POS ============
     await pincode.click({ clickCount: 3 });
     await page.keyboard.press('Backspace');
-    await pincode.pressSequentially('00100', { delay: 120 });
+    await pincode.pressSequentially(POSTAL_CODE_VALID, { delay: 120 });
     await page.waitForTimeout(800);
     await mobile.click({ clickCount: 3 });
     await page.keyboard.press('Backspace');
@@ -147,7 +176,7 @@ test.describe('admin complaint create — validator bundle 2026-05-30', () => {
 
     await expect(
       page.locator('[role="alert"]').filter({ hasText: POSTAL_ERR }),
-      '#478 — postal error must clear on valid 00100',
+      `#478 — postal error must clear on tenant-valid ${POSTAL_CODE_VALID}`,
     ).toHaveCount(0);
     await expect(
       page.locator('[role="alert"]').filter({ hasText: MOBILE_ERR }),

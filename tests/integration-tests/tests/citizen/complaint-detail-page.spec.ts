@@ -1,66 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { pgrCreate, resolveServiceCode, resolveLocalityCode } from '../utils/launch-fixes/api';
-import {
-  BASE_URL,
-  TENANT,
-  ROOT_TENANT,
-  FIXED_OTP,
-  DEFAULT_PASSWORD,
-  SERVICE_CODE,
-  LOCALITY_CODE,
-} from '../utils/env';
+import { BASE_URL } from '../utils/env';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
+import { seedComplaintAsCitizen } from '../utils/seed';
 
 // Disable trace/video so the spec runs cleanly with --no-deps (the
 // .playwright-artifacts-0 dir is only created by the full setup DAG).
 test.use({ trace: 'off', video: 'off' });
-
-interface CitizenAuth {
-  token: string;
-  userInfo: Record<string, unknown>;
-}
-
-/**
- * Obtain a fresh {token, userInfo} for the suite-wide provisioned citizen by
- * exchanging their mobile for an access token. `pgrCreate` needs the full
- * UserRequest as RequestInfo.userInfo (accountId is derived from it), which
- * the persisted fixture doesn't carry, so we re-exchange here.
- */
-async function loginProvisionedCitizen(phone: string): Promise<CitizenAuth> {
-  await fetch(`${BASE_URL}/user-otp/v1/_send`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      otp: { mobileNumber: phone, tenantId: ROOT_TENANT, type: 'login', userType: 'CITIZEN' },
-    }),
-  }).catch(() => {});
-
-  const oauth = async (password: string) =>
-    fetch(`${BASE_URL}/user/oauth/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-      },
-      body: new URLSearchParams({
-        grant_type: 'password',
-        username: phone,
-        password,
-        tenantId: ROOT_TENANT,
-        scope: 'read',
-        userType: 'CITIZEN',
-      }).toString(),
-    });
-
-  let resp = await oauth(FIXED_OTP);
-  if (!resp.ok) resp = await oauth(DEFAULT_PASSWORD);
-  if (!resp.ok) {
-    throw new Error(`citizen token exchange failed (${resp.status}): ${(await resp.text()).slice(0, 200)}`);
-  }
-  const data = (await resp.json()) as { access_token: string; UserRequest: Record<string, unknown> };
-  return { token: data.access_token, userInfo: data.UserRequest };
-}
 
 test('complaint details page loads without crashing for a freshly-filed complaint', {
   annotation: {
@@ -69,7 +15,7 @@ test('complaint details page loads without crashing for a freshly-filed complain
 
 Steps:
 1. setTimeout 120s; attach a pageerror listener to capture uncaught JS errors.
-2. API-seed a complaint for the provisioned citizen via pgrCreate (resolving a valid service/locality code for the deployment). Skip cleanly if create is blocked (e.g. the ASSIGN department bug prevents create on some tenants).
+2. API-seed a complaint for the provisioned citizen via seedComplaintAsCitizen() (the seed plan's deployment-correct serviceCode/localityCode — see personas.ts). Skip cleanly if create is blocked (e.g. no viable (serviceCode, assignee) pair exists on this deployment).
 3. citizenOtpLogin as the provisioned citizen.
 4. Navigate to /digit-ui/citizen/pgr/complaints/{id}, wait 12s for hydration.
 5. Assert "Complaint Summary" heading is visible and the complaint ID appears in the body.
@@ -93,22 +39,14 @@ Catches the class of regressions where a service code has missing fields and the
   // API-seed a complaint owned by the provisioned citizen. A freshly-created
   // PENDINGFORASSIGNMENT complaint is enough to render the detail page — no
   // workflow transition (which needs a PGR_LME/dept) is required here.
+  // seedComplaintAsCitizen() always uses a CITIZEN token (APPLY is
+  // [CITIZEN, CSR] on every deployment — see seed.ts) and picks the seed
+  // plan's deployment-correct (serviceCode, localityCode) rather than
+  // guessing env literals that only exist on Nairobi.
   let complaintId: string;
   try {
-    const auth = await loginProvisionedCitizen(provisioned.mobile);
-    const serviceCode = await resolveServiceCode(BASE_URL, auth.token, TENANT, SERVICE_CODE);
-    const localityCode = await resolveLocalityCode(BASE_URL, auth.token, TENANT, LOCALITY_CODE);
-    const created = await pgrCreate({
-      baseUrl: BASE_URL,
-      auth,
-      tenantId: TENANT,
-      serviceCode,
-      localityCode,
-      description: 'PW detail-page test — auto-filed',
-      citizenName: provisioned.name,
-      citizenPhone: provisioned.mobile,
-    });
-    complaintId = created.serviceRequestId;
+    const created = await seedComplaintAsCitizen({ description: 'PW detail-page test — auto-filed' });
+    complaintId = created.srid;
   } catch (e) {
     test.skip(true, `complaint create blocked on this deployment: ${(e as Error).message.slice(0, 200)}`);
     return;

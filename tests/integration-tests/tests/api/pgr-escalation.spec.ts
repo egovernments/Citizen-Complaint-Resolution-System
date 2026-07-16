@@ -2,7 +2,7 @@
  * PGR Escalation — API-only
  *
  * Tests the manual escalation workflow using only API calls (no browser):
- *   1. Acquire admin + citizen tokens
+ *   1. Acquire an admin token
  *   2. Ensure ESCALATE action exists in PGR workflow (add if missing)
  *   3. Ensure employee hierarchy — at least one reportingTo relationship in HRMS
  *   4. Citizen creates complaint
@@ -14,20 +14,35 @@
  *
  * Prerequisites are auto-seeded (tests 2-3). The test suite is idempotent.
  *
- * Run: npx playwright test tests/specs/pgr-escalation-api.spec.ts
+ * Deployment-independence notes:
+ *  - Complaints are always filed via seed.ts's seedComplaintAsCitizen(), which
+ *    files as a CITIZEN — PGR's APPLY action is [CITIZEN, CSR] on every
+ *    deployment, so an ADMIN token 400s "INVALID ROLE" on bomet. This used to
+ *    register its own throwaway citizen via the OTP flow; that's exactly what
+ *    seedComplaintAsCitizen() already does (against the shared per-run fixture),
+ *    so the bespoke registerCitizen() was pure duplication.
+ *  - Every ASSIGN/ESCALATE payload below sets workflow.assignes, and PGR's
+ *    ServiceRequestValidator.validateDepartment() checks EVERY one of those
+ *    assignees — not just the first — against the complaint type's department
+ *    (backend/pgr-services/.../ServiceRequestValidator.java:152-192). The old
+ *    "first 3 non-ADMIN employees" hierarchy picked whoever HRMS happened to
+ *    return first, with no department in common with SERVICE_CODE. That's
+ *    exactly the bomet false-negative: "INVALID_ASSIGNMENT: cannot be assigned
+ *    to employee of department [DEPT_3]". The hierarchy built in test 3 is now
+ *    anchored on resolveSeedPlan()'s assignee (already proven department- and
+ *    role-compatible) and requires every other link in the chain to share that
+ *    same department — a deployment that can't supply 3 such employees
+ *    genuinely can't exercise a 2-level escalation, and skips rather than
+ *    faking a pass with an incompatible hierarchy.
+ *
+ * Run: npx playwright test tests/api/pgr-escalation.spec.ts
  */
 import { test, expect } from '@playwright/test';
 import { getDigitToken } from '../utils/auth';
-import {
-  BASE_URL, TENANT, ROOT_TENANT,
-  ADMIN_USER, ADMIN_PASS, FIXED_OTP,
-  DEFAULT_PASSWORD,
-  SERVICE_CODE, LOCALITY_CODE,
-  generateCitizenPhone,
-} from '../utils/env';
-
-const CITIZEN_PHONE = generateCitizenPhone();
-const CITIZEN_NAME = 'E2E Escalation Citizen';
+import { BASE_URL, TENANT, ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { resolveSeedPlan } from '../utils/personas';
+import { getProfile } from '../utils/profile';
+import { seedComplaintAsCitizen } from '../utils/seed';
 
 // ---------------------------------------------------------------------------
 // Local helpers
@@ -45,60 +60,6 @@ async function fetchComplaint(token: string, userInfo: Record<string, unknown>, 
   );
   const data: any = await resp.json();
   return data.ServiceWrappers[0].service;
-}
-
-/** Register a citizen via OTP flow and return token. */
-async function registerCitizen(phone: string): Promise<{ token: string; userInfo: Record<string, unknown> }> {
-  await fetch(`${BASE_URL}/user-otp/v1/_send`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      otp: { mobileNumber: phone, tenantId: ROOT_TENANT, type: 'login', userType: 'CITIZEN' },
-    }),
-  });
-
-  let resp = await fetch(`${BASE_URL}/user/oauth/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-    },
-    body: new URLSearchParams({
-      grant_type: 'password', username: phone, password: FIXED_OTP,
-      tenantId: ROOT_TENANT, scope: 'read', userType: 'CITIZEN',
-    }).toString(),
-  });
-
-  if (!resp.ok) {
-    await fetch(`${BASE_URL}/user/citizen/_create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker' },
-        user: {
-          name: CITIZEN_NAME, userName: phone, mobileNumber: phone,
-          password: DEFAULT_PASSWORD, tenantId: ROOT_TENANT, type: 'CITIZEN',
-          roles: [{ code: 'CITIZEN', name: 'Citizen', tenantId: ROOT_TENANT }],
-          otpReference: FIXED_OTP,
-        },
-      }),
-    });
-
-    resp = await fetch(`${BASE_URL}/user/oauth/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-      },
-      body: new URLSearchParams({
-        grant_type: 'password', username: phone, password: FIXED_OTP,
-        tenantId: ROOT_TENANT, scope: 'read', userType: 'CITIZEN',
-      }).toString(),
-    });
-  }
-
-  const data: any = await resp.json();
-  return { token: data.access_token, userInfo: data.UserRequest };
 }
 
 /** Search HRMS employees for a tenant. */
@@ -162,8 +123,6 @@ async function assertOk(resp: Response, context: string): Promise<any> {
 test.describe.serial('PGR escalation — API only', () => {
   let adminToken: string;
   let adminUserInfo: Record<string, unknown>;
-  let citizenToken: string;
-  let citizenUserInfo: Record<string, unknown>;
   let serviceRequestId: string;
   let employeeUuid: string;
   let supervisorUuid: string;
@@ -172,16 +131,14 @@ test.describe.serial('PGR escalation — API only', () => {
   /** Set to true when prerequisites (workflow + hierarchy) are confirmed. */
   let prerequisitesMet = false;
 
-  test('1 — acquire admin and citizen tokens', {
+  test('1 — acquire admin token', {
     annotation: {
       type: 'description',
-      description: `Token-acquisition step for the API-only PGR escalation lifecycle. Same shape as the basic PGR lifecycle's token step but feeds a longer chain of escalation tests that all reuse adminToken/citizenToken.
+      description: `Token-acquisition step for the API-only PGR escalation lifecycle. Every complaint this suite files goes through seedComplaintAsCitizen() (tests 4/10/13), which owns its own citizen identity — this step only needs the admin token that drives ASSIGN/ESCALATE/RESOLVE and the HRMS/workflow patching in tests 2-3.
 
 Steps:
 1. getDigitToken with ROOT_TENANT, ADMIN_USER, ADMIN_PASS; assert access_token is truthy.
 2. Stash adminToken and adminUserInfo.
-3. registerCitizen(CITIZEN_PHONE) — sends OTP, then logs in or creates+logs-in.
-4. Assert citizen response token is truthy; stash citizenToken + citizenUserInfo.
 
 First link in a serial chain — every later step is gated on prerequisitesMet, which is set by step 3.`,
     },
@@ -194,12 +151,7 @@ First link in a serial chain — every later step is gated on prerequisitesMet, 
     expect(adminResp.access_token).toBeTruthy();
     adminToken = adminResp.access_token;
     adminUserInfo = adminResp.UserRequest as Record<string, unknown>;
-
-    const citizenResp = await registerCitizen(CITIZEN_PHONE);
-    expect(citizenResp.token).toBeTruthy();
-    citizenToken = citizenResp.token;
-    citizenUserInfo = citizenResp.userInfo;
-    console.log(`Admin and citizen (${CITIZEN_PHONE}) tokens acquired`);
+    console.log('Admin token acquired');
   });
 
   test('2 — ensure PGR workflow config is correct (ESCALATE, role grants, nextState fix)', {
@@ -325,40 +277,62 @@ Self-healing: safe to run many times. If the workflow seed gets re-applied betwe
   test('3 — ensure 2-level employee hierarchy (reportingTo) in HRMS', {
     annotation: {
       type: 'description',
-      description: `Builds (idempotently) the 2-level employee hierarchy that escalation walks: subordinate → supervisor → super-supervisor. Picks three non-ADMIN employees and updates their assignment.reportingTo via HRMS _update if not already linked. Sets prerequisitesMet so later tests can skip cleanly when the env can't supply enough employees.
+      description: `Builds (idempotently) the 2-level employee hierarchy that escalation walks: subordinate → supervisor → super-supervisor. Every ASSIGN/ESCALATE hop below sets workflow.assignes, and PGR checks EACH assignee's HRMS department against the complaint type's — so, unlike the old "first 3 non-ADMIN employees" picker, every link in the chain must hold the SAME department as resolveSeedPlan()'s chosen assignee, not just be a warm body. Sets prerequisitesMet so later tests can skip cleanly when the deployment can't supply enough same-department employees.
 
 Steps:
 1. searchEmployees(adminToken, TENANT); assert count > 0.
-2. If fewer than 3 employees exist, test.skip with a clear reason and return.
-3. Filter out ADMIN; abort if fewer than 3 candidates remain.
-4. Pick employees[0] = subordinate, [1] = supervisor, [2] = super-supervisor.
-5. Call ensureReportingTo(subordinate, supervisor.uuid) — patches via HRMS _update only if not already set.
-6. Same for ensureReportingTo(supervisor, superSupervisor.uuid).
-7. Stash employeeUuid + supervisorUuid; refresh allEmployees so subsequent tests see updated reportingTo.
-8. Set prerequisitesMet = true.
+2. resolveSeedPlan() — the (serviceCode, assignee) pair PGR's department check will actually accept. test.skip with the plan's own error if it can't be resolved.
+3. Look up that serviceCode's department in the profile's complaint-type catalogue.
+4. Filter employees (excluding ADMIN) down to ones holding that department in any HRMS assignment; find the plan's assignee within that set as the anchor (subordinate).
+5. test.skip if fewer than 2 OTHER same-department employees remain — a 2-level chain needs 3 total, and a deployment with only 1 employee per department (bomet's WATER_ENV, for instance) genuinely can't supply one.
+6. Call ensureReportingTo(subordinate, supervisor.uuid) — patches via HRMS _update only if not already set.
+7. Same for ensureReportingTo(supervisor, superSupervisor.uuid).
+8. Stash employeeUuid + supervisorUuid; refresh allEmployees so subsequent tests see updated reportingTo.
+9. Set prerequisitesMet = true.
 
-If this fails due to insufficient employees, downstream escalation tests skip rather than producing red noise.`,
+If this fails due to insufficient same-department employees, downstream escalation tests skip rather than producing red noise (or, worse, a false pass by escalating to an incompatible department).`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     allEmployees = await searchEmployees(adminToken, TENANT);
     expect(allEmployees.length).toBeGreaterThan(0);
     console.log(`Found ${allEmployees.length} employees in ${TENANT}`);
 
-    if (allEmployees.length < 3) {
-      test.skip(true, 'Need at least 3 employees to create 2-level hierarchy');
+    const plan = await resolveSeedPlan();
+    if ('error' in plan) {
+      test.skip(true, `Cannot build an escalation hierarchy: ${plan.error}`);
+      return;
+    }
+    const department = getProfile().complaintTypes.services.find((s) => s.serviceCode === plan.serviceCode)?.department;
+
+    // Non-ADMIN employees sharing SERVICE_CODE's department — the pool every
+    // hop of the chain (not just the leaf) must be drawn from, since PGR
+    // re-validates the department on every assignee change (ASSIGN AND each
+    // ESCALATE self-loop), not only the first ASSIGN.
+    const deptCandidates = allEmployees.filter(
+      (e: any) => e.user?.userName !== 'ADMIN' && (e.assignments || []).some((a: any) => a.department === department),
+    );
+    const subordinate = deptCandidates.find((e: any) => e.uuid === plan.assigneeUuid);
+    if (!subordinate) {
+      test.skip(
+        true,
+        `resolveSeedPlan() picked assignee ${plan.assigneeCode} (department '${department}') but it wasn't found ` +
+          `re-searching HRMS at ${TENANT} — possible discovery/HRMS state mismatch`,
+      );
+      return;
+    }
+    const others = deptCandidates.filter((e: any) => e.uuid !== plan.assigneeUuid);
+    if (others.length < 2) {
+      test.skip(
+        true,
+        `Need ≥2 more employees in department '${department}' (SERVICE_CODE=${plan.serviceCode}'s department) besides ` +
+          `the seed-plan assignee ${plan.assigneeCode} to build a 2-level reportingTo hierarchy where every ` +
+          `ASSIGN/ESCALATE hop passes PGR's department check — found ${others.length} (${deptCandidates.length} total in department)`,
+      );
       return;
     }
 
-    // Pick 3 non-ADMIN employees for the chain: employee → supervisor → super-supervisor
-    const candidates = allEmployees.filter((e: any) => e.user?.userName !== 'ADMIN');
-    if (candidates.length < 3) {
-      test.skip(true, 'Need at least 3 non-ADMIN employees for hierarchy');
-      return;
-    }
-
-    const subordinate = candidates[0];
-    const supervisor = candidates[1];
-    const superSupervisor = candidates[2];
+    const supervisor = others[0];
+    const superSupervisor = others[1];
 
     // Helper to set reportingTo on an employee's current assignment (idempotent)
     async function ensureReportingTo(emp: any, reportingToUuid: string): Promise<boolean> {
@@ -406,44 +380,21 @@ If this fails due to insufficient employees, downstream escalation tests skip ra
   test('4 — citizen creates complaint', {
     annotation: {
       type: 'description',
-      description: `Creates the first complaint for the escalation lifecycle. Same shape as the basic PGR lifecycle's create step — gates on prerequisitesMet so the run skips cleanly if the workflow patch or HRMS hierarchy didn't land.
+      description: `Creates the first complaint for the escalation lifecycle via seed.ts's seedComplaintAsCitizen(), which files as a CITIZEN with resolveSeedPlan()'s serviceCode/localityCode — the same plan test 3 anchored the reportingTo hierarchy on, so the complaint's department matches every assignee in the chain. Gates on prerequisitesMet so the run skips cleanly if the workflow patch or HRMS hierarchy didn't land.
 
 Steps:
 1. test.skip if !prerequisitesMet.
-2. POST /pgr-services/v2/request/_create with citizen token and a fully-populated service object (service code, source=web, address with non-null geoLocation, citizen name+mobile).
-3. Workflow body: { action: 'APPLY' }.
-4. assertOk + extract serviceRequestId.
-5. Assert applicationStatus === 'PENDINGFORASSIGNMENT'.
+2. seedComplaintAsCitizen({ description }) — files as CITIZEN (APPLY is [CITIZEN, CSR] on every deployment).
+3. Assert status === 'PENDINGFORASSIGNMENT'.
 
 Stashes serviceRequestId for the assign + escalate steps.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     test.skip(!prerequisitesMet, 'Prerequisites not met (workflow or HRMS hierarchy missing)');
 
-    const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_create`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${citizenToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker', authToken: citizenToken, userInfo: citizenUserInfo },
-        service: {
-          tenantId: TENANT,
-          serviceCode: SERVICE_CODE,
-          description: `E2E escalation test — ${new Date().toISOString()}`,
-          source: 'web',
-          address: {
-            city: TENANT,
-            locality: { code: LOCALITY_CODE },
-            geoLocation: { latitude: 0, longitude: 0 },
-          },
-          citizen: { name: CITIZEN_NAME, mobileNumber: CITIZEN_PHONE },
-        },
-        workflow: { action: 'APPLY', verificationDocuments: [] },
-      }),
-    });
-
-    const data = await assertOk(resp, 'PGR _create');
-    serviceRequestId = data.ServiceWrappers[0].service.serviceRequestId;
-    expect(data.ServiceWrappers[0].service.applicationStatus).toBe('PENDINGFORASSIGNMENT');
+    const created = await seedComplaintAsCitizen({ description: `E2E escalation test — ${new Date().toISOString()}` });
+    serviceRequestId = created.srid;
+    expect(created.status).toBe('PENDINGFORASSIGNMENT');
     console.log(`Complaint created: ${serviceRequestId} → PENDINGFORASSIGNMENT`);
   });
 
@@ -720,38 +671,20 @@ Catches a regression where a transition implementation overwrites or strips addi
   test('10 — citizen creates complaint for PENDINGFORASSIGNMENT escalation', {
     annotation: {
       type: 'description',
-      description: `Creates a fresh third complaint to exercise the early-stage escalation path: ESCALATE on PENDINGFORASSIGNMENT (before anyone has been assigned). Used when the initial assign is stuck and a supervisor needs to re-route pre-assignment.
+      description: `Creates a fresh third complaint to exercise the early-stage escalation path: ESCALATE on PENDINGFORASSIGNMENT (before anyone has been assigned). Used when the initial assign is stuck and a supervisor needs to re-route pre-assignment. Filed via seedComplaintAsCitizen() so it lands on the same resolveSeedPlan() service/department as the rest of this suite.
 
 Steps:
 1. test.skip if !prerequisitesMet.
-2. POST /pgr-services/v2/request/_create with citizen token and a fully-populated service object.
-3. Workflow body: { action: 'APPLY' }.
-4. assertOk + extract pfaComplaintId.
-5. Assert applicationStatus === 'PENDINGFORASSIGNMENT'.
+2. seedComplaintAsCitizen({ description }).
+3. Assert status === 'PENDINGFORASSIGNMENT'.
 
 Stashes pfaComplaintId for the PFA-escalate + cleanup steps (11 and 12).`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     test.skip(!prerequisitesMet, 'Prerequisites not met');
-    const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_create`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${citizenToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker', authToken: citizenToken, userInfo: citizenUserInfo },
-        service: {
-          tenantId: TENANT,
-          serviceCode: SERVICE_CODE,
-          description: `E2E PFA-escalate — ${new Date().toISOString()}`,
-          source: 'web',
-          address: { city: TENANT, locality: { code: LOCALITY_CODE }, geoLocation: { latitude: 0, longitude: 0 } },
-          citizen: { name: CITIZEN_NAME, mobileNumber: CITIZEN_PHONE },
-        },
-        workflow: { action: 'APPLY', verificationDocuments: [] },
-      }),
-    });
-    const data = await assertOk(resp, 'PGR _create (pfa path)');
-    pfaComplaintId = data.ServiceWrappers[0].service.serviceRequestId;
-    expect(data.ServiceWrappers[0].service.applicationStatus).toBe('PENDINGFORASSIGNMENT');
+    const created = await seedComplaintAsCitizen({ description: `E2E PFA-escalate — ${new Date().toISOString()}` });
+    pfaComplaintId = created.srid;
+    expect(created.status).toBe('PENDINGFORASSIGNMENT');
     console.log(`Third complaint created: ${pfaComplaintId} → PENDINGFORASSIGNMENT`);
   });
 
@@ -869,7 +802,7 @@ Teardown is API-only because PGR has no UI delete affordance — the cleanup is 
 
 Steps:
 1. test.skip if !prerequisitesMet; setTimeout 240s.
-2. POST PGR _create as the citizen; capture autoSrid.
+2. seedComplaintAsCitizen() to file as CITIZEN on resolveSeedPlan()'s serviceCode; capture autoSrid.
 3. ASSIGN via raw /egov-wf/process/_transition (NOT PGR _update) — this is the only path that populates ProcessInstance.assignes for self-loops, which the scheduler reads to find escalation targets.
 4. Loop with 15s polls, fetching workflow history with history=true, until any ProcessInstance with action=ESCALATE and comment starting "Auto-escalated" appears, or 200s elapse.
 5. Assert escalated === true and the level (count of auto-escalates) >= 1.
@@ -893,25 +826,10 @@ Long-running (240s) because it depends on a real scheduler tick + real SLA breac
     test.skip(!prerequisitesMet, 'Prerequisites not met');
     test.setTimeout(240_000);  // up to 4 min for the SLA breach + scheduler tick
 
-    // Create a fresh complaint
-    const createResp = await fetch(`${BASE_URL}/pgr-services/v2/request/_create`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${citizenToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker', authToken: citizenToken, userInfo: citizenUserInfo },
-        service: {
-          tenantId: TENANT,
-          serviceCode: SERVICE_CODE,
-          description: `E2E auto-escalation — ${new Date().toISOString()}`,
-          source: 'web',
-          address: { city: TENANT, locality: { code: LOCALITY_CODE }, geoLocation: { latitude: 0, longitude: 0 } },
-          citizen: { name: CITIZEN_NAME, mobileNumber: CITIZEN_PHONE },
-        },
-        workflow: { action: 'APPLY', verificationDocuments: [] },
-      }),
-    });
-    const createData = await assertOk(createResp, 'PGR _create (auto-escalation)');
-    const autoSrid = createData.ServiceWrappers[0].service.serviceRequestId;
+    // Create a fresh complaint — same seedComplaintAsCitizen() path as tests
+    // 4 and 10, so it lands on the same department as employeeUuid.
+    const created = await seedComplaintAsCitizen({ description: `E2E auto-escalation — ${new Date().toISOString()}` });
+    const autoSrid = created.srid;
     console.log(`Auto-escalation test complaint: ${autoSrid}`);
 
     // ASSIGN via raw workflow /process/_transition so workflow process_instance.assignes is populated

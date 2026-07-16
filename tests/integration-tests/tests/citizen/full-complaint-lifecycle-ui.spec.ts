@@ -17,7 +17,6 @@ import { citizenOtpLogin } from '../utils/citizen-login';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
   ADMIN_USER, ADMIN_PASS, FIXED_OTP,
-  SERVICE_CODE, LOCALITY_CODE,
   DEFAULT_PASSWORD,
   generateCitizenPhone,
 } from '../utils/env';
@@ -153,30 +152,59 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
       await page.waitForTimeout(5000);
     };
 
+    // Cross-build dropdown locator. The modern digit-ui (CreatePGRFlowV2)
+    // renders each hierarchy level as a shadcn <button role="combobox">;
+    // older builds used input.digit-dropdown-employee-select-wrap--elipses.
+    // Matching only the legacy input made this spec time out on the v2 build
+    // (the wizard was never touched, so NEXT stayed disabled). Match both.
+    const wizardDropdowns = page.locator(
+      'button[role="combobox"], input.digit-dropdown-employee-select-wrap--elipses',
+    );
+    const optionLocator = () =>
+      page.locator(
+        '[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible',
+      );
+
     // Helper: select dropdown option
     const selectDropdownOption = async (index: number) => {
-      const dropdowns = page.locator('input.digit-dropdown-employee-select-wrap--elipses');
-      const dropdown = dropdowns.nth(index);
+      const dropdown = wizardDropdowns.nth(index);
       await dropdown.waitFor({ state: 'visible', timeout: 10_000 });
       await dropdown.click();
       await page.waitForTimeout(1000);
-      const items = page.locator('.digit-dropdown-item');
+      const items = optionLocator();
       const count = await items.count();
       console.log(`Dropdown ${index}: ${count} items`);
       await items.first().click();
       await page.waitForTimeout(500);
     };
 
-    // Step 0: Select complaint type
+    // Walk a depth-agnostic dropdown cascade. Used for both the complaint-type
+    // levels and the boundary levels: depth is tenant-defined (complaint types
+    // are 2 levels on mz.maputo vs 4 on ke; boundaries are 4 on MAPUTO_ADMIN —
+    // Município > Distrito Municipal > Bairro > Quarteirão), each child renders
+    // disabled until the parent's lookup lands, and every level carrying options
+    // is mandatory — so NEXT only enables once the deepest is picked.
+    const walkCascade = async (firstLevelTimeout = 10_000) => {
+      for (let level = 0; level < 8; level++) {
+        const combobox = wizardDropdowns.nth(level);
+        const visible = await combobox
+          .isVisible({ timeout: level === 0 ? firstLevelTimeout : 3000 })
+          .catch(() => false);
+        if (!visible) break;
+        await expect(combobox).toBeEnabled({ timeout: 8000 }).catch(() => {});
+        if (!(await combobox.isEnabled().catch(() => false))) break;
+        const hasPlaceholder = await combobox
+          .evaluate((el) => /^Select/i.test((el as HTMLElement).innerText.trim()))
+          .catch(() => true);
+        if (!hasPlaceholder) continue;
+        await selectDropdownOption(level);
+        await page.waitForTimeout(1500);
+      }
+    };
+
+    // Step 0: Select complaint type.
     console.log('Step 0: Selecting complaint type...');
-    await selectDropdownOption(0);
-    await page.waitForTimeout(2000);
-    const subtypeCount = await page.locator('input.digit-dropdown-employee-select-wrap--elipses').count();
-    if (subtypeCount > 1) {
-      console.log('Selecting subtype...');
-      await selectDropdownOption(1);
-      await page.waitForTimeout(1000);
-    }
+    await walkCascade();
     await snap(page, '02a-complaint-type');
     await clickNextOrSubmit('NEXT');
 
@@ -184,8 +212,13 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     console.log('Step 1: Geolocation — skipping...');
     await clickNextOrSubmit('NEXT');
 
-    // Step 2: Location details — skip
-    console.log('Step 2: Location details — skipping...');
+    // Step 2: Location details — the boundary cascade lives here and its top
+    // level is required (rendered with a `*`), so this step cannot be skipped:
+    // clicking NEXT blind leaves the button disabled until the test times out.
+    console.log('Step 2: Location details — walking boundary cascade...');
+    await page.waitForTimeout(3000);
+    await walkCascade(5000);
+    await snap(page, '02a1-location-details');
     await clickNextOrSubmit('NEXT');
 
     // Step 3: Address — handle radio buttons (city) + locality
@@ -193,7 +226,10 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     await page.waitForTimeout(2000);
 
     const radioButtons = page.locator('input[type="radio"]');
-    const boundaryDropdowns = page.locator('input[class*="select-wrap--elipses"]');
+    // Cross-build: v2 renders boundary levels as shadcn button comboboxes.
+    const boundaryDropdowns = page.locator(
+      'button[role="combobox"], input[class*="select-wrap--elipses"]',
+    );
 
     if (await radioButtons.first().isVisible({ timeout: 5000 }).catch(() => false)) {
       const radioCount = await radioButtons.count();
@@ -222,13 +258,13 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
       // Try waiting for a dropdown (>= 5 localities)
       if (!localitySelected) {
         try {
-          const localityDropdown = page.locator('input[class*="select-wrap--elipses"]');
+          const localityDropdown = boundaryDropdowns;
           await localityDropdown.first().waitFor({ state: 'visible', timeout: 10_000 });
           const ddCount = await localityDropdown.count();
           console.log(`Locality dropdown appeared (${ddCount} matching)`);
           await localityDropdown.first().click();
           await page.waitForTimeout(1000);
-          const items = page.locator('.digit-dropdown-item, .option-item, [class*="dropdown-item"], [class*="option"]');
+          const items = optionLocator();
           const itemCount = await items.count();
           console.log(`Locality dropdown items: ${itemCount}`);
           if (itemCount > 0) {
@@ -257,8 +293,22 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
       await snap(page, '02b-address');
       await clickNextOrSubmit('NEXT');
     } else {
-      console.log('No address controls found — skipping');
-      await clickNextOrSubmit('NEXT');
+      // No address controls. On builds where the boundary cascade already lives
+      // on Location Details (mz.maputo), there is no separate address step and
+      // we are already on Description — clicking NEXT here would wait on a
+      // button that stays disabled until Description is filled, hanging until
+      // the test times out. Only advance if this really is an empty step.
+      const onDescription = await page
+        .locator('textarea')
+        .first()
+        .isVisible({ timeout: 3000 })
+        .catch(() => false);
+      if (onDescription) {
+        console.log('No separate address step on this build — already at Description');
+      } else {
+        console.log('No address controls found — skipping');
+        await clickNextOrSubmit('NEXT');
+      }
     }
 
     // Step 4: Description

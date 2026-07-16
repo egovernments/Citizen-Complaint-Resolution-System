@@ -17,8 +17,9 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL, PGR_CREATE_UNSUPPORTED, PGR_ID_PREFIX } from '../utils/env';
+import { BASE_URL, PGR_ID_PREFIX } from '../utils/env';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
+import { requires } from '../utils/capabilities';
 
 test.describe('Citizen file-complaint wizard', () => {
   // ── Raw-key localization scan ─────────────────────────────────────────────
@@ -280,15 +281,15 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     await walkWizard(page, { assertPincodeToast: true });
 
     // ── Confirmation page contract ─────────────────────────────────
-    // Escape hatch for deployments whose PGR backend rejects complaint-create
-    // (e.g. the bomet ke HTTP 400 / JsonMappingException). Defaults false via
-    // env so mz.maputo — where the boundary cascade now reaches the selectable
-    // Bairro leaf — asserts a real successful submission. Wizard navigation
-    // (Steps 1-6) is still validated by the "no raw localization keys" test.
-    if (PGR_CREATE_UNSUPPORTED) {
-      test.skip(true, 'PGR_CREATE_UNSUPPORTED set — this deployment\'s PGR backend rejects complaint creation; wizard navigation is verified by the raw-keys test');
-      return;
-    }
+    // Gated on the declared capability, not a stray env hatch: whether a
+    // deployment's PGR backend actually accepts a citizen-filed complaint (e.g.
+    // the bomet ke HTTP 400 / JsonMappingException history) is exactly what
+    // capabilities.ts's pgr.citizenCreate encodes (APPLY role includes CITIZEN).
+    // Both maputo-local and bomet declare it 'required', so this must run for
+    // real on both — a true regression now fails loudly instead of hiding
+    // behind PGR_CREATE_UNSUPPORTED. Wizard navigation (Steps 1-6) above always
+    // runs regardless, and is independently verified by the raw-keys test.
+    requires(test, 'pgr.citizenCreate', 'wizard navigation is verified by the raw-keys test');
     await expect(page).toHaveURL(/\/citizen\/pgr\/response/);
     const body = page.locator('body');
     await expect(body).toContainText('Complaint Submitted');

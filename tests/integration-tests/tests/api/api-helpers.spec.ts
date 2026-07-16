@@ -3,14 +3,25 @@ import { loginEmployee, mdmsSearch, pgrSearch, hrmsSearch, workflowBusinessServi
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 import { TENANT } from '../utils/env';
 
-// SRID precedence: explicit env → lifecycle.setup fixtures → naipepea default.
-// The default pairs with TENANT's own default (ke.nairobi); on any other
-// deployment the SRID resolves from a fixture seeded against TENANT, so the
-// SRID and the tenant we search always come from the same source.
-const KNOWN_RESOLVED_SRID =
-  process.env.KNOWN_RESOLVED_SRID
-  || readLifecycleFixtures()?.complaints?.terminal_rated
-  || 'NCCG-PGR-2026-04-28-011862';
+// SRID precedence: explicit env → lifecycle.setup fixtures. No literal
+// fallback: the old default ('NCCG-PGR-2026-04-28-011862') is a naipepea-only
+// historical SRID that pairs with nothing on any other deployment — on bomet
+// or maputo it would just 404, and worse, if a future deployment ever DID
+// happen to seed a complaint with that exact id, the assertions below
+// (CLOSEDAFTERRESOLUTION, rating 4) would pass by coincidence rather than by
+// actually exercising this run's seed. lifecycle-fixtures.json is written
+// fresh per run by lifecycle.setup.ts against THIS tenant; when it's missing
+// or the setup itself skipped (status:'skipped' — e.g. no viable seed-plan
+// triple), that's a real N/A and the test below says so instead of guessing.
+const fixtures = readLifecycleFixtures();
+const KNOWN_RESOLVED_SRID = process.env.KNOWN_RESOLVED_SRID || fixtures?.complaints?.terminal_rated;
+const knownSridSkipReason = KNOWN_RESOLVED_SRID
+  ? ''
+  : !fixtures
+    ? `no KNOWN_RESOLVED_SRID and lifecycle-fixtures.json not found for ${TENANT} — lifecycle.setup didn't run ` +
+      "ahead of this project (it isn't one of 'api's dependencies); set KNOWN_RESOLVED_SRID or run the full suite " +
+      'so lifecycle-setup executes first'
+    : `no KNOWN_RESOLVED_SRID and lifecycle.setup on ${TENANT} wrote status:'skipped' — ${fixtures.skipped_reason ?? 'no reason recorded'}`;
 
 test.describe('00-smoke: API helpers reach the configured deployment', () => {
   test('mdms search returns Department schema records', {
@@ -35,19 +46,21 @@ If this fails, every PGR assignment flow downstream will fail too.`,
   test('pgr search round-trips a known CLOSEDAFTERRESOLUTION complaint', {
     annotation: {
       type: 'description',
-      description: `Anchor smoke check against a fixed historical complaint (default NCCG-PGR-2026-04-28-011862, override via KNOWN_RESOLVED_SRID) in CLOSEDAFTERRESOLUTION state with rating 4. Confirms that pgr-services search is up, the DB still has this seeded record, and the persisted rating round-trips through the search API.
+      description: `Anchor smoke check against a complaint in CLOSEDAFTERRESOLUTION state with rating 4 — either KNOWN_RESOLVED_SRID or lifecycle.setup's own fresh terminal_rated fixture for TENANT (no historical-SRID literal: naipepea's old default pairs with no other deployment). Confirms that pgr-services search is up and the persisted rating round-trips through the search API.
 
 Steps:
-1. Log in as the test employee.
-2. pgrSearch for the configured serviceRequestId (KNOWN_RESOLVED_SRID) in TENANT.
-3. Assert ServiceWrappers[0].service.applicationStatus === 'CLOSEDAFTERRESOLUTION'.
-4. Assert ServiceWrappers[0].service.rating === 4.
+1. test.skip if neither KNOWN_RESOLVED_SRID nor a usable lifecycle-fixtures.json entry exists (with the precise cause: fixture missing vs. lifecycle.setup itself wrote status:'skipped').
+2. Log in as the test employee.
+3. pgrSearch for the resolved serviceRequestId in TENANT.
+4. Assert ServiceWrappers[0].service.applicationStatus === 'CLOSEDAFTERRESOLUTION'.
+5. Assert ServiceWrappers[0].service.rating === 4.
 
 If the seeded record gets purged or the ID format changes, override KNOWN_RESOLVED_SRID — the test isn't trying to validate a specific bug, just that PGR search works end-to-end.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@kind:smoke', '@layer:api', '@persona:cross'] }, async () => {
+    test.skip(!!knownSridSkipReason, knownSridSkipReason);
     const auth = await loginEmployee();
-    const r = await pgrSearch(auth, TENANT, KNOWN_RESOLVED_SRID);
+    const r = await pgrSearch(auth, TENANT, KNOWN_RESOLVED_SRID!);
     const sw = r.ServiceWrappers?.[0];
     expect(sw?.service?.applicationStatus).toBe('CLOSEDAFTERRESOLUTION');
     expect(sw?.service?.rating).toBe(4);

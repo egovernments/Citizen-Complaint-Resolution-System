@@ -6,47 +6,52 @@
  *   • mobile-no     → searching the seeded citizen's mobile returns it.
  *   • junk          → a well-formed but non-existent SRID returns zero rows.
  *
- * Deployment-portable: the complaint + a unique citizen mobile are seeded
- * against the live deployment; self-skips when the employee/ADMIN login is
- * unavailable.
+ * Deployment-portable: the complaint is always seeded as a CITIZEN via
+ * seed.ts (PGR's APPLY action is [CITIZEN, CSR] on every deployment — an
+ * ADMIN token only got away with filing here because local bootstrap grants
+ * ADMIN the CITIZEN role too; bomet's ADMIN has no such luck and 400s), and
+ * personas come from getPersona() rather than a hardcoded env username;
+ * self-skips when the employee login is unavailable.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { pgrCreate, resolveServiceCode, resolveLocalityCode } from '../utils/launch-fixes/api';
-import {
-  BASE_URL, TENANT, EMPLOYEE_USER, EMPLOYEE_PASS, ADMIN_USER, ADMIN_PASS,
-  SERVICE_CODE, LOCALITY_CODE, generateCitizenPhone,
-} from '../utils/env';
-import { getPrincipal, loginEmployeeBrowser, readInboxRows, type Principal } from '../utils/employee-ui';
+import { BASE_URL } from '../utils/env';
+import { getPersona } from '../utils/personas';
+import { seedComplaintAsCitizen } from '../utils/seed';
+import { readProvisionedCitizen } from '../utils/citizen-provision';
+import { loginEmployeeBrowser, readInboxRows } from '../utils/employee-ui';
 
 const INBOX_URL = `${BASE_URL}/digit-ui/employee/pgr/inbox-v2`;
 const SEARCH_RE = /pgr-services\/v2\/request\/_search/;
 
-let admin: Principal | null = null;
 let srid = '';
 let phone = '';
 let setupSkip = '';
 
 test.beforeAll(async () => {
-  admin = await getPrincipal(ADMIN_USER, ADMIN_PASS);
-  if (!admin) { setupSkip = `ADMIN (${ADMIN_USER}) login failed`; return; }
+  // seedComplaintAsCitizen() always files as the ONE citizen provisioned for
+  // this run (tests/fixtures/citizen.setup.ts, read via
+  // readProvisionedCitizen() — the same fixture read internally by seed.ts's
+  // citizen() cache) and doesn't hand the mobile back on the result, so read
+  // it off the fixture directly rather than round-tripping a second _search
+  // just to recover it.
+  const fixture = readProvisionedCitizen();
+  if (!fixture) {
+    setupSkip = 'no citizen-fixture.json on disk — citizen.setup.ts did not run (needed to know which mobile filed the seed complaint)';
+    return;
+  }
+  phone = fixture.mobile;
   try {
-    const serviceCode = await resolveServiceCode(BASE_URL, admin.token, TENANT, SERVICE_CODE);
-    const localityCode = await resolveLocalityCode(BASE_URL, admin.token, TENANT, LOCALITY_CODE);
-    phone = generateCitizenPhone();
-    const created = await pgrCreate({
-      baseUrl: BASE_URL, auth: { token: admin.token, userInfo: admin.userInfo }, tenantId: TENANT,
-      serviceCode, localityCode, description: `inbox-search seed ${new Date().toISOString()}`,
-      citizenName: 'Inbox Search Seed', citizenPhone: phone,
-    });
-    srid = created.serviceRequestId;
+    const created = await seedComplaintAsCitizen({ description: `inbox-search seed ${new Date().toISOString()}` });
+    srid = created.srid;
   } catch (err: any) {
     setupSkip = `seed failed: ${err?.message?.slice(0, 200)}`;
   }
 });
 
 async function openInbox(page: Page): Promise<void> {
-  const ok = await loginEmployeeBrowser(page, EMPLOYEE_USER, EMPLOYEE_PASS);
-  test.skip(!ok, `employee ${EMPLOYEE_USER} login failed`);
+  const employee = await getPersona('employee');
+  const ok = await loginEmployeeBrowser(page, employee.username, employee.password);
+  test.skip(!ok, `employee ${employee.username} login failed`);
   await Promise.all([
     page.waitForResponse((r) => SEARCH_RE.test(r.url()) && r.request().method() === 'POST', { timeout: 30_000 }).catch(() => null),
     page.goto(INBOX_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }),

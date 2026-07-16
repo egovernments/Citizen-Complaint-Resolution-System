@@ -14,8 +14,9 @@
  */
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import { BASE_URL, BASE_HOST, ATTACHMENT_DETAIL_UNSUPPORTED } from '../utils/env';
+import { BASE_URL, BASE_HOST } from '../utils/env';
 import { citizenOtpLogin } from '../utils/citizen-login';
+import { requires } from '../utils/capabilities';
 
 // Match an uploaded image by the generic filestore path or the deployment's own
 // host (BASE_HOST, derived from BASE_URL) — never a hardcoded demo hostname.
@@ -167,16 +168,21 @@ test.describe('citizen complaint — attachment lifecycle #555', () => {
     expect(complaintNumber, '_create response must include a serviceRequestId').toBeTruthy();
 
     // ============ Detail page — Attachments img renders ============
-    // Escape hatch for the #555 detail-half regression (the complaint detail
-    // page not rendering the uploaded attachment <img> — unresolved on bomet
-    // ke). Defaults false via env so the detail assertion runs for real; the
-    // upload-preview half above always validates the ComplaintPhotos.js parser.
-    if (ATTACHMENT_DETAIL_UNSUPPORTED) {
-      test.skip(true, 'ATTACHMENT_DETAIL_UNSUPPORTED set — this deployment\'s detail page does not render the attachment img (CCRS#555 detail half)');
-      return;
-    }
+    // Gated on the declared capability, not a stray env hatch: whether the
+    // detail page renders the uploaded attachment <img> can't be discovered by
+    // a read-only probe (see capabilities.ts), so deploy/expectations/*.json
+    // carries the call per deployment. maputo-local + bomet both declare this
+    // 'required', so a real #555 detail-half regression now fails loudly
+    // instead of hiding behind ATTACHMENT_DETAIL_UNSUPPORTED. The upload-preview
+    // half above always validates the ComplaintPhotos.js parser regardless.
+    requires(test, 'ui.citizen.attachmentDetailRender', 'CCRS#555 detail half');
+    // Citizen detail route is `/citizen/pgr/complaints/:id` (PLURAL) — see
+    // pgr/src/pages/citizen/index.js:33 and the route contract locked in by
+    // track-my-complaint.spec.ts. `/complaint-details/:id` is the EMPLOYEE
+    // route; under /citizen it matches nothing, so the page renders an empty
+    // shell (BackButton only) and the Attachments <img> can never appear.
     await page.goto(
-      `${BASE_URL}/digit-ui/citizen/pgr/complaint-details/${complaintNumber}?cb=${Date.now()}`,
+      `${BASE_URL}/digit-ui/citizen/pgr/complaints/${complaintNumber}?cb=${Date.now()}`,
     );
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(5_000);
