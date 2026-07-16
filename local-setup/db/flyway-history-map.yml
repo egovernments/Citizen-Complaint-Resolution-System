@@ -121,6 +121,12 @@ digit-config-service:
   data_tables: [eg_config_data]
   baseline_fresh: true
 
+audit-service:
+  canonical: audit_service_schema
+  aliases: []
+  data_tables: [eg_audit_logs]
+  baseline_fresh: true       # new to compose (#1157); migrates from empty, absent from the dump
+
 egov-indexer:
   canonical: egov_indexer_schema
   aliases: []
