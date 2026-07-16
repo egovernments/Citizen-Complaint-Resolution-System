@@ -155,7 +155,7 @@ public class DispatchPipelineService {
             response = novuClient.identifyThenTrigger(
                     subscriberId, contact, channel,
                     context.getRenderedBody(), context.getRenderedSubject(),
-                    context.getTransactionId(), event.getData());
+                    context.getTransactionId(), event.getData(), event.getTenantId());
         } catch (CustomException ce) {
             persist(event, context, "FAILED", ce.getCode(), ce.getMessage(), null, 1);
             throw ce;   // consumer logs + DLQs as before

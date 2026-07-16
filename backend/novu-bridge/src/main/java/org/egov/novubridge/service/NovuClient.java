@@ -23,16 +23,21 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class NovuClient {
 
+    private static final String WHATSAPP_PREFIX = "whatsapp:";
+
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
+    private final MdmsServiceClient mdmsServiceClient;
 
     // Hand-rolled subscriberId -> last-identified epoch-ms TTL cache (no guava/caffeine);
     // skips redundant POST /v1/subscribers calls within the configured TTL window.
     private final Map<String, Long> identifiedAt = new ConcurrentHashMap<>();
 
-    public NovuClient(RestTemplate restTemplate, NovuBridgeConfiguration config) {
+    public NovuClient(RestTemplate restTemplate, NovuBridgeConfiguration config,
+                      MdmsServiceClient mdmsServiceClient) {
         this.restTemplate = restTemplate;
         this.config = config;
+        this.mdmsServiceClient = mdmsServiceClient;
     }
 
     /**
@@ -47,10 +52,12 @@ public class NovuClient {
      * @param renderedSubject EMAIL subject, else null
      * @param transactionId   stable idempotency key
      * @param data            structured payload echoed alongside body/subject
+     * @param tenantId        used to resolve the per-tenant WhatsApp sender override from MDMS
      */
     public NovuResponse identifyThenTrigger(String subscriberId, Contact contact, String channel,
                                             String renderedBody, String renderedSubject,
-                                            String transactionId, Map<String, Object> data) {
+                                            String transactionId, Map<String, Object> data,
+                                            String tenantId) {
         identify(subscriberId, contact);
 
         String workflowId = config.getNovuWorkflowId(channel);
@@ -64,6 +71,32 @@ public class NovuClient {
         payload.put("body", renderedBody);
         if (renderedSubject != null) {
             payload.put("subject", renderedSubject);
+        }
+
+        if ("WHATSAPP".equalsIgnoreCase(channel)) {
+            // Twilio Programmable WhatsApp requires whatsapp: prefix on both To and From.
+            if (StringUtils.hasText(phone) && !phone.startsWith(WHATSAPP_PREFIX)) {
+                phone = WHATSAPP_PREFIX + phone;
+            }
+            Map<String, Object> overrides = null;
+            String senderNumber = StringUtils.hasText(tenantId)
+                    ? mdmsServiceClient.getWhatsappSenderNumber(tenantId) : null;
+            if (StringUtils.hasText(senderNumber)) {
+                if (!senderNumber.startsWith(WHATSAPP_PREFIX)) {
+                    senderNumber = WHATSAPP_PREFIX + senderNumber;
+                }
+                Map<String, Object> twilioConfig = new HashMap<>();
+                twilioConfig.put("from", senderNumber);
+                Map<String, Object> providers = new HashMap<>();
+                providers.put("twilio", twilioConfig);
+                overrides = new HashMap<>();
+                overrides.put("providers", providers);
+                log.debug("WHATSAPP dispatch: from override={}", PiiMask.mask(senderNumber));
+            } else {
+                log.warn("WHATSAPP dispatch: no senderNumber in MDMS for tenantId={}; " +
+                        "falling back to integration credentials.from", tenantId);
+            }
+            return trigger(workflowId, subscriberId, phone, payload, transactionId, overrides);
         }
 
         return trigger(workflowId, subscriberId, phone, email, payload, transactionId);

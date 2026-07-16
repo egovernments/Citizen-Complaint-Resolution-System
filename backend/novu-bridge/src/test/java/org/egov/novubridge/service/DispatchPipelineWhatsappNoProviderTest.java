@@ -62,11 +62,13 @@ class DispatchPipelineWhatsappNoProviderTest {
         config.setDefaultLocale("en_IN");
         // Default enabled set ships SMS,EMAIL — WHATSAPP is deliberately absent.
         config.setChannelsEnabled(List.of("SMS", "EMAIL"));
+        // @Value defaults only apply under Spring; set explicitly for this plain-POJO config.
+        config.setNovuWorkflowWhatsapp("complaints-whatsapp");
         mdmsServiceClient = mock(MdmsServiceClient.class);
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), anyString()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
@@ -108,18 +110,20 @@ class DispatchPipelineWhatsappNoProviderTest {
     }
 
     @Test
-    void whatsappEvent_gateEnabled_triggersNovuWhatsappWorkflow() {
+    void whatsappEvent_gateEnabled_dispatchesViaIdentifyThenTrigger_withTenantId() {
         config.setChannelsEnabled(List.of("SMS", "EMAIL", "WHATSAPP"));
 
         DispatchResult result = service.process(whatsappEvent(), true, null);
 
         assertTrue(result.getNovuTriggered());
-        // The bridge asks NovuClient to deliver on the WHATSAPP channel; NovuClient owns
-        // resolving the complaints-whatsapp workflow id internally.
-        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        // The per-tenant WhatsApp sender-override wiring (MDMS lookup, "whatsapp:" phone
+        // prefixing, Twilio provider override) now lives inside NovuClient.identifyThenTrigger
+        // — see NovuClientTest. The pipeline's only remaining contract here is to route an
+        // enabled WHATSAPP event through identifyThenTrigger with the event's tenantId, so
+        // that wiring has what it needs to run.
         verify(novuClient).identifyThenTrigger(eq("ke.bomet:uuid-123"), any(), eq("WHATSAPP"),
-                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP"), any());
-        assertEquals("Dear Jane, your complaint PGR-001 is assigned.", body.getValue());
+                eq("Dear Jane, your complaint PGR-001 is assigned."), any(),
+                eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP"), any(), eq("ke.bomet"));
     }
 
     @Test

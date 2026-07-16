@@ -57,7 +57,7 @@ class DispatchPipelineIdempotencyTest {
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), anyString()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
@@ -90,7 +90,7 @@ class DispatchPipelineIdempotencyTest {
 
         // Current behavior: no pre-send SENT-row dedupe in process(); both passes trigger.
         verify(novuClient, times(2))
-                .identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any());
+                .identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), anyString());
 
         ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
         verify(dispatchLogRepository, times(2)).upsert(captor.capture());

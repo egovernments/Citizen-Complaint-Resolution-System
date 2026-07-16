@@ -32,11 +32,20 @@ public class MdmsServiceClient {
     /** Schema that carries the mobile number validation config. */
     private static final String SCHEMA_CODE = "common-masters.MobileNumberValidation";
 
+    /** Schema that carries per-tenant provider delivery config (WhatsApp sender number etc.). */
+    private static final String PROVIDER_DETAIL_SCHEMA = "ProviderDetail";
+
+    /** Sentinel senderCache value meaning "looked up, confirmed not configured" (ConcurrentHashMap rejects null values). */
+    private static final String NO_SENDER_CONFIGURED = "";
+
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
 
     /** Cache: tenantId → country-code prefix (e.g. "+91") */
     private final Map<String, String> prefixCache = new ConcurrentHashMap<>();
+
+    /** Cache: tenantId → WhatsApp sender number from ProviderDetail MDMS, or {@link #NO_SENDER_CONFIGURED}. */
+    private final Map<String, String> senderCache = new ConcurrentHashMap<>();
 
     public MdmsServiceClient(RestTemplate restTemplate, NovuBridgeConfiguration config) {
         this.restTemplate = restTemplate;
@@ -69,6 +78,68 @@ public class MdmsServiceClient {
         config.setMobileNumberRegex((String) data.get("mobileNumberRegex"));
 
         return config;
+    }
+
+    /**
+     * Returns the WhatsApp sender number for the given tenant from the
+     * {@code ProviderDetail} MDMS schema. Returns {@code null} if not configured;
+     * the pipeline then falls back to the Novu integration's own credentials.from.
+     */
+    @SuppressWarnings("unchecked")
+    public String getWhatsappSenderNumber(String tenantId) {
+        if (senderCache.containsKey(tenantId)) {
+            String cached = senderCache.get(tenantId);
+            return NO_SENDER_CONFIGURED.equals(cached) ? null : cached;
+        }
+        try {
+            String url = config.getMdmsHost() + config.getMdmsSearchPath();
+
+            Map<String, Object> mdmsCriteria = new HashMap<>();
+            mdmsCriteria.put("tenantId", tenantId);
+            mdmsCriteria.put("schemaCode", PROVIDER_DETAIL_SCHEMA);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("MdmsCriteria", mdmsCriteria);
+            body.put("RequestInfo", buildMinimalRequestInfo());
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.POST, new HttpEntity<>(body),
+                    (Class<Map<String, Object>>) (Class<?>) Map.class);
+
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                log.warn("MDMS returned non-2xx or empty body for ProviderDetail tenantId={}", tenantId);
+                senderCache.put(tenantId, NO_SENDER_CONFIGURED);
+                return null;
+            }
+
+            List<Map<String, Object>> mdmsList =
+                    (List<Map<String, Object>>) response.getBody().get("mdms");
+            if (mdmsList == null || mdmsList.isEmpty()) {
+                log.warn("No ProviderDetail records in MDMS for tenantId={}", tenantId);
+                senderCache.put(tenantId, NO_SENDER_CONFIGURED);
+                return null;
+            }
+
+            String senderNumber = mdmsList.stream()
+                    .map(r -> (Map<String, Object>) r.get("data"))
+                    .filter(d -> d != null
+                            && "whatsapp".equalsIgnoreCase((String) d.get("channel"))
+                            && "twilio".equalsIgnoreCase((String) d.get("providerName"))
+                            && Boolean.TRUE.equals(d.get("isActive")))
+                    .map(d -> (String) d.get("senderNumber"))
+                    .filter(s -> s != null && !s.isBlank())
+                    .findFirst().orElse(null);
+
+            senderCache.put(tenantId, senderNumber != null ? senderNumber : NO_SENDER_CONFIGURED);
+            return senderNumber;
+        } catch (Exception e) {
+            // Do NOT cache: unlike a clean non-2xx/empty-result response, an exception here
+            // (timeout, connection reset, transient 5xx) is not a stable "not configured" fact —
+            // senderCache has no TTL, so caching it would permanently disable this tenant's
+            // sender override until process restart, even after MDMS recovers.
+            log.warn("Failed to fetch WhatsApp senderNumber from MDMS for tenantId={}", tenantId, e);
+            return null;
+        }
     }
 
     // -------------------------------------------------------------------------

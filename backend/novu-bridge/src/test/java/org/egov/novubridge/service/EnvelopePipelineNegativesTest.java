@@ -136,7 +136,7 @@ class EnvelopePipelineNegativesTest {
         // suite where every event happens to be rejected for an unrelated reason).
         org.mockito.Mockito.when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
-        org.mockito.Mockito.when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any()))
+        org.mockito.Mockito.when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), anyString()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of()).build());
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.process(validEvent(), true, null));
     }
