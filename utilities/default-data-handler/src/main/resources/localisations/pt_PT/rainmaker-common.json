@@ -34,5 +34,23 @@
         "message": "Selecionar instituição",
         "module": "rainmaker-common",
         "locale": "pt_PT"
+    },
+    {
+        "code": "COMMON_BOTTOM_NAVIGATION_HOME",
+        "message": "Início",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_PERSONAL_DETAILS",
+        "message": "Detalhes Pessoais",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "EDIT_PROFILE",
+        "message": "Actualizar Perfil",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
     }
 ]

@@ -260,11 +260,15 @@ const CreateComplaintForm = ({
     const cfgs = extFields.map((f) => {
       // Date fields → our self-contained calendar-popover component (avoids the
       // native date input / react-datepicker CSS issues). Writes YYYY-MM-DD.
+      // PGR_EXT_* label keys are seeded in egov-localization (en+pt) —
+      // FormComposerV2 t()'s the label, so pass the key and let the raw
+      // prettified label be the visible fallback only when a key is absent.
+      const label = f.labelKey || f.label;
       if (f.dataType === "date") {
         return {
           inline: true,
           key: f.fieldKey,
-          label: f.label,
+          label,
           isMandatory: !!f.mandatory,
           type: "component",
           component: "PGRDatePicker",
@@ -280,15 +284,13 @@ const CreateComplaintForm = ({
         populators.validation = { required: true };
         populators.error = "CORE_COMMON_REQUIRED_ERRMSG";
       }
-      // Prettified English label so it reads correctly without a localization push;
-      // switch to f.labelKey once PGR_EXT_* are loaded in egov-localization.
-      return { inline: true, key: f.fieldKey, label: f.label, isMandatory: !!f.mandatory, type, disable: false, populators };
+      return { inline: true, key: f.fieldKey, label, isMandatory: !!f.mandatory, type, disable: false, populators };
     });
     cfgs.push({
       key: "isConfidential",
       type: "checkbox",
       isMandatory: false,
-      populators: { name: "isConfidential", title: "Keep details confidential" },
+      populators: { name: "isConfidential", title: "PGR_EXT_IS_CONFIDENTIAL_LABEL" },
     });
     return cfgs;
   }, [extFields]);

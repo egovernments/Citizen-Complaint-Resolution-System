@@ -838,5 +838,125 @@
         "message": "abre numa nova janela",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
+    },
+    {
+        "code": "CS_NO_COMPLAINTS_TITLE",
+        "message": "Sem Nenhuma Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_VIEW_COMPLAINT",
+        "message": "Ver Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_TIMELINE",
+        "message": "Cronologia da Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_EASY_SUBMIT",
+        "message": "É fácil apresentar a reclamação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_RESOLUTION_TIME",
+        "message": "Tempo de resolução",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_COMMUNICATION",
+        "message": "Comunicação e atualizações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RATING_COMMENTS_PLACEHOLDER",
+        "message": "Compartilhe qualquer outra informação que você gostaria que a equipe soubesse…",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_RATE_SUBTEXT",
+        "message": "Sua avaliação nos ajuda a melhorar. Leva apenas um instante.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REPORTER_FULL_NAME_LABEL",
+        "message": "Nome Completo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REPORTER_ADDRESS_LABEL",
+        "message": "Endereço",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_OPTIONAL",
+        "message": "Opcional",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_CATEGORY",
+        "message": "Categoria de Manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "NEXT",
+        "message": "Próximo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "BACK",
+        "message": "Voltar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_INSTITUTE_NAME_LABEL",
+        "message": "Nome da Instituição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_NAME_LABEL",
+        "message": "Nome da Testemunha",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_ADDRESS_LABEL",
+        "message": "Endereço da Testemunha",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_NOTE_LABEL",
+        "message": "Nota da Testemunha",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_IS_CONFIDENTIAL_LABEL",
+        "message": "Mantenha os detalhes confidenciais.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_IS_CONFIDENTIAL_HINT",
+        "message": "A visibilidade é garantida assim que o processamento seguro é ativado; por enquanto, isso sinaliza a reclamação para que a equipe esteja ciente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
     }
 ]

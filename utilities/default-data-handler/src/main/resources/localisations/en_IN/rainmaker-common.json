@@ -8933,7 +8933,7 @@
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
-        {
+    {
         "code": "HR_COMMON_CREATE_EMPLOYEE_HEADER",
         "message": "Create Employee",
         "module": "rainmaker-common",
@@ -9776,6 +9776,12 @@
     {
         "code": "WF_COMMON_COMMENTS",
         "message": "Comments",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_PROFILE_PERSONAL_DETAILS",
+        "message": "Personal details",
         "module": "rainmaker-common",
         "locale": "en_IN"
     }
