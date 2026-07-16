@@ -62,22 +62,11 @@ const STATUS_BUCKET = {
 };
 const bucketOf = (status) => STATUS_BUCKET[String(status || "").toUpperCase()] || "inprogress";
 
-// department tag tints (semantic, cycled per department code)
-const DEPT_TINTS = [
-  { bg: "#e3f2fd", fg: "#1565c0" },
-  { bg: "#f3e8fd", fg: "#7b1fa2" },
-  { bg: "#e8f5e9", fg: "#2e7d32" },
-  { bg: "#fff3e0", fg: "#b26a00" },
-  { bg: "#ffebee", fg: "#c62828" },
-  { bg: "#e0f2f1", fg: "#00695c" },
-];
+// department tags: ONE calm tint for every department (per review — the
+// per-code color cycling read as noise); grey only for "Not Assigned".
+const DEPT_TINT = { bg: "#e3f2fd", fg: "#1565c0" };
 const NA_TINT = { bg: "#eceff1", fg: "#455a64" };
-const deptTint = (code) => {
-  if (!code || code === "NA") return NA_TINT;
-  let h = 0;
-  for (let i = 0; i < code.length; i++) h = (h * 31 + code.charCodeAt(i)) % 997;
-  return DEPT_TINTS[h % DEPT_TINTS.length];
-};
+const deptTint = (code) => (!code || code === "NA" ? NA_TINT : DEPT_TINT);
 
 const SORT_OPTIONS = [
   { code: "createdTime", i18nKey: "ES_PGR_ADMIN_CREATED_TIME", fb: "Created Time" },
@@ -177,8 +166,8 @@ const CSS = `
 .pgr-adm-table tbody tr:hover { background: var(--color-surface-secondary,#fafbfc); }
 .pgr-adm-cno-link { display: inline-flex; align-items: center; gap: .3rem; color: var(--color-text-primary,#1f2937); font-weight: 700; text-decoration: underline; }
 .pgr-adm-cno-link:hover { color: var(--color-link-hover, var(--color-primary-1, var(--color-primary-main,#c84c0e))); }
-.pgr-adm-deptag { display: inline-flex; align-items: center; gap: .35rem; border-radius: .4rem; padding: .2rem .55rem; font-size: .76rem; font-weight: 600; white-space: nowrap; max-width: 240px; }
-.pgr-adm-deptag i { overflow: hidden; text-overflow: ellipsis; font-style: normal; }
+.pgr-adm-deptag { display: inline-flex; align-items: center; gap: .35rem; border-radius: .4rem; padding: .2rem .55rem; font-size: .76rem; font-weight: 600; white-space: nowrap; }
+.pgr-adm-deptag i { font-style: normal; }
 .pgr-adm-pill { display: inline-flex; align-items: center; gap: .35rem; border-radius: 9999px; padding: .18rem .65rem; font-size: .74rem; font-weight: 700; white-space: nowrap; }
 .pgr-adm-pill::before { content: ""; width: 6px; height: 6px; border-radius: 9999px; background: currentColor; flex: none; }
 .pgr-adm-pill--open { background: var(--color-primary-selected-bg,#FFF4D7); color: var(--color-warning,#9E5F00); }
