@@ -96,6 +96,17 @@ const CSS = `
 .pgr-adm-frow { display: grid; grid-template-columns: minmax(190px,1fr) minmax(250px,1.5fr) minmax(260px,1.2fr) auto; gap: 1rem; padding: .9rem 1rem; align-items: end; }
 @media (max-width: 1200px) { .pgr-adm-frow { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) { .pgr-adm-frow { grid-template-columns: 1fr; } }
+.pgr-adm-frow > * { min-width: 0; }
+@media (max-width: 640px) {
+  .pgr-adm { padding: .75rem .75rem 1.5rem; }
+  .pgr-adm-top { flex-direction: column; align-items: stretch; }
+  .pgr-adm-fbtns { width: 100%; }
+  .pgr-adm-fbtns .pgr-adm-btn { flex: 1; justify-content: center; }
+  .pgr-adm-results-head { flex-direction: column; align-items: stretch; }
+  .pgr-adm-table th, .pgr-adm-table td { padding: .55rem .6rem; }
+  .pgr-adm-foot { justify-content: center; }
+  .pgr-adm-rdr { left: 0; right: auto; max-width: calc(100vw - 2.5rem); overflow-x: auto; }
+}
 .pgr-adm-field > label { display: block; font-size: .8rem; font-weight: 600; margin-bottom: .3rem; }
 /* icon + input as flex SIBLINGS inside a bordered wrapper — the platform's global input rules
    override padding on inputs, so absolutely-positioned icons would overlap the text */
@@ -113,6 +124,13 @@ const CSS = `
 /* a span, not a <button>: the platform's global button rules (primary bg, 10px 28px padding) can't be out-specified from here */
 .pgr-adm-tag .x { cursor: pointer; color: var(--color-text-secondary,#64748b); font-size: .85rem; line-height: 1; padding: 0 .1rem; user-select: none; }
 .pgr-adm-tag .x:hover { color: var(--color-error,#b3261e); }
+.pgr-adm-msd-search { display: flex; align-items: center; gap: .4rem; padding: .4rem .6rem; border-bottom: 1px solid var(--color-border,#eef2f7); position: sticky; top: 0; background: #fff; color: var(--color-text-secondary,#94a3b8); }
+.pgr-adm-msd-search input { flex: 1; min-width: 0; font-size: .82rem; }
+.pgr-adm-recent { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; background: #fff; border: 1px solid var(--color-border,#cbd5e1); border-radius: .5rem; box-shadow: 0 8px 20px rgba(0,0,0,.12); padding: .25rem 0; }
+.pgr-adm-recent .hd { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--color-text-secondary,#94a3b8); padding: .3rem .6rem .15rem; }
+.pgr-adm-recent .it { display: flex; align-items: center; gap: .45rem; padding: .4rem .6rem; font-size: .84rem; cursor: pointer; }
+.pgr-adm-recent .it:hover { background: var(--color-surface-secondary,#f1f5f9); }
+.pgr-adm-recent .it svg { color: var(--color-text-secondary,#94a3b8); flex: none; }
 .pgr-adm-msd-list { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; max-height: 260px; overflow: auto; background: #fff; border: 1px solid var(--color-border,#cbd5e1); border-radius: .5rem; box-shadow: 0 8px 20px rgba(0,0,0,.12); padding: .25rem 0; }
 .pgr-adm-msd-opt { display: flex; gap: .5rem; align-items: center; padding: .4rem .6rem; font-size: .85rem; cursor: pointer; }
 .pgr-adm-msd-opt:hover { background: var(--color-surface-secondary,#f1f5f9); }
@@ -198,6 +216,7 @@ const IcClear = () => <Ic size={14}><path d="M1 4v6h6" /><path d="M3.51 15a9 9 0
 const IcExport = () => <Ic size={14}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></Ic>;
 const IcBuilding = () => <Ic size={12}><rect x="4" y="2" width="16" height="20" rx="1" /><line x1="9" y1="22" x2="9" y2="18" /><line x1="15" y1="22" x2="15" y2="18" /><line x1="8" y1="6" x2="10" y2="6" /><line x1="14" y1="6" x2="16" y2="6" /><line x1="8" y1="10" x2="10" y2="10" /><line x1="14" y1="10" x2="16" y2="10" /><line x1="8" y1="14" x2="10" y2="14" /><line x1="14" y1="14" x2="16" y2="14" /></Ic>;
 const IcCal = ({ size = 14 }) => <Ic size={size}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></Ic>;
+const IcClock = () => <Ic size={13}><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></Ic>;
 
 const searchAdmin = (params) =>
   Request({ url: Urls.pgr.adminSearch, method: "POST", auth: true, userService: true, useCache: false, params });
@@ -296,21 +315,35 @@ const PGRAdminSearch = () => {
   const [sortOrder, setSortOrder] = useState("DESC");
   const [clientSort, setClientSort] = useState(null); // {col: 'department'|'complaintType', dir} — current page only
   const [deptOpen, setDeptOpen] = useState(false);
+  const [deptQuery, setDeptQuery] = useState("");
   const [dateOpen, setDateOpen] = useState(false);
   const [dateFocus, setDateFocus] = useState([0, 0]); // react-date-range focus: [range, 0=start|1=end]
   const [exporting, setExporting] = useState(false);
+  const [cnoOpen, setCnoOpen] = useState(false);
   const [, setAgoTick] = useState(0); // re-render so "Updated Xs ago" stays fresh
   const deptRef = useRef(null);
   const dateRef = useRef(null);
+  const cnoRef = useRef(null);
 
   useEffect(() => {
     const close = (e) => {
-      if (deptRef.current && !deptRef.current.contains(e.target)) setDeptOpen(false);
+      if (deptRef.current && !deptRef.current.contains(e.target)) { setDeptOpen(false); setDeptQuery(""); }
       if (dateRef.current && !dateRef.current.contains(e.target)) setDateOpen(false);
+      if (cnoRef.current && !cnoRef.current.contains(e.target)) setCnoOpen(false);
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
+
+  // last 5 searched complaint numbers, per tenant (suggestions under the input)
+  const RECENT_KEY = `pgrAdmRecentCno.${tenantId}`;
+  const getRecent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch (e) { return []; } };
+  const [recent, setRecent] = useState(getRecent);
+  const pushRecent = (v) => {
+    const list = [v, ...getRecent().filter((x) => x !== v)].slice(0, 5);
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch (e) {}
+    setRecent(list);
+  };
   useEffect(() => {
     const id = setInterval(() => setAgoTick((x) => x + 1), 10000);
     return () => clearInterval(id);
@@ -371,6 +404,8 @@ const PGRAdminSearch = () => {
     const err = validate(filters);
     setValidationError(err);
     if (err) return;
+    if (filters.complaintNumber.trim()) pushRecent(filters.complaintNumber.trim().toUpperCase());
+    setCnoOpen(false);
     setPage(0);
     setCommitted({ ...filters, departments: [...filters.departments] });
   };
@@ -386,7 +421,7 @@ const PGRAdminSearch = () => {
   };
 
   const deptCell = (raw) => {
-    if (!raw || raw === "NA") return { label: tr("ES_PGR_ADMIN_DEPT_NA", "No department (N/A)"), code: "NA" };
+    if (!raw || raw === "NA") return { label: tr("ES_PGR_ADMIN_DEPT_NA", "Not Assigned"), code: "NA" };
     const hit = deptOptions.map[raw];
     return hit || { label: raw, code: raw };
   };
@@ -546,23 +581,39 @@ const PGRAdminSearch = () => {
       {/* ── Filter bar ── */}
       <div className="pgr-adm-card">
         <div className="pgr-adm-frow">
-          <div className="pgr-adm-field">
+          <div className="pgr-adm-field" ref={cnoRef} style={{ position: "relative" }}>
             <label htmlFor="adm-cno">{tr("CS_COMMON_COMPLAINT_NO", "Complaint No.")}</label>
             <div className="pgr-adm-cno">
               <span className="mag"><IcSearch /></span>
               <input id="adm-cno" type="text" ref={bareInput} placeholder={tr("ES_PGR_ADMIN_CNO_PH", "Enter complaint number")}
-                value={filters.complaintNumber}
-                onChange={(e) => setFilters((f) => ({ ...f, complaintNumber: e.target.value }))} />
+                value={filters.complaintNumber} autoComplete="off"
+                onFocus={() => setCnoOpen(true)}
+                onChange={(e) => { setFilters((f) => ({ ...f, complaintNumber: e.target.value })); setCnoOpen(true); }} />
               <span className="hash" aria-hidden>#</span>
             </div>
+            {(() => {
+              const q = filters.complaintNumber.trim().toUpperCase();
+              const hits = recent.filter((r) => !q || (r.includes(q) && r !== q));
+              return cnoOpen && hits.length > 0 ? (
+                <div className="pgr-adm-recent" role="listbox">
+                  <div className="hd">{tr("ES_PGR_ADMIN_RECENT", "Recent searches")}</div>
+                  {hits.map((r) => (
+                    <div className="it" key={r} role="option" aria-selected="false"
+                      onClick={() => { setFilters((f) => ({ ...f, complaintNumber: r })); setCnoOpen(false); }}>
+                      <IcClock /> {r}
+                    </div>
+                  ))}
+                </div>
+              ) : null;
+            })()}
           </div>
 
           <div className="pgr-adm-field" ref={deptRef}>
             <label>{tr("ES_PGR_ADMIN_HEADER_DEPARTMENT", "Department")}</label>
             <div className="pgr-adm-msd">
               <div className="pgr-adm-msd-field" role="button" tabIndex={0}
-                onClick={() => setDeptOpen((o) => !o)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDeptOpen((o) => !o); } }}>
+                onClick={() => { setDeptQuery(""); setDeptOpen((o) => !o); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDeptQuery(""); setDeptOpen((o) => !o); } }}>
                 {filters.departments.length === 0 && <span className="ph">{tr("ES_PGR_ADMIN_SELECT_DEPARTMENTS", "Select departments")}</span>}
                 {chips.map((d) => (
                   <span className="pgr-adm-tag" key={d.code} onClick={(e) => e.stopPropagation()}>
@@ -577,14 +628,22 @@ const PGRAdminSearch = () => {
               </div>
               {deptOpen && (
                 <div className="pgr-adm-msd-list" role="listbox">
-                  {deptOptions.opts.map((o) => (
-                    <label key={o.code} className="pgr-adm-msd-opt">
-                      <input type="checkbox"
-                        checked={filters.departments.some((d) => d.code === o.code)}
-                        onChange={() => toggleDept(o)} />
-                      <span>{o.label}</span>
-                    </label>
-                  ))}
+                  <div className="pgr-adm-msd-search" onClick={(e) => e.stopPropagation()}>
+                    <IcSearch />
+                    <input type="text" ref={bareInput} autoFocus value={deptQuery}
+                      placeholder={tr("ES_PGR_ADMIN_DEPT_SEARCH_PH", "Search departments")}
+                      onChange={(e) => setDeptQuery(e.target.value)} />
+                  </div>
+                  {deptOptions.opts
+                    .filter((o) => !deptQuery.trim() || o.label.toLowerCase().includes(deptQuery.trim().toLowerCase()))
+                    .map((o) => (
+                      <label key={o.code} className="pgr-adm-msd-opt">
+                        <input type="checkbox"
+                          checked={filters.departments.some((d) => d.code === o.code)}
+                          onChange={() => toggleDept(o)} />
+                        <span>{o.label}</span>
+                      </label>
+                    ))}
                 </div>
               )}
             </div>
