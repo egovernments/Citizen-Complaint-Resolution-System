@@ -51,6 +51,14 @@ import java.time.temporal.TemporalAdjusters;
  *       {@code priorPeriodCreatedAtFilter()} (~1586) / {@code priorPeriodEndDateIso()} (~1360) and the
  *       no-range {@code priorWeekCreatedAtFilter()} (~1417) fallback. Collapses the ~30 FE
  *       {@code *_prior} query keys into one def + {@code {compare:"prior"}}.</li>
+ *   <li>{@code hierLevel} — complaint-hierarchy rollup level (#1111). {@code "leaf"} / absent /
+ *       empty = no-op (today's per-subtype buckets). {@code "1".."12"} rewrites every
+ *       {@code service_code} dimension to the fixed level expression over
+ *       {@code complaint_node_path} (aliased {@code AS service_code}, so viz/sort/columns are
+ *       unchanged) and drops any {@code service_group} dimension (at a rolled-up level it
+ *       collapses into a duplicate of the level bucket). Grains without the path column (daily)
+ *       no-op gracefully, like {@code ward}. Aggregates recompute over raw rows, so averages and
+ *       ratios are correctly weighted — never an average of leaf averages.</li>
  *   <li>{@code series: "daily"} — turn a scalar tile into a daily time series: add the grain's daily
  *       date dimension (+ ascending sort), apply the selected range, drop the base window, and cap
  *       {@code limit} to {@code min(366, dayCount)}. Mirrors the FE {@code *_sparkline} keys
@@ -153,6 +161,12 @@ public class KpiQueryComposer {
         if (params.hasNonNull("serviceCode")) {
             String svc = params.get("serviceCode").asText();
             if (!svc.isEmpty() && !"all".equals(svc)) applyEqFilter(next, g, "service_code", svc);
+        }
+
+        // ---- hierarchy-level rollup (#1111): rewrite service_code dimensions to the level expr ----
+        if (params.hasNonNull("hierLevel")) {
+            String hierLevel = params.get("hierLevel").asText();
+            if (!hierLevel.isEmpty() && !"leaf".equals(hierLevel)) applyHierLevel(next, g, hierLevel);
         }
 
         return next;
@@ -405,6 +419,73 @@ public class KpiQueryComposer {
         if (window != null && window.hasNonNull("timeRole") && "resolved_at".equals(window.get("timeRole").asText()))
             return "resolved_at";
         return "created_at";
+    }
+
+    // ---- hierarchy-level rollup (#1111) ----
+
+    /**
+     * Rewrite the query's {@code service_code} dimensions to the fixed hierarchy-level expression
+     * (via the composer-internal marker only {@link AnalyticsPlanner} accepts — see
+     * {@link AnalyticsCatalog#HIER_DIM_TOKEN}), grouping the tile by the Nth
+     * {@code complaint_node_path} segment instead of the leaf. Rows with a NULL/empty path
+     * (flat/legacy tenants) fall back to their leaf {@code service_code} inside the SQL expr, and
+     * the level clamps to each row's own depth — both live in {@link AnalyticsCatalog#hierLevelExpr}.
+     *
+     * <p>Grains without the path column (daily) skip gracefully, exactly like {@code ward} on a
+     * ward-less grain: the param is inapplicable, not an error. A malformed level, however, IS an
+     * error ({@code invalid_param}) — silently serving leaf granularity for a level the caller
+     * asked for would be a wrong answer, the same reasoning as C2's unparseable-date hard failure.
+     *
+     * <p>R4: when a rewrite happens, any {@code service_group} dimension (and sort referencing it)
+     * is dropped — at a rolled-up level it collapses into a duplicate of the level bucket itself.
+     * When the query carries no {@code service_code} dimension there is nothing to roll up
+     * (scalar tiles), so the param is a no-op and {@code service_group} is left alone.
+     */
+    private void applyHierLevel(ObjectNode query, Grain g, String hierLevel) {
+        if (!catalog.supportsHierLevel(g.name)) {
+            log.debug("grain '{}' has no complaint_node_path; skipping hierLevel param", g.name);
+            return;
+        }
+        int level;
+        try {
+            level = Integer.parseInt(hierLevel);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("invalid_param: hierLevel must be 'leaf' or an integer in 1.."
+                    + AnalyticsCatalog.MAX_HIER_LEVEL);
+        }
+        if (level < 1 || level > AnalyticsCatalog.MAX_HIER_LEVEL)
+            throw new IllegalArgumentException("invalid_param: hierLevel must be 'leaf' or an integer in 1.."
+                    + AnalyticsCatalog.MAX_HIER_LEVEL);
+
+        JsonNode dims = query.get("dimensions");
+        if (dims == null || !dims.isArray()) return;
+        boolean hasServiceCode = false;
+        for (JsonNode d : dims) if (d.isTextual() && "service_code".equals(d.asText())) { hasServiceCode = true; break; }
+        if (!hasServiceCode) return;   // nothing to roll up (scalar / other-dimension tiles)
+
+        ArrayNode next = query.arrayNode();
+        for (JsonNode d : dims) {
+            if (d.isTextual() && "service_code".equals(d.asText())) {
+                ObjectNode marker = next.addObject();
+                marker.put(AnalyticsCatalog.HIER_DIM_LEVEL_FIELD, level);
+                marker.put(AnalyticsCatalog.HIER_DIM_TOKEN_FIELD, AnalyticsCatalog.HIER_DIM_TOKEN);
+            } else if (d.isTextual() && "service_group".equals(d.asText())) {
+                // R4: dropped — duplicates the level bucket once service_code is rolled up.
+            } else {
+                next.add(d);
+            }
+        }
+        query.set("dimensions", next);
+
+        // Keep sort valid: a dropped service_group can no longer be sorted on.
+        JsonNode sort = query.get("sort");
+        if (sort != null && sort.isArray()) {
+            ArrayNode nextSort = query.arrayNode();
+            for (JsonNode s : sort) if (!"service_group".equals(s.path("by").asText(null))) nextSort.add(s);
+            if (nextSort.size() != sort.size()) {
+                if (nextSort.size() == 0) query.remove("sort"); else query.set("sort", nextSort);
+            }
+        }
     }
 
     // ---- narrowing eq filter ----
