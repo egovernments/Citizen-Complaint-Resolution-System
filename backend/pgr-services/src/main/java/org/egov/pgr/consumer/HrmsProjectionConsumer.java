@@ -18,6 +18,21 @@ import java.util.HashMap;
  * create/update topics (VISIBILITY-DESIGN.md §4.3). Org changes reflect on
  * the next inbox load with no complaint re-stamping; the scheduled rebuild in
  * HrmsProjectionService is the backstop for missed events.
+ *
+ * ENABLING THE FEATURE — two independent switches, both required:
+ *  1. Deploy-level: pgr.visibility.enabled=true, normally via the
+ *     PGR_VISIBILITY_ENABLED env var in the pgr-services block of
+ *     local-setup/docker-compose.egov-digit.yaml (or the per-tenant overlay
+ *     docker-compose.<inventory_hostname>.yml on an Ansible box). This is
+ *     what gates THIS consumer (@ConditionalOnProperty below), the nightly
+ *     rebuild, and the /request/inbox/* endpoints.
+ *  2. Per-tenant: MDMS RAINMAKER-PGR.InboxVisibilityConfig with
+ *     `enabled: true` (plus `serverSide: true` to move the frontend from
+ *     client-composed scoping onto these endpoints) — editable at runtime
+ *     via the configurator, no redeploy.
+ * With (1) off nothing visibility-related runs at all; with (1) on but (2)
+ * off for a tenant, the resolver rejects that tenant's inbox calls and the
+ * frontend renders the legacy single inbox.
  */
 @Slf4j
 @Component

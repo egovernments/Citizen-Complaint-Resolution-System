@@ -52,7 +52,7 @@ const useTabCounts = ({ tenantId, allStates, enabled = true, serverSide = false 
   }));
 
   // Server mode counts through the visibility-aware endpoint (the server
-  // resolves the tab's assignee/reportee scope from the `tab` param).
+  // resolves the assignee/reportee scope from the `scope` param).
   const countUrl = serverSide ? Urls.pgr.visibilityCount : Urls.pgr.search.replace("_search", "_count");
 
   const rawCount = async (params) => {
@@ -69,8 +69,9 @@ const useTabCounts = ({ tenantId, allStates, enabled = true, serverSide = false 
     const since = seen[tab];
     const params = { tenantId, applicationStatus: allStates };
     if (serverSide) {
-      // the server resolves the tab's visibility scope
-      params.tab = tab;
+      // The server resolves visibility from the `scope` filter param —
+      // MINE/TEAM are the API's filter semantics; MY/ALL stay UI tab ids.
+      params.scope = tab === "MY" ? "MINE" : "TEAM";
     } else if (tab === "MY") {
       // MY is the assignee axis; requires the count-parity fix in
       // pgr-services PGRService.count() (same assignee resolution as search).

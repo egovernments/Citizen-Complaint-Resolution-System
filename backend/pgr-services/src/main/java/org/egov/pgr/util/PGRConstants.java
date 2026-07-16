@@ -189,6 +189,10 @@ public class PGRConstants {
 
     public static final String MDMS_ESCALATION_CONFIG = "EscalationConfig";
 
+    // MDMS master under module RAINMAKER-PGR (mdms-v2 schema code
+    // RAINMAKER-PGR.InboxVisibilityConfig, seeded by default-data-handler):
+    // the per-tenant visibility feature flag + resolver config. The JSONPATH
+    // constant is where that master lands in an MdmsRes payload.
     public static final String MDMS_INBOX_VISIBILITY_CONFIG = "InboxVisibilityConfig";
 
     public static final String MDMS_INBOX_VISIBILITY_CONFIG_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.InboxVisibilityConfig";

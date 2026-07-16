@@ -1659,10 +1659,11 @@ export const UICustomizations = {
       // therefore lives in All, not My (accepted tradeoff).
       //
       // Server mode (InboxVisibilityConfig.serverSide): pgr-services resolves
-      // the tab scope from the `tab` param — MY = assignee-me, ALL = reportee
-      // subtree + unassigned queues — so the client sends no assignee.
+      // visibility from the `scope` filter param — MINE = assignee-me, TEAM =
+      // reportee subtree + unassigned queues — so the client sends no
+      // assignee. MY/ALL stay UI tab ids; MINE/TEAM are the API semantics.
       if (additionalDetails?.serverSide) {
-        if (activeTab) params.tab = activeTab;
+        if (activeTab) params.scope = activeTab === "MY" ? "MINE" : "TEAM";
       } else if (activeTab === "MY") {
         const userInfo = Digit.UserService.getUser()?.info;
         if (userInfo?.uuid) {

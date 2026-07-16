@@ -248,6 +248,21 @@ public class PGRConfiguration {
 
     // Visibility (V1 Step-2 reportee core) — deploy-level kill switch plus
     // resolver defaults; the per-tenant switch is MDMS InboxVisibilityConfig.
+    //
+    // WHERE OPERATORS SET THESE (Ansible/compose setup):
+    //  - pgr.visibility.enabled maps to the PGR_VISIBILITY_ENABLED env var,
+    //    surfaced in the pgr-services env block of
+    //    local-setup/docker-compose.egov-digit.yaml (deploy-wide default).
+    //  - Per-tenant/box overrides go in the per-tenant compose overlay
+    //    local-setup/docker-compose.<inventory_hostname>.yml, which the
+    //    Ansible playbook includes in every compose invocation when present.
+    //  - The remaining pgr.visibility.* knobs follow Spring relaxed binding
+    //    (e.g. pgr.visibility.team.fanout.max -> PGR_VISIBILITY_TEAM_FANOUT_MAX)
+    //    and can be set the same two ways; none are required — the defaults
+    //    below apply otherwise.
+    //  - Per-tenant FEATURE enablement (and the client->server cutover) is
+    //    NOT env config: it lives in MDMS RAINMAKER-PGR.InboxVisibilityConfig
+    //    (`enabled` / `serverSide`), editable at runtime via the configurator.
     @Value("${pgr.visibility.enabled:false}")
     private Boolean visibilityEnabled;
 

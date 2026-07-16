@@ -220,7 +220,7 @@ pull-based (its views are dynamic/derived, so precomputed per-user counters aren
 }
 ```
 `serverSide` is the client→server cutover switch: when true (and the deployment has
-`PGR_VISIBILITY_ENABLED`), the FE points at `/request/inbox/_search|_count` with a `tab` param and
+`PGR_VISIBILITY_ENABLED`), the FE points at `/request/inbox/_search|_count` with a `scope` param (MINE/TEAM) and
 sends no assignee — pgr-services' `VisibilityService` resolves the scope (My = assignee-me; All =
 reportee subtree + unassigned queues, tenant-wide fallback when the projected subtree is empty).
 When false, the FE composes visibility client-side exactly as Step 1 shipped.

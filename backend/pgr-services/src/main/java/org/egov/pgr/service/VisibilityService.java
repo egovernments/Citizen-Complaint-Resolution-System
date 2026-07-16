@@ -36,7 +36,7 @@ import static org.egov.pgr.util.PGRConstants.MDMS_INBOX_VISIBILITY_CONFIG;
  *        assigned to them or their reportee subtree, PLUS the unassigned
  *        queues (states where no assignee exists yet). For everyone else —
  *        including supervisors whose reportingTo data is unmaintained — ALL
- *        degrades to the tenant-wide open view rather than an empty tab.
+ *        degrades to the tenant-wide open view rather than an empty inbox.
  *
  * Gated twice: the PGR_VISIBILITY_ENABLED env kill switch (service-wide) and
  * the per-tenant MDMS RAINMAKER-PGR.InboxVisibilityConfig `enabled` flag —
@@ -47,8 +47,16 @@ import static org.egov.pgr.util.PGRConstants.MDMS_INBOX_VISIBILITY_CONFIG;
 @Service
 public class VisibilityService {
 
-    public static final String TAB_MY = "MY";
-    public static final String TAB_ALL = "ALL";
+    /**
+     * API scope selectors for the visibility-aware inbox endpoints — filter
+     * semantics, not UI tabs: MINE = assigned to me; TEAM = my reportee
+     * subtree's assignments plus the unassigned queues (falling back to the
+     * tenant-wide open view when no reportees are projected). Machine enum
+     * values on the wire, never shown to users — the inbox labels the UI
+     * renders for them are localized frontend-side (PGR_INBOX_TAB_*).
+     */
+    public static final String SCOPE_MINE = "MINE";
+    public static final String SCOPE_TEAM = "TEAM";
 
     private final PGRConfiguration config;
     private final HrmsProjectionRepository projectionRepository;
@@ -67,8 +75,8 @@ public class VisibilityService {
         this.mdmsUtils = mdmsUtils;
     }
 
-    /** Mutates the criteria with the tab's visibility scope. */
-    public void resolve(RequestInfo requestInfo, RequestSearchCriteria criteria, String tab) {
+    /** Mutates the criteria with the requested visibility scope. */
+    public void resolve(RequestInfo requestInfo, RequestSearchCriteria criteria, String scope) {
         if (!Boolean.TRUE.equals(config.getVisibilityEnabled())) {
             throw new CustomException("PGR_VISIBILITY_DISABLED",
                     "Inbox visibility resolution is disabled on this deployment (PGR_VISIBILITY_ENABLED)");
@@ -87,12 +95,12 @@ public class VisibilityService {
                     "Inbox visibility is not enabled for tenant " + tenantId + " (RAINMAKER-PGR.InboxVisibilityConfig)");
         }
 
-        if (TAB_MY.equalsIgnoreCase(tab)) {
+        if (SCOPE_MINE.equalsIgnoreCase(scope)) {
             criteria.setAssignee(me);
             return;
         }
-        if (!TAB_ALL.equalsIgnoreCase(tab)) {
-            throw new CustomException("PGR_VISIBILITY_INVALID_TAB", "Unknown inbox tab: " + tab);
+        if (!SCOPE_TEAM.equalsIgnoreCase(scope)) {
+            throw new CustomException("PGR_VISIBILITY_INVALID_SCOPE", "Unknown inbox visibility scope: " + scope);
         }
 
         int depth = readDepth(mdmsConfig);
@@ -100,7 +108,7 @@ public class VisibilityService {
         if (CollectionUtils.isEmpty(reportees)) {
             // Fallback rule (design §4.2): no projected reportees — whether the
             // user is a leaf employee or the reportingTo data is unmaintained —
-            // means ALL stays the tenant-wide open view, never an empty tab.
+            // means TEAM stays the tenant-wide open view, never an empty inbox.
             return;
         }
 
@@ -114,7 +122,7 @@ public class VisibilityService {
         // empty-reportees fallback above instead of stalling the inbox behind an
         // unbounded sequential chain of workflow calls.
         if (team.size() > config.getVisibilityTeamFanoutMax()) {
-            log.warn("Visibility ALL for {}: team of {} exceeds fan-out cap {} — falling back to tenant-wide view",
+            log.warn("Visibility TEAM for {}: team of {} exceeds fan-out cap {} — falling back to tenant-wide view",
                     me, team.size(), config.getVisibilityTeamFanoutMax());
             return;
         }
@@ -126,7 +134,7 @@ public class VisibilityService {
 
         criteria.setVisibilityIds(assignedIds);
         criteria.setVisibilityUnassignedStates(new HashSet<>(config.getVisibilityUnassignedStates()));
-        log.debug("Visibility ALL for {}: {} reportees, {} assigned complaints", me, reportees.size(), assignedIds.size());
+        log.debug("Visibility TEAM for {}: {} reportees, {} assigned complaints", me, reportees.size(), assignedIds.size());
     }
 
     @SuppressWarnings("unchecked")
