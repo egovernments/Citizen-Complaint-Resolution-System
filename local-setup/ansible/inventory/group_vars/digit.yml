@@ -81,6 +81,13 @@ footer_bw_logo_url: ""
 login_tenant_allowlist: []
 employee_module_denylist: []
 
+# Client-side dashboard render-lag instrumentation (#1110): the supervisor
+# dashboard POSTs OTLP metrics/logs to the same-origin /otel Kong route.
+# ON by default (the emitter self-mutes when the route is absent). This is
+# the deployed-box KILL SWITCH: set false in host_vars and re-render
+# globalConfigs.js (ansible/nightly) — no rebuild needed.
+dashboard_metrics_enabled: true
+
 # ──────────────────────────────────────────────────────────────────────
 # nginx vhost — feature flags + upstream ports
 # ──────────────────────────────────────────────────────────────────────

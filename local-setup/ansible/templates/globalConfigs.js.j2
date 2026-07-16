@@ -64,6 +64,11 @@ var globalConfigs = (function () {
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
   var corePostalConfigs = {{ core_postal_configs | default({}) | to_json }};
+  // Client-side dashboard render-lag instrumentation (#1110). ON by default;
+  // kill switch = `dashboard_metrics_enabled: false` in the inventory + a
+  // re-render of this file (no rebuild). The emitter self-mutes when the
+  // /otel Kong ingest route is absent.
+  var dashboardMetricsEnabled = {{ dashboard_metrics_enabled | default(true) | to_json }};
 
   // Keycloak SSO settings. Inert when authProvider !== 'keycloak'
   // (which is the default). The auth-adapter inside digit-ui reads
@@ -142,6 +147,8 @@ var globalConfigs = (function () {
       return coreMobileConfigs;
     } else if (key === "CORE_POSTAL_CONFIGS") {
       return corePostalConfigs;
+    } else if (key === "DASHBOARD_METRICS_ENABLED") {
+      return dashboardMetricsEnabled;
     } else if (key === "KEYCLOAK_URL") {
       return keycloakUrl;
     } else if (key === "KEYCLOAK_REALM") {
