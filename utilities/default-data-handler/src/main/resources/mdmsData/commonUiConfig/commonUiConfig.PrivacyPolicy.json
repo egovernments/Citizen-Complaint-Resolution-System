@@ -1,0 +1,51 @@
+[
+  {
+    "module": "HCM",
+    "active": true,
+    "header": "CCRS_PRIVACY_HEADER",
+    "contents": [
+      {
+        "header": "CCRS_PRIVACY_SECTION_1",
+        "isSpaceRequired": false,
+        "descriptions": [
+          {
+            "text": "CCRS_PRIVACY_P1",
+            "type": null,
+            "isBold": false,
+            "isSpaceRequired": false
+          },
+          {
+            "text": "CCRS_PRIVACY_P2",
+            "type": null,
+            "isBold": false,
+            "isSpaceRequired": false
+          },
+          {
+            "text": "CCRS_PRIVACY_P3",
+            "type": null,
+            "isBold": false,
+            "isSpaceRequired": false
+          },
+          {
+            "text": "CCRS_PRIVACY_P4",
+            "type": null,
+            "isBold": false,
+            "isSpaceRequired": false
+          },
+          {
+            "text": "CCRS_PRIVACY_P5",
+            "type": null,
+            "isBold": false,
+            "isSpaceRequired": false
+          },
+          {
+            "text": "CCRS_PRIVACY_P6",
+            "type": null,
+            "isBold": false,
+            "isSpaceRequired": false
+          }
+        ]
+      }
+    ]
+  }
+]
