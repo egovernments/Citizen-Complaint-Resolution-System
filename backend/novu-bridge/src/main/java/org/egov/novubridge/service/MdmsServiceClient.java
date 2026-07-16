@@ -35,13 +35,16 @@ public class MdmsServiceClient {
     /** Schema that carries per-tenant provider delivery config (WhatsApp sender number etc.). */
     private static final String PROVIDER_DETAIL_SCHEMA = "ProviderDetail";
 
+    /** Sentinel senderCache value meaning "looked up, confirmed not configured" (ConcurrentHashMap rejects null values). */
+    private static final String NO_SENDER_CONFIGURED = "";
+
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
 
     /** Cache: tenantId → country-code prefix (e.g. "+91") */
     private final Map<String, String> prefixCache = new ConcurrentHashMap<>();
 
-    /** Cache: tenantId → WhatsApp sender number from ProviderDetail MDMS */
+    /** Cache: tenantId → WhatsApp sender number from ProviderDetail MDMS, or {@link #NO_SENDER_CONFIGURED}. */
     private final Map<String, String> senderCache = new ConcurrentHashMap<>();
 
     public MdmsServiceClient(RestTemplate restTemplate, NovuBridgeConfiguration config) {
@@ -85,7 +88,8 @@ public class MdmsServiceClient {
     @SuppressWarnings("unchecked")
     public String getWhatsappSenderNumber(String tenantId) {
         if (senderCache.containsKey(tenantId)) {
-            return senderCache.get(tenantId);
+            String cached = senderCache.get(tenantId);
+            return NO_SENDER_CONFIGURED.equals(cached) ? null : cached;
         }
         try {
             String url = config.getMdmsHost() + config.getMdmsSearchPath();
@@ -104,6 +108,7 @@ public class MdmsServiceClient {
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
                 log.warn("MDMS returned non-2xx or empty body for ProviderDetail tenantId={}", tenantId);
+                senderCache.put(tenantId, NO_SENDER_CONFIGURED);
                 return null;
             }
 
@@ -111,6 +116,7 @@ public class MdmsServiceClient {
                     (List<Map<String, Object>>) response.getBody().get("mdms");
             if (mdmsList == null || mdmsList.isEmpty()) {
                 log.warn("No ProviderDetail records in MDMS for tenantId={}", tenantId);
+                senderCache.put(tenantId, NO_SENDER_CONFIGURED);
                 return null;
             }
 
@@ -118,18 +124,17 @@ public class MdmsServiceClient {
                     .map(r -> (Map<String, Object>) r.get("data"))
                     .filter(d -> d != null
                             && "whatsapp".equalsIgnoreCase((String) d.get("channel"))
+                            && "twilio".equalsIgnoreCase((String) d.get("providerName"))
                             && Boolean.TRUE.equals(d.get("isActive")))
                     .map(d -> (String) d.get("senderNumber"))
                     .filter(s -> s != null && !s.isBlank())
                     .findFirst().orElse(null);
 
-            if (senderNumber != null) {
-                senderCache.put(tenantId, senderNumber);
-            }
+            senderCache.put(tenantId, senderNumber != null ? senderNumber : NO_SENDER_CONFIGURED);
             return senderNumber;
         } catch (Exception e) {
-            log.warn("Failed to fetch WhatsApp senderNumber from MDMS for tenantId={}: {}",
-                    tenantId, e.getMessage());
+            log.warn("Failed to fetch WhatsApp senderNumber from MDMS for tenantId={}", tenantId, e);
+            senderCache.put(tenantId, NO_SENDER_CONFIGURED);
             return null;
         }
     }

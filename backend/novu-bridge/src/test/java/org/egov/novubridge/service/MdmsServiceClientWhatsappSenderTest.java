@@ -52,9 +52,13 @@ class MdmsServiceClientWhatsappSenderTest {
     }
 
     private Map<String, Object> providerRecord(String channel, boolean isActive, String senderNumber) {
+        return providerRecord("twilio", channel, isActive, senderNumber);
+    }
+
+    private Map<String, Object> providerRecord(String providerName, String channel, boolean isActive, String senderNumber) {
         Map<String, Object> data = new HashMap<>();
         data.put("tenantId", "ke.bomet");
-        data.put("providerName", "twilio");
+        data.put("providerName", providerName);
         data.put("channel", channel);
         data.put("isActive", isActive);
         data.put("senderNumber", senderNumber);
@@ -91,9 +95,19 @@ class MdmsServiceClientWhatsappSenderTest {
         stubMdmsResponse(List.of(
                 providerRecord("sms", true, "+14155550999"),
                 providerRecord("whatsapp", false, "+14155550001"),
+                providerRecord("meta", "whatsapp", true, "+14155550777"),
                 providerRecord("whatsapp", true, "+14155550123")));
 
         assertEquals("+14155550123", mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
+    }
+
+    @Test
+    void activeNonTwilioWhatsappRecord_isIgnored_returnsNull() {
+        // Only a non-Twilio active WhatsApp provider is configured; the sender is always
+        // sent as overrides.providers.twilio.from, so a non-Twilio record must not be picked.
+        stubMdmsResponse(List.of(providerRecord("meta", "whatsapp", true, "+14155550777")));
+
+        assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
     }
 
     @Test
@@ -125,6 +139,50 @@ class MdmsServiceClientWhatsappSenderTest {
 
         assertEquals("+14155550123", mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
         assertEquals("+14155550123", mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
+
+        verify(restTemplate, times(1)).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class));
+    }
+
+    @Test
+    void secondLookupForTenantWithNoActiveRecord_isServedFromCache_doesNotCallMdmsAgain() {
+        // The "not configured" outcome must be cached too, else every WHATSAPP dispatch for a
+        // tenant with no ProviderDetail sender re-issues a synchronous MDMS HTTP call forever.
+        stubMdmsResponse(List.of(providerRecord("whatsapp", false, "+14155550001")));
+
+        assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
+        assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
+
+        verify(restTemplate, times(1)).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class));
+    }
+
+    @Test
+    void secondLookupAfterNoRecordsAtAll_isServedFromCache_doesNotCallMdmsAgain() {
+        stubMdmsResponse(List.of());
+
+        assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
+        assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
+
+        verify(restTemplate, times(1)).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class));
+    }
+
+    @Test
+    void secondLookupAfterNon2xxResponse_isServedFromCache_doesNotCallMdmsAgain() {
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
+                .thenReturn(new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
+        assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
+
+        verify(restTemplate, times(1)).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class));
+    }
+
+    @Test
+    void secondLookupAfterRestTemplateThrows_isServedFromCache_doesNotCallMdmsAgain() {
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
+                .thenThrow(new RuntimeException("MDMS unreachable"));
+
+        assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
+        assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
 
         verify(restTemplate, times(1)).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class));
     }
