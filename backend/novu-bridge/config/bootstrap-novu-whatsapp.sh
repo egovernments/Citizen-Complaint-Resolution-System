@@ -22,7 +22,7 @@ set -euo pipefail
 #   NOVU_ENV_FILE          (default: <script-dir>/.env.novu)
 #   NOVU_ENV_NAME          (default: digit-dev)
 #   NOVU_ENV_COLOR         (default: #4F46E5)
-#   NOVU_WORKFLOW_ID       (default: complaints-whatsapp-v1)
+#   NOVU_WORKFLOW_ID       (default: complaints-whatsapp — MUST match novu.bridge.workflow.id.whatsapp, i.e. what the bridge triggers)
 #   NOVU_WORKFLOW_NAME     (default: Complaints WhatsApp Workflow)
 #   NOVU_INTEGRATION_NAME  (default: twilio-whatsapp)
 #   NOVU_INTEGRATION_ID    (default: twilio-whatsapp)
@@ -66,7 +66,7 @@ require_var TWILIO_WHATSAPP_FROM
 NOVU_BASE_URL="${NOVU_BASE_URL:-http://localhost:1336}"
 NOVU_ENV_NAME="${NOVU_ENV_NAME:-digit-dev}"
 NOVU_ENV_COLOR="${NOVU_ENV_COLOR:-#4F46E5}"
-NOVU_WORKFLOW_ID="${NOVU_WORKFLOW_ID:-complaints-whatsapp-v1}"
+NOVU_WORKFLOW_ID="${NOVU_WORKFLOW_ID:-complaints-whatsapp}"
 NOVU_WORKFLOW_NAME="${NOVU_WORKFLOW_NAME:-Complaints WhatsApp Workflow}"
 NOVU_INTEGRATION_NAME="${NOVU_INTEGRATION_NAME:-twilio-whatsapp}"
 NOVU_INTEGRATION_ID="${NOVU_INTEGRATION_ID:-twilio-whatsapp}"
