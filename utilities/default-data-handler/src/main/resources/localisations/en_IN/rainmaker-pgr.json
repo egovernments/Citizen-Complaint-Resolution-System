@@ -3660,6 +3660,36 @@
         "locale": "en_IN"
     },
     {
+        "code": "ES_PGR_ADMIN_COMPLAINTS_FOUND",
+        "message": "Complaints Found",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_UPDATED",
+        "message": "Updated",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SECS_AGO",
+        "message": "sec ago",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_MINS_AGO",
+        "message": "min ago",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_HOURS_AGO",
+        "message": "hr ago",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "ES_PGR_FILTER_STATUS",
         "message": "Status",
         "module": "rainmaker-pgr",
