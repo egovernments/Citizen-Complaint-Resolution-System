@@ -288,7 +288,8 @@ const PGRAdminSearch = () => {
       return v === k ? d.name || d.code : v;
     };
     const list = (Array.isArray(departments) ? departments : []).filter((d) => d?.code);
-    const opts = [{ code: "NA", label: t("ES_PGR_ADMIN_DEPT_NA") }, ...list.map((d) => ({ code: d.code, label: label(d) }))];
+    const naT = t("ES_PGR_ADMIN_DEPT_NA");
+    const opts = [{ code: "NA", label: naT === "ES_PGR_ADMIN_DEPT_NA" ? "No Department Assigned" : naT }, ...list.map((d) => ({ code: d.code, label: label(d) }))];
     const map = {}; // code OR stored name -> {label, code} (additionalDetail.department holds either)
     list.forEach((d) => {
       const l = label(d);
@@ -313,6 +314,7 @@ const PGRAdminSearch = () => {
   const [dateOpen, setDateOpen] = useState(false);
   const [dateFocus, setDateFocus] = useState([0, 0]); // react-date-range focus: [range, 0=start|1=end]
   const [exporting, setExporting] = useState(false);
+  const [exportNote, setExportNote] = useState("");
   const [cnoOpen, setCnoOpen] = useState(false);
   const [, setAgoTick] = useState(0); // re-render so "Updated Xs ago" stays fresh
   const deptRef = useRef(null);
@@ -414,6 +416,13 @@ const PGRAdminSearch = () => {
     });
   };
 
+  // additionalDetail can arrive as a JSON STRING on some records (legacy
+  // employee-created complaints) — normalize before reading .department.
+  const deptOf = (svc) => {
+    let ad = svc && svc.additionalDetail;
+    if (typeof ad === "string") { try { ad = JSON.parse(ad); } catch (e) { ad = null; } }
+    return ad && ad.department;
+  };
   const deptCell = (raw) => {
     if (!raw || raw === "NA") return { label: tr("ES_PGR_ADMIN_DEPT_NA", "No Department Assigned"), code: "NA" };
     const hit = deptOptions.map[raw];
@@ -447,14 +456,16 @@ const PGRAdminSearch = () => {
   const onExport = async () => {
     if (exporting) return;
     setExporting(true);
+    setExportNote("");
     try {
       const out = [];
       let offset = 0;
+      let capped = true;
       for (let i = 0; i < Math.ceil(EXPORT_MAX_ROWS / 50); i++) {
         const res = await searchAdmin({ ...buildParams(committed, 0, 50), limit: 50, offset });
         const batch = res?.ServiceWrappers || [];
         out.push(...batch);
-        if (batch.length < 50) break;
+        if (batch.length < 50) { capped = false; break; }
         offset += 50;
       }
       // real .xlsx via the platform's Digit.Download.Excel (xlsx lib, json_to_sheet)
@@ -472,14 +483,18 @@ const PGRAdminSearch = () => {
         const md = fmtDT(s?.auditDetails?.lastModifiedTime);
         return {
           [H.cno]: s.serviceRequestId,
-          [H.dept]: deptCell(s?.additionalDetail?.department).label,
+          [H.dept]: deptCell(deptOf(s)).label,
           [H.type]: complaintLabel(t, s.serviceCode),
           [H.status]: tr(`CS_COMMON_${s.applicationStatus}`, s.applicationStatus),
           [H.created]: `${cd.d}, ${cd.t}`,
           [H.modified]: `${md.d}, ${md.t}`,
         };
       });
-      Digit.Download.Excel(data, `admin-complaints-${tenantId}-${new Date().toISOString().slice(0, 10)}`);
+      // Digit.Download.Excel truncates the download name to 30 chars — stay under it
+      Digit.Download.Excel(data, `complaints-${new Date().toISOString().slice(0, 10)}`);
+      if (capped) setExportNote(tr("ES_PGR_ADMIN_EXPORT_CAPPED", `Exported the first ${EXPORT_MAX_ROWS} rows only`));
+    } catch (e) {
+      setExportNote(tr("ES_PGR_ADMIN_EXPORT_FAILED", "Export failed — please try again"));
     } finally {
       setExporting(false);
     }
@@ -503,7 +518,7 @@ const PGRAdminSearch = () => {
   const displayRows = (() => {
     if (!clientSort) return rows;
     const key = clientSort.col === "department"
-      ? (w) => deptCell(w?.service?.additionalDetail?.department).label
+      ? (w) => deptCell(deptOf(w?.service)).label
       : (w) => complaintLabel(t, w?.service?.serviceCode) || "";
     const dir = clientSort.dir === "ASC" ? 1 : -1;
     return [...rows].sort((a, b) => dir * String(key(a)).localeCompare(String(key(b))));
@@ -615,7 +630,7 @@ const PGRAdminSearch = () => {
                     <i>{d.label}</i>
                     <span className="x" role="button" tabIndex={0} aria-label={`remove ${d.label}`}
                       onClick={() => toggleDept(d)}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDept(d); } }}>×</span>
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); toggleDept(d); } }}>×</span>
                   </span>
                 ))}
                 {chipOverflow > 0 && <span className="pgr-adm-tag"><i>+{chipOverflow}</i></span>}
@@ -705,6 +720,7 @@ const PGRAdminSearch = () => {
             <button className="pgr-adm-btn pgr-adm-btn--ghost" onClick={onExport} disabled={exporting || rows.length === 0}>
               <IcExport /> {exporting ? tr("ES_PGR_ADMIN_EXPORTING", "Exporting…") : tr("ES_PGR_ADMIN_EXPORT", "Export")}
             </button>
+            {exportNote && <span style={{ color: "var(--color-error,#b3261e)", fontSize: ".76rem" }}>{exportNote}</span>}
           </div>
         </div>
 
@@ -733,7 +749,7 @@ const PGRAdminSearch = () => {
               <tbody>
                 {displayRows.map((w) => {
                   const s = w.service || {};
-                  const dept = deptCell(s?.additionalDetail?.department);
+                  const dept = deptCell(deptOf(s));
                   const tint = deptTint(dept.code);
                   const statusLabel = tr(`CS_COMMON_${s.applicationStatus}`, s.applicationStatus);
                   const detailUrl = `/${window.contextPath}/employee/pgr/complaint-details/${s.serviceRequestId}`;
