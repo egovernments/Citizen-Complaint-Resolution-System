@@ -238,7 +238,7 @@ except Exception: print(-1)' 2>/dev/null
 
 # _adapter_not_503 — a proxied /novu-adapter call must not 503 (Kong resolves the
 # upstream). 503 = Kong lost the bridge in its DNS cache (needs a Kong restart).
-_adapter_not_503() { local c; c=$(http_code "$PUBLIC_URL/novu-adapter/v1/logs"); [[ "$c" != "503" && "$c" != "000" ]]; }
+_adapter_not_503() { local c; c=$(http_code "$PUBLIC_URL/novu-bridge/novu-adapter/v1/logs"); [[ "$c" != "503" && "$c" != "000" ]]; }
 
 # pause "<prompt>" — stop for a human at the manual/showcase steps (skip with --yes).
 pause() {
@@ -363,7 +363,7 @@ do_step3() {
   compose up -d novu-bridge
 
   verify "novu-bridge env carries a non-empty NOVU_API_KEY" "_svc_env_has novu-bridge '^NOVU_API_KEY=.+'"
-  verify "/novu-adapter is reachable through the gateway" "http_reachable '$PUBLIC_URL/novu-adapter/v1/logs'"
+  verify "/novu-adapter is reachable through the gateway" "http_reachable '$PUBLIC_URL/novu-bridge/novu-adapter/v1/logs'"
 }
 
 # =============================================================================
