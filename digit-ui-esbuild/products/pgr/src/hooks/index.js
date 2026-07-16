@@ -8,7 +8,6 @@ import usePGRUpdate from "./pgr/usePGRUpdate";
 import useServiceDefs from "./pgr/useServiceDefs";
 import useMobileValidation from "./pgr/useMobileValidation";
 import usePGRInboxSearch from "./pgr/usePGRInboxSearch";
-import useAdminComplaintSearch from "./pgr/useAdminComplaintSearch";
 
 const pgr = {
   useProjectSearch,
@@ -20,7 +19,6 @@ const pgr = {
   useServiceDefs,
   useMobileValidation,
   usePGRInboxSearch,
-  useAdminComplaintSearch,
 };
 
 
