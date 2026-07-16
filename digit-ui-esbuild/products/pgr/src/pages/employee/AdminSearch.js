@@ -36,7 +36,9 @@ const PAGE_SIZES = [10, 20, 50];
 const EXPORT_MAX_ROWS = 500;
 const SERVER_SORT_COLS = ["serviceRequestId", "applicationStatus", "createdTime", "lastModifiedTime"];
 
-// applicationStatus -> pill bucket (standard PGR + CMS workflows)
+// applicationStatus -> pill bucket (standard PGR + CMS workflows).
+// Semantics follow the citizen My Complaints pills: rejected-family = error
+// red, resolved-family = success green, freshly-opened = warning amber.
 const STATUS_BUCKET = {
   PENDINGFORASSIGNMENT: "open",
   NEW: "open",
@@ -51,9 +53,11 @@ const STATUS_BUCKET = {
   AWAITINGINFORMATION: "inprogress",
   INFOFROMCITIZEN: "inprogress",
   RESOLVED: "resolved",
-  CLOSEDAFTERRESOLUTION: "closed",
-  CLOSEDAFTERREJECTION: "closed",
-  REJECTED: "closed",
+  RESOLVEDBYSUPERVISOR: "resolved",
+  CLOSEDAFTERRESOLUTION: "resolved",
+  REJECTED: "rejected",
+  CLOSEDAFTERREJECTION: "rejected",
+  CANCELLED: "rejected",
   CLOSED: "closed",
 };
 const bucketOf = (status) => STATUS_BUCKET[String(status || "").toUpperCase()] || "inprogress";
@@ -177,10 +181,11 @@ const CSS = `
 .pgr-adm-deptag i { overflow: hidden; text-overflow: ellipsis; font-style: normal; }
 .pgr-adm-pill { display: inline-flex; align-items: center; gap: .35rem; border-radius: 9999px; padding: .18rem .65rem; font-size: .74rem; font-weight: 700; white-space: nowrap; }
 .pgr-adm-pill::before { content: ""; width: 6px; height: 6px; border-radius: 9999px; background: currentColor; flex: none; }
-.pgr-adm-pill--open { background: #e8f5e9; color: #1b5e20; }
-.pgr-adm-pill--assigned { background: #fff3e0; color: #b26a00; }
-.pgr-adm-pill--inprogress { background: #e3f2fd; color: #1565c0; }
-.pgr-adm-pill--resolved { background: #f3e8fd; color: #6a1b9a; }
+.pgr-adm-pill--open { background: var(--color-primary-selected-bg,#FFF4D7); color: var(--color-warning,#9E5F00); }
+.pgr-adm-pill--assigned { background: #e3f2fd; color: #1565c0; }
+.pgr-adm-pill--inprogress { background: #e0f2f1; color: #00695c; }
+.pgr-adm-pill--resolved { background: var(--color-success-bg,#E8F3EE); color: var(--color-success,#00703C); }
+.pgr-adm-pill--rejected { background: var(--color-error-bg,#FAE5E2); color: var(--color-error,#d4351c); }
 .pgr-adm-pill--closed { background: #eceff1; color: #455a64; }
 .pgr-adm-dt { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; }
 .pgr-adm-dt svg { color: var(--color-text-secondary,#94a3b8); flex: none; }
