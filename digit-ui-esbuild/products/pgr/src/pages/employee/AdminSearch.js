@@ -86,8 +86,6 @@ const STYLE_ID = "pgr-admin-search-css";
 const CSS = `
 .pgr-adm { padding: 1rem 1.25rem 2rem; background: var(--color-page-bg, transparent); color: var(--color-text-primary,#1f2937); }
 .pgr-adm * { box-sizing: border-box; }
-.pgr-adm-crumbs { font-size: .8rem; color: var(--color-text-secondary,#64748b); margin-bottom: .35rem; }
-.pgr-adm-crumbs a { color: var(--color-link-normal, var(--color-primary-1, var(--color-primary-main,#c84c0e))); text-decoration: none; }
 .pgr-adm-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .pgr-adm-title h1 { margin: 0; font-size: 1.6rem; color: var(--color-text-heading, var(--color-primary-1, var(--color-primary-main,#c84c0e))); }
 .pgr-adm-title p { margin: .25rem 0 0; color: var(--color-text-secondary,#64748b); font-size: .9rem; }
@@ -126,6 +124,7 @@ const CSS = `
 .pgr-adm-date .caret { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#64748b); font-size: .75rem; }
 .pgr-adm-rdr { position: absolute; z-index: 40; top: calc(100% + 4px); right: 0; background: #fff; border: 1px solid var(--color-border,#cbd5e1); border-radius: .6rem; box-shadow: 0 10px 24px rgba(0,0,0,.14); overflow: hidden; }
 .pgr-adm-rdr .rdrCalendarWrapper { font-size: 10px; }
+.pgr-adm-rdr .rdrMonth { width: 24em; }
 .pgr-adm-rdr .rdrMonthAndYearWrapper { padding-top: 2px; height: 46px; }
 .pgr-adm-fbtns { display: flex; gap: .6rem; }
 .pgr-adm-fbtns .pgr-adm-btn { min-height: 44px; padding: .6rem 1.5rem; font-size: .9rem; }
@@ -214,6 +213,34 @@ const bareInput = (el) => {
   el.style.setProperty("height", "auto", "important");
   el.style.setProperty("padding", "0.5rem 0", "important");
   el.style.setProperty("margin", "0", "important");
+};
+
+// Same cascade problem for <select>s: the platform forces select padding/height,
+// clipping the text under the custom chevron — inline !important via ref wins.
+const CHEV =
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>\")";
+const selRef = (minW, h) => (el) => {
+  if (!el) return;
+  const imp = (p, v) => el.style.setProperty(p, v, "important");
+  imp("appearance", "none");
+  imp("-webkit-appearance", "none");
+  imp("-moz-appearance", "none");
+  imp("padding", "0.4rem 1.9rem 0.4rem 0.7rem");
+  imp("border", "1px solid var(--color-border, #cbd5e1)");
+  imp("border-radius", "0.5rem");
+  imp("background-color", "#fff");
+  imp("background-image", CHEV);
+  imp("background-repeat", "no-repeat");
+  imp("background-position", "right 0.55rem center");
+  imp("background-size", "11px");
+  imp("height", h);
+  imp("min-height", h);
+  imp("min-width", minW);
+  imp("width", "auto");
+  imp("font-size", "0.8rem");
+  imp("line-height", "1.2");
+  imp("box-shadow", "none");
+  imp("cursor", "pointer");
 };
 
 const PGRAdminSearch = () => {
@@ -372,7 +399,12 @@ const PGRAdminSearch = () => {
     const sel = r.range1 || Object.values(r)[0];
     if (!sel) return;
     setFilters((f) => ({ ...f, fromDate: isoOf(sel.startDate), toDate: isoOf(sel.endDate) }));
-    if (dateFocus[1] === 1) setDateOpen(false); // end date picked → range complete
+  };
+  // the library moves focus start→end after the 1st click and back to start
+  // after the 2nd — that round-trip IS "range complete", so close then
+  const onRangeFocus = (f) => {
+    setDateFocus(f);
+    if (f[1] === 0) setDateOpen(false);
   };
   const primaryFill = (typeof window !== "undefined" &&
     getComputedStyle(document.documentElement).getPropertyValue("--color-primary-1").trim()) || "#c84c0e";
@@ -494,10 +526,6 @@ const PGRAdminSearch = () => {
 
   return (
     <div className="pgr-adm">
-      <div className="pgr-adm-crumbs">
-        <Link to={`/${window?.contextPath}/employee`}>{tr("ACTION_TEST_HOME", "Home")}</Link>
-        {" › "}<span>PGR</span>{" › "}<span>{tr("ES_PGR_ADMIN_SEARCH", "Admin Complaint Search")}</span>
-      </div>
       <div className="pgr-adm-top">
         <div className="pgr-adm-title">
           <h1>{tr("ES_PGR_ADMIN_SEARCH", "Admin Complaint Search")}</h1>
@@ -571,7 +599,7 @@ const PGRAdminSearch = () => {
                 <RangeCalendar
                   ranges={[{ startDate: dateOf(filters.fromDate), endDate: dateOf(filters.toDate || filters.fromDate), key: "range1" }]}
                   focusedRange={dateFocus}
-                  onRangeFocusChange={setDateFocus}
+                  onRangeFocusChange={onRangeFocus}
                   onChange={onRangePick}
                   rangeColors={[primaryFill]}
                   maxDate={new Date()}
@@ -606,10 +634,10 @@ const PGRAdminSearch = () => {
           </div>
           <div className="pgr-adm-sort">
             <span>{tr("ES_PGR_ADMIN_SORT_BY", "Sort by")}</span>
-            <select className="pgr-adm-sel" value={sortBy} onChange={(e) => { setClientSort(null); setSortBy(e.target.value); setPage(0); }}>
+            <select className="pgr-adm-sel" ref={selRef("150px", "40px")} value={sortBy} onChange={(e) => { setClientSort(null); setSortBy(e.target.value); setPage(0); }}>
               {SORT_OPTIONS.map((o) => <option key={o.code} value={o.code}>{tr(o.i18nKey, o.fb)}</option>)}
             </select>
-            <select className="pgr-adm-sel" value={sortOrder} onChange={(e) => { setClientSort(null); setSortOrder(e.target.value); setPage(0); }}>
+            <select className="pgr-adm-sel" ref={selRef("96px", "40px")} value={sortOrder} onChange={(e) => { setClientSort(null); setSortOrder(e.target.value); setPage(0); }}>
               <option value="DESC">{tr("ES_PGR_ADMIN_DESC", "Desc")}</option>
               <option value="ASC">{tr("ES_PGR_ADMIN_ASC", "Asc")}</option>
             </select>
@@ -691,7 +719,7 @@ const PGRAdminSearch = () => {
           </div>
           <div className="pgr-adm-pgsize">
             <span>{tr("ES_PGR_ADMIN_ROWS_PER_PAGE", "Rows per page")}</span>
-            <select className="pgr-adm-sel" value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}>
+            <select className="pgr-adm-sel" ref={selRef("76px", "36px")} value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}>
               {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
