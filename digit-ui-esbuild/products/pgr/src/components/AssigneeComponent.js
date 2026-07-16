@@ -9,8 +9,10 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
   const tenantId = Digit.ULBService.getCurrentTenantId();
   const hrmsContext = window?.globalConfigs?.getConfig("HRMS_CONTEXT_PATH") || "egov-hrms";
 
-  // Get roles from config populators
-  const { roles = [], department } = config?.populators || {};
+  // Get roles from config populators. `allDepartments` is true only for a
+  // CMS_SCREENING_OFFICER, who routes across EVERY department in the tenant;
+  // everyone else stays scoped to the single primary `department`.
+  const { roles = [], department, allDepartments } = config?.populators || {};
 
   // Fetch employee data based on roles
   const { 
@@ -36,18 +38,22 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
         const uuid = employee?.user?.uuid;
         const userServiceUUID = employee?.user?.userServiceUuid;
         if (!department) return acc;
-  
+        // Department display name. Onboarding seeds COMMON_MASTERS_DEPARTMENT_<code>
+        // (not DEPARTMENT_<code>), so use that key; fall back to the raw code.
+        const deptKey = `COMMON_MASTERS_DEPARTMENT_${department}`;
+        const deptName = t(deptKey) === deptKey ? department : t(deptKey);
+
         if (!acc[department]) {
           acc[department] = {
             code: department,
-            name: t(`DEPARTMENT_${department}`),
+            name: deptName,
             options: []
           };
         }
-  
+
         acc[department].options.push({
-          code: `${employee.user?.name} (${department})`,
-          name: `${employee.user?.name} (${department})`,
+          code: `${employee.user?.name} (${deptName})`,
+          name: `${employee.user?.name} (${deptName})`,
           uuid: uuid,
           userServiceUUID: userServiceUUID,
           mobileNumber: employee.user?.mobileNumber,
@@ -64,9 +70,14 @@ const AssigneeComponent = ({ config, onSelect, formState, defaultValues }) => {
   // Update assignees when employee data changes
   useEffect(() => {
     if (employeeData?.Employees?.length > 0) {
-      const filtered = employeeData.Employees.filter(
-        e => e?.assignments?.[0]?.department === department && e?.user?.uuid
-      );
+      // Screening officer (allDepartments): NO department filter — list every
+      // department's assignable employees (transformData groups them by
+      // department). Every other actor stays scoped to the single primary dept.
+      const filtered = employeeData.Employees.filter((e) => {
+        const d = e?.assignments?.[0]?.department;
+        if (!d || !e?.user?.uuid) return false;
+        return allDepartments ? true : d === department;
+      });
       setAssignees(transformData(filtered));
     }
   }, [employeeData]);

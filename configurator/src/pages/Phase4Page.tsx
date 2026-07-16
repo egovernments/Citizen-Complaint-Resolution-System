@@ -69,7 +69,7 @@ export default function Phase4Page() {
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [boundaries, setBoundaries] = useState<Boundary[]>([]);
   const [roles, setRoles] = useState<{ code: string; name: string; description?: string }[]>([]);
-  const [mobileRules, setMobileRules] = useState<{ pattern: string; minLength: number; maxLength: number; errorMessage: string; prefix?: string; allowedStartingCharacters?: string[] } | null>(null);
+  const [mobileRules, setMobileRules] = useState<{ mobileNumberRegex: string; pattern: string; countryCode?: string; prefix?: string; errorMessage: string } | null>(null);
   const [loadingRefs, setLoadingRefs] = useState(false);
   // Set when reference data is unavailable (fetch failed, or the boundary
   // tree came back empty). Distinct from per-row validation errors: without
@@ -92,10 +92,16 @@ export default function Phase4Page() {
       setLoadingRefs(true);
       setRefsError(null);
       try {
+        // Fetch hierarchy type first so boundaries come back with the correct
+        // hierarchyType populated — the boundary-relationships API returns
+        // hierarchyType=null in its wrapper unless explicitly filtered by it.
+        const hierarchies = await boundaryService.getHierarchies(targetTenant).catch(() => []);
+        const hierarchyType = hierarchies[0]?.hierarchyType;
+
         const [depts, desigs, bounds, fetchedRoles, fetchedMobileRules] = await Promise.all([
           mdmsService.getDepartments(targetTenant),
           mdmsService.getDesignations(targetTenant),
-          boundaryService.searchBoundaries(targetTenant),
+          boundaryService.searchBoundaries(targetTenant, hierarchyType ? { hierarchyType } : undefined),
           mdmsService.getRoles(targetTenant).catch(() => [] as typeof roles),
           mdmsService.getMobileValidation(targetTenant).catch(() => null),
         ]);
@@ -240,9 +246,8 @@ export default function Phase4Page() {
       if (emp.mobileNumber) {
         if (mobileRules) {
           let compiled: RegExp | null = null;
-          try { compiled = new RegExp(mobileRules.pattern); } catch { compiled = null; }
-          const len = emp.mobileNumber.length;
-          if (len < mobileRules.minLength || len > mobileRules.maxLength || (compiled && !compiled.test(emp.mobileNumber))) {
+          try { compiled = new RegExp(mobileRules.mobileNumberRegex); } catch { compiled = null; }
+          if (compiled && !compiled.test(emp.mobileNumber)) {
             errors.push(mobileRules.errorMessage);
           }
         } else if (!/^\d{9,10}$/.test(emp.mobileNumber)) {
@@ -311,7 +316,14 @@ export default function Phase4Page() {
                 return {
                   boundary: resolved.match.code,
                   boundaryType: resolved.match.boundaryType,
-                  hierarchyType: resolved.match.hierarchyType,
+                  // eg_hrms_jurisdiction.hierarchy is NOT-NULL. The boundary
+                  // resolver often has no hierarchyType (boundary-service search
+                  // doesn't return it), which made buildEmployee write
+                  // hierarchy=null → persister insert fails → the WHOLE employee
+                  // rolls back (egov-user created, HRMS record never lands).
+                  // Fall back to the tenant's boundary hierarchy ('ADMIN'),
+                  // matching the bulk-import path.
+                  hierarchyType: resolved.match.hierarchyType || 'ADMIN',
                 };
               })
             : [];
@@ -557,14 +569,9 @@ export default function Phase4Page() {
                 • <strong>mobileNumber</strong> -{' '}
                 {mobileRules
                   ? [
-                      mobileRules.minLength === mobileRules.maxLength
-                        ? `${mobileRules.minLength}-digit`
-                        : `${mobileRules.minLength}-${mobileRules.maxLength} digit`,
                       'mobile number',
-                      mobileRules.allowedStartingCharacters?.length
-                        ? `starting with ${mobileRules.allowedStartingCharacters.join(' / ')}`
-                        : null,
-                      mobileRules.prefix ? `(${mobileRules.prefix})` : null,
+                      mobileRules.countryCode ? `(${mobileRules.countryCode})` : null,
+                      `matching ${mobileRules.mobileNumberRegex}`,
                     ]
                       .filter(Boolean)
                       .join(' ')

@@ -6,8 +6,7 @@ import { CardLabel } from "@egovernments/digit-ui-react-components";
 import { useTranslation } from "react-i18next";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 import { point as turfPoint } from "@turf/helpers";
-import keNairobiWardsFallback from "../assets/boundaries/ke_nairobi_wards.json";
-import useWardHighlightColor from "../hooks/pgr/useWardHighlightColor";
+import useMapConfig from "../hooks/pgr/useMapConfig";
 import useTenantBoundaries from "../hooks/pgr/useTenantBoundaries";
 
 // Fix default icon issue in React builds
@@ -28,9 +27,22 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   const { t, i18n } = useTranslation();
   const [fetchedAddress, setFetchedAddress] = useState(null);
   const [isLoadingAddress, setIsLoadingAddress] = useState(false);
-  // Resolved from MDMS (RAINMAKER-PGR.MapConfig.wardHighlightColor),
-  // defaults to the legacy orange #FFA74F.
-  const WARD_COLOR = useWardHighlightColor();
+  // Map theming resolved per tenant from MDMS RAINMAKER-PGR.MapConfig:
+  // base tile theme (defaults to the light voyager basemap) + ward-highlight
+  // colour (defaults to the legacy orange #FFA74F).
+  const {
+    tileUrl,
+    tileAttribution,
+    wardHighlightColor: WARD_COLOR,
+    minZoom,
+    maxZoom,
+    geocodeCountryCodes,
+  } = useMapConfig();
+
+  // This map always opens on a known complaint, so the starting position is the
+  // complaint itself rather than the tenant's configured centre. Only the zoom
+  // is a presentation choice: 15 is street level, clamped to the tenant bounds.
+  const DETAIL_ZOOM = Math.min(Math.max(15, minZoom), maxZoom);
 
   // Nominatim Accept-Language is ISO 639-1; derive from i18n locale (e.g.
   // `sw_KE` → `sw`). Falls back to English (closes egovernments/CCRS#520
@@ -39,12 +51,13 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // in Swahili).
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
 
-  // Tenant ward polygons (boundary-service when MAP_TENANT is set, else
-  // the bundled static Nairobi wards). Null while the fetch is in flight.
+  // Tenant ward polygons from boundary-service for the configured MAP_TENANT.
+  // Null while the fetch is in flight; empty collection when the tenant has
+  // no usable geometry (no overlay — never another tenant's static wards).
   const tenantBoundaries = useTenantBoundaries();
 
   const matchedWard = useMemo(() => {
-    const wardCollection = tenantBoundaries || keNairobiWardsFallback;
+    const wardCollection = tenantBoundaries;
     if (!latitude || !longitude || !wardCollection?.features?.length) return null;
     const pt = turfPoint([longitude, latitude]);
     return wardCollection.features.find((f) => {
@@ -67,7 +80,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
       setIsLoadingAddress(true);
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&countrycodes=ke`,
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1${geocodeCountryCodes ? `&countrycodes=${encodeURIComponent(geocodeCountryCodes)}` : ""}`,
           {
             headers: {
               'Accept-Language': nominatimLang
@@ -162,7 +175,9 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
         }}>
           <MapContainer
             center={[latitude, longitude]}
-            zoom={15}
+            zoom={DETAIL_ZOOM}
+            minZoom={minZoom}
+            maxZoom={maxZoom}
             style={{ height: "100%", width: "100%" }}
             zoomControl={true}
             dragging={true}
@@ -170,10 +185,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
             doubleClickZoom={true}
             touchZoom={true}
           >
-            <TileLayer
-              attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-            />
+            <TileLayer key={tileUrl} attribution={tileAttribution} url={tileUrl} />
             {tenantBoundaries?.features?.length > 0 && (
               <GeoJSON
                 key={`${matchedWard?.properties?.code || "_"}-${tenantBoundaries.features.length}`}

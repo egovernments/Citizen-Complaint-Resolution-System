@@ -1,0 +1,141 @@
+# Source of truth for Flyway history-table names (deployment-parity item #10).
+#
+# The compose stack boots from a dump, then each service's -db migration init
+# container runs Flyway on top. Flyway finds "what have I already applied?" by
+# reading the history table named by SCHEMA_TABLE. If that name does not match
+# what the dump actually shipped, Flyway sees an EMPTY history, replays every
+# migration from V1 against a populated database, and — for services whose V1
+# starts with DROP TABLE IF EXISTS (egov-localization, egov-enc-service) —
+# silently destroys the data and exits 0.
+#
+# db-history-normalize reads this file before any migrator runs and renames
+# legacy history tables to their canonical names.
+#
+#   canonical      the table Flyway looks for (== SCHEMA_TABLE in
+#                  docker-compose.migrations.yml). Keep the two in sync.
+#   aliases        legacy compose names for the same history.
+#   data_tables    real tables this service's migrations CREATE. Derived from the
+#                  CREATE TABLE statements in its own migration SQL — NOT guessed.
+#                  Materialized views are excluded: they can always be rebuilt.
+#   embedded       true = no migration init container. The normalizer skips these
+#                  entirely; nothing would replay against them.
+#   baseline_fresh true = legitimately absent from the dump (migrates from empty).
+#                  Consumed by .github/scripts/check-flyway-dump-alignment.py.
+
+boundary-service:
+  canonical: boundary_service_schema
+  aliases: [boundary_schema_version]
+  data_tables: [boundary, boundary_hierarchy, boundary_relationship]
+
+egov-user:
+  canonical: egov_user_schema
+  aliases: [egov_user_schema_version]
+  data_tables:
+    - eg_address
+    - eg_role
+    - eg_user
+    - eg_user_address
+    - eg_user_audit_table
+    - eg_user_login_failed_attempts
+    - eg_userrole
+    - eg_userrole_v1
+
+mdms-backend:
+  canonical: mdms_v2_schema
+  aliases: [mdms_schema_version]
+  data_tables: [eg_mdms_data, eg_mdms_schema_definition]
+
+egov-idgen:
+  canonical: egov_idgen_schema
+  aliases: [egov_idgen_schema_version]
+  data_tables: [id_generator]
+
+egov-localization:
+  canonical: egov_localization_schema
+  aliases: [egov_localization_schema_version]
+  data_tables: [message]
+
+egov-enc-service:
+  canonical: egov_enc_service_schema
+  aliases: [enc_schema_version]
+  data_tables: [eg_enc_asymmetric_keys, eg_enc_symmetric_keys]
+
+egov-filestore:
+  canonical: egov_filestore_schema
+  aliases: [filestore_schema_version]
+  data_tables: [eg_filestoremap]
+
+egov-workflow-v2:
+  canonical: egov_workflow_v2_schema
+  aliases: [workflow_schema_version]
+  data_tables:
+    - eg_wf_action_v2
+    - eg_wf_assignee_v2
+    - eg_wf_businessservice_v2
+    - eg_wf_document_v2
+    - eg_wf_processinstance_v2
+    - eg_wf_state_v2
+
+egov-hrms:
+  canonical: egov_hrms_schema
+  aliases: [hrms_schema_version]
+  data_tables:
+    - eg_hrms_assignment
+    - eg_hrms_deactivationdetails
+    - eg_hrms_departmentaltests
+    - eg_hrms_educationaldetails
+    - eg_hrms_empdocuments
+    - eg_hrms_employee
+    - eg_hrms_jurisdiction
+    - eg_hrms_reactivationdetails
+    - eg_hrms_servicehistory
+
+egov-url-shortening:
+  canonical: "egov-url-shortening_schema"   # hyphenated, as in the K8s chart
+  aliases: [egov_url_shortening_schema_version]
+  data_tables: [eg_url_shortener]
+
+egov-otp:
+  canonical: egov_otp_schema
+  aliases: []              # no legacy otp history exists in any known dump
+  data_tables: [eg_token]
+
+pgr-services:
+  canonical: pgr_services_schema
+  aliases: []              # already canonical in the dump
+  data_tables:
+    - complaint_open_state_daily
+    - eg_pgr_address_v2
+    - eg_pgr_document_v2
+    - eg_pgr_service_v2
+
+novu-bridge:
+  canonical: novu_bridge_schema
+  aliases: []
+  data_tables: [nb_dispatch_log]
+  baseline_fresh: true
+
+digit-config-service:
+  canonical: digit_config_service_schema
+  aliases: []
+  data_tables: [eg_config_data]
+  baseline_fresh: true
+
+audit-service:
+  canonical: audit_service_schema
+  aliases: []
+  data_tables: [eg_audit_logs]
+  baseline_fresh: true       # new to compose (#1157); migrates from empty, absent from the dump
+
+egov-indexer:
+  canonical: egov_indexer_schema
+  aliases: []
+  data_tables: []
+  embedded: true           # embedded Flyway; no migration init container
+  baseline_fresh: true
+
+egov-accesscontrol:
+  canonical: accesscontrol_schema_version
+  aliases: []
+  data_tables: []
+  embedded: true           # K8s chart declares no schemaTable; stays embedded

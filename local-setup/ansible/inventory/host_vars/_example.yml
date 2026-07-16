@@ -27,7 +27,7 @@ ansible_host: 10.0.0.10
 #   - Grafana root URL (so dashboard links use the real domain)
 #   - Let's Encrypt certificate
 #   - Citizen-facing URLs the UI generates
-domain: digit.example.com
+domain: digit.example.com  
 
 # Default `true`. Renders nginx with `listen 443 ssl` + HTTP→HTTPS
 # redirect, expects Let's Encrypt certs at /etc/letsencrypt/live/<domain>/.
@@ -87,13 +87,12 @@ pgr_boundary_lowest_level: "Ward"
 boundary_type: "Ward"          # what the smallest selectable boundary is called
 
 # Mobile-number validation rules used by the citizen-side UI on signup.
-# Kenya: +254 prefix, 9 digits starting with 1 or 7.
+# Kenya: +254 prefix, 9-10 digits starting with 7 (Safaricom) or 1 (Airtel/Telkom).
+# Length + allowed leading digits are derived from mobileNumberRegex (see
+# filter_plugins/mobile.py) — no separate length/starting-character fields.
 core_mobile_configs:
-  mobilePrefix: "+254"
-  mobileNumberPattern: "^[17][0-9]{8}$"
-  mobileNumberLength: 9
-  mobileNumberAllowedStartingCharacters: ["1", "7"]
-  mobileNumberErrorMessage: "CORE_COMMON_MOBILE_ERROR"
+  countryCode: "+254"
+  mobileNumberRegex: "^0?[17][0-9]{8}$"
 
 # Postal-code validation. The SPA reads this via globalConfigs key
 # `CORE_POSTAL_CONFIGS` for submit-time pattern checks in the citizen +
@@ -107,6 +106,17 @@ core_postal_configs:
   postalCodePattern: "^[0-9]{5}$"
   postalCodeLength: 5
   postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
+
+# Postal-code serviceability allowlist, passed to the MCP tenant
+# bootstrap as `pincode_allowlist` and seeded as `pincode` on every
+# tenant.tenants record. When set, a citizen who types a postal code
+# outside this list is blocked at submit with
+# CS_COMMON_PINCODE_NOT_SERVICABLE — unless they picked a ward, which
+# always supersedes the allowlist. Leave UNSET (the default) to accept
+# any postal code; do NOT set it to [] (mdms-v2 rejects empty arrays).
+# pgr_pincode_allowlist:
+#   - "00100"
+#   - "00200"
 
 # S3 bucket name used by egov-filestore as the asset bucket (sees
 # `asset_s3_bucket` in globalConfigs.js).
@@ -131,6 +141,18 @@ footer_bw_logo_url: ""
 #             Fewer moving parts; stable for production.
 # Both modes bind port 18080 internally; only one can be active.
 digit_ui_mode: static
+
+# Optional (static mode only): serve a PREBUILT bundle image instead of
+# cloning + building digit-ui-esbuild from git on the host. The playbook
+# pulls the image and extracts its baked /var/web/digit-ui into
+# /opt/digit-ui-esbuild/build/ (the dir nginx already serves). Build and
+# publish from the monorepo with:
+#   cd digit-ui-esbuild
+#   docker build -f docker/Dockerfile \
+#     -t <registry>/digit-ui-esbuild:<YYYYMMDD-HHMMSS> \
+#     -t <registry>/digit-ui-esbuild:nightly-develop . && docker push --all-tags <registry>/digit-ui-esbuild
+# Leave unset to keep the legacy git-clone + on-host esbuild behavior.
+# digit_ui_bundle_image: "ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop"
 
 # ────────── digit-ui-v2 (Vite + React 19 citizen SPA) ──────────
 #
@@ -183,6 +205,17 @@ enable_integration_tests_runner: false
 
 # ────────── Optional services (opt-in via flags) ──────────
 
+# Start the real OTP stack: egov-otp (stores OTPs), user-otp (orchestrates
+# send/validate), egov-notification-sms (delivers via SMS gateway).
+# Default false — local-setup/kong/kong.yml mocks /user-otp/* with a canned
+# 200 response so login/register work via the fixed OTP (123456, see
+# CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE) without any SMS infra.
+# Set true for production, AND follow the "TO ENABLE REAL OTP FOR PRODUCTION"
+# steps in local-setup/kong/kong.yml (remove the mock plugin there, and wire
+# up a real SMS_PROVIDER_CLASS in docker-compose.egov-digit.yaml — it
+# defaults to Console, which only logs OTP SMS instead of sending it).
+enable_otp_services: false
+
 # Bring up Elasticsearch + egov-indexer + inbox-v2. Heavy (~3GB RAM
 # extra). Off by default; only enable if you actually use the inbox.
 enable_search_stack: false
@@ -210,6 +243,23 @@ enable_mcp: true
 enable_turbopass: false
 # turbopass_port: 13301        # loopback port the search-api publishes on
 
+# ────────── Self-hosted Overpass (boundary-polygon fetch) ──────────
+# The configurator's Phase 2 OSM step fetches admin-boundary polygons from
+# Overpass. The public overpass-api.de is rate-limited / 504-prone; enable this
+# to run a standalone on-box `bomet-overpass` container (loopback 127.0.0.1:12346)
+# fed a boundary-filtered OSM extract, with nginx proxying /overpass/ → it. When
+# on, the configurator build bakes VITE_OVERPASS_URL=/overpass/api/interpreter so
+# Phase 2 uses the on-box instance. Off by default → public Overpass, nginx vhost
+# byte-identical to a pre-overpass deploy.
+# PREPARE THE EXTRACT FIRST (operator-specific country/size): see
+# overpass/README.md + overpass/prepare-extract.sh, then place the result at
+# overpass_planet_file on the target.
+enable_overpass: false
+# overpass_port: 12346                                   # loopback port
+# overpass_data_dir: /opt/overpass/data                  # holds the extract (mounted /data)
+# overpass_db_dir: /opt/overpass/db                      # Overpass DB volume (mounted /db)
+# overpass_planet_file: /opt/overpass/data/boundaries.osm.bz2  # prepared extract
+
 # ────────── Notifications (Novu + Twilio WhatsApp) ──────────
 # Turn on the `notifications` compose profile — adds 8 containers:
 #   digit-config-service, digit-user-preferences-service, novu-bridge,
@@ -230,6 +280,17 @@ enable_turbopass: false
 # Novu still comes up, operator can configure it via the UI later.
 enable_novu: false
 
+# Build a subpath-rebased Novu dashboard image locally so the SPA serves cleanly
+# under /novu (backend/novu-dashboard/Dockerfile, tagged novu-dashboard:local).
+# Strongly recommended — REQUIRED when Keycloak shares this domain (enable_keycloak),
+# because the stock dashboard's nginx workaround hijacks the whole /auth/ prefix.
+# When false, the stock image is pulled and the legacy root-path nginx workaround
+# is rendered instead. See nginx-site.conf.j2 (enable_novu branch).
+build_novu_dashboard: false
+# novu_dashboard_version: "2.3.0"   # upstream tag to rebase FROM
+# novu_base_path: "/novu"           # subpath to bake into the rebased dist
+# novu_dashboard_image: ""          # override to pin a prebuilt image instead of building
+
 # Pasted from the Novu dashboard after first sign-up.
 # https://docs.novu.co/sdks/api-keys for where to find it.
 novu_api_key: ""
@@ -241,6 +302,50 @@ novu_api_key: ""
 twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
+
+# ────────── Config-driven notifications (PGR + novu-bridge pass-through) ──────────
+# The new path (design D1/D4/D6/D7): PGR reads two MDMS masters
+# (PGR.NotificationRouting + PGR.NotificationTemplate), renders + localizes per
+# recipient, and publishes ONE pre-rendered event per (recipient × channel) to
+# complaints.domain.events. novu-bridge becomes a thin pass-through that
+# identifies the Novu subscriber and delivers renderedBody. Requires
+# enable_novu: true + the seeded MDMS masters + the pass-through
+# novu_bridge_image (below).
+
+# Flip PGR onto the config-driven path for THIS tenant. Default false keeps the
+# legacy hardcoded notification path. Cut over one tenant at a time after the
+# golden-output test + MDMS seed land. (docker-compose.<tenant>.yml may also
+# hard-set PGR_NOTIFICATION_CONFIG_DRIVEN — see docker-compose.bomet.yml.)
+pgr_notification_config_driven: false
+
+# Custom image pins (built+pushed to the VPC registry 10.0.0.4:5000 by CI).
+# Leave unset to keep the published preview / local-build defaults.
+# pgr_services_image:  "10.0.0.4:5000/egovio/pgr-services:notif-config-<sha>"
+# novu_bridge_image:   "10.0.0.4:5000/egovio/novu-bridge:passthrough-<sha>"
+
+# Build the pass-through novu-bridge from backend/novu-bridge on the box.
+build_novu_bridge: false
+# Build pgr-services from backend/pgr-services on the box (config-driven build).
+build_pgr_services: false
+
+# Channels the bridge actually delivers (comma-separated). WHATSAPP is
+# intentionally omitted until a legitimate provider is onboarded as a Novu
+# integration; then add it here. Default SMS,EMAIL.
+# novu_bridge_channels_enabled: "SMS,EMAIL"
+
+# novu-bridge dispatch channel (sms | whatsapp | email). SMS-first per the
+# Bomet phasing (§3): cut SMS over, then add WhatsApp/EMAIL as config-only
+# routing edits. Default sms.
+novu_bridge_channel: "sms"
+
+# Per-channel Novu workflow ids the bridge triggers (rendered body travels in
+# payload.body — the workflow is just the delivery shell). Defaults match the
+# CI bootstrap-created workflows.
+# novu_bridge_workflow_id_sms:      "complaints-sms"
+# novu_bridge_workflow_id_whatsapp: "complaints-whatsapp"
+# novu_bridge_workflow_id_email:    "complaints-email"
+# Subscriber-identify TTL cache (ms) — skip redundant POST /v1/subscribers.
+# novu_bridge_identify_cache_ttl_ms: 300000
 
 # ────────── Keycloak SSO (opt-in) ──────────
 # Adds 2 containers (keycloak + token-exchange-svc) plus the host
@@ -347,9 +452,8 @@ nginx_features:
 # nginx still gets installed (apt task is unconditional) but the operator's
 # hand-managed vhost is left as-is. Use for tenants whose production vhost
 # has hand-crafted routing the template can't (yet) render — e.g. Bomet's
-# /egov-rainmaker/ filestore passthrough, /novu/+/novu-api/ routing, the
-# /digit-ui/ host-alias. Default false so new tenants get the standard
-# templated vhost.
+# /novu/+/novu-api/ routing and the /digit-ui/ host-alias. Default false so
+# new tenants get the standard templated vhost.
 nginx_preserve_vhost: false
 
 # ────────── OpenBao (per-tenant secrets backend) ──────────

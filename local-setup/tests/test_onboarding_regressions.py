@@ -92,21 +92,36 @@ def test_tenant_bootstrapped(token):
     assert tok
 
 
+def _hierarchy_leaf_defs(res):
+    """Leaf complaint types from a RAINMAKER-PGR.ComplaintHierarchy search result.
+
+    ComplaintHierarchy is one adjacency list holding interior nodes AND leaf
+    complaint types. A row is a LEAF iff it carries `department` or `slaHours`
+    (interior nodes omit both). A leaf's `code` IS the serviceCode stored on a
+    complaint, verbatim.
+    """
+    rows = (res.get("MdmsRes", {}).get("RAINMAKER-PGR", {}) or {}).get(
+        "ComplaintHierarchy", []
+    )
+    return [r for r in rows if "department" in r or "slaHours" in r]
+
+
 def test_servicedefs_resolve_at_state_root(token):
-    """PGR validates ServiceDefs at the COMPUTED STATE ROOT, not the city.
+    """PGR validates complaint types at the COMPUTED STATE ROOT, not the city.
 
     Regression (colecta_lixo JSONPATH_ERROR): the configurator wrote the complaint
     types only at the city (mz.maputo); pgr-services resolves them at the state
     root (mz) and found nothing -> `Failed to parse mdms response for service`.
-    ServiceDefs must be readable at the state root.
+    The ComplaintHierarchy leaf rows must be readable at the state root.
     """
     tok, _ = token
-    res = _mdms_search(tok, STATE, "RAINMAKER-PGR", "ServiceDefs")
-    defs = (res.get("MdmsRes", {}).get("RAINMAKER-PGR", {}) or {}).get("ServiceDefs", [])
+    res = _mdms_search(tok, STATE, "RAINMAKER-PGR", "ComplaintHierarchy")
+    defs = _hierarchy_leaf_defs(res)
     assert defs, (
-        f"no RAINMAKER-PGR.ServiceDefs at the state root '{STATE}'. pgr-services "
-        f"resolves ServiceDefs at the state root, so complaint create will fail "
-        f"JSONPATH_ERROR. Seed the complaint types at '{STATE}', not just '{CITY}'."
+        f"no RAINMAKER-PGR.ComplaintHierarchy leaf rows at the state root '{STATE}'. "
+        f"pgr-services resolves complaint types at the state root, so complaint "
+        f"create will fail JSONPATH_ERROR. Seed the complaint types at '{STATE}', "
+        f"not just '{CITY}'."
     )
 
 
@@ -125,11 +140,11 @@ def test_complaint_create_passes_servicedef_validation(token):
         pytest.skip("create-smoke is opt-in (writes a real complaint); "
                     "set RUN_COMPLAINT_CREATE_SMOKE=1 to run")
     tok, user = token
-    res = _mdms_search(tok, STATE, "RAINMAKER-PGR", "ServiceDefs")
-    defs = (res.get("MdmsRes", {}).get("RAINMAKER-PGR", {}) or {}).get("ServiceDefs", [])
+    res = _mdms_search(tok, STATE, "RAINMAKER-PGR", "ComplaintHierarchy")
+    defs = _hierarchy_leaf_defs(res)
     if not defs:
-        pytest.skip("no ServiceDefs at the state root (covered by the dedicated test)")
-    service_code = defs[0].get("serviceCode")
+        pytest.skip("no ComplaintHierarchy leaf rows at the state root (covered by the dedicated test)")
+    service_code = defs[0].get("code")
     payload = _ri(tok)
     payload["RequestInfo"]["userInfo"] = user
     payload["service"] = {

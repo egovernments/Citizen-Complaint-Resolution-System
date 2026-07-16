@@ -543,7 +543,7 @@ services:
     restart: "no"
 
   egov-user:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-user:updatenovalidate-fix
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:master-e22c7c5
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -647,7 +647,7 @@ services:
     - egov-network
 
   user-otp:
-    image: registry.preview.egov.theflywheel.in/egovio/user-otp:mobile-validation-user-otp-12b1961
+    image: registry.preview.egov.theflywheel.in/egovio/user-otp:master-e22c7c5
     container_name: user-otp
     depends_on:
       egov-otp:
@@ -696,7 +696,7 @@ services:
     - egov-network
 
   egov-notification-sms:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-notification-sms:mobile-validation-user-otp-db06ec6
+    image: registry.preview.egov.theflywheel.in/egovio/egov-notification-sms:master-e22c7c5
     container_name: egov-notification-sms
     depends_on:
       redpanda:

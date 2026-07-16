@@ -23,13 +23,12 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import ExcelJS from 'exceljs';
+import { ROOT_TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const SUFFIX = Date.now().toString().slice(-8);
-const ROOT = process.env.ROOT_TENANT || 'ke';
-const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
-const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'eGov@123';
+const ROOT = ROOT_TENANT;
 
 const FIX_INVALID_CODE = path.join(os.tmpdir(), `tenant-invalid-code-${SUFFIX}.xlsx`);
 const FIX_MISSING_CODE = path.join(os.tmpdir(), `tenant-missing-code-${SUFFIX}.xlsx`);

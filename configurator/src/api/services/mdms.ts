@@ -9,6 +9,13 @@ import type {
   Tenant,
 } from '../types';
 
+// MapConfig is a singleton per tenant, keyed on `code` (the schema's x-unique).
+// The key must NOT be derived from any configured value: the one hand-seeded
+// record in the wild keyed itself on its own ward colour, so changing the colour
+// either left the key contradicting the data or minted a second record — and the
+// UI reads MapConfig[0], which then picks between them arbitrarily.
+const MAP_CONFIG_KEY = 'DEFAULT';
+
 export const mdmsService = {
   // Generic MDMS search
   async search<T>(
@@ -52,12 +59,73 @@ export const mdmsService = {
     return response.Mdms as MdmsRecord;
   },
 
+  // Raw search: keeps `uniqueIdentifier` / `id` / `auditDetails`, which the
+  // generic search() drops when it maps records down to their `data`. An update
+  // has to round-trip all three.
+  async searchRecords(
+    tenantId: string,
+    schemaCode: string,
+    options?: { limit?: number }
+  ): Promise<MdmsRecord[]> {
+    const response = await apiClient.post(ENDPOINTS.MDMS_SEARCH, {
+      RequestInfo: apiClient.buildRequestInfo(),
+      MdmsCriteria: { tenantId, schemaCode, limit: options?.limit || 100, offset: 0 },
+    });
+    return (response.mdms || []) as MdmsRecord[];
+  },
+
+  // Generic MDMS update. `uniqueIdentifier` is immutable — mdms-v2 keys the row
+  // on it — so it is round-tripped, not recomputed from the new data.
+  async update(record: MdmsRecord, data: Record<string, unknown>): Promise<MdmsRecord> {
+    const response = await apiClient.post(`${ENDPOINTS.MDMS_UPDATE}/${record.schemaCode}`, {
+      RequestInfo: apiClient.buildRequestInfo(),
+      Mdms: {
+        tenantId: record.tenantId,
+        schemaCode: record.schemaCode,
+        uniqueIdentifier: record.uniqueIdentifier,
+        id: record.id,
+        data,
+        auditDetails: record.auditDetails,
+        isActive: true,
+      },
+    });
+    return response.Mdms as MdmsRecord;
+  },
+
+  /**
+   * Merges `patch` into this tenant's MapConfig, creating the record if it has
+   * none.
+   *
+   * mdms-v2 resolves up the tenant tree, so a search at `ke.bomet` happily
+   * returns a record owned by `ke`. Updating THAT would rewrite the state root
+   * and silently change every other city inheriting from it — so a record only
+   * counts as ours when its `tenantId` matches exactly. Anything else is the
+   * parent's, and we shadow it with a new record at this tenant instead.
+   */
+  async upsertMapConfig(tenantId: string, patch: Record<string, unknown>): Promise<MdmsRecord> {
+    const existing = await this.searchRecords(tenantId, MDMS_SCHEMAS.MAP_CONFIG).catch(() => []);
+    const own = existing.find((r) => r.tenantId === tenantId && r.isActive !== false);
+
+    if (own) {
+      return this.update(own, { ...(own.data as Record<string, unknown>), ...patch });
+    }
+
+    // Inherit the parent's values as the base so shadowing it doesn't silently
+    // drop a colour or basemap the operator set further up the tree.
+    const inherited = existing.find((r) => r.isActive !== false)?.data as Record<string, unknown> | undefined;
+    const data = { ...(inherited || {}), ...patch, code: MAP_CONFIG_KEY };
+    return this.create(tenantId, MDMS_SCHEMAS.MAP_CONFIG, MAP_CONFIG_KEY, data);
+  },
+
   // ============================================
   // Department Methods
   // ============================================
 
   async getDepartments(tenantId: string): Promise<Department[]> {
-    return this.search<Department>(tenantId, MDMS_SCHEMAS.DEPARTMENT);
+    // Pull the full master, not the search() default page (100). Tenants like
+    // mz.ige have 120+ departments; a partial fetch makes bulk-employee
+    // validation wrongly flag the unloaded ones as "Department not found".
+    return this.search<Department>(tenantId, MDMS_SCHEMAS.DEPARTMENT, { limit: 5000 });
   },
 
   async createDepartment(tenantId: string, department: Department): Promise<MdmsRecord> {
@@ -95,7 +163,9 @@ export const mdmsService = {
   // ============================================
 
   async getDesignations(tenantId: string): Promise<Designation[]> {
-    return this.search<Designation>(tenantId, MDMS_SCHEMAS.DESIGNATION);
+    // Same as getDepartments: fetch the full master so employee-bulk validation
+    // doesn't false-negative on designations beyond the default page.
+    return this.search<Designation>(tenantId, MDMS_SCHEMAS.DESIGNATION, { limit: 5000 });
   },
 
   async createDesignation(tenantId: string, designation: Designation): Promise<MdmsRecord> {
@@ -134,42 +204,63 @@ export const mdmsService = {
   // Complaint Type / Service Definition Methods
   // ============================================
 
+  // Read complaint types from the single ComplaintHierarchy master, keeping
+  // only LEAF rows (a row is a leaf iff it carries `department` or `slaHours`;
+  // interior classification nodes omit them) and mapping each to the legacy
+  // ComplaintType shape so callers stay unchanged. A leaf's `code` IS the
+  // serviceCode; grouping derives from `parentCode` (no more menuPath).
   async getComplaintTypes(tenantId: string): Promise<ComplaintType[]> {
     const results = await this.search<Record<string, unknown>>(
       tenantId,
-      MDMS_SCHEMAS.PGR_SERVICE_DEFS
+      MDMS_SCHEMAS.COMPLAINT_HIERARCHY,
+      { limit: 5000 } // full hierarchy can be thousands of leaves; don't truncate at the 100 default
     );
 
-    return results.map((r) => ({
-      serviceCode: r.serviceCode as string,
+    const isLeaf = (r: Record<string, unknown>) =>
+      r.department != null || r.slaHours != null;
+
+    return results.filter(isLeaf).map((r) => ({
+      serviceCode: (r.code ?? r.serviceCode) as string,
       name: (r.name || r.serviceName) as string,
       keywords: (r.keywords as string) || '',
       department: r.department as string,
+      departments: Array.isArray(r.departments) ? (r.departments as string[]) : undefined,
       slaHours: r.slaHours as number,
-      menuPath: r.menuPath as string | undefined,
+      levelCode: r.levelCode as string | undefined,
+      parentCode: r.parentCode as string | undefined,
+      path: r.path as string | undefined,
       active: r.active as boolean,
       order: r.order as number | undefined,
     }));
   },
 
+  // Write a complaint type as a ComplaintHierarchy LEAF row. The unique
+  // identifier and `code` are the serviceCode; leaf fields (department/
+  // departments/slaHours/keywords) mark it as a leaf. `menuPath` is gone —
+  // grouping is carried by `parentCode`. levelCode/path are written verbatim
+  // when the caller has them (the bulk-hierarchy flow computes them).
   async createComplaintType(
     tenantId: string,
     complaintType: ComplaintType
   ): Promise<MdmsRecord> {
+    const data: Record<string, unknown> = {
+      code: complaintType.serviceCode,
+      name: complaintType.name,
+      keywords: complaintType.keywords,
+      department: complaintType.department,
+      slaHours: complaintType.slaHours,
+      active: complaintType.active,
+      order: complaintType.order || 1,
+    };
+    if (complaintType.departments) data.departments = complaintType.departments;
+    if (complaintType.levelCode) data.levelCode = complaintType.levelCode;
+    if (complaintType.parentCode) data.parentCode = complaintType.parentCode;
+    if (complaintType.path) data.path = complaintType.path;
     return this.create(
       tenantId,
-      MDMS_SCHEMAS.PGR_SERVICE_DEFS,
+      MDMS_SCHEMAS.COMPLAINT_HIERARCHY,
       complaintType.serviceCode,
-      {
-        serviceCode: complaintType.serviceCode,
-        name: complaintType.name,
-        keywords: complaintType.keywords,
-        department: complaintType.department,
-        slaHours: complaintType.slaHours,
-        menuPath: complaintType.menuPath || 'Complaint',
-        active: complaintType.active,
-        order: complaintType.order || 1,
-      }
+      data
     );
   },
 
@@ -272,56 +363,70 @@ export const mdmsService = {
   },
 
   // ============================================
-  // Mobile validation rule (common-masters.UserValidation, fieldType "mobile")
+  // Mobile validation rule (common-masters.MobileNumberValidation)
   // ============================================
 
   async getMobileValidation(tenantId: string): Promise<{
-    pattern: string;
-    minLength: number;
-    maxLength: number;
+    mobileNumberRegex: string;
+    pattern: string;   // backward-compat alias
+    countryCode?: string;
+    prefix?: string;   // backward-compat alias
     errorMessage: string;
-    prefix?: string;
-    allowedStartingCharacters?: string[];
   } | null> {
-    // The mobile rule lives in common-masters.UserValidation — NOT
-    // ValidationConfigs.mobileNumberValidation, which is never seeded in this
-    // stack (so the old query always returned null and Phase 4 fell back to a
-    // lenient ^\d{9,10}$ that accepts any 9-10 digit number). This is the same
-    // master egov-user enforces at create time, so the sheet check now matches
-    // what the backend will actually accept.
-    //
-    // Records are keyed by uniqueIdentifier == data.zone (e.g. "mobile",
-    // "India"); mobile rules carry fieldType:"mobile" and the active one has
-    // default:true. pattern / minLength / maxLength / errorMessage are nested
-    // under data.rules; the dialling prefix under data.attributes.prefix.
+    // Flat schema: { countryCode, mobileNumberRegex, default, isActive }.
+    // Pick the record with default:true (the tenant's primary rule).
     const results = await this.search<Record<string, unknown>>(
       tenantId,
-      'common-masters.UserValidation'
+      'common-masters.MobileNumberValidation'
     );
-    const mobileRecords = results.filter((r) => r.fieldType === 'mobile');
-    // Pick the rule flagged as the active default — both data.default === true
-    // AND data.isActive === true (the "mobile"/default rule carries both; other
-    // country rules like "India" carry neither). Fall back to any active rule,
-    // then the first mobile rule, so we never silently drop to the lenient path.
     const preferred =
-      mobileRecords.find((r) => r['default'] === true && r.isActive === true) ??
-      mobileRecords.find((r) => r.isActive === true) ??
-      mobileRecords[0];
+      results.find((r) => r['default'] === true && r.isActive !== false) ??
+      results.find((r) => r.isActive !== false) ??
+      null;
     if (!preferred) return null;
-    const rules = (preferred.rules as Record<string, unknown> | undefined) ?? {};
-    const attributes = (preferred.attributes as Record<string, unknown> | undefined) ?? {};
+    const regex =
+      typeof preferred.mobileNumberRegex === 'string'
+        ? preferred.mobileNumberRegex
+        : '^\\d{9,10}$';
+    const countryCode =
+      typeof preferred.countryCode === 'string' ? preferred.countryCode : undefined;
     return {
-      pattern: typeof rules.pattern === 'string' ? rules.pattern : '^\\d{10}$',
-      minLength: typeof rules.minLength === 'number' ? rules.minLength : 10,
-      maxLength: typeof rules.maxLength === 'number' ? rules.maxLength : 10,
-      prefix: typeof attributes.prefix === 'string' ? attributes.prefix : undefined,
-      allowedStartingCharacters: Array.isArray(rules.allowedStartingCharacters)
-        ? (rules.allowedStartingCharacters as string[])
-        : undefined,
-      errorMessage:
-        typeof rules.errorMessage === 'string' && rules.errorMessage
-          ? rules.errorMessage
-          : 'Mobile number does not match the configured format',
+      mobileNumberRegex: regex,
+      pattern: regex,
+      countryCode,
+      prefix: countryCode,
+      errorMessage: 'Mobile number does not match the configured format',
     };
+  },
+
+  // ============================================
+  // Configured UI locales (common-masters.StateInfo.languages)
+  // ============================================
+
+  // Returns the locale codes the tenant actually serves — the `value` of each
+  // StateInfo.languages entry (e.g. ["en_KE", "sw_KE"]). This is the single
+  // source of truth for the digit-ui language switcher and the configurator's
+  // locale dropdowns (see schemaDescriptors/state-info.ts), so any content we
+  // localize (boundaries, hierarchy levels) must be seeded under THESE locales
+  // — not a hardcoded en_IN, which a non-India tenant's UI never reads, leaving
+  // every boundary dropdown/map tooltip showing the raw code.
+  //
+  // StateInfo lives at the state-root tenant; callers pass a tenant whose root
+  // segment we resolve. Returns [] when StateInfo/languages is absent so callers
+  // can fall back to their own default rather than silently seeding nothing.
+  async getStateInfoLocales(tenantId: string): Promise<string[]> {
+    const rootTenant = tenantId.split('.')[0];
+    try {
+      const records = await this.search<{ languages?: { value?: string }[] }>(
+        rootTenant,
+        'common-masters.StateInfo'
+      );
+      const langs = records.find((r) => Array.isArray(r.languages))?.languages ?? [];
+      return langs
+        .map((l) => (typeof l?.value === 'string' ? l.value : undefined))
+        .filter((v): v is string => !!v);
+    } catch {
+      return [];
+    }
   },
 };

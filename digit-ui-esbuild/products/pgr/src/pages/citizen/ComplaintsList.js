@@ -18,6 +18,7 @@
 //     instead of the legacy raw <Card> with text.
 
 import React, { useEffect } from "react";
+import { complaintLabel } from "../../utils/complaintLabel";
 import { useTranslation } from "react-i18next";
 import { useHistory, useRouteMatch } from "react-router-dom";
 
@@ -79,14 +80,11 @@ function StatusPill({ status, t }) {
   );
 }
 
-function ComplaintRow({ data, onClick, t, menuPath }) {
+function ComplaintRow({ data, onClick, t, typeCode, typeName }) {
   const { serviceRequestId, applicationStatus, auditDetails } = data;
-  // Complaint Type = the service def's menuPath, shown through the
-  // SERVICEDEFS localization key — identical to the employee/citizen
-  // details pages. When the message isn't seeded, t() returns the key
-  // (e.g. "SERVICEDEFS.COMPLAINT"), same as the details screens.
-  const titleKey = menuPath ? `SERVICEDEFS.${menuPath.toUpperCase()}` : "SERVICEDEFS.OTHERS";
-  const title = t(titleKey);
+  // Complaint Type label = key-based (COMPLAINT_HIERARCHY.<code>) like every
+  // other service, falling back to the node name; OTHERS for no resolvable group.
+  const title = complaintLabel(t, typeCode, typeName) || t("CS_COMPLAINT_TYPE_OTHERS");
   const dateStr = auditDetails?.createdTime
     ? Digit.DateUtils.ConvertTimestampToDate(auditDetails.createdTime)
     : "";
@@ -234,10 +232,13 @@ export const ComplaintsList = () => {
   // Service defs give us serviceCode -> menuPath so each card can show the
   // Complaint Type (category) rather than the sub-type. Cached via MDMS.
   const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
-  const menuPathByCode = React.useMemo(() => {
+  // serviceCode → the complaint TYPE label (parent node name) straight from the
+  // hierarchy adapter (def.menuPathName); for an interior-node complaint not in
+  // the leaf set, fall back to the full code→name map cached by the adapter.
+  const typeBySvcCode = React.useMemo(() => {
     const map = {};
     (serviceDefs || []).forEach((def) => {
-      if (def?.serviceCode) map[def.serviceCode] = def.menuPath;
+      if (def?.serviceCode) map[def.serviceCode] = { code: def.menuPath, name: def.menuPathName || def.name };
     });
     return map;
   }, [serviceDefs]);
@@ -338,7 +339,8 @@ export const ComplaintsList = () => {
                 key={service.serviceRequestId}
                 data={service}
                 t={t}
-                menuPath={menuPathByCode[service.serviceCode]}
+                typeCode={typeBySvcCode[service.serviceCode]?.code || service.serviceCode}
+                typeName={typeBySvcCode[service.serviceCode]?.name || (Digit.SessionStorage.get("complaintHierarchyNameByCode") || {})[service.serviceCode]}
                 onClick={() => history.push(`${path}/${service.serviceRequestId}`)}
               />
             ))}

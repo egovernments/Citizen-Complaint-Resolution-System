@@ -310,7 +310,7 @@ Footer buttons: **NEXT** (yellow) + **BACK** (white outline). Step 6 swaps NEXT 
   - Title: "Logout"
   - Body: "Are you sure you want to **Logout**"
   - Buttons: **Cancel** + **Yes, Logout** (yellow filled).
-- **On confirm**: `Digit.UserService.logout()` → redirects to `/citizen/login`. Existing test `tests/citizen/logout.spec.ts` matches `:has-text("Yes")` — could tighten to `Yes, Logout` for fidelity.
+- **On confirm**: `Digit.UserService.logout()` → redirects to `/citizen/login`. Existing test `tests/citizen/citizen-logout.spec.ts` matches `:has-text("Yes")` — could tighten to `Yes, Logout` for fidelity.
 
 ---
 
@@ -381,15 +381,15 @@ On naipepea: citizen `tenantId` = `ke` (state); address `tenantId` = `ke.nairobi
 
 | Story | Spec covering it |
 |---|---|
-| 1.1 / 1.2 login | `login.spec.ts` |
-| 1.1 mobile validator (CCRS#429) | `login-mobile.spec.ts` |
-| 3.4 / 3.6 wizard payload (CCRS#478, address fields) | `create-fixes-2026-04-29.spec.ts` |
-| 3.2 + 3.4 pin trap + cascade gate (CCRS#469, #477) | `pin-and-cascade-fixes-2026-04-29.spec.ts` |
-| 3.1 complaint type localization | `complaint-type-labels.spec.ts` |
-| 4.1 list + 5.1 detail + 5.2 timeline (citizen-fix subset) | `pgr-fixes.spec.ts` |
-| 5.1 detail render no-crash | `complaint-details.spec.ts` |
-| 5.2 + 6.1 timeline + rating localization (CCRS#473) | `timeline-fixes-2026-04-29.spec.ts` |
-| 9.1 logout | `logout.spec.ts` |
+| 1.1 / 1.2 login | `citizen-otp-login.spec.ts` |
+| 1.1 mobile validator (CCRS#429) | `login-mobile-input-validation.spec.ts` |
+| 3.4 / 3.6 wizard payload (CCRS#478, address fields) | `complaint-create-payload-contract.spec.ts` |
+| 3.2 + 3.4 pin trap + cascade gate (CCRS#469, #477) | `wizard-pin-and-boundary-cascade.spec.ts` |
+| 3.1 complaint type localization | `complaint-type-dropdown-labels.spec.ts` |
+| 4.1 list + 5.1 detail + 5.2 timeline (citizen-fix subset) | `pgr-home-layout-and-scroll.spec.ts` |
+| 5.1 detail render no-crash | `complaint-detail-page.spec.ts` |
+| 5.2 + 6.1 timeline + rating localization (CCRS#473) | `complaint-timeline-and-rating-display.spec.ts` |
+| 9.1 logout | `citizen-logout.spec.ts` |
 
 ### Material gaps (no citizen-side spec yet)
 

@@ -1,4 +1,5 @@
 import _ from "lodash";
+import { complaintLabel } from "../utils/complaintLabel";
 import { useLocation, useHistory, Link, useParams } from "react-router-dom";
 import React, { useState, Fragment } from "react";
 import { DeleteIconv2, DownloadIcon, FileIcon, Button, Card, CardSubHeader, EditIcon, ArrowForward, Modal, CloseSvg, Close, } from "@egovernments/digit-ui-react-components";
@@ -1570,18 +1571,29 @@ export const UICustomizations = {
     test: "yes",
   },
   PGRInboxConfig: {
-    preProcess: (data) => {
+    preProcess: (data, additionalDetails) => {
       const clonedData = _.cloneDeep(data);
       const searchForm = clonedData?.state?.searchForm || {};
       const filterForm = clonedData?.state?.filterForm || {};
+
+      // Visibility V1 tab context (passed from PGRInbox via additionalDetails;
+      // absent when the visibility feature flag is off -> legacy behaviour).
+      const activeTab = additionalDetails?.activeTab;
+      const allStates = additionalDetails?.allStates || [];
 
       // Build clean params from form state
       const params = {
         tenantId: Digit.ULBService.getCurrentTenantId(),
         limit: clonedData?.state?.tableForm?.limit || 10,
         offset: clonedData?.state?.tableForm?.offset ?? 0,
-        sortBy: "applicationStatus",
-        sortOrder: "DESC",
+        // Order by SLA remaining (most urgent first) server-side, so the order
+        // is consistent across the FULL paginated result set. The table's
+        // column-header sort is client-side react-table — it only reorders the
+        // current page, so rows appeared to drop in/out as page size changed
+        // (issue #432). pgr-services now supports sortBy=sla; see
+        // PGRQueryBuilder.addOrderByClause.
+        sortBy: "sla",
+        sortOrder: "ASC",
       };
 
       // Search form fields
@@ -1631,9 +1643,36 @@ export const UICustomizations = {
       ];
       const rawStatuses = filterForm.status || {};
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
-      params.applicationStatus = statuses.length > 0 ? statuses : OPEN_STATES;
+      // Status scope: an explicit filter wins; otherwise both tabs default to
+      // every open/actionable state. The tabs differ on the ASSIGNEE axis, not
+      // the status axis (PO decision 2026-07-15).
+      if (statuses.length > 0) {
+        params.applicationStatus = statuses;
+      } else {
+        params.applicationStatus = allStates.length > 0 ? allStates : OPEN_STATES;
+      }
 
-      // Filter: assigned to me
+      // My = complaints whose workflow assignee is me. The tabs replaced the
+      // assigned-to-me radio, so "My" keeps the radio's person semantics
+      // (this is the design matrix's V2 "My", pulled forward — see design §3).
+      // All = every open complaint; a GRO's unassigned assignment queue
+      // therefore lives in All, not My (accepted tradeoff).
+      //
+      // Server mode (InboxVisibilityConfig.serverSide): pgr-services resolves
+      // visibility from the `scope` filter param — MINE = assignee-me, TEAM =
+      // reportee subtree + unassigned queues — so the client sends no
+      // assignee. MY/ALL stay UI tab ids; MINE/TEAM are the API semantics.
+      if (additionalDetails?.serverSide) {
+        if (activeTab) params.scope = activeTab === "MY" ? "MINE" : "TEAM";
+      } else if (activeTab === "MY") {
+        const userInfo = Digit.UserService.getUser()?.info;
+        if (userInfo?.uuid) {
+          params.assignee = [userInfo.uuid];
+        }
+      }
+
+      // Legacy assigned-to-me radio (only present in the filter form when the
+      // visibility-tabs feature flag is OFF — see PGRSearchInboxConfig).
       const assignedFilter = filterForm.assignedToMe;
       if (assignedFilter?.code === "ASSIGNED_TO_ME") {
         const userInfo = Digit.UserService.getUser()?.info;
@@ -1658,16 +1697,21 @@ export const UICustomizations = {
                 </Link>
               </span>
               {(() => {
-                // Show the Complaint Type (menuPath / category) instead of
-                // the sub-type (serviceCode). serviceDefs are cached in
-                // SessionStorage by useServiceDefs (the inbox filter loads
-                // them on mount). Fall back to the serviceCode key if the
-                // def or its menuPath is unavailable.
+                // Complaint Type label = the parent group's NODE NAME, straight
+                // from ComplaintHierarchy — no SERVICEDEFS localization key. The
+                // leaf def already carries its parent's name as menuPathName; for
+                // a complaint filed on an interior node (no-leaf branch), fall
+                // back to the full code→name map, then the raw code.
                 const sc = row?.businessObject?.service?.serviceCode;
                 const defs = Digit.SessionStorage.get("serviceDefs") || [];
                 const def = Array.isArray(defs) ? defs.find((d) => d?.serviceCode === sc) : null;
-                const typeCode = def?.menuPath || sc;
-                return <span>{t(`SERVICEDEFS.${(typeCode || "").toUpperCase()}`)}</span>;
+                const nameByCode = Digit.SessionStorage.get("complaintHierarchyNameByCode") || {};
+                // Label the complaint by its parent group, key-based
+                // (COMPLAINT_HIERARCHY.<code>) like every other service, falling
+                // back to the node name when the key isn't seeded.
+                const parentCode = def?.menuPath || sc;
+                const fallback = def?.menuPathName || nameByCode[parentCode] || nameByCode[sc] || sc;
+                return <span>{complaintLabel(t, parentCode, fallback)}</span>;
               })()}
             </div>
           );
@@ -1682,6 +1726,9 @@ export const UICustomizations = {
           return value ? <span>{value?.[0]?.name}</span> : <span>{t("NA")}</span>;
 
         case "WF_INBOX_HEADER_SLA_DAYS_REMAINING":
+          // slaDays is null only when the record has no createdTime; render NA
+          // rather than an empty error Tag. 0 or negative = SLA breached (error).
+          if (value == null) return <span>{t("ES_COMMON_NA")}</span>;
           return value > 0 ? <Tag label={value} showIcon={false} type="success" /> : <Tag label={value} showIcon={false} type="error" />;
 
         default:

@@ -2,13 +2,11 @@
  * Mobile-number validation rule, sourced from MDMS.
  *
  * The citizen + employee login forms validate against the rule stored
- * under MDMS schema `ValidationConfigs.mobileNumberValidation` for the
+ * under MDMS schema `common-masters.MobileNumberValidation` for the
  * active tenant. The rule controls:
  *   - prefix     (country code shown to the user, e.g. "+254")
- *   - pattern    (regex applied to the entered number)
- *   - minLength / maxLength
- *   - errorMessage  (the human-readable string the UI surfaces inline)
- *   - allowedStartingDigits
+ *   - pattern    (mobileNumberRegex applied to the entered number)
+ *   - minLength / maxLength (derived from the regex)
  *
  * Reading the rule here lets specs stay tenant-agnostic — the same test
  * passes against ke.nairobi (9-digit starting with 1/7) and a 10-digit
@@ -40,6 +38,55 @@ const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
 const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'eGov@123';
 
 /**
+ * Derive min/max digit counts from a mobile-number regex.
+ * Tries every (lead, fill) digit combo at lengths 5–15 and records which
+ * lengths produce a match. Falls back to {min:10, max:10} if the regex
+ * is invalid or no length matches.
+ */
+function deriveMobileLengths(regex: string): { min: number; max: number } {
+  let re: RegExp | null = null;
+  try { re = new RegExp(regex); } catch { return { min: 10, max: 10 }; }
+  let min = 16, max = 0;
+  for (const f of '0123456789') {
+    for (const d of '0123456789') {
+      for (let len = 5; len <= 15; len++) {
+        if (re.test(f + d.repeat(len - 1))) {
+          if (len < min) min = len;
+          if (len > max) max = len;
+        }
+      }
+    }
+  }
+  return max > 0 ? { min, max } : { min: 10, max: 10 };
+}
+
+/**
+ * If the rule's regex starts with a character class like `^[17]` or
+ * `^[6-9]`, extract the allowed starting digits from it.
+ */
+function derivedStartingDigits(pattern: string): string[] | null {
+  const m = pattern.match(/^\^?\[([0-9\-]+)\]/);
+  if (!m) return null;
+  const body = m[1];
+  const set = new Set<string>();
+  let i = 0;
+  while (i < body.length) {
+    if (i + 2 < body.length && body[i + 1] === '-') {
+      const start = parseInt(body[i], 10);
+      const end = parseInt(body[i + 2], 10);
+      if (Number.isInteger(start) && Number.isInteger(end)) {
+        for (let c = start; c <= end; c++) set.add(String(c));
+      }
+      i += 3;
+    } else {
+      set.add(body[i]);
+      i++;
+    }
+  }
+  return [...set];
+}
+
+/**
  * Fetch the live mobile-validation rule for `tenant` from MDMS. Falls
  * back to a 10-digit-numeric default if the schema search fails — this
  * is the same shape the configurator's UI uses for new tenants that
@@ -57,27 +104,25 @@ export async function getMobileValidationRule(tenant: string): Promise<MobileRul
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         RequestInfo: ri,
-        MdmsCriteria: { tenantId: tenant, schemaCode: 'ValidationConfigs.mobileNumberValidation' },
+        MdmsCriteria: { tenantId: tenant, schemaCode: 'common-masters.MobileNumberValidation' },
       }),
     });
     if (!resp.ok) return FALLBACK;
     const json = (await resp.json()) as {
-      mdms?: Array<{ uniqueIdentifier?: string; data?: { rules?: Partial<MobileRule> } }>;
+      mdms?: Array<{ data?: { countryCode?: string; mobileNumberRegex?: string; default?: boolean } }>;
     };
     const records = json.mdms ?? [];
-    const preferred =
-      records.find((r) => r.uniqueIdentifier === 'defaultMobileValidation') ?? records[0];
-    const rules = preferred?.data?.rules;
-    if (!rules) return FALLBACK;
+    const preferred = records.find((r) => r.data?.default === true) ?? records[0];
+    const data = preferred?.data;
+    if (!data?.mobileNumberRegex) return FALLBACK;
+    const lengths = deriveMobileLengths(data.mobileNumberRegex);
     return {
-      prefix: typeof rules.prefix === 'string' ? rules.prefix : undefined,
-      pattern: typeof rules.pattern === 'string' ? rules.pattern : FALLBACK.pattern,
-      minLength: typeof rules.minLength === 'number' ? rules.minLength : FALLBACK.minLength,
-      maxLength: typeof rules.maxLength === 'number' ? rules.maxLength : FALLBACK.maxLength,
-      errorMessage: typeof rules.errorMessage === 'string' ? rules.errorMessage : FALLBACK.errorMessage,
-      allowedStartingDigits: Array.isArray(rules.allowedStartingDigits)
-        ? (rules.allowedStartingDigits as string[])
-        : undefined,
+      prefix: typeof data.countryCode === 'string' ? data.countryCode : undefined,
+      pattern: data.mobileNumberRegex,
+      minLength: lengths.min,
+      maxLength: lengths.max,
+      errorMessage: `Please enter a valid ${lengths.max}-digit mobile number`,
+      allowedStartingDigits: derivedStartingDigits(data.mobileNumberRegex) ?? undefined,
     };
   } catch {
     return FALLBACK;

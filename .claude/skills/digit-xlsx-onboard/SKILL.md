@@ -91,7 +91,7 @@ While you're parsing, sample two numbers and surface them:
 
 1. **Boundary duplicates + whitespace** (`boundaries.xlsx`): strip leading/trailing whitespace from every `code`/`name`/`parentCode`, then drop exact-duplicate rows by `code` (Feliciano's had 11 dup Bairro under `kamavota` + 81 whitespace cells). After cleaning, assert 0 unresolved `parentCode`. This is deterministic *data hygiene*, distinct from the "don't fix bad data" rule — skipping it produces an inconsistent boundary tree.
 2. **`Designation.department`** is comma-separated in the sheet but the schema wants `string[]` — the wizard splits it; just confirm the cell isn't already a stray JSON-array string.
-3. **`ComplaintType`/`ServiceDefs.keywords`** must serialise as a **String**, not an array (the API rejects a JSON array: `expected type: String, found: JSONArray`). The wizard handles comma-sep → string; confirm the cell is comma-sep text.
+3. **`ComplaintType` leaf `keywords`** must serialise as a **String**, not an array (the API rejects a JSON array: `expected type: String, found: JSONArray`). The wizard handles comma-sep → string; confirm the cell is comma-sep text. (Complaint types now load as LEAF rows of `RAINMAKER-PGR.ComplaintHierarchy`, not the retired `ServiceDefs` master.)
 4. **Phase-1 `Logo File Path`** is frequently a path on the partner's *own* machine (e.g. `/Users/feliciano.mazoio/Downloads/logo.png`) — unresolvable anywhere else. Blank that cell; the logo goes through the branding step / UI picker, not this column.
 
 ### Step 3 — Ask the operator ≤ 6 questions
@@ -216,7 +216,9 @@ curl -sS -X POST http://127.0.0.1:13101/v1/tools/validate_boundary_hierarchy \
 curl -sS -X POST http://127.0.0.1:13101/v1/tools/mdms_search \
   -H 'Content-Type: application/json' \
   -d '{"tenant_id":"<root>","schema_code":"common-masters.Department","limit":500}'
-# repeat for common-masters.Designation, RAINMAKER-PGR.ServiceDefs.
+# repeat for common-masters.Designation, and RAINMAKER-PGR.ComplaintHierarchy
+# (complaint types are the LEAF rows — those carrying department/slaHours; the
+#  CATEGORY grouping nodes and the ComplaintHierarchyDefinition row also land here).
 # Expect: every code from the source XLSX present with isActive=true.
 
 # 4. Employees at CITY — by mobile (HRMS overrides userName=employeeCode, so by-username doesn't work for files whose userName column differs from code)

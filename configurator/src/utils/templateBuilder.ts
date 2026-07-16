@@ -48,21 +48,55 @@ export function downloadCommonMastersTemplate() {
   ];
   XLSX.utils.book_append_sheet(wb, buildSheet(desigHeader, desigRows), 'Designation');
 
-  // Operator-friendly headers: "Complaint Type*" is the menu group shown in
-  // the citizen UI, "Complaint sub type*" the actual complaint. serviceCode
-  // and menuPath are derived on upload (excelParser/xlsx-reader) — sheet
-  // authors never deal with API field names. Sub-types sharing the same
-  // "Complaint Type*" value land under one menu entry (see the two
-  // Water Pipes sample rows).
-  const ctHeader = ['Complaint Type*', 'Complaint sub type*', 'department', 'slaHours', 'keywords', 'active'];
-  const ctRows: Row[] = [
-    ['Water Pipes', 'Pipe leakage or damage', 'WORKS', 48, 'leak, damage', 'true'],
-    ['Water Pipes', 'Low pressure', 'WORKS', 48, 'low pressure', 'true'],
-    ['Garbage', 'Missed garbage collection', 'ENV', 48, 'garbage, waste', 'true'],
-  ];
-  XLSX.utils.book_append_sheet(wb, buildSheet(ctHeader, ctRows), 'ComplaintType');
+  // Complaint types are no longer part of this workbook — they are defined in
+  // Phase 3 Step 3.2 via the configurable complaint-hierarchy flow
+  // (downloadComplaintHierarchyTemplate), which supersedes the old flat
+  // "ComplaintType" sheet.
+  triggerDownload(writeWorkbook(wb), 'Departments_and_Designations.xlsx');
+}
 
-  triggerDownload(writeWorkbook(wb), 'Common_and_Complaint_Master.xlsx');
+/**
+ * Dynamic complaint-hierarchy template. Columns are generated from the
+ * operator-defined levels (one column per level, top→leaf) plus the leaf
+ * attribute columns (Department Name*, Resolution Time (Hours)*, Search Words*,
+ * which map to the leaf fields department / slaHours / keywords). Each row is
+ * one leaf complaint type carrying its full ancestor path — the parser folds
+ * the non-leaf cells (de-duped) and the leaf rows into the ONE ComplaintHierarchy
+ * node array. The number/identity of columns reflects whatever hierarchy the
+ * operator defined — fully dynamic.
+ */
+export function downloadComplaintHierarchyTemplate(hierarchyType: string, levelCodes: string[]) {
+  const levels = levelCodes.filter((l) => l && l.trim());
+  const safe = levels.length >= 2 ? levels : ['AUTHORITY_TYPE', 'MAIN_CATEGORY', 'SECTOR', 'SUB_TYPE'];
+  const leafIdx = safe.length - 1;
+  const header = [...safe, 'Department Name*', 'Resolution Time (Hours)*', 'Search Words*'];
+
+  // Example rows: rows 1-2 share ancestors (two leaves under one sector),
+  // row 3 varies the sector — shows the grouping the hierarchy produces.
+  const ancestor = safe.slice(0, leafIdx).map((lc) => `Sample ${lc}`);
+  const mkRow = (
+    sectorOverride: string | null,
+    leaf: string,
+    dept: string,
+    sla: number,
+    kw: string
+  ): Row => {
+    const path = safe.map((_lc, i) => {
+      if (i === leafIdx) return leaf;
+      if (i === leafIdx - 1 && sectorOverride) return sectorOverride;
+      return ancestor[i];
+    });
+    return [...path, dept, sla, kw];
+  };
+  const rows: Row[] = [
+    mkRow(null, 'Example Sub-type 1', 'DEPT_1', 24, 'keyword1, keyword2'),
+    mkRow(null, 'Example Sub-type 2', 'DEPT_1', 48, 'keyword3'),
+    mkRow(`Another ${safe[Math.max(0, leafIdx - 1)]}`, 'Example Sub-type 3', 'DEPT_2', 72, 'keyword4'),
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, buildSheet(header, rows), 'ComplaintHierarchy');
+  triggerDownload(writeWorkbook(wb), `Complaint_Hierarchy_${hierarchyType || 'PGR'}.xlsx`);
 }
 
 export function downloadEmployeeTemplate() {

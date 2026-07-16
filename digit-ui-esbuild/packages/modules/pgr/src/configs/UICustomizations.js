@@ -273,21 +273,6 @@ export const UICustomizations = {
       });
       return link;
     },
-    populateLocalityReqCriteria : () => {
-      const tenantId = Digit.ULBService.getCurrentTenantId();
-
-      return {
-        url: "/egov-location/location/v11/boundarys/_search",
-        params: { tenantId, hierarchyTypeCode:"ADMIN", boundaryType: (typeof window !== "undefined" && window?.globalConfigs?.getConfig("BOUNDARY_TYPE")) || "Locality"},
-        body: {},
-        config: {
-          enabled: true,
-          select: (data) => {
-            return data;
-          },
-        },
-      };
-    }
   },
 
 };

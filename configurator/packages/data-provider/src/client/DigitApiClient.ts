@@ -204,7 +204,13 @@ export class DigitApiClient {
       RequestInfo: this.buildRequestInfo(),
       Mdms: { tenantId, schemaCode, uniqueIdentifier, data: recordData, isActive: true },
     });
-    return (data.mdms || [])[0] as MdmsRecord;
+    const record = (data.mdms || [])[0] as MdmsRecord | undefined;
+    if (!record) {
+      // MDMS v2 "phantom 200": duplicate creates return 200 with an empty mdms
+      // array. Surface it as a typed, matchable error instead of undefined.
+      throw new Error(`MDMS_DUPLICATE: create for '${uniqueIdentifier}' returned no record — a record with this uniqueIdentifier already exists (possibly inactive).`);
+    }
+    return record;
   }
 
   async mdmsUpdate(record: MdmsRecord, isActive: boolean): Promise<MdmsRecord> {
@@ -286,9 +292,18 @@ export class DigitApiClient {
   }
 
   async boundaryRelationshipSearch(tenantId: string, hierarchyType?: string): Promise<Record<string, unknown>[]> {
-    const data = await this.request<{ TenantBoundary?: Record<string, unknown>[] }>(this.endpoint('BOUNDARY_RELATIONSHIP_SEARCH'), {
-      RequestInfo: this.buildRequestInfo(), BoundaryRelationship: { tenantId, hierarchyType },
-    });
+    // boundary-relationships/_search binds its criteria from QUERY params ONLY
+    // (tenantId, hierarchyType, includeChildren) — the request body is just
+    // RequestInfo. Passing tenantId in the body silently returns EVERY
+    // tenant's relationships (the search runs unscoped), which surfaced as
+    // other tenants' boundaries (B1_ADMIN_BLOCK, CITY_001…) bleeding into a
+    // city's boundary list. Same QUERY-only binding boundary.ts relies on.
+    const qs = new URLSearchParams({ tenantId, includeChildren: 'true' });
+    if (hierarchyType) qs.set('hierarchyType', hierarchyType);
+    const data = await this.request<{ TenantBoundary?: Record<string, unknown>[] }>(
+      `${this.endpoint('BOUNDARY_RELATIONSHIP_SEARCH')}?${qs.toString()}`,
+      { RequestInfo: this.buildRequestInfo() },
+    );
     return data.TenantBoundary || [];
   }
 

@@ -14,7 +14,8 @@
 
 import React, { useMemo, useState } from "react";
 import {
-  DEFAULT_MOBILE_MAX_LENGTH,
+  computeMobileLengths,
+  buildMobileErrorMessage,
   DEFAULT_MOBILE_PATTERN,
   DEFAULT_MOBILE_PREFIX,
 } from "@egovernments/digit-ui-libraries";
@@ -39,9 +40,13 @@ const SelectMobileNumber = ({
 
   const rawPattern = validationConfig?.pattern || DEFAULT_MOBILE_PATTERN;
   const mobileNumberPattern = useMemo(() => new RegExp(rawPattern), [rawPattern]);
-  const maxLength = validationConfig?.maxLength || DEFAULT_MOBILE_MAX_LENGTH;
+  const { max: derivedMax } = useMemo(() => computeMobileLengths(rawPattern), [rawPattern]);
+  const maxLength = derivedMax > 0 ? derivedMax : 15;
   const prefix = validationConfig?.prefix || DEFAULT_MOBILE_PREFIX;
-  const mobileErrorKey = validationConfig?.errorMessage || "ERR_INVALID_MOBILE_NUMBER";
+
+  // Single message used for both the initial hint and the inline error — keeps the
+  // field guidance consistent regardless of interaction state.
+  const mobileErrorMsg = useMemo(() => buildMobileErrorMessage(rawPattern, t), [rawPattern, t]);
 
   const isMobileValid = useMemo(
     () => mobileNumberPattern.test(mobileNumber || ""),
@@ -51,7 +56,7 @@ const SelectMobileNumber = ({
   const handleSubmit = (e) => {
     e?.preventDefault?.();
     if (!isMobileValid) {
-      setError(t(mobileErrorKey));
+      setError(mobileErrorMsg);
       return;
     }
     onSelect({ mobileNumber });
@@ -61,7 +66,7 @@ const SelectMobileNumber = ({
     const value = e.target.value.replace(/\D/g, "").slice(0, maxLength);
     setError("");
     onMobileChange({ target: { value } });
-    if (value && !mobileNumberPattern.test(value)) setError(t(mobileErrorKey));
+    if (value && !mobileNumberPattern.test(value)) setError(mobileErrorMsg);
   };
 
   const tr = (key, fallback) => {
@@ -123,12 +128,6 @@ const SelectMobileNumber = ({
             label={tr("CORE_COMMON_MOBILE_NUMBER", "Mobile number")}
             required
             htmlFor="login-mobile"
-            error={error || undefined}
-            hint={
-              !error
-                ? tr("CS_MOBILE_NUMBER_HELP", `Enter your ${maxLength}-digit mobile number`)
-                : undefined
-            }
           >
             <div
               style={{
@@ -191,6 +190,16 @@ const SelectMobileNumber = ({
                 }}
               />
             </div>
+            <p style={{
+              margin: 0,
+              fontSize: "0.75rem",
+              lineHeight: "1.25rem",
+              color: error
+                ? "var(--color-error, #d4351c)"
+                : "var(--color-text-secondary, #6B7280)",
+            }}>
+              {mobileErrorMsg}
+            </p>
           </V2Field>
 
           <V2Button

@@ -1,0 +1,7 @@
+[
+  {
+    "countryCode": "+254",
+    "mobileNumberRegex": "^0?[17][0-9]{8}$",
+    "default": false
+  }
+]

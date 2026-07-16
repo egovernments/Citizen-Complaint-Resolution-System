@@ -22,7 +22,6 @@
     "address": "State A Local Government Authority Address",
     "emailId": "statea@gmail.com",
     "imageId": null,
-    "pincode": [],
     "domainUrl": "https://www.egovernments.org",
     "twitterUrl": null,
     "description": null,
@@ -57,13 +56,6 @@
     "address": "City A Local Government Authority",
     "emailId": "citya@gmail.com",
     "imageId": null,
-    "pincode": [
-      143001,
-      143002,
-      143003,
-      143004,
-      143005
-    ],
     "domainUrl": "https://www.egovernments.org",
     "twitterUrl": null,
     "description": "City A",

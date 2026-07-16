@@ -6,6 +6,7 @@ import ChangeCity from "../ChangeCity";
 import ChangeLanguage from "../ChangeLanguage";
 import { Header as TopBarComponentMain } from "@egovernments/digit-ui-components";
 import ImageComponent from "../ImageComponent";
+import { resolveProfilePhoto } from "../utils";
 
 const DEFAULT_EGOV_LOGO ="https://egov-dev-assets.s3.ap-south-1.amazonaws.com/egov-logo-2025.png";
 const TopBar = ({
@@ -33,8 +34,11 @@ const TopBar = ({
       const usersResponse = await Digit.UserService.userSearch(tenant, { uuid: [uuid] }, {});
       if (usersResponse && usersResponse.user && usersResponse.user.length) {
         const userDetails = usersResponse.user[0];
-        const thumbs = userDetails?.photo?.split(",");
-        setProfilePic(thumbs?.at(0));
+        // #445: photo may be a bare fileStoreId — resolve to a real URL,
+        // otherwise the Dropdown renders charAt(0) of the UUID as a "random"
+        // avatar initial. stateId is the filestore tenant for the lookup.
+        const resolved = await resolveProfilePhoto(userDetails?.photo, Digit.ULBService.getStateId());
+        setProfilePic(resolved);
       }
     }
   }, [profilePic !== null, userDetails?.info?.uuid]);
@@ -133,7 +137,23 @@ const TopBar = ({
           <Dropdown
             option={userOptions}
             optionKey="name"
-            profilePic={profilePic ? profilePic : userDetails?.info?.name || userDetails?.info?.userInfo?.name || "Employee"}
+            // #997: the Dropdown's `profilePic` prop renders a *string* as
+            // charAt(0) (a text initial) and only renders a picture when handed
+            // a React element. #445 resolved the photo to a URL but passed that
+            // URL string here, so the header showed the first char of the URL
+            // ("h" → "H") instead of the image. Pass an <img> element when a
+            // photo exists; fall back to the name string for the text initial.
+            profilePic={
+              profilePic ? (
+                <ImageComponent
+                  src={profilePic}
+                  alt="Profile"
+                  style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+                />
+              ) : (
+                userDetails?.info?.name || userDetails?.info?.userInfo?.name || "Employee"
+              )
+            }
             select={handleUserDropdownSelection}
             showArrow={true}
             menuStyles={{ marginTop: "1rem" }}

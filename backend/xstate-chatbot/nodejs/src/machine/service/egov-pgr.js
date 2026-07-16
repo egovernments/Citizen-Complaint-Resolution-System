@@ -107,6 +107,36 @@ class PGRService {
     return data.MdmsRes || data.mdms || {};
   }
 
+  // ComplaintHierarchy is a single adjacency list holding interior nodes AND leaf
+  // complaint types. A row is a LEAF iff it carries `department` or `slaHours`
+  // (interior nodes omit both). The old RAINMAKER-PGR.ServiceDefs master is gone,
+  // so this adapter fetches ComplaintHierarchy, keeps the leaf rows, and maps each
+  // to the legacy ServiceDef shape so the rest of this file is unchanged.
+  //   serviceCode := row.code        menuPath     := row.parentCode
+  //                                  menuPathName := name of parent node (code === parentCode)
+  mapHierarchyToServiceDefs(rows) {
+    if (!Array.isArray(rows)) return [];
+    const isLeaf = (r) =>
+      r && (r.department !== undefined || r.slaHours !== undefined);
+    const nameByCode = {};
+    for (const r of rows) {
+      if (r && r.code !== undefined) nameByCode[r.code] = r.name;
+    }
+    return rows.filter(isLeaf).map((r) => ({
+      serviceCode: r.code,
+      name: r.name,
+      department: r.department,
+      departments: r.departments,
+      slaHours: r.slaHours,
+      keywords: r.keywords,
+      order: r.order,
+      active: r.active,
+      parentCode: r.parentCode,
+      menuPath: r.parentCode,
+      menuPathName: r.parentCode !== undefined ? nameByCode[r.parentCode] : undefined,
+    }));
+  }
+
   async fetchFrequentComplaints(tenantId, user) {
     try {
 
@@ -117,31 +147,54 @@ class PGRService {
           [
             {
               moduleName: "RAINMAKER-PGR",
-              masterDetails: [{ name: "ServiceDefs" }]
+              masterDetails: [{ name: "ComplaintHierarchy" }]
             }
           ],
           user
         );
 
-        if (mdmsData['RAINMAKER-PGR'] && mdmsData['RAINMAKER-PGR']['ServiceDefs']) {
-          const serviceDefs = mdmsData['RAINMAKER-PGR']['ServiceDefs'];
+        if (mdmsData['RAINMAKER-PGR'] && mdmsData['RAINMAKER-PGR']['ComplaintHierarchy']) {
+          // ComplaintHierarchy holds interior + leaf rows; keep leaves mapped to
+          // the legacy ServiceDef shape so downstream logic is unchanged.
+          const serviceDefs = this.mapHierarchyToServiceDefs(
+            mdmsData['RAINMAKER-PGR']['ComplaintHierarchy']
+          );
 
-          // Filter active services and limit to top frequent ones
+          // Filter active services - show all complaint types
           const activeServices = serviceDefs
             .filter(def => def.active === true)
-            .sort((a, b) => (a.order || 999) - (b.order || 999))
-            .slice(0, 5); // Show top 5 frequent complaints
+            .sort((a, b) => (a.order || 999) - (b.order || 999));
+            // Removed slice to show all complaint types
 
           let complaintTypes = [];
           let messageBundle = {};
-
+          let localisationPrefix = "COMPLAINT_HIERARCHY.";
+          
+          // Collect all localization codes
+          let localizationCodes = [];
           for (let service of activeServices) {
             complaintTypes.push(service.serviceCode);
-            // Use the name from MDMS directly
-            messageBundle[service.serviceCode] = {
-              en_IN: service.name || service.serviceCode,
-              hi_IN: service.name || service.serviceCode
-            };
+            localizationCodes.push(localisationPrefix + service.serviceCode.toUpperCase());
+          }
+          
+          // Fetch all localizations at once from API
+          let localizedMessages = await localisationService.getMessagesForCodesAndTenantId(
+            localizationCodes,
+            tenantId
+          );
+          
+          // Build message bundle
+          for (let service of activeServices) {
+            let localizationKey = localisationPrefix + service.serviceCode.toUpperCase();
+            if (localizedMessages[localizationKey] && Object.keys(localizedMessages[localizationKey]).length > 0) {
+              messageBundle[service.serviceCode] = localizedMessages[localizationKey];
+            } else {
+              // Fallback to MDMS name if localization not found
+              messageBundle[service.serviceCode] = {
+                en_IN: service.name || service.serviceCode,
+                hi_IN: service.name || service.serviceCode
+              };
+            }
           }
 
           return { complaintTypes, messageBundle };
@@ -149,26 +202,47 @@ class PGRService {
       } catch (v2Error) {
       }
 
-      // Fallback to MDMS v1
+      // Fallback to MDMS v1. ComplaintHierarchy holds interior + leaf rows; the
+      // adapter keeps only leaves (mapped to the legacy ServiceDef shape).
       let complaintTypeMdmsData = await this.fetchMdmsData(
         tenantId,
         "RAINMAKER-PGR",
-        "ServiceDefs",
+        "ComplaintHierarchy",
         "$.[?(@.active == true)]",
         user
       );
-      let sortedData = complaintTypeMdmsData
-        .slice()
-        .sort((a, b) => (a.order || 999) - (b.order || 999))
-        .slice(0, 5); // Show top 5
+      let sortedData = this.mapHierarchyToServiceDefs(complaintTypeMdmsData)
+        .sort((a, b) => (a.order || 999) - (b.order || 999));
+        // Removed slice to show all complaint types
 
       let complaintTypes = [];
       let messageBundle = {};
-
+      let localisationPrefix = "COMPLAINT_HIERARCHY.";
+      
+      // Collect unique service codes and localization codes
+      let localizationCodes = [];
       for (let data of sortedData) {
         if (!complaintTypes.includes(data.serviceCode)) {
           complaintTypes.push(data.serviceCode);
-          // Try to use name from data if available
+          localizationCodes.push(localisationPrefix + data.serviceCode.toUpperCase());
+        }
+      }
+      
+      // Fetch all localizations at once from API
+      let localizedMessages = await localisationService.getMessagesForCodesAndTenantId(
+        localizationCodes,
+        tenantId
+      );
+      
+      // Build message bundle
+      for (let data of sortedData) {
+        if (messageBundle[data.serviceCode]) continue; // Skip if already processed
+        
+        let localizationKey = localisationPrefix + data.serviceCode.toUpperCase();
+        if (localizedMessages[localizationKey] && Object.keys(localizedMessages[localizationKey]).length > 0) {
+          messageBundle[data.serviceCode] = localizedMessages[localizationKey];
+        } else {
+          // Fallback to MDMS name if localization not found
           messageBundle[data.serviceCode] = {
             en_IN: data.name || data.serviceCode,
             hi_IN: data.name || data.serviceCode
@@ -204,18 +278,22 @@ class PGRService {
 
 
   async fetchComplaintCategories(tenantId) {
-    //
-    let complaintCategories = await this.fetchMdmsData(
+    // Categories = parent nodes of the active leaf complaint types. ServiceDefs
+    // is gone; the leaf's parentCode replaces the legacy menuPath grouping key.
+    let hierarchyRows = await this.fetchMdmsData(
       tenantId,
       "RAINMAKER-PGR",
-      "ServiceDefs",
-      "$.[?(@.active == true)].menuPath"
+      "ComplaintHierarchy",
+      "$.[?(@.active == true)]"
+    );
+    let complaintCategories = this.mapHierarchyToServiceDefs(hierarchyRows).map(
+      (def) => def.menuPath
     );
     complaintCategories = [...new Set(complaintCategories)];
     complaintCategories = complaintCategories.filter(
       (complaintCategory) => complaintCategory != ""
     ); // To remove any empty category
-    let localisationPrefix = "SERVICEDEFS_";
+    let localisationPrefix = "COMPLAINT_HIERARCHY.";
     let messageBundle = {};
     for (let complaintCategory of complaintCategories) {
       let message = localisationService.getMessageBundleForCode(
@@ -228,13 +306,18 @@ class PGRService {
 
 
   async fetchComplaintItemsForCategory(category, tenantId) {
-    let complaintItems = await this.fetchMdmsData(
+    // Leaf complaint types under a category = leaves whose parentCode (legacy
+    // menuPath) matches the category. ServiceDefs is gone; read ComplaintHierarchy.
+    let hierarchyRows = await this.fetchMdmsData(
       tenantId,
       "RAINMAKER-PGR",
-      "ServiceDefs",
-      '$.[?(@.active == true && @.menuPath == "' + category + '")].serviceCode'
+      "ComplaintHierarchy",
+      "$.[?(@.active == true)]"
     );
-    let localisationPrefix = "SERVICEDEFS_";
+    let complaintItems = this.mapHierarchyToServiceDefs(hierarchyRows)
+      .filter((def) => def.menuPath == category)
+      .map((def) => def.serviceCode);
+    let localisationPrefix = "COMPLAINT_HIERARCHY.";
     let messageBundle = {};
     for (let complaintItem of complaintItems) {
       let message = localisationService.getMessageBundleForCode(
@@ -698,17 +781,59 @@ class PGRService {
     }
   }
 
+
   async preparePGRResult(responseBody, locale) {
     let serviceWrappers = responseBody.ServiceWrappers;
     var results = {};
     results["ServiceWrappers"] = [];
-    let localisationPrefix = "SERVICEDEFS_";
+    let localisationPrefix = "COMPLAINT_HIERARCHY.";
+    let statusLocalisationPrefix = "CS_COMMON_";
 
     let complaintLimit = config.pgrUseCase.complaintSearchLimit;
 
     if (serviceWrappers.length < complaintLimit)
       complaintLimit = serviceWrappers.length;
     var count = 0;
+    
+    // Collect all localization codes needed
+    let localizationCodes = [];
+    let statusCodes = [];
+    let tenantId = serviceWrappers.length > 0 ? serviceWrappers[0].service.tenantId : config.rootTenantId;
+    
+    for (let i = 0; i < complaintLimit && i < serviceWrappers.length; i++) {
+      localizationCodes.push(localisationPrefix + serviceWrappers[i].service.serviceCode.toUpperCase());
+      // Add status codes for localization
+      if (serviceWrappers[i].service.applicationStatus) {
+        statusCodes.push(statusLocalisationPrefix + serviceWrappers[i].service.applicationStatus.toUpperCase());
+      }
+    }
+    
+    // Fetch all localizations at once from API
+    let localizedMessages = {};
+    if (localizationCodes.length > 0) {
+      localizedMessages = await localisationService.getMessagesForCodesAndTenantId(
+        localizationCodes,
+        tenantId
+      );
+    }
+    
+    // Fetch status localizations from rainmaker-pgr module
+    let statusLocalizedMessages = {};
+    if (statusCodes.length > 0) {
+      // Use the localization service to fetch messages for the rainmaker-pgr module
+      try {
+        const pgrMessages = await localisationService.getMessagesForModule('rainmaker-pgr', locale, tenantId);
+        
+        // Map the status codes to their localized messages
+        statusCodes.forEach(statusCode => {
+          if (pgrMessages[statusCode]) {
+            statusLocalizedMessages[statusCode] = pgrMessages[statusCode];
+          }
+        });
+      } catch (error) {
+        console.log("Error fetching status localizations:", error);
+      }
+    }
 
     for (let serviceWrapper of serviceWrappers) {
       if (count < complaintLimit) {
@@ -718,15 +843,22 @@ class PGRService {
           serviceRequestId,
           mobileNumber
         );
-        let serviceCode = localisationService.getMessageBundleForCode(
-          localisationPrefix + serviceWrapper.service.serviceCode.toUpperCase()
-        );
+        
+        let localizationKey = localisationPrefix + serviceWrapper.service.serviceCode.toUpperCase();
+        let serviceCode = localizedMessages[localizationKey] || {};
+        
         let filedDate = serviceWrapper.service.auditDetails.createdTime;
         filedDate = moment(filedDate)
           .tz(config.timeZone)
           .format(config.dateFormat);
-        // Use raw applicationStatus instead of trying to localize
+        
+        // Get localized status or fallback to formatted status
         let applicationStatus = serviceWrapper.service.applicationStatus;
+        if (applicationStatus) {
+          let statusKey = statusLocalisationPrefix + applicationStatus.toUpperCase();
+          applicationStatus = statusLocalizedMessages[statusKey] || applicationStatus;
+        }
+        
         var data = {
           complaintType: dialog.get_message(serviceCode, locale),
           complaintNumber: serviceRequestId,
@@ -925,12 +1057,20 @@ class PGRService {
     // Use sandbox-ui for sandbox mode, digit-ui otherwise
     const uiPath = config.enableSandboxMode ? 'sandbox-ui' : 'digit-ui';
 
-    let url =
-      config.egovServices.externalHost +
-      "citizen/otpLogin?mobileNo=" +
-      mobileNumber +
-      `&redirectTo=${uiPath}/citizen/pgr/complaints/` +
-      encodedPath;
+    let url;
+    if (config.enableSandboxMode) {
+      // For sandbox mode, use the proper login page with redirect
+      const sandboxHost = config.sandboxHost || 'https://sandbox.digit.org';
+      url = `${sandboxHost}/sandbox-ui/user/login?redirectTo=/sandbox-ui/citizen/pgr/complaints/${encodedPath}`;
+    } else {
+      // For production mode, use the OTP login
+      url = config.egovServices.externalHost +
+        "citizen/otpLogin?mobileNo=" +
+        mobileNumber +
+        `/digit-ui/citizen/pgr/complaints/` +
+        encodedPath;
+    }
+    
     let shortURL = await this.getShortenedURL(url);
     return shortURL;
   }

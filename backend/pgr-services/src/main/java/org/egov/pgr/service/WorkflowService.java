@@ -260,5 +260,31 @@ public class WorkflowService {
 
     }
 
+    public Set<String> getServiceRequestIdsByAssignee(RequestInfo requestInfo, String tenantId, String assigneeUuid) {
+        StringBuilder url = new StringBuilder(pgrConfiguration.getWfHost());
+        url.append(pgrConfiguration.getWfProcessInstanceSearchPath());
+        url.append("?tenantId=").append(tenantId);
+        url.append("&businessService=").append(PGR_BUSINESSSERVICE);
+        url.append("&assignee=").append(assigneeUuid);
+
+        RequestInfoWrapper requestInfoWrapper = RequestInfoWrapper.builder().requestInfo(requestInfo).build();
+        Object result = repository.fetchResult(url, requestInfoWrapper);
+
+        ProcessInstanceResponse response;
+        try {
+            response = mapper.convertValue(result, ProcessInstanceResponse.class);
+        } catch (IllegalArgumentException e) {
+            throw new CustomException("PARSING ERROR", "Failed to parse workflow response for assignee search");
+        }
+
+        if (CollectionUtils.isEmpty(response.getProcessInstances())) {
+            return Collections.emptySet();
+        }
+
+        return response.getProcessInstances().stream()
+                .map(ProcessInstance::getBusinessId)
+                .collect(Collectors.toSet());
+    }
+
 
 }
