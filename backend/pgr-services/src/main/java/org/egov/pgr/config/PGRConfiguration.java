@@ -257,6 +257,9 @@ public class PGRConfiguration {
     @Value("#{'${pgr.visibility.unassigned.states:PENDINGFORASSIGNMENT,PENDINGFORREASSIGNMENT}'.split(',')}")
     private java.util.List<String> visibilityUnassignedStates;
 
+    @Value("${pgr.visibility.team.fanout.max:25}")
+    private Integer visibilityTeamFanoutMax;
+
     // Config-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate)
     @Value("${pgr.notification.config.driven:false}")
     private Boolean notificationConfigDriven;

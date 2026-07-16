@@ -74,17 +74,17 @@ public class VisibilityService {
                     "Inbox visibility resolution is disabled on this deployment (PGR_VISIBILITY_ENABLED)");
         }
 
+        String me = requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getUuid() : null;
+        if (me == null) {
+            throw new CustomException("PGR_VISIBILITY_NO_USER", "Inbox visibility requires an authenticated user");
+        }
+
         String tenantId = criteria.getTenantId() != null ? criteria.getTenantId()
                 : requestInfo.getUserInfo().getTenantId();
         Map<String, Object> mdmsConfig = fetchVisibilityConfig(requestInfo, tenantId);
         if (mdmsConfig == null || !Boolean.TRUE.equals(mdmsConfig.get("enabled"))) {
             throw new CustomException("PGR_VISIBILITY_DISABLED",
                     "Inbox visibility is not enabled for tenant " + tenantId + " (RAINMAKER-PGR.InboxVisibilityConfig)");
-        }
-
-        String me = requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getUuid() : null;
-        if (me == null) {
-            throw new CustomException("PGR_VISIBILITY_NO_USER", "Inbox visibility requires an authenticated user");
         }
 
         if (TAB_MY.equalsIgnoreCase(tab)) {
@@ -106,6 +106,19 @@ public class VisibilityService {
 
         Set<String> team = new HashSet<>(reportees);
         team.add(me);
+
+        // The workflow-v2 process search only accepts a single assignee per call
+        // (a comma-separated list is matched as one literal string), so the team
+        // resolution is necessarily one call per member. Bound the fan-out: past
+        // the cap, degrade to the same tenant-wide open view as the
+        // empty-reportees fallback above instead of stalling the inbox behind an
+        // unbounded sequential chain of workflow calls.
+        if (team.size() > config.getVisibilityTeamFanoutMax()) {
+            log.warn("Visibility ALL for {}: team of {} exceeds fan-out cap {} — falling back to tenant-wide view",
+                    me, team.size(), config.getVisibilityTeamFanoutMax());
+            return;
+        }
+
         Set<String> assignedIds = new HashSet<>();
         for (String memberUuid : team) {
             assignedIds.addAll(workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, memberUuid));

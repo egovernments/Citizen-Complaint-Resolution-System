@@ -224,7 +224,7 @@ const PGRSearchInbox = () => {
   /**
    * Show loader until necessary data is available
    */
-  if (isLoading || isValidationLoading || visLoading || !pageConfig || serviceDefs?.length === 0) {
+  if (isLoading || isValidationLoading || visLoading || !pageConfig || serviceDefs == null) {
     return <Loader />;
   }
 

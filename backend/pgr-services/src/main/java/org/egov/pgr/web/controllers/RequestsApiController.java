@@ -52,6 +52,19 @@ public class RequestsApiController{
         this.visibilityService = visibilityService;
     }
 
+    /**
+     * RequestSearchCriteria's internal fields (visibility predicate, workflow
+     * pre-resolution, plain-search flag) are populated server-side only.
+     * `@JsonIgnore` does not stop `@ModelAttribute` query-param binding, so
+     * disallow them explicitly — a client-supplied `visibilityIds` would
+     * otherwise ride into the visibility OR-predicate.
+     */
+    @InitBinder
+    public void disallowInternalCriteriaFields(org.springframework.web.bind.WebDataBinder binder) {
+        binder.setDisallowedFields("visibilityIds*", "visibilityUnassignedStates*",
+                "serviceRequestIds*", "userIds*", "isPlainSearch*");
+    }
+
 
     @RequestMapping(value="/request/_create", method = RequestMethod.POST)
     public ResponseEntity<ServiceResponse> requestsCreatePost(@Valid @RequestBody ServiceRequest request) throws IOException {
