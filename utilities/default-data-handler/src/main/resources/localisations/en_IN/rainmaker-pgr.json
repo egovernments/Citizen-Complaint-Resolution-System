@@ -8002,5 +8002,95 @@
         "message": "opens in a new window",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "CS_NO_COMPLAINTS_TITLE",
+        "message": "No complaints yet",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_VIEW_COMPLAINT",
+        "message": "View Complaint",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_TIMELINE",
+        "message": "Activity timeline",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_RATING_COMMENTS_PLACEHOLDER",
+        "message": "Share anything else you'd like the team to know…",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_RATE_SUBTEXT",
+        "message": "Your rating helps us improve. It only takes a moment.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REPORTER_FULL_NAME_LABEL",
+        "message": "Full Name",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_REPORTER_ADDRESS_LABEL",
+        "message": "Address",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_OPTIONAL",
+        "message": "Optional",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "NEXT",
+        "message": "Next",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "BACK",
+        "message": "Back",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_SEARCH_ERROR",
+        "message": "Could not search the location",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_AWAITINGINFORMATION",
+        "message": "Awaiting Information",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_INFOFROMCITIZEN",
+        "message": "Awaiting information from citizen",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_INVESTIGATION",
+        "message": "Under Investigation",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMMON_REFERRED",
+        "message": "Referred",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]

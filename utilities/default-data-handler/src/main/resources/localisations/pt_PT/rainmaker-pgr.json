@@ -571,13 +571,13 @@
     },
     {
         "code": "CS_DESC_MIN_CHARS",
-        "message": "Descreva o problema em 20 a 1000 caracteres (use palavras, nao apenas numeros).",
+        "message": "Descreva o problema em 20 a 1000 caracteres (use palavras, não apenas números).",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
     {
         "code": "CS_DESC_NEEDS_WORDS",
-        "message": "Descreva o problema por palavras, nao apenas numeros.",
+        "message": "Descreva o problema por palavras, não apenas números.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1214,6 +1214,240 @@
     {
         "code": "PGR_LANDING_EXTERNAL_LINK_NOTE",
         "message": "abre numa nova janela",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_NO_COMPLAINTS_TITLE",
+        "message": "Sem Nenhuma Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_VIEW_COMPLAINT",
+        "message": "Ver Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_TIMELINE",
+        "message": "Cronologia da Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_EASY_SUBMIT",
+        "message": "É fácil apresentar a reclamação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_RESOLUTION_TIME",
+        "message": "Tempo de resolução",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_COMMUNICATION",
+        "message": "Comunicação e atualizações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RATING_COMMENTS_PLACEHOLDER",
+        "message": "Compartilhe qualquer outra informação que você gostaria que a equipe soubesse…",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_RATE_SUBTEXT",
+        "message": "Sua avaliação nos ajuda a melhorar. Leva apenas um instante.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REPORTER_FULL_NAME_LABEL",
+        "message": "Nome Completo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REPORTER_ADDRESS_LABEL",
+        "message": "Endereço",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_OPTIONAL",
+        "message": "Opcional",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_CATEGORY",
+        "message": "Categoria de Manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "NEXT",
+        "message": "Próximo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "BACK",
+        "message": "Voltar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_INSTITUTE_NAME_LABEL",
+        "message": "Nome da Instituição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_NAME_LABEL",
+        "message": "Nome da Testemunha",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_ADDRESS_LABEL",
+        "message": "Endereço da Testemunha",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_NOTE_LABEL",
+        "message": "Nota da Testemunha",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_IS_CONFIDENTIAL_LABEL",
+        "message": "Mantenha os detalhes confidenciais.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_IS_CONFIDENTIAL_HINT",
+        "message": "A visibilidade é garantida assim que o processamento seguro é ativado; por enquanto, isso sinaliza a reclamação para que a equipe esteja ciente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_ERROR",
+        "message": "Não foi possível obter a sua localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_PERMISSION_DENIED",
+        "message": "Permissão de localização negada — permita o acesso à localização no seu navegador",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_UNAVAILABLE",
+        "message": "A sua localização não está disponível de momento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_TIMEOUT",
+        "message": "Tempo esgotado ao obter a sua localização — tente novamente",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_NOT_SUPPORTED",
+        "message": "O seu navegador não suporta localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOCATION_NOT_FOUND",
+        "message": "Localização não encontrada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_SEARCH_ERROR",
+        "message": "Não foi possível pesquisar a localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CANCELLED",
+        "message": "Cancelado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_INFOFROMCITIZEN",
+        "message": "Aguarda Informação do Cidadão",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PENDINGATSUPERVISOR",
+        "message": "Pendente com o supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGATLME",
+        "message": "Funcionário pendente na última etapa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGATSUPERVISOR",
+        "message": "Pendente no Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_RESOLVEDBYSUPERVISOR",
+        "message": "Resolvida pelo Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_REFERRED",
+        "message": "Encaminhada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_RESOLVEDBYSUPERVISOR",
+        "message": "Resolvido pelo supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_DATE_OF_FACT_LABEL",
+        "message": "Data do Facto",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_ENTITY_NAME_LABEL",
+        "message": "Nome da Entidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_ENTITY_ADDRESS_LABEL",
+        "message": "Endereço da Entidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINT_TYPE",
+        "message": "Tipo de Reclamação",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     }
