@@ -34,6 +34,12 @@ MIGRATORS=(
   "egov-hrms|egov-hrms-db:hrms-boundary-0a4e737|egov_hrms_schema"
   "egov-url-shortening|egov-url-shortening-db:v2.9.2-4a60f20|egov-url-shortening_schema"
   "egov-otp|egov-otp-db:v2.9.2-4a60f20|egov_otp_schema"
+  # Phase 4 — the last self-migrating services. These three -db images are pinned
+  # to the SAME tag as their app image in docker-compose.migrations.yml, not to
+  # the K8s v2.9.2 release tag, so keep the two in sync.
+  "egov-indexer|egov-indexer-db:maven-jdk21-9f83afb|egov_indexer_schema"
+  "egov-accesscontrol|egov-accesscontrol-db:maven-jdk21-9f83afb|accesscontrol_schema_version"
+  "egov-bndry-mgmnt|egov-bndry-mgmnt-db:bndry-mgmnt-3794b8c|egov-bndry-mgmnt_schema"
 )
 
 # Row count + content checksum for every table in public.
@@ -96,6 +102,14 @@ normalize it-pos | tee "$WORK/first-run.log"
 REBUILT="$(sed -n 's/^  rebuilt  \([a-z0-9-]*\):.*/\1/p' "$WORK/first-run.log" | tr '\n' ' ')"
 echo "  rebuild path: ${REBUILT:-<none>}"
 
+# Services the dump carries NEITHER history NOR tables for (`baseline_fresh: true`
+# in flyway-history-map.yml). The normalizer correctly leaves them alone ("fresh
+# install"), so they are not in REBUILT — but their migrator still legitimately
+# applies from empty. Demanding a no-op from them would be wrong for the same
+# reason it is wrong for REBUILT, just via a different path.
+BASELINE_FRESH="egov-indexer"
+echo "  baseline-fresh: ${BASELINE_FRESH:-<none>}"
+
 # Idempotency: a second run must change nothing and still exit 0.
 normalize it-pos > "$WORK/second-run.log"
 grep -q "renamed 0, rebuilt 0" "$WORK/second-run.log" || {
@@ -105,7 +119,7 @@ echo "  idempotent: second run renamed 0, rebuilt 0"
 fail=0
 while read -r name rc verdict; do
   expect=noop
-  case " $REBUILT " in *" $name "*) expect=applied-or-failed ;; esac
+  case " $REBUILT $BASELINE_FRESH " in *" $name "*) expect=applied-or-failed ;; esac
   printf "  %-22s exit=%s %-18s (expect %s)\n" "$name" "$rc" "$verdict" "$expect"
   if [ "$rc" != "0" ]; then
     echo "    FAIL: $name exited $rc"; fail=1

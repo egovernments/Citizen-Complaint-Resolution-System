@@ -89,6 +89,14 @@ exists`) or the migration silently doesn't apply.
    on a from-empty build. See the `pgr-services-migration` gates for the pattern.
 7. **App has embedded Flyway off.** Each converted app sets `SPRING_FLYWAY_ENABLED:
    "false"` so the init container is the single source of migration truth.
+8. **No exceptions.** Every service that owns a schema has a migration init
+   container — there is no `embedded` opt-out in `flyway-history-map.yml` any more
+   (Phase 4). An app that migrates itself can silently *not* migrate and still
+   report healthy (novu-bridge's Flyway pointed at a hardcoded `localhost` and
+   applied nothing for months), and a service with no mechanism at all is worse
+   still: `egov-bndry-mgmnt`'s tables existed only because the dump shipped them,
+   so a from-empty build produced no schema and nothing noticed. If you are adding
+   a service, it gets a migrator.
 
 ---
 
@@ -214,7 +222,7 @@ migrator's `SCHEMA_TABLE` has no map entry.
 ./local-setup/db/normalize/test-integration.sh /path/to/dump.sql
 ```
 
-It loads the dump into a throwaway database, normalizes, runs all eleven pinned `-db`
+It loads the dump into a throwaway database, normalizes, runs all fourteen pinned `-db`
 migrators, and asserts every pre-existing table is byte-identical afterwards. It also
 runs the same dump *without* the normalizer and asserts the data IS destroyed — if
 that half ever stops failing, the guard has been silently disabled.
