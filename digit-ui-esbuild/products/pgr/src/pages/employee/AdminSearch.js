@@ -10,22 +10,29 @@ import { complaintLabel } from "../../utils/complaintLabel";
 /**
  * PGRAdminSearch — SUPERUSER-only cross-department complaint search
  * (/employee/pgr/admin-search), custom UI replicating the approved design:
- * tenant banner top-right, horizontal Search Filters card (complaint no,
- * department multi-select with in-field chips + "No department (N/A)",
- * date range), Search Results card (count, sort + export, sortable columns,
- * department tags, status pills, numbered pagination with rows-per-page).
- * Brand colors flow through the theme token chain; the fixed hexes below are
- * semantic status/tag tints only.
+ * tenant banner top-right; single-row filter bar (complaint no with search/#
+ * adornments, department multi-select with in-field chips capped at 3 + "+N"
+ * overflow and a "No department (N/A)" sentinel, calendar-icon date range,
+ * Search/Clear inline); results card ("N Complaints Found" + freshness dot,
+ * sort + CSV export, sortable columns, tinted department tags, dot-status
+ * pills, stacked date/time cells, eye+View action, «‹1›» pagination with
+ * rows-per-page). Brand colors flow through the theme token chain; the fixed
+ * hexes below are semantic status/tag tints only.
  *
  * Backend: POST /pgr-services/v2/request/_admin/_search (PR #1260).
  * totalCount workaround: the current backend echoes the page size as
  * totalCount (reported on #1260), so we over-fetch by one row per page to
  * know whether a next page exists; the count renders as "N+" until the last
  * page (or a fixed backend) makes it exact.
+ *
+ * Sorting: complaint no / status / created / last-modified sort server-side
+ * (AdminSearchCriteria sortBy); department / complaint type sort the CURRENT
+ * PAGE client-side (labels are derived FE-side, the backend can't order them).
  */
 
 const PAGE_SIZES = [10, 20, 50];
 const EXPORT_MAX_ROWS = 500;
+const SERVER_SORT_COLS = ["serviceRequestId", "applicationStatus", "createdTime", "lastModifiedTime"];
 
 // applicationStatus -> pill bucket (standard PGR + CMS workflows)
 const STATUS_BUCKET = {
@@ -86,20 +93,21 @@ const CSS = `
 .pgr-adm-banner svg { color: var(--color-primary-1, var(--color-primary-main,#c84c0e)); flex: none; }
 .pgr-adm-banner b { color: var(--color-primary-1, var(--color-primary-main,#c84c0e)); }
 .pgr-adm-card { background: var(--color-surface,#fff); border: 1px solid var(--color-card-border, var(--color-border,#e2e8f0)); border-radius: .75rem; margin-bottom: 1rem; }
-.pgr-adm-fhead { display: flex; align-items: center; gap: .5rem; padding: .9rem 1rem .2rem; font-weight: 700; font-size: .95rem; }
-.pgr-adm-frow { display: grid; grid-template-columns: minmax(200px,1fr) minmax(260px,1.5fr) minmax(300px,1.2fr); gap: 1rem; padding: .6rem 1rem .9rem; align-items: start; }
-@media (max-width: 1100px) { .pgr-adm-frow { grid-template-columns: 1fr; } }
+.pgr-adm-frow { display: grid; grid-template-columns: minmax(190px,1fr) minmax(250px,1.5fr) minmax(260px,1.2fr) auto; gap: 1rem; padding: .9rem 1rem; align-items: start; }
+@media (max-width: 1200px) { .pgr-adm-frow { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) { .pgr-adm-frow { grid-template-columns: 1fr; } }
 .pgr-adm-field > label { display: block; font-size: .8rem; font-weight: 600; margin-bottom: .3rem; }
 .pgr-adm-cno { position: relative; }
-.pgr-adm-cno input { width: 100%; min-height: 42px; padding: .5rem 2rem .5rem .6rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; font-size: .85rem; background: #fff; }
-.pgr-adm-cno span { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#94a3b8); font-size: .9rem; }
-.pgr-adm-cno input:focus, .pgr-adm-msd-field:focus-within, .pgr-adm-datebox:focus-within { outline: none; border-color: var(--color-input-border-focus, var(--color-primary-1,#c84c0e)); }
+.pgr-adm-cno input { width: 100%; min-height: 42px; padding: .5rem 1.8rem .5rem 2rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; font-size: .85rem; background: #fff; }
+.pgr-adm-cno .mag { position: absolute; left: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#94a3b8); display: inline-flex; }
+.pgr-adm-cno .hash { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#94a3b8); font-size: .9rem; }
+.pgr-adm-cno input:focus, .pgr-adm-msd-field:focus-within, .pgr-adm-date input:focus { outline: none; border-color: var(--color-input-border-focus, var(--color-primary-1,#c84c0e)); }
 .pgr-adm-msd { position: relative; }
-.pgr-adm-msd-field { min-height: 42px; width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; padding: .3rem 2rem .3rem .5rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; cursor: pointer; position: relative; }
+.pgr-adm-msd-field { min-height: 42px; width: 100%; display: flex; flex-wrap: nowrap; align-items: center; gap: .35rem; padding: .3rem 2rem .3rem .5rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; cursor: pointer; position: relative; overflow: hidden; }
 .pgr-adm-msd-field .ph { color: var(--color-text-secondary,#94a3b8); font-size: .85rem; padding-left: .1rem; }
 .pgr-adm-msd-field .caret { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#64748b); font-size: .75rem; }
-.pgr-adm-tag { display: inline-flex; align-items: center; gap: .35rem; background: var(--color-surface-secondary,#f1f5f9); border: 1px solid var(--color-border,#e2e8f0); border-radius: .4rem; padding: .18rem .5rem; font-size: .78rem; line-height: 1.25; color: var(--color-text-primary,#334155); white-space: nowrap; max-width: 100%; }
-.pgr-adm-tag i { overflow: hidden; text-overflow: ellipsis; font-style: normal; }
+.pgr-adm-tag { display: inline-flex; align-items: center; gap: .35rem; background: var(--color-surface-secondary,#f1f5f9); border: 1px solid var(--color-border,#e2e8f0); border-radius: .4rem; padding: .18rem .5rem; font-size: .78rem; line-height: 1.25; color: var(--color-text-primary,#334155); white-space: nowrap; max-width: 100%; flex: none; }
+.pgr-adm-tag i { overflow: hidden; text-overflow: ellipsis; font-style: normal; max-width: 130px; }
 /* a span, not a <button>: the platform's global button rules (primary bg, 10px 28px padding) can't be out-specified from here */
 .pgr-adm-tag .x { cursor: pointer; color: var(--color-text-secondary,#64748b); font-size: .85rem; line-height: 1; padding: 0 .1rem; user-select: none; }
 .pgr-adm-tag .x:hover { color: var(--color-error,#b3261e); }
@@ -107,13 +115,14 @@ const CSS = `
 .pgr-adm-msd-opt { display: flex; gap: .5rem; align-items: center; padding: .4rem .6rem; font-size: .85rem; cursor: pointer; }
 .pgr-adm-msd-opt:hover { background: var(--color-surface-secondary,#f1f5f9); }
 .pgr-adm-dates { display: flex; align-items: center; gap: .5rem; }
-.pgr-adm-datebox { flex: 1; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; padding: .3rem .6rem .35rem; background: #fff; min-height: 42px; }
-.pgr-adm-datebox label { display: block; font-size: .62rem; color: var(--color-text-secondary,#94a3b8); font-weight: 600; margin: 0 0 .05rem; }
-.pgr-adm-datebox input { width: 100%; border: none; outline: none; padding: 0; font-size: .82rem; background: transparent; color: inherit; }
+.pgr-adm-date { position: relative; flex: 1; }
+.pgr-adm-date input { width: 100%; min-height: 42px; padding: .5rem .5rem .5rem 2.2rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; font-size: .82rem; background: #fff; color: inherit; cursor: pointer; }
+.pgr-adm-date input::-webkit-calendar-picker-indicator { display: none; }
+.pgr-adm-date svg { position: absolute; left: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#94a3b8); pointer-events: none; }
 .pgr-adm-dates .dash { color: var(--color-text-secondary,#94a3b8); }
-.pgr-adm-err { color: var(--color-error,#b3261e); font-size: .78rem; padding: 0 1rem .5rem; }
-.pgr-adm-factions { display: flex; justify-content: flex-end; gap: .6rem; padding: .75rem 1rem .9rem; border-top: 1px solid var(--color-border,#eef2f7); }
-.pgr-adm-btn { display: inline-flex; align-items: center; gap: .45rem; padding: .55rem 1.1rem; border-radius: .5rem; font-weight: 700; font-size: .85rem; cursor: pointer; border: 1px solid transparent; }
+.pgr-adm-fbtns { display: flex; gap: .6rem; margin-top: 1.45rem; }
+.pgr-adm-err { color: var(--color-error,#b3261e); font-size: .78rem; padding: 0 1rem .75rem; }
+.pgr-adm-btn { display: inline-flex; align-items: center; gap: .45rem; padding: .55rem 1.1rem; border-radius: .5rem; font-weight: 700; font-size: .85rem; cursor: pointer; border: 1px solid transparent; white-space: nowrap; }
 .pgr-adm-btn--primary { background: var(--color-button-primary-bg-default, var(--color-primary-1, var(--color-primary-main,#c84c0e))); color: #fff; }
 .pgr-adm-btn--primary:hover { background: var(--color-button-primary-bg-hover, var(--color-primary-1,#a33d0b)); }
 .pgr-adm-btn--ghost { background: #fff; border-color: var(--color-border,#cbd5e1); color: var(--color-text-primary,#334155); }
@@ -121,8 +130,10 @@ const CSS = `
 .pgr-adm-btn[disabled] { opacity: .55; cursor: default; }
 .pgr-adm-results { padding: 0; overflow: hidden; margin-bottom: 0; }
 .pgr-adm-results-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem 1rem; border-bottom: 1px solid var(--color-border,#eef2f7); flex-wrap: wrap; }
-.pgr-adm-results-head h2 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: .5rem; }
-.pgr-adm-count { background: var(--color-surface-secondary,#f1f5f9); border-radius: 9999px; padding: .1rem .6rem; font-size: .8rem; font-weight: 600; color: var(--color-text-secondary,#475569); }
+.pgr-adm-found { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; }
+.pgr-adm-found h2 { margin: 0; font-size: 1.05rem; }
+.pgr-adm-updated { display: inline-flex; align-items: center; gap: .35rem; font-size: .78rem; color: var(--color-text-secondary,#64748b); }
+.pgr-adm-updated::before { content: ""; width: 7px; height: 7px; border-radius: 9999px; background: #2e7d32; }
 .pgr-adm-sort { display: flex; align-items: center; gap: .4rem; font-size: .8rem; color: var(--color-text-secondary,#64748b); flex-wrap: wrap; }
 .pgr-adm-sort select { padding: .4rem .5rem; border: 1px solid var(--color-border,#cbd5e1); border-radius: .4rem; background: #fff; font-size: .8rem; }
 .pgr-adm-table { width: 100%; border-collapse: collapse; }
@@ -132,18 +143,22 @@ const CSS = `
 .pgr-adm-th-sort .si.act { color: var(--color-primary-1, var(--color-primary-main,#c84c0e)); }
 .pgr-adm-table td { padding: .7rem 1rem; border-bottom: 1px solid var(--color-border,#f1f5f9); font-size: .84rem; vertical-align: middle; }
 .pgr-adm-table tbody tr:hover { background: var(--color-surface-secondary,#fafbfc); }
-.pgr-adm-table a { color: var(--color-link-normal, var(--color-primary-1, var(--color-primary-main,#c84c0e))); font-weight: 600; text-decoration: none; }
-.pgr-adm-table a:hover { color: var(--color-link-hover, var(--color-primary-1,#a33d0b)); text-decoration: underline; }
-.pgr-adm-cno-link { display: inline-flex; align-items: center; gap: .3rem; }
-.pgr-adm-deptag { display: inline-flex; align-items: center; gap: .35rem; border-radius: .4rem; padding: .2rem .55rem; font-size: .76rem; font-weight: 600; white-space: nowrap; }
-.pgr-adm-pill { display: inline-block; border-radius: 9999px; padding: .18rem .65rem; font-size: .74rem; font-weight: 700; white-space: nowrap; }
+.pgr-adm-cno-link { display: inline-flex; align-items: center; gap: .3rem; color: var(--color-text-primary,#1f2937); font-weight: 700; text-decoration: underline; }
+.pgr-adm-cno-link:hover { color: var(--color-link-hover, var(--color-primary-1, var(--color-primary-main,#c84c0e))); }
+.pgr-adm-deptag { display: inline-flex; align-items: center; gap: .35rem; border-radius: .4rem; padding: .2rem .55rem; font-size: .76rem; font-weight: 600; white-space: nowrap; max-width: 240px; }
+.pgr-adm-deptag i { overflow: hidden; text-overflow: ellipsis; font-style: normal; }
+.pgr-adm-pill { display: inline-flex; align-items: center; gap: .35rem; border-radius: 9999px; padding: .18rem .65rem; font-size: .74rem; font-weight: 700; white-space: nowrap; }
+.pgr-adm-pill::before { content: ""; width: 6px; height: 6px; border-radius: 9999px; background: currentColor; flex: none; }
 .pgr-adm-pill--open { background: #e8f5e9; color: #1b5e20; }
 .pgr-adm-pill--assigned { background: #fff3e0; color: #b26a00; }
 .pgr-adm-pill--inprogress { background: #e3f2fd; color: #1565c0; }
 .pgr-adm-pill--resolved { background: #f3e8fd; color: #6a1b9a; }
 .pgr-adm-pill--closed { background: #eceff1; color: #455a64; }
-.pgr-adm-eye { display: inline-flex; color: var(--color-text-secondary,#64748b); }
-.pgr-adm-eye:hover { color: var(--color-primary-1, var(--color-primary-main,#c84c0e)); }
+.pgr-adm-dt { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; }
+.pgr-adm-dt svg { color: var(--color-text-secondary,#94a3b8); flex: none; }
+.pgr-adm-dt .t { display: block; color: var(--color-text-secondary,#64748b); font-size: .76rem; }
+.pgr-adm-view { display: inline-flex; align-items: center; gap: .35rem; color: var(--color-text-primary,#334155); font-weight: 600; text-decoration: none; }
+.pgr-adm-view:hover { color: var(--color-primary-1, var(--color-primary-main,#c84c0e)); }
 .pgr-adm-empty { padding: 2.25rem 1rem; text-align: center; color: var(--color-text-secondary,#64748b); font-size: .9rem; }
 .pgr-adm-foot { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .75rem 1rem; flex-wrap: wrap; }
 .pgr-adm-foot .info { font-size: .78rem; color: var(--color-text-secondary,#64748b); }
@@ -156,7 +171,9 @@ const CSS = `
 `;
 
 function injectCss() {
-  if (typeof document === "undefined" || document.getElementById(STYLE_ID)) return;
+  if (typeof document === "undefined") return;
+  const existing = document.getElementById(STYLE_ID);
+  if (existing) { if (existing.textContent !== CSS) existing.textContent = CSS; return; }
   const el = document.createElement("style");
   el.id = STYLE_ID;
   el.textContent = CSS;
@@ -167,14 +184,14 @@ const Ic = ({ children, size = 15 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
     strokeLinecap="round" strokeLinejoin="round" aria-hidden focusable="false">{children}</svg>
 );
-const IcFunnel = () => <Ic size={16}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></Ic>;
 const IcInfo = () => <Ic size={16}><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></Ic>;
-const IcSearch = () => <Ic size={14}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></Ic>;
+const IcSearch = ({ size = 14 }) => <Ic size={size}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></Ic>;
 const IcClear = () => <Ic size={14}><path d="M1 4v6h6" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></Ic>;
 const IcExport = () => <Ic size={14}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></Ic>;
-const IcEye = () => <Ic size={16}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></Ic>;
+const IcEye = () => <Ic size={15}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></Ic>;
 const IcExt = () => <Ic size={12}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></Ic>;
 const IcBuilding = () => <Ic size={12}><rect x="4" y="2" width="16" height="20" rx="1" /><line x1="9" y1="22" x2="9" y2="18" /><line x1="15" y1="22" x2="15" y2="18" /><line x1="8" y1="6" x2="10" y2="6" /><line x1="14" y1="6" x2="16" y2="6" /><line x1="8" y1="10" x2="10" y2="10" /><line x1="14" y1="10" x2="16" y2="10" /><line x1="8" y1="14" x2="10" y2="14" /><line x1="14" y1="14" x2="16" y2="14" /></Ic>;
+const IcCal = ({ size = 14 }) => <Ic size={size}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></Ic>;
 
 const searchAdmin = (params) =>
   Request({ url: Urls.pgr.adminSearch, method: "POST", auth: true, userService: true, useCache: false, params });
@@ -188,14 +205,14 @@ const PGRAdminSearch = () => {
   const isSuperUser = roles.includes("SUPERUSER");
 
   const lang = String(i18n?.language || "en").startsWith("pt") ? "pt-PT" : "en-GB";
-  const fmtDate = (epoch) => {
-    if (!epoch) return "—";
-    const d = new Date(Number(epoch));
-    const day = d.toLocaleDateString(lang, { day: "2-digit", month: "short", year: "numeric" });
-    const time = d
-      .toLocaleTimeString(lang, { hour: "numeric", minute: "2-digit", hour12: lang === "en-GB" })
+  const fmtDT = (epoch) => {
+    if (!epoch) return { d: "—", t: "" };
+    const dt = new Date(Number(epoch));
+    const d = dt.toLocaleDateString(lang, { day: "2-digit", month: "short", year: "numeric" });
+    const tm = dt
+      .toLocaleTimeString(lang, { hour: "2-digit", minute: "2-digit", hour12: lang === "en-GB" })
       .replace(/\b(am|pm)\b/gi, (m) => m.toUpperCase());
-    return `${day}, ${time}`;
+    return { d, t: tm };
   };
 
   // ── departments (options + display-normalisation map) ──────────────────
@@ -229,14 +246,20 @@ const PGRAdminSearch = () => {
   const [pageSize, setPageSize] = useState(20);
   const [sortBy, setSortBy] = useState("createdTime");
   const [sortOrder, setSortOrder] = useState("DESC");
+  const [clientSort, setClientSort] = useState(null); // {col: 'department'|'complaintType', dir} — current page only
   const [deptOpen, setDeptOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [, setAgoTick] = useState(0); // re-render so "Updated Xs ago" stays fresh
   const deptRef = useRef(null);
 
   useEffect(() => {
     const close = (e) => { if (deptRef.current && !deptRef.current.contains(e.target)) setDeptOpen(false); };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
+  }, []);
+  useEffect(() => {
+    const id = setInterval(() => setAgoTick((x) => x + 1), 10000);
+    return () => clearInterval(id);
   }, []);
 
   const buildParams = (f, pg, size) => {
@@ -250,7 +273,7 @@ const PGRAdminSearch = () => {
 
   // ── rows query (over-fetch by 1 → next-page probe; see header comment) ──
   const rowsKey = ["pgrAdminSearchUi", JSON.stringify(committed), page, pageSize, sortBy, sortOrder];
-  const { data: rowsData, isLoading: rowsLoading, isError, refetch } = useQuery(
+  const { data: rowsData, isLoading: rowsLoading, isError, refetch, dataUpdatedAt } = useQuery(
     rowsKey,
     async () => {
       const res = await searchAdmin(buildParams(committed, page, pageSize));
@@ -325,20 +348,22 @@ const PGRAdminSearch = () => {
       const head = [
         tr("CS_COMMON_COMPLAINT_NO", "Complaint No."),
         tr("ES_PGR_ADMIN_HEADER_DEPARTMENT", "Department"),
-        tr("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE", "Category"),
+        tr("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE", "Complaint Type"),
         tr("CS_COMPLAINT_DETAILS_CURRENT_STATUS", "Status"),
         tr("ES_PGR_ADMIN_CREATED_ON", "Created On"),
         tr("ES_PGR_ADMIN_LAST_MODIFIED", "Last Modified"),
       ];
       const lines = out.map((w) => {
         const s = w.service || {};
+        const cd = fmtDT(s?.auditDetails?.createdTime);
+        const md = fmtDT(s?.auditDetails?.lastModifiedTime);
         return [
           s.serviceRequestId,
           deptCell(s?.additionalDetail?.department).label,
           complaintLabel(t, s.serviceCode),
           tr(`CS_COMMON_${s.applicationStatus}`, s.applicationStatus),
-          fmtDate(s?.auditDetails?.createdTime),
-          fmtDate(s?.auditDetails?.lastModifiedTime),
+          `${cd.d}, ${cd.t}`,
+          `${md.d}, ${md.t}`,
         ].map(esc).join(",");
       });
       const csv = "\uFEFF" + [head.map(esc).join(","), ...lines].join("\r\n"); // BOM so Excel opens UTF-8 correctly
@@ -369,23 +394,71 @@ const PGRAdminSearch = () => {
   const showFrom = total === 0 ? 0 : page * pageSize + 1;
   const showTo = page * pageSize + rows.length;
 
-  const setSort = (col) => {
+  // department / complaint type: label-based sort of the CURRENT page (labels only exist FE-side)
+  const displayRows = (() => {
+    if (!clientSort) return rows;
+    const key = clientSort.col === "department"
+      ? (w) => deptCell(w?.service?.additionalDetail?.department).label
+      : (w) => complaintLabel(t, w?.service?.serviceCode) || "";
+    const dir = clientSort.dir === "ASC" ? 1 : -1;
+    return [...rows].sort((a, b) => dir * String(key(a)).localeCompare(String(key(b))));
+  })();
+
+  const setServerSort = (col) => {
+    setClientSort(null);
     if (sortBy === col) setSortOrder((o) => (o === "DESC" ? "ASC" : "DESC"));
     else { setSortBy(col); setSortOrder("DESC"); }
     setPage(0);
   };
-  const SortTh = ({ col, children }) => (
-    <th className="pgr-adm-th-sort" onClick={() => setSort(col)} title={tr("ES_PGR_ADMIN_SORT_BY", "Sort by")}>
-      {children}
-      <span className={`si ${sortBy === col ? "act" : ""}`}>{sortBy === col ? (sortOrder === "DESC" ? "↓" : "↑") : "⇅"}</span>
-    </th>
-  );
+  const setSort = (col) => {
+    if (SERVER_SORT_COLS.includes(col)) return setServerSort(col);
+    setClientSort((cs) => (cs?.col === col ? { col, dir: cs.dir === "ASC" ? "DESC" : "ASC" } : { col, dir: "ASC" }));
+  };
+  const sortState = (col) => {
+    if (clientSort) return clientSort.col === col ? clientSort.dir : null;
+    return SERVER_SORT_COLS.includes(col) && sortBy === col ? sortOrder : null;
+  };
+  const SortTh = ({ col, children }) => {
+    const st = sortState(col);
+    return (
+      <th className="pgr-adm-th-sort" onClick={() => setSort(col)} title={tr("ES_PGR_ADMIN_SORT_BY", "Sort by")}>
+        {children}
+        <span className={`si ${st ? "act" : ""}`}>{st ? (st === "DESC" ? "↓" : "↑") : "⇅"}</span>
+      </th>
+    );
+  };
+
+  const agoLabel = (() => {
+    if (!dataUpdatedAt) return "";
+    const s = Math.max(0, Math.round((Date.now() - dataUpdatedAt) / 1000));
+    const upd = tr("ES_PGR_ADMIN_UPDATED", "Updated");
+    if (s < 60) return `${upd} ${s} ${tr("ES_PGR_ADMIN_SECS_AGO", "sec ago")}`;
+    if (s < 3600) return `${upd} ${Math.floor(s / 60)} ${tr("ES_PGR_ADMIN_MINS_AGO", "min ago")}`;
+    return `${upd} ${Math.floor(s / 3600)} ${tr("ES_PGR_ADMIN_HOURS_AGO", "hr ago")}`;
+  })();
+
+  const CHIP_LIMIT = 3;
+  const chips = filters.departments.slice(0, CHIP_LIMIT);
+  const chipOverflow = filters.departments.length - chips.length;
+
+  const dtCell = (epoch) => {
+    const v = fmtDT(epoch);
+    return (
+      <span className="pgr-adm-dt">
+        <IcCal />
+        <span>
+          {v.d}
+          <span className="t">{v.t}</span>
+        </span>
+      </span>
+    );
+  };
 
   return (
     <div className="pgr-adm">
       <div className="pgr-adm-crumbs">
         <Link to={`/${window?.contextPath}/employee`}>{tr("ACTION_TEST_HOME", "Home")}</Link>
-        {" / "}<span>PGR</span>{" / "}<span>{tr("ES_PGR_ADMIN_SEARCH", "Admin Complaint Search")}</span>
+        {" › "}<span>PGR</span>{" › "}<span>{tr("ES_PGR_ADMIN_SEARCH", "Admin Complaint Search")}</span>
       </div>
       <div className="pgr-adm-top">
         <div className="pgr-adm-title">
@@ -398,17 +471,17 @@ const PGRAdminSearch = () => {
         </div>
       </div>
 
-      {/* ── Search Filters ── */}
+      {/* ── Filter bar ── */}
       <div className="pgr-adm-card">
-        <div className="pgr-adm-fhead"><IcFunnel /> {tr("ES_PGR_ADMIN_SEARCH_FILTERS", "Search Filters")}</div>
         <div className="pgr-adm-frow">
           <div className="pgr-adm-field">
             <label htmlFor="adm-cno">{tr("CS_COMMON_COMPLAINT_NO", "Complaint No.")}</label>
             <div className="pgr-adm-cno">
+              <span className="mag"><IcSearch /></span>
               <input id="adm-cno" type="text" placeholder={tr("ES_PGR_ADMIN_CNO_PH", "Enter complaint number")}
                 value={filters.complaintNumber}
                 onChange={(e) => setFilters((f) => ({ ...f, complaintNumber: e.target.value }))} />
-              <span aria-hidden>#</span>
+              <span className="hash" aria-hidden>#</span>
             </div>
           </div>
 
@@ -419,7 +492,7 @@ const PGRAdminSearch = () => {
                 onClick={() => setDeptOpen((o) => !o)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDeptOpen((o) => !o); } }}>
                 {filters.departments.length === 0 && <span className="ph">{tr("ES_PGR_ADMIN_SELECT_DEPARTMENTS", "Select departments")}</span>}
-                {filters.departments.map((d) => (
+                {chips.map((d) => (
                   <span className="pgr-adm-tag" key={d.code} onClick={(e) => e.stopPropagation()}>
                     <i>{d.label}</i>
                     <span className="x" role="button" tabIndex={0} aria-label={`remove ${d.label}`}
@@ -427,6 +500,7 @@ const PGRAdminSearch = () => {
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDept(d); } }}>×</span>
                   </span>
                 ))}
+                {chipOverflow > 0 && <span className="pgr-adm-tag"><i>+{chipOverflow}</i></span>}
                 <span className="caret" aria-hidden>▾</span>
               </div>
               {deptOpen && (
@@ -447,46 +521,48 @@ const PGRAdminSearch = () => {
           <div className="pgr-adm-field">
             <label>{tr("ES_PGR_ADMIN_DATE_RANGE", "Date Range")}</label>
             <div className="pgr-adm-dates">
-              <div className="pgr-adm-datebox">
-                <label htmlFor="adm-from">{tr("ES_PGR_ADMIN_FROM_DATE", "From Date")}</label>
-                <input id="adm-from" type="date" value={filters.fromDate}
+              <div className="pgr-adm-date">
+                <IcCal />
+                <input id="adm-from" type="date" aria-label={tr("ES_PGR_ADMIN_FROM_DATE", "From Date")} value={filters.fromDate}
+                  onClick={(e) => e.target.showPicker && e.target.showPicker()}
                   onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))} />
               </div>
               <span className="dash" aria-hidden>–</span>
-              <div className="pgr-adm-datebox">
-                <label htmlFor="adm-to">{tr("ES_PGR_ADMIN_TO_DATE", "To Date")}</label>
-                <input id="adm-to" type="date" value={filters.toDate}
+              <div className="pgr-adm-date">
+                <IcCal />
+                <input id="adm-to" type="date" aria-label={tr("ES_PGR_ADMIN_TO_DATE", "To Date")} value={filters.toDate}
+                  onClick={(e) => e.target.showPicker && e.target.showPicker()}
                   onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))} />
               </div>
             </div>
           </div>
+
+          <div className="pgr-adm-fbtns">
+            <button className="pgr-adm-btn pgr-adm-btn--primary" onClick={onSearch}>
+              <IcSearch /> {tr("ACTION_TEST_SEARCH", "Search")}
+            </button>
+            <button className="pgr-adm-btn pgr-adm-btn--ghost" onClick={onClear}>
+              <IcClear /> {tr("ES_PGR_ADMIN_CLEAR", "Clear")}
+            </button>
+          </div>
         </div>
 
         {validationError && <div className="pgr-adm-err" role="alert">{validationError}</div>}
-
-        <div className="pgr-adm-factions">
-          <button className="pgr-adm-btn pgr-adm-btn--ghost" onClick={onClear}>
-            <IcClear /> {tr("ES_PGR_ADMIN_CLEAR", "Clear")}
-          </button>
-          <button className="pgr-adm-btn pgr-adm-btn--primary" onClick={onSearch}>
-            <IcSearch /> {tr("ACTION_TEST_SEARCH", "Search")}
-          </button>
-        </div>
       </div>
 
-      {/* ── Search Results ── */}
+      {/* ── Results ── */}
       <div className="pgr-adm-card pgr-adm-results">
         <div className="pgr-adm-results-head">
-          <h2>
-            {tr("ES_PGR_ADMIN_SEARCH_RESULTS", "Search Results")}
-            <span className="pgr-adm-count">({totalStr})</span>
-          </h2>
+          <div className="pgr-adm-found">
+            <h2>{totalStr} {tr("ES_PGR_ADMIN_COMPLAINTS_FOUND", "Complaints Found")}</h2>
+            {agoLabel && <span className="pgr-adm-updated">{agoLabel}</span>}
+          </div>
           <div className="pgr-adm-sort">
             <span>{tr("ES_PGR_ADMIN_SORT_BY", "Sort by")}</span>
-            <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPage(0); }}>
+            <select value={sortBy} onChange={(e) => { setClientSort(null); setSortBy(e.target.value); setPage(0); }}>
               {SORT_OPTIONS.map((o) => <option key={o.code} value={o.code}>{tr(o.i18nKey, o.code)}</option>)}
             </select>
-            <select value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); setPage(0); }}>
+            <select value={sortOrder} onChange={(e) => { setClientSort(null); setSortOrder(e.target.value); setPage(0); }}>
               <option value="DESC">{tr("ES_PGR_ADMIN_DESC", "Desc")}</option>
               <option value="ASC">{tr("ES_PGR_ADMIN_ASC", "Asc")}</option>
             </select>
@@ -511,8 +587,8 @@ const PGRAdminSearch = () => {
               <thead>
                 <tr>
                   <SortTh col="serviceRequestId">{tr("CS_COMMON_COMPLAINT_NO", "Complaint No.")}</SortTh>
-                  <th>{tr("ES_PGR_ADMIN_HEADER_DEPARTMENT", "Department")}</th>
-                  <th>{tr("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE", "Category")}</th>
+                  <SortTh col="department">{tr("ES_PGR_ADMIN_HEADER_DEPARTMENT", "Department")}</SortTh>
+                  <SortTh col="complaintType">{tr("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE", "Complaint Type")}</SortTh>
                   <SortTh col="applicationStatus">{tr("CS_COMPLAINT_DETAILS_CURRENT_STATUS", "Status")}</SortTh>
                   <SortTh col="createdTime">{tr("ES_PGR_ADMIN_CREATED_ON", "Created On")}</SortTh>
                   <SortTh col="lastModifiedTime">{tr("ES_PGR_ADMIN_LAST_MODIFIED", "Last Modified")}</SortTh>
@@ -520,7 +596,7 @@ const PGRAdminSearch = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((w) => {
+                {displayRows.map((w) => {
                   const s = w.service || {};
                   const dept = deptCell(s?.additionalDetail?.department);
                   const tint = deptTint(dept.code);
@@ -534,17 +610,17 @@ const PGRAdminSearch = () => {
                         </Link>
                       </td>
                       <td>
-                        <span className="pgr-adm-deptag" style={{ background: tint.bg, color: tint.fg }}>
-                          <IcBuilding /> {dept.label}
+                        <span className="pgr-adm-deptag" style={{ background: tint.bg, color: tint.fg }} title={dept.label}>
+                          <IcBuilding /> <i>{dept.label}</i>
                         </span>
                       </td>
                       <td>{complaintLabel(t, s.serviceCode)}</td>
                       <td><span className={`pgr-adm-pill pgr-adm-pill--${bucketOf(s.applicationStatus)}`}>{statusLabel}</span></td>
-                      <td>{fmtDate(s?.auditDetails?.createdTime)}</td>
-                      <td>{fmtDate(s?.auditDetails?.lastModifiedTime)}</td>
+                      <td>{dtCell(s?.auditDetails?.createdTime)}</td>
+                      <td>{dtCell(s?.auditDetails?.lastModifiedTime)}</td>
                       <td>
-                        <Link className="pgr-adm-eye" to={detailUrl} aria-label={tr("ES_PGR_ADMIN_VIEW", "View")} title={tr("ES_PGR_ADMIN_VIEW", "View")}>
-                          <IcEye />
+                        <Link className="pgr-adm-view" to={detailUrl}>
+                          <IcEye /> {tr("ES_PGR_ADMIN_VIEW", "View")}
                         </Link>
                       </td>
                     </tr>
