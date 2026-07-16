@@ -4,6 +4,8 @@ import { Redirect, Link } from "react-router-dom";
 import { useQuery } from "react-query";
 import { Request } from "@egovernments/digit-ui-libraries";
 import { Loader } from "@egovernments/digit-ui-components";
+import { DateRange as RangeCalendar } from "react-date-range"; // same lib the inbox date filter uses; .rdr* styles ship in digit-ui-css
+import { pt as dfnsPt, enGB as dfnsEnGB } from "date-fns/locale";
 import Urls from "../../utils/urls";
 import { complaintLabel } from "../../utils/complaintLabel";
 
@@ -116,12 +118,14 @@ const CSS = `
 .pgr-adm-msd-list { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; max-height: 260px; overflow: auto; background: #fff; border: 1px solid var(--color-border,#cbd5e1); border-radius: .5rem; box-shadow: 0 8px 20px rgba(0,0,0,.12); padding: .25rem 0; }
 .pgr-adm-msd-opt { display: flex; gap: .5rem; align-items: center; padding: .4rem .6rem; font-size: .85rem; cursor: pointer; }
 .pgr-adm-msd-opt:hover { background: var(--color-surface-secondary,#f1f5f9); }
-.pgr-adm-dates { display: flex; align-items: center; gap: .5rem; }
-.pgr-adm-date { display: flex; align-items: center; gap: .45rem; flex: 1; min-height: 42px; padding: 0 .6rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; cursor: pointer; }
-.pgr-adm-date input { flex: 1; min-width: 0; border: none !important; outline: none !important; box-shadow: none !important; background: transparent; font-size: .82rem; padding: .5rem 0; min-height: 0; color: inherit; cursor: pointer; }
-.pgr-adm-date input::-webkit-calendar-picker-indicator { display: none; }
-.pgr-adm-date svg { flex: none; color: var(--color-text-secondary,#94a3b8); pointer-events: none; }
-.pgr-adm-dates .dash { color: var(--color-text-secondary,#94a3b8); }
+.pgr-adm-daterange { position: relative; }
+.pgr-adm-date { display: flex; align-items: center; gap: .45rem; min-height: 42px; padding: 0 2rem 0 .6rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; cursor: pointer; position: relative; }
+.pgr-adm-date > svg { flex: none; color: var(--color-text-secondary,#94a3b8); pointer-events: none; }
+.pgr-adm-date .val { flex: 1; min-width: 0; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pgr-adm-date .val.ph { color: var(--color-text-secondary,#94a3b8); }
+.pgr-adm-date .caret { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#64748b); font-size: .75rem; }
+.pgr-adm-rdr { position: absolute; z-index: 40; top: calc(100% + 4px); right: 0; background: #fff; border: 1px solid var(--color-border,#cbd5e1); border-radius: .6rem; box-shadow: 0 10px 24px rgba(0,0,0,.14); overflow: hidden; }
+.pgr-adm-rdr .rdrCalendarWrapper { font-size: 12px; }
 .pgr-adm-fbtns { display: flex; gap: .6rem; }
 .pgr-adm-fbtns .pgr-adm-btn { min-height: 42px; }
 .pgr-adm-err { color: var(--color-error,#b3261e); font-size: .78rem; padding: 0 1rem .75rem; }
@@ -199,6 +203,19 @@ const IcCal = ({ size = 14 }) => <Ic size={size}><rect x="3" y="4" width="18" he
 const searchAdmin = (params) =>
   Request({ url: Urls.pgr.adminSearch, method: "POST", auth: true, userService: true, useCache: false, params });
 
+// The platform stylesheet forces input chrome (border/padding/height) with
+// !important from a source scoped CSS cannot beat — inline !important is the
+// only author style that outranks it in the cascade, hence a ref callback.
+const bareInput = (el) => {
+  if (!el) return;
+  ["border", "outline", "box-shadow"].forEach((p) => el.style.setProperty(p, "none", "important"));
+  el.style.setProperty("background", "transparent", "important");
+  el.style.setProperty("min-height", "0", "important");
+  el.style.setProperty("height", "auto", "important");
+  el.style.setProperty("padding", "0.5rem 0", "important");
+  el.style.setProperty("margin", "0", "important");
+};
+
 const PGRAdminSearch = () => {
   const { t, i18n } = useTranslation();
   const tenantId = Digit.ULBService.getCurrentTenantId();
@@ -251,12 +268,18 @@ const PGRAdminSearch = () => {
   const [sortOrder, setSortOrder] = useState("DESC");
   const [clientSort, setClientSort] = useState(null); // {col: 'department'|'complaintType', dir} — current page only
   const [deptOpen, setDeptOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [dateFocus, setDateFocus] = useState([0, 0]); // react-date-range focus: [range, 0=start|1=end]
   const [exporting, setExporting] = useState(false);
   const [, setAgoTick] = useState(0); // re-render so "Updated Xs ago" stays fresh
   const deptRef = useRef(null);
+  const dateRef = useRef(null);
 
   useEffect(() => {
-    const close = (e) => { if (deptRef.current && !deptRef.current.contains(e.target)) setDeptOpen(false); };
+    const close = (e) => {
+      if (deptRef.current && !deptRef.current.contains(e.target)) setDeptOpen(false);
+      if (dateRef.current && !dateRef.current.contains(e.target)) setDateOpen(false);
+    };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, []);
@@ -333,6 +356,25 @@ const PGRAdminSearch = () => {
     const hit = deptOptions.map[raw];
     return hit || { label: raw, code: raw };
   };
+
+  // ── single range-calendar plumbing (filters keep yyyy-mm-dd strings) ────
+  const isoOf = (d) => {
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
+  const dateOf = (iso) => (iso ? new Date(`${iso}T00:00:00`) : new Date());
+  const disp = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
+  const rangeLabel = filters.fromDate
+    ? `${disp(filters.fromDate)} – ${disp(filters.toDate || filters.fromDate)}`
+    : tr("ES_PGR_ADMIN_DATE_RANGE_PH", "Select date range");
+  const onRangePick = (r) => {
+    const sel = r.range1 || Object.values(r)[0];
+    if (!sel) return;
+    setFilters((f) => ({ ...f, fromDate: isoOf(sel.startDate), toDate: isoOf(sel.endDate) }));
+    if (dateFocus[1] === 1) setDateOpen(false); // end date picked → range complete
+  };
+  const primaryFill = (typeof window !== "undefined" &&
+    getComputedStyle(document.documentElement).getPropertyValue("--color-primary-1").trim()) || "#c84c0e";
 
   const onExport = async () => {
     if (exporting) return;
@@ -481,7 +523,7 @@ const PGRAdminSearch = () => {
             <label htmlFor="adm-cno">{tr("CS_COMMON_COMPLAINT_NO", "Complaint No.")}</label>
             <div className="pgr-adm-cno">
               <span className="mag"><IcSearch /></span>
-              <input id="adm-cno" type="text" placeholder={tr("ES_PGR_ADMIN_CNO_PH", "Enter complaint number")}
+              <input id="adm-cno" type="text" ref={bareInput} placeholder={tr("ES_PGR_ADMIN_CNO_PH", "Enter complaint number")}
                 value={filters.complaintNumber}
                 onChange={(e) => setFilters((f) => ({ ...f, complaintNumber: e.target.value }))} />
               <span className="hash" aria-hidden>#</span>
@@ -521,23 +563,32 @@ const PGRAdminSearch = () => {
             </div>
           </div>
 
-          <div className="pgr-adm-field">
+          <div className="pgr-adm-field pgr-adm-daterange" ref={dateRef}>
             <label>{tr("ES_PGR_ADMIN_DATE_RANGE", "Date Range")}</label>
-            <div className="pgr-adm-dates">
-              <div className="pgr-adm-date">
-                <IcCal />
-                <input id="adm-from" type="date" aria-label={tr("ES_PGR_ADMIN_FROM_DATE", "From Date")} value={filters.fromDate}
-                  onClick={(e) => e.target.showPicker && e.target.showPicker()}
-                  onChange={(e) => setFilters((f) => ({ ...f, fromDate: e.target.value }))} />
-              </div>
-              <span className="dash" aria-hidden>–</span>
-              <div className="pgr-adm-date">
-                <IcCal />
-                <input id="adm-to" type="date" aria-label={tr("ES_PGR_ADMIN_TO_DATE", "To Date")} value={filters.toDate}
-                  onClick={(e) => e.target.showPicker && e.target.showPicker()}
-                  onChange={(e) => setFilters((f) => ({ ...f, toDate: e.target.value }))} />
-              </div>
+            <div className="pgr-adm-date" role="button" tabIndex={0}
+              aria-label={tr("ES_PGR_ADMIN_DATE_RANGE", "Date Range")}
+              onClick={() => { setDateFocus([0, 0]); setDateOpen((o) => !o); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDateFocus([0, 0]); setDateOpen((o) => !o); } }}>
+              <IcCal />
+              <span className={`val ${filters.fromDate ? "" : "ph"}`}>{rangeLabel}</span>
+              <span className="caret" aria-hidden>▾</span>
             </div>
+            {dateOpen && (
+              <div className="pgr-adm-rdr">
+                <RangeCalendar
+                  ranges={[{ startDate: dateOf(filters.fromDate), endDate: dateOf(filters.toDate || filters.fromDate), key: "range1" }]}
+                  focusedRange={dateFocus}
+                  onRangeFocusChange={setDateFocus}
+                  onChange={onRangePick}
+                  rangeColors={[primaryFill]}
+                  maxDate={new Date()}
+                  weekStartsOn={1}
+                  showDateDisplay={false}
+                  retainEndDateOnFirstSelection={true}
+                  locale={lang === "pt-PT" ? dfnsPt : dfnsEnGB}
+                />
+              </div>
+            )}
           </div>
 
           <div className="pgr-adm-fbtns">
