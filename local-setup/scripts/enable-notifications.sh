@@ -80,7 +80,7 @@ NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-registry.preview.egov.theflywheel.in/ego
 # ^ base image = SMS/email + FREE-FORM WhatsApp only. The Content-SID (approved
 #   template) WhatsApp path needs this PR branch's build, published to public
 #   Docker Hub (multi-arch) under the WA_IMAGE_TAG below.
-WA_IMAGE_TAG="${WA_IMAGE_TAG:-whatsapp-contentsid-pipeline-4b4e3bb}"  # bump to the latest published tag after re-publish
+WA_IMAGE_TAG="${WA_IMAGE_TAG:-whatsapp-contentsid-pipeline-f76f6ea}"  # bump to the latest published tag after re-publish
 NOVU_BRIDGE_IMAGE_WA="${NOVU_BRIDGE_IMAGE_WA:-egovio/novu-bridge:$WA_IMAGE_TAG}"   # public Docker Hub, multi-arch — WhatsApp Content-SID bridge (this PR)
 PGR_IMAGE_WA="${PGR_IMAGE_WA:-egovio/pgr-services:$WA_IMAGE_TAG}"                  # public Docker Hub, multi-arch — WhatsApp Content-SID pgr (this PR)
 
