@@ -1,8 +1,7 @@
 # Notifications enablement — runbook
 
 Enable config-driven PGR notifications (SMS · email · WhatsApp) on a **running**
-DIGIT/CCRS deployment. Terse; every command was run on a real box. Rationale, bugs,
-and edge cases: [`PRACTICAL-ENABLE-RUNBOOK.md`](./PRACTICAL-ENABLE-RUNBOOK.md).
+DIGIT/CCRS deployment. Terse; every command was run on a real box.
 
 State root tenant below is `<root>` (e.g. `ke`, `mz`). Config is authored there; city
 tenants inherit.
@@ -63,7 +62,8 @@ sudo docker restart kong-gateway   # a bridge recreate poisons Kong's DNS cache 
 
 **5 — Ingress** *(only if you did NOT deploy with `enable_novu:true`)* — add the nginx
 `/novu` `/novu-api` `/novu-ws` blocks + the dashboard public-URL envs, and open the port
-(`sudo ufw allow 80/tcp`). Copy the blocks from `nginx-site.conf.j2`; see PRACTICAL §5b.
+(`sudo ufw allow 80/tcp`). Copy the `/novu` `/novu-api` `/novu-ws` blocks from
+[`local-setup/ansible/templates/nginx-site.conf.j2`](../../local-setup/ansible/templates/nginx-site.conf.j2).
 
 **6 — Seed the MDMS masters** — §4 below.
 
@@ -82,10 +82,17 @@ done
 **9 — Drive a complaint, then verify**
 ```bash
 sudo docker exec docker-postgres psql -U egov -d egov -c \
- "select event_name,channel,status,last_error_code from nb_dispatch_log order by createdtime desc limit 10;"
+ "select event_name,channel,status,last_error_code from nb_dispatch_log order by created_time desc limit 10;"
 ```
-`SENT` = Novu accepted the trigger — **not** proof of delivery (no Twilio callback here). Confirm
-on the handset/inbox, or via the Twilio Messages API.
+`SENT` in `nb_dispatch_log` = Novu **accepted** the async trigger — **not** proof of delivery. Ask
+Novu itself whether the send actually succeeded (status `sent`, not `error`; surface any `errorId`):
+```bash
+KEY=$(sudo docker exec novu-bridge printenv NOVU_API_KEY)
+curl -s "http://localhost:14002/v1/messages?limit=20" -H "Authorization: ApiKey $KEY" \
+ | jq -r '.data[] | "\(.channel)\t\(.status)\t\(.errorId // "")"'
+```
+**`SENT` in `nb_dispatch_log` ≠ delivered** — the Novu message status (and the handset/inbox, or the
+Twilio Messages API) is the truth.
 
 ---
 

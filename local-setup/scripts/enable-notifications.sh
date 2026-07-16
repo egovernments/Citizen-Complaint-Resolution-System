@@ -62,8 +62,12 @@ CCRS_HOME="${CCRS_HOME:-/opt/ccrs}"                       # the CCRS develop che
 #   DIGIT_URL  = the in-box gateway origin. Used for host-local API calls.
 #   PUBLIC_URL = the external nip.io / public origin. The oauth token mint and
 #                the MDMS seed run against THIS (that's what the runbook used).
-DIGIT_URL="${DIGIT_URL:-http://localhost:8080}"           # in-box gateway origin (host-local API calls)
-PUBLIC_URL="${PUBLIC_URL:-${DIGIT_URL}}"                  # external origin (oauth + seed + ingress verify); default = DIGIT_URL
+DIGIT_URL="${DIGIT_URL:-http://localhost:18000}"          # in-box Kong gateway origin (host-local API calls)
+PUBLIC_URL="${PUBLIC_URL:-${DIGIT_URL}}"                  # external nip.io/public origin (oauth + seed + ingress verify).
+                                                          # NO SAFE DEFAULT — set it to your external origin, e.g.
+                                                          # PUBLIC_URL=http://<host>.nip.io. Falls back to DIGIT_URL, which
+                                                          # only works when the box IS the public origin. Preflight stops if
+                                                          # PUBLIC_URL is unreachable.
 
 # Tenant + admin identity.
 NOTIF_TENANT="${NOTIF_TENANT:-ke}"                        # state-root tenant to author config at; city tenants inherit
@@ -74,10 +78,11 @@ ADMIN_PASS="${ADMIN_PASS:-eGov@123}"                      # admin password
 NOVU_API_LOCAL="${NOVU_API_LOCAL:-http://localhost:14002}" # novu-api direct port (mint key + workflows talk to THIS, not the /novu/ dashboard)
 NOVU_BRIDGE_IMAGE="${NOVU_BRIDGE_IMAGE:-registry.preview.egov.theflywheel.in/egovio/novu-bridge:develop-20260716}"
 # ^ base image = SMS/email + FREE-FORM WhatsApp only. The Content-SID (approved
-#   template) WhatsApp path needs a build off this PR branch — on the box that is
-#   the locally-tagged novu-bridge:wa-sync / pgr-services:wa-contentsid images.
-NOVU_BRIDGE_IMAGE_WA="${NOVU_BRIDGE_IMAGE_WA:-novu-bridge:wa-sync}"   # local tag carrying WhatsApp templates (this PR)
-PGR_IMAGE_WA="${PGR_IMAGE_WA:-pgr-services:wa-contentsid}"            # local tag carrying WhatsApp templates (this PR)
+#   template) WhatsApp path needs this PR branch's build, published to public
+#   Docker Hub (multi-arch) under the WA_IMAGE_TAG below.
+WA_IMAGE_TAG="${WA_IMAGE_TAG:-whatsapp-contentsid-pipeline-4b4e3bb}"  # bump to the latest published tag after re-publish
+NOVU_BRIDGE_IMAGE_WA="${NOVU_BRIDGE_IMAGE_WA:-egovio/novu-bridge:$WA_IMAGE_TAG}"   # public Docker Hub, multi-arch — WhatsApp Content-SID bridge (this PR)
+PGR_IMAGE_WA="${PGR_IMAGE_WA:-egovio/pgr-services:$WA_IMAGE_TAG}"                  # public Docker Hub, multi-arch — WhatsApp Content-SID pgr (this PR)
 
 # Feature toggles that get written into .env.
 CHANNELS_ENABLED="${CHANNELS_ENABLED:-SMS,EMAIL,WHATSAPP}"           # NOVU_BRIDGE_CHANNELS_ENABLED (compose default is SMS,EMAIL)
@@ -227,6 +232,21 @@ _svc_env_has() {   # _svc_env_has <service> <grep-ERE against the container env>
   sudo docker inspect "$cid" --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -qE "$2"
 }
 
+# _wa_enabled — is WhatsApp in the channel gate? Only then is the Content-SID
+# WhatsApp image a hard requirement.
+_wa_enabled() { [[ ",${CHANNELS_ENABLED}," == *,WHATSAPP,* ]]; }
+
+# _ensure_wa_image <image-ref> — make the Content-SID WhatsApp image available on
+# the box: use it if already present, else `docker pull` it from public Docker Hub
+# (multi-arch). Returns 0 iff the image is resolvable/pulled. NEVER silently falls
+# back to the base image — the caller FAILS LOUDLY when this returns non-zero.
+_ensure_wa_image() {
+  local img="$1"
+  sudo docker image inspect "$img" >/dev/null 2>&1 && return 0
+  log "Pulling WhatsApp Content-SID image ${img} (public Docker Hub)…"
+  sudo docker pull "$img" >/dev/null 2>&1
+}
+
 # mint_token — DIGIT employee token via Basic egov-user-client: at the PUBLIC origin.
 # Prints ONLY the token to stdout; callers must never log it.
 mint_token() {
@@ -305,14 +325,23 @@ do_step1() {
 
   log "Setting the config-driven flag…"
   set_env PGR_NOTIFICATION_CONFIG_DRIVEN true
-  # NOTE: for WhatsApp *templates* you also need this PR's pgr image. We only pin
-  # it if the local tag exists — otherwise the base image (SMS/email + free-form
-  # WhatsApp) stays in place. Compose var is PGR_SERVICES_IMAGE on most stacks.
-  if [[ "$DRY_RUN" != true ]] && sudo docker image inspect "$PGR_IMAGE_WA" >/dev/null 2>&1; then
-    log "Local WhatsApp-template image ${PGR_IMAGE_WA} present — pinning it"
-    set_env PGR_SERVICES_IMAGE "$PGR_IMAGE_WA"
+  # NOTE: for WhatsApp *templates* you also need this PR's Content-SID pgr image.
+  # When WHATSAPP is enabled we PULL + PIN it and FAIL LOUDLY if it can't be
+  # resolved (never silently keep the base image). Compose var is PGR_SERVICES_IMAGE.
+  if _wa_enabled; then
+    if [[ "$DRY_RUN" == true ]]; then
+      note "WHATSAPP enabled → would pull + pin ${PGR_IMAGE_WA}; would BLOCK the run if it can't be resolved"
+    elif _ensure_wa_image "$PGR_IMAGE_WA"; then
+      log "WhatsApp Content-SID pgr image ${PGR_IMAGE_WA} available — pinning it"
+      set_env PGR_SERVICES_IMAGE "$PGR_IMAGE_WA"
+    else
+      err "WHATSAPP is enabled but the Content-SID pgr image ${PGR_IMAGE_WA} could not be resolved or pulled."
+      err "Publish/pull it (or set PGR_IMAGE_WA / WA_IMAGE_TAG), or drop WHATSAPP from CHANNELS_ENABLED."
+      err "Refusing to silently fall back to the base image (no Content-SID WhatsApp path)."
+      return 1
+    fi
   else
-    note "Local ${PGR_IMAGE_WA} not found — keeping current pgr image (SMS/email + free-form WhatsApp)"
+    note "WHATSAPP not in CHANNELS_ENABLED — keeping current pgr image (SMS/email path)"
   fi
 
   log "Recreating pgr-services…"
@@ -332,14 +361,26 @@ do_step1() {
 do_step2() {
   step step2 "$(step_title step2)"
 
-  # pre: either the registry image is reachable/pullable, or the local WA tag exists.
-  require "bridge image available (registry pull OR local ${NOVU_BRIDGE_IMAGE_WA})" \
-    "sudo docker image inspect '$NOVU_BRIDGE_IMAGE_WA' >/dev/null 2>&1 || sudo docker pull '$NOVU_BRIDGE_IMAGE' >/dev/null 2>&1 || sudo docker image inspect '$NOVU_BRIDGE_IMAGE' >/dev/null 2>&1"
+  # pre: the base bridge image must be pullable or already present. (WhatsApp adds a
+  # stricter gate below — the Content-SID bridge image must resolve.)
+  require "base bridge image available (registry pull OR already present)" \
+    "sudo docker pull '$NOVU_BRIDGE_IMAGE' >/dev/null 2>&1 || sudo docker image inspect '$NOVU_BRIDGE_IMAGE' >/dev/null 2>&1"
 
   log "Pinning the bridge image…"
-  if [[ "$DRY_RUN" != true ]] && sudo docker image inspect "$NOVU_BRIDGE_IMAGE_WA" >/dev/null 2>&1; then
-    log "Local WhatsApp-template bridge ${NOVU_BRIDGE_IMAGE_WA} present — pinning it"
-    set_env NOVU_BRIDGE_IMAGE "$NOVU_BRIDGE_IMAGE_WA"
+  # When WHATSAPP is enabled we PULL + PIN the Content-SID bridge and FAIL LOUDLY
+  # if it can't be resolved (never silently keep the base image).
+  if _wa_enabled; then
+    if [[ "$DRY_RUN" == true ]]; then
+      note "WHATSAPP enabled → would pull + pin ${NOVU_BRIDGE_IMAGE_WA}; would BLOCK the run if it can't be resolved"
+    elif _ensure_wa_image "$NOVU_BRIDGE_IMAGE_WA"; then
+      log "WhatsApp Content-SID bridge ${NOVU_BRIDGE_IMAGE_WA} available — pinning it"
+      set_env NOVU_BRIDGE_IMAGE "$NOVU_BRIDGE_IMAGE_WA"
+    else
+      err "WHATSAPP is enabled but the Content-SID bridge image ${NOVU_BRIDGE_IMAGE_WA} could not be resolved or pulled."
+      err "Publish/pull it (or set NOVU_BRIDGE_IMAGE_WA / WA_IMAGE_TAG), or drop WHATSAPP from CHANNELS_ENABLED."
+      err "Refusing to silently fall back to the base image (no Content-SID WhatsApp path)."
+      return 1
+    fi
   else
     set_env NOVU_BRIDGE_IMAGE "$NOVU_BRIDGE_IMAGE"
   fi
@@ -506,7 +547,14 @@ do_step6() {
   log "MDMS row counts — Routing=${nr} (expect 24), Template=${nt} (expect 42), ProviderTemplate=${np} (expect 14)"
   verify "NotificationRouting has >= 1 row (got ${nr})"          "[[ '${nr:-0}' -ge 1 ]]"
   verify "NotificationTemplate has >= 1 row (got ${nt})"         "[[ '${nt:-0}' -ge 1 ]]"
-  verify "NotificationProviderTemplate has >= 1 row (got ${np})" "[[ '${np:-0}' -ge 1 ]]"
+  # WhatsApp is a HARD gate. seed-notifications.py treats a NotificationProviderTemplate
+  # data failure as NON-fatal, so the run could "succeed" with WhatsApp unconfigured.
+  # When WHATSAPP is enabled, fail the step if the ProviderTemplate master is empty.
+  if _wa_enabled; then
+    verify "WHATSAPP enabled → NotificationProviderTemplate has >= 1 row (got ${np})" "[[ '${np:-0}' -ge 1 ]]"
+  else
+    note "WHATSAPP not enabled — NotificationProviderTemplate rows are informational (got ${np})"
+  fi
 }
 
 # =============================================================================
@@ -607,7 +655,10 @@ do_step8() {
   # Everything the bootstrap needs is passed via the CHILD ENVIRONMENT so secrets
   # never appear on the command line or in this script's narration. NOVU_WORKFLOW_ID
   # is pinned to the WhatsApp id explicitly; the sms/email ids follow WF_*.
-  if ! NOVU_API_KEY="$key" \
+  # NOVU_ENV_FILE=/dev/null: defense-in-depth so the bootstrap never sources the
+  # tracked dummy config/.env.novu and clobbers the explicit env we pass here.
+  if ! NOVU_ENV_FILE=/dev/null \
+       NOVU_API_KEY="$key" \
        TWILIO_ACCOUNT_SID="$TWILIO_ACCOUNT_SID" \
        TWILIO_AUTH_TOKEN="$TWILIO_AUTH_TOKEN" \
        TWILIO_WHATSAPP_FROM="$TWILIO_WHATSAPP_FROM" \
@@ -662,10 +713,41 @@ do_step9() {
 
   log "Reading the last 10 nb_dispatch_log rows…"
   run "query nb_dispatch_log" \
-    "sudo docker exec '$DB_CONTAINER' psql -U '$DB_USER' -d '$DB_NAME' -c \"select event_name,channel,status,last_error_code from nb_dispatch_log order by createdtime desc limit 10;\""
+    "sudo docker exec '$DB_CONTAINER' psql -U '$DB_USER' -d '$DB_NAME' -c \"select event_name,channel,status,last_error_code from nb_dispatch_log order by created_time desc limit 10;\""
 
   note "SENT = Novu accepted the trigger — NOT proof of delivery. Drive a real"
   note "complaint through PGR to populate this log (that's a separate action)."
+
+  # nb_dispatch_log.status=SENT only means Novu ACCEPTED the async trigger — Novu
+  # can still fail the actual send. Ask Novu itself: read recent messages and check
+  # their status is 'sent' (not 'error'); surface any errorId.
+  if [[ "$DRY_RUN" == true ]]; then
+    note "would also GET ${NOVU_API_LOCAL}/v1/messages?limit=20 (Authorization: ApiKey) and"
+    note "check the recent message statuses are 'sent' (not 'error'), surfacing any errorId."
+  else
+    local nkey; nkey="$(_read_novu_key)"
+    if [[ -z "$nkey" ]]; then
+      warn "no NOVU_API_KEY in .env — skipping the Novu message-status check (run step3 first)"
+    else
+      log "Checking recent Novu message delivery statuses (${NOVU_API_LOCAL}/v1/messages)…"
+      run "GET Novu messages (status = the real delivery truth)" \
+        "curl -s '$NOVU_API_LOCAL/v1/messages?limit=20' -H 'Authorization: ApiKey ${nkey}' | python3 -c 'import sys,json
+try: d=json.load(sys.stdin)
+except Exception: print(\"     (could not parse Novu messages response)\"); sys.exit(0)
+msgs=d.get(\"data\", d) if isinstance(d,dict) else d
+if isinstance(msgs,dict): msgs=msgs.get(\"data\",[])
+bad=0
+for m in (msgs or []):
+ st=str(m.get(\"status\",\"\")); ch=m.get(\"channel\",\"\")
+ eid=m.get(\"errorId\") or (m.get(\"providerResponse\") or {}).get(\"errorId\")
+ if st==\"error\": bad+=1
+ print(\"     %-9s %-8s %s\"%(ch,st,(\"errorId=%s\"%eid) if eid else \"\"))
+if bad: sys.stderr.write(\"     %d Novu message(s) in ERROR — see errorId above (NOT delivered)\\n\"%bad)'"
+      unset nkey
+    fi
+  fi
+  note "nb_dispatch_log SENT != delivered. The Novu message status (sent vs error)"
+  note "and the handset/inbox are the truth."
 
   verify "nb_dispatch_log table exists and is queryable" \
     "sudo docker exec '$DB_CONTAINER' psql -U '$DB_USER' -d '$DB_NAME' -c 'select 1 from nb_dispatch_log limit 1;' >/dev/null 2>&1 || sudo docker exec '$DB_CONTAINER' psql -U '$DB_USER' -d '$DB_NAME' -c \"select to_regclass('public.nb_dispatch_log');\" | grep -q nb_dispatch_log"
@@ -695,7 +777,15 @@ preflight() {
     if [[ "$perms" == "600" ]]; then ok "precondition: .env is mode 600"; else warn ".env is mode ${perms} (expected 600)"; fi
   fi
 
-  require "public gateway reachable ($PUBLIC_URL)" "http_reachable '$PUBLIC_URL'"
+  if [[ "$DRY_RUN" != true ]] && ! http_reachable "$PUBLIC_URL"; then
+    err "PRECONDITION FAILED: public gateway not reachable at PUBLIC_URL=${PUBLIC_URL}"
+    err "PUBLIC_URL has no safe default. Set it to your EXTERNAL origin and re-run, e.g.:"
+    err "    PUBLIC_URL=http://<host>.nip.io ./enable-notifications.sh"
+    err "(DIGIT_URL defaults to the in-box Kong at ${DIGIT_URL}; PUBLIC_URL is your public/nip.io origin.)"
+    return 1
+  else
+    require "public gateway reachable ($PUBLIC_URL)" "http_reachable '$PUBLIC_URL'"
+  fi
   require "admin creds mint a token (user=$ADMIN_USER, tenant=$NOTIF_TENANT)" "_have_token"
   require "tenant resolves ($NOTIF_TENANT via MDMS)" "http_reachable '$PUBLIC_URL/mdms-v2/v2/_search' || _have_token"
 }
@@ -731,8 +821,11 @@ THE ONE MANUAL INPUT (step 7) — export before running; NO defaults, never prin
 
 KEY ENV VARS (override on the command line; defaults are the reference-box values):
   DIGIT_HOME=$DIGIT_HOME   CCRS_HOME=$CCRS_HOME
-  DIGIT_URL=$DIGIT_URL   (in-box gateway origin, host-local API calls)
+  DIGIT_URL=$DIGIT_URL   (in-box Kong gateway origin, host-local API calls; default :18000)
   PUBLIC_URL=$PUBLIC_URL   (external origin — oauth + seed + ingress verify)
+                          NO SAFE DEFAULT — set to your external origin, e.g.
+                          PUBLIC_URL=http://<host>.nip.io ; preflight stops non-zero
+                          if it is unreachable.
   NOTIF_TENANT=$NOTIF_TENANT   ADMIN_USER=$ADMIN_USER   ADMIN_PASS=******
   NOVU_API_LOCAL=$NOVU_API_LOCAL
   NOVU_BASE_URL=$NOVU_BASE_URL   (bootstrap-novu-whatsapp.sh target — step8)

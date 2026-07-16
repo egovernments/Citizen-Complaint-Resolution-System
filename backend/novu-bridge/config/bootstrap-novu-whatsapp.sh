@@ -53,9 +53,23 @@ require_cmd jq
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NOVU_ENV_FILE="${NOVU_ENV_FILE:-${SCRIPT_DIR}/.env.novu}"
 if [[ -f "$NOVU_ENV_FILE" ]]; then
+  # EXPLICIT ENV WINS. The tracked .env.novu holds DUMMY values, so it must only
+  # FILL variables the caller did NOT already provide — never override them.
+  # Snapshot the vars we care about (name + whether set), source the file, then
+  # restore any that were already set so the dummy values can't clobber them.
+  _PRESET_VARS=(NOVU_BASE_URL NOVU_API_KEY TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN \
+    TWILIO_WHATSAPP_FROM NOVU_ENV_NAME NOVU_ENV_COLOR NOVU_INTEGRATION_NAME \
+    NOVU_INTEGRATION_ID NOVU_WORKFLOW_ID NOVU_WORKFLOW_NAME NOVU_SMS_BODY \
+    NOVU_EVENT_WORKFLOWS NOVU_SMS_WORKFLOW_ID NOVU_EMAIL_WORKFLOW_ID)
+  declare -A _PRESET_SNAP=()
+  for _v in "${_PRESET_VARS[@]}"; do
+    [[ -n "${!_v+x}" ]] && _PRESET_SNAP[$_v]="${!_v}"
+  done
   # shellcheck disable=SC1090
   set -a && source "$NOVU_ENV_FILE" && set +a
-  echo "Loaded environment from: $NOVU_ENV_FILE"
+  for _v in "${!_PRESET_SNAP[@]}"; do printf -v "$_v" '%s' "${_PRESET_SNAP[$_v]}"; export "$_v"; done
+  unset _PRESET_VARS _PRESET_SNAP _v
+  echo "Loaded environment from: $NOVU_ENV_FILE (explicit env preserved)"
 fi
 
 require_var NOVU_API_KEY
@@ -462,7 +476,7 @@ curl -X POST "$NOVU_BASE_URL/v1/events/trigger" \
   -H "Authorization: ApiKey $NOVU_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "name":"complaints-whatsapp-v1",
+    "name":"complaints-whatsapp",
     "to":{
       "subscriberId":"pb.amritsar:4fef6612-07a8-4751-97e9-0e0ac0687ebe",
       "phone":"whatsapp:+14155550123"
