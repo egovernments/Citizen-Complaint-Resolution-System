@@ -1,7 +1,7 @@
 [
   {
     "tenantId": "{tenantid}",
-    "code": "commonUiConfig.PrivacyPolicy",
+    "code": "commonMDMSConfig.PrivacyPolicy",
     "description": "Login/consent privacy policy content (localization keys)",
     "definition": {
       "type": "object",
