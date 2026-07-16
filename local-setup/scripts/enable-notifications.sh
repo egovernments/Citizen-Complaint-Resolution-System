@@ -15,14 +15,18 @@
 #   4. Open the channel gate (SMS,EMAIL,WHATSAPP) + config-admin proxy roles
 #   5. Ingress for the Novu dashboard (SHOWCASE + VALIDATE — site-specific)
 #   6. Seed the 4 notification MDMS masters at the state-root tenant
-#   7. Add a provider + enter Twilio creds in Novu (SHOWCASE + VALIDATE — secrets
-#      are entered by a human, never by this script)
-#   8. Create the per-channel Novu workflows (complaints-sms/-email/-whatsapp)
+#   7. Provider credentials (Twilio) — the ONE manual input. Require the three
+#      TWILIO_* env vars (secrets are never printed); stop with actionable
+#      instructions if any are missing. This is the only thing a human supplies.
+#   8. Bootstrap Novu: Twilio integration + per-channel workflows
+#      (complaints-sms/-email/-whatsapp) — one call to bootstrap-novu-whatsapp.sh
 #   9. Drive-and-verify: read nb_dispatch_log (SENT = trigger accepted, not proof
 #      of delivery)
 #
-# Everything is tunable via the env vars in the CONFIG block below; the baked-in
-# defaults are the exact values from the validated reference box.
+# The ONLY human input is exporting the three TWILIO_* env vars (step 7); every
+# other step is fully scripted. Everything is tunable via the env vars in the
+# CONFIG block below; the baked-in defaults are the exact values from the
+# validated reference box.
 #
 # Usage:
 #   ./enable-notifications.sh                 # run all steps in order
@@ -33,7 +37,9 @@
 #   ./enable-notifications.sh --only step6    # just seed the masters
 #   ./enable-notifications.sh --only step6,step8
 #   ./enable-notifications.sh --dry-run       # print what it WOULD do, run nothing
-#   ./enable-notifications.sh --yes           # don't pause at manual/showcase steps
+#   ./enable-notifications.sh --yes           # don't pause at the showcase step (5)
+#   TWILIO_ACCOUNT_SID=AC… TWILIO_AUTH_TOKEN=… \
+#     TWILIO_WHATSAPP_FROM=whatsapp:+14155238886 ./enable-notifications.sh
 #
 # NOTE: the human-facing "#" comments in here explain the WHY — an operator can
 # ignore them and just watch the coloured CLI narration. The narration
@@ -83,6 +89,23 @@ PROXY_ALLOWED_ROLES="${PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME,MDMS_
 WF_SMS="${WF_SMS:-complaints-sms}"                        # SMS workflow  (one `sms` step)
 WF_EMAIL="${WF_EMAIL:-complaints-email}"                  # EMAIL workflow (one `email` step — NOT sms; common mistake)
 WF_WA="${WF_WA:-complaints-whatsapp}"                     # WhatsApp workflow (one `sms` step; bridge adds whatsapp:+e164)
+
+# Novu bootstrap base URL — the internal Novu API origin that bootstrap-novu-whatsapp.sh
+# talks to. Default matches that script; override to NOVU_API_LOCAL if the internal
+# port isn't reachable from where this runs.
+NOVU_BASE_URL="${NOVU_BASE_URL:-$NOVU_API_LOCAL}" # bootstrap talks to the same novu-api as the mint step (not the script's stock :1336)
+
+# -----------------------------------------------------------------------------
+# Provider (Twilio) — the ONE manual input. NO DEFAULTS: these must be supplied
+# by the operator (export before running). Step 7 hard-stops if any is empty; the
+# values are handed straight to bootstrap-novu-whatsapp.sh and NEVER printed.
+#   TWILIO_ACCOUNT_SID     Twilio Console → Account Info → Account SID (starts AC…)
+#   TWILIO_AUTH_TOKEN      Twilio Console → Account Info → Auth Token   (secret)
+#   TWILIO_WHATSAPP_FROM   approved WhatsApp sender, e.g. whatsapp:+14155238886
+# -----------------------------------------------------------------------------
+TWILIO_ACCOUNT_SID="${TWILIO_ACCOUNT_SID:-}"              # REQUIRED — no default
+TWILIO_AUTH_TOKEN="${TWILIO_AUTH_TOKEN:-}"                # REQUIRED — no default (secret)
+TWILIO_WHATSAPP_FROM="${TWILIO_WHATSAPP_FROM:-}"          # REQUIRED — no default (e.g. whatsapp:+14155238886)
 
 # Postgres (for the nb_dispatch_log verify).
 DB_CONTAINER="${DB_CONTAINER:-docker-postgres}"           # postgres container name
@@ -259,8 +282,8 @@ step_title() {
     step4) echo "Open the channel gate + config-admin proxy roles" ;;
     step5) echo "Ingress for the Novu dashboard (showcase + validate)" ;;
     step6) echo "Seed the notification MDMS masters" ;;
-    step7) echo "Add a provider + Twilio creds in Novu (showcase + validate)" ;;
-    step8) echo "Create the per-channel Novu workflows" ;;
+    step7) echo "Provider credentials (Twilio) — the one manual input" ;;
+    step8) echo "Bootstrap Novu: Twilio integration + per-channel workflows" ;;
     step9) echo "Drive-and-verify via nb_dispatch_log" ;;
     *)     echo "?" ;;
   esac
@@ -487,36 +510,118 @@ do_step6() {
 }
 
 # =============================================================================
-# STEP 7 — Add a provider + enter Twilio creds in Novu (SHOWCASE + VALIDATE).
-#   This script NEVER handles the Twilio secrets. A human enters them in the Novu
-#   dashboard (Integration Store → Twilio): Account SID + Auth token +
-#   From = whatsapp:+<sender>, then Create Integration. We then VERIFY that a
-#   Twilio integration WITH credentials exists — without ever reading the secrets.
+# STEP 7 — Provider credentials (Twilio): the ONE manual input.
+#   The whole run is scripted EXCEPT the Twilio credentials, which the operator
+#   must supply as env vars. This step is a gate: it requires TWILIO_ACCOUNT_SID,
+#   TWILIO_AUTH_TOKEN and TWILIO_WHATSAPP_FROM to be set and non-empty. If any is
+#   missing it prints exactly what to export (and where to get it) and STOPS the
+#   run non-zero so nothing half-configures. Secret values are never echoed — we
+#   only ever show a 4-char prefix. Step 8 hands these straight to Novu.
+#   pre : (none — this is the input gate)
+#   act : validate the three TWILIO_* env vars are present
+#   post: all three present (masked confirmation); otherwise hard stop
 # =============================================================================
 do_step7() {
   step step7 "$(step_title step7)"
-  require "novu-api reachable" "http_reachable '$NOVU_API_LOCAL'"
 
-  warn "MANUAL: add the provider + enter Twilio credentials in Novu — this script will not."
-  cat <<EOF
+  # Which of the three required vars are unset/empty?
+  local missing=()
+  [[ -z "${TWILIO_ACCOUNT_SID}"   ]] && missing+=(TWILIO_ACCOUNT_SID)
+  [[ -z "${TWILIO_AUTH_TOKEN}"    ]] && missing+=(TWILIO_AUTH_TOKEN)
+  [[ -z "${TWILIO_WHATSAPP_FROM}" ]] && missing+=(TWILIO_WHATSAPP_FROM)
+
+  # Under --dry-run we don't hard-fail — just report what would be required.
+  if [[ "$DRY_RUN" == true ]]; then
+    if ((${#missing[@]})); then
+      note "would REQUIRE these (currently unset): ${missing[*]}"
+    else
+      note "Twilio creds present — would proceed (SID ${TWILIO_ACCOUNT_SID:0:4}…)"
+    fi
+    verify "the three TWILIO_* env vars are supplied" "true"
+    return 0
+  fi
+
+  if ((${#missing[@]})); then
+    err "Missing the one manual input — the Twilio credentials: ${missing[*]}"
+    cat >&2 <<EOF
    ----------------------------------------------------------------------------
-   Configurator → Notification Providers → Add   (or Novu dashboard → Integration
-   Store → Twilio), then enter, server-side in Novu:
-     Account SID : AC••••••••••••••••••••••••••••••   (your Twilio account)
-     Auth token  : ••••••••••••••••••••••••••••••••   (never entered here)
-     From        : whatsapp:+<your-approved-sender>
-   → Create Integration.
+   This is the ONLY thing a human supplies. Export the three Twilio env vars,
+   then re-run:  ./enable-notifications.sh --from step7
+
+     TWILIO_ACCOUNT_SID     Twilio Console → Account Info → Account SID (starts AC…)
+     TWILIO_AUTH_TOKEN      Twilio Console → Account Info → Auth Token  (keep secret)
+     TWILIO_WHATSAPP_FROM   your approved WhatsApp sender in E.164 with the
+                            whatsapp: prefix, e.g. whatsapp:+14155238886
+
+   Example:
+     export TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+     export TWILIO_AUTH_TOKEN=your-auth-token
+     export TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+     ./enable-notifications.sh --from step7
    ----------------------------------------------------------------------------
 EOF
-  pause "Create the Twilio integration in Novu, then continue to verify it exists."
+    return 1
+  fi
 
-  # Postcondition: a Twilio integration with credentials exists. We read the
-  # integration listing (which does NOT expose the secret token) and check that
-  # a providerId=twilio integration with an accountSid is present.
-  if [[ "$DRY_RUN" == true ]]; then verify "a Twilio integration exists in Novu" "true"; return 0; fi
+  # Present — confirm without ever printing a secret in full (mask to 4 chars).
+  ok "Twilio Account SID present (${TWILIO_ACCOUNT_SID:0:4}… — redacted)"
+  ok "Twilio Auth token present (${TWILIO_AUTH_TOKEN:0:4}… — redacted)"
+  ok "Twilio WhatsApp sender: ${TWILIO_WHATSAPP_FROM}"
+  note "these are handed to bootstrap-novu-whatsapp.sh in step8 — never printed again"
+}
+
+# =============================================================================
+# STEP 8 — Bootstrap Novu: Twilio integration + per-channel workflows.
+#   One idempotent call to bootstrap-novu-whatsapp.sh does ALL of it:
+#     * creates/finds the Novu environment,
+#     * creates the Twilio integration FROM THE TWILIO_* env vars (secrets flow
+#       straight env → Novu; never touch argv or the narration), and
+#     * creates the three per-channel workflows complaints-sms (sms step),
+#       complaints-email (email step — NOT sms), complaints-whatsapp (sms step).
+#   pre : NOVU_API_KEY minted (step3) + Twilio creds present (step7) + script on disk
+#   act : run bootstrap-novu-whatsapp.sh with NOVU_API_KEY + TWILIO_* + NOVU_BASE_URL
+#         + the three workflow ids
+#   post: a providerId=twilio integration WITH credentials exists AND /v2/workflows
+#         lists complaints-sms / complaints-email / complaints-whatsapp
+# =============================================================================
+do_step8() {
+  step step8 "$(step_title step8)"
+  local boot="$CCRS_HOME/backend/novu-bridge/config/bootstrap-novu-whatsapp.sh"
+
+  require "a NOVU_API_KEY is available (step3 done)" "test -n \"\$(_read_novu_key)\""
+  require "bootstrap script exists ($boot)" "test -f '$boot'"
+  require "Twilio creds present (step7 done)" \
+    "[[ -n \"\${TWILIO_ACCOUNT_SID}\" && -n \"\${TWILIO_AUTH_TOKEN}\" && -n \"\${TWILIO_WHATSAPP_FROM}\" ]]"
+
+  if [[ "$DRY_RUN" == true ]]; then
+    log "Would run bootstrap-novu-whatsapp.sh against ${NOVU_BASE_URL}:"
+    log "  → Twilio integration (from TWILIO_* env) + ${WF_SMS} / ${WF_EMAIL} / ${WF_WA}"
+    verify "a twilio integration + all three workflows exist" "true"
+    return 0
+  fi
+
   local key; key="$(_read_novu_key)"
   if [[ -z "$key" ]]; then err "no NOVU_API_KEY in .env — run step3 first"; return 1; fi
-  verify "a Twilio integration with credentials exists in Novu" \
+
+  log "Bootstrapping Novu (Twilio integration + per-channel workflows)…"
+  # Everything the bootstrap needs is passed via the CHILD ENVIRONMENT so secrets
+  # never appear on the command line or in this script's narration. NOVU_WORKFLOW_ID
+  # is pinned to the WhatsApp id explicitly; the sms/email ids follow WF_*.
+  if ! NOVU_API_KEY="$key" \
+       TWILIO_ACCOUNT_SID="$TWILIO_ACCOUNT_SID" \
+       TWILIO_AUTH_TOKEN="$TWILIO_AUTH_TOKEN" \
+       TWILIO_WHATSAPP_FROM="$TWILIO_WHATSAPP_FROM" \
+       NOVU_BASE_URL="$NOVU_BASE_URL" \
+       NOVU_WORKFLOW_ID="$WF_WA" \
+       NOVU_SMS_WORKFLOW_ID="$WF_SMS" \
+       NOVU_EMAIL_WORKFLOW_ID="$WF_EMAIL" \
+       bash "$boot"; then
+    err "bootstrap-novu-whatsapp.sh failed — see its output above"; unset key; return 1
+  fi
+
+  # Postcondition A: a providerId=twilio integration WITH credentials exists.
+  # We read the integration listing (which does NOT expose the secret token).
+  verify "a providerId=twilio integration with credentials exists in Novu" \
     "curl -s '$NOVU_API_LOCAL/v1/integrations' -H 'Authorization: ApiKey ${key}' | python3 -c 'import sys,json
 d=json.load(sys.stdin); data=d.get(\"data\", d)
 def walk(o):
@@ -526,71 +631,21 @@ def walk(o):
  if isinstance(o,list): return any(walk(v) for v in o)
  return False
 sys.exit(0 if walk(data) else 1)'"
-  unset key
-}
 
-# =============================================================================
-# STEP 8 — Create the per-channel Novu workflows.
-#   act : POST complaints-sms (sms step), complaints-email (EMAIL step — NOT sms),
-#         complaints-whatsapp (sms step) to $NOVU_API_LOCAL/v2/workflows if absent.
-#   post: GET /v2/workflows lists all three with the right step types.
-# =============================================================================
-_ensure_workflow() {   # _ensure_workflow <workflowId> <steps-json>
-  local wid="$1" steps="$2" key
-  key="$(_read_novu_key)"
-  [[ -n "$key" ]] || { err "no NOVU_API_KEY in .env — run step3 first"; return 1; }
-  if curl -s "$NOVU_API_LOCAL/v2/workflows?limit=100" -H "Authorization: ApiKey $key" 2>/dev/null \
-       | grep -q "\"workflowId\":\"$wid\""; then
-    ok "workflow ${wid} already exists"
-    return 0
-  fi
-  log "Creating workflow ${wid}…"
-  local payload
-  payload="$(printf '{"workflowId":"%s","name":"%s","active":true,"validatePayload":false,"isTranslationEnabled":false,"steps":%s}' "$wid" "$wid" "$steps")"
-  curl -s -o /dev/null -w '' -X POST "$NOVU_API_LOCAL/v2/workflows" \
-    -H "Authorization: ApiKey $key" -H "Content-Type: application/json" -d "$payload"
-  unset key
-}
-do_step8() {
-  step step8 "$(step_title step8)"
-  require "a NOVU_API_KEY is available (step3 done)" "test -n \"\$(_read_novu_key)\""
-
-  if [[ "$DRY_RUN" == true ]]; then
-    log "Would create ${WF_SMS} (sms), ${WF_EMAIL} (email), ${WF_WA} (sms)"
-    verify "all three workflows exist with correct step types" "true"
-    return 0
-  fi
-
-  # sms/whatsapp use an `sms` step; email uses an `email` step (NOT sms — the
-  # single most common mistake wiring these up).
-  local sms_step='[{"name":"sms-step","type":"sms","controlValues":{"body":"{{ payload.body }}"}}]'
-  local email_step='[{"name":"email-step","type":"email","controlValues":{"subject":"{{ payload.subject }}","body":"{{ payload.body }}","editorType":"html","disableOutputSanitization":true}}]'
-
-  _ensure_workflow "$WF_SMS"   "$sms_step"
-  _ensure_workflow "$WF_EMAIL" "$email_step"
-  _ensure_workflow "$WF_WA"    "$sms_step"
-
-  # Postcondition: all three present, each with the expected step type.
-  local key; key="$(_read_novu_key)"
-  verify "workflows ${WF_SMS}(sms) ${WF_EMAIL}(email) ${WF_WA}(sms) all present with right step types" \
+  # Postcondition B: complaints-sms / complaints-email / complaints-whatsapp present.
+  verify "workflows ${WF_SMS} ${WF_EMAIL} ${WF_WA} all present" \
     "curl -s '$NOVU_API_LOCAL/v2/workflows?limit=100' -H 'Authorization: ApiKey ${key}' | WF_SMS='$WF_SMS' WF_EMAIL='$WF_EMAIL' WF_WA='$WF_WA' python3 -c 'import os,sys,json
-want={os.environ[\"WF_SMS\"]:\"sms\",os.environ[\"WF_EMAIL\"]:\"email\",os.environ[\"WF_WA\"]:\"sms\"}
-d=json.load(sys.stdin); wfs=[]
+want=[os.environ[\"WF_SMS\"],os.environ[\"WF_EMAIL\"],os.environ[\"WF_WA\"]]
+d=json.load(sys.stdin); ids=set()
 def walk(o):
  if isinstance(o,dict):
-  if \"workflowId\" in o and \"steps\" in o: wfs.append(o)
+  if o.get(\"workflowId\"): ids.add(o[\"workflowId\"])
   for v in o.values(): walk(v)
  elif isinstance(o,list):
   for v in o: walk(v)
 walk(d)
-by={w.get(\"workflowId\"):w for w in wfs}
-ok=True
-for wid,t in want.items():
- w=by.get(wid); types=[s.get(\"type\") for s in (w.get(\"steps\") or [])] if w else []
- good=w is not None and t in types
- sys.stderr.write(\"     %-22s %s (steps=%s)\\n\"%(wid,\"OK\" if good else \"MISSING/BADTYPE\",\",\".join(map(str,types))))
- ok=ok and good
-sys.exit(0 if ok else 1)'"
+for w in want: sys.stderr.write(\"     %-22s %s\\n\"%(w,\"OK\" if w in ids else \"MISSING\"))
+sys.exit(0 if all(w in ids for w in want) else 1)'"
   unset key
 }
 
@@ -663,11 +718,16 @@ OPTIONS:
   --to    <step>        Run up to and including <step>.
   --only  <step[,...]>  Run only these steps (e.g. --only step6 or --only step6,step8).
   --dry-run             Print what would run; execute nothing.
-  --yes                 Do not pause at the manual/showcase steps (5 and 7).
+  --yes                 Do not pause at the showcase step (5).
   --no-color            Disable coloured output (also honours NO_COLOR).
 
 STEPS (run in order by default; preflight always runs first):
 $(for s in "${ALL_STEPS[@]}"; do printf '  %-7s %s\n' "$s" "$(step_title "$s")"; done)
+
+THE ONE MANUAL INPUT (step 7) — export before running; NO defaults, never printed:
+  TWILIO_ACCOUNT_SID     Twilio Console → Account Info → Account SID (starts AC…)
+  TWILIO_AUTH_TOKEN      Twilio Console → Account Info → Auth Token  (secret)
+  TWILIO_WHATSAPP_FROM   approved WhatsApp sender, e.g. whatsapp:+14155238886
 
 KEY ENV VARS (override on the command line; defaults are the reference-box values):
   DIGIT_HOME=$DIGIT_HOME   CCRS_HOME=$CCRS_HOME
@@ -675,9 +735,11 @@ KEY ENV VARS (override on the command line; defaults are the reference-box value
   PUBLIC_URL=$PUBLIC_URL   (external origin — oauth + seed + ingress verify)
   NOTIF_TENANT=$NOTIF_TENANT   ADMIN_USER=$ADMIN_USER   ADMIN_PASS=******
   NOVU_API_LOCAL=$NOVU_API_LOCAL
+  NOVU_BASE_URL=$NOVU_BASE_URL   (bootstrap-novu-whatsapp.sh target — step8)
   NOVU_BRIDGE_IMAGE=$NOVU_BRIDGE_IMAGE
   CHANNELS_ENABLED=$CHANNELS_ENABLED
   PROXY_ALLOWED_ROLES=$PROXY_ALLOWED_ROLES
+  TWILIO_ACCOUNT_SID=$([[ -n "${TWILIO_ACCOUNT_SID}" ]] && echo '<set>' || echo '<unset>')   TWILIO_AUTH_TOKEN=$([[ -n "${TWILIO_AUTH_TOKEN}" ]] && echo '<set>' || echo '<unset>')   TWILIO_WHATSAPP_FROM=${TWILIO_WHATSAPP_FROM:-<unset>}
   DB_CONTAINER=$DB_CONTAINER   DB_USER=$DB_USER   DB_NAME=$DB_NAME
   ENABLE_INGRESS=$ENABLE_INGRESS   DRY_RUN=$DRY_RUN
 
@@ -686,6 +748,8 @@ EXAMPLES:
   enable-notifications.sh --from step4
   enable-notifications.sh --only step6
   enable-notifications.sh --dry-run
+  TWILIO_ACCOUNT_SID=AC… TWILIO_AUTH_TOKEN=… TWILIO_WHATSAPP_FROM=whatsapp:+14155238886 \\
+    enable-notifications.sh --from step7
   PUBLIC_URL=http://1.2.3.4.nip.io ADMIN_USER=ADMIN enable-notifications.sh
 EOF
 }
