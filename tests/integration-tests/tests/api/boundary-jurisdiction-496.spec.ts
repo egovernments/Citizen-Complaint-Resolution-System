@@ -35,7 +35,7 @@ import { requires } from '../utils/capabilities';
 import { fetchEmployees, fetchBoundaryTree, type BoundaryNode } from '../utils/probes';
 
 test.describe('lifecycle — boundary jurisdiction filter for ward CSR #496', () => {
-  test('boundary-relationships API returns only the ward subtree', async ({ request }) => {
+  test('boundary-relationships API returns only the ward subtree', { tag: ['@persona:employee'] }, async ({ request }) => {
     requires(test, 'personas.ward-scoped-csr');
 
     const profile = getProfile();

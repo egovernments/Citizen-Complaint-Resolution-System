@@ -21,6 +21,7 @@ const CITIZEN_PROFILE_URL = '/digit-ui/citizen/user/profile';
 test.describe('citizen profile — sidebar Avatar refresh on save #556 (v2 port)', () => {
   test.fixme(
     'sidebar avatar img.src changes after save without a hard refresh',
+    { tag: ['@persona:citizen'] },
     async ({ page }) => {
       const mobile = generateCitizenPhone();
 

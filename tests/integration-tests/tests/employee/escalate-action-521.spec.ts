@@ -77,7 +77,7 @@ test.beforeAll(async () => {
 test.describe('employee — manual Escalate action #521', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('PENDINGATLME → Escalate → PENDINGATSUPERVISOR (workflow state moves)', async ({ page }) => {
+  test('PENDINGATLME → Escalate → PENDINGATSUPERVISOR (workflow state moves)', { tag: ['@persona:employee'] }, async ({ page }) => {
     requires(test, CAPABILITY, 'employee #521 escalate');
     test.skip(!!seedSkipReason, seedSkipReason);
     test.skip(!COMPLAINT_ID, 'no complaint at PENDINGATLME available (seed produced no id)');

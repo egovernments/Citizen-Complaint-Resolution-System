@@ -71,7 +71,7 @@ async function runSearch(page: Page): Promise<void> {
 test.describe('employee inbox-v2 — search', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('search by complaint number returns exactly that complaint @p1', async ({ page }) => {
+  test('search by complaint number returns exactly that complaint @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!setupSkip, setupSkip);
     await openInbox(page);
 
@@ -82,7 +82,7 @@ test.describe('employee inbox-v2 — search', () => {
     expect(rows[0].srid).toBe(srid);
   });
 
-  test('search by mobile number returns the matching complaint @p1', async ({ page }) => {
+  test('search by mobile number returns the matching complaint @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!setupSkip, setupSkip);
     await openInbox(page);
 
@@ -93,7 +93,7 @@ test.describe('employee inbox-v2 — search', () => {
     expect(rows.some((r) => r.srid === srid), 'the seeded complaint is among the mobile matches').toBeTruthy();
   });
 
-  test('search for a well-formed but non-existent complaint number returns nothing @p1', async ({ page }) => {
+  test('search for a well-formed but non-existent complaint number returns nothing @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!setupSkip, setupSkip);
     await openInbox(page);
 

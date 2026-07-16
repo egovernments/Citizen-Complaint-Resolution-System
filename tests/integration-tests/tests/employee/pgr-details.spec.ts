@@ -126,7 +126,7 @@ async function valueForLabel(page: Page, label: string): Promise<string> {
 test.describe('PGR complaint details — Flow 5 render slice', () => {
   // Each test gets its own page context — no shared state between stories.
 
-  test('Story 5.1 — details page loads without error (terminal fixture) @p0', async ({ page }) => {
+  test('Story 5.1 — details page loads without error (terminal fixture) @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     const heading = page.getByText('Complaint Details', { exact: true }).first();
@@ -137,14 +137,14 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
     expect(body).not.toMatch(/Complaint not found/i);
   });
 
-  test('Story 5.4 — Complaint No. label + value match the SRID @p0', async ({ page }) => {
+  test('Story 5.4 — Complaint No. label + value match the SRID @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     const value = await valueForLabel(page, 'Complaint No.');
     expect(value).toBe(TERMINAL_COMPLAINT_ID);
   });
 
-  test('Story 5.5 — Current Status chip renders localized status text @p0', async ({ page }) => {
+  test('Story 5.5 — Current Status chip renders localized status text @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     const status = await valueForLabel(page, 'Current Status');
@@ -156,7 +156,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
     expect(status).not.toMatch(/^[A-Z_]+$/);
   });
 
-  test('Story 5.6 — complaint classification rows render localized values @p1', async ({ page }) => {
+  test('Story 5.6 — complaint classification rows render localized values @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
     await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     // PGRDetails.js renders the classification block between the
@@ -196,14 +196,14 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
     }
   });
 
-  test('Story 5.9 — Filed Date renders in DD/MM/YYYY @p1', async ({ page }) => {
+  test('Story 5.9 — Filed Date renders in DD/MM/YYYY @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
     await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     const filed = await valueForLabel(page, 'Filed Date');
     expect(filed).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
   });
 
-  test('Story 5.16 — Complaint Timeline section renders with checkpoint rows @p0', async ({ page }) => {
+  test('Story 5.16 — Complaint Timeline section renders with checkpoint rows @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     // Accept the localized English label OR the raw i18n key / sw_KE rendering.
@@ -218,7 +218,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
     expect(count).toBeGreaterThanOrEqual(2);
   });
 
-  test('Story 5.18 — timeline actor name is clean (no role-list concat) — #524', async ({ page }) => {
+  test('Story 5.18 — timeline actor name is clean (no role-list concat) — #524', { tag: ['@persona:employee'] }, async ({ page }) => {
     // #524 fix is now in-repo (digit-ui-esbuild TimeLineWrapper.js `formatPerson`
     // returns just `person.name`), so this asserts the post-fix shape directly.
     // Previously masked with `test.fail(true)` pending a deploy; unmasked once
@@ -238,7 +238,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
     expect(timelineText).not.toMatch(/SUPERUSER/);
   });
 
-  test('Story 5.24a — Take Action HIDDEN on terminal-state complaint @p1', async ({ page }) => {
+  test('Story 5.24a — Take Action HIDDEN on terminal-state complaint @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
     await openDetails(page, TERMINAL_COMPLAINT_ID);
 
     // CLOSEDAFTERREJECTION has no nextActions for any role, so the
@@ -253,7 +253,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
     await expect(takeAction).toHaveCount(0);
   });
 
-  test('Story 5.24b — Take Action VISIBLE on non-terminal complaint @p0', async ({ page }) => {
+  test('Story 5.24b — Take Action VISIBLE on non-terminal complaint @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     await openDetails(page, NONTERMINAL_COMPLAINT_ID);
 
     // The take-action control renders ONLY when the workflow returns

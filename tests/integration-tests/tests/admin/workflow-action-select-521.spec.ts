@@ -20,7 +20,7 @@ import { loadAuth, pgrSearch } from '../utils/manage/api';
 const COMPLAINTS_LIST_URL = '/configurator/manage/complaints';
 
 test.describe('admin Workflow Action — Escalate visible #521', () => {
-  test('Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME', async ({
+  test('Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME', { tag: ['@persona:admin'] }, async ({
     page,
   }) => {
     // The dropdown can only offer Escalate if the tenant's PGR workflow defines

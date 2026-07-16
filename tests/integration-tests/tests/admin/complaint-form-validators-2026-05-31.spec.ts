@@ -64,7 +64,7 @@ function invalidPostalSample(): string {
 }
 
 test.describe('admin complaint create — validator bundle 2026-05-30', () => {
-  test('users + edit + create + validators bidirectional', async ({ page }) => {
+  test('users + edit + create + validators bidirectional', { tag: ['@persona:admin'] }, async ({ page }) => {
     // A mobile number valid for THIS tenant's MDMS rule (Kenya: 07…, Maputo:
     // 8…). Derived from `common-masters.MobileNumberValidation` so the POS
     // assertion below isn't pinned to a Kenya-only literal.

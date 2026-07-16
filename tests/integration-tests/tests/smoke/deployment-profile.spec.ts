@@ -13,7 +13,7 @@ import { test, expect } from '@playwright/test';
 import { getProfile } from '../utils/profile';
 import { auditExpectations, loadExpectations } from '../utils/capabilities';
 
-test('deployment profile is non-empty', async () => {
+test('deployment profile is non-empty', { tag: ['@persona:system'] }, async () => {
   const p = getProfile();
   expect(p.boundary.nodeCount, 'boundary hierarchy is empty').toBeGreaterThan(0);
   expect(p.boundary.levels.length, 'boundary hierarchy has no cascade').toBeGreaterThanOrEqual(2);
@@ -24,7 +24,7 @@ test('deployment profile is non-empty', async () => {
   expect(p.tenant.label, 'no tenant display label').not.toBe('');
 });
 
-test('deployment meets its declared expectations', async () => {
+test('deployment meets its declared expectations', { tag: ['@persona:system'] }, async () => {
   const p = getProfile();
   const { name } = loadExpectations();
   const rows = auditExpectations(p);

@@ -98,7 +98,7 @@ async function timelineText(page: Page): Promise<string> {
 test.describe('employee PGR lifecycle through the Take-Action UI', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('ASSIGN (GRO) → PENDINGATLME, then RESOLVE (LME) → RESOLVED @p0', async ({ browser }) => {
+  test('ASSIGN (GRO) → PENDINGATLME, then RESOLVE (LME) → RESOLVED @p0', { tag: ['@persona:employee'] }, async ({ browser }) => {
     test.skip(!!setupSkip, setupSkip);
     expect(srid).not.toBe('');
 

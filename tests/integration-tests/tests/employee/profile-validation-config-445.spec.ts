@@ -27,7 +27,7 @@ const CRASH_PATTERNS = [
 test.describe('employee profile — validationConfig null-safety #445', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('post-auth UserProfile mount + onChange do not throw', async ({ page }) => {
+  test('post-auth UserProfile mount + onChange do not throw', { tag: ['@persona:employee'] }, async ({ page }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => {
       pageErrors.push(`${err.name}: ${err.message}`);

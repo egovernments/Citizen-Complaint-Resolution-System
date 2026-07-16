@@ -33,7 +33,7 @@ const COMPLAINT_TYPE_URL = '/digit-ui/citizen/pgr/complaint-type';
 test.describe('citizen complaint — attachment lifecycle #555', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('upload preview renders, then detail page surfaces the same image', async ({ page }) => {
+  test('upload preview renders, then detail page surfaces the same image', { tag: ['@persona:citizen'] }, async ({ page }) => {
     // ============ OTP login (uses suite-wide provisioned citizen) ============
     await citizenOtpLogin(page);
     await page.waitForTimeout(3_000);

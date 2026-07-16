@@ -162,7 +162,7 @@ async function showAllRows(page: Page): Promise<void> {
 test.describe('employee inbox-v2 — filters narrow the result set', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('status filter → only rows in the chosen workflow state @p0', async ({ page }) => {
+  test('status filter → only rows in the chosen workflow state @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!seedSkip, seedSkip);
     await openInbox(page);
 
@@ -195,7 +195,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     expect(cleared.every((r) => r.status !== rejectedLabel), 'after clear, back to non-REJECTED default').toBeTruthy();
   });
 
-  test('complaint-type filter → only rows of the chosen serviceCode @p0', async ({ page }) => {
+  test('complaint-type filter → only rows of the chosen serviceCode @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!seedSkip, seedSkip);
     test.skip(!secondTypeAvailable, 'deployment has only one complaint type — nothing to narrow between');
     await openInbox(page);
@@ -238,7 +238,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     expect(matchedCode.length).toBeGreaterThan(0);
   });
 
-  test('locality filter → only rows in the chosen leaf boundary @p0', async ({ page }) => {
+  test('locality filter → only rows in the chosen leaf boundary @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!seedSkip, seedSkip);
     await openInbox(page);
 

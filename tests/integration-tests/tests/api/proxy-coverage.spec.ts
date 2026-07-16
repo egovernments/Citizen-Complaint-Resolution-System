@@ -331,7 +331,7 @@ test.describe('API Proxy Coverage', () => {
 
 test.describe('Domain Configuration', () => {
   test('KC client has deployment domain in redirect URIs', {
-    tag: ['@area:keycloak', '@layer:api'],
+    tag: ['@area:keycloak', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
     test.skip(!(await kcReachable()), `Keycloak realm ${KC_REALM} discovery not reachable — KC overlay not deployed here.`);
     const deploymentDomain = new URL(BASE_URL).origin;
@@ -372,7 +372,7 @@ test.describe('Domain Configuration', () => {
   });
 
   test('KC CORS allows deployment domain', {
-    tag: ['@area:keycloak', '@layer:api'],
+    tag: ['@area:keycloak', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
     test.skip(!(await kcReachable()), `Keycloak realm ${KC_REALM} discovery not reachable — KC overlay not deployed here.`);
     await page.goto(`${BASE_URL}/digit-ui/citizen`, {

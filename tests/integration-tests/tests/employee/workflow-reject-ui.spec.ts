@@ -64,7 +64,7 @@ test.beforeAll(async () => {
 test.describe('employee PGR REJECT through the Take-Action UI', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('REJECT (GRO) with a rejection reason → REJECTED, reason on timeline @p0', async ({ page }) => {
+  test('REJECT (GRO) with a rejection reason → REJECTED, reason on timeline @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!setupSkip, setupSkip);
     test.skip(!reasonsSeeded, 'no RAINMAKER-PGR.RejectionReasons seeded on this deployment');
 

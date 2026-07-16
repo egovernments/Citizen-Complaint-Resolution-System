@@ -48,7 +48,7 @@ const ASSIGNED_COMPLAINT_ID =
 test.describe('employee digit-ui shell bundle', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('login + chrome + visible decrypt + inbox honest drives', async ({ page }) => {
+  test('login + chrome + visible decrypt + inbox honest drives', { tag: ['@persona:employee'] }, async ({ page }) => {
     // Onboarding-data gap (#505 brand chrome): the login banner brand color
     // (#505 sub-1) and the 96x96 banner/header logo (#505 sub-3) only render
     // once the tenant's branding (logo asset + theme color) is onboarded via
