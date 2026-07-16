@@ -1144,27 +1144,42 @@ public class NotificationService {
         org.egov.pgr.web.models.Service service = request.getService();
         String tenantId = service.getTenantId();
         RequestInfo ri = request.getRequestInfo();
+        // Base placeholders that need NO localization: set these FIRST and independently, so a
+        // localization-service outage cannot blank them. (Previously getLocalizationMessages was the
+        // first call inside this try; when it threw — e.g. a downstream mis-instrumented JDBC driver
+        // 400 — id/date/complaint_type were all left unset, and the WhatsApp Content-SID send then
+        // shipped empty contentVariables → Twilio 21656.)
         try {
-            String loc = notificationUtil.getLocalizationMessages(tenantId, ri, PGR_MODULE);
             put(v, "id", service.getServiceRequestId());
-            if (StringUtils.hasText(service.getServiceCode())) {
-                String ct = notificationUtil.getCustomizedMsgForPlaceholder(loc,
-                        "pgr.complaint.category." + service.getServiceCode());
-                // Fall back to the raw service code so a missing localization key never ships a
-                // literal {complaint_type} to the recipient.
-                put(v, "complaint_type", StringUtils.hasText(ct) ? ct : service.getServiceCode());
-            }
-            if (StringUtils.hasText(service.getApplicationStatus())) {
-                String st = notificationUtil.getCustomizedMsgForPlaceholder(loc,
-                        "CS_COMMON_" + service.getApplicationStatus());
-                put(v, "status", StringUtils.hasText(st) ? st : service.getApplicationStatus());
-            }
             put(v, "date", formatCreatedDate(service));
+            // complaint_type falls back to the raw service code; localized label enriched below.
+            if (StringUtils.hasText(service.getServiceCode()))
+                put(v, "complaint_type", service.getServiceCode());
+            if (StringUtils.hasText(service.getApplicationStatus()))
+                put(v, "status", service.getApplicationStatus());
             if (request.getWorkflow() != null) put(v, "additional_comments", request.getWorkflow().getComments());
             if (service.getRating() != null) put(v, "rating", service.getRating().toString());
             if (service.getCitizen() != null) put(v, "citizen_name", service.getCitizen().getName());
         } catch (Exception e) {
             log.warn("Failed building base placeholders for {}", service.getServiceRequestId(), e);
+        }
+        // Localized enrichment (nicer complaint_type / status labels). Isolated: a localization
+        // outage must NOT abort the base placeholders above.
+        try {
+            String loc = notificationUtil.getLocalizationMessages(tenantId, ri, PGR_MODULE);
+            if (StringUtils.hasText(service.getServiceCode())) {
+                String ct = notificationUtil.getCustomizedMsgForPlaceholder(loc,
+                        "pgr.complaint.category." + service.getServiceCode());
+                if (StringUtils.hasText(ct)) put(v, "complaint_type", ct);
+            }
+            if (StringUtils.hasText(service.getApplicationStatus())) {
+                String st = notificationUtil.getCustomizedMsgForPlaceholder(loc,
+                        "CS_COMMON_" + service.getApplicationStatus());
+                if (StringUtils.hasText(st)) put(v, "status", st);
+            }
+        } catch (Exception e) {
+            log.warn("Localized placeholder enrichment unavailable for {}: {}",
+                    service.getServiceRequestId(), e.getMessage());
         }
         // {download_link} is isolated in its own try: it makes an HTTP call to the url-shortening
         // service, and an outage there (e.g. a mis-instrumented JDBC driver returning 400) must NOT
