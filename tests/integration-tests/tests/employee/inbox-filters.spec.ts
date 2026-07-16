@@ -26,8 +26,8 @@
  * "Assigned to All" radio means it sees every complaint, not just its own.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { BASE_URL, TENANT } from '../utils/env';
-import { getPersona, resolveSeedPlan, type ResolvedPersona } from '../utils/personas';
+import { BASE_URL } from '../utils/env';
+import { getPersona, resolveSeedPlan, serviceCodesFor, type ResolvedPersona } from '../utils/personas';
 import { seedComplaintAsCitizen } from '../utils/seed';
 import {
   loginEmployeeBrowser, readInboxRows, apiReject, apiServiceCode, type Principal,
@@ -51,20 +51,6 @@ let serviceCodeA = '';
 let serviceCodeB = '';
 let secondTypeAvailable = true;
 
-/** Fetch the leaf serviceCodes from RAINMAKER-PGR.ComplaintHierarchy (the app's
- *  source of truth now that ServiceDefs is empty on CRS tenants). */
-async function fetchLeafServiceCodes(token: string): Promise<string[]> {
-  try {
-    const j: any = await fetch(`${BASE_URL}/mdms-v2/v2/_search`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ RequestInfo: { authToken: token }, MdmsCriteria: { tenantId: TENANT, schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy', limit: 200 } }),
-    }).then((r) => r.json());
-    const rows = (j.mdms || []).map((m: any) => m.data).filter(Boolean);
-    const parents = new Set(rows.map((x: any) => x.parentCode).filter(Boolean));
-    return rows.filter((x: any) => !parents.has(x.code)).map((x: any) => x.code);
-  } catch { return []; }
-}
-
 async function seedOpen(serviceCode: string, localityCode: string): Promise<string> {
   const { srid } = await seedComplaintAsCitizen({
     serviceCode, localityCode, description: `inbox-filter seed ${serviceCode} ${Date.now()}`,
@@ -85,12 +71,22 @@ test.beforeAll(async () => {
     admin = toPrincipal(employee);
     gro = toPrincipal(plan.actor);
 
-    serviceCodeA = plan.serviceCode;
+    // Seed a service the VIEWER's department owns — the inbox scopes by
+    // department as well as jurisdiction, so plan.serviceCode (picked for
+    // ASSIGN-ability, not visibility) can be invisible to them. On bomet the
+    // viewer is an ENV GRO while plan.serviceCode is RudeBehavior/WATER_ENV, so
+    // every seeded row was filtered out and the inbox looked "empty of ours".
+    const visible = serviceCodesFor(employee);
+    if (!visible.length) {
+      seedSkip = `inbox viewer ${employee.username} holds no department that owns a complaint type (departments: ${employee.departments.join('|') || 'none'})`;
+      return;
+    }
+    serviceCodeA = visible[0];
     const localityA = plan.localityCode;
 
-    // A second, distinct complaint type (for the complaint-type narrowing test).
-    const leaves = await fetchLeafServiceCodes(employee.token);
-    serviceCodeB = leaves.find((c) => c !== serviceCodeA) || '';
+    // A second, distinct complaint type (for the complaint-type narrowing test)
+    // — also department-visible, else the filter has nothing to narrow to.
+    serviceCodeB = visible.find((c) => c !== serviceCodeA) || '';
     secondTypeAvailable = !!serviceCodeB;
 
     // Guarantee ≥1 OPEN complaint of type A and (if available) type B.

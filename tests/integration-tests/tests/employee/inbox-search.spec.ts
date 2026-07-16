@@ -15,7 +15,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { BASE_URL } from '../utils/env';
-import { getPersona } from '../utils/personas';
+import { getPersona, serviceCodesFor } from '../utils/personas';
 import { seedComplaintAsCitizen } from '../utils/seed';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
 import { loginEmployeeBrowser, readInboxRows } from '../utils/employee-ui';
@@ -41,7 +41,22 @@ test.beforeAll(async () => {
   }
   phone = fixture.mobile;
   try {
-    const created = await seedComplaintAsCitizen({ description: `inbox-search seed ${new Date().toISOString()}` });
+    // Seed a service the inbox VIEWER's department owns. The inbox scopes by
+    // department as well as jurisdiction, so the profile's default seed service
+    // (chosen for ASSIGN-ability) can be one this viewer is structurally blind
+    // to — on bomet the viewer is an ENV GRO while the default is
+    // RudeBehavior/WATER_ENV, so searching the seeded SRID or the citizen's
+    // mobile returned nothing even though the complaint existed.
+    const employee = await getPersona('inbox-viewer');
+    const visible = serviceCodesFor(employee);
+    if (!visible.length) {
+      setupSkip = `inbox viewer ${employee.username} holds no department that owns a complaint type (departments: ${employee.departments.join('|') || 'none'})`;
+      return;
+    }
+    const created = await seedComplaintAsCitizen({
+      serviceCode: visible[0],
+      description: `inbox-search seed ${new Date().toISOString()}`,
+    });
     srid = created.srid;
   } catch (err: any) {
     setupSkip = `seed failed: ${err?.message?.slice(0, 200)}`;
