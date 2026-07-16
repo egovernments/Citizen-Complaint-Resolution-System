@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { MapContainer, TileLayer, Marker, Tooltip, Polygon, GeoJSON, useMapEvents, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { CardLabel, Loader, Toast } from "@egovernments/digit-ui-react-components";
+import { CardLabel, Loader } from "@egovernments/digit-ui-react-components";
+import { Toast } from "@egovernments/digit-ui-components";
 import { useTranslation } from "react-i18next";
 import _ from "lodash";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
@@ -88,6 +89,8 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   // address-text path; map TILE labels are baked into the CARTO raster
   // tiles and require a vector-tile provider swap to translate.)
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
+  // Country scoping for the OSM geocoder (was hardcoded to a Kenya viewbox).
+  const nominatimCountry = window?.globalConfigs?.getConfig?.("NOMINATIM_COUNTRYCODES") || "mz";
   // Zero Mile Stone, Nagpur (Geographical Center of India) — used only as the last-resort fallback when the tenant has not configured MAP_CENTER in globalConfigs.
   const INDIA_CENTER = { lat: 21.1498, lng: 79.0806 };
   const DEFAULT_CENTER = window?.globalConfigs?.getConfig?.("MAP_CENTER") || INDIA_CENTER;
@@ -198,7 +201,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setSelectedWard(ward?.code || null);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&countrycodes=ke`,
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&countrycodes=${nominatimCountry}`,
         { headers: { "Accept-Language": nominatimLang } }
       );
       const data = await response.json();
@@ -254,7 +257,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     }
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&countrycodes=ke&viewbox=36.60,-1.55,37.10,-1.15&bounded=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&countrycodes=${nominatimCountry}`,
         { headers: { "Accept-Language": nominatimLang } }
       );
       const data = await response.json();
@@ -298,7 +301,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setIsSearching(true);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&countrycodes=ke&viewbox=36.60,-1.55,37.10,-1.15&bounded=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&countrycodes=${nominatimCountry}`,
         { headers: { "Accept-Language": nominatimLang } }
       );
       const data = await response.json();
@@ -359,20 +362,19 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           };
           const specificKey = KEY_BY_CODE[error?.code];
           const specific = specificKey ? t(specificKey) : null;
-          // Use the per-code message when it is localised; otherwise fall back
-          // to the generic label + the raw message so the cause is visible
-          // on-device even before the new keys are uploaded.
-          const label =
-            specific && specific !== specificKey
-              ? specific
-              : `${t("CS_GEOLOCATION_ERROR")}${error?.message ? ` (${error.message})` : ""}`;
+          // Only ever show localized text — the raw browser message stays in the
+          // console (QA: no technical detail in the toast).
+          const label = specific && specific !== specificKey ? specific : t("CS_GEOLOCATION_ERROR");
           setShowToast({ key: "error", label });
           setIsSearching(false);
         },
         {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
+          // Coarse (network) positioning with a recent cached fix accepted:
+          // high-accuracy + maximumAge 0 guarantees a timeout on GPS-less
+          // desktops. 15s cap for slow network lookups.
+          enableHighAccuracy: false,
+          timeout: 15000,
+          maximumAge: 30000,
         }
       );
     } else {
@@ -732,10 +734,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
 
       {showToast && (
         <Toast
-          error={showToast.key === "error"}
+          type={showToast.key === "error" ? "error" : "success"}
           label={showToast.label}
           onClose={closeToast}
-          isDleteBtn={true}
         />
       )}
     </div>
