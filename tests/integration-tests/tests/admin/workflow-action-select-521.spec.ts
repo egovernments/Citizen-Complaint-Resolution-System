@@ -14,6 +14,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { BASE_URL, TENANT } from '../utils/env';
+import { requires } from '../utils/capabilities';
 import { loadAuth, pgrSearch } from '../utils/manage/api';
 
 const COMPLAINTS_LIST_URL = '/configurator/manage/complaints';
@@ -22,6 +23,15 @@ test.describe('admin Workflow Action — Escalate visible #521', () => {
   test('Edit view exposes a Workflow Action select; ESCALATE present when state=PENDINGATLME', async ({
     page,
   }) => {
+    // The dropdown can only offer Escalate if the tenant's PGR workflow defines
+    // the action at all, and the two shipped deployments disagree: bomet's `ke`
+    // has it, while any tenant bootstrapped from the `pg` demo workflow (e.g.
+    // mz.maputo) reaches PENDINGATSUPERVISOR only via FORWARD/AUTO_ESCALATE and
+    // has no manual ESCALATE. Without this gate the spec fails on the latter for
+    // a workflow-config gap, which reads as a #521 regression and is not one.
+    // Declared per deployment in deploy/expectations/*.json.
+    requires(test, 'workflow.pgr.actions.ESCALATE', 'admin #521 Escalate option');
+
     // Onboarding-data gap: the Escalate-at-PENDINGATLME assertion needs a
     // complaint currently in PENDINGATLME. If the deployment has none, the
     // Workflow-action surface can't be exercised meaningfully — skip rather

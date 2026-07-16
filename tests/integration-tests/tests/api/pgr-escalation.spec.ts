@@ -171,6 +171,7 @@ Steps:
 Self-healing: safe to run many times. If the workflow seed gets re-applied between runs, this step quietly re-patches it.`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
+
     const biz = await fetchPgrWorkflow(adminToken);
     expect(biz).toBeTruthy();
 

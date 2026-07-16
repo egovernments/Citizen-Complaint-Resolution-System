@@ -14,6 +14,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { getDigitToken, loginViaApi } from '../utils/auth';
 import { citizenOtpLogin } from '../utils/citizen-login';
+import { getPersona } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
   ADMIN_USER, ADMIN_PASS, FIXED_OTP,
@@ -36,9 +37,31 @@ async function snap(page: Page, name: string) {
 const CITIZEN_PHONE = generateCitizenPhone();
 const CITIZEN_NAME = 'E2E UI Citizen';
 
-// City-level admin for UI tests (getCurrentTenantId returns the TENANT env)
-const CITY_ADMIN_USER = process.env.CITY_ADMIN_USER || ADMIN_USER;
-const CITY_ADMIN_PASS = process.env.CITY_ADMIN_PASS || DEFAULT_PASSWORD;
+/**
+ * The employee who drives Take Action in steps 3-5. Resolved by CAPABILITY, not
+ * by name: the requirement is "can act on this complaint's workflow", which
+ * means the GRO role plus an HRMS department at the complaint's own tenant.
+ *
+ * A pinned name cannot express that and gets it wrong in both directions:
+ * bomet's deploy/bomet.env pins CITY_ADMIN_USER=BOMET_LME, which has NO HRMS
+ * employee record on `ke` at all — so it logs in fine, never gets a Take Action
+ * button, and step 4 fails 10s later on a missing locator that says nothing
+ * about the cause. The bare ADMIN default fares no better there (also no HRMS
+ * record). getPersona('gro-with-department') finds HS_GRO on bomet and EMP001 on
+ * mz.maputo without either deployment declaring anything.
+ *
+ * CITY_ADMIN_USER still wins when set, so an operator can pin a specific actor.
+ */
+async function cityAdmin(): Promise<{ username: string; password: string }> {
+  if (process.env.CITY_ADMIN_USER) {
+    return {
+      username: process.env.CITY_ADMIN_USER,
+      password: process.env.CITY_ADMIN_PASS || DEFAULT_PASSWORD,
+    };
+  }
+  const p = await getPersona('gro-with-department');
+  return { username: p.username, password: p.password };
+}
 
 /** Fetch complaint status via API (verification helper — not a "UI under test" action). */
 async function fetchComplaintStatus(serviceRequestId: string): Promise<string> {
@@ -366,8 +389,8 @@ Doesn't assert the complaint appears in the inbox because legitimate boundary sc
     await loginViaApi(page, {
       tenant: TENANT,
       authTenant: TENANT,
-      username: CITY_ADMIN_USER,
-      password: CITY_ADMIN_PASS,
+      username: (await cityAdmin()).username,
+      password: (await cityAdmin()).password,
     });
 
     await page.goto(`${BASE_URL}/digit-ui/employee/pgr/inbox`, {
@@ -416,8 +439,8 @@ Status verification is API-only because there's no good DOM signal that the assi
     await loginViaApi(page, {
       tenant: TENANT,
       authTenant: TENANT,
-      username: CITY_ADMIN_USER,
-      password: CITY_ADMIN_PASS,
+      username: (await cityAdmin()).username,
+      password: (await cityAdmin()).password,
     });
 
     // Navigate to complaint details
@@ -500,8 +523,8 @@ API-only verification of status follows the same pattern as step 4 — UI flow i
     await loginViaApi(page, {
       tenant: TENANT,
       authTenant: TENANT,
-      username: CITY_ADMIN_USER,
-      password: CITY_ADMIN_PASS,
+      username: (await cityAdmin()).username,
+      password: (await cityAdmin()).password,
     });
 
     // Navigate to complaint details
