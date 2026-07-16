@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Redirect, Link } from "react-router-dom";
+import { Redirect, Link, useHistory } from "react-router-dom";
 import { useQuery } from "react-query";
 import { Request } from "@egovernments/digit-ui-libraries";
 import { Loader } from "@egovernments/digit-ui-components";
@@ -14,12 +14,12 @@ import { complaintLabel } from "../../utils/complaintLabel";
  * (/employee/pgr/admin-search), custom UI replicating the approved design:
  * tenant banner top-right; single-row filter bar (complaint no with search/#
  * adornments, department multi-select with in-field chips capped at 3 + "+N"
- * overflow and a "No department (N/A)" sentinel, calendar-icon date range,
- * Search/Clear inline); results card ("N Complaints Found" + freshness dot,
- * sort + CSV export, sortable columns, tinted department tags, dot-status
- * pills, stacked date/time cells, eye+View action, «‹1›» pagination with
- * rows-per-page). Brand colors flow through the theme token chain; the fixed
- * hexes below are semantic status/tag tints only.
+ * overflow and a "No department (N/A)" sentinel, single range-calendar date
+ * field, Search/Clear inline); results card ("N Complaints Found" + freshness
+ * dot, sort + Excel export via Digit.Download.Excel, sortable columns, tinted
+ * department tags, dot-status pills, stacked date/time cells, click-anywhere
+ * rows, «‹1›» pagination with rows-per-page). Brand colors flow through the
+ * theme token chain; the fixed hexes below are semantic status/tag tints only.
  *
  * Backend: POST /pgr-services/v2/request/_admin/_search (PR #1260).
  * totalCount workaround: the current backend echoes the page size as
@@ -76,10 +76,10 @@ const deptTint = (code) => {
 };
 
 const SORT_OPTIONS = [
-  { code: "createdTime", i18nKey: "ES_PGR_ADMIN_CREATED_TIME" },
-  { code: "lastModifiedTime", i18nKey: "ES_PGR_ADMIN_LAST_MODIFIED" },
-  { code: "serviceRequestId", i18nKey: "CS_COMMON_COMPLAINT_NO" },
-  { code: "applicationStatus", i18nKey: "CS_COMPLAINT_DETAILS_CURRENT_STATUS" },
+  { code: "createdTime", i18nKey: "ES_PGR_ADMIN_CREATED_TIME", fb: "Created Time" },
+  { code: "lastModifiedTime", i18nKey: "ES_PGR_ADMIN_LAST_MODIFIED", fb: "Last Modified" },
+  { code: "serviceRequestId", i18nKey: "CS_COMMON_COMPLAINT_NO", fb: "Complaint No" },
+  { code: "applicationStatus", i18nKey: "CS_COMPLAINT_DETAILS_CURRENT_STATUS", fb: "Status" },
 ];
 
 const STYLE_ID = "pgr-admin-search-css";
@@ -101,13 +101,13 @@ const CSS = `
 .pgr-adm-field > label { display: block; font-size: .8rem; font-weight: 600; margin-bottom: .3rem; }
 /* icon + input as flex SIBLINGS inside a bordered wrapper — the platform's global input rules
    override padding on inputs, so absolutely-positioned icons would overlap the text */
-.pgr-adm-cno { display: flex; align-items: center; gap: .45rem; min-height: 42px; padding: 0 .6rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; }
+.pgr-adm-cno { display: flex; align-items: center; gap: .45rem; min-height: 44px; padding: 0 .6rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; }
 .pgr-adm-cno input { flex: 1; min-width: 0; border: none !important; outline: none !important; box-shadow: none !important; background: transparent; font-size: .85rem; padding: .5rem 0; min-height: 0; }
 .pgr-adm-cno .mag { color: var(--color-text-secondary,#94a3b8); display: inline-flex; flex: none; }
 .pgr-adm-cno .hash { color: var(--color-text-secondary,#94a3b8); font-size: .9rem; flex: none; }
 .pgr-adm-cno:focus-within, .pgr-adm-msd-field:focus-within, .pgr-adm-date:focus-within { outline: none; border-color: var(--color-input-border-focus, var(--color-primary-1,#c84c0e)); }
 .pgr-adm-msd { position: relative; }
-.pgr-adm-msd-field { min-height: 42px; width: 100%; display: flex; flex-wrap: nowrap; align-items: center; gap: .35rem; padding: .3rem 2rem .3rem .5rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; cursor: pointer; position: relative; overflow: hidden; }
+.pgr-adm-msd-field { min-height: 44px; width: 100%; display: flex; flex-wrap: nowrap; align-items: center; gap: .35rem; padding: .3rem 2rem .3rem .5rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; cursor: pointer; position: relative; overflow: hidden; }
 .pgr-adm-msd-field .ph { color: var(--color-text-secondary,#94a3b8); font-size: .85rem; padding-left: .1rem; }
 .pgr-adm-msd-field .caret { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#64748b); font-size: .75rem; }
 .pgr-adm-tag { display: inline-flex; align-items: center; gap: .35rem; background: var(--color-surface-secondary,#f1f5f9); border: 1px solid var(--color-border,#e2e8f0); border-radius: .4rem; padding: .18rem .5rem; font-size: .78rem; line-height: 1.25; color: var(--color-text-primary,#334155); white-space: nowrap; max-width: 100%; flex: none; }
@@ -119,15 +119,16 @@ const CSS = `
 .pgr-adm-msd-opt { display: flex; gap: .5rem; align-items: center; padding: .4rem .6rem; font-size: .85rem; cursor: pointer; }
 .pgr-adm-msd-opt:hover { background: var(--color-surface-secondary,#f1f5f9); }
 .pgr-adm-daterange { position: relative; }
-.pgr-adm-date { display: flex; align-items: center; gap: .45rem; min-height: 42px; padding: 0 2rem 0 .6rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; cursor: pointer; position: relative; }
+.pgr-adm-date { display: flex; align-items: center; gap: .45rem; min-height: 44px; padding: 0 2rem 0 .6rem; border: 1px solid var(--color-input-border-default, var(--color-border,#cbd5e1)); border-radius: .5rem; background: #fff; cursor: pointer; position: relative; }
 .pgr-adm-date > svg { flex: none; color: var(--color-text-secondary,#94a3b8); pointer-events: none; }
 .pgr-adm-date .val { flex: 1; min-width: 0; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pgr-adm-date .val.ph { color: var(--color-text-secondary,#94a3b8); }
 .pgr-adm-date .caret { position: absolute; right: .6rem; top: 50%; transform: translateY(-50%); color: var(--color-text-secondary,#64748b); font-size: .75rem; }
 .pgr-adm-rdr { position: absolute; z-index: 40; top: calc(100% + 4px); right: 0; background: #fff; border: 1px solid var(--color-border,#cbd5e1); border-radius: .6rem; box-shadow: 0 10px 24px rgba(0,0,0,.14); overflow: hidden; }
-.pgr-adm-rdr .rdrCalendarWrapper { font-size: 12px; }
+.pgr-adm-rdr .rdrCalendarWrapper { font-size: 10px; }
+.pgr-adm-rdr .rdrMonthAndYearWrapper { padding-top: 2px; height: 46px; }
 .pgr-adm-fbtns { display: flex; gap: .6rem; }
-.pgr-adm-fbtns .pgr-adm-btn { min-height: 42px; }
+.pgr-adm-fbtns .pgr-adm-btn { min-height: 44px; padding: .6rem 1.5rem; font-size: .9rem; }
 .pgr-adm-err { color: var(--color-error,#b3261e); font-size: .78rem; padding: 0 1rem .75rem; }
 .pgr-adm-btn { display: inline-flex; align-items: center; gap: .45rem; padding: .55rem 1.1rem; border-radius: .5rem; font-weight: 700; font-size: .85rem; cursor: pointer; border: 1px solid transparent; white-space: nowrap; }
 .pgr-adm-btn--primary { background: var(--color-button-primary-bg-default, var(--color-primary-1, var(--color-primary-main,#c84c0e))); color: #fff; }
@@ -142,13 +143,16 @@ const CSS = `
 .pgr-adm-updated { display: inline-flex; align-items: center; gap: .35rem; font-size: .78rem; color: var(--color-text-secondary,#64748b); }
 .pgr-adm-updated::before { content: ""; width: 7px; height: 7px; border-radius: 9999px; background: #2e7d32; }
 .pgr-adm-sort { display: flex; align-items: center; gap: .4rem; font-size: .8rem; color: var(--color-text-secondary,#64748b); flex-wrap: wrap; }
-.pgr-adm-sort select { padding: .4rem .5rem; border: 1px solid var(--color-border,#cbd5e1); border-radius: .4rem; background: #fff; font-size: .8rem; }
+.pgr-adm-sel { appearance: none; -webkit-appearance: none; -moz-appearance: none; padding: .45rem 2rem .45rem .7rem; border: 1px solid var(--color-border,#cbd5e1); border-radius: .5rem; background: #fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>") no-repeat right .6rem center / 11px; font-size: .8rem; color: inherit; cursor: pointer; }
+.pgr-adm-sort .pgr-adm-sel { min-height: 40px; }
+.pgr-adm-sort .pgr-adm-btn { min-height: 40px; }
 .pgr-adm-table { width: 100%; border-collapse: collapse; }
 .pgr-adm-table th { text-align: left; font-size: .78rem; font-weight: 600; color: var(--color-text-primary,#334155); padding: .65rem 1rem; background: var(--color-surface-secondary,#f8fafc); border-bottom: 1px solid var(--color-border,#eef2f7); white-space: nowrap; }
 .pgr-adm-th-sort { cursor: pointer; user-select: none; }
 .pgr-adm-th-sort .si { color: var(--color-text-secondary,#94a3b8); font-size: .72rem; margin-left: .2rem; }
 .pgr-adm-th-sort .si.act { color: var(--color-primary-1, var(--color-primary-main,#c84c0e)); }
 .pgr-adm-table td { padding: .7rem 1rem; border-bottom: 1px solid var(--color-border,#f1f5f9); font-size: .84rem; vertical-align: middle; }
+.pgr-adm-table tbody tr { cursor: pointer; }
 .pgr-adm-table tbody tr:hover { background: var(--color-surface-secondary,#fafbfc); }
 .pgr-adm-cno-link { display: inline-flex; align-items: center; gap: .3rem; color: var(--color-text-primary,#1f2937); font-weight: 700; text-decoration: underline; }
 .pgr-adm-cno-link:hover { color: var(--color-link-hover, var(--color-primary-1, var(--color-primary-main,#c84c0e))); }
@@ -164,17 +168,15 @@ const CSS = `
 .pgr-adm-dt { display: inline-flex; align-items: center; gap: .45rem; white-space: nowrap; }
 .pgr-adm-dt svg { color: var(--color-text-secondary,#94a3b8); flex: none; }
 .pgr-adm-dt .t { display: block; color: var(--color-text-secondary,#64748b); font-size: .76rem; }
-.pgr-adm-view { display: inline-flex; align-items: center; gap: .35rem; color: var(--color-text-primary,#334155); font-weight: 600; text-decoration: none; }
-.pgr-adm-view:hover { color: var(--color-primary-1, var(--color-primary-main,#c84c0e)); }
 .pgr-adm-empty { padding: 2.25rem 1rem; text-align: center; color: var(--color-text-secondary,#64748b); font-size: .9rem; }
 .pgr-adm-foot { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .75rem 1rem; flex-wrap: wrap; }
 .pgr-adm-foot .info { font-size: .78rem; color: var(--color-text-secondary,#64748b); }
 .pgr-adm-pages { display: flex; align-items: center; gap: .25rem; }
-.pgr-adm-page { min-width: 32px; height: 32px; border: 1px solid var(--color-border,#cbd5e1); background: #fff; border-radius: .4rem; cursor: pointer; font-size: .8rem; color: var(--color-text-primary,#334155); }
+.pgr-adm-page { min-width: 36px; height: 36px; border: 1px solid var(--color-border,#cbd5e1); background: #fff; border-radius: .4rem; cursor: pointer; font-size: .8rem; color: var(--color-text-primary,#334155); }
 .pgr-adm-page[disabled] { opacity: .45; cursor: default; }
 .pgr-adm-page--active { background: var(--color-button-primary-bg-default, var(--color-primary-1,#c84c0e)); color: #fff; border-color: var(--color-button-primary-bg-default, var(--color-primary-1,#c84c0e)); }
 .pgr-adm-pgsize { display: flex; align-items: center; gap: .4rem; font-size: .78rem; color: var(--color-text-secondary,#64748b); }
-.pgr-adm-pgsize select { padding: .35rem .5rem; border: 1px solid var(--color-border,#cbd5e1); border-radius: .4rem; background: #fff; font-size: .8rem; }
+.pgr-adm-pgsize .pgr-adm-sel { min-height: 36px; }
 `;
 
 function injectCss() {
@@ -195,8 +197,6 @@ const IcInfo = () => <Ic size={16}><circle cx="12" cy="12" r="10" /><line x1="12
 const IcSearch = ({ size = 14 }) => <Ic size={size}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></Ic>;
 const IcClear = () => <Ic size={14}><path d="M1 4v6h6" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></Ic>;
 const IcExport = () => <Ic size={14}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></Ic>;
-const IcEye = () => <Ic size={15}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></Ic>;
-const IcExt = () => <Ic size={12}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></Ic>;
 const IcBuilding = () => <Ic size={12}><rect x="4" y="2" width="16" height="20" rx="1" /><line x1="9" y1="22" x2="9" y2="18" /><line x1="15" y1="22" x2="15" y2="18" /><line x1="8" y1="6" x2="10" y2="6" /><line x1="14" y1="6" x2="16" y2="6" /><line x1="8" y1="10" x2="10" y2="10" /><line x1="14" y1="10" x2="16" y2="10" /><line x1="8" y1="14" x2="10" y2="14" /><line x1="14" y1="14" x2="16" y2="14" /></Ic>;
 const IcCal = ({ size = 14 }) => <Ic size={size}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></Ic>;
 
@@ -218,6 +218,7 @@ const bareInput = (el) => {
 
 const PGRAdminSearch = () => {
   const { t, i18n } = useTranslation();
+  const history = useHistory();
   const tenantId = Digit.ULBService.getCurrentTenantId();
   injectCss();
 
@@ -389,37 +390,29 @@ const PGRAdminSearch = () => {
         if (batch.length < 50) break;
         offset += 50;
       }
-      const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-      const head = [
-        tr("CS_COMMON_COMPLAINT_NO", "Complaint No."),
-        tr("ES_PGR_ADMIN_HEADER_DEPARTMENT", "Department"),
-        tr("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE", "Complaint Type"),
-        tr("CS_COMPLAINT_DETAILS_CURRENT_STATUS", "Status"),
-        tr("ES_PGR_ADMIN_CREATED_ON", "Created On"),
-        tr("ES_PGR_ADMIN_LAST_MODIFIED", "Last Modified"),
-      ];
-      const lines = out.map((w) => {
+      // real .xlsx via the platform's Digit.Download.Excel (xlsx lib, json_to_sheet)
+      const H = {
+        cno: tr("CS_COMMON_COMPLAINT_NO", "Complaint No."),
+        dept: tr("ES_PGR_ADMIN_HEADER_DEPARTMENT", "Department"),
+        type: tr("CS_COMPLAINT_DETAILS_COMPLAINT_TYPE", "Complaint Type"),
+        status: tr("CS_COMPLAINT_DETAILS_CURRENT_STATUS", "Status"),
+        created: tr("ES_PGR_ADMIN_CREATED_ON", "Created On"),
+        modified: tr("ES_PGR_ADMIN_LAST_MODIFIED", "Last Modified"),
+      };
+      const data = out.map((w) => {
         const s = w.service || {};
         const cd = fmtDT(s?.auditDetails?.createdTime);
         const md = fmtDT(s?.auditDetails?.lastModifiedTime);
-        return [
-          s.serviceRequestId,
-          deptCell(s?.additionalDetail?.department).label,
-          complaintLabel(t, s.serviceCode),
-          tr(`CS_COMMON_${s.applicationStatus}`, s.applicationStatus),
-          `${cd.d}, ${cd.t}`,
-          `${md.d}, ${md.t}`,
-        ].map(esc).join(",");
+        return {
+          [H.cno]: s.serviceRequestId,
+          [H.dept]: deptCell(s?.additionalDetail?.department).label,
+          [H.type]: complaintLabel(t, s.serviceCode),
+          [H.status]: tr(`CS_COMMON_${s.applicationStatus}`, s.applicationStatus),
+          [H.created]: `${cd.d}, ${cd.t}`,
+          [H.modified]: `${md.d}, ${md.t}`,
+        };
       });
-      const csv = "\uFEFF" + [head.map(esc).join(","), ...lines].join("\r\n"); // BOM so Excel opens UTF-8 correctly
-      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `admin-complaints-${tenantId}-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      Digit.Download.Excel(data, `admin-complaints-${tenantId}-${new Date().toISOString().slice(0, 10)}`);
     } finally {
       setExporting(false);
     }
@@ -613,10 +606,10 @@ const PGRAdminSearch = () => {
           </div>
           <div className="pgr-adm-sort">
             <span>{tr("ES_PGR_ADMIN_SORT_BY", "Sort by")}</span>
-            <select value={sortBy} onChange={(e) => { setClientSort(null); setSortBy(e.target.value); setPage(0); }}>
-              {SORT_OPTIONS.map((o) => <option key={o.code} value={o.code}>{tr(o.i18nKey, o.code)}</option>)}
+            <select className="pgr-adm-sel" value={sortBy} onChange={(e) => { setClientSort(null); setSortBy(e.target.value); setPage(0); }}>
+              {SORT_OPTIONS.map((o) => <option key={o.code} value={o.code}>{tr(o.i18nKey, o.fb)}</option>)}
             </select>
-            <select value={sortOrder} onChange={(e) => { setClientSort(null); setSortOrder(e.target.value); setPage(0); }}>
+            <select className="pgr-adm-sel" value={sortOrder} onChange={(e) => { setClientSort(null); setSortOrder(e.target.value); setPage(0); }}>
               <option value="DESC">{tr("ES_PGR_ADMIN_DESC", "Desc")}</option>
               <option value="ASC">{tr("ES_PGR_ADMIN_ASC", "Asc")}</option>
             </select>
@@ -646,7 +639,6 @@ const PGRAdminSearch = () => {
                   <SortTh col="applicationStatus">{tr("CS_COMPLAINT_DETAILS_CURRENT_STATUS", "Status")}</SortTh>
                   <SortTh col="createdTime">{tr("ES_PGR_ADMIN_CREATED_ON", "Created On")}</SortTh>
                   <SortTh col="lastModifiedTime">{tr("ES_PGR_ADMIN_LAST_MODIFIED", "Last Modified")}</SortTh>
-                  <th>{tr("ES_PGR_ADMIN_ACTIONS", "Actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -657,10 +649,11 @@ const PGRAdminSearch = () => {
                   const statusLabel = tr(`CS_COMMON_${s.applicationStatus}`, s.applicationStatus);
                   const detailUrl = `/${window.contextPath}/employee/pgr/complaint-details/${s.serviceRequestId}`;
                   return (
-                    <tr key={s.serviceRequestId}>
+                    <tr key={s.serviceRequestId} onClick={() => history.push(detailUrl)}
+                      title={tr("ES_PGR_ADMIN_VIEW", "View")}>
                       <td>
-                        <Link className="pgr-adm-cno-link" to={detailUrl}>
-                          {s.serviceRequestId} <IcExt />
+                        <Link className="pgr-adm-cno-link" to={detailUrl} onClick={(e) => e.stopPropagation()}>
+                          {s.serviceRequestId}
                         </Link>
                       </td>
                       <td>
@@ -672,11 +665,6 @@ const PGRAdminSearch = () => {
                       <td><span className={`pgr-adm-pill pgr-adm-pill--${bucketOf(s.applicationStatus)}`}>{statusLabel}</span></td>
                       <td>{dtCell(s?.auditDetails?.createdTime)}</td>
                       <td>{dtCell(s?.auditDetails?.lastModifiedTime)}</td>
-                      <td>
-                        <Link className="pgr-adm-view" to={detailUrl}>
-                          <IcEye /> {tr("ES_PGR_ADMIN_VIEW", "View")}
-                        </Link>
-                      </td>
                     </tr>
                   );
                 })}
@@ -703,7 +691,7 @@ const PGRAdminSearch = () => {
           </div>
           <div className="pgr-adm-pgsize">
             <span>{tr("ES_PGR_ADMIN_ROWS_PER_PAGE", "Rows per page")}</span>
-            <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}>
+            <select className="pgr-adm-sel" value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}>
               {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
