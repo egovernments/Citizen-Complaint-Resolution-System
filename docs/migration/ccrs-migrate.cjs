@@ -19,16 +19,23 @@
  *                     ComplaintExtendedAttributeSchema seed + v1 verify
  *    5. landing       landing sections + page config + PGR_LANDING_* keys
  *    6. cms           (opt-in: --cms) CMS roles/actions/grants + workflow
- *    7. verify        consolidated read-back across everything
+ *    7. banner        tenant.citymodule schema/rows + PGR bannerImage
+ *                     (rows create-missing-only; value set only with
+ *                     --banner-url and only when currently empty)
+ *    8. gzip          (opt-in: --gzip) verify /digit-ui gzip+Cache-Control;
+ *                     applies the nginx block when run ON the serving box
+ *    9. verify        consolidated read-back across everything
  *
  *  USAGE
  *    node ccrs-migrate.cjs --host http://<gateway> --tenant mz \
  *         [--user ADMIN] [--pass 'eGov@123'] [--token <authToken>] \
  *         [--phases schemas,landing] [--dry-run] [--cms] [--update-wf] \
- *         [--locale en_IN] [--hierarchy PGR] [--report out.json]
+ *         [--locale en_IN] [--hierarchy PGR] [--report out.json] \
+ *         [--banner-url https://.../logo.png] [--gzip] [--nginx-conf /etc/nginx/...]
  *
  *    Env-var equivalents (CLI wins): BASE_URL TENANT OAUTH_USER OAUTH_PASS
  *    OAUTH_BASIC TOKEN PHASES DRY_RUN CMS UPDATE_WF LOCALE HIERARCHY REPORT
+ *    BANNER_URL GZIP NGINX_CONF
  *    · OAUTH_BASIC accepts EITHER plaintext "client:secret" or base64 —
  *      normalised automatically (the legacy scripts disagreed on this).
  *    · TENANT may be a state root ("mz") or a city ("mz.igsae"); state-level
@@ -56,7 +63,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (!a.startsWith('--')) continue;
     const key = a.slice(2);
-    const flag = ['dry-run', 'cms', 'update-wf', 'no-color', 'help'].includes(key);
+    const flag = ['dry-run', 'cms', 'update-wf', 'gzip', 'no-color', 'help'].includes(key);
     out[key] = flag ? true : argv[++i];
   }
   return out;
@@ -75,7 +82,7 @@ const CFG = {
   pass: ARGS.pass || process.env.OAUTH_PASS || 'eGov@123',
   basicRaw: ARGS.basic || process.env.OAUTH_BASIC || 'egov-user-client:',
   token: ARGS.token || process.env.TOKEN || '',
-  phases: String(ARGS.phases || process.env.PHASES || 'auth,schemas,hierarchy,pgr-masters,landing,cms,verify')
+  phases: String(ARGS.phases || process.env.PHASES || 'auth,schemas,hierarchy,pgr-masters,landing,cms,banner,gzip,verify')
     .split(',').map((s) => s.trim()).filter(Boolean),
   dryRun: !!ARGS['dry-run'] || truthy(process.env.DRY_RUN),
   cms: !!ARGS.cms || truthy(process.env.CMS),
@@ -83,6 +90,9 @@ const CFG = {
   locale: ARGS.locale || process.env.LOCALE || 'en_IN',
   hierarchy: ARGS.hierarchy || process.env.HIERARCHY || 'PGR',
   report: ARGS.report || process.env.REPORT || '',
+  bannerUrl: ARGS['banner-url'] || process.env.BANNER_URL || '',
+  gzip: !!ARGS.gzip || truthy(process.env.GZIP),
+  nginxConf: ARGS['nginx-conf'] || process.env.NGINX_CONF || '',
 };
 CFG.state = CFG.tenant.includes('.') ? CFG.tenant.split('.')[0] : CFG.tenant;
 // OAUTH_BASIC: legacy scripts disagreed (plaintext vs base64) — accept both.
@@ -110,6 +120,8 @@ const SEED = {
   roleactions: path.join(REPO, 'utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ROLEACTIONS/ACCESSCONTROL-ROLEACTIONS.roleactions.json'),
   actionsTest: path.join(REPO, 'utilities/default-data-handler/src/main/resources/mdmsData/ACCESSCONTROL-ACTIONS-TEST/ACCESSCONTROL-ACTIONS-TEST.actions-test.json'),
   cmsWorkflow: path.join(REPO, 'utilities/default-data-handler/src/main/resources/CmsPgrWorkflowConfig.json'),
+  tenantSchemas: path.join(REPO, 'utilities/default-data-handler/src/main/resources/schema/tenant.json'),
+  citymoduleRows: path.join(REPO, 'utilities/default-data-handler/src/main/resources/mdmsData/tenant/tenant.citymodule.json'),
 };
 
 /* ──────────────────────────────── output ──────────────────────────────── */
@@ -152,7 +164,7 @@ function req(pathname, method, headers, body) {
       (res) => {
         let buf = '';
         res.on('data', (c) => (buf += c));
-        res.on('end', () => resolve({ code: res.statusCode || 0, body: buf }));
+        res.on('end', () => resolve({ code: res.statusCode || 0, body: buf, headers: res.headers || {} }));
       }
     );
     r.on('timeout', () => { r.destroy(new Error('timeout')); });
@@ -217,11 +229,20 @@ async function mdmsCreate(tenantId, schemaCode, uniqueIdentifier, data) {
   const okResp = r.code >= 200 && r.code < 300;
   return { ok: okResp, exists: !okResp && (r.code === 409 || DUP_RE.test(r.body)), code: r.code, body: r.body };
 }
+async function mdmsUpdate(schemaCode, row) {
+  // row = the full object returned by _search (id/uniqueIdentifier/data/...)
+  const r = await postJson(`/mdms-v2/v2/_update/${schemaCode}`, { RequestInfo: ri(), Mdms: row });
+  return { ok: r.code >= 200 && r.code < 300, code: r.code, body: r.body };
+}
 async function schemaSearch(tenantId, codes) {
   // NB: schema _search pages at 10 by default — always pass an explicit limit.
   const r = await postJson('/mdms-v2/schema/v1/_search', { RequestInfo: ri(), SchemaDefCriteria: { tenantId, codes, limit: 200 } });
   const j = parse(r.body);
   return new Set(((j && j.SchemaDefinitions) || []).map((s) => s.code));
+}
+async function schemaGet(tenantId, code) {
+  const r = await postJson('/mdms-v2/schema/v1/_search', { RequestInfo: ri(), SchemaDefCriteria: { tenantId, codes: [code], limit: 10 } });
+  return (((parse(r.body) || {}).SchemaDefinitions) || [])[0] || null;
 }
 async function schemaCreate(tenantId, s) {
   // Old MDMS images silently drop schema creates with non-ASCII descriptions
@@ -711,6 +732,162 @@ async function phaseCms() {
   return record('cms', OUTCOME.OK, 'roles, actions, grants, workflow ensured');
 }
 
+/* ═══════════════════════════ PHASE: banner ════════════════════════════ */
+
+async function phaseBanner() {
+  const SCHEMA = 'tenant.citymodule';
+  const failures = [];
+  let schemaDrift = false;
+
+  // 1) schema: register from the DDH seed when absent; when present, MDMS has
+  //    no schema-update API — drift (missing bannerImage) is reported, not fixed.
+  const live = await schemaGet(CFG.state, SCHEMA);
+  if (!live) {
+    let seedDef = null;
+    try { seedDef = (readJson(SEED.tenantSchemas) || []).find((x) => x.code === SCHEMA); } catch { /* seed optional */ }
+    if (!seedDef) return record('banner', OUTCOME.FAILED, 'schema absent and seed file unreadable', 'SEED_FILE_MISSING',
+      `Expected ${SEED.tenantSchemas} (run from a full repo checkout).`);
+    if (CFG.dryRun) info('dry-run: would register tenant.citymodule schema (incl. bannerImage)');
+    else {
+      const r = await schemaCreate(CFG.state, seedDef);
+      if (!r.ok && !r.exists) return record('banner', OUTCOME.FAILED, `schema create: HTTP ${r.code}`, 'CITYMODULE_SCHEMA_CREATE', truncate(r.body, 200));
+      ok('tenant.citymodule schema registered (incl. bannerImage)');
+      warn('restart egov-mdms-service if data creates 400 (schema definitions are cached)');
+    }
+  } else if (live.definition && live.definition.properties && live.definition.properties.bannerImage) {
+    ok('schema present with bannerImage');
+  } else {
+    schemaDrift = true;
+    warn('schema present WITHOUT bannerImage — MDMS has no schema-update API (SQL-only fix)');
+  }
+
+  // 2) rows: create MISSING only (Workbench / PGR / HRMS) — existing rows are
+  //    never touched, exactly like docs/migration/fix-citymodule.sh.
+  let wanted = [];
+  try { wanted = JSON.parse(JSON.stringify(readJson(SEED.citymoduleRows)).split('{tenantid}').join(CFG.state)); }
+  catch (e) { return record('banner', OUTCOME.FAILED, `cannot read citymodule row seed: ${e.message}`, 'SEED_FILE_MISSING', `Expected ${SEED.citymoduleRows}.`); }
+  const { rows } = await mdmsSearch(CFG.state, SCHEMA);
+  const byCode = new Map((rows || []).filter((m) => m.isActive).map((m) => [m.data && m.data.code, m]));
+  for (const w of wanted) {
+    if (byCode.has(w.code)) { info(`row ${w.code} exists — untouched`); continue; }
+    if (CFG.dryRun) { info(`dry-run: would create citymodule row ${w.code}`); continue; }
+    const res = await mdmsCreate(CFG.state, SCHEMA, w.code, w);
+    if (!res.ok && !res.exists) failures.push(`row ${w.code}: HTTP ${res.code} ${truncate(res.body, 80)}`);
+    else ok(`row ${w.code} created`);
+  }
+
+  // 3) PGR bannerImage: opt-in via --banner-url, and ONLY filled when empty —
+  //    an existing value is never overwritten (differences are reported).
+  const pgr = byCode.get('PGR');
+  const current = pgr && pgr.data ? pgr.data.bannerImage : undefined;
+  if (!CFG.bannerUrl) {
+    info(`PGR bannerImage: ${current ? truncate(current, 70) : '(not set)'} — pass --banner-url to fill when empty`);
+  } else if (current) {
+    info(`PGR bannerImage already set — untouched${current === CFG.bannerUrl ? '' : ' (DIFFERS from --banner-url)'}`);
+  } else if (schemaDrift) {
+    warn('cannot set bannerImage while the schema lacks the property');
+  } else if (!pgr) {
+    if (!CFG.dryRun) warn('PGR row was created this run — re-run the phase to set bannerImage (search-then-update needs the stored row)');
+  } else if (CFG.dryRun) {
+    info(`dry-run: would set PGR bannerImage = ${CFG.bannerUrl}`);
+  } else {
+    pgr.data.bannerImage = CFG.bannerUrl;
+    const r = await mdmsUpdate(SCHEMA, pgr);
+    if (!r.ok) failures.push(`bannerImage update: HTTP ${r.code} ${truncate(r.body, 80)}`);
+    else ok(`PGR bannerImage set = ${CFG.bannerUrl}`);
+  }
+
+  if (CFG.dryRun) return record('banner', OUTCOME.SKIPPED, 'dry-run: plan printed above');
+  if (schemaDrift) return record('banner', OUTCOME.PARTIAL, 'schema lacks bannerImage (rows ensured)', 'CITYMODULE_SCHEMA_DRIFT',
+    'No schema-update API exists — run docs/migration/fix-citymodule.sh ON the box (PR #1210), restart egov-mdms-service, then re-run --phases banner.');
+  if (failures.length) return record('banner', OUTCOME.PARTIAL, `${failures.length} step(s) failed`, 'BANNER_STEP_FAILED', failures.slice(0, 4).join(' | '));
+  return record('banner', OUTCOME.OK, 'citymodule schema/rows ensured' + (CFG.bannerUrl ? ' · bannerImage ensured' : ''));
+}
+
+/* ════════════════════════════ PHASE: gzip ═════════════════════════════ */
+
+const GZIP_BLOCK = [
+  '        # ccrs-gzip (added by ccrs-migrate --gzip) — scoped to /digit-ui only, never Kong/API routes',
+  '        gzip on;',
+  '        gzip_vary on;',
+  '        gzip_min_length 1024;',
+  '        gzip_comp_level 5;',
+  '        gzip_types text/css application/javascript text/javascript application/json image/svg+xml;',
+  '        add_header Cache-Control "no-cache" always;',
+].join('\n');
+
+async function phaseGzip() {
+  if (!CFG.gzip) return record('gzip', OUTCOME.SKIPPED, 'opt-in phase — pass --gzip to run');
+  const RUNBOOK = 'docs/ops/digit-ui-compression.md (ansible boxes: cd local-setup/ansible && ./deploy.sh <host> --tags nginx)';
+
+  // 1) remote verify — same probe as the runbook (HEAD + Accept-Encoding).
+  const probe = async () => {
+    const h = await req('/digit-ui/index.js', 'HEAD', { 'accept-encoding': 'gzip' });
+    return { enc: String((h.headers || {})['content-encoding'] || ''), cc: String((h.headers || {})['cache-control'] || ''), code: h.code };
+  };
+  const before = await probe();
+  if (/gzip/i.test(before.enc)) {
+    ok(`already enabled (content-encoding: gzip · cache-control: ${before.cc || '—'})`);
+    return record('gzip', OUTCOME.OK, `already enabled (cache-control: ${before.cc || '—'})`);
+  }
+  warn(`gzip NOT active on ${CFG.base}/digit-ui/index.js (HTTP ${before.code}, content-encoding: ${before.enc || 'none'})`);
+
+  // 2) apply — only possible when this process runs ON the serving box.
+  const { execSync } = require('child_process');
+  const sh = (cmd, opts) => execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], ...opts });
+  let conf = CFG.nginxConf;
+  if (!conf) {
+    try { conf = sh("sudo grep -RlE 'location [^{]*/digit-ui' /etc/nginx/ 2>/dev/null | head -1").trim(); } catch { conf = ''; }
+  }
+  if (!conf) {
+    return record('gzip', OUTCOME.PARTIAL, 'not enabled, and no nginx config serving /digit-ui found on THIS machine', 'GZIP_NOT_ENABLED',
+      `Run the script on the serving box (or pass --nginx-conf), or apply per ${RUNBOOK}.`);
+  }
+  let cur;
+  try { cur = sh(`sudo cat '${conf.replace(/'/g, "'\\''")}'`); }
+  catch (e) { return record('gzip', OUTCOME.PARTIAL, `cannot read ${conf}: ${truncate(e.message, 80)}`, 'GZIP_CONF_UNREADABLE', `Apply manually per ${RUNBOOK}.`); }
+  if (cur.includes('# ccrs-gzip')) {
+    return record('gzip', OUTCOME.PARTIAL, `${conf} already carries the ccrs-gzip block but the probe shows no gzip`, 'GZIP_CONFIGURED_NOT_ACTIVE',
+      'Run: sudo nginx -t && sudo systemctl reload nginx (or the container equivalent), then re-run --phases gzip.');
+  }
+  const m = cur.match(/^[ \t]*location [^{]*\/digit-ui[^{]*\{/m);
+  if (!m) {
+    return record('gzip', OUTCOME.PARTIAL, `no "location /digit-ui" block in ${conf}`, 'GZIP_LOCATION_NOT_FOUND', `Apply manually per ${RUNBOOK}.`);
+  }
+  const at = cur.indexOf(m[0]) + m[0].length;
+  // Proxy-mode locations must fetch identity from the upstream so the edge can gzip.
+  const proxied = /proxy_pass/.test(cur.slice(at, at + 800));
+  const block = '\n' + GZIP_BLOCK + (proxied ? '\n        proxy_set_header Accept-Encoding "";' : '');
+  info(`target: ${conf} (${proxied ? 'proxy' : 'disk-serve'} mode)`);
+  if (/add_header/.test(cur)) {
+    warn('existing add_header directives in this file — nginx replaces (not merges) inherited headers per block; re-check security headers on /digit-ui after reload (see runbook)');
+  }
+  if (CFG.dryRun) {
+    info('dry-run: would back up the file, insert the gzip block inside the /digit-ui location, nginx -t, reload');
+    return record('gzip', OUTCOME.SKIPPED, 'dry-run: plan printed above');
+  }
+  const bak = `${conf}.${new Date().toISOString().slice(0, 10)}.ccrs-gzip.bak`;
+  const qconf = `'${conf.replace(/'/g, "'\\''")}'`;
+  try {
+    sh(`sudo cp ${qconf} '${bak.replace(/'/g, "'\\''")}'`);
+    sh(`sudo tee ${qconf} > /dev/null`, { input: cur.slice(0, at) + block + cur.slice(at) });
+    try { sh('sudo nginx -t'); }
+    catch (e) {
+      sh(`sudo cp '${bak.replace(/'/g, "'\\''")}' ${qconf}`); // auto-rollback
+      return record('gzip', OUTCOME.FAILED, `nginx -t rejected the change — restored ${bak}`, 'GZIP_NGINX_T_FAILED', truncate(e.message, 200));
+    }
+    try { sh('sudo systemctl reload nginx'); } catch { sh('sudo nginx -s reload'); }
+  } catch (e) {
+    return record('gzip', OUTCOME.FAILED, `apply failed: ${truncate(e.message, 120)}`, 'GZIP_APPLY_FAILED', `Backup (if created): ${bak}. Apply manually per ${RUNBOOK}.`);
+  }
+  ok(`gzip block inserted (backup: ${bak}) and nginx reloaded`);
+  await sleep(1500);
+  const after = await probe();
+  if (/gzip/i.test(after.enc)) return record('gzip', OUTCOME.OK, `enabled (cache-control: ${after.cc || '—'}) · backup ${bak}`);
+  return record('gzip', OUTCOME.PARTIAL, 'config applied but the probe still shows no gzip', 'GZIP_VERIFY_FAILED',
+    `Another nginx layer may front this host — verify per ${RUNBOOK}. Rollback: sudo cp ${bak} ${conf} && sudo nginx -t && sudo systemctl reload nginx.`);
+}
+
 /* ════════════════════════════ PHASE: verify ═══════════════════════════ */
 
 async function phaseVerify() {
@@ -751,6 +928,8 @@ async function phaseVerify() {
     ['pgr-masters', phasePgrMasters],
     ['landing', phaseLanding],
     ['cms', phaseCms],
+    ['banner', phaseBanner],
+    ['gzip', phaseGzip],
     ['verify', phaseVerify],
   ];
 
