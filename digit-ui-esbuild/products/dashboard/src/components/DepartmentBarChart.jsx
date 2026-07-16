@@ -16,6 +16,7 @@ import {
   resolveBarGroupLayout,
 } from "../config/barChartPresentation";
 import { SHARED_CHROME, VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
+import { formatNumber } from "../utils/numberFormat";
 import {
   buildWrappedVerticalXAxisLabels,
 } from "../config/chartAxisLabels";
@@ -272,7 +273,7 @@ const DepartmentBarChart = ({
           :{" "}
           {isPercent
             ? formatBarChartPercentOneDecimal(tooltip?.value)
-            : tooltip?.value}
+            : formatNumber(tooltip?.value, { decimals: 0 }) ?? tooltip?.value}
         </div>
       </ChartTooltipPortal>
     </>

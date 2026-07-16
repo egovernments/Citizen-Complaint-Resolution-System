@@ -5,6 +5,7 @@
 // code-owned fallbacks — unseeded values surface their raw code.
 import { translate as t, getLanguage } from "../i18n/localeRuntime";
 import { dimensionLabel } from "../i18n/dimensionLabel";
+import { formatNumber } from "../utils/numberFormat";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -18,10 +19,16 @@ function metricRow(label, value) {
   return `<div class="dashboard-map-hover-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
 }
 
+// Numeric parts go through the tenant mask (formatNumber, null when
+// unconfigured -> the pre-#1213 expression); the % suffix stays here.
 function formatPct(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
-  return `${Math.round(n)}%`;
+  return `${formatNumber(n, { decimals: 0 }) ?? Math.round(n)}%`;
+}
+
+function formatCount(value) {
+  return formatNumber(value, { decimals: 0 }) ?? value;
 }
 
 /**
@@ -42,13 +49,13 @@ export function buildMapHoverTooltipHtml(ward = {}, { layerMode = "created", geo
   } else if (layerMode === "resolved") {
     rows.push(metricRow(t("DASHBOARD_MAP_HOVER_PCT_RESOLVED", "% Resolved"), formatPct(resolvedPct)));
   } else {
-    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_CREATED", "Created"), created));
+    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_CREATED", "Created"), formatCount(created)));
   }
 
   if (layerMode !== "created") {
-    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_TOTAL_CREATED", "Total created"), created));
-    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_OPEN", "Open"), open));
-    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_RESOLVED", "Resolved"), resolved));
+    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_TOTAL_CREATED", "Total created"), formatCount(created)));
+    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_OPEN", "Open"), formatCount(open)));
+    rows.push(metricRow(t("DASHBOARD_MAP_HOVER_RESOLVED", "Resolved"), formatCount(resolved)));
   }
 
   return `
