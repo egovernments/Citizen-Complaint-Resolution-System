@@ -123,6 +123,28 @@ distinct-countable but not filterable** — arbitrary UUID probing is rejected.
 - `timeRole`: a named time column for the grain (e.g. facts: `filed_at`, `resolved_at`;
   events: `event_at`; daily: `snapshot_date`). Defaults per grain.
 
+### `params` — kpiId-by-reference tuning knobs
+
+Instead of an inline grammar body, a query node may reference a stored KPI definition and tune
+it: `{ "kpiId": "<id>", "params": { … } }`. The server layers the params onto the def's baked
+query (`KpiQueryComposer.mergeParams`); the param vocabulary is fixed (unknown names are
+ignored) and every declared param with an `allowed` list is enforced server-side
+(`invalid_param` when out of list):
+
+| param | effect |
+|---|---|
+| `window` | overrides `query.window.name`, preserving `timeRole`/`timeBucket` |
+| `dateFrom` + `dateTo` | inclusive ISO dates → half-open range on the grain's time column; removes the base window |
+| `ward` | narrows `ward_code = ?` iff filterable on the grain |
+| `serviceCode` | narrows `service_code = ?` iff filterable |
+| `compare: "prior"` | immediately-preceding equal-duration range — "vs prior period" deltas |
+| `series: "daily"` | scalar → daily time series — sparklines |
+| `hierLevel` | `"leaf"` (no-op) or `"1"`..`"12"`: re-groups every `service_code` dimension by the Nth segment of the materialized `complaint_node_path` (#1111). The derived expression is a fixed server-side template aliased back `AS service_code` — result columns are unchanged, and aggregates recompute over raw rows (weighted). NULL/empty-path rows fall back to their leaf code; a level deeper than a row's depth clamps to its leaf; grains without the path column (daily) no-op. A `service_group` dimension is dropped at non-leaf levels (it duplicates the level bucket). Note: `avg(sla_target_ms)`-style measures average heterogeneous per-subtype SLAs inside a level bucket — indicative, not a category SLA |
+
+Params can only narrow/re-group: the server-injected RBAC row-scope is layered on top by the
+planner and is never widened. Full semantics + catalog cookbook:
+`docs/dashboard-configuration/10-kpi-catalog.md` §4.
+
 ---
 
 ## 5. Response shape

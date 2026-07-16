@@ -156,11 +156,14 @@ ignored):
 | `serviceCode` | narrows `service_code = ?` iff filterable |
 | `compare: "prior"` | immediately-preceding equal-duration range (prior calendar week when no range is set) — powers "vs prior period" deltas |
 | `series: "daily"` | scalar → daily time series (adds the grain's date dimension + asc sort, caps limit at min(366, days)) — powers sparklines |
+| `hierLevel` | complaint-hierarchy rollup level (#1111). `"leaf"`/absent = today's per-subtype buckets; `"1"`..`"12"` re-groups every `service_code` dimension by the Nth segment of `complaint_node_path` (aliased back `AS service_code`, so `viz.dimensionKey`, sort and columns are untouched). Aggregates recompute over raw rows, so averages/ratios stay correctly weighted. Grains without the path column (daily) no-op, like `ward`. See the rollup notes below |
 
 Rules enforced server-side:
 
-- **`allowed` list** (C1): a requested `window` outside the def's `allowed` list is rejected
-  with `invalid_param` — it is never silently honoured.
+- **`allowed` list** (C1, generalized in #1111): a requested value for ANY declared param with a
+  non-empty `allowed` list (`window`, `hierLevel`, …) outside that list is rejected with
+  `invalid_param` — it is never silently honoured. This applies on both the normal kpiId path
+  and the backend-compose path.
 - **`default`** is applied **server-side** for any declared param the caller omitted, with
   precedence *explicit caller param > declared default > the def's baked query*
   (`AnalyticsService.withDeclaredDefaults`). A bare `{ "kpiId": "..." }` reference therefore
@@ -172,7 +175,33 @@ Rules enforced server-side:
 Design consequence: a KPI that should cover *all time* by default (e.g. the Complaint Type
 Details table) must **not** declare a `window` default — with the server-side default fix, a
 declared default now actually applies. *(Changed in this PR: `cl_table_complaint_type_details`
-dropped its `last_7d` default for exactly this reason — issue #1028 / PR #1074 context.)*
+dropped its `last_7d` default for exactly this reason — issue #1028 / PR #1074 context.
+Superseded since: the def now declares `window` `default: "all"` with `"all"` in `allowed`,
+which expresses "all time by default" explicitly instead of by omission.)*
+
+### Hierarchy-level rollup (`hierLevel`) notes — #1111
+
+- **Where the rollup happens**: in SQL, at query time, over the grains' materialized
+  `complaint_node_path` — `coalesce(nullif(split_part(complaint_node_path,'.',least(N,complaint_depth)),''), service_code)`.
+  Pre-aggregation `limit`s therefore truncate AFTER summing into level buckets (a level-1 view of
+  a 200-leaf tenant is not a truncated leaf list), and every measure is recomputed over raw rows
+  (weighted averages, count-FILTER ratios — never an average of leaf averages).
+- **Fallbacks**: rows with a NULL/empty path (flat tenants, legacy dotted-code imports — see the
+  `V20260716000000` migration) fall back to their leaf `service_code`; a level deeper than a
+  row's own depth clamps to its leaf segment.
+- **`service_group` is dropped** at `hierLevel != leaf`: once `service_code` is rolled up, the
+  root-category dimension collapses into a duplicate of (or an ancestor of) the level bucket.
+  The FE table simply sees no `service_group` column values for that row shape. Column
+  hiding/relabelling reacts in the PR2 FE control.
+- **`ideal_sla_ms` caveat**: measures like `avg(sla_target_ms)` average HETEROGENEOUS per-subtype
+  SLA targets inside a level bucket. The number is a correctly weighted mean of the bucket's
+  complaints' targets, but it is *not* "the SLA" of the category — there is no single category
+  SLA. Treat it as indicative at non-leaf levels; the PR2 FE relabels/hides it accordingly.
+  (`cl_table_complaint_type_details` ships with `hierLevel` default `"leaf"`, so its default UX
+  is unchanged.)
+- **Labels**: level-bucket codes are ordinary `ComplaintHierarchy` node codes; the FE already
+  resolves any node code via `COMPLAINT_HIERARCHY.<code>` localization, so level-1/2 labels need
+  no new work.
 
 ## 5. Status lifecycle
 
