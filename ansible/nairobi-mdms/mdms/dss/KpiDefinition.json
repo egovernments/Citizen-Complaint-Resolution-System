@@ -764,7 +764,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_chart_complaints_by_type",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -823,6 +823,17 @@
             "last_30d",
             "wtd",
             "mtd"
+          ]
+        },
+        {
+          "name": "hierLevel",
+          "default": "1",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
           ]
         }
       ],
@@ -1060,7 +1071,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_chart_open_by_type_stage",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -1138,6 +1149,17 @@
             "last_30d",
             "wtd",
             "mtd"
+          ]
+        },
+        {
+          "name": "hierLevel",
+          "default": "1",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
           ]
         }
       ],
@@ -1433,7 +1455,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_table_complaint_type_details",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -1623,7 +1645,20 @@
             "last_7d",
             "last_30d",
             "wtd",
-            "mtd"
+            "mtd",
+            "all"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "hierLevel",
+          "default": "leaf",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
           ]
         }
       ],
@@ -1718,7 +1753,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_chart_over_time_created_daily",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -1762,6 +1797,7 @@
       "viz": {
         "kind": "line",
         "format": "integer",
+        "valueKey": "created",
         "accent": "teal",
         "group": "complaint-landscape",
         "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_CREATED_DAILY",
@@ -3254,10 +3290,21 @@
             "mtd"
           ],
           "default": "last_7d"
+        },
+        {
+          "name": "hierLevel",
+          "default": "leaf",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
         }
       ],
       "status": "published",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "supportsSeries": false
     }
   },
@@ -3352,10 +3399,21 @@
             "mtd"
           ],
           "default": "last_7d"
+        },
+        {
+          "name": "hierLevel",
+          "default": "leaf",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
         }
       ],
       "status": "published",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "supportsSeries": false
     }
   }
