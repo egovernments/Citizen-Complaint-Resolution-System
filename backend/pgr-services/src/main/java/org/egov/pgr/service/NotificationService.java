@@ -911,8 +911,10 @@ public class NotificationService {
                 }
                 // WHATSAPP: business-initiated messages must reference an APPROVED provider template
                 // (Twilio Content SID) — free-form WhatsApp is rejected by Twilio (63016). Resolve it
-                // once per (audience, channel) match; if none/unapproved, skip the whole WHATSAPP row
-                // (a clean SKIP, never a free-form WhatsApp attempt). SMS/EMAIL are unaffected.
+                // once per (audience, channel) match. If none/unapproved we still EMIT the event with a
+                // null templateId: the bridge persists an auditable SKIPPED/NB_TEMPLATE_NOT_APPROVED row
+                // and never falls back to a free-form WhatsApp send. Dropping the event here (an earlier
+                // `continue`) made the skip invisible — no nb_dispatch_log row. SMS/EMAIL are unaffected.
                 String providerTemplateId = null;
                 Map<String, Object> contentVariables = null;
                 if ("WHATSAPP".equalsIgnoreCase(channel)) {
@@ -920,13 +922,13 @@ public class NotificationService {
                             audience, action, toState, locale);
                     if (pt == null) {
                         log.info("No approved WhatsApp provider-template for {}.{}.{}.{} on complaint {}; "
-                                + "skipping WHATSAPP (NB_TEMPLATE_NOT_APPROVED)",
+                                + "emitting for an auditable bridge-side SKIP (NB_TEMPLATE_NOT_APPROVED)",
                                 audience, action, toState, locale,
                                 request.getService().getServiceRequestId());
-                        continue;
+                    } else {
+                        providerTemplateId = String.valueOf(pt.get("templateId"));
+                        contentVariables = buildContentVariables(pt.get("variables"), values);
                     }
-                    providerTemplateId = String.valueOf(pt.get("templateId"));
-                    contentVariables = buildContentVariables(pt.get("variables"), values);
                 }
                 String body = null;
                 String subject = null;
@@ -1303,7 +1305,8 @@ public class NotificationService {
             if (!action.equalsIgnoreCase(String.valueOf(r.get("action")))) continue;
             if (!toState.equalsIgnoreCase(String.valueOf(r.get("toState")))) continue;
             if (!locale.equalsIgnoreCase(String.valueOf(r.get("locale")))) continue;
-            if (!StringUtils.hasText(String.valueOf(r.get("templateId")))) continue;
+            Object templateId = r.get("templateId");
+            if (templateId == null || !StringUtils.hasText(templateId.toString())) continue;
             return r;
         }
         return null;

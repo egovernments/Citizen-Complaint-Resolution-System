@@ -9,16 +9,29 @@ import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * §4 of the 2026-07-06 provider-template-mapping design: pull the linked Twilio
  * account's <b>approved WhatsApp Content templates</b> from
  * {@code content.twilio.com/v1/ContentAndApprovals}, auto-match each
- * {@code complaints_{action}_{toState}_[hindi_]message[_new]} friendly-name to a PGR
- * routing key, and return proposed {@code RAINMAKER-PGR.NotificationProviderTemplate}
- * rows (ContentSid + ordered variables) for the configurator to persist.
+ * {@code complaints_…_message[_new]} friendly-name to a PGR routing key, and return
+ * proposed {@code RAINMAKER-PGR.NotificationProviderTemplate} rows (ContentSid +
+ * ordered variables) for the configurator to persist.
+ *
+ * <p><b>Matching is token-based, not a single brittle regex.</b> A friendly_name is
+ * split on {@code _} and each token classified:
+ * <ul>
+ *   <li>{@code complaints} / {@code message} / {@code new} — convention markers.</li>
+ *   <li>{@code citizen} / {@code employee} — <b>audience</b> (derived, not hardcoded).</li>
+ *   <li>{@code english}/{@code en} / {@code hindi}/{@code hi} — <b>locale</b>. If absent,
+ *       the Twilio content {@code language} is used, else {@code en_IN}.</li>
+ *   <li>{@code sms} and any state token (e.g. {@code pendingatlme}) — ignored; the
+ *       <b>toState</b> and <b>variables</b> are canonical <i>per action</i> (derived from
+ *       the seed {@code RAINMAKER-PGR.NotificationProviderTemplate.json}), because names
+ *       like {@code …reassign_pendingatlme…} route to {@code PENDINGFORREASSIGNMENT} and
+ *       {@code complaints_rate_english_…} routes to {@code CLOSEDAFTERRESOLUTION}.</li>
+ *   <li>an {@link #ACTION_ROUTING} key — the <b>action</b>.</li>
+ * </ul>
  *
  * <p><b>Secrets stay server-side.</b> The Twilio Account SID / Auth Token are read
  * from the Novu integration and used only to call Twilio here; they are never
@@ -35,22 +48,25 @@ public class TwilioTemplateSyncService {
     private static final String TWILIO_CONTENT_APPROVALS_URL =
             "https://content.twilio.com/v1/ContentAndApprovals";
 
-    /** friendly_name convention: complaints_{action}_{toState}_[hindi_]message[_new]. */
-    private static final Pattern FRIENDLY_NAME = Pattern.compile(
-            "complaints_([a-z]+)_([a-z]+)_(?:(hindi)_)?message(?:_new)?", Pattern.CASE_INSENSITIVE);
-
     /**
-     * Canonical ordered variable names per routing key (design §3). Positional →
-     * these fill Twilio {@code {{1}},{{2}},…}. Operators should confirm order in the UI.
+     * Canonical routing per PGR action, derived verbatim from the seed
+     * {@code RAINMAKER-PGR.NotificationProviderTemplate.json}. The action token in the
+     * Twilio friendly_name selects the entry; {@code toState} and {@code variables} come
+     * from here (never parsed from the name) so that e.g. {@code reassign} → the routing
+     * key {@code REASSIGN.PENDINGFORREASSIGNMENT} regardless of the name's state token.
      */
-    private static final Map<String, List<String>> VARIABLE_ORDER = Map.of(
-            "APPLY.PENDINGFORASSIGNMENT",       List.of("complaint_type", "id", "date"),
-            "ASSIGN.PENDINGATLME",              List.of("complaint_type", "id", "date", "emp_name", "emp_designation", "emp_department"),
-            "RESOLVE.RESOLVED",                 List.of("complaint_type", "id", "date", "emp_name"),
-            "REJECT.REJECTED",                  List.of("complaint_type", "id", "date", "additional_comments"),
-            "REOPEN.PENDINGFORASSIGNMENT",      List.of("complaint_type", "id", "date"),
-            "REASSIGN.PENDINGFORREASSIGNMENT",  List.of("complaint_type", "id", "date", "emp_name", "emp_designation", "emp_department"),
-            "RATE.CLOSEDAFTERRESOLUTION",       List.of("complaint_type", "id", "date"));
+    private static final Map<String, Routing> ACTION_ROUTING;
+    static {
+        Map<String, Routing> m = new LinkedHashMap<>();
+        m.put("APPLY",    new Routing("PENDINGFORASSIGNMENT",     List.of("complaint_type", "id", "date")));
+        m.put("ASSIGN",   new Routing("PENDINGATLME",            List.of("complaint_type", "id", "date", "emp_name", "emp_designation", "emp_department")));
+        m.put("RESOLVE",  new Routing("RESOLVED",                List.of("complaint_type", "id", "date", "emp_name")));
+        m.put("REJECT",   new Routing("REJECTED",                List.of("complaint_type", "id", "date", "additional_comments")));
+        m.put("REOPEN",   new Routing("PENDINGFORASSIGNMENT",     List.of("complaint_type", "id", "date")));
+        m.put("REASSIGN", new Routing("PENDINGFORREASSIGNMENT",   List.of("complaint_type", "id", "date", "emp_name", "emp_designation", "emp_department")));
+        m.put("RATE",     new Routing("CLOSEDAFTERRESOLUTION",    List.of("complaint_type", "id", "date")));
+        ACTION_ROUTING = Collections.unmodifiableMap(m);
+    }
 
     public TwilioTemplateSyncService(NovuClient novuClient, RestTemplate restTemplate) {
         this.novuClient = novuClient;
@@ -64,13 +80,18 @@ public class TwilioTemplateSyncService {
      * templateName, variables[], approvalStatus, active}} — ready for MDMS upsert.
      * Also returns unmatched/non-approved entries as diagnostics so the operator
      * sees the gaps.
+     *
+     * <p>Proposals are de-duplicated on {@code (audience, action, toState, locale)},
+     * preferring the {@code _message_new} variant over a plain {@code _message} one.
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> syncWhatsappTemplates() {
         String[] creds = twilioCredentials();
         String accountSid = creds[0], authToken = creds[1];
 
-        List<Map<String, Object>> matched = new ArrayList<>();
+        // Dedup on (audience, action, toState, locale); prefer the _new variant.
+        Map<String, Map<String, Object>> dedup = new LinkedHashMap<>();
+        Map<String, Boolean> dedupIsNew = new HashMap<>();
         List<Map<String, Object>> unmatched = new ArrayList<>();
 
         String url = TWILIO_CONTENT_APPROVALS_URL + "?PageSize=200";
@@ -83,49 +104,98 @@ public class TwilioTemplateSyncService {
                 Map<String, Object> c = (Map<String, Object>) o;
                 String sid = str(c.get("sid"));
                 String friendlyName = str(c.get("friendly_name"));
+                String language = str(c.get("language"));
                 String waStatus = whatsappApprovalStatus(c);
 
-                Matcher m = FRIENDLY_NAME.matcher(friendlyName == null ? "" : friendlyName);
-                if (!m.matches()) {
-                    unmatched.add(diag(sid, friendlyName, waStatus, "friendly_name does not match complaints_{action}_{toState}_message convention"));
+                Parsed p = parse(friendlyName, language);
+                if (p == null) {
+                    unmatched.add(diag(sid, friendlyName, waStatus,
+                            "friendly_name does not match complaints_…_message[_new] convention"));
                     continue;
                 }
-                String action = m.group(1).toUpperCase(Locale.ROOT);
-                String toState = m.group(2).toUpperCase(Locale.ROOT);
-                String locale = m.group(3) != null ? "hi_IN" : "en_IN";
-                String key = action + "." + toState;
-                List<String> variables = VARIABLE_ORDER.get(key);
-                if (variables == null) {
-                    unmatched.add(diag(sid, friendlyName, waStatus, "no known variable order for routing key " + key));
+                if (p.action == null) {
+                    unmatched.add(diag(sid, friendlyName, waStatus,
+                            "no known PGR routing key for this template (unknown action token)"));
                     continue;
                 }
                 if (!"approved".equalsIgnoreCase(waStatus)) {
-                    unmatched.add(diag(sid, friendlyName, waStatus, "WhatsApp approval status is not 'approved'"));
+                    unmatched.add(diag(sid, friendlyName, waStatus,
+                            "WhatsApp approval status is not 'approved'"));
                     continue;
                 }
+
+                Routing r = ACTION_ROUTING.get(p.action);
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("provider", "twilio");
                 row.put("channel", "WHATSAPP");
-                row.put("audience", "CITIZEN");   // only CITIZEN templates exist upstream
-                row.put("action", action);
-                row.put("toState", toState);
-                row.put("locale", locale);
+                row.put("audience", p.audience);
+                row.put("action", p.action);
+                row.put("toState", r.toState);
+                row.put("locale", p.locale);
                 row.put("templateId", sid);
                 row.put("templateName", friendlyName);
-                row.put("variables", variables);
+                row.put("variables", r.variables);
                 row.put("approvalStatus", "approved");
                 row.put("active", true);
-                matched.add(row);
+
+                String dk = p.audience + "|" + p.action + "|" + r.toState + "|" + p.locale;
+                Boolean existingNew = dedupIsNew.get(dk);
+                if (existingNew == null || (p.isNew && !existingNew)) {
+                    // First seen, or this is a _new variant superseding a plain _message one.
+                    dedup.put(dk, row);
+                    dedupIsNew.put(dk, p.isNew);
+                }
+                // else: keep the existing (already-preferred) proposal and drop this duplicate.
             }
             url = nextPageUrl(page);
         }
-        log.info("Twilio template sync: {} matched (approved+known), {} unmatched/skipped", matched.size(), unmatched.size());
+
+        List<Map<String, Object>> matched = new ArrayList<>(dedup.values());
+        log.info("Twilio template sync: {} matched (approved+known, deduped), {} unmatched/skipped",
+                matched.size(), unmatched.size());
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("matched", matched);
         out.put("unmatched", unmatched);
         out.put("total", matched.size() + unmatched.size());
         return out;
+    }
+
+    /**
+     * Token-classify a friendly_name into (audience, action, locale, isNew). Returns
+     * {@code null} when the name is not a PGR complaint template at all (missing
+     * {@code complaints}/{@code message} markers). A returned {@link Parsed} with a
+     * {@code null action} means "looks like a template but the action is unknown".
+     */
+    Parsed parse(String friendlyName, String contentLanguage) {
+        if (!StringUtils.hasText(friendlyName)) return null;
+        String[] tokens = friendlyName.toLowerCase(Locale.ROOT).split("_");
+        Set<String> tokenSet = new HashSet<>(Arrays.asList(tokens));
+
+        // Convention markers required to treat this as a PGR notification template.
+        if (!tokenSet.contains("complaints") || !tokenSet.contains("message")) return null;
+
+        String audience = tokenSet.contains("employee") ? "EMPLOYEE" : "CITIZEN";
+
+        String locale;
+        if (tokenSet.contains("hindi") || tokenSet.contains("hi")) locale = "hi_IN";
+        else if (tokenSet.contains("english") || tokenSet.contains("en")) locale = "en_IN";
+        else locale = localeFromLanguage(contentLanguage);
+
+        boolean isNew = tokenSet.contains("new");
+
+        String action = null;
+        for (String t : tokens) {
+            String upper = t.toUpperCase(Locale.ROOT);
+            if (ACTION_ROUTING.containsKey(upper)) { action = upper; break; }
+        }
+        return new Parsed(audience, action, locale, isNew);
+    }
+
+    /** Map a Twilio content {@code language} to a PGR locale; defaults to {@code en_IN}. */
+    private static String localeFromLanguage(String language) {
+        if (!StringUtils.hasText(language)) return "en_IN";
+        return language.toLowerCase(Locale.ROOT).startsWith("hi") ? "hi_IN" : "en_IN";
     }
 
     /** Twilio Account SID + Auth Token from the Novu twilio integration (internal use only). */
@@ -212,5 +282,29 @@ public class TwilioTemplateSyncService {
 
     private static String str(Object o) {
         return o == null ? null : o.toString();
+    }
+
+    /** Canonical toState + ordered variables for a PGR action (from the seed file). */
+    static final class Routing {
+        final String toState;
+        final List<String> variables;
+        Routing(String toState, List<String> variables) {
+            this.toState = toState;
+            this.variables = variables;
+        }
+    }
+
+    /** Result of classifying a friendly_name. {@code action == null} ⇒ unknown action. */
+    static final class Parsed {
+        final String audience;
+        final String action;   // null when no known action token is present
+        final String locale;
+        final boolean isNew;
+        Parsed(String audience, String action, String locale, boolean isNew) {
+            this.audience = audience;
+            this.action = action;
+            this.locale = locale;
+            this.isNew = isNew;
+        }
     }
 }
