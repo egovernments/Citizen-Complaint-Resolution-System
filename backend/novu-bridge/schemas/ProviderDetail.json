@@ -35,6 +35,10 @@
       "type": "integer",
       "description": "Provider priority (lower = higher priority)",
       "default": 0
+    },
+    "senderNumber": {
+      "type": "string",
+      "description": "Provider-specific sender/from identity (e.g. the Twilio WhatsApp sender number)"
     }
   },
   "required": ["tenantId", "providerName", "channel"],

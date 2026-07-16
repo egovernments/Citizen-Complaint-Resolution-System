@@ -43,6 +43,10 @@
         "providerName": {
           "type": "string",
           "description": "Provider name (e.g., twilio, sendgrid, etc.)"
+        },
+        "senderNumber": {
+          "type": "string",
+          "description": "Provider-specific sender/from identity (e.g. the Twilio WhatsApp sender number)"
         }
       },
       "x-security": [

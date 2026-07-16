@@ -133,8 +133,11 @@ public class MdmsServiceClient {
             senderCache.put(tenantId, senderNumber != null ? senderNumber : NO_SENDER_CONFIGURED);
             return senderNumber;
         } catch (Exception e) {
+            // Do NOT cache: unlike a clean non-2xx/empty-result response, an exception here
+            // (timeout, connection reset, transient 5xx) is not a stable "not configured" fact —
+            // senderCache has no TTL, so caching it would permanently disable this tenant's
+            // sender override until process restart, even after MDMS recovers.
             log.warn("Failed to fetch WhatsApp senderNumber from MDMS for tenantId={}", tenantId, e);
-            senderCache.put(tenantId, NO_SENDER_CONFIGURED);
             return null;
         }
     }

@@ -91,7 +91,7 @@ public class NovuClient {
                 providers.put("twilio", twilioConfig);
                 overrides = new HashMap<>();
                 overrides.put("providers", providers);
-                log.debug("WHATSAPP dispatch: from override={}", senderNumber);
+                log.debug("WHATSAPP dispatch: from override={}", PiiMask.mask(senderNumber));
             } else {
                 log.warn("WHATSAPP dispatch: no senderNumber in MDMS for tenantId={}; " +
                         "falling back to integration credentials.from", tenantId);

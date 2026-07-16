@@ -177,13 +177,28 @@ class MdmsServiceClientWhatsappSenderTest {
     }
 
     @Test
-    void secondLookupAfterRestTemplateThrows_isServedFromCache_doesNotCallMdmsAgain() {
+    void secondLookupAfterRestTemplateThrows_isNotCached_retriesMdms() {
+        // Unlike a clean "not configured" outcome, a thrown exception (timeout, connection
+        // reset, transient 5xx) must NOT be cached: senderCache has no TTL, so caching it would
+        // permanently disable this tenant's sender override until process restart even after
+        // MDMS recovers. Each lookup after a failure must retry MDMS.
         when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
                 .thenThrow(new RuntimeException("MDMS unreachable"));
 
         assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
         assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
 
-        verify(restTemplate, times(1)).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class));
+        verify(restTemplate, times(2)).exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class));
+    }
+
+    @Test
+    void lookupRecoversAfterTransientException_onNextCall() {
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(HttpEntity.class), eq(Map.class)))
+                .thenThrow(new RuntimeException("MDMS unreachable"))
+                .thenReturn(new ResponseEntity<>(
+                        Map.of("mdms", List.of(providerRecord("whatsapp", true, "+14155550123"))), HttpStatus.OK));
+
+        assertNull(mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
+        assertEquals("+14155550123", mdmsServiceClient.getWhatsappSenderNumber("ke.bomet"));
     }
 }
