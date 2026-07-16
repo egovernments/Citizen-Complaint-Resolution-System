@@ -958,5 +958,47 @@
         "message": "A visibilidade é garantida assim que o processamento seguro é ativado; por enquanto, isso sinaliza a reclamação para que a equipe esteja ciente.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_ERROR",
+        "message": "Não foi possível obter a sua localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_PERMISSION_DENIED",
+        "message": "Permissão de localização negada — permita o acesso à localização no seu navegador",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_UNAVAILABLE",
+        "message": "A sua localização não está disponível de momento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_TIMEOUT",
+        "message": "Tempo esgotado ao obter a sua localização — tente novamente",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_NOT_SUPPORTED",
+        "message": "O seu navegador não suporta localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOCATION_NOT_FOUND",
+        "message": "Localização não encontrada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_SEARCH_ERROR",
+        "message": "Não foi possível pesquisar a localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
     }
 ]
