@@ -763,7 +763,12 @@ services:
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
       EGOV_USER_HOST: http://egov-user-proxy:8107/
-      STATE_LEVEL_TENANT_ID: pg.citya
+      # STATE_LEVEL_TENANT_ID MUST be the state ROOT (pg → rewritten to state_root),
+      # NOT the city tier. egov-workflow-v2 resolves the businessservice (PGR) at this
+      # tenant, and the businessservice is seeded at the state root. Grouping this with
+      # enc-service on `pg.citya` (city) makes workflow look for PGR at the city, find
+      # nothing, and fail every complaint APPLY. Refs #1160.
+      STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
       # Disable schema-per-tenant mode - use public schema for all tenants
       IS_ENVIRONMENT_CENTRAL_INSTANCE: 'false'
