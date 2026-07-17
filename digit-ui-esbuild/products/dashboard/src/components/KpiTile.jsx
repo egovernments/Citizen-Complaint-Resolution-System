@@ -23,6 +23,7 @@ import useDashboardT from '../i18n/useDashboardT';
 import { dimensionLabel } from '../i18n/dimensionLabel';
 import { translate as t } from '../i18n/localeRuntime';
 import { resolveTitle, resolveSubtitle, seriesEntryLabel, resolveSeriesLabel } from '../i18n/textResolver';
+import { markFirstWidgetVisible } from '../services/dashboardMetrics';
 
 /**
  * Generic viz-kind-driven tile renderer (the dashboard RENDERING ENGINE).
@@ -70,6 +71,15 @@ export function KpiTile({ def, result, results, error, vizOverride, loading = fa
   const { language } = useDashboardT();
   const viz = def?.viz || {};
   const title = resolveTitle(def);
+
+  // first_widget_visible (#1110): one-shot per load, fired by whichever tile
+  // first renders NON-skeleton content — including the error and "No data"
+  // paths (R9/F8) so failed loads still measure. The metrics module dedupes
+  // and stamps post-paint, so repeat calls are cheap no-ops.
+  const isSkeleton = !result && !error && loading;
+  React.useEffect(() => {
+    if (!isSkeleton) markFirstWidgetVisible();
+  }, [isSkeleton]);
 
   if (error) {
     return (

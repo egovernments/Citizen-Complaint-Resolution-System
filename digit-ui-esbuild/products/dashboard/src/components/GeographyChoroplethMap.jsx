@@ -872,7 +872,7 @@ const GeographyChoroplethMap = ({
         />
 
         {activeFilterLabel ? (
-          <div className="dashboard-map-filter-chip tw-pointer-events-auto tw-absolute tw-right-3 tw-top-3 tw-z-[1000] tw-flex tw-items-center tw-gap-2 tw-rounded-sm tw-border tw-border-border tw-bg-surface/95 tw-px-2.5 tw-py-1.5 tw-text-[10px] tw-shadow-sm">
+          <div className="dashboard-map-filter-badge tw-pointer-events-auto tw-absolute tw-right-3 tw-top-3 tw-z-[1000] tw-flex tw-items-center tw-gap-2 tw-rounded-sm tw-border tw-border-border tw-bg-surface/95 tw-px-2.5 tw-py-1.5 tw-text-[10px] tw-shadow-sm">
             <span className="tw-text-muted-foreground">{t("DASHBOARD_MAP_FILTER", "Filter:")}</span>
             <span className="tw-font-semibold tw-text-foreground">{activeFilterLabel}</span>
             <button
