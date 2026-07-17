@@ -337,9 +337,15 @@ def k8s_targets(root: pathlib.Path):
     of the other -- `kafka` and `redpanda` both select app=redpanda. Checking
     either covers the workload, so they collapse to one target. Without this,
     the alias Service looks unmonitored and CI cries wolf.
+
+    Both .yaml and .yml are read. Everything under k8s/ happens to be .yaml today,
+    so globbing one extension looks fine and silently drops the first Service anyone
+    writes as .yml -- unmonitored, with the guard still green. That is the same
+    assumption that made the docstring's compose glob wrong, and it is not worth
+    betting a coverage gap on a file-naming convention nobody enforces.
     """
     docs = []
-    for f in sorted(root.rglob("*.yaml")):
+    for f in sorted(set(root.rglob("*.yaml")) | set(root.rglob("*.yml"))):
         docs.extend(_load_all_strict(_stub_vars(f.read_text()), _rel(f)))
     return k8s_targets_from_docs(docs)
 
@@ -693,6 +699,19 @@ def self_test() -> int:
             failures.append(f"multi-doc loader mangled a valid manifest: {docs}")
     except GuardError as e:
         failures.append(f"multi-doc loader rejected a valid manifest: {e}")
+
+    # 8j. k8s manifests are read as BOTH .yaml and .yml. Everything under k8s/ is
+    #     .yaml today, so a one-extension glob looks fine and silently drops the first
+    #     Service anyone writes as .yml -- unmonitored, guard still green.
+    with tempfile.TemporaryDirectory() as td:
+        root = pathlib.Path(td)
+        (root / "a.yaml").write_text(
+            "apiVersion: v1\nkind: Service\nmetadata: {name: svc-yaml}\nspec: {selector: {app: a}}\n")
+        (root / "b.yml").write_text(
+            "apiVersion: v1\nkind: Service\nmetadata: {name: svc-yml}\nspec: {selector: {app: b}}\n")
+        got = set(k8s_targets(root))
+        if got != {"svc-yaml", "svc-yml"}:
+            failures.append(f"k8s manifest glob missed an extension: saw {sorted(got)}")
 
     # 8i. a literally-disabled endpoint is not coverage: it can never run, in any
     #     deployment, so counting it means claiming a probe that does nothing.
