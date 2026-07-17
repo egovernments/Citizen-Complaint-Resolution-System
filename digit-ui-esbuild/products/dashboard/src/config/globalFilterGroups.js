@@ -1,4 +1,9 @@
 import { translate } from "../i18n/localeRuntime";
+import {
+  clearedSelection,
+  normalizeComplaintTypeValue,
+  repairSelection,
+} from "../utils/complaintTypeTree";
 
 function todayISO() {
   const d = new Date();
@@ -95,6 +100,13 @@ export function buildDefaultFilters() {
   );
   defaults.timeWindow = "weekly";
   defaults.dateRangeActive = true;
+  // Tree-traversal complaint-type filter companions: `complaintType` stays the
+  // selected node's code ("all" = cleared, back-compat with every consumer);
+  // path + leaf make the persisted selection self-describing so the very first
+  // batch (before the MDMS tree loads) already sends the right param shape
+  // (leaf → serviceCode, interior → complaintPath).
+  defaults.complaintTypePath = null;
+  defaults.complaintTypeLeaf = false;
   return defaults;
 }
 
@@ -139,13 +151,16 @@ export function sanitizeFilters(raw, dynamicOptions = {}) {
     if (field.type === "date" && isValidISODate(value)) {
       next[field.id] = value;
     }
-    if (field.type === "select") {
+    // complaintType is a tree node, not a flat option — handled below.
+    if (field.type === "select" && field.id !== "complaintType") {
       const fieldOptions = options[field.id] ?? field.options;
       if (fieldOptions.some((opt) => opt.id === value)) {
         next[field.id] = value;
       }
     }
   }
+
+  Object.assign(next, sanitizeComplaintTypeSelection(raw, options));
 
   if (["daily", "weekly", "monthly", "wow", "mom"].includes(raw.timeWindow)) {
     next.timeWindow = raw.timeWindow;
@@ -154,4 +169,45 @@ export function sanitizeFilters(raw, dynamicOptions = {}) {
   next.dateRangeActive = raw.dateRangeActive === true;
 
   return next;
+}
+
+/**
+ * Sanitize/repair the complaint-type node selection ({ complaintType,
+ * complaintTypePath, complaintTypeLeaf }):
+ *
+ * - Pruned tree available (options.complaintTypeTree) — the authority:
+ *   exact node wins; a vanished node walks UP its stored dot-path to the
+ *   nearest surviving ancestor (repairSelection); nothing valid → cleared.
+ * - Flat scoped option list only (tree fetch failed / flat tenant): leaf
+ *   codes validate against the list exactly like before; interior selections
+ *   can't be verified without a tree, so they are HELD as-is (never cleared)
+ *   — a transient MDMS hiccup must not permanently forget a persisted subtree
+ *   filter (persistDashboardFilters runs this sanitizer on every filter
+ *   change, so a destructive clear here would outlive the hiccup). The trio
+ *   is repaired-or-cleared by the tree branch on the next successful load.
+ * - No dynamic options at all (initial localStorage load): trust the
+ *   persisted trio and let reconcileFiltersWithOptions repair it when the
+ *   tree arrives — clearing here would forget the selection on every reload.
+ */
+function sanitizeComplaintTypeSelection(raw, options) {
+  const stored = normalizeComplaintTypeValue({
+    code: raw.complaintType,
+    path: raw.complaintTypePath,
+    leaf: raw.complaintTypeLeaf,
+  });
+  let selection = stored;
+
+  if (options.complaintTypeTree) {
+    selection = repairSelection(options.complaintTypeTree, stored);
+  } else if (options.complaintType && stored.leaf) {
+    selection = options.complaintType.some((opt) => opt.id === stored.code)
+      ? stored
+      : clearedSelection();
+  }
+
+  return {
+    complaintType: selection.code,
+    complaintTypePath: selection.path,
+    complaintTypeLeaf: selection.leaf,
+  };
 }

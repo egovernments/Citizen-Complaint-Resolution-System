@@ -10,6 +10,7 @@ import CardUpdatedStamp from "./components/CardUpdatedStamp";
 import ResizeGrip from "./components/ResizeGrip";
 import SubtleScroll from "./components/SubtleScroll";
 import GroupByLevelSelect, { levelDisplayLabel } from "./components/GroupByLevelSelect";
+import TypeFilterIgnoredNote, { typeFilterIgnored } from "./components/TypeFilterIgnoredNote";
 import {
   VIZ_TYPE,
   SHARED_CHROME,
@@ -154,9 +155,12 @@ const AdminDashboard = ({ embedded = false }) => {
  * the saved layout: localStorage, kpiId-keyed. NOT part of `filters` state on
  * purpose — a Group-by level is structurally NOT a filter: it changes the
  * widget's own aggregation dimension (which hierarchy level the service_code
- * buckets roll up to), never which complaints qualify. Hierarchy FILTERS were
- * built and deliberately abandoned; this control must stay out of the filter
- * store so it can never be mistaken for (or grow into) one.
+ * buckets roll up to), never which complaints qualify. Hierarchy FILTERING
+ * lives where filters live: the global complaint-type TREE filter
+ * (ComplaintTypeTreeFilter, the sanctioned revival of the abandoned July
+ * demo) is part of `filters`/globalParams; this per-widget control must stay
+ * out of the filter store so the two axes never blur — they compose at the
+ * query level (subtree WHERE × level GROUP BY).
  */
 const HIER_OVERRIDES_STORAGE_KEY = "ccrs.dashboard.hier-level-overrides.v1";
 
@@ -593,6 +597,12 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
             const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
+            // Subtle per-tile note when the backend ignored the subtree
+            // complaint-type filter on this KPI's grain (daily has no
+            // complaint_node_path) — the field is ABSENT unless it happened.
+            const ignoredNote = typeFilterIgnored(batch.results?.[item.i]) ? (
+              <TypeFilterIgnoredNote />
+            ) : null;
             const removeBtn = (
               <WidgetRemoveButton
                 label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${resolveTitle(kpis[item.i]) || item.i}`}
@@ -611,6 +621,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                 >
                   {removeBtn}
                   {renderTile(item.i)}
+                  {ignoredNote}
                   <CardUpdatedStamp label={lastUpdatedLabel} />
                 </div>
               );
@@ -675,6 +686,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                     renderTile(item.i, groupBy.info)
                   )}
                 </div>
+                {ignoredNote}
                 <CardUpdatedStamp label={lastUpdatedLabel} />
                 <ResizeGrip />
               </section>
