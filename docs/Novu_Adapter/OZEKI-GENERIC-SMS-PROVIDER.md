@@ -1,6 +1,6 @@
 # Ozeki SMS Gateway via Novu `generic-sms` — Design
 
-**Status**: DESIGN — draft for review, not implemented. Mechanics verified 2026-07-17 against Novu v2.3.0 source (the self-hosted tag we deploy) and both novu-bridge variants (develop + the pass-through `feat/whatsapp-contentsid-pipeline` branch).
+**Status**: bridge implementation included in this PR (`OzekiOverridesBuilder` + `NovuClient` SMS-leg wiring + `NOVU_BRIDGE_SMS_PROVIDER` / `NOVU_BRIDGE_OZEKI_INTEGRATION_IDENTIFIER` knobs, default off). The R1 empirical gate (§4) against a live Ozeki gateway is still outstanding — do not enable in a deployment before running it. Mechanics verified 2026-07-17 against Novu v2.3.0 source (the self-hosted tag we deploy).
 **Goal**: send SMS through a customer-hosted [Ozeki SMS Gateway](https://ozeki-sms-gateway.com/p_5667-http-sms-api.html) (HTTP REST, common in on-prem installs) from the DIGIT notification pipeline, with the provider visible in the Novu dashboard (integration store + activity feed), **without forking Novu images** and **without a standalone shim service**.
 
 ---

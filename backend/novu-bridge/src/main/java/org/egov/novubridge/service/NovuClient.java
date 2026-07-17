@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.novubridge.config.NovuBridgeConfiguration;
+import org.egov.novubridge.service.provider.OzekiOverridesBuilder;
 import org.egov.novubridge.util.PiiMask;
 import org.egov.tracer.model.CustomException;
 import org.springframework.http.*;
@@ -66,7 +67,18 @@ public class NovuClient {
             payload.put("subject", renderedSubject);
         }
 
-        return trigger(workflowId, subscriberId, phone, email, payload, transactionId);
+        // Ozeki delivery (opt-in): reshape the SMS send for an Ozeki gateway
+        // behind a generic-sms integration. Overrides are sent raw (Novu never
+        // templates them), which is exactly why this envelope can only be built
+        // here — the pass-through path is the one place that has the final
+        // renderedBody, recipient phone and transactionId together.
+        Map<String, Object> overrides = null;
+        if ("SMS".equalsIgnoreCase(channel) && config.isOzekiSmsEnabled()) {
+            overrides = OzekiOverridesBuilder.build(
+                    config.getOzekiIntegrationIdentifier(), transactionId, phone, renderedBody);
+        }
+
+        return trigger(workflowId, subscriberId, phone, email, payload, transactionId, overrides);
     }
 
     /**
@@ -152,6 +164,12 @@ public class NovuClient {
      */
     public NovuResponse trigger(String workflowId, String subscriberId, String phone, String email,
                                 Map<String, Object> payload, String transactionId) {
+        return trigger(workflowId, subscriberId, phone, email, payload, transactionId, null);
+    }
+
+    public NovuResponse trigger(String workflowId, String subscriberId, String phone, String email,
+                                Map<String, Object> payload, String transactionId,
+                                Map<String, Object> overrides) {
         try {
             Map<String, Object> request = new HashMap<>();
             request.put("name", workflowId);
@@ -168,6 +186,9 @@ public class NovuClient {
             request.put("payload", payload);
             if (StringUtils.hasText(transactionId)) {
                 request.put("transactionId", transactionId);
+            }
+            if (overrides != null && !overrides.isEmpty()) {
+                request.put("overrides", overrides);
             }
 
             HttpHeaders headers = new HttpHeaders();

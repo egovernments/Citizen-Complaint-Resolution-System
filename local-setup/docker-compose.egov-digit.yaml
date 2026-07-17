@@ -2262,6 +2262,11 @@ services:
       NOVU_BRIDGE_WORKFLOW_ID_SMS: ${NOVU_BRIDGE_WORKFLOW_ID_SMS:-complaints-sms}
       NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP: ${NOVU_BRIDGE_WORKFLOW_ID_WHATSAPP:-complaints-whatsapp}
       NOVU_BRIDGE_WORKFLOW_ID_EMAIL: ${NOVU_BRIDGE_WORKFLOW_ID_EMAIL:-complaints-email}
+      # SMS provider envelope: empty = Novu's primary SMS integration; "ozeki"
+      # = deliver via an Ozeki SMS Gateway behind a generic-sms Novu
+      # integration (docs/Novu_Adapter/OZEKI-GENERIC-SMS-PROVIDER.md).
+      NOVU_BRIDGE_SMS_PROVIDER: ${NOVU_BRIDGE_SMS_PROVIDER:-}
+      NOVU_BRIDGE_OZEKI_INTEGRATION_IDENTIFIER: ${NOVU_BRIDGE_OZEKI_INTEGRATION_IDENTIFIER:-ozeki-sms}
       # TTL cache (ms) skips redundant identifies for the same subscriberId.
       NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS: ${NOVU_BRIDGE_IDENTIFY_CACHE_TTL_MS:-300000}
       # Channels actually delivered. WHATSAPP stays OFF until a legitimate

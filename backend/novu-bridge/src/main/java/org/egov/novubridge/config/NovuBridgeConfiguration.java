@@ -103,6 +103,21 @@ public class NovuBridgeConfiguration {
     @Value("${novu.bridge.workflow.id.email:complaints-email}")
     private String novuWorkflowEmail;
 
+    // ---- SMS provider envelope ----
+    // Empty (default) = plain trigger; Novu's primary SMS integration delivers.
+    // "ozeki" = attach the Ozeki generic-sms overrides envelope to SMS triggers
+    // (OzekiOverridesBuilder); requires a generic-sms Novu integration whose
+    // identifier matches novu.bridge.ozeki.integration.identifier.
+    @Value("${novu.bridge.sms.provider:}")
+    private String smsProvider;
+
+    @Value("${novu.bridge.ozeki.integration.identifier:ozeki-sms}")
+    private String ozekiIntegrationIdentifier;
+
+    public boolean isOzekiSmsEnabled() {
+        return smsProvider != null && "ozeki".equalsIgnoreCase(smsProvider.trim());
+    }
+
     // ---- Subscriber identify (upsert) TTL cache ----
     @Value("${novu.bridge.identify.cache.ttl.ms:300000}")
     private Long identifyCacheTtlMs;
