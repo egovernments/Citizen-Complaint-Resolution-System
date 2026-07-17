@@ -6,6 +6,13 @@ DIGIT/CCRS deployment. Terse; every command was run on a real box.
 State root tenant below is `<root>` (e.g. `ke`, `mz`). Config is authored there; city
 tenants inherit.
 
+**Scripts** — the runnable pieces (the installer chains them; run individually to resume/verify):
+- [`enable-notifications.sh`](../../local-setup/scripts/enable-notifications.sh) — **primary path**: whole flow, resumable + pre/post-validated per step
+- [`seed-notifications.py`](../../local-setup/scripts/seed-notifications.py) — seed the 4 MDMS masters
+- [`persist-provider-templates.py`](../../local-setup/scripts/persist-provider-templates.py) — pull **your** approved Twilio SIDs → MDMS
+- [`drive-test-complaint.py`](../../local-setup/scripts/drive-test-complaint.py) — the final **drive + verify** (self-discovering)
+- [`bootstrap-novu-whatsapp.sh`](../../backend/novu-bridge/config/bootstrap-novu-whatsapp.sh) · [`novu-mint-key.sh`](../../backend/novu-bridge/config/novu-mint-key.sh) — Novu integration + workflows / API key
+
 ---
 
 ## 1. Services — what runs, what to set, which image
@@ -93,24 +100,9 @@ which also creates the Twilio integration. **For a standalone run you must set
 `NOVU_BASE_URL=http://localhost:14002`** — its built-in default is `:1336` (wrong for this stack;
 `enable-notifications.sh` passes `:14002` for you, so this only bites a bare `bash bootstrap-novu-whatsapp.sh`).
 
-**9 — Drive a complaint, then verify**
-```bash
-sudo docker exec docker-postgres psql -U egov -d egov -c \
- "select event_name,channel,status,last_error_code from nb_dispatch_log order by created_time desc limit 10;"
-```
-`SENT` in `nb_dispatch_log` = Novu **accepted** the async trigger — **not** proof of delivery. Ask
-Novu itself whether the send actually succeeded (status `sent`, not `error`; surface any `errorId`):
-```bash
-KEY=$(sudo docker exec novu-bridge printenv NOVU_API_KEY)
-curl -s "http://localhost:14002/v1/messages?limit=20" -H "Authorization: ApiKey $KEY" \
- | jq -r '.data[] | "\(.channel)\t\(.status)\t\(.errorId // "")"'
-```
-**`SENT` in `nb_dispatch_log` ≠ delivered** — the Novu message status (and the handset/inbox, or the
-Twilio Messages API) is the truth.
-
-> **WhatsApp shows up as `channel=sms` in Novu.** `complaints-whatsapp` is an sms-type Novu step, so
-> `GET /v1/messages` labels WhatsApp sends `channel=sms` and `?channel=whatsapp` returns 0. Split
-> SMS vs WhatsApp by the **`transactionId` suffix** (`…:WHATSAPP` vs `…:SMS`), not by Novu's channel.
+**9 — Setup complete. ⚠️ Don't drive a complaint yet.** The drive-and-verify is the **last** thing —
+it only works after **§4** (seed the masters) and, for WhatsApp, **§5** (author your Content templates
++ persist **your** SIDs). Do §4 and §5; the final drive + verify is **[§5.4](#54-drive-a-real-complaint-and-verify)**.
 
 ---
 
@@ -200,15 +192,35 @@ curl -X POST -H "Authorization: Bearer <token>" -H 'Content-Type: application/js
 Bearer auth; writes one `TEST`-tagged `nb_dispatch_log` row. A `SKIPPED/NB_TEMPLATE_NOT_APPROVED`
 here means §5.0 isn't done for that template.
 
-### 5.4 Drive a real complaint and verify
-End-to-end proof: [`local-setup/scripts/drive-test-complaint.py`](../../local-setup/scripts/drive-test-complaint.py)
-— fully scripted (creates a citizen, files a complaint, verifies the dispatch). The manual
-equivalent is a single create, then re-run the §2 step-9 checks:
+### 5.4 Drive a real complaint and verify — the FINAL step
+
+Do this only after §4 (seed) and §5.0–5.2 (your Content templates + persisted SIDs). Fully scripted +
+self-discovering: [`local-setup/scripts/drive-test-complaint.py`](../../local-setup/scripts/drive-test-complaint.py)
+— finds a city tenant/locality/serviceCode, creates a citizen, files a complaint, and runs the three
+checks below.
 ```bash
-curl -X POST -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' \
-  http://<host>/pgr-services/v2/request/_create \
-  -d '{"RequestInfo":{"authToken":"<token>"},"service":{"tenantId":"<root>","serviceCode":"GarbageNeedsTobeCleared","description":"test","source":"web","phone":"+2547XXXXXXXX"},"workflow":{"action":"APPLY"}}'
+python3 local-setup/scripts/drive-test-complaint.py --mobile 7011854675 --country +91
 ```
+Filing by hand needs: a **city** tenant with boundaries (`INVALID_BOUNDARY` at the state root), a real
+`address.locality.code` (`select code from boundary_relationship where boundarytype='Locality'`), a
+non-null `geoLocation` (null crashes the persister → 200 but no row), a `ComplaintHierarchy` leaf
+`serviceCode`, and filing as a **CITIZEN** (SUPERADMIN gets `INVALID ROLE` on `APPLY`).
+
+**What "done" looks like — three levels of truth:**
+```bash
+# 1) bridge accepted + emitted — WhatsApp row SENT
+sudo docker exec docker-postgres psql -U egov -d egov -c \
+ "select event_name,channel,status,last_error_code from nb_dispatch_log order by created_time desc limit 10;"
+# 2) Novu actually sent (SENT above only = trigger accepted, async):
+KEY=$(sudo docker exec novu-bridge printenv NOVU_API_KEY)
+curl -s "http://localhost:14002/v1/messages?limit=20" -H "Authorization: ApiKey $KEY" \
+ | jq -r '.data[] | "\(.transactionId)\t\(.status)\t\(.errorId // "")"'   # want status=sent
+# 3) reached the handset — Twilio Messages API final status = delivered/read
+```
+> **WhatsApp shows up as `channel=sms` in Novu** (`complaints-whatsapp` is an sms-type step), so
+> `?channel=whatsapp` returns 0 — split SMS vs WhatsApp by the **`transactionId` suffix**
+> (`…:WHATSAPP` vs `…:SMS`), not by Novu's `channel`. `SENT` in `nb_dispatch_log` ≠ delivered; the
+> Novu message status and Twilio's final status are the truth.
 
 ---
 
