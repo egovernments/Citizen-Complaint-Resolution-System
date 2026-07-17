@@ -68,17 +68,44 @@ public class AnalyticsService {
     private final KpiCatalogService kpiCatalogService;
     private final PrincipalScopeResolver scopeResolver;
     private final KpiQueryComposer queryComposer;
+    private final AnalyticsMetrics metrics;
 
     @Autowired
     public AnalyticsService(AnalyticsPlanner planner, AnalyticsCatalog catalog, JdbcTemplate jdbc,
                             KpiCatalogService kpiCatalogService, PrincipalScopeResolver scopeResolver,
-                            KpiQueryComposer queryComposer){
+                            KpiQueryComposer queryComposer, AnalyticsMetrics metrics){
         this.planner = planner; this.catalog = catalog; this.jdbc = jdbc;
         this.kpiCatalogService = kpiCatalogService; this.scopeResolver = scopeResolver;
-        this.queryComposer = queryComposer;
+        this.queryComposer = queryComposer; this.metrics = metrics;
     }
 
+    /** Back-compat entry point (no trace correlation header). */
     public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, String tenantId, int stateLevelLen){
+        return query(body, requestInfo, tenantId, stateLevelLen, null);
+    }
+
+    /**
+     * #1110: instrumented entry point. Every executed SQL query (batch entry, single query,
+     * compose SOURCE query) records an OTEL duration/rows point via {@link QueryTelemetry};
+     * one {@code analytics.slow_queries} line (top-{@value QueryTelemetry#TOP_N} by tookMs)
+     * is logged per request — also on partial failure, covering whatever did execute.
+     *
+     * @param headerTraceId the literal {@code x-trace-id} header — correlation FALLBACK only;
+     *                      the active span's trace id (javaagent + Kong w3c propagation) wins.
+     */
+    public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, String tenantId,
+                                    int stateLevelLen, String headerTraceId){
+        QueryTelemetry tel = new QueryTelemetry(metrics, tenantId, stateLevelLen);
+        try {
+            return doQuery(body, requestInfo, tenantId, stateLevelLen, tel);
+        } finally {
+            if (!tel.isEmpty())
+                log.info(tel.slowQueryLine(QueryTelemetry.resolveTraceId(headerTraceId)));
+        }
+    }
+
+    private Map<String,Object> doQuery(JsonNode body, RequestInfo requestInfo, String tenantId,
+                                       int stateLevelLen, QueryTelemetry tel){
         if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
         AnalyticsScope scope = scopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
         Set<String> callerRoles = extractRoles(requestInfo);
@@ -107,7 +134,7 @@ public class AnalyticsService {
                         continue;
                     }
                     // D1a: backend-composed defs (query:null + viz.compose) resolve recursively here.
-                    Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles);
+                    Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, name);
                     if (composed != null) { results.put(name, composed); continue; }
 
                     JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
@@ -126,7 +153,7 @@ public class AnalyticsService {
                                 "message", "inline query projects officer-PII dimension(s); role not authorized"));
                         continue;
                     }
-                    results.put(name, runOne(actualQueryNode, scope));
+                    results.put(name, runOne(actualQueryNode, scope, tel, name, kpiContext(queryNode)));
                 } catch (Exception ex) {
                     partial = true;
                     results.put(name, err(ex));
@@ -138,14 +165,14 @@ public class AnalyticsService {
             JsonNode queryNode = body.get("query");
             if (publicFloor && !queryNode.has("kpiId"))
                 throw new IllegalArgumentException("kpi_forbidden: public access is limited to published PUBLIC KPIs");
-            Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles);
+            Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, "query");
             if (composed != null) { out.putAll(composed); return out; }
             JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
             if (actualQueryNode == null)
                 throw new IllegalArgumentException("kpi_forbidden: KPI not found or not authorized");
             if (!queryNode.has("kpiId") && projectsForbiddenPii(actualQueryNode, callerRoles))
                 throw new IllegalArgumentException("pii_forbidden: inline query projects officer-PII dimension(s); role not authorized");
-            out.putAll(runOne(actualQueryNode, scope));
+            out.putAll(runOne(actualQueryNode, scope, tel, "query", kpiContext(queryNode)));
         } else {
             throw new IllegalArgumentException("invalid_param: body must contain 'query' or 'queries'");
         }
@@ -253,7 +280,8 @@ public class AnalyticsService {
      * {@code hourlyAvgFromDaily}, {@code openRateComplement}, {@code netBacklogDaily}.
      */
     private Map<String,Object> maybeComposeResult(JsonNode queryNode, AnalyticsScope scope,
-                                                  String tenantId, Set<String> callerRoles) {
+                                                  String tenantId, Set<String> callerRoles,
+                                                  QueryTelemetry tel, String entryName) {
         if (queryNode == null || !queryNode.has("kpiId")) return null;
         String kpiId = queryNode.get("kpiId").asText();
         Optional<KpiDefinition> defOpt = kpiCatalogService.getDef(kpiId, tenantId);
@@ -274,13 +302,15 @@ public class AnalyticsService {
         String type = compose.get("type").asText();
 
         // Resolve + run each source kpiId with the same params, RBAC and row-scope.
+        // #1110/R9: each SOURCE query records its own metric point and joins the per-request
+        // slow-query pool (attributed to its own kpiId, under the composed entry's name).
         List<Map<String,Object>> sourceRows = new ArrayList<>();
         for (JsonNode srcId : compose.get("sourceKpiIds")) {
             JsonNode srcRef = synthRef(srcId.asText(), params);
             JsonNode srcQuery = resolveKpiRef(srcRef, tenantId, callerRoles);
             if (srcQuery == null)
                 throw new IllegalArgumentException("kpi_forbidden: compose source '" + srcId.asText() + "' not authorized");
-            Map<String,Object> r = runOne(srcQuery, scope);
+            Map<String,Object> r = runOne(srcQuery, scope, tel, entryName, srcId.asText());
             sourceRows.add(firstRow(r));
         }
 
@@ -412,17 +442,35 @@ public class AnalyticsService {
         return callerRoles == null || callerRoles.stream().noneMatch(OFFICER_PII_ROLES::contains);
     }
 
-    private Map<String,Object> runOne(JsonNode q, AnalyticsScope scope){
+    /**
+     * Execute one planned query. THE choke point for every analytics SQL execution
+     * (batch entries, the single-query arm, compose SOURCE queries) — each successful run
+     * records one OTEL metric point + one slow-query-pool entry (#1110).
+     *
+     * @param entryName the batch dict key this run belongs to ({@code "query"} on the
+     *                  single arm); compose sources share their composed entry's name
+     * @param kpiId     the resolved KPI id, or {@code "inline"} for inline-grammar queries
+     */
+    private Map<String,Object> runOne(JsonNode q, AnalyticsScope scope, QueryTelemetry tel,
+                                      String entryName, String kpiId){
         AnalyticsPlanner.Planned p = planner.plan(q, scope);
         long t0 = System.currentTimeMillis();
         List<Map<String,Object>> rows = jdbc.queryForList(p.sql, p.params.toArray());
+        long tookMs = System.currentTimeMillis() - t0;
+        if (tel != null) tel.record(entryName, kpiId, p.grain, tookMs, rows.size());
         Map<String,Object> r = new LinkedHashMap<>();
         r.put("grain", p.grain);
         r.put("columns", p.columns);
         r.put("rows", rows);
         r.put("rowCount", rows.size());
-        r.put("tookMs", System.currentTimeMillis() - t0);
+        r.put("tookMs", tookMs);
         return r;
+    }
+
+    /** Metric attribution for a request query node: its kpiId, or {@code "inline"}. */
+    private static String kpiContext(JsonNode queryNode) {
+        return queryNode != null && queryNode.hasNonNull("kpiId")
+                ? queryNode.get("kpiId").asText() : "inline";
     }
 
     /** /_schema capabilities — lets the FE build the KPI editor dynamically. */
@@ -462,6 +510,48 @@ public class AnalyticsService {
     private Long asOf(){
         try { return jdbc.queryForObject("SELECT max(facts_built_at) FROM complaint_facts", Long.class); }
         catch (Exception e) { return System.currentTimeMillis(); }
+    }
+
+    // ---- #1110: tenant record-count for /packs (record_count_tier tag source) ----
+
+    private static final long RECORD_COUNT_TTL_MS = 5 * 60_000L;
+    /** tenantId -> [count, expiresAtMs]. Concurrent; a stale entry is simply recomputed. */
+    private final java.util.concurrent.ConcurrentHashMap<String, long[]> recordCountCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** Injectable clock for cache-expiry tests (see AnalyticsServiceRecordCountTest). */
+    private java.util.function.LongSupplier recordCountClock = System::currentTimeMillis;
+
+    /**
+     * TENANT-CORPUS size of {@code complaint_facts} — how many fact rows exist for the
+     * tenant subtree, using {@link AnalyticsPlanner#applyScope}'s tenant semantics
+     * (state level: {@code tenant_id LIKE 'ke%'}; city level: exact match). This is
+     * deliberately NOT the caller's ABAC-visible subset: the dashboard uses it as the
+     * {@code record_count_tier} tag, which must describe the tenant's data volume so
+     * render-lag comparisons across personas share a denominator (#1110/R9-C9).
+     *
+     * <p>Cached in-memory for 5 minutes per tenant; errors return null (additive,
+     * never fails the /packs response) and are not cached.
+     */
+    public Long recordCount(String tenantId, int stateLevelLen) {
+        if (tenantId == null || tenantId.isEmpty()) return null;
+        long now = recordCountClock.getAsLong();
+        long[] cached = recordCountCache.get(tenantId);
+        if (cached != null && cached[1] > now) return cached[0];
+        // same state-level test as PrincipalScopeResolver.resolve()
+        boolean stateLevel = tenantId.split("\\.").length == stateLevelLen;
+        try {
+            Long count = stateLevel
+                    ? jdbc.queryForObject("SELECT count(*) FROM complaint_facts WHERE tenant_id LIKE ?",
+                                          Long.class, tenantId + "%")
+                    : jdbc.queryForObject("SELECT count(*) FROM complaint_facts WHERE tenant_id = ?",
+                                          Long.class, tenantId);
+            if (count == null) return null;
+            recordCountCache.put(tenantId, new long[]{count, now + RECORD_COUNT_TTL_MS});
+            return count;
+        } catch (Exception e) {
+            log.debug("recordCount for tenant {} failed (returning null)", tenantId, e);
+            return null;
+        }
     }
 
     private Map<String,Object> scopeInfo(AnalyticsScope s){
