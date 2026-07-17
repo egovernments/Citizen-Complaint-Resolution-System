@@ -29,8 +29,10 @@ import org.springframework.stereotype.Component;
  *   <li>{@code pgr.analytics.query.rows} — counter of rows returned.</li>
  * </ul>
  * Attributes: {@code kpi_id} (the KPI id, {@code inline} for inline-grammar queries),
- * {@code grain}, {@code tenant}. Cardinality is bounded: kpi_id by the MDMS catalog
- * (tens), grain by the 3 grains, tenant by the tenant tree.
+ * {@code grain}, {@code tenant} (the STATE-ROOT tenant, never the raw request
+ * tenantId — see {@link QueryTelemetry#stateRootOf}). Cardinality is bounded: kpi_id
+ * by the MDMS catalog (tens), grain by the 3 grains, tenant by the deployment's
+ * state roots.
  */
 @Component
 @Slf4j
@@ -72,7 +74,9 @@ public class AnalyticsMetrics {
      * @param kpiId  the KPI id the query was resolved from, or {@code "inline"} for
      *               inline-grammar queries
      * @param grain  the grain the planner resolved ({@code facts|events|daily})
-     * @param tenant the request tenantId (scope tenant, not per-row)
+     * @param tenant the STATE-ROOT tenant (callers must pre-normalize via
+     *               {@link QueryTelemetry#stateRootOf} — the raw request tenantId is
+     *               attacker-controlled and would blow up label cardinality)
      */
     public void recordQuery(String kpiId, String grain, String tenant, long tookMs, long rowCount) {
         try {

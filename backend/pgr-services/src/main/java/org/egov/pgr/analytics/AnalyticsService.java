@@ -95,7 +95,7 @@ public class AnalyticsService {
      */
     public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, String tenantId,
                                     int stateLevelLen, String headerTraceId){
-        QueryTelemetry tel = new QueryTelemetry(metrics, tenantId);
+        QueryTelemetry tel = new QueryTelemetry(metrics, tenantId, stateLevelLen);
         try {
             return doQuery(body, requestInfo, tenantId, stateLevelLen, tel);
         } finally {

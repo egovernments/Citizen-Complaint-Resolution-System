@@ -44,17 +44,43 @@ final class QueryTelemetry {
 
     private final AnalyticsMetrics metrics;
     private final String tenantId;
+    private final String metricTenant;
     private final List<Execution> executions = new ArrayList<>();
 
-    QueryTelemetry(AnalyticsMetrics metrics, String tenantId) {
+    QueryTelemetry(AnalyticsMetrics metrics, String tenantId, int stateLevelLen) {
         this.metrics = metrics;
         this.tenantId = tenantId;
+        this.metricTenant = stateRootOf(tenantId, stateLevelLen);
     }
 
-    /** Record one successfully executed query (metric point + slow-query pool entry). */
+    /**
+     * Record one successfully executed query (metric point + slow-query pool entry).
+     * The metric point is tagged with the STATE-ROOT tenant, not the raw request
+     * tenantId: the request string is never validated against real tenants, so tagging
+     * it raw would let an unauthenticated caller mint a new Prometheus series per
+     * request ({@code ke.attack0001}, {@code ke.attack0002}, ...) — a cardinality bomb
+     * on the collector. The full tenantId still appears (sanitized) in the
+     * slow-query log line, which is unbounded-safe.
+     */
     void record(String name, String kpiId, String grain, long tookMs, long rowCount) {
-        if (metrics != null) metrics.recordQuery(kpiId, grain, tenantId, tookMs, rowCount);
+        if (metrics != null) metrics.recordQuery(kpiId, grain, metricTenant, tookMs, rowCount);
         executions.add(new Execution(name, kpiId, tookMs, rowCount));
+    }
+
+    /**
+     * First {@code stateLevelLen} dot-segments of the tenant — same state-level
+     * semantics as PrincipalScopeResolver/AnalyticsService.recordCount. Bounds the
+     * metric label to the deployment's state roots: a fabricated sub-tenant suffix
+     * collapses to its real root, and a fabricated ROOT never reaches
+     * {@link #record} because KPI-by-reference resolution fails at a root with no
+     * published catalog (and inline queries are blocked for the public floor).
+     */
+    static String stateRootOf(String tenantId, int stateLevelLen) {
+        if (tenantId == null || tenantId.isEmpty()) return tenantId;
+        String[] parts = tenantId.split("\\.");
+        int keep = Math.max(1, stateLevelLen);
+        if (parts.length <= keep) return tenantId;
+        return String.join(".", java.util.Arrays.asList(parts).subList(0, keep));
     }
 
     boolean isEmpty() {

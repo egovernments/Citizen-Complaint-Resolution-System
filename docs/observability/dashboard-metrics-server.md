@@ -35,7 +35,10 @@ Same convention as the client-side `dashboardMetrics.js` (#1268).
 
 Labels on both: `kpi_id` (the KPI id, or `inline` for inline-grammar queries), `grain`
 (`facts`/`events`/`daily`/`compose` never appears — sources record their real grain),
-`tenant` (the request tenantId). Resource attributes (`service.name="pgr-services"` →
+`tenant` (the **state-root** tenant, e.g. `ke` — never the raw request tenantId,
+which is caller-controlled and unvalidated: tagging it raw would let an anonymous
+caller mint a new Prometheus series per request. The full request tenantId still
+appears, sanitized, in the `analytics.slow_queries` log line). Resource attributes (`service.name="pgr-services"` →
 `job`) come from the agent; `resource_to_telemetry_conversion` is enabled on the
 collector's prometheus exporter.
 
