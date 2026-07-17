@@ -179,8 +179,8 @@ account's approved templates, auto-matches them to routing rows (approved pre-se
 shown as diagnostics), and **Persist** upserts them into `RAINMAKER-PGR.NotificationProviderTemplate`.
 Idempotent (create-or-update by routing tuple).
 
-![Notification Providers → Sync WhatsApp templates](https://raw.githubusercontent.com/KDwevedi/Citizen-Complaint-Resolution-System/screenshots-notifications/notifications/configurator-notification-providers.png)
-![Sync dialog — 14 matched, review + Persist](https://raw.githubusercontent.com/KDwevedi/Citizen-Complaint-Resolution-System/screenshots-notifications/notifications/configurator-sync-twilio-templates.png)
+![Notification Providers → Sync WhatsApp templates](https://raw.githubusercontent.com/egovernments/Citizen-Complaint-Resolution-System/screenshots-notifications/notifications/configurator-notification-providers.png)
+![Sync dialog — 14 matched, review + Persist](https://raw.githubusercontent.com/egovernments/Citizen-Complaint-Resolution-System/screenshots-notifications/notifications/configurator-sync-twilio-templates.png)
 
 ### 5.2 …or the same thing headless (CLI)
 ```bash
