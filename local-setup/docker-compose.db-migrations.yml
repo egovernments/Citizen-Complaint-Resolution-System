@@ -1109,7 +1109,7 @@ services:
       - egov-network
     restart: "no"
 
-    db-seed:
+  db-seed:
     image: postgres:16
     container_name: db-seed-container
     depends_on:
