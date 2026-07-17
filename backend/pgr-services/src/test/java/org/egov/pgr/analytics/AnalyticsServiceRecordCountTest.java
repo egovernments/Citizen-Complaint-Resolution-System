@@ -37,7 +37,8 @@ public class AnalyticsServiceRecordCountTest {
 
     @BeforeEach
     public void setUp() {
-        service = new AnalyticsService(null, null, jdbc, null, null, null, new AnalyticsMetrics());
+        // null config -> the shared DEFAULT_ANALYTICS_CONFIG_CACHE_TTL_MS (5 minutes)
+        service = new AnalyticsService(null, null, jdbc, null, null, null, new AnalyticsMetrics(), null);
         ReflectionTestUtils.setField(service, "recordCountClock", (LongSupplier) clock::get);
     }
 
@@ -82,6 +83,25 @@ public class AnalyticsServiceRecordCountTest {
 
         assertEquals(10L, service.recordCount("ke", STATE_LEN));
         clock.addAndGet(5 * 60_000L + 1L);        // past the TTL
+        assertEquals(20L, service.recordCount("ke", STATE_LEN));
+
+        verify(jdbc, times(2)).queryForObject(anyString(), eq(Long.class), any());
+    }
+
+    @Test
+    public void ttlIsConfigurableViaTheSharedAnalyticsCacheConfig() {
+        // pgr.analytics.config-cache-ttl-ms — ONE property drives every analytics
+        // config cache; here a 1s TTL instead of the 5m default.
+        org.egov.pgr.config.PGRConfiguration cfg = mock(org.egov.pgr.config.PGRConfiguration.class);
+        when(cfg.getAnalyticsConfigCacheTtlMs()).thenReturn(1_000L);
+        service = new AnalyticsService(null, null, jdbc, null, null, null, new AnalyticsMetrics(), cfg);
+        ReflectionTestUtils.setField(service, "recordCountClock", (LongSupplier) clock::get);
+        when(jdbc.queryForObject(anyString(), eq(Long.class), any())).thenReturn(10L, 20L);
+
+        assertEquals(10L, service.recordCount("ke", STATE_LEN));
+        clock.addAndGet(999L);                     // inside the configured 1s TTL
+        assertEquals(10L, service.recordCount("ke", STATE_LEN));
+        clock.addAndGet(2L);                       // past it
         assertEquals(20L, service.recordCount("ke", STATE_LEN));
 
         verify(jdbc, times(2)).queryForObject(anyString(), eq(Long.class), any());
