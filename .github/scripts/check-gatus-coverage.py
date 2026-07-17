@@ -421,10 +421,31 @@ def _is_literally_disabled(endpoint) -> bool:
 _STUB = re.compile(r"^__[A-Z0-9_]+__$")   # what _stub_vars leaves behind for ${VAR}
 
 
+# Gatus's ConvertGroupAndEndpointNameToKey lowercases each of group and name and folds
+# these characters to '-', then joins the two with '_'.
+_GATUS_FOLD = str.maketrans({c: "-" for c in "/_.,# "})
+
+
 def _gatus_key(endpoint) -> str:
-    """Gatus's own identity for an endpoint: group + name, lowercased, spaces dashed."""
-    raw = f"{endpoint.get('group', '')}_{endpoint.get('name', '')}"
-    return raw.lower().replace(" ", "-")
+    """Gatus's own identity for an endpoint, matching ConvertGroupAndEndpointNameToKey.
+
+    Each of group and name is sanitised FIRST (lowercase, fold / _ . , # and space to
+    '-'), and only then joined with '_'. Sanitising before the join is what keeps the
+    key injective and faithful to Gatus:
+
+      * injective -- a literal '_' inside a component becomes '-', so (group='A_B',
+        name='C') -> 'a-b_c' and (group='A', name='B_C') -> 'a_b-c' stay distinct.
+        The earlier version joined first and folded only spaces, collapsing both to
+        'a_b_c' -- a fabricated duplicate (false red) Gatus would never raise, since
+        Gatus folds the underscores too.
+      * faithful -- a bare tuple (group, name) would be injective but would treat
+        'A B' and 'A-B' as different, whereas Gatus folds both to 'a-b'; that could
+        MISS a real Gatus duplicate (a false green). Matching Gatus's own folding is
+        the only key that agrees with the tool this guard is modelling.
+    """
+    def fold(x):
+        return str(x).lower().translate(_GATUS_FOLD)
+    return f"{fold(endpoint.get('group', ''))}_{fold(endpoint.get('name', ''))}"
 
 
 def _validate_endpoints(endpoints, where):
@@ -889,6 +910,15 @@ def self_test() -> int:
         [{"name": "Foo Bar", "group": "G", "url": "tcp://a:1"},
          {"name": "foo-bar", "group": "g", "url": "tcp://b:1"}],
     )
+    #     _gatus_key must be injective: (group, name) pairs that differ only in where an
+    #     underscore falls must NOT collide, or a legitimate config is falsely rejected.
+    if _gatus_key({"group": "A", "name": "B_C"}) == _gatus_key({"group": "A_B", "name": "C"}):
+        failures.append("_gatus_key collided on distinct group/name pairs (underscore separator)")
+    #     ...and it must match Gatus's own folding, so 'A B' and 'A-B' ARE the same key
+    #     (Gatus folds both to 'a-b'); keying them apart would miss a real duplicate.
+    if _gatus_key({"group": "G", "name": "A B"}) != _gatus_key({"group": "G", "name": "A-B"}):
+        failures.append("_gatus_key did not fold space/dash the way Gatus does")
+
     #     enabled must be a bool: a quoted "false" is a string and gatus panics
     #     ("cannot unmarshal !!str `false` into bool").
     _expect_endpoint_error(
