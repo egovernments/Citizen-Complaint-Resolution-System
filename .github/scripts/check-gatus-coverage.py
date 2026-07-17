@@ -376,12 +376,30 @@ def k8s_targets_from_docs(docs):
         # one. Everything is in `digit` today, which is exactly when this looks safe.
         ns = doc["metadata"].get("namespace", "default")
         key = (ns, tuple(sorted(sel.items()))) if sel else (ns, "__none__", name)
-        by_selector.setdefault(key, []).append(name)
+        by_selector.setdefault(key, []).append((ns, name))
+    # The grouping key carries namespace, but the returned map is keyed by bare Service
+    # NAME, because that is all a Gatus URL gives us to match on (`_hosts` extracts a
+    # hostname, which has no namespace). So the moment two Services in different
+    # namespaces share a name, this map cannot represent both -- one would overwrite the
+    # other and its coverage would silently reattribute to the wrong workload. Rather
+    # than pick a winner, fail loud, the same way compose_targets does for a shadowing
+    # alias. Not reachable today (everything is in `digit`), and the fix is deliberately
+    # a hard error rather than an (ns, name) key, which would break every downstream
+    # targets[host] lookup since hosts carry no namespace.
     out = {}
-    for names in by_selector.values():
-        canonical = sorted(names)[0]
-        for n in names:
+    owner = {}
+    for group in by_selector.values():
+        canonical = sorted(n for _, n in group)[0]
+        for ns, n in group:
+            if n in out:
+                raise GuardError(
+                    f"two k8s Services are both named {n!r} but front different workloads "
+                    f"(namespaces {owner[n]} and {ns}). A Gatus URL names only the host, so "
+                    f"this map cannot tell them apart and one's coverage would reattribute "
+                    f"to the other. Rename one, or give it a distinct Service name."
+                )
             out[n] = canonical
+            owner[n] = ns
     return out
 
 
@@ -647,6 +665,23 @@ def self_test() -> int:
     ])
     if grouped != {"kafka": "kafka", "redpanda": "kafka", "redis": "redis"}:
         failures.append(f"selector grouping wrong: {grouped}")
+
+    # 3d. the grouping key is namespace-aware, but the returned map is keyed by bare
+    #     Service name (a Gatus host has no namespace). Two same-named Services in
+    #     different namespaces front different workloads and cannot both be represented,
+    #     so the flatten must fail loud rather than silently overwrite one -- otherwise
+    #     the very cross-namespace masking the (ns, selector) key prevents at grouping
+    #     time reappears one loop later at flatten time.
+    try:
+        k8s_targets_from_docs([
+            {"kind": "Service", "metadata": {"name": "redis", "namespace": "ns-a"},
+             "spec": {"selector": {"app": "redis-a"}}},
+            {"kind": "Service", "metadata": {"name": "redis", "namespace": "ns-b"},
+             "spec": {"selector": {"app": "redis-b"}}},
+        ])
+        failures.append("two same-named Services in different namespaces collapsed silently")
+    except GuardError:
+        pass
 
     # 4. a dangling check is caught
     if find_dangling({"ghost"}, {"real": "real"}) != ["ghost"]:
