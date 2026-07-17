@@ -73,6 +73,11 @@ State machine (review round R6):
    component's staleness guard is respected), post-paint. Superseded batches
    discard their window; a **30 s** absolute expiry discards dangling windows.
 
+Interpretation note: with apply-on-select tree filtering (#1285), each
+traversal step re-queries immediately, so one logical filtering session emits
+**N `filter_apply` samples** (one per step) — treat the sample count as
+"applied filter steps", not "filtering sessions".
+
 ## Flush cadence & delivery
 
 - **Quiesce flush** ~2 s after the load settles (lets buffered resource-timing
