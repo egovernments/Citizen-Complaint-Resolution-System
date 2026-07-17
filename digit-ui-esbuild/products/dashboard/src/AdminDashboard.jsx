@@ -30,7 +30,8 @@ import { useCatalog } from "./hooks/useCatalog";
 import { useCatalogLayout } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
-import { GRID_COLS, KPI_ROW_HEIGHT } from "./constants/layoutConfig";
+import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM_ID } from "./constants/layoutConfig";
+import { defaultSizeForKpi } from "./utils/layoutStore";
 import {
   isCardKind,
   isSparklineKind,
@@ -356,6 +357,48 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
 
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Drag-and-drop placement from the Add-KPI picker: the picker item is an
+  // HTML5 drag source (dataTransfer carries the kpiId); the grid accepts it
+  // via RGL's external-drop support. isDroppable is only enabled while a
+  // picker drag is live, so foreign drags (files, text) never conjure a
+  // placeholder. The drop funnels into the SAME addKpiToLayout path as a
+  // picker click — one code path for attach + persist + batch refetch.
+  const [droppingKpiId, setDroppingKpiId] = useState(null);
+  const droppingKpiIdRef = useRef(null);
+  const handlePickerDragStart = useCallback((kpiId) => {
+    droppingKpiIdRef.current = kpiId;
+    setDroppingKpiId(kpiId);
+  }, []);
+  const handlePickerDragEnd = useCallback(() => {
+    droppingKpiIdRef.current = null;
+    setDroppingKpiId(null);
+  }, []);
+  // RGL sizes the drop placeholder from droppingItem, and its calcXY uses the
+  // same w/h to compute the drop cell — matching the tile's real default size
+  // keeps the preview honest and the landing coordinates in-bounds.
+  const droppingItem = useMemo(() => {
+    if (!droppingKpiId) return undefined;
+    return { i: DROPPING_ITEM_ID, ...defaultSizeForKpi(droppingKpiId, kpis) };
+  }, [droppingKpiId, kpis]);
+  const handleGridDrop = useCallback(
+    (_layout, item, e) => {
+      // Prefer the dataTransfer payload (survives re-renders mid-drag); the
+      // ref covers browsers that gate getData to the drop handler proper.
+      let kpiId = null;
+      try {
+        kpiId = e?.dataTransfer?.getData("text/plain") || null;
+      } catch {
+        /* some browsers throw on getData outside dragstart/drop */
+      }
+      if (!kpiId) kpiId = droppingKpiIdRef.current;
+      droppingKpiIdRef.current = null;
+      setDroppingKpiId(null);
+      if (!kpiId || !item) return;
+      addKpiToLayout(kpiId, { x: item.x, y: item.y });
+    },
+    [addKpiToLayout]
+  );
+
   const tiles = useMemo(
     () => layout.map((item) => ({ kpiId: item.i })),
     [layout]
@@ -539,8 +582,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       catalogItems={catalogItems}
       onAddWidget={addKpiToLayout}
       onResetLayout={resetLayout}
-      onDragWidgetStart={() => {}}
-      onDragWidgetEnd={() => {}}
+      onDragWidgetStart={handlePickerDragStart}
+      onDragWidgetEnd={handlePickerDragEnd}
       searchQuery={searchQuery}
       onSearchQueryChange={setSearchQuery}
       onExport={handleExport}
@@ -586,6 +629,9 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           compactType="vertical"
           isDraggable
           isResizable
+          isDroppable={Boolean(droppingKpiId)}
+          droppingItem={droppingItem}
+          onDrop={handleGridDrop}
           draggableHandle=".dashboard-widget-surface"
           draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
           onLayoutChange={onLayoutChange}
