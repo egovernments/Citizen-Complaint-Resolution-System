@@ -63,6 +63,12 @@ LS = ROOT / "local-setup"
 #                               *future* service unique to one of them would have slipped
 #                               through silently. Scanning a file whose services are all
 #                               duplicates costs nothing; not scanning it costs coverage.
+#   docker-compose.tilt.yml     image-override overlay for the hot-reload Tiltfile (#1288).
+#                               Overrides `image:` on pgr-services/digit-ui only, so it adds
+#                               no service of its own -- listed because the check below
+#                               requires every compose file on disk to be accounted for,
+#                               and "adds nothing today" is exactly the assumption that
+#                               went stale for the five files above.
 #
 # This list is the guard's whole perimeter. Anything not in it is unwatched, so it is
 # checked against the directory listing below rather than maintained by memory.
@@ -82,6 +88,7 @@ COMPOSE_FILES = [
     LS / "docker-compose.db-migrations.yml",
     LS / "docker-compose.bomet.yml",
     LS / "docker-compose.core.yml",
+    LS / "docker-compose.tilt.yml",
 ]
 K8S_DIR = LS / "k8s"
 GATUS_COMPOSE = LS / "gatus/config.yaml"
