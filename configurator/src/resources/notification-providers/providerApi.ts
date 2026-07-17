@@ -60,6 +60,40 @@ export interface TestSendResponse {
   transactionId?: string;
 }
 
+/** One reconciled Twilio Content template that maps onto a PGR routing tuple.
+ *  These rows are ready to persist verbatim as MDMS
+ *  RAINMAKER-PGR.NotificationProviderTemplate `data` (the bridge already dropped
+ *  the transport-only extras). The MDMS uniqueIdentifier is the x-unique join
+ *  `<provider>.<channel>.<audience>.<action>.<toState>.<locale>`. */
+export interface TwilioMatchedTemplate {
+  provider: string;
+  channel: string;
+  audience: string;
+  action: string;
+  toState: string;
+  locale: string;
+  templateId: string;
+  templateName?: string;
+  variables: string[];
+  approvalStatus?: string;
+  active?: boolean;
+}
+
+/** A Twilio Content template the bridge could NOT map to a PGR routing tuple —
+ *  diagnostics only (never persisted). */
+export interface TwilioUnmatchedTemplate {
+  templateId: string;
+  templateName?: string;
+  approvalStatus?: string;
+  skipReason?: string;
+}
+
+export interface TwilioTemplatesResponse {
+  matched: TwilioMatchedTemplate[];
+  unmatched: TwilioUnmatchedTemplate[];
+  total: number;
+}
+
 /** Same-origin base — the novu-bridge route is served behind Kong/nginx on the
  *  page's own origin. Falls back to a relative URL in non-browser contexts. */
 function origin(): string {
@@ -120,6 +154,18 @@ export function pullTemplates(channel: string, providerId: string): Promise<Temp
 /** POST /providers/verify — connectivity/active check for one integration. */
 export function verifyProvider(integrationId: string): Promise<VerifyResponse> {
   return call<VerifyResponse>(`${BASE}/verify`, 'POST', { integrationId });
+}
+
+/** GET /providers/twilio-templates — pull the operator's OWN approved Twilio
+ *  WhatsApp Content templates, already reconciled server-side against the PGR
+ *  routing tuples. `matched[]` rows are persist-ready MDMS
+ *  NotificationProviderTemplate `data`; `unmatched[]` is diagnostics-only.
+ *  Twilio secrets stay server-side — this endpoint only returns the SID mapping.
+ *  Surfaces bridge errors (e.g. NB_NO_TWILIO_INTEGRATION) through call()'s
+ *  Errors/message extraction so the caller can prompt the operator to add the
+ *  Twilio provider first. Mirrors the CLI persist-provider-templates.py pull. */
+export function syncTwilioTemplates(): Promise<TwilioTemplatesResponse> {
+  return call<TwilioTemplatesResponse>(`${BASE}/twilio-templates`, 'GET');
 }
 
 /** POST /providers/test-send — dispatch one live test message via Novu. */

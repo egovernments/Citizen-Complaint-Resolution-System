@@ -2273,6 +2273,10 @@ services:
       # Channels actually delivered. WHATSAPP stays OFF until a legitimate
       # provider is onboarded as a Novu integration (then just add it here).
       NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-SMS,EMAIL}
+      # Roles allowed through the /novu-adapter proxy (ProxyAuthFilter). Must be
+      # plumbed from .env — the installer sets it; include MDMS_ADMIN so the
+      # configurator's own provider/template screens are not 403'd.
+      NOVU_BRIDGE_PROXY_ALLOWED_ROLES: ${NOVU_BRIDGE_PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME}
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
       # MDMS_HOST MUST be set. The bridge's application.properties default

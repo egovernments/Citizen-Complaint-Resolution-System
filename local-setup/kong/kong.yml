@@ -617,6 +617,12 @@ services:
     paths:
     - /novu-bridge/novu-adapter/v1/providers/test-send
     strip_path: false
+  - name: novu-bridge-providers-twilio-templates-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/twilio-templates
+    strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083
   tags:
