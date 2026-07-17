@@ -183,7 +183,7 @@ export async function fetchComplaintHierarchyLevels() {
   try {
     const response = await fetch(getMdmsSearchUrl(), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withTraceHeaders({ "Content-Type": "application/json" }),
       credentials: "omit",
       body: JSON.stringify({
         RequestInfo: buildRequestInfo(),
