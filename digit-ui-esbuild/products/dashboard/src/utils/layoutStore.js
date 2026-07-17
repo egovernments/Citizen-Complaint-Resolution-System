@@ -19,6 +19,20 @@ import { compactVertically } from "./gridGeometry";
 
 export const LEGACY_STORAGE_KEY = "ccrs.dashboard.catalog-layout.v1";
 
+/**
+ * Storage key for one user's layout on one tenant. The v1 key was a single
+ * global slot, so two personas on the same browser (bug-bash GRO + supervisor,
+ * shared counter machines) silently overwrote each other's arrangement: the
+ * second login reconciled the first user's saved layout against its own
+ * catalog and the next persist rewrote the shared slot with the reduced set —
+ * KPIs added by the first user were gone when they came back (#1276). Falls
+ * back to the legacy key when identity is unavailable.
+ */
+export function storageKeyFor(tenantId, userId) {
+  if (!tenantId || !userId) return LEGACY_STORAGE_KEY;
+  return `${LEGACY_STORAGE_KEY}.${tenantId}.${userId}`;
+}
+
 const CARD_KINDS = new Set([
   "number-tile-delta",
   "number-tile",
@@ -134,16 +148,26 @@ export function addItemToLayout(layout, kpiId, kpis, position) {
  * stored layout (key absent / unparseable); an intentionally-empty array (user
  * cleared every tile) is returned as `[]` so the seed does not re-add the
  * removed tiles on reload.
+ *
+ * `legacyKey` (optional) is consulted when `key` holds nothing — a one-time,
+ * read-only migration path so layouts saved under the global v1 key survive
+ * the move to per-user keys. Persisting always writes the scoped key, so the
+ * legacy slot is never mutated and stops mattering after the first save.
  */
-export function readSavedLayout(storage, key) {
-  try {
-    const raw = storage?.getItem(key);
-    if (raw == null) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+export function readSavedLayout(storage, key, legacyKey) {
+  const readKey = (k) => {
+    try {
+      const raw = storage?.getItem(k);
+      if (raw == null) return null;
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+  const saved = readKey(key);
+  if (saved !== null) return saved;
+  return legacyKey && legacyKey !== key ? readKey(legacyKey) : null;
 }
 
 export function persistLayout(storage, key, layout) {

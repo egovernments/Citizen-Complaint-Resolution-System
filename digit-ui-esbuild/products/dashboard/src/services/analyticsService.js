@@ -38,6 +38,16 @@ export function hasAuth() {
   return Boolean(getEmployeeToken());
 }
 
+/**
+ * Stable identity of the signed-in employee (user uuid), or null when no
+ * session exists. Used to scope per-user client state (e.g. the dashboard
+ * layout storage key) — NOT for authorization, which stays server-side.
+ */
+export function getUserUuid() {
+  const info = getEmployeeInfo();
+  return info && typeof info === "object" ? info.uuid || null : null;
+}
+
 function buildRequestInfo() {
   const authToken = getEmployeeToken();
   const userInfo = getEmployeeInfo();

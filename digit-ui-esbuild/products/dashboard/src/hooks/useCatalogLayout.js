@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { compactVertically } from "../utils/gridGeometry";
 import {
   LEGACY_STORAGE_KEY,
+  storageKeyFor,
   buildSeedLayout,
   resolveInitialLayout,
   addItemToLayout,
@@ -9,6 +10,7 @@ import {
   persistLayout,
   sizeConstraintsForKpi,
 } from "../utils/layoutStore";
+import { getTenantId, getUserUuid } from "../services/analyticsService";
 
 /**
  * useCatalogLayout — the catalog-world layout hook (kpiId-keyed).
@@ -36,14 +38,20 @@ import {
 
 export { sizeConstraintsForKpi } from "../utils/layoutStore";
 
-const STORAGE_KEY = LEGACY_STORAGE_KEY;
+// Layout state is per-user, per-tenant (see storageKeyFor — the single global
+// v1 key let personas sharing a browser clobber each other's layout). Reads
+// fall back to the legacy global key once so pre-migration layouts survive;
+// writes only ever touch the scoped key.
+function storageKey() {
+  return storageKeyFor(getTenantId(), getUserUuid());
+}
 
 function readSaved() {
-  return readSavedLayout(window.localStorage, STORAGE_KEY);
+  return readSavedLayout(window.localStorage, storageKey(), LEGACY_STORAGE_KEY);
 }
 
 function persist(layout) {
-  persistLayout(window.localStorage, STORAGE_KEY, layout);
+  persistLayout(window.localStorage, storageKey(), layout);
 }
 
 export function useCatalogLayout(kpis, packLayout) {
