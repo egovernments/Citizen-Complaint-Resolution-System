@@ -87,7 +87,8 @@ combined body). Primary transport is `fetch({keepalive:true})`.
 
 Failure policy: every failed POST logs a `console.warn` (config errors stay
 visible even when invisible in metrics). A **4xx** (route missing / auth
-misconfig) mutes the session after ONE failure; network errors / 5xx back off
+misconfig) mutes the session after ONE failure — except **429** (our own
+per-IP Kong rate limit), which is retryable; 429 / network errors / 5xx back off
 1 s / 10 s / 60 s and mute after **3 consecutive** failures, attempting a
 best-effort `dashboard.metrics.selfmute` log record first. On installs without
 the observability stack the cost is ≤ 3 failed POSTs per page load.

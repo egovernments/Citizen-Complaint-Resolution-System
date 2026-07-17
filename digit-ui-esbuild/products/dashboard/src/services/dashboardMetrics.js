@@ -758,8 +758,10 @@ function noteFailure(status) {
     `[dashboardMetrics] telemetry POST failed${status ? ` (HTTP ${status})` : " (network)"}` +
       ` — check the /otel Kong route / DASHBOARD_METRICS_ENABLED gate`
   );
-  if (status >= 400 && status < 500) {
+  if (status >= 400 && status < 500 && status !== 429) {
     // Route missing / auth misconfig: mute after ONE failure, but loudly.
+    // 429 is EXEMPT: our own Kong route rate-limits at 60/min-per-IP, so a
+    // shared-IP burst must take the backoff path below, not a session mute.
     state.muted = true;
     // eslint-disable-next-line no-console
     console.warn("[dashboardMetrics] muting dashboard telemetry for this session (4xx)");
