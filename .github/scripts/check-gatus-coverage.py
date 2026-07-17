@@ -377,29 +377,47 @@ def k8s_targets_from_docs(docs):
         ns = doc["metadata"].get("namespace", "default")
         key = (ns, tuple(sorted(sel.items()))) if sel else (ns, "__none__", name)
         by_selector.setdefault(key, []).append((ns, name))
+
+    def _grp(k):
+        if len(k) == 3:            # (ns, "__none__", name): no selector
+            return f"namespace={k[0]}, no selector"
+        sel_d = dict(k[1])
+        return f"namespace={k[0]}, selector={sel_d}" if sel_d else f"namespace={k[0]}, no selector"
     # The grouping key carries namespace, but the returned map is keyed by bare Service
     # NAME, because that is all a Gatus URL gives us to match on (`_hosts` extracts a
-    # hostname, which has no namespace). So the moment two Services in different
-    # namespaces share a name, this map cannot represent both -- one would overwrite the
-    # other and its coverage would silently reattribute to the wrong workload. Rather
-    # than pick a winner, fail loud, the same way compose_targets does for a shadowing
-    # alias. Not reachable today (everything is in `digit`), and the fix is deliberately
-    # a hard error rather than an (ns, name) key, which would break every downstream
-    # targets[host] lookup since hosts carry no namespace.
+    # hostname, which has no namespace). So two Services that share a name cannot both be
+    # represented -- see the two collision branches below.
     out = {}
-    owner = {}
-    for group in by_selector.values():
+    owner = {}   # Service name -> the (ns, selector) group key that first claimed it
+    for gkey, group in by_selector.items():
         canonical = sorted(n for _, n in group)[0]
-        for ns, n in group:
+        for _ns, n in group:
             if n in out:
+                if owner[n] == gkey:
+                    # Same name, namespace AND selector: the same workload declared
+                    # twice (a copy-pasted or duplicated manifest), not a collision
+                    # between two different workloads. "rename one" would be wrong --
+                    # it would leave two live Services doing the same thing.
+                    raise GuardError(
+                        f"k8s Service {n!r} is declared more than once with the same "
+                        f"name, namespace and selector ({_grp(gkey)}) -- a duplicate "
+                        f"manifest, not a naming collision. Remove the duplicate."
+                    )
+                # Same name, DIFFERENT workload (different namespace and/or selector).
+                # A Gatus URL names only the host, so this map cannot represent both,
+                # and one's coverage would reattribute to the other. Fail loud rather
+                # than pick a winner, as compose_targets does for a shadowing alias.
+                # Not reachable on today's tree (everything is one workload per name);
+                # a hard error rather than an (ns, name) key, which would break every
+                # downstream targets[host] lookup since hosts carry no namespace.
                 raise GuardError(
-                    f"two k8s Services are both named {n!r} but front different workloads "
-                    f"(namespaces {owner[n]} and {ns}). A Gatus URL names only the host, so "
-                    f"this map cannot tell them apart and one's coverage would reattribute "
-                    f"to the other. Rename one, or give it a distinct Service name."
+                    f"two k8s Services are both named {n!r} but front different "
+                    f"workloads ({_grp(owner[n])} vs {_grp(gkey)}). A Gatus URL names "
+                    f"only the host, so this map cannot tell them apart and one's "
+                    f"coverage would reattribute to the other. Rename one."
                 )
             out[n] = canonical
-            owner[n] = ns
+            owner[n] = gkey
     return out
 
 
@@ -693,6 +711,8 @@ def self_test() -> int:
     #     so the flatten must fail loud rather than silently overwrite one -- otherwise
     #     the very cross-namespace masking the (ns, selector) key prevents at grouping
     #     time reappears one loop later at flatten time.
+    #     ...and the message must fit the collision. Different workloads sharing a name
+    #     ("front different workloads ... Rename one"):
     try:
         k8s_targets_from_docs([
             {"kind": "Service", "metadata": {"name": "redis", "namespace": "ns-a"},
@@ -701,8 +721,24 @@ def self_test() -> int:
              "spec": {"selector": {"app": "redis-b"}}},
         ])
         failures.append("two same-named Services in different namespaces collapsed silently")
-    except GuardError:
-        pass
+    except GuardError as e:
+        if "different" not in str(e).lower():
+            failures.append(f"cross-workload collision got the wrong message: {e}")
+
+    # 3e. the SAME workload declared twice (duplicate manifest) is the only collision
+    #     reachable on today's tree, and must not be described as "different workloads"
+    #     or told to "rename one" -- the fix is to delete the duplicate.
+    try:
+        k8s_targets_from_docs([
+            {"kind": "Service", "metadata": {"name": "redis", "namespace": "digit"},
+             "spec": {"selector": {"app": "redis"}}},
+            {"kind": "Service", "metadata": {"name": "redis", "namespace": "digit"},
+             "spec": {"selector": {"app": "redis"}}},
+        ])
+        failures.append("a duplicate k8s manifest was not caught")
+    except GuardError as e:
+        if "duplicate" not in str(e).lower() or "different workloads" in str(e).lower():
+            failures.append(f"duplicate manifest got the cross-workload message: {e}")
 
     # 4. a dangling check is caught
     if find_dangling({"ghost"}, {"real": "real"}) != ["ghost"]:
