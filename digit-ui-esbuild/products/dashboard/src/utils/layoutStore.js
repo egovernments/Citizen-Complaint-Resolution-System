@@ -84,7 +84,10 @@ export function defaultSizeForKpi(kpiId, kpis) {
 function clampNum(v, min, max, fallback) {
   const n = Number(v);
   if (!Number.isFinite(n)) return fallback;
-  return Math.min(max, Math.max(min, n));
+  // Grid coordinates are integral cells; a fractional value (sub-pixel drop
+  // math, hand-edited storage) would make RGL compute fractional pixel
+  // transforms downstream. Round before clamping.
+  return Math.min(max, Math.max(min, Math.round(n)));
 }
 
 /**

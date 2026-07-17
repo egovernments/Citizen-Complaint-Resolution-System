@@ -284,3 +284,39 @@ test("mergeEmittedLayout takes RGL geometry but re-attaches stripped constraints
     { x: 4, y: 2, w: 3, minW: 2, maxH: 3 }
   );
 });
+
+/* ------------------------------------------------------------------ */
+/* Drop-coordinate hardening (#1287)                                   */
+/* ------------------------------------------------------------------ */
+
+test("REGRESSION #1287: NaN drop coordinates never persist — clamped to a valid cell", () => {
+  // An RGL onDrop item computed against unmeasurable geometry can carry NaN
+  // x/y. The add must still land, at finite integer coordinates.
+  const next = addItemToLayout([], "chart_a", KPIS, { x: NaN, y: NaN });
+  const l = next.find((it) => it.i === "chart_a");
+  assert.ok(l, "tile attached despite NaN drop coords");
+  assert.ok(Number.isInteger(l.x) && Number.isInteger(l.y), `finite ints, got ${l.x},${l.y}`);
+  assert.ok(Number.isInteger(l.w) && Number.isInteger(l.h));
+});
+
+test("fractional drop coordinates are rounded to whole grid cells", () => {
+  // x rounds (3.4 -> 3); y also rounds, then vertical compaction owns the
+  // final row (a lone tile is pulled to y 0 regardless).
+  const next = addItemToLayout([], "card_a", KPIS, { x: 3.4, y: 1.6 });
+  const l = next.find((it) => it.i === "card_a");
+  assert.deepEqual({ x: l.x, y: l.y }, { x: 3, y: 0 });
+  assert.ok(next.every((it) => Number.isInteger(it.x) && Number.isInteger(it.y)));
+});
+
+test("droppingItem size is always finite, even for a kpiId the catalog cannot resolve", () => {
+  // dataTransfer.getData is empty during dragover in Chrome; the placeholder
+  // is sized from state set at dragstart — but even an unresolvable id must
+  // produce a real w/h, or RGL's calcXY turns the whole drag into NaN.
+  for (const id of ["ghost_kpi", undefined, null]) {
+    const { w, h } = defaultSizeForKpi(id, KPIS);
+    assert.ok(Number.isFinite(w) && w > 0, `w finite for ${String(id)}`);
+    assert.ok(Number.isFinite(h) && h > 0, `h finite for ${String(id)}`);
+  }
+  const { w, h } = defaultSizeForKpi("chart_a", undefined); // catalog not yet loaded
+  assert.ok(Number.isFinite(w) && Number.isFinite(h));
+});
