@@ -123,17 +123,36 @@ the tenant's `StateInfo.languages` value is the only code that matters at runtim
 
 ## 7. Numbers and dates
 
-**Numbers** are tenant-configurable via `dss.DashboardConfig.numberFormat` (state root tenant,
-record id `default`): a separators-only display mask applied to every number the dashboard renders
-— KPI values and deltas, table cells, bar/line/stacked labels, axis ticks, tooltips, map hovers,
-and duration strings ("2,5 hrs"). Placeholder chars are `[#0]`; the first non-placeholder char is
-the grouping separator, the last is the decimal separator; the decimal COUNT stays per-KPI
-(`viz.format`). Examples: `#,##0.00` (en → `1,234.56`), `#.##0,00` (pt → `1.234,56`), `# ##0,00`
-(fr → `1 234,56`). The mask is per-TENANT, not per-language (a per-language override is backlog).
-When the field is absent or malformed the dashboard renders exactly as before, and the CSV export
-always stays raw (machine-readable) regardless of the mask. To change it on a live tenant,
-`_update` the existing record (uniqueIdentifier `default`) via mdms-v2 — never re-create the
-schema.
+**Numbers** are configurable **per locale** via `dss.DashboardConfig.numberFormat` (state root
+tenant, record id `default`): a separators-only display mask applied to every number the dashboard
+renders — KPI values and deltas, table cells, bar/line/stacked labels, axis ticks, tooltips, map
+hovers, and duration strings ("2,5 hrs"). The canonical form is an object keyed by locale code
+(the `value`s in `common-masters.StateInfo.languages`, §6) with an optional `default` for locales
+without an entry:
+
+```json
+"numberFormat": {
+  "en_IN": "#,##0.00",
+  "pt_PT": "#.##0,00",
+  "fr_FR": "# ##0,00",
+  "default": "#,##0.00"
+}
+```
+
+Each user sees the convention of the language they selected in the TopBar — on a multi-locale
+tenant like bomet (`en_IN` + `fr_FR` + `pt_PT`), `12348248` renders as `12,348,248.00` (en_IN),
+`12.348.248,00` (pt_PT), and `12 348 248,00` (fr_FR); switching language reformats every number
+in place. Resolution is `numberFormat[language] ?? numberFormat.default ?? unconfigured`. A plain
+STRING is also accepted (legacy form, kept for back-compat): one mask applied for every locale,
+i.e. the original tenant-wide behavior.
+
+Mask syntax: placeholder chars are `[#0]`; the first non-placeholder char is the grouping
+separator, the last is the decimal separator; the decimal COUNT stays per-KPI (`viz.format`).
+Examples: `#,##0.00` (en → `1,234.56`), `#.##0,00` (pt → `1.234,56`), `# ##0,00` (fr →
+`1 234,56`). When the field is absent or malformed — or the active locale has no entry and no
+`default` — the dashboard renders exactly as before, and the CSV export always stays raw
+(machine-readable) regardless of the mask. To change it on a live tenant, `_update` the existing
+record (uniqueIdentifier `default`) via mdms-v2 — never re-create the schema.
 
 **Dates** are untouched by the mask: `toLocaleString`/`toLocaleDateString` call sites pass the
 active locale (`en_IN` → `en-IN`), so date shapes follow the language switch automatically — no
