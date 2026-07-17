@@ -15,7 +15,7 @@ import { resolveBarChartColumnWidth } from "../config/barChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import useDashboardT from "../i18n/useDashboardT";
 import ChartScrollViewport from "./ChartScrollViewport";
-import { formatNumber } from "../utils/numberFormat";
+import { formatNumber, getNumberFormatStamp } from "../utils/numberFormat";
 
 // Numeric part goes through the tenant mask (formatNumber, null when
 // unconfigured -> pre-#1213 expression).
@@ -36,6 +36,11 @@ function breakEvenSeriesValues(value, breakEven) {
 
 const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
   const { t, language } = useDashboardT();
+  // Per-locale numberFormat mask stamp (#1272): baked into the options memo
+  // because react-apexcharts compares JSON.stringify(options), which drops
+  // the total-label/tooltip formatter closures — `language` alone can miss a
+  // mask change whose translated strings happen to coincide.
+  const numberFormatStamp = getNumberFormatStamp();
   const rows = useMemo(
     () =>
       (data || []).map((entry) => ({
@@ -189,6 +194,9 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
           });
         },
       }),
+      // Not an Apex option — stringifiable stamp of the per-locale mask so
+      // the JSON.stringify options comparison sees mask-only changes.
+      _numberFormatStamp: numberFormatStamp,
     }),
     [
       axisMax,
@@ -204,6 +212,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
       rows,
       t,
       language,
+      numberFormatStamp,
     ]
   );
 

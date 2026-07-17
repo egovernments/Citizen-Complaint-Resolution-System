@@ -22,7 +22,7 @@ import DashboardLogin, {
   clearDashboardSession,
 } from "./components/DashboardLogin";
 import { useDashboardConfig } from "../useDashboardConfig";
-import { setNumberFormatMask } from "./utils/numberFormat";
+import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberFormat";
 
 import useDashboardT from "./i18n/useDashboardT";
 import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
@@ -131,16 +131,24 @@ const AdminDashboard = ({ embedded = false }) => {
   // session and owns sign-out, so the standalone login gate is skipped.
   const [authed] = useState(() => embedded || hasDashboardSession());
 
-  // Tenant number-format mask (dss.DashboardConfig.numberFormat, #1213).
-  // Primed SYNCHRONOUSLY during render — the presentation configs are plain
-  // modules (no hook access), and setting the module-level store before
+  // Per-LOCALE number-format mask (dss.DashboardConfig.numberFormat, #1213 /
+  // #1272). `numberFormat` is either an object keyed by locale code (with
+  // optional `default`) or a legacy string applied to every locale;
+  // resolveNumberFormatMask picks the active language's mask. Primed
+  // SYNCHRONOUSLY during render — the presentation configs are plain modules
+  // (no hook access), and setting the module-level store before
   // AdminDashboardInner mounts means the first painted frame is already
-  // masked: no useEffect priming, no unmasked flicker. Unconfigured tenants
-  // (config null / field absent) clear the store and every formatter falls
-  // back to its pre-#1213 expression byte-for-byte.
+  // masked: no useEffect priming, no unmasked flicker. useDashboardT
+  // subscribes this component to the locale runtime, so a language switch
+  // re-renders it and re-runs this prime with the new locale's mask BEFORE
+  // any child re-renders (parents render first). Unconfigured tenants
+  // (config null / field absent / no mask for the locale and no default)
+  // clear the store and every formatter falls back to its pre-#1213
+  // expression byte-for-byte.
+  const { language } = useDashboardT();
   const { config: dashboardConfig, loading: dashboardConfigLoading } =
     useDashboardConfig();
-  setNumberFormatMask(dashboardConfig?.numberFormat);
+  setNumberFormatMask(resolveNumberFormatMask(dashboardConfig?.numberFormat, language));
 
   const handleLogin = useCallback(() => {
     window.location.reload();

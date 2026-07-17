@@ -1,4 +1,4 @@
-// Unit tests for the tenant number-format mask (#1213).
+// Unit tests for the per-locale number-format mask (#1213, per-locale per #1272).
 // Run from digit-ui-esbuild/:  node --test products/dashboard/src/utils/numberFormat.test.js
 //
 // numberFormat.js is ESM (like the rest of products/), so the test bundles it
@@ -157,4 +157,81 @@ test("setNumberFormatMask(null) clears back to unconfigured", () => {
   assert.equal(formatNumber(1, "integer"), "1");
   setNumberFormatMask(null);
   assert.equal(formatNumber(1, "integer"), null);
+});
+
+/* ------------------------------------------------------------------ */
+/* resolveNumberFormatMask — per-locale resolution (#1272)             */
+/* ------------------------------------------------------------------ */
+
+const LOCALE_MASKS = {
+  en_IN: "#,##0.00",
+  pt_PT: "#.##0,00",
+  fr_FR: "# ##0,00",
+  default: "#,##0.00",
+};
+
+test("resolveNumberFormatMask object form: exact locale match wins", () => {
+  const { resolveNumberFormatMask } = load();
+  assert.equal(resolveNumberFormatMask(LOCALE_MASKS, "en_IN"), "#,##0.00");
+  assert.equal(resolveNumberFormatMask(LOCALE_MASKS, "pt_PT"), "#.##0,00");
+  assert.equal(resolveNumberFormatMask(LOCALE_MASKS, "fr_FR"), "# ##0,00");
+});
+
+test("resolveNumberFormatMask object form: unknown locale falls back to default", () => {
+  const { resolveNumberFormatMask } = load();
+  assert.equal(resolveNumberFormatMask(LOCALE_MASKS, "sw_KE"), "#,##0.00");
+  assert.equal(resolveNumberFormatMask(LOCALE_MASKS, undefined), "#,##0.00");
+  assert.equal(resolveNumberFormatMask(LOCALE_MASKS, null), "#,##0.00");
+});
+
+test("resolveNumberFormatMask object form without default: unknown locale -> null", () => {
+  const { resolveNumberFormatMask } = load();
+  const noDefault = { pt_PT: "#.##0,00" };
+  assert.equal(resolveNumberFormatMask(noDefault, "pt_PT"), "#.##0,00");
+  assert.equal(resolveNumberFormatMask(noDefault, "en_IN"), null);
+});
+
+test("resolveNumberFormatMask string legacy form: same mask for every locale", () => {
+  const { resolveNumberFormatMask } = load();
+  assert.equal(resolveNumberFormatMask("#.##0,00", "en_IN"), "#.##0,00");
+  assert.equal(resolveNumberFormatMask("#.##0,00", "fr_FR"), "#.##0,00");
+  assert.equal(resolveNumberFormatMask("#.##0,00", undefined), "#.##0,00");
+});
+
+test("resolveNumberFormatMask malformed values -> null (unconfigured)", () => {
+  const { resolveNumberFormatMask } = load();
+  assert.equal(resolveNumberFormatMask(undefined, "en_IN"), null);
+  assert.equal(resolveNumberFormatMask(null, "en_IN"), null);
+  assert.equal(resolveNumberFormatMask(42, "en_IN"), null);
+  assert.equal(resolveNumberFormatMask(["#,##0.00"], "en_IN"), null);
+  assert.equal(resolveNumberFormatMask({}, "en_IN"), null);
+  // non-string entries never resolve, for the locale or the default
+  assert.equal(resolveNumberFormatMask({ en_IN: 7 }, "en_IN"), null);
+  assert.equal(resolveNumberFormatMask({ default: { nested: true } }, "en_IN"), null);
+});
+
+test("language switch flips separators end-to-end (bomet en/pt/fr conventions)", () => {
+  const { resolveNumberFormatMask, setNumberFormatMask, formatNumber } = load();
+  const prime = (language) =>
+    setNumberFormatMask(resolveNumberFormatMask(LOCALE_MASKS, language));
+
+  prime("en_IN");
+  assert.equal(formatNumber(12348248, { decimals: 2 }), "12,348,248.00");
+  prime("pt_PT"); // simulated TopBar language switch -> AdminDashboard re-prime
+  assert.equal(formatNumber(12348248, { decimals: 2 }), "12.348.248,00");
+  prime("fr_FR");
+  assert.equal(formatNumber(12348248, { decimals: 2 }), "12 348 248,00");
+  prime("en_IN"); // and back
+  assert.equal(formatNumber(12348248, { decimals: 2 }), "12,348,248.00");
+});
+
+test("getNumberFormatStamp tracks the resolved mask string across switches", () => {
+  const { resolveNumberFormatMask, setNumberFormatMask, getNumberFormatStamp } = load();
+  assert.equal(getNumberFormatStamp(), null);
+  setNumberFormatMask(resolveNumberFormatMask(LOCALE_MASKS, "en_IN"));
+  assert.equal(getNumberFormatStamp(), "#,##0.00");
+  setNumberFormatMask(resolveNumberFormatMask(LOCALE_MASKS, "fr_FR"));
+  assert.equal(getNumberFormatStamp(), "# ##0,00");
+  setNumberFormatMask(null);
+  assert.equal(getNumberFormatStamp(), null);
 });

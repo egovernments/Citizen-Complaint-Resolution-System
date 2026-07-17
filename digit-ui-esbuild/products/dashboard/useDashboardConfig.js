@@ -3,7 +3,12 @@
  * master (STATE ROOT tenant, same owning tenant as the dss.KpiDefinition /
  * dss.DashboardPack catalog), a single-record per-tenant dashboard config:
  *
- *   { "id": "default", "allowedRoles": [...], "numberFormat": "#.##0,00" }
+ *   { "id": "default", "allowedRoles": [...],
+ *     "numberFormat": { "en_IN": "#,##0.00", "pt_PT": "#.##0,00",
+ *                       "default": "#,##0.00" } }
+ *
+ * (`numberFormat` is locale-keyed with an optional `default`; a plain string
+ * is the legacy one-mask-for-every-locale form — see utils/numberFormat.js.)
  *
  * This is THE shared fetch for every dss.DashboardConfig consumer. PR #1258
  * (route/card role gate) reads `allowedRoles` from the same master with an

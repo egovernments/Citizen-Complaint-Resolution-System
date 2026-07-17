@@ -1,9 +1,24 @@
 /**
- * Tenant-configurable number DISPLAY format for the supervisor dashboard
- * (#1213, fixes #1251).
+ * Locale-configurable number DISPLAY format for the supervisor dashboard
+ * (#1213, fixes #1251; per-LOCALE resolution per the #1272 requirement
+ * change).
  *
  * The mask comes from MDMS — dss.DashboardConfig (state root tenant, record
- * id "default", field `numberFormat`), e.g.:
+ * id "default", field `numberFormat`), in either of two shapes:
+ *
+ * - OBJECT keyed by locale code, with an optional `default` (the canonical
+ *   form — each user sees their selected language's convention):
+ *
+ *     { "en_IN": "#,##0.00", "pt_PT": "#.##0,00", "fr_FR": "# ##0,00",
+ *       "default": "#,##0.00" }
+ *
+ * - STRING (legacy, kept for back-compat): ONE mask applied for every
+ *   locale — the original per-tenant form.
+ *
+ * `resolveNumberFormatMask(numberFormat, language)` picks the mask for the
+ * active language: `object[language] ?? object.default ?? null`; the string
+ * form resolves to itself for every language; anything missing/malformed
+ * resolves to null (unconfigured behavior). Masks look like:
  *
  *   "#,##0.00"   en    1,234,567.89
  *   "#.##0,00"   pt    1.234.567,89
@@ -20,8 +35,11 @@
  * configs are plain modules, not components — hooks can't reach them — so the
  * parsed mask lives in a module-level store. AdminDashboard primes it
  * SYNCHRONOUSLY during render (holding the dashboard until the MDMS query
- * settles), so the first painted frame is already masked and the store never
- * changes under a mounted tree.
+ * settles), so the first painted frame is already masked. AdminDashboard
+ * subscribes to the locale runtime (useDashboardT) and re-runs the same
+ * synchronous prime with the newly resolved mask when the language changes —
+ * parents render before children, so by the time any tile re-renders the
+ * store already holds the new locale's mask.
  *
  * Fallback contract (unconfigured tenants render byte-identically):
  * `formatNumber` returns null when no mask is configured (or the value is not
@@ -122,6 +140,32 @@ const FORMAT_PRESETS = {
 };
 
 /* ------------------------------------------------------------------ */
+/* Per-locale mask resolution                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Resolve the raw `dss.DashboardConfig.numberFormat` value to the mask STRING
+ * for `language` (a locale code like "en_IN"), or null.
+ *
+ * - string  → that mask, for every locale (legacy tenant-wide form)
+ * - object  → `numberFormat[language] ?? numberFormat.default ?? null`
+ * - anything else (missing, array, number, non-string entry) → null
+ *
+ * The returned string still goes through parseMask via setNumberFormatMask,
+ * so a malformed mask VALUE also ends at null — a garbage MDMS record can
+ * never scramble the dashboard.
+ */
+export function resolveNumberFormatMask(numberFormat, language) {
+  if (typeof numberFormat === "string") return numberFormat;
+  if (!numberFormat || typeof numberFormat !== "object" || Array.isArray(numberFormat)) {
+    return null;
+  }
+  const candidate =
+    (language != null ? numberFormat[language] : undefined) ?? numberFormat.default ?? null;
+  return typeof candidate === "string" ? candidate : null;
+}
+
+/* ------------------------------------------------------------------ */
 /* Module-level mask store                                             */
 /* ------------------------------------------------------------------ */
 
@@ -143,6 +187,18 @@ export function setNumberFormatMask(mask) {
 /** The parsed active mask (tests/diagnostics). */
 export function getNumberFormatMask() {
   return activeMask;
+}
+
+/**
+ * The active mask's raw string (null when unconfigured) — a JSON-stringifiable
+ * change stamp for the Apex options memos. react-apexcharts (1.4.1) decides
+ * whether to call `updateOptions` by comparing `JSON.stringify(options)`,
+ * which DROPS the formatter closures — so charts must bake this stamp into
+ * their options object (and dep their memo on it) for a locale-driven mask
+ * change to actually redraw baked labels/ticks/tooltips.
+ */
+export function getNumberFormatStamp() {
+  return activeMaskSource;
 }
 
 /* ------------------------------------------------------------------ */
