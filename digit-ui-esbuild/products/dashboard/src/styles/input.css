@@ -616,37 +616,195 @@
     pointer-events: none;
   }
 
-  /* ── Complaint-type tree-traversal filter (one-widget subtree nav) ──── */
-
-  .dashboard-type-tree-filter {
-    @apply tw-inline-flex tw-h-7 tw-shrink-0 tw-items-center tw-gap-1 tw-self-center;
-  }
-
-  .dashboard-type-tree-up {
-    @apply tw-px-1;
-  }
-
-  .dashboard-type-tree-crumbs {
-    @apply tw-inline-flex tw-items-center tw-gap-1 tw-text-[11px] tw-leading-none tw-text-muted-foreground;
-  }
-
-  .dashboard-type-tree-crumb {
-    @apply tw-m-0 tw-cursor-pointer tw-border-0 tw-bg-transparent tw-p-0 tw-text-[11px] tw-leading-none tw-text-muted-foreground hover:tw-text-foreground hover:tw-underline;
-    font-family: inherit;
-  }
-
-  .dashboard-type-tree-sep {
-    @apply tw-select-none;
-  }
-
-  .dashboard-type-tree-current {
-    @apply tw-text-[11px] tw-font-medium tw-leading-none tw-text-foreground;
-  }
-
   /* Per-tile note when the backend reports the subtree filter could not be
      honoured on a grain (paramsIgnored: complaintPath — daily-grain KPIs). */
   .dashboard-type-filter-ignored {
     @apply tw-pointer-events-none tw-absolute tw-bottom-1 tw-left-5 tw-z-[2] tw-rounded tw-bg-surface tw-px-1 tw-text-[10px] tw-italic tw-leading-tight tw-text-muted-foreground;
+  }
+
+  /* ── Shared popover/menu primitive (chip anchor + portaled panel) ───── */
+
+  /* Anchor chip: the inline filter-control language (h-7 / rounded-sm /
+     border-border / bg-surface / 12px), as a real button. */
+  .dashboard-popover-chip {
+    @apply tw-box-border tw-m-0 tw-inline-flex tw-h-7 tw-min-w-0 tw-max-w-full tw-shrink tw-cursor-pointer tw-select-none tw-items-center tw-gap-1.5 tw-self-center tw-whitespace-nowrap tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-px-2 tw-text-[12px] tw-leading-none tw-text-foreground;
+    font-family: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .dashboard-popover-chip:hover:not(:disabled) {
+    @apply tw-border-foreground;
+  }
+
+  .dashboard-popover-chip:focus {
+    @apply tw-border-foreground tw-outline-none;
+  }
+
+  .dashboard-popover-chip:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
+  }
+
+  .dashboard-popover-chip[aria-expanded="true"] {
+    @apply tw-border-foreground;
+  }
+
+  .dashboard-popover-chip:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* Compact variant for widget-header placement (the "Group by" chip). */
+  .dashboard-popover-chip--compact {
+    @apply tw-h-6 tw-gap-1 tw-px-1.5 tw-text-[11px];
+  }
+
+  .dashboard-popover-chip-prefix {
+    @apply tw-shrink-0 tw-text-muted-foreground;
+  }
+
+  .dashboard-popover-chip-value {
+    @apply tw-inline-flex tw-min-w-0 tw-items-center tw-overflow-hidden tw-font-medium;
+  }
+
+  .dashboard-popover-chip-caret {
+    @apply tw-shrink-0 tw-text-muted-foreground;
+  }
+
+  /* Chip content for hierarchical selections: "… › Parent › Node" — each
+     segment ellipsizes on its own so deep leaves stay chip-sized. */
+  .dashboard-popover-chip-trail {
+    @apply tw-inline-flex tw-min-w-0 tw-items-center tw-gap-1;
+  }
+
+  .dashboard-popover-chip-seg {
+    @apply tw-min-w-0 tw-max-w-[9rem] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap;
+  }
+
+  .dashboard-popover-chip-seg--muted {
+    @apply tw-font-normal tw-text-muted-foreground;
+  }
+
+  .dashboard-popover-chip-sep {
+    @apply tw-shrink-0 tw-select-none tw-text-muted-foreground;
+  }
+
+  /* Panel: mirrors .dashboard-add-kpi-panel's surface language. */
+  .dashboard-popover-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border, #e5e2db);
+    border-radius: 6px;
+    background-color: var(--popover, #ffffff);
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.08),
+      0 2px 4px -2px rgb(0 0 0 / 0.06);
+    color: var(--foreground, #1a1917);
+    isolation: isolate;
+  }
+
+  /* Tree-traversal panel body (ComplaintTypeTreePanel). */
+  .dashboard-popover-tree {
+    @apply tw-flex tw-min-h-0 tw-flex-col tw-overflow-hidden;
+  }
+
+  /* Ancestor trail across the top of the tree panel. */
+  .dashboard-popover-trail {
+    @apply tw-flex tw-shrink-0 tw-flex-wrap tw-items-center tw-gap-1 tw-border-b tw-border-border tw-px-3 tw-py-2 tw-text-[11px] tw-leading-none tw-text-muted-foreground;
+  }
+
+  .dashboard-popover-trail-crumb {
+    @apply tw-m-0 tw-min-w-0 tw-max-w-[7rem] tw-cursor-pointer tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-rounded-sm tw-border-0 tw-bg-transparent tw-p-0 tw-text-[11px] tw-leading-none tw-text-muted-foreground hover:tw-text-foreground hover:tw-underline;
+    font-family: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .dashboard-popover-trail-crumb:focus {
+    @apply tw-outline-none;
+  }
+
+  .dashboard-popover-trail-crumb:focus-visible {
+    @apply tw-text-foreground tw-underline;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 35%, transparent);
+  }
+
+  .dashboard-popover-trail-sep,
+  .dashboard-popover-trail-ellipsis {
+    @apply tw-shrink-0 tw-select-none;
+  }
+
+  .dashboard-popover-trail-current {
+    @apply tw-min-w-0 tw-max-w-[10rem] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-font-medium tw-text-foreground;
+  }
+
+  /* Scrollable item region (deep trees) and pinned footer (reset row). */
+  .dashboard-popover-list {
+    -webkit-overflow-scrolling: touch;
+    @apply tw-m-0 tw-min-h-0 tw-flex-1 tw-overflow-y-auto tw-overscroll-contain tw-p-1;
+  }
+
+  .dashboard-popover-footer {
+    @apply tw-shrink-0 tw-border-t tw-border-border tw-p-1;
+  }
+
+  .dashboard-menu-item {
+    @apply tw-box-border tw-m-0 tw-flex tw-w-full tw-cursor-pointer tw-items-center tw-gap-2 tw-rounded-sm tw-border-0 tw-bg-transparent tw-px-2 tw-py-1.5 tw-text-left tw-text-[12px] tw-leading-snug tw-text-foreground;
+    font-family: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .dashboard-menu-item:hover {
+    background-color: var(--muted, #f5f4f1);
+  }
+
+  .dashboard-menu-item:focus {
+    @apply tw-outline-none;
+  }
+
+  .dashboard-menu-item:focus-visible {
+    background-color: var(--muted, #f5f4f1);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ring) 35%, transparent);
+  }
+
+  .dashboard-menu-item[data-selected="true"] {
+    @apply tw-font-medium;
+  }
+
+  .dashboard-menu-item--muted {
+    color: var(--muted-foreground, #6b6860);
+  }
+
+  .dashboard-menu-item--muted:hover,
+  .dashboard-menu-item--muted:focus-visible {
+    color: var(--foreground, #1a1917);
+  }
+
+  .dashboard-menu-item-label {
+    @apply tw-min-w-0 tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap;
+  }
+
+  .dashboard-menu-item-trailing {
+    @apply tw-inline-flex tw-shrink-0 tw-items-center tw-text-muted-foreground;
+  }
+
+  .dashboard-menu-item-check {
+    color: var(--primary, #1a1917);
+  }
+
+  /* Non-interactive section label between runs of related items (the flat
+     complaint-type degrade path's category groups). */
+  .dashboard-menu-group-label {
+    @apply tw-px-2 tw-pb-1 tw-pt-2 tw-text-[10px] tw-font-normal tw-uppercase tw-tracking-wider tw-text-muted-foreground;
+  }
+
+  /* Widget-header wrapper for the compact "Group by" chip: right-aligned in
+     the title row, shrinkable (the chip value truncates) so it never wraps
+     narrow widgets; mr-6 clears the hover remove button. */
+  .dashboard-groupby-chip-wrap {
+    @apply tw-ml-2 tw-mr-6 tw-inline-flex tw-min-w-0 tw-shrink tw-items-center tw-self-center;
   }
 
   /* ── Responsive layout ─────────────────────────────────────────────── */
