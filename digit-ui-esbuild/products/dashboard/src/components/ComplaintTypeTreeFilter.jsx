@@ -68,14 +68,19 @@ export function ComplaintTypeTreePanel({ tree, appliedCode, onApply, t }) {
   const mountedRef = useRef(false);
 
   // After an in-panel browse hop the clicked row unmounts and DOM focus dies
-  // on <body>; hand it to the new level's first row so arrow keys keep
+  // on <body>; hand it to the new level's first LIST row (not the trail's
+  // root crumb, which is first in document order) so arrow keys keep
   // working. Initial focus on open is the primitive's job, not ours.
   useEffect(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
       return;
     }
-    rootRef.current?.querySelector("[data-menu-item]:not(:disabled)")?.focus();
+    const root = rootRef.current;
+    const target =
+      root?.querySelector(".dashboard-popover-list [data-menu-item]:not(:disabled)") ||
+      root?.querySelector("[data-menu-item]:not(:disabled)");
+    target?.focus();
   }, [browseCode]);
 
   const allTypesLabel = t("DASHBOARD_FILTERS_ALL_TYPES", "All types");
