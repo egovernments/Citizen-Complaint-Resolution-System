@@ -1,3 +1,5 @@
+import { withTraceHeaders, recordApiCall } from "./dashboardMetrics";
+
 /** Browser-facing analytics API base (relative path or absolute URL). */
 export function getAnalyticsBase() {
   if (process.env.REACT_APP_ANALYTICS_BASE) {
@@ -38,6 +40,16 @@ export function hasAuth() {
   return Boolean(getEmployeeToken());
 }
 
+/**
+ * Stable identity of the signed-in employee (user uuid), or null when no
+ * session exists. Used to scope per-user client state (e.g. the dashboard
+ * layout storage key) — NOT for authorization, which stays server-side.
+ */
+export function getUserUuid() {
+  const info = getEmployeeInfo();
+  return info && typeof info === "object" ? info.uuid || null : null;
+}
+
 function buildRequestInfo() {
   const authToken = getEmployeeToken();
   const userInfo = getEmployeeInfo();
@@ -53,9 +65,12 @@ function buildRequestInfo() {
 }
 
 async function postAnalytics(path, body) {
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   const response = await fetch(`${ANALYTICS_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    // Per-load W3C traceparent + x-trace-id (dashboardMetrics) — Kong's otel
+    // plugin and the pgr javaagent continue the browser's trace id end-to-end.
+    headers: withTraceHeaders({ "Content-Type": "application/json" }),
     credentials: "omit",
     body: JSON.stringify({
       RequestInfo: buildRequestInfo(),
@@ -64,6 +79,8 @@ async function postAnalytics(path, body) {
   });
 
   if (!response.ok) {
+    const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    recordApiCall(`${ANALYTICS_BASE}${path}`, endedAt - startedAt, 0, false);
     const error = new Error(`Analytics request failed (${response.status})`);
     error.status = response.status;
     try {

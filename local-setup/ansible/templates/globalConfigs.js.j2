@@ -45,6 +45,13 @@ var globalConfigs = (function () {
   var pgrBoundaryLowestLevel = {{ pgr_boundary_lowest_level | to_json }};
   var boundaryType = {{ boundary_type | to_json }};
   var hierarchyType = {{ hierarchy_type | default('ADMIN') | to_json }};
+  // COMPLAINT hierarchy pin (distinct from the boundary hierarchyType above):
+  // which RAINMAKER-PGR.ComplaintHierarchyDefinition the dashboard's per-widget
+  // "Group by" control enumerates. Optional — when empty the SPA resolves the
+  // definition whose hierarchyType actually has ComplaintHierarchy rows behind
+  // it. Set `complaint_hierarchy_type: PGR` in host_vars when the tenant
+  // carries multiple definitions (e.g. a live tree plus a test one).
+  var complaintHierarchyType = {{ complaint_hierarchy_type | default('') | to_json }};
   var mapCenter = {{ map_center | to_json }};
   // Tenant whose boundary tree the SPA's map/boundary code resolves
   // against (Turbopass/OSM boundary resolution). Mirrors the build-time
@@ -57,6 +64,11 @@ var globalConfigs = (function () {
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
   var corePostalConfigs = {{ core_postal_configs | default({}) | to_json }};
+  // Client-side dashboard render-lag instrumentation (#1110). ON by default;
+  // kill switch = `dashboard_metrics_enabled: false` in the inventory + a
+  // re-render of this file (no rebuild). The emitter self-mutes when the
+  // /otel Kong ingest route is absent.
+  var dashboardMetricsEnabled = {{ dashboard_metrics_enabled | default(true) | to_json }};
 
   // Keycloak SSO settings. Inert when authProvider !== 'keycloak'
   // (which is the default). The auth-adapter inside digit-ui reads
@@ -129,10 +141,14 @@ var globalConfigs = (function () {
       return boundaryType;
     } else if (key === "HIERARCHY_TYPE") {
       return hierarchyType;
+    } else if (key === "COMPLAINT_HIERARCHY_TYPE") {
+      return complaintHierarchyType;
     } else if (key === "CORE_MOBILE_CONFIGS") {
       return coreMobileConfigs;
     } else if (key === "CORE_POSTAL_CONFIGS") {
       return corePostalConfigs;
+    } else if (key === "DASHBOARD_METRICS_ENABLED") {
+      return dashboardMetricsEnabled;
     } else if (key === "KEYCLOAK_URL") {
       return keycloakUrl;
     } else if (key === "KEYCLOAK_REALM") {

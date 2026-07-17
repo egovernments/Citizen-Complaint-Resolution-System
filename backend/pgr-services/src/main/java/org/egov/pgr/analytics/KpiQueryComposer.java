@@ -15,6 +15,8 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
+import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Param-merge for the kpiId-by-reference analytics path.
@@ -45,12 +47,32 @@ import java.time.temporal.TemporalAdjusters;
  *   <li>{@code ward} — a boundary/ward code; narrows to {@code ward_code = ?} <em>iff</em> the grain
  *       has a filterable {@code ward_code}. A client narrowing WITHIN the user's RBAC scope; it can
  *       never widen (row-scope is still injected on top by {@link AnalyticsPlanner#plan}).</li>
- *   <li>{@code serviceCode} — a complaint type; narrows to {@code service_code = ?} iff filterable.</li>
+ *   <li>{@code serviceCode} — a complaint type LEAF; narrows to {@code service_code = ?} iff
+ *       filterable. This stays the param for leaf selections (exact match, works on every grain
+ *       incl. daily); {@code complaintPath} below is for interior nodes only.</li>
+ *   <li>{@code complaintPath} — a complaint-hierarchy INTERIOR node's dot-path (e.g.
+ *       {@code SANITATION.SEWAGE}); narrows to the node's whole subtree via a delimiter-guarded
+ *       {@code complaint_node_path} subtree predicate ({@code = ? OR LIKE ?||'.%'}) iff the grain
+ *       carries the path column (facts/events). Values are validated against the path alphabet
+ *       ({@code [A-Za-z0-9._/-]}, length-capped) — anything else is {@code invalid_param}. On the
+ *       daily grain (no path column) the param cannot apply; unlike {@code ward}'s silent skip,
+ *       the skip is REPORTED to the caller via the {@code paramsIgnored} collector (surfaced as
+ *       {@code paramsIgnored:["complaintPath"]} on the result envelope) so the FE can flag the
+ *       widget as unfiltered. Rows with a NULL path (nodes whose own code contains '.', see the
+ *       #1111 migration; flat tenants) never match a subtree filter.</li>
  *   <li>{@code compare: "prior"} — instead of the selected/default range, apply the
  *       <em>immediately-preceding equal-duration</em> range on the def's time column. Mirrors the FE
  *       {@code priorPeriodCreatedAtFilter()} (~1586) / {@code priorPeriodEndDateIso()} (~1360) and the
  *       no-range {@code priorWeekCreatedAtFilter()} (~1417) fallback. Collapses the ~30 FE
  *       {@code *_prior} query keys into one def + {@code {compare:"prior"}}.</li>
+ *   <li>{@code hierLevel} — complaint-hierarchy rollup level (#1111). {@code "leaf"} / absent /
+ *       empty = no-op (today's per-subtype buckets). {@code "1".."12"} rewrites every
+ *       {@code service_code} dimension to the fixed level expression over
+ *       {@code complaint_node_path} (aliased {@code AS service_code}, so viz/sort/columns are
+ *       unchanged) and drops any {@code service_group} dimension (at a rolled-up level it
+ *       collapses into a duplicate of the level bucket). Grains without the path column (daily)
+ *       no-op gracefully, like {@code ward}. Aggregates recompute over raw rows, so averages and
+ *       ratios are correctly weighted — never an average of leaf averages.</li>
  *   <li>{@code series: "daily"} — turn a scalar tile into a daily time series: add the grain's daily
  *       date dimension (+ ascending sort), apply the selected range, drop the base window, and cap
  *       {@code limit} to {@code min(366, dayCount)}. Mirrors the FE {@code *_sparkline} keys
@@ -77,6 +99,15 @@ public class KpiQueryComposer {
     private static final long MS_PER_DAY = 86_400_000L;
     /** Sparkline daily-series safety cap, matching the FE {@code Math.min(366, ...)}. */
     private static final int MAX_SERIES_DAYS = 366;
+    /** {@code complaintPath} length cap — live paths are short dot-joined UPPER_SNAKE codes. */
+    static final int MAX_COMPLAINT_PATH_LENGTH = 256;
+    /**
+     * The complaint-hierarchy path alphabet: dot-joined MDMS node codes (alnum/underscore/dash,
+     * occasionally slash). Anything outside it — quotes, whitespace, LIKE metachars, SQL syntax —
+     * is rejected up front (defense in depth on top of the planner's bound params + LIKE-escape).
+     */
+    private static final Pattern COMPLAINT_PATH_VALUE =
+            Pattern.compile("^[A-Za-z0-9._/\\-]{1," + MAX_COMPLAINT_PATH_LENGTH + "}$");
 
     private final AnalyticsCatalog catalog;
 
@@ -89,6 +120,19 @@ public class KpiQueryComposer {
      * empty. Never mutates {@code baseQuery}.
      */
     public JsonNode mergeParams(JsonNode baseQuery, JsonNode params) {
+        return mergeParams(baseQuery, params, null);
+    }
+
+    /**
+     * As {@link #mergeParams(JsonNode, JsonNode)}, additionally reporting into
+     * {@code paramsIgnoredOut} (nullable) the name of any supplied param that could NOT be applied
+     * to this def's grain and whose skip the FE must be told about. Today only
+     * {@code complaintPath} reports (the daily grain has no {@code complaint_node_path}, so a
+     * subtree selection would otherwise leave those widgets silently unfiltered); the historical
+     * silent no-ops ({@code ward} on ward-less grains, {@code hierLevel} on daily) keep their
+     * behaviour unchanged.
+     */
+    public JsonNode mergeParams(JsonNode baseQuery, JsonNode params, List<String> paramsIgnoredOut) {
         if (baseQuery == null || !baseQuery.isObject()) return baseQuery;
         if (params == null || !params.isObject() || params.size() == 0) return baseQuery;
 
@@ -153,6 +197,16 @@ public class KpiQueryComposer {
         if (params.hasNonNull("serviceCode")) {
             String svc = params.get("serviceCode").asText();
             if (!svc.isEmpty() && !"all".equals(svc)) applyEqFilter(next, g, "service_code", svc);
+        }
+        if (params.hasNonNull("complaintPath")) {
+            String path = params.get("complaintPath").asText();
+            if (!path.isEmpty()) applyComplaintPath(next, g, path, paramsIgnoredOut);
+        }
+
+        // ---- hierarchy-level rollup (#1111): rewrite service_code dimensions to the level expr ----
+        if (params.hasNonNull("hierLevel")) {
+            String hierLevel = params.get("hierLevel").asText();
+            if (!hierLevel.isEmpty() && !"leaf".equals(hierLevel)) applyHierLevel(next, g, hierLevel);
         }
 
         return next;
@@ -405,6 +459,105 @@ public class KpiQueryComposer {
         if (window != null && window.hasNonNull("timeRole") && "resolved_at".equals(window.get("timeRole").asText()))
             return "resolved_at";
         return "created_at";
+    }
+
+    // ---- hierarchy-level rollup (#1111) ----
+
+    /**
+     * Rewrite the query's {@code service_code} dimensions to the fixed hierarchy-level expression
+     * (via the composer-internal marker only {@link AnalyticsPlanner} accepts — see
+     * {@link AnalyticsCatalog#HIER_DIM_TOKEN}), grouping the tile by the Nth
+     * {@code complaint_node_path} segment instead of the leaf. Rows with a NULL/empty path
+     * (flat/legacy tenants) fall back to their leaf {@code service_code} inside the SQL expr, and
+     * the level clamps to each row's own depth — both live in {@link AnalyticsCatalog#hierLevelExpr}.
+     *
+     * <p>Grains without the path column (daily) skip gracefully, exactly like {@code ward} on a
+     * ward-less grain: the param is inapplicable, not an error. A malformed level, however, IS an
+     * error ({@code invalid_param}) — silently serving leaf granularity for a level the caller
+     * asked for would be a wrong answer, the same reasoning as C2's unparseable-date hard failure.
+     *
+     * <p>R4: when a rewrite happens, any {@code service_group} dimension (and sort referencing it)
+     * is dropped — at a rolled-up level it collapses into a duplicate of the level bucket itself.
+     * When the query carries no {@code service_code} dimension there is nothing to roll up
+     * (scalar tiles), so the param is a no-op and {@code service_group} is left alone.
+     */
+    private void applyHierLevel(ObjectNode query, Grain g, String hierLevel) {
+        if (!catalog.supportsHierLevel(g.name)) {
+            log.debug("grain '{}' has no complaint_node_path; skipping hierLevel param", g.name);
+            return;
+        }
+        int level;
+        try {
+            level = Integer.parseInt(hierLevel);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("invalid_param: hierLevel must be 'leaf' or an integer in 1.."
+                    + AnalyticsCatalog.MAX_HIER_LEVEL);
+        }
+        if (level < 1 || level > AnalyticsCatalog.MAX_HIER_LEVEL)
+            throw new IllegalArgumentException("invalid_param: hierLevel must be 'leaf' or an integer in 1.."
+                    + AnalyticsCatalog.MAX_HIER_LEVEL);
+
+        JsonNode dims = query.get("dimensions");
+        if (dims == null || !dims.isArray()) return;
+        boolean hasServiceCode = false;
+        for (JsonNode d : dims) if (d.isTextual() && "service_code".equals(d.asText())) { hasServiceCode = true; break; }
+        if (!hasServiceCode) return;   // nothing to roll up (scalar / other-dimension tiles)
+
+        ArrayNode next = query.arrayNode();
+        for (JsonNode d : dims) {
+            if (d.isTextual() && "service_code".equals(d.asText())) {
+                ObjectNode marker = next.addObject();
+                marker.put(AnalyticsCatalog.HIER_DIM_LEVEL_FIELD, level);
+                marker.put(AnalyticsCatalog.HIER_DIM_TOKEN_FIELD, AnalyticsCatalog.HIER_DIM_TOKEN);
+            } else if (d.isTextual() && "service_group".equals(d.asText())) {
+                // R4: dropped — duplicates the level bucket once service_code is rolled up.
+            } else {
+                next.add(d);
+            }
+        }
+        query.set("dimensions", next);
+
+        // Keep sort valid: a dropped service_group can no longer be sorted on.
+        JsonNode sort = query.get("sort");
+        if (sort != null && sort.isArray()) {
+            ArrayNode nextSort = query.arrayNode();
+            for (JsonNode s : sort) if (!"service_group".equals(s.path("by").asText(null))) nextSort.add(s);
+            if (nextSort.size() != sort.size()) {
+                if (nextSort.size() == 0) query.remove("sort"); else query.set("sort", nextSort);
+            }
+        }
+    }
+
+    // ---- complaint-hierarchy subtree filter (interior nodes) ----
+
+    /**
+     * Narrow to a complaint-hierarchy INTERIOR node's whole subtree: a delimiter-guarded
+     * {@code complaint_node_path} {@code subtree} predicate ({@code = ? OR LIKE ?||'.%'} — the
+     * {@code '.'} guard so {@code PGR} never matches a {@code PGRX} sibling, the eq arm so a
+     * complaint filed AT a mixed interior+serviceable node stays in its own subtree). The
+     * predicate rides {@link AnalyticsPlanner}'s prefix-filterable allowlist with bound params
+     * and LIKE-escaping, exactly like the inline path's {@code starts_with}.
+     *
+     * <p>A malformed value (outside the path alphabet / over the length cap) is a hard
+     * {@code invalid_param} — same reasoning as C2/hierLevel: silently serving the UN-narrowed
+     * number for a subtree the caller asked for would be a wrong answer. A grain without the
+     * path column (daily) skips the filter but REPORTS the skip via {@code paramsIgnoredOut},
+     * so the FE can badge the widget instead of presenting an unfiltered count as filtered.
+     *
+     * <p>Leaf selections must keep using {@code serviceCode} (exact match; also covers the daily
+     * grain, which has a filterable {@code service_code} but no path column).
+     */
+    private void applyComplaintPath(ObjectNode query, Grain g, String path, List<String> paramsIgnoredOut) {
+        if (!COMPLAINT_PATH_VALUE.matcher(path).matches())
+            throw new IllegalArgumentException("invalid_param: complaintPath must be a dot-joined node path over"
+                    + " [A-Za-z0-9._/-], at most " + MAX_COMPLAINT_PATH_LENGTH + " chars");
+        if (!g.prefixFilterable.contains("complaint_node_path")) {
+            log.debug("grain '{}' has no complaint_node_path; ignoring complaintPath param (reported)", g.name);
+            if (paramsIgnoredOut != null && !paramsIgnoredOut.contains("complaintPath"))
+                paramsIgnoredOut.add("complaintPath");
+            return;
+        }
+        mergeableFilterObject(query, "complaint_node_path").put("subtree", path);
     }
 
     // ---- narrowing eq filter ----

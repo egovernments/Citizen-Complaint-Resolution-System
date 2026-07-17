@@ -33,11 +33,22 @@ Options A and B run locally. Option C deploys to a remote server, pulling pre-bu
 
 | Tool | Install Link | When you need it |
 |------|-------------|------------------|
-| [Tilt](https://docs.tilt.dev/install.html) | [See Tilt install section](#installing-tilt) | Only if using Option B |
+| [Tilt](https://docs.tilt.dev/install.html) | [See Tilt install section](#step-1-install-tilt) | Only if using Option B |
 | [Node.js 20+](https://nodejs.org/en/download/) | [Download](https://nodejs.org/) | Running Postman tests with Newman (`npx`) |
 | [Python 3.8+](https://www.python.org/downloads/) | [Download](https://www.python.org/downloads/) | Running the CI dataloader script |
+| **JDK 17 or 21** | [Temurin 17](https://adoptium.net/temurin/releases/?version=17) | Hot reload for PGR Java code (Tilt only) — see note below |
 | [Maven 3.9+](https://maven.apache.org/download.cgi) | [Download](https://maven.apache.org/download.cgi) | Hot reload for PGR Java code (Tilt only) |
 | [Yarn](https://yarnpkg.com/getting-started/install) | [Download](https://yarnpkg.com/) | Hot reload for DIGIT UI (Tilt only) |
+
+> **JDK version matters.** `backend/pgr-services` sets `<java.version>17</java.version>` and builds only on
+> **JDK 17 or 21**. JDK 23 and 25 fail: Lombok 1.18.30 (inherited from the Spring Boot 3.2.2 parent) cannot
+> run on their compiler internals, so every `@Builder`-generated method silently disappears and the build
+> dies with dozens of `cannot find symbol: method builder()` errors. The error never mentions Lombok or
+> your JDK, so it is easy to misread as broken source.
+>
+> Ubuntu's `default-jdk` may be newer than 21. Check with `mvn -version` (it reports the JDK Maven actually
+> uses, which is what matters — not `java -version`), and switch with
+> `sudo update-alternatives --config java` if needed.
 
 ---
 
@@ -106,20 +117,30 @@ Tilt wraps Docker Compose with a web dashboard showing live logs, service health
 
 ### Step 1: Install Tilt
 
-This project works best with a [patched version of Tilt](https://github.com/ChakshuGautam/tilt/releases/tag/v0.36.3-healthcheck) that waits for Docker Compose health checks. The upstream Tilt has a bug where it marks containers "ready" before they're healthy.
+Install upstream Tilt from https://docs.tilt.dev/install.html.
 
 ```bash
 # Linux amd64
-curl -fsSL https://github.com/ChakshuGautam/tilt/releases/download/v0.36.3-healthcheck/tilt-linux-amd64.gz \
-  | gunzip > /usr/local/bin/tilt
-chmod +x /usr/local/bin/tilt
+curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
 
 # Verify
 tilt version
 ```
 
-> PR to upstream: https://github.com/tilt-dev/tilt/pull/6682.
-> If using upstream Tilt, install from https://docs.tilt.dev/install.html.
+> **Do not use the `v0.36.3-healthcheck` fork.** We previously recommended a
+> [patched Tilt](https://github.com/ChakshuGautam/tilt/releases/tag/v0.36.3-healthcheck) that waits for
+> Docker Compose health checks, because upstream Tilt marks containers "ready" before they are healthy
+> (upstream PR: https://github.com/tilt-dev/tilt/pull/6682).
+>
+> That release is currently **broken and unusable**: the published binary ships without its web assets, so
+> `tilt up` exits immediately with `Could not find Tilt web static files`. Its version string is
+> `v0.36.3-dev`, and the `-dev` suffix makes Tilt serve the UI from the build machine's source tree
+> (`/root/code/tilt-fork/web`) instead of embedded assets. `--web-mode=prod` fails too, so there is no
+> workaround short of rebuilding and re-releasing the fork.
+>
+> Consequence of using upstream: Tilt may show a service as ready before its health check passes. The
+> stack still comes up — `docker-compose.yml` enforces ordering via `depends_on: service_healthy` — but
+> don't trust the dashboard's "ready" as "healthy". Check the `gatus` resource for real health.
 
 ### Step 2: Clone and start
 
@@ -297,8 +318,7 @@ local-setup/
 │   └── inventory.ini.example       # Template inventory
 ├── docker-compose.registry.yml     # Compose with public registry images
 ├── kong/
-│   ├── kong.yml                    # API gateway routes + auth enrichment
-│   └── auth-enrichment.lua         # Kong pre-function: authToken → userInfo
+│   └── kong.yml                    # API gateway routes + auth enrichment + RBAC (pre-function)
 ├── nginx/
 │   ├── digit-ui.conf               # UI + API proxy config
 │   ├── globalConfigs.js            # Runtime UI configuration
@@ -643,14 +663,14 @@ local-setup/
 ├── docker-compose.registry.yml     # All images from public registry (for Ansible deploy)
 ├── docker-compose.deploy.yaml      # Deploy variant (no resource limits)
 ├── docker-compose.db-migrations.yml # DB migrations variant
+├── docker-compose.tilt.yml         # Overlay: points pgr-services/digit-ui at Tilt's locally built images
 ├── Tiltfile                        # Tilt with hot reload (requires Maven/Yarn)
 ├── Tiltfile.db-dump                # Tilt with pre-built images (recommended)
 ├── ansible/
 │   ├── playbook-deploy.yml         # Ansible: install Docker, deploy stack, run CI tests
 │   └── inventory.ini.example       # Template inventory with placeholder IP
 ├── kong/
-│   ├── kong.yml                    # API gateway routes + OTEL + auth enrichment
-│   └── auth-enrichment.lua         # Kong pre-function: resolve authToken → userInfo
+│   └── kong.yml                    # API gateway routes + OTEL + auth enrichment + RBAC (pre-function)
 ├── nginx/
 │   ├── digit-ui.conf               # UI serving + API proxy to Kong
 │   ├── globalConfigs.js            # Runtime UI config (auth provider, API endpoints)

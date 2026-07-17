@@ -125,6 +125,16 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
   if (typeof window !== "undefined" && !isLoading && mdmsConfig) {
     window.__DIGIT_USER_VALIDATION = window.__DIGIT_USER_VALIDATION || {};
     window.__DIGIT_USER_VALIDATION.mobile = validationRules;
+    // CCSD-1990/1989: name + email ride the same master (optional fields) and
+    // the same canonical channel. Synchronous consumers (config getters) fall
+    // back to their built-in patterns when these are absent — an unseeded or
+    // partially-seeded master can never break a form.
+    if (mdmsConfig.nameRegex) {
+      window.__DIGIT_USER_VALIDATION.name = { pattern: mdmsConfig.nameRegex };
+    }
+    if (mdmsConfig.emailRegex) {
+      window.__DIGIT_USER_VALIDATION.email = { pattern: mdmsConfig.emailRegex };
+    }
   }
 
   const getMinMaxValues = () => {

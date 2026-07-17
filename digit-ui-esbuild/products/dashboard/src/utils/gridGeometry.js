@@ -40,6 +40,30 @@ export function compactVertically(layout) {
 }
 
 /**
+ * Compact the layout around one PINNED item: the pinned item keeps its exact
+ * cell, every other item is re-placed in reading order at the lowest free row
+ * in its columns — so tiles that occupied the pinned cell are pushed DOWN past
+ * it instead of reclaiming it. This is the legacy dashboard's drop semantics
+ * ("lands where you hover, pushing others"): plain compactVertically gives
+ * reading-order priority to the existing occupant, which bounces a dropped
+ * tile below the very cell the drop preview promised it.
+ * `pinned` must not already be in `layout`.
+ */
+export function compactAroundPinned(layout, pinned) {
+  const sorted = [...layout]
+    .map((item) => ({ ...item }))
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+
+  const placed = [{ ...pinned }];
+  for (const item of sorted) {
+    let y = 0;
+    while (collidesAt(item, item.x, y, placed)) y += 1;
+    placed.push({ ...item, y });
+  }
+  return placed;
+}
+
+/**
  * Swap the dragged item with the item it was dropped onto: the dragged item snaps
  * to the displaced item's slot, and the displaced item moves to the dragged item's
  * origin. Dropping on empty space is a no-op (the item keeps its new position).

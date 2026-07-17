@@ -33,6 +33,8 @@ export default defineConfig({
   ],
   use: {
     baseURL: BASE_URL,
+    // Opt-in for self-signed clusters (e.g. local k3s ingress); secure by default.
+    ignoreHTTPSErrors: process.env.IGNORE_HTTPS_ERRORS === '1',
     headless: true,
     screenshot: 'on',
     trace: 'on',

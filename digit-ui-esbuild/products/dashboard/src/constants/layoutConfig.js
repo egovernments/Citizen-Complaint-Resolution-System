@@ -11,6 +11,14 @@ export const GRID_COLS = 12;
 export const KPI_ROW_HEIGHT = 52;
 export const GRID_MARGIN_Y = 16;
 
+/**
+ * react-grid-layout's synthetic placeholder id for external drops (its
+ * droppingItem default). While a picker item is dragged over the grid, RGL
+ * injects an item with this id into the layouts it emits; it must never reach
+ * layout state or storage.
+ */
+export const DROPPING_ITEM_ID = "__dropping-elem__";
+
 /** Default grid size for full-width data tables (header + rows + updated stamp). */
 export const FULL_WIDTH_TABLE_GRID = {
   w: 12,

@@ -32,6 +32,11 @@ import UploadDrawer from "./ImageUpload/UploadDrawer";
 import ImageComponent from "../../../components/ImageComponent";
 
 const DEFAULT_TENANT = Digit?.ULBService?.getStateId?.();
+// CCSD-1989: strict email shape (blank ok) so "a@b." fails client-side with a
+// localized error instead of the unlocalized backend save failure. FALLBACK
+// only — the live pattern comes from common-masters.MobileNumberValidation
+// (emailRegex) via validationConfig, same channel as the mobile pattern.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Derive the maximum digit count from a mobile regex pattern string.
 // Works for exact-count patterns like ^[79][0-9]{8}$ (→9) and optional-prefix
@@ -91,7 +96,11 @@ const defaultValidationConfig = {
       // an unmodified Edit Profile (CCRS#556). Real-world names can also
       // contain "O'Brien" / "Mary-Anne" / "John Jr." which the
       // alpha-only regex rejected too.
-      name: "/^[a-zA-Z0-9 .'\\-]+$/i",
+      // CCSD-1992: forbid a leading separator so a name of just "-" fails
+      // client-side with the localized name error instead of an unhandled
+      // backend UserProfileUpdateDeniedException; O'Brien / Mary-Anne / John Jr.
+      // / mobile-number names still pass.
+      name: "/^(?![ .'\\-])[a-zA-Z0-9 .'\\-]+$/i",
       // Fallback mobile pattern for when the MDMS ValidationConfigs master
       // isn't seeded for the tenant. Pull the tenant's pattern from
       // globalConfigs.CORE_MOBILE_CONFIGS (e.g. Mozambique "^8[0-9]{8}$")
@@ -305,7 +314,9 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         if (!record) return null;
         const maxLen = mobileRegexMaxLength(record.mobileNumberRegex) || 15;
         return {
-          UserProfileValidationConfig: [{ mobileNumber: record.mobileNumberRegex }],
+          // email is optional in the master — undefined entries are dropped
+          // below so the built-in EMAIL_RE fallback stays in effect.
+          UserProfileValidationConfig: [{ mobileNumber: record.mobileNumberRegex, email: record.emailRegex }],
           prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
           maxLength: maxLen,
         };
@@ -466,7 +477,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     if (userInfo?.userName !== value) {
       setEmail(value);
 
-      if (value.length && !(value.includes("@") && value.includes("."))) {
+      if (value.length && !(validationConfig?.email || EMAIL_RE).test(value.trim())) {
         setErrors({
           ...errors,
           emailAddress: {
@@ -571,11 +582,15 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   const updateProfile = async () => {
     setLoading(true);
     try {
+      // Validate the trimmed value directly: setName is asynchronous, so the
+      // `name` binding below would still hold the untrimmed text (a legacy
+      // profile with leading whitespace would fail Save with no input error).
+      const trimmedName = (name || "").trim();
       if (name) {
-        setName((prev) => prev.trim());
+        setName(trimmedName);
       }
 
-      if (!validationConfig?.name?.test(name) || name === "" || name.length > 50 || name.length < 1) {
+      if (!validationConfig?.name?.test(trimmedName) || trimmedName === "" || trimmedName.length > 50 || trimmedName.length < 1) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_NAME_INVALID"),
@@ -589,7 +604,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         });
       }
 
-      if (email.length && !(email.includes("@") && email.includes("."))) {
+      if (email.length && !(validationConfig?.email || EMAIL_RE).test(email.trim())) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_EMAIL_INVALID"),
