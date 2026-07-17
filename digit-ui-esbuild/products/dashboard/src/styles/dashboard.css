@@ -1389,6 +1389,16 @@
   align-self: center;
 }
 
+/* Stacked (mobile) filter bar: the chip stretches full-width, exactly
+     like .dashboard-filter-inline-select in the 639px block below. */
+
+@media (max-width: 639px) {
+  .dashboard-popover-chip {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 /* ── Responsive layout ─────────────────────────────────────────────── */
 
 .dashboard-grid-wrap .react-grid-layout {

@@ -827,6 +827,15 @@
     @apply tw-ml-2 tw-mr-6 tw-inline-flex tw-shrink-0 tw-items-center tw-self-center;
   }
 
+  /* Stacked (mobile) filter bar: the chip stretches full-width, exactly
+     like .dashboard-filter-inline-select in the 639px block above. */
+  @media (max-width: 639px) {
+    .dashboard-popover-chip {
+      width: 100%;
+      min-width: 0;
+    }
+  }
+
   /* ── Responsive layout ─────────────────────────────────────────────── */
 
   .dashboard-main {
