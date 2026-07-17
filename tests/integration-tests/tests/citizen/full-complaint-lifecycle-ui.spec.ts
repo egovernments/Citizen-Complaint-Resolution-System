@@ -63,6 +63,31 @@ async function cityAdmin(): Promise<{ username: string; password: string }> {
   return { username: p.username, password: p.password };
 }
 
+/**
+ * The employee who drives Take Action → Resolve in step 5.
+ *
+ * Deliberately NOT cityAdmin(): the two steps are gated on different roles.
+ * Every deployment we test declares
+ *
+ *   ASSIGN  : [GRO, PGR_VIEWER]
+ *   RESOLVE : [PGR_LME, PGR_VIEWER]
+ *
+ * and egov-workflow-v2 computes the Take Action menu from the CALLER's roles,
+ * so the Resolve option simply never renders for a GRO who holds no PGR_LME.
+ * Only mz.maputo happens to have one employee (EMP001: GRO + PGR_LME) covering
+ * both, which is why driving all of steps 3-5 as one person passed here and
+ * failed on bomet, where the GRO is HS_GRO (roles: [GRO] — nothing else) and
+ * step 5 timed out on a Resolve option that was never coming. That is the same
+ * "the actor and the assignee are necessarily different people" fact the seed
+ * plan already encodes; see personas.ts's persona-triple comment.
+ *
+ * getPersona('lme') is the same resolution escalate-action-521.spec.ts uses to
+ * drive its own Take Action, for the same reason.
+ */
+async function resolverPersona() {
+  return getPersona('lme');
+}
+
 /** Fetch complaint status via API (verification helper — not a "UI under test" action). */
 async function fetchComplaintStatus(serviceRequestId: string): Promise<string> {
   const tokenResp = await getDigitToken({
@@ -519,16 +544,18 @@ API-only verification of status follows the same pattern as step 4 — UI flow i
     test.skip(!complaintCreated, 'complaint not created');
     test.setTimeout(120_000);
 
-    // Login as city-level admin
+    // Log in as someone the workflow will actually offer Resolve to (PGR_LME),
+    // not the GRO who did the ASSIGN — see resolverPersona().
+    const resolver = await resolverPersona();
     await loginViaApi(page, {
       tenant: TENANT,
-      authTenant: TENANT,
-      username: (await cityAdmin()).username,
-      password: (await cityAdmin()).password,
+      authTenant: resolver.tenant,
+      username: resolver.username,
+      password: resolver.password,
     });
 
     // Navigate to complaint details
-    console.log(`Navigating to complaint ${serviceRequestId}...`);
+    console.log(`Navigating to complaint ${serviceRequestId} as ${resolver.username} (roles: ${resolver.roles.join('|')})...`);
     await page.goto(`${BASE_URL}/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
@@ -546,7 +573,10 @@ API-only verification of status follows the same pattern as step 4 — UI flow i
     // Click "Resolve" in the dropdown menu
     console.log('Clicking Resolve...');
     const resolveOption = page.locator('.header-dropdown-option').filter({ hasText: /^Resolve$/i });
-    await expect(resolveOption).toBeVisible({ timeout: 5_000 });
+    await expect(
+      resolveOption,
+      `Resolve must be offered to ${resolver.username} (roles: ${resolver.roles.join('|')}). The workflow builds this menu from the caller's roles, so an empty menu here means this persona holds none of RESOLVE's roles — not that the UI is broken.`,
+    ).toBeVisible({ timeout: 5_000 });
     await resolveOption.click();
     await page.waitForTimeout(3_000);
     await snap(page, '05b-resolve-modal');
