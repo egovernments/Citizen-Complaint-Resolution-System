@@ -22,8 +22,14 @@ A service that genuinely cannot be probed (no listening port, or a one-shot job
 that exits) must be listed in EXEMPT with a reason. That is deliberate: adding a
 service then forgets to monitor it fails CI until someone makes an explicit call.
 
+The guard also refuses to run on inputs it cannot trust, because for a coverage
+check every uncertainty resolves toward a false green, and a false green here is
+worse than no check at all -- it is a dashboard people believe. So a missing
+source file, or an ambiguous network alias, is a hard failure rather than a skip.
+
 Sources of truth:
-  compose:  local-setup/docker-compose.yml, local-setup/docker-compose.egov-digit.yaml
+  compose:  every local-setup/docker-compose*.yml, enumerated in COMPOSE_FILES and
+            cross-checked against the directory so a new one cannot go unscanned
   k3s:      local-setup/k8s/**/*.yaml            (kind: Service)
   gatus:    local-setup/gatus/config.yaml        (compose tier)
             local-setup/k8s/tools/gatus.yaml     (k3s tier, gatus-config ConfigMap)
@@ -40,29 +46,40 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 LS = ROOT / "local-setup"
 
-# The compose files whose services must be covered. These are the two real
-# deployment paths, plus the overlays ansible layers on top:
+# Every compose file in local-setup/ whose services must be covered.
 #
 #   docker-compose.yml          the local / CI path (.github/workflows/local-setup-ci.yaml
 #                               runs a bare `docker compose up -d` against it).
 #   docker-compose.egov-digit.yaml
 #                               the tenant path. ansible deploys ONLY this file plus the
-#                               overlays below -- never docker-compose.yml (see
-#                               playbook-deploy.yml "Compute compose file stack",
-#                               compose_files: -f docker-compose.egov-digit.yaml ...).
+#                               migration/fast-path overlays -- never docker-compose.yml
+#                               (see playbook-deploy.yml "Compute compose file stack").
+#   deploy.yaml / registry.yml / db-migrations.yml / bomet.yml / core.yml
+#                               variants that mostly duplicate the above, but are real
+#                               usage paths of their own (the digit-mcp docs deploy with
+#                               deploy.yaml). They contributed nothing but duplicate
+#                               names when this list was written, which is exactly why
+#                               they were left out -- and that reasoning was wrong: a
+#                               *future* service unique to one of them would have slipped
+#                               through silently. Scanning a file whose services are all
+#                               duplicates costs nothing; not scanning it costs coverage.
 #
-# The overlays add no long-lived services of their own (they add *-migration one-shots
-# and override existing services), but they are listed so that a future long-lived
-# service added there cannot slip past this check.
+# This list is the guard's whole perimeter. Anything not in it is unwatched, so it is
+# checked against the directory listing below rather than maintained by memory.
 #
-# registry.yml / deploy.yaml / db-migrations.yml are variants of the above and would
-# only contribute duplicate names.
+# NOTE: .github/workflows/gatus-coverage.yml must list every one of these in BOTH of
+# its `paths:` filters, or a PR touching only an unlisted file never triggers the guard.
 COMPOSE_FILES = [
     LS / "docker-compose.yml",
     LS / "docker-compose.egov-digit.yaml",
     LS / "docker-compose.migrations.yml",
     LS / "docker-compose.migrations.ansible.yml",
     LS / "docker-compose.fast-path.yml",
+    LS / "docker-compose.deploy.yaml",
+    LS / "docker-compose.registry.yml",
+    LS / "docker-compose.db-migrations.yml",
+    LS / "docker-compose.bomet.yml",
+    LS / "docker-compose.core.yml",
 ]
 K8S_DIR = LS / "k8s"
 GATUS_COMPOSE = LS / "gatus/config.yaml"
@@ -105,15 +122,32 @@ EXEMPT = {
 
 # Suffixes that mark generated one-shot migration containers. These are created
 # per schema-owning service by the migrations overlay and all exit on success.
+#
+# A suffix alone is NOT enough to exempt a service: the name is a hint, the absence
+# of a listening port is the evidence. Exempting on the name alone meant any future
+# service called `session-init` or `search-seed` was waived through no matter how
+# long-lived it was -- reopening, for a whole class of names, exactly the "forgotten
+# by construction" gap this guard exists to close. See _is_exempt.
 EXEMPT_SUFFIXES = ("-migration", "-migrations", "-seed", "-init")
 
 
-def _is_exempt(name: str):
+def _is_exempt(name: str, listens: bool = True):
+    """Reason this service needs no Gatus check, or None if it needs one.
+
+    `listens` says whether the service publishes a port (compose `ports`/`expose`,
+    or a k8s Service, which by definition fronts one). It defaults to True so that
+    the conservative answer -- "this must be monitored" -- is what you get when the
+    caller cannot prove otherwise.
+    """
     if name in EXEMPT:
         return EXEMPT[name]
     for suf in EXEMPT_SUFFIXES:
         if name.endswith(suf):
-            return f"one-shot: matches '*{suf}'"
+            if listens:
+                # Named like a one-shot but holds a port open: not a one-shot.
+                # Monitor it, or give it an explicit EXEMPT entry with a reason.
+                return None
+            return f"one-shot: matches '*{suf}' and publishes no port"
     return None
 
 
@@ -126,26 +160,76 @@ def _stub_vars(text: str) -> str:
     return re.sub(r"\$\{([A-Z0-9_]+)(:-[^}]*)?\}", r"__\1__", text)
 
 
+class GuardError(Exception):
+    """The guard cannot trust its own inputs. Never a silent pass."""
+
+
 def compose_targets(paths):
-    """{reachable dns name -> service name} for every compose service.
+    """({reachable dns name -> service name}, {service -> publishes a port}).
 
     Includes network aliases, because a Gatus URL names the DNS host, and the
     host is often an alias rather than the service (postgres -> pgbouncer).
     """
-    names, aliases = {}, {}
+    names, aliases, listens = {}, {}, {}
     for p in paths:
         if not p.exists():
-            continue
+            # Skipping a missing source used to be a `continue`, which made the
+            # guard pass while reading nothing: rename docker-compose.yml away and
+            # it still reported OK. A source it cannot read is a broken guard, and
+            # a broken guard must fail loudly rather than certify an empty perimeter.
+            raise GuardError(
+                f"{p.relative_to(ROOT)} is listed in COMPOSE_FILES but does not exist. "
+                f"If it was renamed or removed, update COMPOSE_FILES (and the paths: "
+                f"filters in .github/workflows/gatus-coverage.yml) to match."
+            )
         doc = yaml.safe_load(_stub_vars(p.read_text())) or {}
         for svc, body in (doc.get("services") or {}).items():
+            body = body or {}
             names[svc] = svc
-            nets = (body or {}).get("networks")
+            # A service may appear in several files (overlays override the base);
+            # if it publishes a port in any of them, it listens.
+            listens[svc] = listens.get(svc, False) or bool(body.get("ports") or body.get("expose"))
+            nets = body.get("networks")
             if isinstance(nets, dict):
                 for net in nets.values():
                     for a in ((net or {}).get("aliases") or []):
+                        prev = aliases.get(a)
+                        if prev is not None and prev != svc:
+                            raise GuardError(
+                                f"network alias '{a}' is claimed by two services "
+                                f"('{prev}' and '{svc}'). One would silently absorb the "
+                                f"other's Gatus check. Give them distinct aliases."
+                            )
                         aliases[a] = svc
+
+    # An alias that shadows a real service name is the dangerous case: `names.update`
+    # below would overwrite the real service's own entry, so it vanishes as a required
+    # target and the impostor inherits its check. That is precisely how a dead
+    # postgres-db could hide behind a live pooler -- the bug this dashboard exists to
+    # catch -- reintroduced with zero CI signal.
+    for a, svc in aliases.items():
+        if a in names and a != svc:
+            raise GuardError(
+                f"network alias '{a}' on service '{svc}' shadows the real service "
+                f"named '{a}'. The alias would absorb '{a}'s Gatus check and '{a}' "
+                f"itself would no longer need monitoring. Rename the alias."
+            )
+
     names.update(aliases)
-    return names
+    return names, listens
+
+
+def find_unlisted_compose_files():
+    """Compose files on disk that COMPOSE_FILES does not scan.
+
+    The perimeter must not be maintained from memory: a new docker-compose.*.yml is
+    invisible to this guard until it is listed, and invisible is indistinguishable
+    from covered. Adding one now forces the decision.
+    """
+    listed = {p.resolve() for p in COMPOSE_FILES}
+    on_disk = {p.resolve() for p in LS.glob("docker-compose*.yml")} | \
+              {p.resolve() for p in LS.glob("docker-compose*.yaml")}
+    return sorted(p.name for p in on_disk - listed)
 
 
 def k8s_targets(root: pathlib.Path):
@@ -201,12 +285,18 @@ def gatus_k8s_endpoints():
     return []
 
 
-def find_unmonitored(targets, monitored_hosts):
-    """Services with no endpoint pointing at them (or any of their aliases)."""
+def find_unmonitored(targets, monitored_hosts, listens=None):
+    """Services with no endpoint pointing at them (or any of their aliases).
+
+    `listens` maps service -> publishes a port. Anything absent from it is assumed
+    to listen, so a service can never be exempted by a name suffix on the strength
+    of missing information.
+    """
+    listens = listens or {}
     covered = {targets[h] for h in monitored_hosts if h in targets}
     missing = []
     for svc in sorted(set(targets.values())):
-        if svc in covered or _is_exempt(svc):
+        if svc in covered or _is_exempt(svc, listens.get(svc, True)):
             continue
         missing.append(svc)
     return missing
@@ -229,14 +319,23 @@ def find_drift(compose_eps, k8s_eps):
 
 
 def report() -> int:
-    ctargets = compose_targets(COMPOSE_FILES)
+    ctargets, clistens = compose_targets(COMPOSE_FILES)
     ktargets = k8s_targets(K8S_DIR)
     ceps, keps = gatus_compose_endpoints(), gatus_k8s_endpoints()
     chosts, khosts = _hosts(ceps), _hosts(keps)
 
     rc = 0
 
-    unmon_c = find_unmonitored(ctargets, chosts)
+    unlisted = find_unlisted_compose_files()
+    if unlisted:
+        rc = 1
+        print("FAIL: compose files this guard does not scan "
+              "(add them to COMPOSE_FILES and to both paths: filters in "
+              ".github/workflows/gatus-coverage.yml, or this guard is blind to them):")
+        for f in unlisted:
+            print(f"  - {f}")
+
+    unmon_c = find_unmonitored(ctargets, chosts, clistens)
     if unmon_c:
         rc = 1
         print("FAIL: compose services with no Gatus check "
@@ -244,6 +343,8 @@ def report() -> int:
         for s in unmon_c:
             print(f"  - {s}")
 
+    # Every k8s Service fronts a port by definition, so none can claim the
+    # one-shot suffix exemption; listens defaults to True for all of them.
     unmon_k = find_unmonitored(ktargets, khosts)
     if unmon_k:
         rc = 1
@@ -293,8 +394,20 @@ def self_test() -> int:
     # 2. exempt services are not reported
     if find_unmonitored({"minio-init": "minio-init"}, set()) != []:
         failures.append("exempt service was wrongly reported as unmonitored")
-    if find_unmonitored({"foo-migration": "foo-migration"}, set()) != []:
-        failures.append("'*-migration' suffix was wrongly reported as unmonitored")
+    if find_unmonitored({"foo-migration": "foo-migration"}, set(), {"foo-migration": False}) != []:
+        failures.append("'*-migration' suffix with no port was wrongly reported as unmonitored")
+
+    # 2b. the suffix exemption is evidence-based, not name-based: a service named
+    #     like a one-shot but holding a port open is NOT a one-shot and must be
+    #     monitored. Without this, any future `session-init` is silently waived.
+    if find_unmonitored({"session-init": "session-init"}, set(), {"session-init": True}) != ["session-init"]:
+        failures.append("a port-publishing '*-init' was wrongly exempted by its name alone")
+    # ...and an unknown service defaults to "must be monitored" rather than exempt.
+    if find_unmonitored({"mystery-seed": "mystery-seed"}, set()) != ["mystery-seed"]:
+        failures.append("'*-seed' with unknown port status defaulted to exempt instead of monitored")
+    # An explicit EXEMPT entry still wins regardless of ports.
+    if _is_exempt("gatus", listens=True) is None:
+        failures.append("explicit EXEMPT entry stopped applying to a listening service")
 
     # 3. an alias counts as coverage (the postgres -> pgbouncer case)
     if find_unmonitored({"pgbouncer": "pgbouncer", "postgres": "pgbouncer"}, {"postgres"}) != []:
@@ -339,6 +452,65 @@ def self_test() -> int:
     if got != {"postgres-db", "egov-notification-sms"}:
         failures.append(f"host extraction wrong: {got}")
 
+    # 8. the guard refuses to run on inputs it cannot trust, rather than passing.
+    #    Each of these used to be a silent green.
+    import tempfile
+
+    def _expect_guard_error(what, write):
+        with tempfile.TemporaryDirectory() as td:
+            p = pathlib.Path(td) / "docker-compose.probe.yml"
+            p.write_text(write)
+            try:
+                compose_targets([p])
+            except GuardError:
+                return
+            failures.append(what)
+
+    # 8a. a COMPOSE_FILES entry that does not exist must be fatal, not skipped.
+    try:
+        compose_targets([LS / "docker-compose.NOT-A-REAL-FILE.yml"])
+        failures.append("a missing compose file was silently skipped instead of failing")
+    except GuardError:
+        pass
+
+    # 8b. two services claiming one alias: one would absorb the other's check.
+    _expect_guard_error(
+        "two services sharing a network alias were silently collapsed",
+        "services:\n"
+        "  svc-a: {networks: {digit: {aliases: [shared]}}}\n"
+        "  svc-b: {networks: {digit: {aliases: [shared]}}}\n",
+    )
+
+    # 8c. an alias shadowing a real service name: the postgres-db masking case.
+    _expect_guard_error(
+        "an alias shadowing a real service name silently hijacked its coverage",
+        "services:\n"
+        "  postgres-db: {ports: ['5432:5432']}\n"
+        "  evil-svc: {networks: {digit: {aliases: [postgres-db]}}}\n",
+    )
+
+    # 8d. a legitimate alias (postgres -> pgbouncer) must still be accepted, and
+    #     the same alias repeated across overlay files is not a collision.
+    with tempfile.TemporaryDirectory() as td:
+        a = pathlib.Path(td) / "docker-compose.a.yml"
+        b = pathlib.Path(td) / "docker-compose.b.yml"
+        a.write_text("services:\n  pgbouncer: {ports: ['5432'], networks: {digit: {aliases: [postgres]}}}\n")
+        b.write_text("services:\n  pgbouncer: {networks: {digit: {aliases: [postgres]}}}\n")
+        try:
+            t, l = compose_targets([a, b])
+            if t.get("postgres") != "pgbouncer":
+                failures.append(f"legitimate alias was not resolved: {t}")
+            if not l.get("pgbouncer"):
+                failures.append("port published in one overlay file was lost when merging files")
+        except GuardError as e:
+            failures.append(f"legitimate repeated alias wrongly rejected: {e}")
+
+    # 9. the perimeter is derived from disk, not memory: every compose file present
+    #    must be scanned, so a newly added one cannot be invisible to this guard.
+    unlisted = find_unlisted_compose_files()
+    if unlisted:
+        failures.append(f"compose files exist that COMPOSE_FILES does not scan: {unlisted}")
+
     for f in failures:
         print(f"SELF-TEST FAIL: {f}")
     if failures:
@@ -348,9 +520,13 @@ def self_test() -> int:
 
 
 def main() -> int:
-    if "--self-test" in sys.argv:
-        return self_test()
-    return report()
+    try:
+        if "--self-test" in sys.argv:
+            return self_test()
+        return report()
+    except GuardError as e:
+        print(f"FAIL: {e}")
+        return 1
 
 
 if __name__ == "__main__":
