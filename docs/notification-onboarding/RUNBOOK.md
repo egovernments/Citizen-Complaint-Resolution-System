@@ -100,9 +100,12 @@ which also creates the Twilio integration. **For a standalone run you must set
 `NOVU_BASE_URL=http://localhost:14002`** — its built-in default is `:1336` (wrong for this stack;
 `enable-notifications.sh` passes `:14002` for you, so this only bites a bare `bash bootstrap-novu-whatsapp.sh`).
 
-**9 — Setup complete. ⚠️ Don't drive a complaint yet.** The drive-and-verify is the **last** thing —
-it only works after **§4** (seed the masters) and, for WhatsApp, **§5** (author your Content templates
-+ persist **your** SIDs). Do §4 and §5; the final drive + verify is **[§5.4](#54-drive-a-real-complaint-and-verify)**.
+**9 — WhatsApp only: your Content templates → your SIDs** *(SMS/email skip this)* — author +
+Meta-approve your Content templates, then persist your account's SIDs to MDMS. See **§5.0–5.2**.
+
+**10 — Drive a complaint + verify** — the final check. Run
+[`drive-test-complaint.py`](../../local-setup/scripts/drive-test-complaint.py) (or file one by hand),
+then confirm delivery — see **[§5.4](#54-drive-a-real-complaint-and-verify--the-final-step)**.
 
 ---
 
