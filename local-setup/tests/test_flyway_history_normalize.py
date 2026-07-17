@@ -13,7 +13,7 @@ import yaml
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "db", "normalize")))
 
-from normalize import ABORT, DROP, NOOP, RENAME, SKIP, decide, load_map
+from normalize import ABORT, DROP, NOOP, RENAME, decide, load_map
 
 MAP_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "db", "flyway-history-map.yml")
@@ -72,17 +72,28 @@ def test_no_history_but_populated_data_tables_abort():
     assert "eg_user" in d.reason
 
 
-def test_embedded_services_are_skipped_entirely():
-    spec = {"canonical": "accesscontrol_schema_version", "embedded": True}
-    d = decide("egov-accesscontrol", spec, {"accesscontrol_schema_version"}, {})
-    assert d.action == SKIP
+def test_no_service_opts_out_of_normalization():
+    # Phase 4 removed the `embedded` escape hatch: every service with a schema now
+    # has a migration init container, so every entry must be normalized. A stray
+    # `embedded: true` would silently skip a service whose migrator DOES run —
+    # exactly the replay-against-populated-tables case decide() exists to catch.
+    m = load_map(MAP_PATH)
+    opted_out = [svc for svc, spec in m.items() if spec.get("embedded")]
+    assert not opted_out, f"`embedded` is no longer supported; found on: {opted_out}"
 
 
-def test_embedded_service_is_skipped_even_when_it_looks_wrong():
-    # No migrator exists for it, so nothing can replay against it. Hands off.
-    spec = {"canonical": "accesscontrol_schema_version", "embedded": True}
-    d = decide("egov-accesscontrol", spec, set(), {})
-    assert d.action == SKIP
+def test_bndry_mgmnt_empty_dump_tables_are_rebuilt_not_aborted():
+    # The dump ships both bndry tables with NO history under any name. They are
+    # empty, so the migrator may safely rebuild them. If they are ever populated,
+    # the ABORT branch must win instead (covered by the eg_user test above).
+    m = load_map(MAP_PATH)
+    spec = m["egov-bndry-mgmnt"]
+    present = {"eg_bm_generated_template", "eg_bm_processed_template"}
+    d = decide("egov-bndry-mgmnt", spec, present, {})
+    assert d.action == DROP
+
+    d = decide("egov-bndry-mgmnt", spec, present, {"eg_bm_generated_template": 12})
+    assert d.action == ABORT
 
 
 # ── the shipped map itself ────────────────────────────────────────────────────
@@ -94,7 +105,9 @@ def test_shipped_map_parses_and_covers_every_migrator():
         "boundary-service", "egov-user", "mdms-backend", "egov-idgen",
         "egov-localization", "egov-enc-service", "egov-filestore",
         "egov-workflow-v2", "egov-hrms", "egov-url-shortening", "egov-otp",
-        "pgr-services", "novu-bridge", "digit-config-service",
+        "pgr-services", "novu-bridge", "digit-config-service", "audit-service",
+        # Phase 4 — the last three to get init containers.
+        "egov-indexer", "egov-accesscontrol", "egov-bndry-mgmnt",
     ]:
         assert svc in m, f"{svc} missing from the map"
         assert m[svc]["canonical"], f"{svc} has no canonical table"

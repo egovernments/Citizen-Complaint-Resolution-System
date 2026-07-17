@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otp-mock-conf
+  namespace: egov
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      # OTP validate -> rubber-stamp success (mirrors compose otp-validate-mock)
+      location ~* _validate {
+        default_type application/json;
+        return 200 '{"ResponseInfo":{"apiId":"Rainmaker","ver":".01","ts":"","resMsgId":"uief87324","msgId":"","status":"successful"},"otp":{"otp":"","UUID":"mock","isValidationSuccessful":true}}';
+      }
+      # everything else (/_send, etc.) -> success (mirrors compose user-otp-mock)
+      location / {
+        default_type application/json;
+        return 200 '{"ResponseInfo":{"apiId":"Rainmaker","ver":null,"ts":null,"resMsgId":"uief87324","msgId":null,"status":"successful"},"otp":{"identity":"","tenantId":"","type":"","otp":"","expiryTime":0}}';
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otp-mock
+  namespace: egov
+  labels: { app: otp-mock }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: otp-mock }
+  template:
+    metadata:
+      labels: { app: otp-mock }
+    spec:
+      containers:
+      - name: nginx
+        image: docker.io/library/nginx:alpine
+        imagePullPolicy: IfNotPresent
+        ports: [{ containerPort: 8080 }]
+        volumeMounts:
+        - { name: conf, mountPath: /etc/nginx/conf.d }
+      volumes:
+      - name: conf
+        configMap: { name: otp-mock-conf }

@@ -10,6 +10,7 @@ import CardUpdatedStamp from "./components/CardUpdatedStamp";
 import ResizeGrip from "./components/ResizeGrip";
 import SubtleScroll from "./components/SubtleScroll";
 import GroupByLevelSelect, { levelDisplayLabel } from "./components/GroupByLevelSelect";
+import TypeFilterIgnoredNote, { typeFilterIgnored } from "./components/TypeFilterIgnoredNote";
 import {
   VIZ_TYPE,
   SHARED_CHROME,
@@ -21,6 +22,8 @@ import DashboardLogin, {
   hasDashboardSession,
   clearDashboardSession,
 } from "./components/DashboardLogin";
+import { useDashboardConfig } from "../useDashboardConfig";
+import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberFormat";
 
 import useDashboardT from "./i18n/useDashboardT";
 import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
@@ -30,6 +33,7 @@ import { useCatalog } from "./hooks/useCatalog";
 import { useCatalogLayout } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
+import * as dashboardMetrics from "./services/dashboardMetrics";
 import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM_ID } from "./constants/layoutConfig";
 import { defaultSizeForKpi } from "./utils/layoutStore";
 import { createPickerDragLifecycle } from "./utils/pickerDragLifecycle";
@@ -131,6 +135,25 @@ const AdminDashboard = ({ embedded = false }) => {
   // session and owns sign-out, so the standalone login gate is skipped.
   const [authed] = useState(() => embedded || hasDashboardSession());
 
+  // Per-LOCALE number-format mask (dss.DashboardConfig.numberFormat, #1213 /
+  // #1272). `numberFormat` is either an object keyed by locale code (with
+  // optional `default`) or a legacy string applied to every locale;
+  // resolveNumberFormatMask picks the active language's mask. Primed
+  // SYNCHRONOUSLY during render — the presentation configs are plain modules
+  // (no hook access), and setting the module-level store before
+  // AdminDashboardInner mounts means the first painted frame is already
+  // masked: no useEffect priming, no unmasked flicker. useDashboardT
+  // subscribes this component to the locale runtime, so a language switch
+  // re-renders it and re-runs this prime with the new locale's mask BEFORE
+  // any child re-renders (parents render first). Unconfigured tenants
+  // (config null / field absent / no mask for the locale and no default)
+  // clear the store and every formatter falls back to its pre-#1213
+  // expression byte-for-byte.
+  const { language } = useDashboardT();
+  const { config: dashboardConfig, loading: dashboardConfigLoading } =
+    useDashboardConfig();
+  setNumberFormatMask(resolveNumberFormatMask(dashboardConfig?.numberFormat, language));
+
   const handleLogin = useCallback(() => {
     window.location.reload();
   }, []);
@@ -141,6 +164,15 @@ const AdminDashboard = ({ embedded = false }) => {
   }, []);
 
   if (!authed) return <DashboardLogin onLogin={handleLogin} />;
+  // Hold the dashboard until the DashboardConfig query settles (one
+  // session-cached request, retry: false) so tiles never paint with default
+  // separators and then re-render masked. Mirrors the accessLoading -> Loader
+  // gate #1258 adds in Module.js; when both land, that single gate (fed by
+  // the shared useDashboardConfig cache entry) makes this one settle
+  // instantly.
+  if (dashboardConfigLoading) {
+    return <div className="kpi-tile kpi-tile--loading"><div className="kpi-tile__skeleton" /></div>;
+  }
   return <AdminDashboardInner embedded={embedded} onSignOut={embedded ? undefined : handleSignOut} />;
 };
 
@@ -156,9 +188,12 @@ const AdminDashboard = ({ embedded = false }) => {
  * the saved layout: localStorage, kpiId-keyed. NOT part of `filters` state on
  * purpose — a Group-by level is structurally NOT a filter: it changes the
  * widget's own aggregation dimension (which hierarchy level the service_code
- * buckets roll up to), never which complaints qualify. Hierarchy FILTERS were
- * built and deliberately abandoned; this control must stay out of the filter
- * store so it can never be mistaken for (or grow into) one.
+ * buckets roll up to), never which complaints qualify. Hierarchy FILTERING
+ * lives where filters live: the global complaint-type TREE filter
+ * (ComplaintTypeTreeFilter, the sanctioned revival of the abandoned July
+ * demo) is part of `filters`/globalParams; this per-widget control must stay
+ * out of the filter store so the two axes never blur — they compose at the
+ * query level (subtree WHERE × level GROUP BY).
  */
 const HIER_OVERRIDES_STORAGE_KEY = "ccrs.dashboard.hier-level-overrides.v1";
 
@@ -178,6 +213,19 @@ function persistHierOverrides(overrides) {
   } catch {
     /* ignore quota/serialisation errors — override state is non-critical */
   }
+}
+
+/**
+ * Errored-widget count for dashboard.error_widgets.count (#1110): companion
+ * refs (__prior/__series/__pins) collapse to their base kpiId so a tile whose
+ * base AND companion queries failed still counts as ONE broken widget; a
+ * whole-batch failure (`__batch`) counts every laid-out tile.
+ */
+function countErrorWidgets(errors, tileCount) {
+  const keys = Object.keys(errors || {});
+  if (!keys.length) return 0;
+  if (keys.includes("__batch")) return tileCount;
+  return new Set(keys.map((k) => k.replace(/__(prior|series|pins)$/, ""))).size;
 }
 
 /**
@@ -299,6 +347,16 @@ function seriesToPoints(rows, viz, valueKey, columns) {
 /* -------------------------------------------------------------------------- */
 
 const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
+  // Render-lag instrumentation (#1110): begin the load SYNCHRONOUSLY at mount,
+  // BEFORE useCatalog/useFilterOptions fire their fetches, so every request of
+  // this load carries the load's traceparent/x-trace-id (useState initializer
+  // runs during the first render; the hooks' effects run after it).
+  useState(() => {
+    dashboardMetrics.beginLoad();
+    return null;
+  });
+  // Soft-nav away: ship whatever telemetry is still pending for this load.
+  useEffect(() => () => dashboardMetrics.flush("unmount"), []);
   const { t, language, i18nTick } = useDashboardT();
   const { filters, setFilter, clearFilters, applyFilterOptions } =
     useDashboardFilters();
@@ -493,6 +551,9 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     }
     const refs = buildRefs(tiles, kpis, filters, hierOverrides);
     const reqId = ++reqIdRef.current;
+    // A new batch actually fired: opens a pending interaction window (R6) —
+    // an intent whose filter change didn't change refsKey never reaches here.
+    dashboardMetrics.markBatchStart(reqId);
     setBatch((prev) => ({ ...prev, loading: true }));
 
     runKpiBatch(refs, tenantId)
@@ -504,6 +565,12 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           errors: res?.errors || null,
           partial: Boolean(res?.partial),
         });
+        // AFTER the staleness guard; companion-ref errors (__prior/__series/
+        // __pins) collapse to their base kpiId so one broken tile counts once.
+        dashboardMetrics.markAllWidgetsReady(
+          countErrorWidgets(res?.errors, tiles.length),
+          reqId
+        );
       })
       .catch((err) => {
         if (reqId !== reqIdRef.current) return;
@@ -513,6 +580,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           errors: { __batch: err?.message || t("DASHBOARD_COMMON_BATCH_FAILED", "Batch query failed") },
           partial: true,
         });
+        // Whole-batch failure: every laid-out tile is an errored widget.
+        dashboardMetrics.markAllWidgetsReady(tiles.length, reqId);
       });
     // refsKey captures both the tile set and the resolved params.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -586,6 +655,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     const rows = layout.map((item) => {
       const def = kpis[item.i];
       const assembled = assembleResult(item.i, def, batch.results);
+      // CSV values stay RAW (unmasked, dot-decimal, no grouping) on purpose:
+      // the tenant numberFormat mask (#1213) is display-only — a masked
+      // "52.560" would be re-parsed as 52.56 by Excel/imports expecting
+      // machine-readable CSV.
       const value =
         assembled?.value != null
           ? assembled.value
@@ -612,6 +685,24 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     URL.revokeObjectURL(url);
   }, [layout, kpis, batch.results, t]);
 
+  // Filter interactions register an intent with the metrics module first (the
+  // window only opens if the change actually re-fires the batch — R6); the
+  // filters hook itself stays untouched.
+  const handleFilterChange = useCallback(
+    (...args) => {
+      dashboardMetrics.markInteraction("filter");
+      return setFilter(...args);
+    },
+    [setFilter]
+  );
+  const handleClearFilters = useCallback(
+    (...args) => {
+      dashboardMetrics.markInteraction("filter");
+      return clearFilters(...args);
+    },
+    [clearFilters]
+  );
+
   const showEmpty = !catalogLoading && pack && layout.length === 0;
 
   return (
@@ -627,8 +718,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       onSearchQueryChange={setSearchQuery}
       onExport={handleExport}
       filters={filters}
-      onFilterChange={setFilter}
-      onClearFilters={clearFilters}
+      onFilterChange={handleFilterChange}
+      onClearFilters={handleClearFilters}
       filterOptions={filterOptions}
       filterOptionsLoading={filterOptionsLoading}
       kpiCardData={{}}
@@ -698,6 +789,12 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
             const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
+            // Subtle per-tile note when the backend ignored the subtree
+            // complaint-type filter on this KPI's grain (daily has no
+            // complaint_node_path) — the field is ABSENT unless it happened.
+            const ignoredNote = typeFilterIgnored(batch.results?.[item.i]) ? (
+              <TypeFilterIgnoredNote />
+            ) : null;
             const removeBtn = (
               <WidgetRemoveButton
                 label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${resolveTitle(kpis[item.i]) || item.i}`}
@@ -716,6 +813,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                 >
                   {removeBtn}
                   {renderTile(item.i)}
+                  {ignoredNote}
                   <CardUpdatedStamp label={lastUpdatedLabel} />
                 </div>
               );
@@ -780,6 +878,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                     renderTile(item.i, groupBy.info)
                   )}
                 </div>
+                {ignoredNote}
                 <CardUpdatedStamp label={lastUpdatedLabel} />
                 <ResizeGrip />
               </section>

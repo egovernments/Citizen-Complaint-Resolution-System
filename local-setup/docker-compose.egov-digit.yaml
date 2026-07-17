@@ -574,31 +574,12 @@ services:
   # via configs/egov-persister/audit-service-persister.yml. K8s runs this too
   # (coreservices-helmfile: audit-service installed:true). Compose previously lacked
   # it, so audit capture was non-functional (no eg_audit_logs table). This restores
-  # cross-stack parity. Schema is created by the audit-service-db Flyway image below.
-  audit-service-migration:
-    image: egovio/audit-service-db:v2.9.2-4a60f20
-    container_name: audit-service-migration
-    depends_on:
-      # DIRECT to postgres-db (never the pgbouncer 'postgres' alias, which runs in
-      # transaction mode and breaks Flyway's session locks).
-      postgres-db:
-        condition: service_healthy
-    environment:
-      DB_URL: jdbc:postgresql://postgres-db:5432/egov
-      SCHEMA_TABLE: audit_service_schema
-      FLYWAY_USER: egov
-      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      FLYWAY_LOCATIONS: filesystem:/flyway/sql
-      FLYWAY_VALIDATE_ON_MIGRATE: "false"
-    restart: "no"
-    networks:
-      - egov-network
-
+  # cross-stack parity. Its schema is owned by an audit-service-db Flyway init
+  # container, declared with every other migrator in docker-compose.migrations.yml
+  # (which the playbook always layers) — this file stays free of migration wiring.
   audit-service:
     image: egovio/audit-service:v2.9.2-4a60f20
     depends_on:
-      audit-service-migration:
-        condition: service_completed_successfully
       pgbouncer:
         condition: service_healthy
       redpanda:
@@ -611,7 +592,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      # Flyway disabled on the app — the audit-service-migration init ran it.
+      # Flyway disabled on the app — its migration init container owns the schema
+      # (docker-compose.migrations.yml). Also set there, alongside the migrator.
       SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
@@ -781,7 +763,12 @@ services:
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
       EGOV_USER_HOST: http://egov-user-proxy:8107/
-      STATE_LEVEL_TENANT_ID: pg.citya
+      # STATE_LEVEL_TENANT_ID MUST be the state ROOT (pg → rewritten to state_root),
+      # NOT the city tier. egov-workflow-v2 resolves the businessservice (PGR) at this
+      # tenant, and the businessservice is seeded at the state root. Grouping this with
+      # enc-service on `pg.citya` (city) makes workflow look for PGR at the city, find
+      # nothing, and fail every complaint APPLY. Refs #1160.
+      STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
       # Disable schema-per-tenant mode - use public schema for all tenants
       IS_ENVIRONMENT_CENTRAL_INSTANCE: 'false'
@@ -1568,12 +1555,21 @@ services:
     container_name: egov-url-shortening
     restart: unless-stopped
     depends_on:
+      # pgbouncer for the app datasource, postgres-db for Flyway's direct migration.
+      pgbouncer:
+        condition: service_healthy
       postgres-db:
         condition: service_healthy
     environment:
       SERVER_PORT: '8080'
       SERVER_CONTEXTPATH: /egov-url-shortening
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/egov
+      # The image pins spring.datasource.driver-class-name to OpenTelemetryDriver,
+      # which only accepts jdbc:otel: URLs -- a plain jdbc:postgresql:// one makes
+      # Hikari throw "claims to not accept jdbcUrl" and the DataSource never opens.
+      # App traffic goes through pgbouncer (the 'postgres' alias), as every other
+      # service does; Flyway below stays direct on postgres-db, because it takes a
+      # session-level advisory lock that transaction-mode pooling would break.
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_URL: jdbc:postgresql://postgres-db:5432/egov
@@ -1675,6 +1671,16 @@ services:
       - "18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
+      # Profile-gated stacks: keep these beside COMPOSE_PROFILES in .env.
+      # Unset means off -- gatus enables an endpoint when its variable is missing.
+      GATUS_PROFILE_OTP: ${GATUS_PROFILE_OTP:-false}
+      GATUS_PROFILE_SEARCH: ${GATUS_PROFILE_SEARCH:-false}
+      GATUS_PROFILE_MCP: ${GATUS_PROFILE_MCP:-false}
+      GATUS_PROFILE_KEYCLOAK: ${GATUS_PROFILE_KEYCLOAK:-false}
+      GATUS_PROFILE_NOTIFICATIONS: ${GATUS_PROFILE_NOTIFICATIONS:-false}
+      GATUS_AUDIT: "true"
+      GATUS_PROXIES: "true"
+      GATUS_SMS_PORT: "8005"
     networks:
       - egov-network
 
@@ -2267,6 +2273,10 @@ services:
       # Channels actually delivered. WHATSAPP stays OFF until a legitimate
       # provider is onboarded as a Novu integration (then just add it here).
       NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-SMS,EMAIL}
+      # Roles allowed through the /novu-adapter proxy (ProxyAuthFilter). Must be
+      # plumbed from .env — the installer sets it; include MDMS_ADMIN so the
+      # configurator's own provider/template screens are not 403'd.
+      NOVU_BRIDGE_PROXY_ALLOWED_ROLES: ${NOVU_BRIDGE_PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME}
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
       # MDMS_HOST MUST be set. The bridge's application.properties default

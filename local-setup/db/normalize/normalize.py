@@ -14,7 +14,6 @@ NOOP = "noop"
 RENAME = "rename"
 DROP = "drop"
 ABORT = "abort"
-SKIP = "skip"
 
 
 class Decision(NamedTuple):
@@ -46,11 +45,6 @@ def decide(
     row_counts  — rows per data table, for the data tables that are present
     """
     canonical = spec["canonical"]
-
-    # No migration init container exists for embedded services, so nothing would
-    # replay against their history. Hands off, whatever it looks like.
-    if spec.get("embedded"):
-        return Decision(SKIP, service, canonical, reason="embedded Flyway")
 
     canonical_present = canonical in present
     found = [a for a in (spec.get("aliases") or []) if a in present]
@@ -245,10 +239,10 @@ def main() -> int:
     for orphan in sorted(history_tables() - known):
         print(f"  warning  unrecognised history table {orphan!r} — no migrator owns it, skipping")
 
-    tally = {a: sum(1 for d in decisions if d.action == a) for a in (NOOP, RENAME, DROP, SKIP)}
+    tally = {a: sum(1 for d in decisions if d.action == a) for a in (NOOP, RENAME, DROP)}
     print(
         f"ok: renamed {tally[RENAME]}, rebuilt {tally[DROP]}, "
-        f"already-aligned {tally[NOOP]}, skipped {tally[SKIP]}"
+        f"already-aligned {tally[NOOP]}"
     )
     return 0
 

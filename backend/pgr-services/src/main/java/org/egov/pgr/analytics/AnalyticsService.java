@@ -7,6 +7,7 @@ import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.AnalyticsCatalog.Grain;
 import org.egov.pgr.analytics.model.KpiDefinition;
+import org.egov.pgr.config.PGRConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -68,17 +69,46 @@ public class AnalyticsService {
     private final KpiCatalogService kpiCatalogService;
     private final PrincipalScopeResolver scopeResolver;
     private final KpiQueryComposer queryComposer;
+    private final AnalyticsMetrics metrics;
+    private final PGRConfiguration config;
 
     @Autowired
     public AnalyticsService(AnalyticsPlanner planner, AnalyticsCatalog catalog, JdbcTemplate jdbc,
                             KpiCatalogService kpiCatalogService, PrincipalScopeResolver scopeResolver,
-                            KpiQueryComposer queryComposer){
+                            KpiQueryComposer queryComposer, AnalyticsMetrics metrics,
+                            PGRConfiguration config){
         this.planner = planner; this.catalog = catalog; this.jdbc = jdbc;
         this.kpiCatalogService = kpiCatalogService; this.scopeResolver = scopeResolver;
-        this.queryComposer = queryComposer;
+        this.queryComposer = queryComposer; this.metrics = metrics; this.config = config;
     }
 
+    /** Back-compat entry point (no trace correlation header). */
     public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, String tenantId, int stateLevelLen){
+        return query(body, requestInfo, tenantId, stateLevelLen, null);
+    }
+
+    /**
+     * #1110: instrumented entry point. Every executed SQL query (batch entry, single query,
+     * compose SOURCE query) records an OTEL duration/rows point via {@link QueryTelemetry};
+     * one {@code analytics.slow_queries} line (top-{@value QueryTelemetry#TOP_N} by tookMs)
+     * is logged per request — also on partial failure, covering whatever did execute.
+     *
+     * @param headerTraceId the literal {@code x-trace-id} header — correlation FALLBACK only;
+     *                      the active span's trace id (javaagent + Kong w3c propagation) wins.
+     */
+    public Map<String,Object> query(JsonNode body, RequestInfo requestInfo, String tenantId,
+                                    int stateLevelLen, String headerTraceId){
+        QueryTelemetry tel = new QueryTelemetry(metrics, tenantId, stateLevelLen);
+        try {
+            return doQuery(body, requestInfo, tenantId, stateLevelLen, tel);
+        } finally {
+            if (!tel.isEmpty())
+                log.info(tel.slowQueryLine(QueryTelemetry.resolveTraceId(headerTraceId)));
+        }
+    }
+
+    private Map<String,Object> doQuery(JsonNode body, RequestInfo requestInfo, String tenantId,
+                                       int stateLevelLen, QueryTelemetry tel){
         if (tenantId == null || tenantId.isEmpty()) throw new IllegalArgumentException("invalid_param: tenantId is required");
         AnalyticsScope scope = scopeResolver.resolve(requestInfo, tenantId, stateLevelLen);
         Set<String> callerRoles = extractRoles(requestInfo);
@@ -107,10 +137,11 @@ public class AnalyticsService {
                         continue;
                     }
                     // D1a: backend-composed defs (query:null + viz.compose) resolve recursively here.
-                    Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles);
+                    Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, name);
                     if (composed != null) { results.put(name, composed); continue; }
 
-                    JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
+                    List<String> paramsIgnored = new ArrayList<>();
+                    JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles, paramsIgnored);
                     if (actualQueryNode == null) {
                         partial = true;
                         results.put(name, Map.of("error", "kpi_forbidden",
@@ -126,7 +157,9 @@ public class AnalyticsService {
                                 "message", "inline query projects officer-PII dimension(s); role not authorized"));
                         continue;
                     }
-                    results.put(name, runOne(actualQueryNode, scope));
+                    Map<String,Object> result = runOne(actualQueryNode, scope, tel, name, kpiContext(queryNode));
+                    if (!paramsIgnored.isEmpty()) result.put("paramsIgnored", paramsIgnored);
+                    results.put(name, result);
                 } catch (Exception ex) {
                     partial = true;
                     results.put(name, err(ex));
@@ -138,14 +171,16 @@ public class AnalyticsService {
             JsonNode queryNode = body.get("query");
             if (publicFloor && !queryNode.has("kpiId"))
                 throw new IllegalArgumentException("kpi_forbidden: public access is limited to published PUBLIC KPIs");
-            Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles);
+            Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, "query");
             if (composed != null) { out.putAll(composed); return out; }
-            JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
+            List<String> paramsIgnored = new ArrayList<>();
+            JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles, paramsIgnored);
             if (actualQueryNode == null)
                 throw new IllegalArgumentException("kpi_forbidden: KPI not found or not authorized");
             if (!queryNode.has("kpiId") && projectsForbiddenPii(actualQueryNode, callerRoles))
                 throw new IllegalArgumentException("pii_forbidden: inline query projects officer-PII dimension(s); role not authorized");
-            out.putAll(runOne(actualQueryNode, scope));
+            out.putAll(runOne(actualQueryNode, scope, tel, "query", kpiContext(queryNode)));
+            if (!paramsIgnored.isEmpty()) out.put("paramsIgnored", paramsIgnored);
         } else {
             throw new IllegalArgumentException("invalid_param: body must contain 'query' or 'queries'");
         }
@@ -162,8 +197,14 @@ public class AnalyticsService {
      * {@link KpiQueryComposer} so the kpiId-by-reference path honours the global filters. The merge
      * produces only narrowing filters; the server-injected RBAC row-scope ({@code applyScope}) is
      * still layered on top by the planner and is never widened here.
+     *
+     * @param paramsIgnored collector (nullable) for supplied params the composer could not apply
+     *                      to this def's grain and must report (today: {@code complaintPath} on
+     *                      the path-less daily grain) — surfaced on the result envelope as
+     *                      {@code paramsIgnored:[...]}
      */
-    private JsonNode resolveKpiRef(JsonNode queryNode, String tenantId, Set<String> callerRoles) {
+    private JsonNode resolveKpiRef(JsonNode queryNode, String tenantId, Set<String> callerRoles,
+                                   List<String> paramsIgnored) {
         if (!queryNode.has("kpiId")) return queryNode;
 
         String kpiId = queryNode.get("kpiId").asText();
@@ -176,17 +217,18 @@ public class AnalyticsService {
         // Precedence: explicit caller param > declared default > the def's baked query.
         JsonNode effectiveParams = withDeclaredDefaults(def.get(), queryNode.get("params"));
 
-        // C1: validate the EFFECTIVE window param against the def's params.allowed allow-list
-        // (the def is in scope here). An out-of-list window must be a per-entry invalid_param,
-        // not silently honoured by the composer/planner (which accept any well-formed window).
-        validateWindowParam(def.get(), effectiveParams);
+        // C1 (generalized in #1111/R3): validate EVERY effective param against the def's declared
+        // params.allowed allow-list (the def is in scope here). An out-of-list value (window,
+        // hierLevel, ...) must be a per-entry invalid_param, not silently honoured by the
+        // composer/planner (which accept any well-formed value).
+        validateAllowedParams(def.get(), effectiveParams);
 
         JsonNode storedQuery = def.get().getQuery();
         if (storedQuery == null || storedQuery.isNull())
             // D1a backend-composed defs are intercepted by maybeComposeResult before this point;
             // a query:null def WITHOUT a valid compose op is a genuine misconfiguration.
             throw new IllegalArgumentException("invalid_kpi: KPI '" + kpiId + "' has no query defined");
-        return queryComposer.mergeParams(storedQuery, effectiveParams);
+        return queryComposer.mergeParams(storedQuery, effectiveParams, paramsIgnored);
     }
 
     /**
@@ -197,8 +239,11 @@ public class AnalyticsService {
      * > the def's baked query (a defaulted param flows through {@link KpiQueryComposer#mergeParams}
      * exactly like a caller-sent one, and the C1 window allow-list check runs on the EFFECTIVE
      * params). Returns {@code reqParams} untouched (possibly null) when no default applies.
+     * An EMPTY-STRING default is a no-op (skipped like an absent one) — the dss.KpiDefinition
+     * schema requires {@code default} on every params entry, so free-form params (complaintPath)
+     * are seeded with {@code "default":""}. Package-private for tests.
      */
-    private JsonNode withDeclaredDefaults(KpiDefinition def, JsonNode reqParams) {
+    JsonNode withDeclaredDefaults(KpiDefinition def, JsonNode reqParams) {
         List<KpiDefinition.KpiParam> declared = def.getParams();
         if (declared == null || declared.isEmpty()) return reqParams;
         com.fasterxml.jackson.databind.node.ObjectNode merged = null;
@@ -218,25 +263,37 @@ public class AnalyticsService {
     }
 
     /**
-     * C1 — window allow-list enforcement. If the request {@code params} carries a {@code window}
-     * and the def declares a {@code window} param with a non-empty {@code allowed} list, the value
-     * must be in that list. Out-of-list (incl. arbitrary {@code last_Nd}) → {@code invalid_param}.
-     * No-op when the def declares no allow-list for {@code window} (open window).
+     * C1, generalized in #1111/R3 — allow-list enforcement for ANY declared param. For each of the
+     * def's declared params carrying a non-empty {@code allowed} list, an effective (caller-sent or
+     * defaulted) value must be in that list. Out-of-list (incl. arbitrary {@code last_Nd} windows,
+     * out-of-range {@code hierLevel}s) → {@code invalid_param}. No-op for params the def declares
+     * without an allow-list — absent OR empty {@code "allowed":[]} both mean unvalidated free-form
+     * (the dss.KpiDefinition schema requires the key, so complaintPath is seeded with an empty
+     * list) — and for undeclared params (composer vocabulary applies).
+     * Runs on BOTH the normal kpiId path and the compose path (each calls this on its own def).
+     * Malformed shapes are rejected outright: a non-object {@code params} node, or an object/array
+     * value for a declared allow-listed param, is {@code invalid_param} (never a silent bypass).
      */
-    private void validateWindowParam(KpiDefinition def, JsonNode reqParams) {
-        if (reqParams == null || !reqParams.hasNonNull("window")) return;
-        String requested = reqParams.get("window").asText();
-        if (requested.isEmpty()) return;
+    void validateAllowedParams(KpiDefinition def, JsonNode reqParams) {
+        if (reqParams == null || reqParams.isNull()) return;
+        if (!reqParams.isObject())
+            throw new IllegalArgumentException("invalid_param: params must be an object");
         if (def.getParams() == null) return;
         for (KpiDefinition.KpiParam p : def.getParams()) {
-            if (p != null && "window".equals(p.getName())) {
-                List<String> allowed = p.getAllowed();
-                if (allowed != null && !allowed.isEmpty() && !allowed.contains(requested))
-                    throw new IllegalArgumentException(
-                            "invalid_param: window '" + requested + "' is not allowed for KPI '" + def.getId()
-                                    + "'; allowed=" + allowed);
-                return;
-            }
+            if (p == null || p.getName() == null) continue;
+            List<String> allowed = p.getAllowed();
+            if (allowed == null || allowed.isEmpty()) continue;
+            if (!reqParams.hasNonNull(p.getName())) continue;
+            JsonNode value = reqParams.get(p.getName());
+            if (!value.isValueNode())
+                throw new IllegalArgumentException(
+                        "invalid_param: " + p.getName() + " must be a scalar value");
+            String requested = value.asText();
+            if (requested.isEmpty()) continue;
+            if (!allowed.contains(requested))
+                throw new IllegalArgumentException(
+                        "invalid_param: " + p.getName() + " '" + requested + "' is not allowed for KPI '"
+                                + def.getId() + "'; allowed=" + allowed);
         }
     }
 
@@ -253,7 +310,8 @@ public class AnalyticsService {
      * {@code hourlyAvgFromDaily}, {@code openRateComplement}, {@code netBacklogDaily}.
      */
     private Map<String,Object> maybeComposeResult(JsonNode queryNode, AnalyticsScope scope,
-                                                  String tenantId, Set<String> callerRoles) {
+                                                  String tenantId, Set<String> callerRoles,
+                                                  QueryTelemetry tel, String entryName) {
         if (queryNode == null || !queryNode.has("kpiId")) return null;
         String kpiId = queryNode.get("kpiId").asText();
         Optional<KpiDefinition> defOpt = kpiCatalogService.getDef(kpiId, tenantId);
@@ -267,20 +325,24 @@ public class AnalyticsService {
         // so a bare {kpiId} compose ref honours its declared defaults too (explicit caller wins).
         JsonNode params = withDeclaredDefaults(def, queryNode.get("params"));
 
-        // C1: the compose def's window allow-list still applies to the effective params.
-        validateWindowParam(def, params);
+        // C1 (generalized, #1111/R3): the compose def's declared allow-lists still apply to the
+        // effective params before they propagate to every source KPI.
+        validateAllowedParams(def, params);
 
         JsonNode compose = def.getViz().getCompose();
         String type = compose.get("type").asText();
 
         // Resolve + run each source kpiId with the same params, RBAC and row-scope.
+        // #1110/R9: each SOURCE query records its own metric point and joins the per-request
+        // slow-query pool (attributed to its own kpiId, under the composed entry's name).
         List<Map<String,Object>> sourceRows = new ArrayList<>();
+        List<String> paramsIgnored = new ArrayList<>();   // deduped in resolveKpiRef/composer
         for (JsonNode srcId : compose.get("sourceKpiIds")) {
             JsonNode srcRef = synthRef(srcId.asText(), params);
-            JsonNode srcQuery = resolveKpiRef(srcRef, tenantId, callerRoles);
+            JsonNode srcQuery = resolveKpiRef(srcRef, tenantId, callerRoles, paramsIgnored);
             if (srcQuery == null)
                 throw new IllegalArgumentException("kpi_forbidden: compose source '" + srcId.asText() + "' not authorized");
-            Map<String,Object> r = runOne(srcQuery, scope);
+            Map<String,Object> r = runOne(srcQuery, scope, tel, entryName, srcId.asText());
             sourceRows.add(firstRow(r));
         }
 
@@ -294,6 +356,7 @@ public class AnalyticsService {
         out.put("rows", List.of(row));
         out.put("rowCount", 1);
         out.put("compose", type);
+        if (!paramsIgnored.isEmpty()) out.put("paramsIgnored", paramsIgnored);
         return out;
     }
 
@@ -412,24 +475,42 @@ public class AnalyticsService {
         return callerRoles == null || callerRoles.stream().noneMatch(OFFICER_PII_ROLES::contains);
     }
 
-    private Map<String,Object> runOne(JsonNode q, AnalyticsScope scope){
+    /**
+     * Execute one planned query. THE choke point for every analytics SQL execution
+     * (batch entries, the single-query arm, compose SOURCE queries) — each successful run
+     * records one OTEL metric point + one slow-query-pool entry (#1110).
+     *
+     * @param entryName the batch dict key this run belongs to ({@code "query"} on the
+     *                  single arm); compose sources share their composed entry's name
+     * @param kpiId     the resolved KPI id, or {@code "inline"} for inline-grammar queries
+     */
+    private Map<String,Object> runOne(JsonNode q, AnalyticsScope scope, QueryTelemetry tel,
+                                      String entryName, String kpiId){
         AnalyticsPlanner.Planned p = planner.plan(q, scope);
         long t0 = System.currentTimeMillis();
         List<Map<String,Object>> rows = jdbc.queryForList(p.sql, p.params.toArray());
+        long tookMs = System.currentTimeMillis() - t0;
+        if (tel != null) tel.record(entryName, kpiId, p.grain, tookMs, rows.size());
         Map<String,Object> r = new LinkedHashMap<>();
         r.put("grain", p.grain);
         r.put("columns", p.columns);
         r.put("rows", rows);
         r.put("rowCount", rows.size());
-        r.put("tookMs", System.currentTimeMillis() - t0);
+        r.put("tookMs", tookMs);
         return r;
+    }
+
+    /** Metric attribution for a request query node: its kpiId, or {@code "inline"}. */
+    private static String kpiContext(JsonNode queryNode) {
+        return queryNode != null && queryNode.hasNonNull("kpiId")
+                ? queryNode.get("kpiId").asText() : "inline";
     }
 
     /** /_schema capabilities — lets the FE build the KPI editor dynamically. */
     public Map<String,Object> schema(){
         Map<String,Object> out = new LinkedHashMap<>();
         out.put("aggFns", AnalyticsCatalog.AGG_FNS);
-        out.put("filterOps", Arrays.asList("eq","ne","gt","gte","lt","lte","in","isnull","starts_with"));
+        out.put("filterOps", Arrays.asList("eq","ne","gt","gte","lt","lte","in","isnull","starts_with","subtree"));
         out.put("windows", Arrays.asList("all","live","last_<N>d","wtd","mtd","qtd","ytd"));
         out.put("timeBuckets", Arrays.asList("day","week","month","quarter","year"));
         Map<String,Object> grains = new LinkedHashMap<>();
@@ -462,6 +543,58 @@ public class AnalyticsService {
     private Long asOf(){
         try { return jdbc.queryForObject("SELECT max(facts_built_at) FROM complaint_facts", Long.class); }
         catch (Exception e) { return System.currentTimeMillis(); }
+    }
+
+    // ---- #1110: tenant record-count for /packs (record_count_tier tag source) ----
+
+    /** tenantId -> [count, expiresAtMs]. Concurrent; a stale entry is simply recomputed. */
+    private final java.util.concurrent.ConcurrentHashMap<String, long[]> recordCountCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** Injectable clock for cache-expiry tests (see AnalyticsServiceRecordCountTest). */
+    private java.util.function.LongSupplier recordCountClock = System::currentTimeMillis;
+
+    /**
+     * TENANT-CORPUS size of {@code complaint_facts} — how many fact rows exist for the
+     * tenant subtree, using {@link AnalyticsPlanner#applyScope}'s tenant semantics
+     * (state level: {@code tenant_id LIKE 'ke%'}; city level: exact match). This is
+     * deliberately NOT the caller's ABAC-visible subset: the dashboard uses it as the
+     * {@code record_count_tier} tag, which must describe the tenant's data volume so
+     * render-lag comparisons across personas share a denominator (#1110/R9-C9).
+     *
+     * <p>Cached in-memory per tenant for {@code pgr.analytics.config-cache-ttl-ms}
+     * (the single TTL shared by every analytics config cache; default 5 minutes);
+     * errors return null (additive, never fails the /packs response) and are not cached.
+     */
+    public Long recordCount(String tenantId, int stateLevelLen) {
+        if (tenantId == null || tenantId.isEmpty()) return null;
+        long now = recordCountClock.getAsLong();
+        long[] cached = recordCountCache.get(tenantId);
+        if (cached != null && cached[1] > now) return cached[0];
+        // same state-level test as PrincipalScopeResolver.resolve()
+        boolean stateLevel = tenantId.split("\\.").length == stateLevelLen;
+        try {
+            Long count = stateLevel
+                    ? jdbc.queryForObject("SELECT count(*) FROM complaint_facts WHERE tenant_id LIKE ?",
+                                          Long.class, tenantId + "%")
+                    : jdbc.queryForObject("SELECT count(*) FROM complaint_facts WHERE tenant_id = ?",
+                                          Long.class, tenantId);
+            if (count == null) return null;
+            recordCountCache.put(tenantId, new long[]{count, now + configCacheTtlMs()});
+            return count;
+        } catch (Exception e) {
+            log.debug("recordCount for tenant {} failed (returning null)", tenantId, e);
+            return null;
+        }
+    }
+
+    /**
+     * The shared analytics config-cache TTL ({@code pgr.analytics.config-cache-ttl-ms});
+     * falls back to the 5-minute default when constructed without a Spring config
+     * (tests). Same accessor idiom as KpiCatalogService.configCacheTtlMs().
+     */
+    private long configCacheTtlMs() {
+        Long v = config == null ? null : config.getAnalyticsConfigCacheTtlMs();
+        return v != null ? v : PGRConfiguration.DEFAULT_ANALYTICS_CONFIG_CACHE_TTL_MS;
     }
 
     private Map<String,Object> scopeInfo(AnalyticsScope s){

@@ -1190,6 +1190,16 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_TYPE_FILTER_ALL_IN",
+    "message": "All in",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TYPE_FILTER_NOT_APPLIED",
+    "message": "Type filter not applied",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_UNIT_D",
     "message": "d",
     "module": "rainmaker-dashboard"
@@ -2761,6 +2771,16 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_TILE_SERIES_RESOLUTION_RATE",
     "message": "Taxa de resolução",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TYPE_FILTER_ALL_IN",
+    "message": "Tudo em",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TYPE_FILTER_NOT_APPLIED",
+    "message": "Filtro de tipo não aplicado",
     "module": "rainmaker-dashboard"
   },
   {
