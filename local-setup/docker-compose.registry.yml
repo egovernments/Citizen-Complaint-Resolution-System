@@ -1549,7 +1549,12 @@ services:
     environment:
       SERVER_PORT: '8080'
       SERVER_CONTEXTPATH: /egov-url-shortening
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/egov
+      # The image pins spring.datasource.driver-class-name to OpenTelemetryDriver,
+      # which only accepts jdbc:otel: URLs -- a plain jdbc:postgresql:// one makes
+      # Hikari throw "claims to not accept jdbcUrl" and the DataSource never opens.
+      # Flyway below stays on a plain URL: it resolves its own driver from the URL
+      # and must reach postgres-db directly, never the transaction-mode pooler.
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres-db:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: egov123
       SPRING_FLYWAY_URL: jdbc:postgresql://postgres-db:5432/egov
