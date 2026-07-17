@@ -180,7 +180,11 @@ export function sanitizeFilters(raw, dynamicOptions = {}) {
  *   nearest surviving ancestor (repairSelection); nothing valid → cleared.
  * - Flat scoped option list only (tree fetch failed / flat tenant): leaf
  *   codes validate against the list exactly like before; interior selections
- *   can't be verified without a tree → cleared.
+ *   can't be verified without a tree, so they are HELD as-is (never cleared)
+ *   — a transient MDMS hiccup must not permanently forget a persisted subtree
+ *   filter (persistDashboardFilters runs this sanitizer on every filter
+ *   change, so a destructive clear here would outlive the hiccup). The trio
+ *   is repaired-or-cleared by the tree branch on the next successful load.
  * - No dynamic options at all (initial localStorage load): trust the
  *   persisted trio and let reconcileFiltersWithOptions repair it when the
  *   tree arrives — clearing here would forget the selection on every reload.
@@ -195,11 +199,10 @@ function sanitizeComplaintTypeSelection(raw, options) {
 
   if (options.complaintTypeTree) {
     selection = repairSelection(options.complaintTypeTree, stored);
-  } else if (options.complaintType) {
-    selection =
-      stored.leaf && options.complaintType.some((opt) => opt.id === stored.code)
-        ? stored
-        : clearedSelection();
+  } else if (options.complaintType && stored.leaf) {
+    selection = options.complaintType.some((opt) => opt.id === stored.code)
+      ? stored
+      : clearedSelection();
   }
 
   return {

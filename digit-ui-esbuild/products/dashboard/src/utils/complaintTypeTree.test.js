@@ -347,6 +347,133 @@ test("normalize: trio passes through, bare string means leaf, all clears", () =>
 });
 
 /* ------------------------------------------------------------------ */
+/* Persist/load round-trip (config/dashboardFilters sanitizer):        */
+/* a tree-fetch failure must NOT forget a persisted interior selection */
+/* ------------------------------------------------------------------ */
+
+const {
+  loadDashboardFilters,
+  persistDashboardFilters,
+  reconcileFiltersWithOptions,
+} = bundle("../config/dashboardFilters.js");
+
+// dashboardFilters reaches for browser globals (localStorage for the persisted
+// filters, window.globalConfigs for the tenant-scoped storage key) — stub the
+// minimum for a node round-trip.
+function stubBrowserGlobals() {
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
+  globalThis.window = { localStorage: globalThis.localStorage };
+  return () => {
+    delete globalThis.localStorage;
+    delete globalThis.window;
+  };
+}
+
+test("tree-fetch failure: persisted interior selection survives a reload cycle, then repairs", () => {
+  const restore = stubBrowserGlobals();
+  try {
+    const full = tree();
+    const pruned = pruneComplaintTree(full, [
+      "GarbageFull",
+      "GarbageMissed",
+      "SewageOverflow",
+      "Pothole",
+    ]);
+    // What useFilterOptions emits when the MDMS hierarchy fetch failed but the
+    // scoped DISTINCT leaf list loaded: flat complaintType list, NO tree.
+    const flatOnly = {
+      complaintType: [
+        { id: "all", label: "All types" },
+        { id: "GarbageFull", label: "Bin overflowing" },
+        { id: "GarbageMissed", label: "Missed pickup" },
+        { id: "SewageOverflow", label: "Sewage overflow" },
+        { id: "Pothole", label: "Pothole" },
+      ],
+    };
+
+    // Session 1 — tree present: the user applies the interior GARBAGE subtree.
+    persistDashboardFilters(
+      {
+        ...loadDashboardFilters(),
+        complaintType: "GARBAGE",
+        complaintTypePath: "SANITATION.GARBAGE",
+        complaintTypeLeaf: false,
+      },
+      { ...flatOnly, complaintTypeTree: pruned }
+    );
+
+    // Session 2 — transient MDMS hiccup: tree fetch failed, flat list loaded.
+    const reloaded = loadDashboardFilters();
+    assert.equal(reloaded.complaintType, "GARBAGE"); // cold load trusts the trio
+    // A filter change re-persists through the sanitizer's FLAT branch — the
+    // held interior trio must be persisted as-is, not cleared (regression:
+    // storage was wiped here while in-memory state kept the selection).
+    persistDashboardFilters({ ...reloaded, dateFrom: "2026-01-01" }, flatOnly);
+
+    const afterHiccup = loadDashboardFilters();
+    assert.deepEqual(
+      {
+        code: afterHiccup.complaintType,
+        path: afterHiccup.complaintTypePath,
+        leaf: afterHiccup.complaintTypeLeaf,
+      },
+      { code: "GARBAGE", path: "SANITATION.GARBAGE", leaf: false }
+    );
+    // In-memory reconcile against the same flat-only options agrees with
+    // storage (no memory/storage split-brain).
+    assert.equal(
+      reconcileFiltersWithOptions(afterHiccup, flatOnly).complaintType,
+      "GARBAGE"
+    );
+
+    // Session 3 — tree is back: the held selection repairs through the tree
+    // branch. Exact node survives here…
+    const treeBack = reconcileFiltersWithOptions(afterHiccup, {
+      ...flatOnly,
+      complaintTypeTree: pruned,
+    });
+    assert.deepEqual(
+      {
+        code: treeBack.complaintType,
+        path: treeBack.complaintTypePath,
+        leaf: treeBack.complaintTypeLeaf,
+      },
+      { code: "GARBAGE", path: "SANITATION.GARBAGE", leaf: false }
+    );
+    // …and a re-scope that dropped the whole branch repairs to cleared, so
+    // holding through the hiccup never pins a permanently-invalid selection.
+    const rescoped = pruneComplaintTree(full, ["Pothole"]);
+    assert.equal(
+      reconcileFiltersWithOptions(afterHiccup, {
+        ...flatOnly,
+        complaintTypeTree: rescoped,
+      }).complaintType,
+      ALL
+    );
+
+    // Unchanged flat-branch behavior: a persisted LEAF still validates against
+    // the flat list — a vanished leaf clears exactly as before.
+    persistDashboardFilters(
+      {
+        ...reloaded,
+        complaintType: "GhostLeaf",
+        complaintTypePath: null,
+        complaintTypeLeaf: true,
+      },
+      flatOnly
+    );
+    assert.equal(loadDashboardFilters().complaintType, ALL);
+  } finally {
+    restore();
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /* Label fallback                                                       */
 /* ------------------------------------------------------------------ */
 
