@@ -1,7 +1,7 @@
 // ReactDOMServer render smoke for the design-pass controls: the
-// complaint-type chip + traversal panel and the "Group by" chip, at root /
-// interior / leaf / 4-level-deep states (ke's PGR_TEST-shaped hierarchy, not
-// just the 2-level live PGR tree).
+// complaint-type chip + traversal panel and the per-widget settings gear
+// ("Group by" menu), at root / interior / leaf / 4-level-deep states (ke's
+// PGR_TEST-shaped hierarchy, not just the 2-level live PGR tree).
 //
 // Run from digit-ui-esbuild/:
 //   node --test products/dashboard/src/components/treeControls.rendersmoke.test.js
@@ -202,7 +202,7 @@ const OPTIONS = [
   { value: "leaf", leaf: true },
 ];
 
-test("group-by chip smoke: labeled chip, no native select, menu semantics", () => {
+test("group-by smoke: settings gear icon button, no native select, menu semantics", () => {
   const html = renderGroupBy({
     value: "1",
     options: OPTIONS,
@@ -210,9 +210,16 @@ test("group-by chip smoke: labeled chip, no native select, menu semantics", () =
     onChange: noop,
   });
   assert.doesNotMatch(html, /<select/);
-  assert.match(html, /dashboard-popover-chip--compact/);
-  assert.match(html, /dashboard-popover-chip-prefix/);
-  assert.match(html, /Category/);
+  // icon-only anchor in the remove-button idiom — NOT a text chip
+  assert.match(html, /dashboard-popover-iconbtn/);
+  assert.doesNotMatch(html, /dashboard-popover-chip/);
+  assert.match(html, /<svg/);
   assert.match(html, /aria-haspopup="menu"/);
-  assert.match(html, /dashboard-groupby-chip-wrap/);
+  assert.match(html, /aria-expanded="false"/);
+  // accessible name + tooltip carry the label and the current value (the
+  // unseeded smoke runtime echoes the KEY for the label — copy is not what
+  // this smoke verifies; "Category" resolves from the level's own label)
+  assert.match(html, /aria-label="DASHBOARD_GROUPBY_LABEL"/);
+  assert.match(html, /title="DASHBOARD_GROUPBY_LABEL: Category"/);
+  assert.match(html, /dashboard-widget-settings-wrap/);
 });

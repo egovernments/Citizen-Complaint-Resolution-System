@@ -390,11 +390,6 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
-    "code": "DASHBOARD_GROUPBY_CHIP",
-    "message": "Group",
-    "module": "rainmaker-dashboard"
-  },
-  {
     "code": "DASHBOARD_GROUPBY_LABEL",
     "message": "Group by",
     "module": "rainmaker-dashboard"
@@ -1592,7 +1587,7 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
 ];
 
 /**
- * pt_PT (European Portuguese) pack — same 315 codes as the en_IN pack, 1:1.
+ * pt_PT (European Portuguese) pack — same 314 codes as the en_IN pack, 1:1.
  * Translations follow European/Mozambique conventions (bairro/distrito geo
  * terms, "reclamações" agreement); placeholder tokens verified identical to
  * the en_IN messages.
@@ -1971,11 +1966,6 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_GEO_LEVEL_3",
     "message": "Reclamações",
-    "module": "rainmaker-dashboard"
-  },
-  {
-    "code": "DASHBOARD_GROUPBY_CHIP",
-    "message": "Agrupar",
     "module": "rainmaker-dashboard"
   },
   {

@@ -3,14 +3,19 @@ import { createPortal } from "react-dom";
 
 /**
  * Shared styled popover/menu primitive for the dashboard's compact controls
- * (the complaint-type tree filter in the filter bar, the per-widget "Group by"
- * chip) — the design-pass replacement for the browser-native <select>s.
+ * (the complaint-type tree filter in the filter bar, the per-widget settings
+ * gear's "Group by" menu) — the design-pass replacement for the
+ * browser-native <select>s.
  *
  * Anatomy:
  *   - anchor CHIP: a real <button> styled like the inline filter controls
  *     (.dashboard-popover-chip — same h-7/rounded-sm/border-border/bg-surface
  *     language as .dashboard-filter-inline-select), with aria-haspopup/
- *     aria-expanded and a caret;
+ *     aria-expanded and a caret; OR, when `icon` is passed, an ICON-ONLY
+ *     anchor (.dashboard-popover-iconbtn — the muted 1.5rem-square idiom of
+ *     .dashboard-widget-remove-btn) for widget-header placement, where a
+ *     text chip would make headers with options look different from headers
+ *     without;
  *   - PANEL: a fixed-position, body-portaled surface mirroring
  *     .dashboard-add-kpi-panel (border-border, 6px radius, the same soft
  *     shadow), position-synced on scroll/resize, flipped above the anchor
@@ -150,10 +155,9 @@ export const PopoverMenuGroupLabel = ({ children }) => (
 
 const PopoverMenu = ({
   chip,
-  chipPrefix,
   chipTitle,
   ariaLabel,
-  compact = false,
+  icon = null,
   disabled = false,
   align = "start",
   panelWidth = 240,
@@ -294,17 +298,18 @@ const PopoverMenu = ({
         aria-expanded={open}
         aria-label={ariaLabel}
         title={chipTitle}
-        className={`dashboard-popover-chip${compact ? " dashboard-popover-chip--compact" : ""}${
+        className={`${icon ? "dashboard-popover-iconbtn" : "dashboard-popover-chip"}${
           chipClassName ? ` ${chipClassName}` : ""
         }`}
         onClick={() => (open ? close() : setOpen(true))}
         onKeyDown={handleAnchorKeyDown}
       >
-        {chipPrefix != null && (
-          <span className="dashboard-popover-chip-prefix">{chipPrefix}</span>
+        {icon ?? (
+          <>
+            <span className="dashboard-popover-chip-value">{chip}</span>
+            <CaretIcon />
+          </>
         )}
-        <span className="dashboard-popover-chip-value">{chip}</span>
-        <CaretIcon />
       </button>
       {open && canPortal
         ? createPortal(

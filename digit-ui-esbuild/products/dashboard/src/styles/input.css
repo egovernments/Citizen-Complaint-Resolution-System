@@ -653,13 +653,28 @@
     cursor: default;
   }
 
-  /* Compact variant for widget-header placement (the "Group by" chip). */
-  .dashboard-popover-chip--compact {
-    @apply tw-h-6 tw-gap-1 tw-px-1.5 tw-text-[11px];
+  /* Icon-only anchor for widget-header placement (per-widget settings
+     gear): the .dashboard-widget-remove-btn idiom — 1.5rem square, muted,
+     transparent resting, bg-muted on hover/open — minus the absolute
+     positioning (this one sits in the title-row flex flow). */
+  .dashboard-popover-iconbtn {
+    @apply tw-box-border tw-m-0 tw-inline-flex tw-h-6 tw-w-6 tw-shrink-0 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-sm tw-border-0 tw-bg-transparent tw-p-0 tw-text-muted-foreground;
+    font: inherit;
+    -webkit-appearance: none;
+    appearance: none;
   }
 
-  .dashboard-popover-chip-prefix {
-    @apply tw-shrink-0 tw-text-muted-foreground;
+  .dashboard-popover-iconbtn:hover:not(:disabled),
+  .dashboard-popover-iconbtn[aria-expanded="true"] {
+    @apply tw-bg-muted tw-text-foreground;
+  }
+
+  .dashboard-popover-iconbtn:focus {
+    @apply tw-outline-none;
+  }
+
+  .dashboard-popover-iconbtn:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
   }
 
   .dashboard-popover-chip-value {
@@ -805,11 +820,11 @@
     @apply tw-px-2 tw-pb-1 tw-pt-2 tw-text-[10px] tw-font-normal tw-uppercase tw-tracking-wider tw-text-muted-foreground;
   }
 
-  /* Widget-header wrapper for the compact "Group by" chip: right-aligned in
-     the title row, shrinkable (the chip value truncates) so it never wraps
-     narrow widgets; mr-6 clears the hover remove button. */
-  .dashboard-groupby-chip-wrap {
-    @apply tw-ml-2 tw-mr-6 tw-inline-flex tw-min-w-0 tw-shrink tw-items-center tw-self-center;
+  /* Widget-header wrapper for the per-widget settings gear: right-aligned
+     in the title row (same slot on every header that has options; absent
+     otherwise); mr-6 clears the absolute remove button. */
+  .dashboard-widget-settings-wrap {
+    @apply tw-ml-2 tw-mr-6 tw-inline-flex tw-shrink-0 tw-items-center tw-self-center;
   }
 
   /* ── Responsive layout ─────────────────────────────────────────────── */
