@@ -12,19 +12,24 @@ import { translate as t } from "../i18n/localeRuntime";
 import { seriesEntryLabel } from "../i18n/textResolver";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
+import { formatNumber } from "../utils/numberFormat";
 
+// Cell formatters route their NUMERIC part through the tenant mask
+// (formatNumber, null when unconfigured -> each `??` fallback keeps the
+// pre-#1213 expression byte-for-byte); unit suffixes (%, h, hr/hrs/day/days,
+// /5) stay here.
 const TrendCell = ({ value }) => {
   const { muted, trendUp, trendDown } = DATA_TABLE_STYLES;
   if (value == null || !Number.isFinite(value)) {
     return <span className={muted}>—</span>;
   }
   if (value === 0) {
-    return <span className={muted}>0.0%</span>;
+    return <span className={muted}>{formatNumber(0, { decimals: 1 }) ?? "0.0"}%</span>;
   }
   const up = value > 0;
   return (
     <span className={up ? trendUp : trendDown}>
-      {up ? "↑" : "↓"} {Math.abs(value).toFixed(1)}%
+      {up ? "↑" : "↓"} {formatNumber(Math.abs(value), { decimals: 1 }) ?? Math.abs(value).toFixed(1)}%
     </span>
   );
 };
@@ -32,16 +37,16 @@ const TrendCell = ({ value }) => {
 const formatPercent = (value, decimals = 1) => {
   if (value == null || !Number.isFinite(value)) return "—";
   const pct = value <= 1 ? value * 100 : value;
-  return `${pct.toFixed(decimals)}%`;
+  return `${formatNumber(pct, { decimals }) ?? pct.toFixed(decimals)}%`;
 };
 
 const formatHours = (ms) => {
   if (ms == null || !Number.isFinite(ms)) return "—";
   const hours = ms / 3600000;
+  const nearWhole = Math.abs(hours - Math.round(hours)) < 0.05;
   const formatted =
-    Math.abs(hours - Math.round(hours)) < 0.05
-      ? String(Math.round(hours))
-      : hours.toFixed(1);
+    formatNumber(nearWhole ? Math.round(hours) : hours, { decimals: nearWhole ? 0 : 1 }) ??
+    (nearWhole ? String(Math.round(hours)) : hours.toFixed(1));
   return `${formatted}h`;
 };
 
@@ -53,23 +58,29 @@ const formatHoursDays = (ms) => {
   const hours = ms / MS_PER_HOUR;
   if (hours < 48) {
     const rounded = Math.round(hours * 10) / 10;
-    const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    const formatted =
+      formatNumber(rounded, { decimals: 1, trim: true }) ??
+      (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
     return `${formatted} ${rounded === 1 ? t("DASHBOARD_UNIT_HR", "hr") : t("DASHBOARD_UNIT_HRS", "hrs")}`;
   }
   const days = ms / MS_PER_DAY;
   const rounded = Math.round(days * 10) / 10;
-  const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  const formatted =
+    formatNumber(rounded, { decimals: 1, trim: true }) ??
+    (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
   return `${formatted} ${rounded === 1 ? t("DASHBOARD_UNIT_DAY", "day") : t("DASHBOARD_UNIT_DAYS", "days")}`;
 };
 
 const formatRating = (value) => {
   if (value == null || !Number.isFinite(value)) return "—";
-  return `${Number(value).toFixed(1)}/5`;
+  return `${formatNumber(value, { decimals: 1 }) ?? Number(value).toFixed(1)}/5`;
 };
 
 const formatInteger = (value) => {
   if (value == null || !Number.isFinite(value)) return "—";
-  return String(Math.round(value));
+  // Masked path adds thousands grouping — the ungrouped String(Math.round())
+  // was part of bug #1251; unconfigured tenants keep it unchanged.
+  return formatNumber(value, { decimals: 0 }) ?? String(Math.round(value));
 };
 
 // Legacy humaniser — retained verbatim as the dimensionLabel fallback so

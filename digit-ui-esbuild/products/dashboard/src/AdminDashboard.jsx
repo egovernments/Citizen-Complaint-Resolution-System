@@ -22,6 +22,8 @@ import DashboardLogin, {
   hasDashboardSession,
   clearDashboardSession,
 } from "./components/DashboardLogin";
+import { useDashboardConfig } from "../useDashboardConfig";
+import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberFormat";
 
 import useDashboardT from "./i18n/useDashboardT";
 import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
@@ -131,6 +133,25 @@ const AdminDashboard = ({ embedded = false }) => {
   // session and owns sign-out, so the standalone login gate is skipped.
   const [authed] = useState(() => embedded || hasDashboardSession());
 
+  // Per-LOCALE number-format mask (dss.DashboardConfig.numberFormat, #1213 /
+  // #1272). `numberFormat` is either an object keyed by locale code (with
+  // optional `default`) or a legacy string applied to every locale;
+  // resolveNumberFormatMask picks the active language's mask. Primed
+  // SYNCHRONOUSLY during render — the presentation configs are plain modules
+  // (no hook access), and setting the module-level store before
+  // AdminDashboardInner mounts means the first painted frame is already
+  // masked: no useEffect priming, no unmasked flicker. useDashboardT
+  // subscribes this component to the locale runtime, so a language switch
+  // re-renders it and re-runs this prime with the new locale's mask BEFORE
+  // any child re-renders (parents render first). Unconfigured tenants
+  // (config null / field absent / no mask for the locale and no default)
+  // clear the store and every formatter falls back to its pre-#1213
+  // expression byte-for-byte.
+  const { language } = useDashboardT();
+  const { config: dashboardConfig, loading: dashboardConfigLoading } =
+    useDashboardConfig();
+  setNumberFormatMask(resolveNumberFormatMask(dashboardConfig?.numberFormat, language));
+
   const handleLogin = useCallback(() => {
     window.location.reload();
   }, []);
@@ -141,6 +162,15 @@ const AdminDashboard = ({ embedded = false }) => {
   }, []);
 
   if (!authed) return <DashboardLogin onLogin={handleLogin} />;
+  // Hold the dashboard until the DashboardConfig query settles (one
+  // session-cached request, retry: false) so tiles never paint with default
+  // separators and then re-render masked. Mirrors the accessLoading -> Loader
+  // gate #1258 adds in Module.js; when both land, that single gate (fed by
+  // the shared useDashboardConfig cache entry) makes this one settle
+  // instantly.
+  if (dashboardConfigLoading) {
+    return <div className="kpi-tile kpi-tile--loading"><div className="kpi-tile__skeleton" /></div>;
+  }
   return <AdminDashboardInner embedded={embedded} onSignOut={embedded ? undefined : handleSignOut} />;
 };
 
@@ -543,6 +573,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     const rows = layout.map((item) => {
       const def = kpis[item.i];
       const assembled = assembleResult(item.i, def, batch.results);
+      // CSV values stay RAW (unmasked, dot-decimal, no grouping) on purpose:
+      // the tenant numberFormat mask (#1213) is display-only — a masked
+      // "52.560" would be re-parsed as 52.56 by Excel/imports expecting
+      // machine-readable CSV.
       const value =
         assembled?.value != null
           ? assembled.value
