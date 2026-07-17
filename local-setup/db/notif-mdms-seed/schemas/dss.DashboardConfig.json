@@ -7,7 +7,7 @@
     "id": { "type": "string", "description": "Config record key; the UI reads the \"default\" record (single-record master)" },
     "allowedRoles": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": { "type": "string", "minLength": 1 },
       "minItems": 1,
       "description": "Role codes allowed to see the dashboard home card and open /employee/dashboard. Nav/route gate only — NOT a security boundary: the data plane is enforced server-side by the analytics catalog + scope RBAC. Absent record → the UI falls back to its built-in DASHBOARD_ROLES list."
     },
