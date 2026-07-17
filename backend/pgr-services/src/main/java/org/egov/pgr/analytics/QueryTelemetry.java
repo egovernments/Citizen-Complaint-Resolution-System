@@ -2,6 +2,7 @@ package org.egov.pgr.analytics;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
  *
  * <p>Not thread-safe by design: request-scoped, single thread.
  */
+@Slf4j
 final class QueryTelemetry {
 
     static final int TOP_N = 3;
@@ -101,8 +103,9 @@ final class QueryTelemetry {
         try {
             SpanContext sc = Span.current().getSpanContext();
             if (sc.isValid()) return sc.getTraceId();
-        } catch (RuntimeException ignored) {
-            // no agent / API misbehaviour — fall through to the header
+        } catch (RuntimeException e) {
+            // no agent / API misbehaviour — fall through to the header (but keep the root cause)
+            log.trace("Span.current() unavailable; falling back to x-trace-id header", e);
         }
         if (headerTraceId != null && !headerTraceId.isBlank()) return headerTraceId.trim();
         return "-";
