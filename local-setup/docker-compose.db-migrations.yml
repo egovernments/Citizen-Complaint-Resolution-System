@@ -761,7 +761,7 @@ services:
       OTEL_TRACES_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     volumes:
-    - ./configs/persister:/persister-config:ro
+    - ./configs/egov-persister:/persister-config:ro
     ports:
     - 18091:8091
     healthcheck:
