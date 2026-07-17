@@ -10,6 +10,7 @@ import CardUpdatedStamp from "./components/CardUpdatedStamp";
 import ResizeGrip from "./components/ResizeGrip";
 import SubtleScroll from "./components/SubtleScroll";
 import GroupByLevelSelect, { levelDisplayLabel } from "./components/GroupByLevelSelect";
+import TypeFilterIgnoredNote, { typeFilterIgnored } from "./components/TypeFilterIgnoredNote";
 import {
   VIZ_TYPE,
   SHARED_CHROME,
@@ -596,6 +597,12 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
             const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
+            // Subtle per-tile note when the backend ignored the subtree
+            // complaint-type filter on this KPI's grain (daily has no
+            // complaint_node_path) — the field is ABSENT unless it happened.
+            const ignoredNote = typeFilterIgnored(batch.results?.[item.i]) ? (
+              <TypeFilterIgnoredNote />
+            ) : null;
             const removeBtn = (
               <WidgetRemoveButton
                 label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${resolveTitle(kpis[item.i]) || item.i}`}
@@ -614,6 +621,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                 >
                   {removeBtn}
                   {renderTile(item.i)}
+                  {ignoredNote}
                   <CardUpdatedStamp label={lastUpdatedLabel} />
                 </div>
               );
@@ -678,6 +686,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                     renderTile(item.i, groupBy.info)
                   )}
                 </div>
+                {ignoredNote}
                 <CardUpdatedStamp label={lastUpdatedLabel} />
                 <ResizeGrip />
               </section>

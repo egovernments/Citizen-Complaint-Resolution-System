@@ -1051,6 +1051,23 @@
   color: var(--foreground);
 }
 
+/* Per-tile note when the backend reports the subtree filter could not be
+   honoured on a grain (paramsIgnored: complaintPath — daily-grain KPIs). */
+.dashboard-type-filter-ignored{
+  pointer-events: none;
+  position: absolute;
+  bottom: 0.25rem;
+  left: 1.25rem;
+  z-index: 2;
+  border-radius: 0.25rem;
+  background-color: var(--surface);
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+  font-size: 10px;
+  font-style: italic;
+  line-height: 1.25;
+  color: var(--muted-foreground);
+}
 
 /* ── Responsive layout ─────────────────────────────────────────────── */
 

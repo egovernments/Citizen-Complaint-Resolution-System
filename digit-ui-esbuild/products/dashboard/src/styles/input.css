@@ -643,6 +643,11 @@
     @apply tw-text-[11px] tw-font-medium tw-leading-none tw-text-foreground;
   }
 
+  /* Per-tile note when the backend reports the subtree filter could not be
+     honoured on a grain (paramsIgnored: complaintPath — daily-grain KPIs). */
+  .dashboard-type-filter-ignored {
+    @apply tw-pointer-events-none tw-absolute tw-bottom-1 tw-left-5 tw-z-[2] tw-rounded tw-bg-surface tw-px-1 tw-text-[10px] tw-italic tw-leading-tight tw-text-muted-foreground;
+  }
 
   /* ── Responsive layout ─────────────────────────────────────────────── */
 
@@ -1443,7 +1448,6 @@
   .dashboard-horizontal-bar .apexcharts-svg {
     overflow: visible !important;
   }
-
 
   .dashboard-horizontal-bar .apexcharts-yaxis-texts-g .apexcharts-yaxis-label,
   .dashboard-stacked-bar--horizontal .apexcharts-yaxis-texts-g .apexcharts-yaxis-label {
