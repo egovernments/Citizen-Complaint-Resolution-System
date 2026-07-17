@@ -829,36 +829,38 @@ export function flush(reason) {
     });
 }
 
-/** pagehide backstop: sendBeacon with an explicit JSON Blob (R4). */
-function flushWithBeacon(reason) {
+function sendBeaconJson(url, payload) {
+  try {
+    if (typeof navigator === "undefined" || !navigator.sendBeacon) return false;
+    return !!navigator.sendBeacon(
+      url,
+      new Blob([JSON.stringify(payload)], { type: "application/json" })
+    );
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * pagehide backstop: sendBeacon with an explicit JSON Blob (R4).
+ * The two signals succeed or fail independently, so restore per payload —
+ * restoring both when only the logs beacon failed would double-count the
+ * already-delivered metrics on the next flush. Exported for the smoke test.
+ */
+export function flushWithBeacon(reason) {
   if (!on() || !isDirty()) return;
   const taken = takePending();
   const metricsPayload = buildMetricsPayload(taken.hist, taken.sums);
   const logsPayload = buildLogsPayload(taken.logs);
-  let ok = true;
-  try {
-    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-      if (metricsPayload) {
-        ok =
-          navigator.sendBeacon(
-            METRICS_URL,
-            new Blob([JSON.stringify(metricsPayload)], { type: "application/json" })
-          ) && ok;
-      }
-      if (logsPayload) {
-        ok =
-          navigator.sendBeacon(
-            LOGS_URL,
-            new Blob([JSON.stringify(logsPayload)], { type: "application/json" })
-          ) && ok;
-      }
-    } else {
-      ok = false;
-    }
-  } catch (e) {
-    ok = false;
-  }
-  if (!ok) restorePending(taken); // page may survive (bfcache/visibility) — keep the data
+  const metricsOk = !metricsPayload || sendBeaconJson(METRICS_URL, metricsPayload);
+  const logsOk = !logsPayload || sendBeaconJson(LOGS_URL, logsPayload);
+  if (metricsOk && logsOk) return;
+  // page may survive (bfcache/visibility) — keep only what actually failed
+  restorePending({
+    hist: metricsOk ? {} : taken.hist,
+    sums: metricsOk ? {} : taken.sums,
+    logs: logsOk ? [] : taken.logs,
+  });
 }
 
 /* ------------------------------------------------------------------------- */

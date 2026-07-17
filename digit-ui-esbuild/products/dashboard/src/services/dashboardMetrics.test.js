@@ -330,3 +330,58 @@ test("flush sends TWO separate OTLP payloads with delta temporality + datapoint 
   assert.deepEqual(m._inspect().pending.logs, []);
   assert.deepEqual(Object.keys(m._inspect().pending.hist), []);
 });
+
+/* ------------------------------------------------------------------ */
+/* Beacon backstop (pagehide)                                         */
+/* ------------------------------------------------------------------ */
+
+/** Settle a load + one interaction so pending holds hist, sums AND logs. */
+function seedPendingSignals(m) {
+  setNow(0);
+  m.beginLoad();
+  m.markBatchStart(1);
+  m.markAllWidgetsReady(1, 1); // errorCount=1 -> a pending sum too
+  setNow(100);
+  flushRaf();
+  setNow(1000);
+  m.markInteraction("filter");
+  setNow(1100);
+  m.markBatchStart(2);
+  m.markAllWidgetsReady(0, 2);
+  setNow(1600);
+  flushRaf();
+}
+
+test("flushWithBeacon restores per payload: metrics delivered + logs failed re-queues ONLY the logs", () => {
+  const m = loadFreshModule();
+  seedPendingSignals(m);
+  assert.ok(Object.keys(m._inspect().pending.hist).length > 0);
+  assert.ok(m._inspect().pending.logs.length > 0);
+
+  const beaconCalls = [];
+  global.navigator.sendBeacon = (url) => {
+    beaconCalls.push(url);
+    return url === "/otel/v1/metrics"; // metrics beacon lands, logs beacon fails
+  };
+  m.flushWithBeacon("pagehide");
+  assert.deepEqual(beaconCalls, ["/otel/v1/metrics", "/otel/v1/logs"]);
+
+  // metrics (hist + sums) must NOT come back — they were delivered
+  assert.deepEqual(Object.keys(m._inspect().pending.hist), []);
+  assert.deepEqual(Object.keys(m._inspect().pending.sums), []);
+  // the failed logs payload is restored for the next flush
+  assert.ok(m._inspect().pending.logs.length > 0);
+});
+
+test("flushWithBeacon restores everything when both beacons fail", () => {
+  const m = loadFreshModule();
+  seedPendingSignals(m);
+  const hist = Object.keys(m._inspect().pending.hist).sort();
+  const logsCount = m._inspect().pending.logs.length;
+
+  global.navigator.sendBeacon = () => false;
+  m.flushWithBeacon("pagehide");
+
+  assert.deepEqual(Object.keys(m._inspect().pending.hist).sort(), hist);
+  assert.equal(m._inspect().pending.logs.length, logsCount);
+});
