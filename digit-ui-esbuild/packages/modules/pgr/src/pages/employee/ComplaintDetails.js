@@ -34,6 +34,7 @@ import { Close } from "../../Icons";
 import { useTranslation } from "react-i18next";
 import { isError, useQueryClient } from "react-query";
 import StarRated from "../../components/timelineInstances/StarRated";
+import useReopenWindow from "../../hooks/useReopenWindow";
 
 const MapView = (props) => {
   return (
@@ -253,23 +254,9 @@ export const ComplaintDetails = (props) => {
   const workflowDetails = Digit.Hooks.useWorkflowDetails({ tenantId, id, moduleCode: "PGR", role: "EMPLOYEE" });
   const [imagesToShowBelowComplaintDetails, setImagesToShowBelowComplaintDetails] = useState([])
 
-  // Reopen window (ms) from RAINMAKER-PGR.UIConstants.REOPENSLA — the same tenant-configurable
-  // knob the citizen flow and pgr-services' validateReOpen() use, so this guard can never claim
-  // a different deadline than the server enforces (issue #925). undefined while loading or on an
-  // unseeded tenant: the guard below then defers to the backend rather than blocking blindly.
-  const { data: reopenWindowMs } = Digit.Hooks.useCustomMDMS(
-    tenantId,
-    "RAINMAKER-PGR",
-    [{ name: "UIConstants" }],
-    {
-      cacheTime: Infinity,
-      select: (raw) => {
-        const value = raw?.["RAINMAKER-PGR"]?.UIConstants?.[0]?.REOPENSLA;
-        return typeof value === "number" && value > 0 ? value : undefined;
-      },
-    },
-    { schemaCode: "RAINMAKER-PGR.UIConstants" }
-  );
+  // Same REOPENSLA window the citizen timeline gates on, so employee and citizen can never
+  // disagree about the deadline. undefined => defer to pgr-services (see useReopenWindow).
+  const reopenWindowMs = useReopenWindow(tenantId);
 
   // RAIN-5692 PGR : GRO is assigning complaint, Selecting employee and assign. Its not getting assigned.
   // Fix for next action  assignee dropdown issue
@@ -376,7 +363,7 @@ export const ComplaintDetails = (props) => {
         setPopup(true);
         setDisplayMenu(false);
         break;
-      case "REOPEN":
+      case "REOPEN": {
         const lastModifiedTime = complaintDetails?.service?.auditDetails?.lastModifiedTime;
         if (reopenWindowMs && lastModifiedTime && Date.now() - lastModifiedTime > reopenWindowMs) {
           setValidationToast(t("CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE"));
@@ -386,6 +373,7 @@ export const ComplaintDetails = (props) => {
           setDisplayMenu(false);
         }
         break;
+      }
       default:
         setDisplayMenu(false);
     }

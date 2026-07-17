@@ -3,7 +3,7 @@
 //
 // Strangler-fig replacement for the legacy ComplaintDetails.js. Same
 // data hooks (`useComplaintDetails`, `useWorkflowDetails`,
-// `useCustomMDMS` for closing-time) and same subcomponents
+// `useReopenWindow` for the reopen window) and same subcomponents
 // (TimeLine, ComplaintPhotos, ComplaintLocationMap). Only the visual
 // chrome — page header, summary cards, key-value rows, status pill —
 // is replaced with the v2 Card / typography / theme tokens used by
@@ -22,6 +22,7 @@ import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import TimeLine from "../../components/TimeLine";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
+import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 
 const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CLOSEDAFTERREJECTION", "CLOSEDAFTERRESOLUTION"];
 const REJECTED_STATUSES = ["REJECTED", "CLOSEDAFTERREJECTION"];
@@ -128,14 +129,10 @@ function WorkflowComponent({ complaintDetails, id }) {
     complaintDetails.service.tenantId;
   const workFlowDetails = Digit.Hooks.useWorkflowDetails({ tenantId, id, moduleCode: "PGR" });
 
-  // Pre-fetched MDMS for downstream rules; kept to avoid changing fetch
-  // cadence vs. the legacy file (some hooks gate on its cache hit).
-  Digit.Hooks.useCustomMDMS(
-    tenantId,
-    "RAINMAKER-PGR",
-    [{ name: "ComplainClosingTime" }],
-    { cacheTime: Infinity, select: (data) => data?.["RAINMAKER-PGR"]?.cct }
-  );
+  // Replaces a fetch of the legacy RAINMAKER-PGR.ComplainClosingTime master whose result was
+  // discarded — the vestige of the reopen-window lookup that #925 restores. REOPENSLA is the
+  // master the configurator actually exposes, so read that and feed the timeline.
+  const ComplainMaxIdleTime = useReopenWindow(tenantId);
 
   useEffect(() => {
     workFlowDetails.revalidate();
@@ -150,6 +147,7 @@ function WorkflowComponent({ complaintDetails, id }) {
       complaintWorkflow={complaintDetails.workflow}
       rating={complaintDetails.audit?.rating}
       complaintDetails={complaintDetails}
+      ComplainMaxIdleTime={ComplainMaxIdleTime}
     />
   );
 }

@@ -37,9 +37,6 @@ import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_MASTER;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_MASTER;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_JSONPATH;
-import static org.egov.pgr.util.PGRConstants.MDMS_UI_CONSTANTS_MASTER;
-import static org.egov.pgr.util.PGRConstants.MDMS_UI_CONSTANTS_JSONPATH;
-import static org.egov.pgr.util.PGRConstants.MDMS_REOPEN_SLA_KEYWORD;
 
 @Slf4j
 @Component
@@ -75,21 +72,6 @@ public class MDMSUtils {
     }
     private final Map<String, TimedRows> notificationRoutingCache = new ConcurrentHashMap<>();
     private final Map<String, TimedRows> notificationTemplateCache = new ConcurrentHashMap<>();
-
-    // Reopen window (RAINMAKER-PGR.UIConstants.REOPENSLA) in millis, cached with the same short
-    // TTL as the notification masters so a configurator edit takes effect without a pgr-services
-    // restart. Keyed by the REQUESTING tenant, not the state tenant: UIConstants may be overridden
-    // city-side (data/<state>/<city>/RAINMAKER-PGR/UIConstants.json), so a state-keyed entry would
-    // serve one city's window to its siblings. Only successful lookups are cached — a transient
-    // MDMS miss is retried on the next reopen attempt rather than pinning the property fallback.
-    private final Map<String, TimedReopenWindow> reopenWindowCache = new ConcurrentHashMap<>();
-
-    private static final class TimedReopenWindow {
-        final Long millis;
-        final long fetchedAt;
-        TimedReopenWindow(Long millis) { this.millis = millis; this.fetchedAt = System.currentTimeMillis(); }
-        boolean fresh(long ttlMs) { return System.currentTimeMillis() - fetchedAt < ttlMs; }
-    }
 
     /**
      * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ComplaintHierarchy leaf rows'
@@ -166,83 +148,6 @@ public class MDMSUtils {
         // (retry next event); serve a stale non-empty entry if we have one rather than dropping
         // notifications during an MDMS blip.
         return cached != null ? cached.rows : fetched;
-    }
-
-    /**
-     * The reopen window in millis for the tenant, read from MDMS
-     * RAINMAKER-PGR.UIConstants.REOPENSLA — the same knob the citizen UI gates on, so the
-     * employee/CSR path and the server-side check enforce exactly one configured window
-     * (issue #925). Cached per state-level tenant with a short TTL.
-     *
-     * Falls back to the pgr.complain.idle.time property only when MDMS has no usable
-     * REOPENSLA (unseeded tenant or MDMS outage) — reopen must not silently become
-     * unbounded, nor start rejecting everything, just because MDMS blipped.
-     */
-    public long getReopenWindowMillis(RequestInfo requestInfo, String tenantId) {
-        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
-        long ttl = config.getNotificationMdmsCacheTtlMs();
-
-        TimedReopenWindow cached = reopenWindowCache.get(tenantId);
-        if (cached != null && cached.fresh(ttl)) return cached.millis;
-
-        Long fetched = fetchReopenWindowMillis(requestInfo, tenantId, stateTenant);
-        if (fetched != null) {
-            reopenWindowCache.put(tenantId, new TimedReopenWindow(fetched));
-            return fetched;
-        }
-        // Serve a stale-but-known value over the property fallback: it is the configured
-        // intent, whereas the property is only a deployment-level backstop.
-        if (cached != null) return cached.millis;
-
-        log.warn("REOPENSLA not available from MDMS for tenant {} — falling back to "
-                + "pgr.complain.idle.time ({} ms)", tenantId, config.getComplainMaxIdleTime());
-        return config.getComplainMaxIdleTime();
-    }
-
-    /**
-     * Reads REOPENSLA for the tenant, trying the city tenant first then the state tenant
-     * (mirrors mDMSCall's fallback). Returns null when MDMS yields no usable positive value,
-     * so the caller can apply its own fallback.
-     */
-    private Long fetchReopenWindowMillis(RequestInfo requestInfo, String tenantId, String stateTenant) {
-        Long value = doFetchReopenWindowMillis(requestInfo, tenantId);
-        if (value == null && !stateTenant.equals(tenantId))
-            value = doFetchReopenWindowMillis(requestInfo, stateTenant);
-        return value;
-    }
-
-    private Long doFetchReopenWindowMillis(RequestInfo requestInfo, String tenantId) {
-        try {
-            List<MasterDetail> masterDetails = new ArrayList<>();
-            masterDetails.add(MasterDetail.builder().name(MDMS_UI_CONSTANTS_MASTER).build());
-            ModuleDetail moduleDetail = ModuleDetail.builder().masterDetails(masterDetails)
-                    .moduleName(MDMS_MODULE_NAME).build();
-            MdmsCriteriaReq req = MdmsCriteriaReq.builder()
-                    .requestInfo(requestInfo != null ? requestInfo : new RequestInfo())
-                    .mdmsCriteria(MdmsCriteria.builder()
-                            .moduleDetails(Collections.singletonList(moduleDetail))
-                            .tenantId(tenantId).build())
-                    .build();
-
-            Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), req);
-            List<Map<String, Object>> rows = JsonPath.read(result, MDMS_UI_CONSTANTS_JSONPATH);
-            if (rows == null || rows.isEmpty()) return null;
-
-            Object raw = rows.get(0).get(MDMS_REOPEN_SLA_KEYWORD);
-            if (!(raw instanceof Number)) return null;
-
-            long millis = ((Number) raw).longValue();
-            // A non-positive window would silently block every reopen; treat it as misconfigured
-            // and let the caller fall back rather than bricking the action.
-            if (millis <= 0) {
-                log.warn("Ignoring non-positive REOPENSLA ({}) for tenant {}", millis, tenantId);
-                return null;
-            }
-            return millis;
-        } catch (Exception e) {
-            log.error("Failed to read REOPENSLA from RAINMAKER-PGR.UIConstants for tenant {}", tenantId, e);
-            return null;
-        }
     }
 
     @SuppressWarnings("unchecked")

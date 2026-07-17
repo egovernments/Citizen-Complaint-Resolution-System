@@ -12,6 +12,7 @@ import Urls from "../../utils/urls";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
+import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -275,23 +276,9 @@ const PGRDetails = () => {
     { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
   );
 
-  // Reopen window (ms) from RAINMAKER-PGR.UIConstants.REOPENSLA — the same tenant-configurable
-  // knob the citizen flow and pgr-services' validateReOpen() use, so this guard can never claim
-  // a different deadline than the server enforces (issue #925). undefined while loading or on an
-  // unseeded tenant: the guard below then defers to the backend rather than blocking blindly.
-  const { data: reopenWindowMs } = Digit.Hooks.useCustomMDMS(
-    tenantId,
-    "RAINMAKER-PGR",
-    [{ name: "UIConstants" }],
-    {
-      cacheTime: Infinity,
-      select: (raw) => {
-        const value = raw?.["RAINMAKER-PGR"]?.UIConstants?.[0]?.REOPENSLA;
-        return typeof value === "number" && value > 0 ? value : undefined;
-      },
-    },
-    { schemaCode: "RAINMAKER-PGR.UIConstants" }
-  );
+  // Same REOPENSLA window the citizen timeline gates on, so employee and citizen can never
+  // disagree about the deadline. undefined => defer to pgr-services (see useReopenWindow).
+  const reopenWindowMs = useReopenWindow(tenantId);
 
   // Complaint classification hierarchy (configurable N levels). Absent on
   // un-migrated tenants -> buildComplaintPath returns null and the flat

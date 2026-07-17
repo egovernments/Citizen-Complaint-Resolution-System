@@ -151,14 +151,6 @@ public class PGRConstants {
 
     public static final String MDMS_DATA_SLA_KEYWORD = "slaHours";
 
-    // --- Reopen window (RAINMAKER-PGR.UIConstants.REOPENSLA) ---
-    // REOPENSLA is the millisecond window after resolution/rejection during which a complaint
-    // may still be reopened. It is the single source of truth for both the citizen and the
-    // employee/CSR path — the UI gates on it and validateReOpen() enforces it server-side.
-    public static final String MDMS_UI_CONSTANTS_MASTER = "UIConstants";
-    public static final String MDMS_UI_CONSTANTS_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.UIConstants";
-    public static final String MDMS_REOPEN_SLA_KEYWORD = "REOPENSLA";
-
     // --- Config-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate) ---
     public static final String MDMS_NOTIFICATION_ROUTING_MASTER = "NotificationRouting";
     public static final String MDMS_NOTIFICATION_TEMPLATE_MASTER = "NotificationTemplate";
