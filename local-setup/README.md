@@ -334,7 +334,7 @@ local-setup/
 │   └── user-seed.sh                # Creates ADMIN + GRO users via API
 ├── data/
 │   └── Bomet county...xlsx         # Sample county data for E2E tests
-├── configs/persister/              # Kafka consumer configs (9 YAML files)
+├── configs/egov-persister/         # Kafka consumer configs (9 YAML files)
 ├── db/                             # SQL seeds + workflow JSON
 ├── gatus/                          # Health monitoring config
 ├── jupyter/                        # DataLoader library + notebook
@@ -693,7 +693,7 @@ local-setup/
 │   ├── localization-seed.sql       # UI label translations
 │   └── pgr-workflow-config.json    # PGR 11-state workflow definition
 ├── configs/
-│   └── persister/                  # Persister YAML configs (9 files)
+│   └── egov-persister/             # Persister YAML configs (9 files)
 ├── jupyter/
 │   ├── Dockerfile                  # Jupyter container build
 │   └── dataloader/
