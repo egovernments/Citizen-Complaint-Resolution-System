@@ -14,7 +14,13 @@ import { createPortal } from "react-dom";
  *   - PANEL: a fixed-position, body-portaled surface mirroring
  *     .dashboard-add-kpi-panel (border-border, 6px radius, the same soft
  *     shadow), position-synced on scroll/resize, flipped above the anchor
- *     when the viewport below is too short, clamped horizontally.
+ *     when the viewport below is too short, clamped horizontally. Because
+ *     the portal target (document.body) sits OUTSIDE .dashboard-root — the
+ *     element every dashboard design token (--border/--muted/--ring/…) and
+ *     the Inter font stack hang off — the panel carries the dashboard-root
+ *     class itself, so its contents resolve the exact same tokens as
+ *     in-tree dashboard chrome instead of inheriting the host app's
+ *     body-level styling.
  *
  * Behavior owned here so consumers stay declarative:
  *   - open/close state, click-outside close, Escape/Tab close (refocusing the
@@ -306,7 +312,7 @@ const PopoverMenu = ({
               ref={panelRef}
               role="menu"
               aria-label={ariaLabel}
-              className={`dashboard-popover-panel${panelClassName ? ` ${panelClassName}` : ""}`}
+              className={`dashboard-root dashboard-popover-panel${panelClassName ? ` ${panelClassName}` : ""}`}
               style={{
                 position: "fixed",
                 top: pos?.top ?? -9999,
