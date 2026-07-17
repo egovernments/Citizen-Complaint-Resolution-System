@@ -11,8 +11,6 @@ run_ci_tests: true                      # no boot_tenant
 state_tenant_id: ke
 boot_tenant: mz.maputo                  # outside the state root
 core_mobile_configs:
-  mobileNumberPattern: ^[17][0-9]{8}$   # 9-digit pattern…
-  mobileNumberLength: 10                # …with a 10-digit length
-  mobileNumberAllowedStartingCharacters: ['1', '7']
+  mobileNumberRegex: '^[17('            # does not compile
 bootstrap_secrets:
   elasticsearch_master_password: wrong

@@ -2039,8 +2039,10 @@
         - {name: PGR-Services, path: /pgr-services/health}
       loop_control:
         label: "{{ item.name }}"
+      register: kong_svc_health
       retries: 3
       delay: 10
+      until: kong_svc_health.status == 200
 
     # When tls_enabled=false (sandbox), hit the box on plain HTTP and pass
     # `Host: {{ domain }}` so nginx routes to the right server-name block.

@@ -9,9 +9,7 @@ digit_ui_mode: static
 run_ci_tests: true
 auth_provider: digit
 core_mobile_configs:
-  mobilePrefix: '+254'
-  mobileNumberPattern: ^[17][0-9]{8}$
-  mobileNumberLength: 9
-  mobileNumberAllowedStartingCharacters: ['1', '7']
+  countryCode: '+254'
+  mobileNumberRegex: ^0?[17][0-9]{8}$
 bootstrap_secrets:
   elasticsearch_master_password: asd@#$@$!132123

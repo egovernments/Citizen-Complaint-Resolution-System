@@ -129,49 +129,44 @@ def r_mcp_registry(cfg):
 
 @rule(
     "mobile-config-consistency",
-    "core_mobile_configs carries one intent in three fields. The pattern is "
-    "what egov-user enforces (synthesized into MDMS UserValidation); length "
-    "and allowed starting characters are what the UI and test suites trust. "
-    "When they disagree, citizens/tests mint numbers the server rejects with "
-    "INVALID_MOBILE_FORMAT (PR #841 discussion).",
+    "common-masters.MobileNumberValidation (the playbook's own preflight "
+    "hard-fail, playbook-deploy.yml) only accepts countryCode + "
+    "mobileNumberRegex — length and allowed starting digits are derived from "
+    "the regex at runtime (filter_plugins/mobile.py, tests/global-setup.ts), "
+    "not carried as separate fields. A regex that fails to compile breaks "
+    "that derivation everywhere it's used, and citizens/tests mint numbers "
+    "the server rejects with INVALID_MOBILE_FORMAT (PR #841 discussion).",
 )
 def r_mobile(cfg):
     mc = get(cfg, "core_mobile_configs")
     if not isinstance(mc, dict) or not mc:
         return
-    pattern = mc.get("mobileNumberPattern")
-    length = mc.get("mobileNumberLength")
-    starts = mc.get("mobileNumberAllowedStartingCharacters") or []
-    if not pattern:
-        yield (WARN, "core_mobile_configs has no mobileNumberPattern — egov-user gets no rule to enforce.")
+    regex = mc.get("mobileNumberRegex")
+    if not regex:
+        yield (WARN, "core_mobile_configs has no mobileNumberRegex — egov-user gets no rule to enforce.")
         return
     try:
-        rx = re.compile(str(pattern))
+        re.compile(str(regex))
     except re.error as e:
-        yield (FAIL, f"mobileNumberPattern does not compile: {e}")
-        return
-    if length:
-        for start in (starts or ["dummy-skip"]):
-            if start == "dummy-skip":
-                break
-            sample = str(start) + "0" * (int(length) - len(str(start)))
-            if not rx.fullmatch(sample):
-                yield (FAIL,
-                       f"inconsistent core_mobile_configs: a {length}-digit number starting "
-                       f"with '{start}' ({sample}) is rejected by mobileNumberPattern {pattern}.")
+        yield (FAIL, f"mobileNumberRegex does not compile: {e}")
+    if not mc.get("countryCode"):
+        yield (WARN, "core_mobile_configs has no countryCode — UI mobile-prefix hints will be wrong.")
 
 
 @rule(
     "boot-tenant-prefix",
-    "boot_tenant must live under state_tenant_id (e.g. ke.bomet under ke). "
-    "A mismatched pair seeds city data under a root the services never query — "
+    "boot_tenant must live under state_root (e.g. ke.bomet under ke), or equal "
+    "state_root itself for cross-root bootstrap tenants (e.g. Maputo: "
+    "boot_tenant pg, state_root pg, state_tenant_id mz — the MCP-bootstrapped "
+    "root differs from the boot-time root by design). A pair that matches "
+    "neither seeds city data under a root the services never query — "
     "everything 'succeeds' and nothing is visible.",
 )
 def r_boot_tenant(cfg):
     boot = get(cfg, "boot_tenant")
-    state = get(cfg, "state_tenant_id")
-    if boot and state and boot != state and not str(boot).startswith(str(state) + "."):
-        yield (FAIL, f"boot_tenant '{boot}' is not under state_tenant_id '{state}'.")
+    root = get(cfg, "state_root") or get(cfg, "state_tenant_id")
+    if boot and root and boot != root and not str(boot).startswith(str(root) + "."):
+        yield (FAIL, f"boot_tenant '{boot}' is not under state_root '{root}'.")
 
 
 @rule(
@@ -276,21 +271,21 @@ SELF_TEST_CASES = [
      {"digit-ui-v2-combo"}),
     ("mcp without registry fires", {"enable_mcp": True, "docker_registry": ""},
      {"mcp-needs-registry"}),
-    ("inconsistent mobile combo fires (pattern 9 digits, length 10)",
-     {"core_mobile_configs": {"mobileNumberPattern": "^[17][0-9]{8}$",
-       "mobileNumberLength": 10, "mobileNumberAllowedStartingCharacters": ["1", "7"]}},
+    ("non-compiling mobileNumberRegex fires",
+     {"core_mobile_configs": {"countryCode": "+254", "mobileNumberRegex": "^[17("}},
      {"mobile-config-consistency"}),
-    ("consistent kenya-shaped mobile combo is clean",
-     {"core_mobile_configs": {"mobileNumberPattern": "^[17][0-9]{8}$",
-       "mobileNumberLength": 9, "mobileNumberAllowedStartingCharacters": ["1", "7"]}},
-     set()),
-    ("optional-prefix pattern accepts both lengths",
-     {"core_mobile_configs": {"mobileNumberPattern": "^0?[17][0-9]{8}$",
-       "mobileNumberLength": 9, "mobileNumberAllowedStartingCharacters": ["1", "7"]}},
+    ("missing countryCode warns", {"core_mobile_configs": {"mobileNumberRegex": "^[17][0-9]{8}$"}},
+     {"mobile-config-consistency"}),
+    ("kenya-shaped countryCode + mobileNumberRegex is clean",
+     {"core_mobile_configs": {"countryCode": "+254", "mobileNumberRegex": "^0?[17][0-9]{8}$"}},
      set()),
     ("boot tenant outside state root fires",
      {"boot_tenant": "mz.maputo", "state_tenant_id": "ke"},
      {"boot-tenant-prefix"}),
+    ("maputo-style cross-root bootstrap is clean (boot_tenant == state_root, "
+     "differs from state_tenant_id)",
+     {"boot_tenant": "pg", "state_root": "pg", "state_tenant_id": "mz"},
+     set()),
     ("ci tests without boot tenant fires", {"run_ci_tests": True},
      {"ci-tests-need-boot-tenant"}),
     ("bad ui mode fires", {"digit_ui_mode": "docker"},
