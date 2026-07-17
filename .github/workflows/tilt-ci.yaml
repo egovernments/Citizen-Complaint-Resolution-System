@@ -16,6 +16,126 @@ defaults:
     working-directory: local-setup
 
 jobs:
+  # Loads Tiltfile.k8s -- the k3s tier -- which nothing else in CI does.
+  #
+  # `tilt-test` below runs a bare `tilt ci`, which loads the DEFAULT Tiltfile (the
+  # compose tier). It never reads Tiltfile.k8s, so red/green there says nothing about
+  # whether the k3s tier can even load. That blind spot let two faults reach develop:
+  #
+  #   * #1297 added a `gatus-config` ConfigMap to k8s/tools/gatus.yaml while
+  #     Tiltfile.k8s already generated one -> "Duplicate YAML: ConfigMap gatus-config"
+  #     aborts the whole Tiltfile, taking down every resource in the tier, not just gatus.
+  #   * 09a8ec2e (2026-05-13) renamed configs/persister -> configs/egov-persister and
+  #     missed Tiltfile.k8s, so `local()` died on "no such file or directory". That one
+  #     sat on develop for two months.
+  #
+  # Both are load-time faults, so evaluating the Tiltfile catches them -- no cluster and
+  # no deploy needed. `tilt alpha tiltfile-result` does exactly that and exits 5 on an
+  # evaluation error. It takes seconds, which is why this is a separate job from the
+  # heavy compose one rather than bolted onto it.
+  #
+  # Deliberately NOT a full `tilt ci -f Tiltfile.k8s`: that would stand up a kind cluster
+  # and deploy ~25 manifests of JVM services on a 2-core runner. This job's claim is
+  # narrow and honest -- "the k3s tier still loads" -- not "the k3s tier works".
+  tiltfile-k8s-load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Tilt
+        working-directory: .
+        run: |
+          TILT_VERSION="0.33.21"
+          curl -fsSL "https://github.com/tilt-dev/tilt/releases/download/v${TILT_VERSION}/tilt.${TILT_VERSION}.linux.x86_64.tar.gz" \
+            | tar -xzf - -C /usr/local/bin tilt
+          tilt version
+          kubectl version --client=true
+
+      - name: Fake a kind-ccrs kube context
+        working-directory: .
+        run: |
+          # Tiltfile.k8s calls allow_k8s_contexts('kind-ccrs'), and Tilt refuses to run
+          # local() under an unrecognised context ("might be a production kube context").
+          # It matches on the context NAME only, and nothing here contacts a server:
+          # tiltfile-result never deploys, and the Tiltfile's kubectl calls are all
+          # --dry-run=client. So a kubeconfig naming the context is enough -- no cluster.
+          # The token is required only to stop kubectl prompting for credentials.
+          cat > "$RUNNER_TEMP/kubeconfig.yaml" <<'EOF'
+          apiVersion: v1
+          kind: Config
+          clusters:
+            - name: ccrs
+              cluster:
+                server: https://127.0.0.1:6443
+          contexts:
+            - name: kind-ccrs
+              context:
+                cluster: ccrs
+                user: ccrs
+                namespace: digit
+          current-context: kind-ccrs
+          users:
+            - name: ccrs
+              user:
+                token: offline-dummy-token
+          EOF
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig.yaml" >> "$GITHUB_ENV"
+
+      - name: Load Tiltfile.k8s
+        env:
+          # Skips the maven/JDK probes and the from-source docker_builds: CI mode uses
+          # pre-built images. Without it the Tiltfile stops at "Maven not found".
+          TILT_CI: "1"
+        run: |
+          echo "::group::tilt alpha tiltfile-result -f Tiltfile.k8s"
+          if ! tilt alpha tiltfile-result -f Tiltfile.k8s > /dev/null; then
+            echo "::endgroup::"
+            echo ""
+            echo 'FAIL: Tiltfile.k8s does not load, so "tilt up -f Tiltfile.k8s" deploys nothing.'
+            echo "The error above is the whole k3s tier failing, not one resource."
+            echo "Common causes: two manifests defining the same kind/name/namespace"
+            echo "(Duplicate YAML), or a k8s_yaml(local(...)) path that no longer exists."
+            exit 1
+          fi
+          echo "::endgroup::"
+          echo "OK: Tiltfile.k8s evaluates cleanly."
+
+      - name: Prove this check can actually fail
+        env:
+          TILT_CI: "1"
+        run: |
+          # A green check that cannot fail is worthless, and this one is easy to break
+          # into a no-op (wrong context, missing TILT_CI, a tilt that exits 0 on error) --
+          # all of which would still print OK above. So assert the detector fires on the
+          # exact fault that shipped in #1297: a duplicate gatus-config ConfigMap.
+          # The copy sits beside the original so its relative paths still resolve.
+          cp Tiltfile.k8s Tiltfile.k8s.negative-control
+          cat >> Tiltfile.k8s.negative-control <<'EOF'
+
+          k8s_yaml(local('kubectl create configmap gatus-config --from-file=config.yaml=gatus/config.yaml -n digit --dry-run=client -o yaml'))
+          EOF
+
+          set +e
+          out=$(tilt alpha tiltfile-result -f Tiltfile.k8s.negative-control 2>&1)
+          rc=$?
+          set -e
+          rm -f Tiltfile.k8s.negative-control
+
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: a deliberately duplicated ConfigMap loaded cleanly."
+            echo "This job is not detecting anything -- the check above is a false green."
+            exit 1
+          fi
+          if ! echo "$out" | grep -q "Duplicate YAML"; then
+            echo "FAIL: the negative control failed, but not with the expected error."
+            echo "Got: $out"
+            exit 1
+          fi
+          echo "OK: negative control rejected as expected ($(echo "$out" | grep -o 'Duplicate YAML.*' | head -1))"
+
   tilt-test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
