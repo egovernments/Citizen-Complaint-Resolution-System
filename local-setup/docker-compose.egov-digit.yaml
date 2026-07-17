@@ -1555,6 +1555,9 @@ services:
     container_name: egov-url-shortening
     restart: unless-stopped
     depends_on:
+      # pgbouncer for the app datasource, postgres-db for Flyway's direct migration.
+      pgbouncer:
+        condition: service_healthy
       postgres-db:
         condition: service_healthy
     environment:
@@ -1563,9 +1566,10 @@ services:
       # The image pins spring.datasource.driver-class-name to OpenTelemetryDriver,
       # which only accepts jdbc:otel: URLs -- a plain jdbc:postgresql:// one makes
       # Hikari throw "claims to not accept jdbcUrl" and the DataSource never opens.
-      # Flyway below stays on a plain URL: it resolves its own driver from the URL
-      # and must reach postgres-db directly, never the transaction-mode pooler.
-      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres-db:5432/egov
+      # App traffic goes through pgbouncer (the 'postgres' alias), as every other
+      # service does; Flyway below stays direct on postgres-db, because it takes a
+      # session-level advisory lock that transaction-mode pooling would break.
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_URL: jdbc:postgresql://postgres-db:5432/egov
