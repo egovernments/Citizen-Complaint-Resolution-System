@@ -153,10 +153,11 @@ ignored):
 | `window` | overrides `query.window.name`, preserving `timeRole`/`timeBucket` |
 | `dateFrom` + `dateTo` | inclusive ISO dates → half-open `gte`/`lt` range on the grain's time column; removes the base window. Unparseable values are a hard `invalid_param`, not a silent fallback |
 | `ward` | narrows `ward_code = ?` iff filterable on the grain |
-| `serviceCode` | narrows `service_code = ?` iff filterable |
+| `serviceCode` | narrows `service_code = ?` iff filterable — the param for complaint-type **leaf** selections (exact match; works on every grain incl. daily) |
 | `compare: "prior"` | immediately-preceding equal-duration range (prior calendar week when no range is set) — powers "vs prior period" deltas |
 | `series: "daily"` | scalar → daily time series (adds the grain's date dimension + asc sort, caps limit at min(366, days)) — powers sparklines |
 | `hierLevel` | complaint-hierarchy rollup level (#1111). `"leaf"`/absent = today's per-subtype buckets; `"1"`..`"12"` re-groups every `service_code` dimension by the Nth segment of `complaint_node_path` (aliased back `AS service_code`, so `viz.dimensionKey`, sort and columns are untouched). Aggregates recompute over raw rows, so averages/ratios stay correctly weighted. Grains without the path column (daily) no-op, like `ward`. See the rollup notes below |
+| `complaintPath` | complaint-hierarchy **subtree filter** for **interior-node** selections. Value = the node's dot-path (e.g. `SANITATION.SEWAGE`); adds a delimiter-guarded `subtree` predicate on `complaint_node_path` (`= ? OR LIKE ?\|\|'.%'`) on grains carrying the path column (facts/events) — a WHERE, orthogonal to `hierLevel`'s GROUP BY rewrite, so "filter the Sanitation subtree, grouped at level 2" composes. Leaf selections keep sending `serviceCode` (exact match; also covers the daily grain). Free-form validated string: `[A-Za-z0-9._/-]`, ≤ 256 chars, else `invalid_param`; declared on the type-dimension KPIs with **no `allowed` list and no default**. On the daily grain the filter cannot apply: the skip is reported via `paramsIgnored:["complaintPath"]` on the result envelope so the FE badges the widget "filter not applied" instead of silently serving unfiltered numbers. NULL-path rows (node codes containing `.`; flat tenants) never match a subtree |
 
 Rules enforced server-side:
 

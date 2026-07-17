@@ -108,6 +108,7 @@ shorthand for `eq`):
 | `gt`/`gte`/`lt`/`lte` | `{ "gte": 1719792000000 }` |
 | `in` | `{ "in": ["web","mobile"] }` |
 | `isnull` | `{ "isnull": false }` |
+| `starts_with` / `subtree` | `{ "starts_with": "BOMET." }` / `{ "subtree": "SANITATION.SEWAGE" }` — allowed ONLY on the grain's prefix-filterable materialized-path columns (`boundary_path`, `complaint_node_path`). `subtree` is the delimiter-guarded form (`col = ? OR col LIKE ?\|\|'.%'`): the node itself plus dot-descendants, so `PGR` never matches a `PGRX` sibling |
 
 UUID/PII-adjacent columns (e.g. `account_id`, `current_assignee_uuid`) are **group-by-able and
 distinct-countable but not filterable** — arbitrary UUID probing is rejected.
@@ -136,7 +137,8 @@ ignored) and every declared param with an `allowed` list is enforced server-side
 | `window` | overrides `query.window.name`, preserving `timeRole`/`timeBucket` |
 | `dateFrom` + `dateTo` | inclusive ISO dates → half-open range on the grain's time column; removes the base window |
 | `ward` | narrows `ward_code = ?` iff filterable on the grain |
-| `serviceCode` | narrows `service_code = ?` iff filterable |
+| `serviceCode` | narrows `service_code = ?` iff filterable — the param for complaint-type **leaf** selections (exact match; works on every grain incl. daily) |
+| `complaintPath` | narrows to a complaint-hierarchy **interior** node's whole subtree: a delimiter-guarded `subtree` predicate on `complaint_node_path` (`= ? OR LIKE ?\|\|'.%'`) iff the grain carries the path column (facts/events). Value = the node's dot-path (`SANITATION.SEWAGE`); validated against `[A-Za-z0-9._/-]` (max 256 chars) — anything else is `invalid_param`. On the daily grain (no path column) the filter cannot apply and the result envelope reports `paramsIgnored:["complaintPath"]` instead of silently serving unfiltered numbers. Leaf selections keep using `serviceCode`; NULL-path rows (node codes containing `.`, flat tenants) never match a subtree |
 | `compare: "prior"` | immediately-preceding equal-duration range — "vs prior period" deltas |
 | `series: "daily"` | scalar → daily time series — sparklines |
 | `hierLevel` | `"leaf"` (no-op) or `"1"`..`"12"`: re-groups every `service_code` dimension by the Nth segment of the materialized `complaint_node_path` (#1111). The derived expression is a fixed server-side template aliased back `AS service_code` — result columns are unchanged, and aggregates recompute over raw rows (weighted). NULL/empty-path rows fall back to their leaf code; a level deeper than a row's depth clamps to its leaf; grains without the path column (daily) no-op. A `service_group` dimension is dropped at non-leaf levels (it duplicates the level bucket). Note: `avg(sla_target_ms)`-style measures average heterogeneous per-subtype SLAs inside a level bucket — indicative, not a category SLA |
@@ -164,6 +166,11 @@ planner and is never widened. Full semantics + catalog cookbook:
 Batch responses wrap each query under `results.<name>` plus a top-level `partial` flag (one failed
 query never blanks the others). `asOf` is the materialized-view refresh instant — data is as fresh
 as the last refresh, not real-time. Durations are epoch-milliseconds.
+
+When a supplied param could not be applied to the def's grain **and the caller must know**
+(today: `complaintPath` on the path-less daily grain), the per-query result additionally carries
+`"paramsIgnored": ["complaintPath"]` — the FE shows a "filter not applied" indicator instead of
+presenting an unfiltered number as filtered. The field is absent when every param applied.
 
 ---
 

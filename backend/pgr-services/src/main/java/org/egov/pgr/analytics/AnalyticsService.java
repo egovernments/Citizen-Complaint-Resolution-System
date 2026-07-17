@@ -137,7 +137,8 @@ public class AnalyticsService {
                     Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, name);
                     if (composed != null) { results.put(name, composed); continue; }
 
-                    JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
+                    List<String> paramsIgnored = new ArrayList<>();
+                    JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles, paramsIgnored);
                     if (actualQueryNode == null) {
                         partial = true;
                         results.put(name, Map.of("error", "kpi_forbidden",
@@ -153,7 +154,9 @@ public class AnalyticsService {
                                 "message", "inline query projects officer-PII dimension(s); role not authorized"));
                         continue;
                     }
-                    results.put(name, runOne(actualQueryNode, scope, tel, name, kpiContext(queryNode)));
+                    Map<String,Object> result = runOne(actualQueryNode, scope, tel, name, kpiContext(queryNode));
+                    if (!paramsIgnored.isEmpty()) result.put("paramsIgnored", paramsIgnored);
+                    results.put(name, result);
                 } catch (Exception ex) {
                     partial = true;
                     results.put(name, err(ex));
@@ -167,12 +170,14 @@ public class AnalyticsService {
                 throw new IllegalArgumentException("kpi_forbidden: public access is limited to published PUBLIC KPIs");
             Map<String,Object> composed = maybeComposeResult(queryNode, scope, tenantId, callerRoles, tel, "query");
             if (composed != null) { out.putAll(composed); return out; }
-            JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles);
+            List<String> paramsIgnored = new ArrayList<>();
+            JsonNode actualQueryNode = resolveKpiRef(queryNode, tenantId, callerRoles, paramsIgnored);
             if (actualQueryNode == null)
                 throw new IllegalArgumentException("kpi_forbidden: KPI not found or not authorized");
             if (!queryNode.has("kpiId") && projectsForbiddenPii(actualQueryNode, callerRoles))
                 throw new IllegalArgumentException("pii_forbidden: inline query projects officer-PII dimension(s); role not authorized");
             out.putAll(runOne(actualQueryNode, scope, tel, "query", kpiContext(queryNode)));
+            if (!paramsIgnored.isEmpty()) out.put("paramsIgnored", paramsIgnored);
         } else {
             throw new IllegalArgumentException("invalid_param: body must contain 'query' or 'queries'");
         }
@@ -189,8 +194,14 @@ public class AnalyticsService {
      * {@link KpiQueryComposer} so the kpiId-by-reference path honours the global filters. The merge
      * produces only narrowing filters; the server-injected RBAC row-scope ({@code applyScope}) is
      * still layered on top by the planner and is never widened here.
+     *
+     * @param paramsIgnored collector (nullable) for supplied params the composer could not apply
+     *                      to this def's grain and must report (today: {@code complaintPath} on
+     *                      the path-less daily grain) — surfaced on the result envelope as
+     *                      {@code paramsIgnored:[...]}
      */
-    private JsonNode resolveKpiRef(JsonNode queryNode, String tenantId, Set<String> callerRoles) {
+    private JsonNode resolveKpiRef(JsonNode queryNode, String tenantId, Set<String> callerRoles,
+                                   List<String> paramsIgnored) {
         if (!queryNode.has("kpiId")) return queryNode;
 
         String kpiId = queryNode.get("kpiId").asText();
@@ -214,7 +225,7 @@ public class AnalyticsService {
             // D1a backend-composed defs are intercepted by maybeComposeResult before this point;
             // a query:null def WITHOUT a valid compose op is a genuine misconfiguration.
             throw new IllegalArgumentException("invalid_kpi: KPI '" + kpiId + "' has no query defined");
-        return queryComposer.mergeParams(storedQuery, effectiveParams);
+        return queryComposer.mergeParams(storedQuery, effectiveParams, paramsIgnored);
     }
 
     /**
@@ -308,9 +319,10 @@ public class AnalyticsService {
         // #1110/R9: each SOURCE query records its own metric point and joins the per-request
         // slow-query pool (attributed to its own kpiId, under the composed entry's name).
         List<Map<String,Object>> sourceRows = new ArrayList<>();
+        List<String> paramsIgnored = new ArrayList<>();   // deduped in resolveKpiRef/composer
         for (JsonNode srcId : compose.get("sourceKpiIds")) {
             JsonNode srcRef = synthRef(srcId.asText(), params);
-            JsonNode srcQuery = resolveKpiRef(srcRef, tenantId, callerRoles);
+            JsonNode srcQuery = resolveKpiRef(srcRef, tenantId, callerRoles, paramsIgnored);
             if (srcQuery == null)
                 throw new IllegalArgumentException("kpi_forbidden: compose source '" + srcId.asText() + "' not authorized");
             Map<String,Object> r = runOne(srcQuery, scope, tel, entryName, srcId.asText());
@@ -327,6 +339,7 @@ public class AnalyticsService {
         out.put("rows", List.of(row));
         out.put("rowCount", 1);
         out.put("compose", type);
+        if (!paramsIgnored.isEmpty()) out.put("paramsIgnored", paramsIgnored);
         return out;
     }
 
@@ -480,7 +493,7 @@ public class AnalyticsService {
     public Map<String,Object> schema(){
         Map<String,Object> out = new LinkedHashMap<>();
         out.put("aggFns", AnalyticsCatalog.AGG_FNS);
-        out.put("filterOps", Arrays.asList("eq","ne","gt","gte","lt","lte","in","isnull","starts_with"));
+        out.put("filterOps", Arrays.asList("eq","ne","gt","gte","lt","lte","in","isnull","starts_with","subtree"));
         out.put("windows", Arrays.asList("all","live","last_<N>d","wtd","mtd","qtd","ytd"));
         out.put("timeBuckets", Arrays.asList("day","week","month","quarter","year"));
         Map<String,Object> grains = new LinkedHashMap<>();

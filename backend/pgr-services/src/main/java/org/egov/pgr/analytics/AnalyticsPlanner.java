@@ -232,6 +232,20 @@ public class AnalyticsPlanner {
                 parts.add(colKey + " LIKE ? || '%'");
                 continue;
             }
+            // subtree: delimiter-guarded subtree membership on a materialized dot-path column —
+            // the node itself OR any dot-descendant. Unlike a bare starts_with, the '.' guard
+            // prevents sibling-prefix collisions ('PGR' must not match 'PGRX.…'), and the eq arm
+            // keeps mixed interior+serviceable nodes (a complaint filed AT the node) in the
+            // subtree. Same allowlist as starts_with (prefix-filterable path columns only), same
+            // bound-param + LIKE-escape mechanics.
+            if ("subtree".equals(op)) {
+                if (!prefixFilterable) throw new IllegalArgumentException(
+                        "op_not_allowed: 'subtree' is only permitted on prefix-filterable path columns, not '" + colKey + "' on " + g.name);
+                params.add(v.asText());
+                params.add(escapeLike(v.asText()));
+                parts.add("(" + colKey + " = ? OR " + colKey + " LIKE ? || '.%')");
+                continue;
+            }
             if (!plainFilterable) throw new IllegalArgumentException(
                     "op_not_allowed: column '" + colKey + "' on " + g.name + " only supports the 'starts_with' filter op");
             switch (op) {

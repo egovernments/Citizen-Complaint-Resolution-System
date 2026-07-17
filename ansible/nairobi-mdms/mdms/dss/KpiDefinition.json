@@ -764,7 +764,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_chart_complaints_by_type",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -835,6 +835,9 @@
             "3",
             "4"
           ]
+        },
+        {
+          "name": "complaintPath"
         }
       ],
       "rbac": {
@@ -1071,7 +1074,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_chart_open_by_type_stage",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -1161,6 +1164,9 @@
             "3",
             "4"
           ]
+        },
+        {
+          "name": "complaintPath"
         }
       ],
       "rbac": {
@@ -1455,7 +1461,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_table_complaint_type_details",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -1660,6 +1666,9 @@
             "3",
             "4"
           ]
+        },
+        {
+          "name": "complaintPath"
         }
       ],
       "rbac": {
@@ -3301,10 +3310,13 @@
             "3",
             "4"
           ]
+        },
+        {
+          "name": "complaintPath"
         }
       ],
       "status": "published",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "supportsSeries": false
     }
   },
@@ -3410,10 +3422,13 @@
             "3",
             "4"
           ]
+        },
+        {
+          "name": "complaintPath"
         }
       ],
       "status": "published",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "supportsSeries": false
     }
   }
