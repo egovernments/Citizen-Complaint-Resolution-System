@@ -10,6 +10,17 @@
 # below. When those manifests land, flip the matching toggle to "true" -- the endpoint
 # blocks already exist, so do not add new ones.
 # CI enforces tier parity (.github/workflows/gatus-coverage.yml).
+#
+# This ConfigMap is the ONLY definition of gatus-config. Tiltfile.k8s used to
+# generate one of the same name from gatus/config.yaml; defining it in both places
+# makes Tilt abort the entire tier with "Duplicate YAML: ConfigMap gatus-config".
+# If you reintroduce generation there, delete this ConfigMap -- never both.
+#
+# What the old generated-from-compose arrangement bought, and this one gives up:
+# tier drift used to be impossible by construction, since both tiers read one file.
+# This file duplicates the catalogue so the k3s tier can pin its own toggles, so
+# drift is now merely *detected* (by the CI guard above) rather than prevented.
+# Keep the two catalogues identical by hand; the guard will fail the PR if you don't.
 apiVersion: v1
 kind: ConfigMap
 metadata:
