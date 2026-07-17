@@ -154,9 +154,12 @@ const AdminDashboard = ({ embedded = false }) => {
  * the saved layout: localStorage, kpiId-keyed. NOT part of `filters` state on
  * purpose — a Group-by level is structurally NOT a filter: it changes the
  * widget's own aggregation dimension (which hierarchy level the service_code
- * buckets roll up to), never which complaints qualify. Hierarchy FILTERS were
- * built and deliberately abandoned; this control must stay out of the filter
- * store so it can never be mistaken for (or grow into) one.
+ * buckets roll up to), never which complaints qualify. Hierarchy FILTERING
+ * lives where filters live: the global complaint-type TREE filter
+ * (ComplaintTypeTreeFilter, the sanctioned revival of the abandoned July
+ * demo) is part of `filters`/globalParams; this per-widget control must stay
+ * out of the filter store so the two axes never blur — they compose at the
+ * query level (subtree WHERE × level GROUP BY).
  */
 const HIER_OVERRIDES_STORAGE_KEY = "ccrs.dashboard.hier-level-overrides.v1";
 
