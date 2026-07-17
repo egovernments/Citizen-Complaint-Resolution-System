@@ -3754,3 +3754,18 @@
 .dashboard-root.dashboard-embedded > div > main {
   overflow: visible;
 }
+
+/* The host app's vendor/overrides.css forces height:44px !important on all
+   text inputs/selects via a high-specificity :not() chain. The dashboard uses
+   compact 1.75rem controls (owner preference). Stacked-class specificity +
+   !important re-asserts the compact size; both !important -> specificity wins.
+   Scoped to the wards select only (calendars keep the host size by owner choice). */
+.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select {
+  height: 1.75rem !important;
+  min-height: 1.75rem !important;
+  max-height: 1.75rem !important;
+  font-size: 12px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 1 !important;
+}
