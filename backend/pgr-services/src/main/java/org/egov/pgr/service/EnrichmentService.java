@@ -11,6 +11,7 @@ import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.repository.IdGenRepository;
 import org.egov.pgr.util.PGRUtils;
 import org.egov.pgr.web.models.AuditDetails;
+import org.egov.pgr.web.models.ExtendedAttributes;
 import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.egov.pgr.web.models.Service;
 import org.egov.pgr.web.models.ServiceRequest;
@@ -146,6 +147,28 @@ public class EnrichmentService {
         if(criteria.getLimit()!=null && criteria.getLimit() > config.getMaxLimit())
             criteria.setLimit(config.getMaxLimit());
 
+    }
+
+
+    public void enrichUserContactDetails(ServiceRequest request) {
+        ExtendedAttributes ext = request.getService().getExtendedAttributes();
+        if (ext == null) return;
+
+        String email   = ext.getEmail();
+        String address = ext.getComplainantAddress();
+
+        // Null out fields that route to User Service — must not be written to the JSONB column
+        ext.setEmail(null);
+        ext.setComplainantAddress(null);
+
+        if (email == null && address == null) return;
+
+        userService.updateUserContactDetails(
+                request.getService().getAccountId(),
+                email,
+                address,
+                request.getService().getTenantId(),
+                request.getRequestInfo());
     }
 
 

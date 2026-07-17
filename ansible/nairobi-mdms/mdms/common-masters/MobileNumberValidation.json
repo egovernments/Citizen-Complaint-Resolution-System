@@ -1,0 +1,10 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "countryCode": "+254",
+      "mobileNumberRegex": "^[17][0-9]{8}$",
+      "default": true
+    }
+  }
+]

@@ -1,5 +1,12 @@
 import { useState, useEffect } from "react";
-import keNairobiWardsFallback from "../../assets/boundaries/ke_nairobi_wards.json";
+import useMapConfig from "./useMapConfig";
+
+// No hardcoded boundary data. When a tenant has no usable geometry (or no
+// boundary tenant is configured), the map shows NO ward overlay rather than
+// inventing another tenant's wards — drawing a stale set would mis-resolve pins
+// to boundaries nowhere near the complaint. Boundaries come only from the live
+// boundary-service for the configured boundary tenant.
+const EMPTY_BOUNDARIES = { type: "FeatureCollection", features: [] };
 
 // boundary-service historically returns a unit-square placeholder polygon
 // for boundaries created without real geometry (XLSX onboarding with no
@@ -54,25 +61,33 @@ const GEOMETRY_CHUNK_SIZE = 40;
 //      code/boundaryType/children — no name, no geometry.
 //   2. boundary/_search (query params: tenantId, codes csv, limit) per
 //      chunk of LEAF codes → geometry, joined back by code.
-// Falls back to the bundled static Nairobi wards when MAP_TENANT is
-// absent, any fetch fails, or every leaf is geometry-less / placeholder.
+// Yields an empty FeatureCollection — never another tenant's wards — when no
+// boundary tenant is configured, any fetch fails, or every leaf is
+// geometry-less / placeholder.
 //
-// Returns null while the fetch is in flight — consumers already treat
-// null as "use the static fallback for point-in-polygon" and gate the
-// <GeoJSON> layer on features.length, so the swap-in re-render keying
-// stays exactly as before.
+// Returns null while the fetch is in flight; consumers gate the <GeoJSON>
+// layer on features.length and skip pin resolution until it arrives.
 const useTenantBoundaries = () => {
   const [tenantBoundaries, setTenantBoundaries] = useState(null);
+  // Which tenant's tree to draw is resolved from MDMS MapConfig, falling back to
+  // the deploy-time globalConfigs MAP_TENANT key.
+  const { isReady, boundaryTenantId: MAP_TENANT } = useMapConfig();
+  // The hierarchy is a boundary construct rather than a map one, so it is not
+  // part of MapConfig; it stays on globalConfigs until a default-boundary-
+  // hierarchy master exists to own it.
+  const HIERARCHY_TYPE = window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
 
   useEffect(() => {
     let cancelled = false;
-    const MAP_TENANT = window?.globalConfigs?.getConfig?.("MAP_TENANT") || process.env.REACT_APP_MAP_TENANT;
+    // Hold off while MapConfig is still resolving: acting on the not-yet-loaded
+    // value would fetch the fallback tenant's wards (or none), then need a second
+    // pass to correct itself.
+    if (!isReady) return undefined;
     if (!MAP_TENANT) {
-      console.log("No MAP_TENANT configured, falling back to static Nairobi wards.");
-      setTenantBoundaries(keNairobiWardsFallback);
+      console.log("No map boundary tenant configured — no ward overlay.");
+      setTenantBoundaries(EMPTY_BOUNDARIES);
       return undefined;
     }
-    const HIERARCHY_TYPE = window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
 
     const fetchBoundaries = async () => {
       try {
@@ -138,21 +153,20 @@ const useTenantBoundaries = () => {
         if (features.length > 0) {
           setTenantBoundaries({ type: "FeatureCollection", features });
         } else {
-          // Empty tree OR all leaves placeholder → the tenant has no
-          // usable geometry; the static fallback at least keeps the
-          // Nairobi reference deployment working.
-          setTenantBoundaries(keNairobiWardsFallback);
+          // Empty tree OR all leaves placeholder → the tenant has no usable
+          // geometry. Show no overlay (NOT another tenant's static wards).
+          setTenantBoundaries(EMPTY_BOUNDARIES);
         }
       } catch (e) {
         console.error("Failed to fetch tenant boundaries:", e);
-        if (!cancelled) setTenantBoundaries(keNairobiWardsFallback);
+        if (!cancelled) setTenantBoundaries(EMPTY_BOUNDARIES);
       }
     };
     fetchBoundaries();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isReady, MAP_TENANT, HIERARCHY_TYPE]);
 
   return tenantBoundaries;
 };

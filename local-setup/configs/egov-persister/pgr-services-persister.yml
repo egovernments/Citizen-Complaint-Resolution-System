@@ -7,7 +7,7 @@ serviceMaps:
     isTransaction: true
     queryMaps:
 
-    - query: INSERT INTO eg_pgr_service_v2(id, tenantid, servicecode, servicerequestid, description, accountid, additionaldetails, applicationstatus, source, createdby, createdtime, lastmodifiedby, lastmodifiedtime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    - query: INSERT INTO eg_pgr_service_v2(id, tenantid, servicecode, servicerequestid, description, accountid, additionaldetails, extended_attributes, applicationstatus, source, createdby, createdtime, lastmodifiedby, lastmodifiedtime) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
       basePath: service
       jsonMaps:
       - jsonPath: $.service.id
@@ -23,6 +23,10 @@ serviceMaps:
       - jsonPath: $.service.accountId
 
       - jsonPath: $.service.additionalDetail
+        type: JSON
+        dbType: JSONB
+
+      - jsonPath: $.service.extendedAttributes
         type: JSON
         dbType: JSONB
 
@@ -87,6 +91,30 @@ serviceMaps:
 
       - jsonPath: $.service.auditDetails.lastModifiedTime
 
+    - query: INSERT INTO eg_pgr_document_v2(id, document_type, filestore_id, document_uid, service_id, additional_details, created_by, last_modified_by, created_time, last_modified_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+      basePath: service.documents.*
+      jsonMaps:
+      - jsonPath: $.service.documents.*.id
+
+      - jsonPath: $.service.documents.*.documentType
+
+      - jsonPath: $.service.documents.*.fileStoreId
+
+      - jsonPath: $.service.documents.*.documentUid
+
+      - jsonPath: $.service.id
+
+      - jsonPath: $.service.documents.*.additionalDetails
+        type: JSON
+        dbType: JSONB
+
+      - jsonPath: $.service.auditDetails.createdBy
+
+      - jsonPath: $.service.auditDetails.lastModifiedBy
+
+      - jsonPath: $.service.auditDetails.createdTime
+
+      - jsonPath: $.service.auditDetails.lastModifiedTime
 
 
   - version: 1.0
@@ -95,7 +123,7 @@ serviceMaps:
     isTransaction: true
     queryMaps:
 
-    - query: UPDATE eg_pgr_service_v2 SET servicecode=?, rating = ?,servicerequestid=?, description=?, accountid=?, additionaldetails=?, applicationstatus=?, lastmodifiedby=?, lastmodifiedtime=? WHERE id=?;
+    - query: UPDATE eg_pgr_service_v2 SET servicecode=?, rating = ?,servicerequestid=?, description=?, accountid=?, additionaldetails=?, extended_attributes=?, applicationstatus=?, lastmodifiedby=?, lastmodifiedtime=? WHERE id=?;
       basePath: service
       jsonMaps:
       - jsonPath: $.service.serviceCode
@@ -109,6 +137,10 @@ serviceMaps:
       - jsonPath: $.service.accountId
 
       - jsonPath: $.service.additionalDetail
+        type: JSON
+        dbType: JSONB
+
+      - jsonPath: $.service.extendedAttributes
         type: JSON
         dbType: JSONB
 

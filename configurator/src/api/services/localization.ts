@@ -139,9 +139,9 @@ export const localizationService = {
     ];
   },
 
-  // Create localization for a complaint type.
+  // Create localization for a complaint type (a ComplaintHierarchy LEAF).
   //
-  // Emits up to four keys per record, deduped:
+  // Emits up to three keys per record, deduped, ALL keyed off the LEAF code:
   //   1. `SERVICEDEFS.<serviceCode>`        — citizen, exact-case (back-compat)
   //   2. `SERVICEDEFS.<SERVICECODE>`        — citizen, uppercase (what the
   //      runtime hooks actually query via `serviceCode.toUpperCase()`)
@@ -151,26 +151,29 @@ export const localizationService = {
   //      `getSubMenu` path uses just `SERVICEDEFS.<CODE_UPPER>`. Both must
   //      resolve or one side renders the raw key (see
   //      egovernments/Citizen-Complaint-Resolution-System#539).
-  //   4. `SERVICEDEFS.<MENUPATH_UPPER>`     — parent menu label that the
-  //      citizen top-level menu builds via `t("SERVICEDEFS." +
-  //      def.menuPath.toUpperCase())`. Without this a new menuPath renders
-  //      as the raw key in the citizen create flow.
+  //
+  // In the 2-master model `menuPath` is GONE — the parent group label is no
+  // longer a leaf concern. Localizing the interior (group) node labels is the
+  // hierarchy node loader's job, keyed off each node's own code, so this
+  // function no longer emits a `SERVICEDEFS.<MENUPATH_UPPER>` key.
   //
   // Deduped because the backend's upsert rejects the whole batch on
   // core.DUPLICATE_MESSAGE_IDENTITY when it sees a repeat (e.g. an
   // already-uppercase serviceCode would otherwise emit two identical rows
   // for keys 1 and 2).
-  //
-  // `name` is the message for the serviceCode keys; `menuPath` (verbatim,
-  // since the operator's display label isn't a separate field) is used
-  // for the parent-menu key.
   buildComplaintTypeLocalizations(
     _tenantId: string,
     serviceCode: string,
     name: string,
     locale: string = 'en_IN',
-    opts: { department?: string; menuPath?: string; menuName?: string } = {}
+    opts: { department?: string } = {}
   ): LocalizationMessage[] {
+    // Seed COMPLAINT_HIERARCHY.<code> keys (the new, ServiceDefs-free namespace)
+    // for every node passed in (interior + leaf). The UI resolves a complaint's
+    // label key-based, exactly like other DIGIT services, so these must exist
+    // for the chosen locale. Emits exact-case + uppercase (the runtime queries
+    // `code.toUpperCase()`). `_tenantId`/`opts` are accepted for caller compat.
+    void _tenantId; void opts;
     const messages: LocalizationMessage[] = [];
     const seen = new Set<string>();
     const push = (code: string, message: string) => {
@@ -178,18 +181,8 @@ export const localizationService = {
       seen.add(code);
       messages.push({ code, message, module: 'rainmaker-pgr', locale });
     };
-
-    push(`SERVICEDEFS.${serviceCode}`, name);
-    push(`SERVICEDEFS.${serviceCode.toUpperCase()}`, name);
-    if (opts.department) {
-      push(`SERVICEDEFS.${serviceCode.toUpperCase()}.${opts.department.toUpperCase()}`, name);
-    }
-    if (opts.menuPath) {
-      // Prefer the human group label ("Maternal & Neonatal Emergencies")
-      // when the caller carries one; the bare menuPath code is the
-      // legacy fallback for callers without a display name.
-      push(`SERVICEDEFS.${opts.menuPath.toUpperCase()}`, opts.menuName || opts.menuPath);
-    }
+    push(`COMPLAINT_HIERARCHY.${serviceCode}`, name);
+    push(`COMPLAINT_HIERARCHY.${serviceCode.toUpperCase()}`, name);
     return messages;
   },
 
@@ -309,27 +302,25 @@ export const localizationService = {
     return this.upsertMessages(tenantId, locale, messages);
   },
 
-  // Upload localizations for all complaint types. `department` and
-  // `menuPath`, when present on each record, drive the emission of the
-  // dept-qualified and menuPath-parent keys — see
-  // `buildComplaintTypeLocalizations` for the full key list.
+  // Upload localizations for all complaint types (leaf rows). `department`,
+  // when present on a record, drives the dept-qualified key — see
+  // `buildComplaintTypeLocalizations` for the full key list. The gone
+  // `menuPath` parent-label key is no longer emitted here.
   // Also always pushes CS_COMPLAINT_LOCATION — a static PGR UI label
   // hardcoded in CreateComplaintConfig.js that no source tenant carries.
   async uploadComplaintTypeLocalizations(
     tenantId: string,
-    types: { serviceCode: string; name: string; department?: string; menuPath?: string; menuName?: string }[],
+    types: { serviceCode: string; name: string; department?: string }[],
     locale: string = 'en_IN'
   ): Promise<{ success: number; failed: number }> {
     const raw = types.flatMap((t) =>
       this.buildComplaintTypeLocalizations(tenantId, t.serviceCode, t.name, locale, {
         department: t.department,
-        menuPath: t.menuPath,
-        menuName: t.menuName,
       })
     );
-    // Dedupe across all types — multiple types sharing the same menuPath
-    // (e.g. "Complaint") each emit SERVICEDEFS.<MENUPATH>, which the upsert
-    // endpoint rejects with DUPLICATE_MESSAGE_IDENTITY.
+    // Dedupe across all types (e.g. an already-uppercase serviceCode that
+    // collapses keys 1 and 2) — the upsert endpoint rejects a repeat with
+    // DUPLICATE_MESSAGE_IDENTITY.
     const seen = new Set<string>();
     const messages = raw.filter((m) => {
       if (seen.has(m.code)) return false;

@@ -3,6 +3,11 @@
         "businessService": "Incident",
         "active": "true",
         "isStatelevel": "true"
+      },
+      {
+        "businessService": "PGR",
+        "active": "true",
+        "isStatelevel": "true"
       }
 
 ]

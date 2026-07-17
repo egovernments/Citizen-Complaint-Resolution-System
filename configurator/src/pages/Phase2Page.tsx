@@ -28,11 +28,12 @@ import { Header, SubHeader } from '@/components/digit/Header';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { Banner } from '@/components/digit/Banner';
-import { apiClient, boundaryService, localizationService, ApiClientError } from '@/api';
+import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
 import { buildOsmBoundaries, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
+import { deriveMapPosition } from '@/utils/mapConfigFromBoundaries';
 import osmtogeojson from 'osmtogeojson';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
 
@@ -46,9 +47,53 @@ type Step =
 
 type BoundaryPath = 'osm' | 'excel' | null;
 
+// The included levels, ascending by OSM admin_level.
+function getSelectedLevels(levels: OsmAdminLevel[]): OsmAdminLevel[] {
+  return [...levels].filter(l => l.selected).sort((a, b) => a.level - b.level);
+}
+
+// A valid hierarchy is a CONTIGUOUS subset of the discovered levels (>= 2),
+// each named. Contiguous because the hierarchy is a strict parent→child chain:
+// a gap would reparent a deep level's features onto the level above, silently
+// collapsing the skipped tier.
+function validateLevelSelection(levels: OsmAdminLevel[]): { valid: boolean; error: string | null } {
+  const allSorted = [...levels].sort((a, b) => a.level - b.level);
+  const selected = getSelectedLevels(levels);
+  if (selected.length < 2) {
+    return { valid: false, error: 'Select at least two levels to form a hierarchy.' };
+  }
+  const idx = selected.map(l => allSorted.findIndex(x => x.level === l.level));
+  const contiguous = idx[idx.length - 1] - idx[0] === idx.length - 1;
+  if (!contiguous) {
+    const gaps = allSorted
+      .slice(idx[0], idx[idx.length - 1] + 1)
+      .filter(l => !l.selected)
+      .map(l => `Level ${l.level}`);
+    return {
+      valid: false,
+      error:
+        `Selected levels must be contiguous — you can't skip a level in between, ` +
+        `the hierarchy is a strict parent→child chain. Re-include ${gaps.join(', ')}, ` +
+        `or trim from the top/bottom of the range instead.`,
+    };
+  }
+  const unnamed = selected.filter(l => !l.mappedName.trim());
+  if (unnamed.length) {
+    return { valid: false, error: `Name every selected level (missing: ${unnamed.map(l => `Level ${l.level}`).join(', ')}).` };
+  }
+  return { valid: true, error: null };
+}
+
 // Turbopass suggestions endpoint. Same-origin '/turbopass' by default (nginx
 // proxies it to the search-api container); override via VITE_TURBOPASS_URL.
 const TURBOPASS_BASE: string = import.meta.env.VITE_TURBOPASS_URL || '/turbopass';
+
+// Overpass endpoint for the boundary-polygon fetch. Defaults to the public
+// instance (zero-config, but rate-limited / 504-prone under load). A deploy
+// that self-hosts Overpass sets VITE_OVERPASS_URL (e.g. same-origin
+// '/overpass/api/interpreter', proxied by nginx to the on-box container behind
+// the enable_overpass gate) at configurator build time.
+const OVERPASS_URL: string = import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
 
 // The OSM path always writes the ADMIN hierarchy (the Excel path lets the
 // operator name it).
@@ -69,23 +114,59 @@ async function runPostCreatePipeline(
     name: b.name,
   }));
 
-  await localizationService.uploadBoundaryLocalizations(
-    tenantId,
-    boundaryData,
-    hierarchyType,
-    'en_IN'
-  );
+  // Seed under every locale the tenant actually serves (StateInfo.languages),
+  // not a hardcoded en_IN — the digit-ui citizen app reads boundary names under
+  // its ACTIVE locale (e.g. en_KE / sw_KE for Kenya), so seeding only en_IN left
+  // the create-complaint locality dropdown AND the OSM map ward tooltips showing
+  // raw boundary codes. Fall back to en_IN when StateInfo has no languages so an
+  // India tenant behaves exactly as before.
+  const configuredLocales = await mdmsService.getStateInfoLocales(tenantId).catch(() => []);
+  const locales = configuredLocales.length > 0 ? configuredLocales : ['en_IN'];
 
-  // Create level-label localization keys so DIGIT-UI renders "MUNICÍPIO" / "DISTRITO"
-  // instead of the raw key "maputo_hierarchy_type_MUNICÍPIO" in the complaint form.
-  await localizationService.uploadHierarchyLevelLocalizations(
-    tenantId,
-    hierarchyType,
-    levels,
-    'en_IN'
-  ).catch(e => console.warn('hierarchy-level localization failed (non-fatal)', e));
+  for (const locale of locales) {
+    await localizationService.uploadBoundaryLocalizations(
+      tenantId,
+      boundaryData,
+      hierarchyType,
+      locale
+    );
+
+    // Create level-label localization keys so DIGIT-UI renders "MUNICÍPIO" / "DISTRITO"
+    // instead of the raw key "maputo_hierarchy_type_MUNICÍPIO" in the complaint form.
+    await localizationService.uploadHierarchyLevelLocalizations(
+      tenantId,
+      hierarchyType,
+      levels,
+      locale
+    ).catch(e => console.warn(`hierarchy-level localization failed (non-fatal) for ${locale}`, e));
+  }
 
   await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
+
+  // The boundaries just onboarded describe exactly the area this tenant serves,
+  // so they already answer where the citizen map should open, how far in, and
+  // which extent the address search may return results from. Derive all three
+  // rather than asking an admin to type eight numbers they cannot sanity-check
+  // without a map in front of them — and note a wrong search extent is not
+  // cosmetic: Nominatim's bounded search DISCARDS anything outside the box.
+  //
+  // Best-effort. Boundaries are the operator's real work here; failing Phase 2
+  // over a map default would be a poor trade. An unwritten MapConfig just means
+  // the map keeps its built-in defaults.
+  try {
+    const derived = deriveMapPosition(created);
+    if (derived) {
+      await mdmsService.upsertMapConfig(tenantId, {
+        ...derived,
+        // The wards the map draws are the ones we just created, for this tenant.
+        boundaryTenantId: tenantId,
+      });
+    } else {
+      console.warn('[Phase 2] no boundary geometry — leaving MapConfig at its defaults');
+    }
+  } catch (e) {
+    console.warn('[Phase 2] map position not written (non-fatal)', e);
+  }
 
   // Clear ancestralmaterializedpath so boundary-service includeChildren=true
   // doesn't combine two overlapping queries and return each node twice in the
@@ -484,6 +565,22 @@ export default function Phase2Page() {
         ? pickedSuggestion.countryCode.trim().toUpperCase().replace(/[\\"]/g, '\\$&')
         : '';
 
+      // OSM stores a place's primary `name` in the LOCAL language, but the
+      // typeahead (Turbopass) usually surfaces a translated/anglicized name —
+      // e.g. it suggests "Maputo Province" while the OSM relation's name is
+      // "Maputo" (the English label lives only in name:en). A strict
+      // ["name"="Maputo Province"] match then resolves nothing, so the search
+      // dead-ends with "No administrative boundaries found" (issue #757).
+      // Match the picked name against the common name variants so either the
+      // native or the translated form resolves the relation.
+      const NAME_KEYS = ['name', 'name:en', 'int_name', 'alt_name'];
+      const relByName = NAME_KEYS
+        .map(k => `  rel(area.country)["boundary"="administrative"]["${k}"="${escaped}"];`)
+        .join('\n');
+      const areaByName = NAME_KEYS
+        .map(k => `  area["${k}"="${escaped}"]["boundary"="administrative"];`)
+        .join('\n');
+
       // When the operator picked a typeahead suggestion with a country code,
       // scope the lookup to that country and resolve the named relation
       // itself (included in the output so the root level isn't lost).
@@ -492,7 +589,9 @@ export default function Phase2Page() {
       const query = countryCode
         ? `[out:json][timeout:90];
 area["ISO3166-1"="${countryCode}"][admin_level=2]->.country;
-rel(area.country)["boundary"="administrative"]["name"="${escaped}"]->.target;
+(
+${relByName}
+)->.target;
 .target map_to_area ->.searchArea;
 (
   rel(area.searchArea)["boundary"="administrative"];
@@ -502,7 +601,9 @@ out body;
 >;
 out skel qt;`
         : `[out:json][timeout:90];
-area["name"="${escaped}"]["boundary"="administrative"]->.searchArea;
+(
+${areaByName}
+)->.searchArea;
 (
   rel(area.searchArea)["boundary"="administrative"];
 );
@@ -510,7 +611,7 @@ out body;
 >;
 out skel qt;`;
 
-      const res = await fetch('https://overpass-api.de/api/interpreter', {
+      const res = await fetch(OVERPASS_URL, {
         method: 'POST',
         body: query
       });
@@ -522,10 +623,16 @@ out skel qt;`;
       let targetAdminLevel = 0;
       const sTerm = searchTerm.toLowerCase().trim();
       geojson.features.forEach((feature: any) => {
-        const featName = feature.properties?.name?.toLowerCase() || '';
-        const featAltName = feature.properties?.alt_name?.toLowerCase() || '';
-        if (featName === sTerm || featName.includes(sTerm) || featAltName === sTerm) {
-          const lvl = parseInt(feature.properties.admin_level, 10);
+        const props = feature.properties || {};
+        // Match the search term against the same name variants the query
+        // resolves on (name/name:en/int_name/alt_name) — otherwise a place
+        // picked by its translated name (e.g. "Maputo Province" vs the OSM
+        // name "Maputo") never matches here and the root level isn't found.
+        const featNames = NAME_KEYS
+          .map(k => (typeof props[k] === 'string' ? props[k].toLowerCase() : ''))
+          .filter(Boolean);
+        if (featNames.some(n => n === sTerm || n.includes(sTerm))) {
+          const lvl = parseInt(props.admin_level, 10);
           // If we found a match, we prefer the HIGHEST admin_level number (most specific)
           // Wait, if it's the search target, it should be the ROOT.
           // e.g. "Maputo" matches Level 4 (Cidade de maputo).
@@ -561,7 +668,10 @@ out skel qt;`;
           level,
           features,
           examples: uniqueNames.slice(0, 3),
-          mappedName: ''
+          mappedName: '',
+          // Default all selected (a contiguous, valid starting point); the
+          // operator trims the range and names what they keep.
+          selected: true,
         };
       }).sort((a, b) => a.level - b.level);
 
@@ -586,14 +696,14 @@ out skel qt;`;
   // EXCLUDED (never silently re-parented) — if any were dropped, show the
   // review step so the operator knows exactly what's missing before create.
   const handlePrepareOsmCreate = () => {
-    const validLevels = adminLevels.filter(l => l.mappedName.trim());
-    if (validLevels.length < 2) {
-      setError("Please map at least two admin levels to create a hierarchy.");
+    const { valid, error: selError } = validateLevelSelection(adminLevels);
+    if (!valid) {
+      setError(selError);
       return;
     }
     setError(null);
 
-    const sortedLevels = [...validLevels].sort((a, b) => a.level - b.level);
+    const sortedLevels = getSelectedLevels(adminLevels);
     const { boundaries, skipped } = buildOsmBoundaries(sortedLevels, boundaryTenant, OSM_HIERARCHY_TYPE);
 
     if (boundaries.length === 0) {
@@ -612,9 +722,7 @@ out skel qt;`;
   };
 
   const runOsmCreate = async (boundariesToCreate: Boundary[]) => {
-    const validLevels = adminLevels
-      .filter(l => l.mappedName.trim())
-      .sort((a, b) => a.level - b.level);
+    const validLevels = getSelectedLevels(adminLevels);
     const levelNames = validLevels.map(l => l.mappedName.trim());
 
     setLoading(true);
@@ -1278,60 +1386,89 @@ out skel qt;`;
       )}
 
       {/* OSM: map admin levels to hierarchy names */}
-      {step === 'map-levels' && (
+      {step === 'map-levels' && (() => {
+        const levelSel = validateLevelSelection(adminLevels);
+        return (
         <DigitCard>
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <Header>Map Admin Levels</Header>
             <SubHeader>
               We found {adminLevels.length} levels of administrative boundaries for {searchTerm}.
-              Please provide a local name for each level (e.g., "Province", "District", "City", "Neighborhood").
+              Tick the levels to include and name each — the selection must be a
+              contiguous range (you can drop the outer levels, but not skip one in the middle).
             </SubHeader>
 
             <div className="space-y-4 pt-4">
               {adminLevels.map((lvl, index) => (
-                <div key={lvl.level} className="border p-6 rounded-lg bg-card/50 space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-medium text-lg flex items-center">
-                        OSM Admin Level {lvl.level}
-                        <Badge variant="outline" className="ml-2 bg-background">
-                          {lvl.features.length} regions
-                        </Badge>
-                      </h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Examples: {lvl.examples.join(', ')}{lvl.examples.length < lvl.features.length ? ', etc.' : ''}
-                      </p>
-                    </div>
+                <div
+                  key={lvl.level}
+                  className={`border p-6 rounded-lg space-y-4 transition-colors ${lvl.selected ? 'bg-card/50' : 'bg-muted/30 opacity-60'}`}
+                >
+                  <div className="flex justify-between items-start gap-3">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-1.5 h-4 w-4 accent-primary cursor-pointer"
+                        checked={lvl.selected}
+                        disabled={loading}
+                        onChange={(e) => {
+                          const newLevels = [...adminLevels];
+                          newLevels[index] = { ...newLevels[index], selected: e.target.checked };
+                          setAdminLevels(newLevels);
+                        }}
+                      />
+                      <span>
+                        <h3 className="font-medium text-lg flex items-center">
+                          OSM Admin Level {lvl.level}
+                          <Badge variant="outline" className="ml-2 bg-background">
+                            {lvl.features.length} regions
+                          </Badge>
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Examples: {lvl.examples.join(', ')}{lvl.examples.length < lvl.features.length ? ', etc.' : ''}
+                        </p>
+                      </span>
+                    </label>
                   </div>
 
-                  <div className="pt-2">
-                    <label className="text-sm font-medium mb-1.5 block">Hierarchy Name</label>
-                    <Input
-                      placeholder="e.g., District"
-                      value={lvl.mappedName}
-                      onChange={(e) => {
-                        const newLevels = [...adminLevels];
-                        newLevels[index].mappedName = e.target.value;
-                        setAdminLevels(newLevels);
-                      }}
-                      disabled={loading}
-                    />
-                  </div>
+                  {lvl.selected && (
+                    <div className="pt-2">
+                      <label className="text-sm font-medium mb-1.5 block">Hierarchy Name</label>
+                      <Input
+                        placeholder="e.g., District"
+                        value={lvl.mappedName}
+                        onChange={(e) => {
+                          const newLevels = [...adminLevels];
+                          newLevels[index] = { ...newLevels[index], mappedName: e.target.value };
+                          setAdminLevels(newLevels);
+                        }}
+                        disabled={loading}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+
+            {!levelSel.valid && levelSel.error && (
+              <Alert variant="warning">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{levelSel.error}</AlertDescription>
+              </Alert>
+            )}
 
             <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
               <Button variant="ghost" size="sm" onClick={() => setStep('osm-search')} className="text-muted-foreground hover:text-primary">← Back</Button>
               <SubmitBar
                 label={loading ? "Creating..." : "Create Hierarchy & Boundaries"}
                 onSubmit={handlePrepareOsmCreate}
-                disabled={loading || adminLevels.filter(l => l.mappedName.trim()).length < 2}
+                disabled={loading || !levelSel.valid}
               />
             </div>
           </div>
         </DigitCard>
-      )}
+        );
+      })()}
 
       {/* OSM: review skipped features before create */}
       {step === 'osm-review' && (

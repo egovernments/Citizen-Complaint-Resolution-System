@@ -3,6 +3,7 @@ import { ApiCacheService } from "../atoms/ApiCacheService";
 import Urls from "../atoms/urls";
 import { Request, ServiceRequest } from "../atoms/Utils/Request";
 import { PersistantStorage } from "../atoms/Utils/Storage";
+import idbCache from "../atoms/Utils/idbCache";
 
 // export const stringReplaceAll = (str = "", searcher = "", replaceWith = "") => {
 //   if (searcher == "") return str;
@@ -150,6 +151,11 @@ const getBillsGenieKey = (tenantId, moduleCode) => ({
 });
 
 const getModuleServiceDefsCriteria = (tenantId, moduleCode) => ({
+  // Adapter: the legacy RAINMAKER-PGR.ServiceDefs master is gone. Service
+  // definitions now derive from the single RAINMAKER-PGR.ComplaintHierarchy
+  // adjacency list (interior nodes + leaf complaint types). We fetch the whole
+  // tree and map LEAF rows into the legacy ServiceDefs shape (see
+  // GetServiceDefs) so every downstream consumer keeps working unchanged.
   type: "serviceDefs",
   details: {
     tenantId: tenantId,
@@ -158,7 +164,7 @@ const getModuleServiceDefsCriteria = (tenantId, moduleCode) => ({
         moduleName: `RAINMAKER-${moduleCode}`,
         masterDetails: [
           {
-            name: "ServiceDefs",
+            name: "ComplaintHierarchy",
           },
         ],
       },
@@ -984,7 +990,53 @@ const GetEgovLocations = (MdmsRes) => {
   }));
 };
 
-const GetServiceDefs = (MdmsRes, moduleCode) => MdmsRes[`RAINMAKER-${moduleCode}`].ServiceDefs.filter((def) => def.active);
+// Heuristic: a ComplaintHierarchy row is a LEAF complaint type (vs an interior
+// classification node) iff it carries a `department` or `slaHours` — interior
+// nodes omit both. A leaf row's `code` IS the serviceCode stored on a complaint.
+const isComplaintHierarchyLeaf = (row) =>
+  row != null && (row.department != null || row.slaHours != null);
+
+// Map ComplaintHierarchy leaf rows onto the legacy ServiceDefs shape so all
+// downstream code (hooks, pickers, inbox, details pages) keeps working without
+// touching field names. `menuPath` is no longer a master field — it is derived
+// as the leaf's parentCode, and `menuPathName` as that parent node's `name`.
+const mapComplaintHierarchyToServiceDefs = (rows = []) => {
+  const all = Array.isArray(rows) ? rows : [];
+  const nameByCode = {};
+  all.forEach((n) => {
+    if (n?.code != null) nameByCode[n.code] = n.name;
+  });
+  // Cache the FULL node code→name map (interior + leaf) so read sites can label
+  // a complaint by its node NAME directly — no SERVICEDEFS localization key —
+  // including complaints filed against an interior node (a no-leaf branch).
+  try {
+    if (typeof Digit !== "undefined" && Digit.SessionStorage) {
+      Digit.SessionStorage.set("complaintHierarchyNameByCode", nameByCode);
+    }
+  } catch (e) {
+    /* non-fatal: read sites fall back to def.name / raw code */
+  }
+  return all
+    .filter((row) => isComplaintHierarchyLeaf(row) && row.active !== false)
+    .map((row) => ({
+      serviceCode: row.code,
+      name: row.name,
+      department: row.department,
+      departments: row.departments,
+      slaHours: row.slaHours,
+      keywords: row.keywords,
+      order: row.order,
+      active: row.active,
+      parentCode: row.parentCode,
+      // Preserve the legacy grouping/label contract: group key = parentCode,
+      // group label = parent node's name.
+      menuPath: row.parentCode,
+      menuPathName: row.parentCode != null ? nameByCode[row.parentCode] : undefined,
+    }));
+};
+
+const GetServiceDefs = (MdmsRes, moduleCode) =>
+  mapComplaintHierarchyToServiceDefs(MdmsRes[`RAINMAKER-${moduleCode}`]?.ComplaintHierarchy);
 
 const GetSanitationType = (MdmsRes) => MdmsRes["FSM"].SanitationType.filter((type) => type.active);
 
@@ -1496,14 +1548,17 @@ export const MdmsService = {
   },
   getDataByCriteria: async (tenantId, mdmsDetails, moduleCode) => {
     const key = `MDMS.${tenantId}.${moduleCode}.${mdmsDetails.type}.${JSON.stringify(mdmsDetails.details)}`;
-    const inStoreValue = PersistantStorage.get(key);
+    // Large MDMS payloads (incl. the multi-MB ComplaintHierarchy tree) cache in
+    // IndexedDB, not localStorage — this method is already async + every caller
+    // awaits it, so no sync-read path is affected. Fixes the QuotaExceededError.
+    const inStoreValue = await idbCache.get(key);
     if (inStoreValue) {
       return inStoreValue;
     }
     const { MdmsRes } = await MdmsService.call(tenantId, mdmsDetails.details);
     const responseValue = transformResponse(mdmsDetails.type, MdmsRes, moduleCode.toUpperCase(), tenantId);
     const cacheSetting = getCacheSetting(mdmsDetails.details.moduleDetails[0].moduleName);
-    PersistantStorage.set(key, responseValue, Digit.Utils.getMultiRootTenant() ? 0 : cacheSetting.cacheTimeInSecs);
+    await idbCache.set(key, responseValue, Digit.Utils.getMultiRootTenant() ? 0 : cacheSetting.cacheTimeInSecs);
     return responseValue;
   },
   getServiceDefs: (tenantId, moduleCode) => {

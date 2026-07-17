@@ -10,6 +10,8 @@ import org.egov.pgr.repository.PGRRepository;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.PGRUtils;
 import org.egov.pgr.validator.ServiceRequestValidator;
+import org.egov.pgr.web.models.ComplaintTemplateTypeConfig;
+import org.egov.pgr.web.models.ExtendedAttributes;
 import org.egov.pgr.web.models.Service;
 import org.egov.pgr.web.models.ServiceWrapper;
 import org.egov.pgr.web.models.RequestSearchCriteria;
@@ -23,6 +25,10 @@ import java.util.*;
 import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_SEARCH;
 import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_NAME_SEARCH;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICENAME_SEARCH;
+import static org.egov.pgr.util.PGRConstants.ROLE_CONFIDENTIAL_VIEWER;
+import static org.egov.pgr.util.PGRConstants.MASK_SENTINEL;
+
+import java.util.stream.Collectors;
 
 @Slf4j
 @org.springframework.stereotype.Service
@@ -49,15 +55,20 @@ public class PGRService {
     private MDMSUtils mdmsUtils;
 
     private ComplaintDomainEventService complaintDomainEventService;
-    
+
     private PGRUtils pgrUtils;
 
+    private ExtendedAttributesValidationService extendedAttributesValidationService;
+
+    private EncryptionDecryptionService encryptionDecryptionService;
 
     @Autowired
     public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
                       ServiceRequestValidator serviceRequestValidator, ServiceRequestValidator validator, Producer producer,
                       PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils,
-                      ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils) {
+                      ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils,
+                      ExtendedAttributesValidationService extendedAttributesValidationService,
+                      EncryptionDecryptionService encryptionDecryptionService) {
         this.enrichmentService = enrichmentService;
         this.userService = userService;
         this.workflowService = workflowService;
@@ -69,6 +80,8 @@ public class PGRService {
         this.mdmsUtils = mdmsUtils;
         this.complaintDomainEventService = complaintDomainEventService;
         this.pgrUtils = pgrUtils;
+        this.extendedAttributesValidationService = extendedAttributesValidationService;
+        this.encryptionDecryptionService = encryptionDecryptionService;
     }
 
 
@@ -93,10 +106,33 @@ public class PGRService {
 		backend.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
 		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
 		service.setAdditionalDetail(merged);
+
+		// Extended attributes: validate → encrypt → sync contact details to User Service
+		ExtendedAttributes ext = service.getExtendedAttributes();
+		ComplaintTemplateTypeConfig cfg = null;
+		ExtendedAttributes plainExt = null;
+		if (ext != null) {
+			if (ext.getIsConfidential() == null) ext.setIsConfidential(false);
+			cfg = mdmsUtils.fetchComplaintTemplateTypeConfig(
+					request.getRequestInfo(), tenantId, ext.getCaseRelatedTo());
+			if (cfg == null)
+				throw new CustomException("INVALID_CASE_RELATED_TO",
+						"No MDMS config found for caseRelatedTo: " + ext.getCaseRelatedTo());
+			extendedAttributesValidationService.validate(ext, cfg, service);
+			plainExt = ext.copy(); // snapshot before encrypt — avoids decrypt round-trip for response
+			service.setExtendedAttributes(
+					encryptionDecryptionService.encrypt(ext, cfg, tenantId));
+			enrichmentService.enrichUserContactDetails(request);
+		}
+
 		complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
 
 		producer.push(tenantId, config.getCreateTopic(), request);
 		producer.push(tenantId, config.getInboxCreateTopic(), request);
+
+		if (plainExt != null)
+			service.setExtendedAttributes(plainExt);
+
 		return request;
 	}
 
@@ -118,6 +154,16 @@ public class PGRService {
         if(criteria.getMobileNumber()!=null && CollectionUtils.isEmpty(criteria.getUserIds()))
             return new ArrayList<>();
 
+        if (criteria.getAssignee() != null) {
+            String tenantId = criteria.getTenantId() != null ? criteria.getTenantId()
+                    : (requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getTenantId() : null);
+            Set<String> serviceRequestIds = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
+            if (serviceRequestIds.isEmpty()) {
+                return new ArrayList<>();
+            }
+            criteria.setServiceRequestIds(serviceRequestIds);
+        }
+
         criteria.setIsPlainSearch(false);
 
         List<ServiceWrapper> serviceWrappers = repository.getServiceWrappers(criteria);
@@ -125,23 +171,26 @@ public class PGRService {
         if(CollectionUtils.isEmpty(serviceWrappers))
             return new ArrayList<>();;
 
-        userService.enrichUsers(serviceWrappers);
+        userService.enrichUsers(serviceWrappers, requestInfo);
         List<ServiceWrapper> enrichedServiceWrappers = workflowService.enrichWorkflow(requestInfo,serviceWrappers);
-        Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
-        for(ServiceWrapper svc : enrichedServiceWrappers){
-            if(sortedWrappers.containsKey(svc.getService().getAuditDetails().getCreatedTime())){
-                sortedWrappers.get(svc.getService().getAuditDetails().getCreatedTime()).add(svc);
-            }else{
-                List<ServiceWrapper> serviceWrapperList = new ArrayList<>();
-                serviceWrapperList.add(svc);
-                sortedWrappers.put(svc.getService().getAuditDetails().getCreatedTime(), serviceWrapperList);
-            }
-        }
-        List<ServiceWrapper> sortedServiceWrappers = new ArrayList<>();
-        for(Long createdTimeDesc : sortedWrappers.keySet()){
-            sortedServiceWrappers.addAll(sortedWrappers.get(createdTimeDesc));
-        }
-        return sortedServiceWrappers;
+
+        String tenantIdForMdms = criteria.getTenantId() != null ? criteria.getTenantId()
+                : (requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getTenantId() : null);
+        Map<String, ComplaintTemplateTypeConfig> configCache = buildConfigCache(requestInfo, tenantIdForMdms, enrichedServiceWrappers);
+        applyDecryptOrMask(enrichedServiceWrappers, requestInfo, configCache);
+
+        // NOTE: do not re-sort enrichedServiceWrappers here. It used to be
+        // regrouped into a createdTime-descending TreeMap unconditionally,
+        // which silently discarded whatever ORDER BY
+        // PGRQueryBuilder.addOrderByClause built from criteria.sortBy/sortOrder
+        // (locality/applicationStatus/serviceRequestId/sla) — every inbox
+        // column-header sort landed on this endpoint and always came back in
+        // createdTime-descending order regardless of what was requested
+        // (issue #922). The query builder already defaults to
+        // "ORDER BY ser_createdtime DESC" when no sortBy is given, so trusting
+        // the DB's order here preserves that default while finally letting an
+        // explicit sortBy take effect.
+        return enrichedServiceWrappers;
     }
 
 
@@ -161,14 +210,44 @@ public class PGRService {
         Service updateService = request.getService();
 		Map<String, Object> existing = pgrUtils.extractAdditionalDetails(updateService.getAdditionalDetail());
 		Map<String, Object> backend = new HashMap<>();
-		backend.put("department", getDepartmentFromMDMS(request, mdmsData));
+		Object clientDept = existing.get("department");
+        if (clientDept == null || (clientDept instanceof String s && (s.isBlank() || s.equalsIgnoreCase("NA")))) {
+            backend.put("department", getDepartmentFromMDMS(request, mdmsData));
+        }
 		backend.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
 		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
 		updateService.setAdditionalDetail(merged);
 
+		// Extended attributes: validate → re-encrypt → sync contact details to User Service
+		ExtendedAttributes updatedExt = updateService.getExtendedAttributes();
+		ComplaintTemplateTypeConfig cfg = null;
+		ExtendedAttributes plainExt = null;
+		if (updatedExt != null) {
+			if (updatedExt.getIsConfidential() == null) updatedExt.setIsConfidential(false);
+			cfg = mdmsUtils.fetchComplaintTemplateTypeConfig(
+					request.getRequestInfo(), tenantId, updatedExt.getCaseRelatedTo());
+			if (cfg == null)
+				throw new CustomException("INVALID_CASE_RELATED_TO",
+						"No MDMS config found for caseRelatedTo: " + updatedExt.getCaseRelatedTo());
+			restoreMaskedPlaceholders(updatedExt, updateService.getId(), tenantId, cfg);
+			extendedAttributesValidationService.validate(updatedExt, cfg, updateService);
+			plainExt = updatedExt.copy(); // snapshot before encrypt — avoids decrypt round-trip for response
+			// A restored value may be real confidential data the caller isn't cleared to see —
+			// persist it correctly either way, but don't leak it back in this response.
+			if (updatedExt.getIsConfidentialSafe() && !isAuthorizedForConfidential(request.getRequestInfo(), updateService, cfg))
+				encryptionDecryptionService.maskAll(plainExt);
+			updateService.setExtendedAttributes(
+					encryptionDecryptionService.encrypt(updatedExt, cfg, tenantId));
+			enrichmentService.enrichUserContactDetails(request);
+		}
+
         complaintDomainEventService.publishWorkflowTransitionEvent(request, fromState);
-        producer.push(tenantId,config.getUpdateTopic(),request);
-        producer.push(tenantId,config.getInboxUpdateTopic(),request);
+        producer.push(tenantId, config.getUpdateTopic(), request);
+        producer.push(tenantId, config.getInboxUpdateTopic(), request);
+
+		if (plainExt != null)
+			updateService.setExtendedAttributes(plainExt);
+
         return request;
     }
 
@@ -179,6 +258,19 @@ public class PGRService {
      * @return
      */
     public Integer count(RequestInfo requestInfo, RequestSearchCriteria criteria){
+        // Mirror search()'s assignee handling: resolve the assignee to
+        // serviceRequestIds via workflow before counting. Without this the
+        // assignee param was silently ignored on _count, so count and search
+        // disagreed for assignee-scoped queries (e.g. the My-tab badge).
+        if (criteria.getAssignee() != null) {
+            String tenantId = criteria.getTenantId() != null ? criteria.getTenantId()
+                    : (requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getTenantId() : null);
+            Set<String> serviceRequestIds = workflowService.getServiceRequestIdsByAssignee(requestInfo, tenantId, criteria.getAssignee());
+            if (CollectionUtils.isEmpty(serviceRequestIds)) {
+                return 0;
+            }
+            criteria.setServiceRequestIds(serviceRequestIds);
+        }
         criteria.setIsPlainSearch(false);
         Integer count = repository.getCount(criteria);
         return count;
@@ -205,8 +297,13 @@ public class PGRService {
             return new ArrayList<>();
         }
 
-        userService.enrichUsers(serviceWrappers);
+        userService.enrichUsers(serviceWrappers, requestInfo);
         List<ServiceWrapper> enrichedServiceWrappers = workflowService.enrichWorkflow(requestInfo, serviceWrappers);
+
+        String tenantIdForMdms = criteria.getTenantId() != null ? criteria.getTenantId()
+                : (requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getTenantId() : null);
+        Map<String, ComplaintTemplateTypeConfig> configCache = buildConfigCache(requestInfo, tenantIdForMdms, enrichedServiceWrappers);
+        applyDecryptOrMask(enrichedServiceWrappers, requestInfo, configCache);
 
         Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
         for(ServiceWrapper svc : enrichedServiceWrappers){
@@ -238,6 +335,107 @@ public class PGRService {
 		
 		return Integer.valueOf(config.getComplaintTypes());
 	}
+
+    private boolean hasAnyRole(RequestInfo requestInfo, List<String> roleCodes) {
+        if (requestInfo == null || requestInfo.getUserInfo() == null
+                || requestInfo.getUserInfo().getRoles() == null) return false;
+        return requestInfo.getUserInfo().getRoles().stream()
+                .anyMatch(r -> roleCodes.contains(r.getCode()));
+    }
+
+    /** Fetches ComplaintTemplateTypeConfig per distinct caseRelatedTo in the result set. */
+    private Map<String, ComplaintTemplateTypeConfig> buildConfigCache(
+            RequestInfo requestInfo, String tenantId, List<ServiceWrapper> wrappers) {
+        if (tenantId == null) return Collections.emptyMap();
+        Set<String> categoryTypes = wrappers.stream()
+                .map(w -> w.getService().getExtendedAttributes())
+                .filter(Objects::nonNull)
+                .map(ExtendedAttributes::getCaseRelatedTo)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, ComplaintTemplateTypeConfig> cache = new HashMap<>();
+        for (String cat : categoryTypes) {
+            ComplaintTemplateTypeConfig cfg = mdmsUtils.fetchComplaintTemplateTypeConfig(requestInfo, tenantId, cat);
+            if (cfg != null) cache.put(cat, cfg);
+        }
+        return cache;
+    }
+
+    /**
+     * Clients that fetched a complaint while it was masked (e.g. a transient MDMS lookup
+     * failure, or the citizen UI caching a stale view) may echo the "****" sentinel back
+     * on a later update — the citizen RATE flow resubmits the whole cached service object.
+     * Restore the currently-stored value for any field the client sends back as the
+     * sentinel, so a masked placeholder never permanently overwrites real data.
+     */
+    private void restoreMaskedPlaceholders(ExtendedAttributes updatedExt, String serviceId, String tenantId,
+                                            ComplaintTemplateTypeConfig cfg) {
+        boolean hasMasked = updatedExt.getDynamicFields().values().stream().anyMatch(MASK_SENTINEL::equals);
+        if (!hasMasked) return;
+
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder()
+                .ids(Collections.singleton(serviceId)).tenantId(tenantId).build();
+        criteria.setIsPlainSearch(false);
+        List<ServiceWrapper> existing = repository.getServiceWrappers(criteria);
+        if (CollectionUtils.isEmpty(existing)) return;
+
+        ExtendedAttributes existingExt = existing.get(0).getService().getExtendedAttributes();
+        if (existingExt == null) return;
+
+        // existingExt's x-security fields are ciphertext at rest — decrypt before copying
+        // back, otherwise validation runs on ciphertext and encrypt() double-encrypts it.
+        encryptionDecryptionService.decrypt(existingExt, cfg);
+
+        for (String key : new ArrayList<>(updatedExt.getDynamicFields().keySet())) {
+            if (!MASK_SENTINEL.equals(updatedExt.getField(key))) continue;
+            Object existingValue = existingExt.getField(key);
+            if (existingValue == null) {
+                updatedExt.removeField(key);
+            } else if (MASK_SENTINEL.equals(existingValue)) {
+                // decrypt() falls back to the sentinel on failure (e.g. enc-service down) —
+                // treating that as a real value would persist "****" as if it were genuine,
+                // the exact corruption this method exists to prevent. Fail closed instead.
+                throw new CustomException("MASK_RESTORE_FAILED",
+                        "Could not recover the original value for field '" + key
+                                + "'; rejecting update to avoid persisting a placeholder.");
+            } else {
+                updatedExt.putField(key, existingValue);
+            }
+        }
+    }
+
+    /**
+     * Decrypts or masks extendedAttributes for each wrapper.
+     * All-or-nothing: confidential + no viewer role → maskAll. Creator always decrypts.
+     * If MDMS config is gone for a confidential complaint, mask to avoid leaking ciphertext.
+     */
+    private void applyDecryptOrMask(List<ServiceWrapper> wrappers, RequestInfo requestInfo,
+                                     Map<String, ComplaintTemplateTypeConfig> configCache) {
+        for (ServiceWrapper wrapper : wrappers) {
+            Service svc = wrapper.getService();
+            if (svc.getExtendedAttributes() == null) continue;
+            ComplaintTemplateTypeConfig cfg = configCache.get(svc.getExtendedAttributes().getCaseRelatedTo());
+            if (cfg == null) {
+                if (svc.getExtendedAttributes().getIsConfidentialSafe())
+                    encryptionDecryptionService.maskAll(svc.getExtendedAttributes());
+                continue;
+            }
+            if (svc.getExtendedAttributes().getIsConfidentialSafe() && !isAuthorizedForConfidential(requestInfo, svc, cfg)) {
+                encryptionDecryptionService.maskAll(svc.getExtendedAttributes());
+            } else {
+                encryptionDecryptionService.decrypt(svc.getExtendedAttributes(), cfg);
+            }
+        }
+    }
+
+    /** Creator always qualifies; otherwise the caller needs one of cfg's allowed viewer roles. */
+    private boolean isAuthorizedForConfidential(RequestInfo requestInfo, Service svc, ComplaintTemplateTypeConfig cfg) {
+        String callerUuid = requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getUuid() : null;
+        if (callerUuid != null && callerUuid.equals(svc.getAccountId())) return true;
+        List<String> viewerRoles = !CollectionUtils.isEmpty(cfg.getAllowedViewerRoles())
+                ? cfg.getAllowedViewerRoles() : List.of(ROLE_CONFIDENTIAL_VIEWER);
+        return hasAnyRole(requestInfo, viewerRoles);
+    }
 
     private String getDepartmentFromMDMS(ServiceRequest request, Object mdmsData) {
 

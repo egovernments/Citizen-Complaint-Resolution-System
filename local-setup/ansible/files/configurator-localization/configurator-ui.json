@@ -1,0 +1,4922 @@
+[
+  {
+    "code": "app.nav.dashboard",
+    "message": "Dashboard",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.tenant_management",
+    "message": "Tenant Management",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.tenants",
+    "message": "Tenants",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.departments",
+    "message": "Departments",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.designations",
+    "message": "Designations",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.hierarchies",
+    "message": "Hierarchies",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.complaint_management",
+    "message": "Complaint Management",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.complaint_hierarchies",
+    "message": "Complaint Hierarchies",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.complaint_types",
+    "message": "Complaint Types",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.complaints",
+    "message": "Complaints",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.localization",
+    "message": "Localization",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.people",
+    "message": "People",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.employees",
+    "message": "Employees",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.users",
+    "message": "Users",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.system",
+    "message": "System",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.access_roles",
+    "message": "Access Roles",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.workflows",
+    "message": "Workflows",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.processes",
+    "message": "Processes",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.mdms_schemas",
+    "message": "MDMS Schemas",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.boundaries",
+    "message": "Boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.advanced",
+    "message": "Advanced",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.switch_to_onboarding",
+    "message": "Switch to Onboarding",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.header.management_mode",
+    "message": "Management Mode",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.header.title",
+    "message": "DIGIT Management Studio",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.complaint_types",
+    "message": "Complaint Types",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.departments",
+    "message": "Departments",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.designations",
+    "message": "Designations",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.tenants",
+    "message": "Tenants",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.employees",
+    "message": "Employees",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.users",
+    "message": "Users",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.complaints",
+    "message": "Complaints",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.boundaries",
+    "message": "Boundaries",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.localization",
+    "message": "Localization Messages",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.access_roles",
+    "message": "Access Roles",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.access_actions",
+    "message": "Access Actions",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.role_actions",
+    "message": "Role Actions",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.workflow_services",
+    "message": "Business Services",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.workflow_processes",
+    "message": "Workflow Processes",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.mdms_schemas",
+    "message": "MDMS Schemas",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.boundary_hierarchies",
+    "message": "Boundary Hierarchies",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.code",
+    "message": "Code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.name",
+    "message": "Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.description",
+    "message": "Description",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.status",
+    "message": "Status",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.active",
+    "message": "Active",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.service_code",
+    "message": "Service Code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.department",
+    "message": "Department",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.sla_hours",
+    "message": "SLA (hrs)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.menu_path",
+    "message": "Complaint Type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.parent",
+    "message": "Parent",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.city",
+    "message": "City",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.district",
+    "message": "District",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.mobile",
+    "message": "Mobile",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.designation",
+    "message": "Designation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.username",
+    "message": "Username",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.type",
+    "message": "Type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.roles",
+    "message": "Roles",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.boundary_type",
+    "message": "Boundary Type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.tenant",
+    "message": "Tenant",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.message",
+    "message": "Message",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.module",
+    "message": "Module",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.locale",
+    "message": "Locale",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.url",
+    "message": "URL",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.service",
+    "message": "Service",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.enabled",
+    "message": "Enabled",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.role_code",
+    "message": "Role Code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.action_id",
+    "message": "Action ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.action_code",
+    "message": "Action Code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.business_service",
+    "message": "Business Service",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.business",
+    "message": "Business",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.sla",
+    "message": "SLA",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.business_id",
+    "message": "Business ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.action",
+    "message": "Action",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.state",
+    "message": "State",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.created",
+    "message": "Created",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.hierarchy_type",
+    "message": "Hierarchy Type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.request_id",
+    "message": "Request ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.citizen",
+    "message": "Citizen",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.locality",
+    "message": "Locality",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.refresh",
+    "message": "Refresh",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.create",
+    "message": "Create",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.search",
+    "message": "Search...",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.loading",
+    "message": "Loading...",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.error_loading",
+    "message": "Error loading data",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.error_unexpected",
+    "message": "An unexpected error occurred",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.try_again",
+    "message": "Try again",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.no_records",
+    "message": "No records found",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.adjust_search",
+    "message": "Try adjusting your search query",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.showing",
+    "message": "Showing %{start}-%{end} of %{total}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.previous",
+    "message": "Previous",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.next",
+    "message": "Next",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.page_info",
+    "message": "Page %{page} of %{totalPages}",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.actions",
+    "message": "Actions",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.columns",
+    "message": "Columns",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.show_columns",
+    "message": "Show columns",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.reset",
+    "message": "Reset",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.list.rows_per_page",
+    "message": "Rows per page:",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.complaint_hierarchy",
+    "message": "Complaint Types",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.workflow_business_services",
+    "message": "Workflow Business Services",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.complaint_hierarchies",
+    "message": "Complaint Hierarchies",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.state_info",
+    "message": "State Info",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.city_modules",
+    "message": "City Modules",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.id_formats",
+    "message": "ID Formats",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.workflow_config",
+    "message": "Workflow Config",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.auto_escalation",
+    "message": "Auto Escalation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.sla_config",
+    "message": "SLA Config",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.roles",
+    "message": "Roles",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.action_mappings",
+    "message": "Action Mappings",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.encryption_policy",
+    "message": "Encryption Policy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.decryption_abac",
+    "message": "Decryption ABAC",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.masking_patterns",
+    "message": "Masking Patterns",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.security_policy",
+    "message": "Security Policy",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.inbox_config",
+    "message": "Inbox Config",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.deactivation_reasons",
+    "message": "Deactivation Reasons",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.degrees",
+    "message": "Degrees",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.employment_tests",
+    "message": "Employment Tests",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.specializations",
+    "message": "Specializations",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.gender_types",
+    "message": "Gender Types",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.employee_status",
+    "message": "Employee Status",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.employee_type",
+    "message": "Employee Type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.cron_jobs",
+    "message": "Cron Jobs",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.ui_homepage",
+    "message": "UI Homepage",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.theme_config",
+    "message": "Theme Config",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.user_validation",
+    "message": "User Field Validation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.mobile_validation",
+    "message": "Mobile Number Validation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.tenant_boundary",
+    "message": "Tenant Boundary (HRMS)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.auto_escalation_ignore",
+    "message": "Auto-Escalation Ignored",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.workflow_bs_master",
+    "message": "Workflow BS Master",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.pgr_ui_constants",
+    "message": "PGR UI Constants",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.header.brand",
+    "message": "Complaints Management",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.pgr_dashboard",
+    "message": "PGR Dashboard",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.notifications",
+    "message": "Notifications",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.dashboard.date.all",
+    "message": "All Time",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.dashboard.date.today",
+    "message": "Today",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.dashboard.date.yesterday",
+    "message": "Yesterday",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.dashboard.date.week",
+    "message": "This Week",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.dashboard.date.month",
+    "message": "This Month",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.notification_routing",
+    "message": "Notification Routing",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.notification_templates",
+    "message": "Notification Templates",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.notification_routing",
+    "message": "PGR Notification Routing",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.resources.notification_template",
+    "message": "PGR Notification Templates",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.from_state",
+    "message": "From State",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.to_state",
+    "message": "To State",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.audience",
+    "message": "Audience",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.channel",
+    "message": "Channel",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.dashboard.date.3months",
+    "message": "3 Months",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.tenant_id",
+    "message": "Tenant ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.path",
+    "message": "Path",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.order",
+    "message": "Order",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.keywords",
+    "message": "Keywords",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.level_code",
+    "message": "Level Code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.parent_code",
+    "message": "Parent Code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.logo_url",
+    "message": "Logo URL",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.banner_url",
+    "message": "Banner URL",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.qr_code_url",
+    "message": "QR Code URL",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.statelogo",
+    "message": "State Logo",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.logo_url_white",
+    "message": "Logo URL (White)",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.enable_whats_app",
+    "message": "Enable WhatsApp",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.has_localisation",
+    "message": "Has Localisation",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.format",
+    "message": "Format",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.idname",
+    "message": "ID Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.uuid",
+    "message": "UUID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.get_uri",
+    "message": "GET URI",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.post_uri",
+    "message": "POST URI",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.is_state_level",
+    "message": "Is State Level",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.topic",
+    "message": "Topic",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.state_sla",
+    "message": "State SLA",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.business_sla",
+    "message": "Business SLA",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.slot_percentage",
+    "message": "Slot Percentage",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.middle_slab_color",
+    "message": "Middle Slab Color",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.negative_slab_color",
+    "message": "Negative Slab Color",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.positive_slab_color",
+    "message": "Positive Slab Color",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.actionid",
+    "message": "Action ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.rolecode",
+    "message": "Role Code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.actioncode",
+    "message": "Action Code",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.id",
+    "message": "ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.left_icon",
+    "message": "Left Icon",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.right_icon",
+    "message": "Right Icon",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.display_name",
+    "message": "Display Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.order_number",
+    "message": "Order Number",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.parent_module",
+    "message": "Parent Module",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.navigation_url",
+    "message": "Navigation URL",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.key",
+    "message": "Key",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.pattern",
+    "message": "Pattern",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.pattern_id",
+    "message": "Pattern ID",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.model",
+    "message": "Model",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.index",
+    "message": "Index",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.method",
+    "message": "Method",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.job_name",
+    "message": "Job Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.redirect_url",
+    "message": "Redirect URL",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.version",
+    "message": "Version",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.default",
+    "message": "Default",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.is_active",
+    "message": "Is Active",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.field_type",
+    "message": "Field Type",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.validation_name",
+    "message": "Validation Name",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.is_statelevel",
+    "message": "Is State Level",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.reopensla",
+    "message": "Reopen SLA",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.body",
+    "message": "Body",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.subject",
+    "message": "Subject",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.nav.dashboard",
+    "message": "डैशबोर्ड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.tenant_management",
+    "message": "टेनेंट प्रबंधन",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.tenants",
+    "message": "टेनेंट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.departments",
+    "message": "विभाग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.designations",
+    "message": "पदनाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.hierarchies",
+    "message": "पदानुक्रम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.complaint_management",
+    "message": "शिकायत प्रबंधन",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.complaint_hierarchies",
+    "message": "शिकायत पदानुक्रम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.complaint_types",
+    "message": "शिकायत प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.complaints",
+    "message": "शिकायतें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.localization",
+    "message": "स्थानीयकरण",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.people",
+    "message": "लोग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.employees",
+    "message": "कर्मचारी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.users",
+    "message": "उपयोगकर्ता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.system",
+    "message": "सिस्टम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.access_roles",
+    "message": "एक्सेस भूमिकाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.workflows",
+    "message": "वर्कफ़्लो",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.processes",
+    "message": "प्रक्रियाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.mdms_schemas",
+    "message": "MDMS स्कीमा",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.boundaries",
+    "message": "सीमाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.advanced",
+    "message": "उन्नत",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.switch_to_onboarding",
+    "message": "ऑनबोर्डिंग पर जाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.header.management_mode",
+    "message": "प्रबंधन मोड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.header.title",
+    "message": "DIGIT Management Studio",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.complaint_types",
+    "message": "शिकायत प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.departments",
+    "message": "विभाग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.designations",
+    "message": "पदनाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.tenants",
+    "message": "टेनेंट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.employees",
+    "message": "कर्मचारी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.users",
+    "message": "उपयोगकर्ता",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.complaints",
+    "message": "शिकायतें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.boundaries",
+    "message": "सीमाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.localization",
+    "message": "स्थानीयकरण संदेश",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.access_roles",
+    "message": "एक्सेस भूमिकाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.access_actions",
+    "message": "एक्सेस क्रियाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.role_actions",
+    "message": "भूमिका क्रियाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.workflow_services",
+    "message": "व्यापार सेवाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.workflow_processes",
+    "message": "वर्कफ़्लो प्रक्रियाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.mdms_schemas",
+    "message": "MDMS स्कीमा",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.boundary_hierarchies",
+    "message": "सीमा पदानुक्रम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.code",
+    "message": "कोड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.name",
+    "message": "नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.description",
+    "message": "विवरण",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.status",
+    "message": "स्थिति",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.active",
+    "message": "सक्रिय",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.service_code",
+    "message": "सेवा कोड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.department",
+    "message": "विभाग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.sla_hours",
+    "message": "SLA (घंटे)",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.menu_path",
+    "message": "शिकायत प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.parent",
+    "message": "मूल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.city",
+    "message": "शहर",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.district",
+    "message": "जिला",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.mobile",
+    "message": "मोबाइल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.designation",
+    "message": "पदनाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.username",
+    "message": "उपयोगकर्ता नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.type",
+    "message": "प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.roles",
+    "message": "भूमिकाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.boundary_type",
+    "message": "सीमा प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.tenant",
+    "message": "टेनेंट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.message",
+    "message": "संदेश",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.module",
+    "message": "मॉड्यूल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.locale",
+    "message": "लोकेल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.url",
+    "message": "URL",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.service",
+    "message": "सेवा",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.enabled",
+    "message": "सक्षम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.role_code",
+    "message": "भूमिका कोड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.action_id",
+    "message": "क्रिया ID",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.action_code",
+    "message": "क्रिया कोड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.business_service",
+    "message": "व्यापार सेवा",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.business",
+    "message": "व्यापार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.sla",
+    "message": "SLA",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.business_id",
+    "message": "व्यापार ID",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.action",
+    "message": "क्रिया",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.state",
+    "message": "राज्य",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.created",
+    "message": "निर्मित",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.hierarchy_type",
+    "message": "पदानुक्रम प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.request_id",
+    "message": "अनुरोध ID",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.citizen",
+    "message": "नागरिक",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.locality",
+    "message": "इलाका",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.refresh",
+    "message": "ताज़ा करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.create",
+    "message": "बनाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.search",
+    "message": "खोजें...",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.loading",
+    "message": "लोड हो रहा है...",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.error_loading",
+    "message": "डेटा लोड करने में त्रुटि",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.error_unexpected",
+    "message": "एक अप्रत्याशित त्रुटि हुई",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.try_again",
+    "message": "पुनः प्रयास करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.no_records",
+    "message": "कोई रिकॉर्ड नहीं मिला",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.adjust_search",
+    "message": "अपनी खोज को समायोजित करने का प्रयास करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.showing",
+    "message": "%{total} में से %{start}-%{end} दिखा रहे हैं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.previous",
+    "message": "पिछला",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.next",
+    "message": "अगला",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.page_info",
+    "message": "%{totalPages} में से पृष्ठ %{page}",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.actions",
+    "message": "क्रियाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.columns",
+    "message": "कॉलम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.show_columns",
+    "message": "कॉलम दिखाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.reset",
+    "message": "रीसेट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.list.rows_per_page",
+    "message": "प्रति पृष्ठ पंक्तियाँ:",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.complaint_hierarchy",
+    "message": "शिकायत प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.workflow_business_services",
+    "message": "वर्कफ़्लो व्यापार सेवाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.complaint_hierarchies",
+    "message": "शिकायत पदानुक्रम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.state_info",
+    "message": "राज्य जानकारी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.city_modules",
+    "message": "शहर मॉड्यूल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.id_formats",
+    "message": "ID प्रारूप",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.workflow_config",
+    "message": "वर्कफ़्लो कॉन्फ़िग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.auto_escalation",
+    "message": "स्वचालित वृद्धि",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.sla_config",
+    "message": "SLA कॉन्फ़िग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.roles",
+    "message": "भूमिकाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.action_mappings",
+    "message": "क्रिया मैपिंग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.encryption_policy",
+    "message": "एन्क्रिप्शन नीति",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.decryption_abac",
+    "message": "डिक्रिप्शन ABAC",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.masking_patterns",
+    "message": "मास्किंग पैटर्न",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.security_policy",
+    "message": "सुरक्षा नीति",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.inbox_config",
+    "message": "इनबॉक्स कॉन्फ़िग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.deactivation_reasons",
+    "message": "निष्क्रियकरण कारण",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.degrees",
+    "message": "डिग्रियां",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.employment_tests",
+    "message": "रोजगार परीक्षण",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.specializations",
+    "message": "विशेषज्ञताएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.gender_types",
+    "message": "लिंग प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.employee_status",
+    "message": "कर्मचारी स्थिति",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.employee_type",
+    "message": "कर्मचारी प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.cron_jobs",
+    "message": "क्रॉन जॉब्स",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.ui_homepage",
+    "message": "UI होमपेज",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.theme_config",
+    "message": "थीम कॉन्फ़िग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.user_validation",
+    "message": "उपयोगकर्ता फ़ील्ड सत्यापन",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.mobile_validation",
+    "message": "मोबाइल नंबर सत्यापन",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.tenant_boundary",
+    "message": "टेनेंट सीमा (HRMS)",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.auto_escalation_ignore",
+    "message": "स्वतः-वृद्धि अनदेखी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.workflow_bs_master",
+    "message": "वर्कफ़्लो BS मास्टर",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.pgr_ui_constants",
+    "message": "PGR UI स्थिरांक",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.header.brand",
+    "message": "शिकायत प्रबंधन",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.pgr_dashboard",
+    "message": "PGR डैशबोर्ड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.notifications",
+    "message": "सूचनाएं",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.dashboard.date.all",
+    "message": "सभी समय",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.dashboard.date.today",
+    "message": "आज",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.dashboard.date.yesterday",
+    "message": "कल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.dashboard.date.week",
+    "message": "इस सप्ताह",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.dashboard.date.month",
+    "message": "इस महीने",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.notification_routing",
+    "message": "अधिसूचना रूटिंग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.notification_templates",
+    "message": "अधिसूचना टेम्पलेट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.notification_routing",
+    "message": "PGR अधिसूचना रूटिंग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.resources.notification_template",
+    "message": "PGR अधिसूचना टेम्पलेट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.from_state",
+    "message": "स्रोत स्थिति",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.to_state",
+    "message": "लक्ष्य स्थिति",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.audience",
+    "message": "दर्शक",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.channel",
+    "message": "चैनल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.dashboard.date.3months",
+    "message": "3 महीने",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.tenant_id",
+    "message": "टेनेंट आईडी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.path",
+    "message": "पथ",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.order",
+    "message": "क्रम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.keywords",
+    "message": "कीवर्ड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.level_code",
+    "message": "स्तर कोड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.parent_code",
+    "message": "मूल कोड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.logo_url",
+    "message": "लोगो URL",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.banner_url",
+    "message": "बैनर URL",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.qr_code_url",
+    "message": "QR कोड URL",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.statelogo",
+    "message": "राज्य लोगो",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.logo_url_white",
+    "message": "लोगो URL (सफ़ेद)",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.enable_whats_app",
+    "message": "WhatsApp सक्षम करें",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.has_localisation",
+    "message": "स्थानीयकरण उपलब्ध",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.format",
+    "message": "प्रारूप",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.idname",
+    "message": "आईडी नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.uuid",
+    "message": "UUID",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.get_uri",
+    "message": "GET URI",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.post_uri",
+    "message": "POST URI",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.is_state_level",
+    "message": "राज्य स्तरीय",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.topic",
+    "message": "विषय",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.state_sla",
+    "message": "राज्य SLA",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.business_sla",
+    "message": "व्यापार SLA",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.slot_percentage",
+    "message": "स्लॉट प्रतिशत",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.middle_slab_color",
+    "message": "मध्य स्लैब रंग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.negative_slab_color",
+    "message": "नकारात्मक स्लैब रंग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.positive_slab_color",
+    "message": "सकारात्मक स्लैब रंग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.actionid",
+    "message": "क्रिया आईडी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.rolecode",
+    "message": "भूमिका कोड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.actioncode",
+    "message": "क्रिया कोड",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.id",
+    "message": "आईडी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.left_icon",
+    "message": "बायां आइकन",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.right_icon",
+    "message": "दायां आइकन",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.display_name",
+    "message": "प्रदर्शित नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.order_number",
+    "message": "क्रम संख्या",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.parent_module",
+    "message": "मूल मॉड्यूल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.navigation_url",
+    "message": "नेविगेशन URL",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.key",
+    "message": "कुंजी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.pattern",
+    "message": "पैटर्न",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.pattern_id",
+    "message": "पैटर्न आईडी",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.model",
+    "message": "मॉडल",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.index",
+    "message": "सूचकांक",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.method",
+    "message": "विधि",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.job_name",
+    "message": "जॉब नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.redirect_url",
+    "message": "रीडायरेक्ट URL",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.version",
+    "message": "संस्करण",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.default",
+    "message": "डिफ़ॉल्ट",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.is_active",
+    "message": "सक्रिय है",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.field_type",
+    "message": "फ़ील्ड प्रकार",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.validation_name",
+    "message": "सत्यापन नाम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.is_statelevel",
+    "message": "राज्य स्तरीय",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.reopensla",
+    "message": "पुनः खोलें SLA",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.body",
+    "message": "मुख्य भाग",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.subject",
+    "message": "विषय",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.nav.dashboard",
+    "message": "Tableau de bord",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.tenant_management",
+    "message": "Gestion des entités",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.tenants",
+    "message": "Entités",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.departments",
+    "message": "Départements",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.designations",
+    "message": "Fonctions",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.hierarchies",
+    "message": "Hiérarchies",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.complaint_management",
+    "message": "Gestion des plaintes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.complaint_hierarchies",
+    "message": "Hiérarchies de plaintes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.complaint_types",
+    "message": "Types de plaintes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.complaints",
+    "message": "Plaintes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.localization",
+    "message": "Localisation",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.people",
+    "message": "Personnes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.employees",
+    "message": "Employés",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.users",
+    "message": "Utilisateurs",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.system",
+    "message": "Système",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.access_roles",
+    "message": "Rôles d'accès",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.workflows",
+    "message": "Flux de travail",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.processes",
+    "message": "Processus",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.mdms_schemas",
+    "message": "Schémas MDMS",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.boundaries",
+    "message": "Limites",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.advanced",
+    "message": "Avancé",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.switch_to_onboarding",
+    "message": "Passer à l'intégration",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.header.management_mode",
+    "message": "Mode gestion",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.header.title",
+    "message": "DIGIT Management Studio",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.complaint_types",
+    "message": "Types de plaintes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.departments",
+    "message": "Départements",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.designations",
+    "message": "Fonctions",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.tenants",
+    "message": "Entités",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.employees",
+    "message": "Employés",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.users",
+    "message": "Utilisateurs",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.complaints",
+    "message": "Plaintes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.boundaries",
+    "message": "Limites",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.localization",
+    "message": "Messages de localisation",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.access_roles",
+    "message": "Rôles d'accès",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.access_actions",
+    "message": "Actions d'accès",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.role_actions",
+    "message": "Actions de rôle",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.workflow_services",
+    "message": "Services métier",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.workflow_processes",
+    "message": "Processus de flux",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.mdms_schemas",
+    "message": "Schémas MDMS",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.boundary_hierarchies",
+    "message": "Hiérarchies de limites",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.code",
+    "message": "Code",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.name",
+    "message": "Nom",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.description",
+    "message": "Description",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.status",
+    "message": "Statut",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.active",
+    "message": "Actif",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.service_code",
+    "message": "Code de service",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.department",
+    "message": "Département",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.sla_hours",
+    "message": "SLA (h)",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.menu_path",
+    "message": "Type de plainte",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.parent",
+    "message": "Parent",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.city",
+    "message": "Ville",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.district",
+    "message": "District",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.mobile",
+    "message": "Mobile",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.designation",
+    "message": "Fonction",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.username",
+    "message": "Nom d'utilisateur",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.type",
+    "message": "Type",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.roles",
+    "message": "Rôles",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.boundary_type",
+    "message": "Type de limite",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.tenant",
+    "message": "Entité",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.message",
+    "message": "Message",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.module",
+    "message": "Module",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.locale",
+    "message": "Langue",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.url",
+    "message": "URL",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.service",
+    "message": "Service",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.enabled",
+    "message": "Activé",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.role_code",
+    "message": "Code de rôle",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.action_id",
+    "message": "ID d'action",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.action_code",
+    "message": "Code d'action",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.business_service",
+    "message": "Service métier",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.business",
+    "message": "Métier",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.sla",
+    "message": "SLA",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.business_id",
+    "message": "ID métier",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.action",
+    "message": "Action",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.state",
+    "message": "État",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.created",
+    "message": "Créé",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.hierarchy_type",
+    "message": "Type de hiérarchie",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.request_id",
+    "message": "ID de demande",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.citizen",
+    "message": "Citoyen",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.locality",
+    "message": "Localité",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.refresh",
+    "message": "Actualiser",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.create",
+    "message": "Créer",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.search",
+    "message": "Rechercher...",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.loading",
+    "message": "Chargement...",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.error_loading",
+    "message": "Erreur lors du chargement des données",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.error_unexpected",
+    "message": "Une erreur inattendue est survenue",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.try_again",
+    "message": "Réessayer",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.no_records",
+    "message": "Aucun enregistrement trouvé",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.adjust_search",
+    "message": "Essayez d'ajuster votre recherche",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.showing",
+    "message": "Affichage de %{start} à %{end} sur %{total}",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.previous",
+    "message": "Précédent",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.next",
+    "message": "Suivant",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.page_info",
+    "message": "Page %{page} sur %{totalPages}",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.actions",
+    "message": "Actions",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.columns",
+    "message": "Colonnes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.show_columns",
+    "message": "Afficher les colonnes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.reset",
+    "message": "Réinitialiser",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.list.rows_per_page",
+    "message": "Lignes par page :",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.complaint_hierarchy",
+    "message": "Types de plaintes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.workflow_business_services",
+    "message": "Services métier de flux",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.complaint_hierarchies",
+    "message": "Hiérarchies de plaintes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.state_info",
+    "message": "Infos sur l'État",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.city_modules",
+    "message": "Modules de ville",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.id_formats",
+    "message": "Formats d'identifiant",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.workflow_config",
+    "message": "Configuration des flux",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.auto_escalation",
+    "message": "Escalade automatique",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.sla_config",
+    "message": "Configuration SLA",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.roles",
+    "message": "Rôles",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.action_mappings",
+    "message": "Mappages d'actions",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.encryption_policy",
+    "message": "Politique de chiffrement",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.decryption_abac",
+    "message": "Déchiffrement ABAC",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.masking_patterns",
+    "message": "Modèles de masquage",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.security_policy",
+    "message": "Politique de sécurité",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.inbox_config",
+    "message": "Configuration de la boîte de réception",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.deactivation_reasons",
+    "message": "Motifs de désactivation",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.degrees",
+    "message": "Diplômes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.employment_tests",
+    "message": "Tests d'emploi",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.specializations",
+    "message": "Spécialisations",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.gender_types",
+    "message": "Types de genre",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.employee_status",
+    "message": "Statut de l'employé",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.employee_type",
+    "message": "Type d'employé",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.cron_jobs",
+    "message": "Tâches Cron",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.ui_homepage",
+    "message": "Page d'accueil UI",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.theme_config",
+    "message": "Configuration du thème",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.user_validation",
+    "message": "Validation des champs utilisateur",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.mobile_validation",
+    "message": "Validation du numéro de mobile",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.tenant_boundary",
+    "message": "Limite d'entité (HRMS)",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.auto_escalation_ignore",
+    "message": "Auto-escalade ignorée",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.workflow_bs_master",
+    "message": "Maître BS de flux",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.pgr_ui_constants",
+    "message": "Constantes UI PGR",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.header.brand",
+    "message": "Gestion des plaintes",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.pgr_dashboard",
+    "message": "Tableau de bord PGR",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.notifications",
+    "message": "Notifications",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.dashboard.date.all",
+    "message": "Tout",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.dashboard.date.today",
+    "message": "Aujourd'hui",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.dashboard.date.yesterday",
+    "message": "Hier",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.dashboard.date.week",
+    "message": "Cette semaine",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.dashboard.date.month",
+    "message": "Ce mois-ci",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.notification_routing",
+    "message": "Routage des notifications",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.notification_templates",
+    "message": "Modèles de notification",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.notification_routing",
+    "message": "Routage des notifications PGR",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.resources.notification_template",
+    "message": "Modèles de notification PGR",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.from_state",
+    "message": "État source",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.to_state",
+    "message": "État cible",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.audience",
+    "message": "Public",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.channel",
+    "message": "Canal",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.dashboard.date.3months",
+    "message": "3 mois",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.tenant_id",
+    "message": "ID de l'entité",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.path",
+    "message": "Chemin",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.order",
+    "message": "Ordre",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.keywords",
+    "message": "Mots-clés",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.level_code",
+    "message": "Code de niveau",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.parent_code",
+    "message": "Code parent",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.logo_url",
+    "message": "URL du logo",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.banner_url",
+    "message": "URL de la bannière",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.qr_code_url",
+    "message": "URL du code QR",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.statelogo",
+    "message": "Logo de l'État",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.logo_url_white",
+    "message": "URL du logo (blanc)",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.enable_whats_app",
+    "message": "Activer WhatsApp",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.has_localisation",
+    "message": "Localisation disponible",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.format",
+    "message": "Format",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.idname",
+    "message": "Nom de l'ID",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.uuid",
+    "message": "UUID",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.get_uri",
+    "message": "URI GET",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.post_uri",
+    "message": "URI POST",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.is_state_level",
+    "message": "Niveau État",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.topic",
+    "message": "Sujet",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.state_sla",
+    "message": "SLA de l'État",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.business_sla",
+    "message": "SLA métier",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.slot_percentage",
+    "message": "Pourcentage de créneau",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.middle_slab_color",
+    "message": "Couleur du palier intermédiaire",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.negative_slab_color",
+    "message": "Couleur du palier négatif",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.positive_slab_color",
+    "message": "Couleur du palier positif",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.actionid",
+    "message": "ID d'action",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.rolecode",
+    "message": "Code de rôle",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.actioncode",
+    "message": "Code d'action",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.id",
+    "message": "ID",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.left_icon",
+    "message": "Icône de gauche",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.right_icon",
+    "message": "Icône de droite",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.display_name",
+    "message": "Nom affiché",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.order_number",
+    "message": "Numéro d'ordre",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.parent_module",
+    "message": "Module parent",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.navigation_url",
+    "message": "URL de navigation",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.key",
+    "message": "Clé",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.pattern",
+    "message": "Modèle",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.pattern_id",
+    "message": "ID du modèle",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.model",
+    "message": "Modèle",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.index",
+    "message": "Index",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.method",
+    "message": "Méthode",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.job_name",
+    "message": "Nom de la tâche",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.redirect_url",
+    "message": "URL de redirection",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.version",
+    "message": "Version",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.default",
+    "message": "Par défaut",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.is_active",
+    "message": "Actif",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.field_type",
+    "message": "Type de champ",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.validation_name",
+    "message": "Nom de validation",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.is_statelevel",
+    "message": "Niveau État",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.reopensla",
+    "message": "SLA de réouverture",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.body",
+    "message": "Corps",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.subject",
+    "message": "Objet",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.nav.dashboard",
+    "message": "Painel",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.tenant_management",
+    "message": "Gestão de entidades",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.tenants",
+    "message": "Entidades",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.departments",
+    "message": "Departamentos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.designations",
+    "message": "Cargos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.hierarchies",
+    "message": "Hierarquias",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.complaint_management",
+    "message": "Gestão de reclamações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.complaint_hierarchies",
+    "message": "Hierarquias de reclamações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.complaint_types",
+    "message": "Tipos de reclamação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.complaints",
+    "message": "Reclamações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.localization",
+    "message": "Localização",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.people",
+    "message": "Pessoas",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.employees",
+    "message": "Funcionários",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.users",
+    "message": "Usuários",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.system",
+    "message": "Sistema",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.access_roles",
+    "message": "Funções de acesso",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.workflows",
+    "message": "Fluxos de trabalho",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.processes",
+    "message": "Processos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.mdms_schemas",
+    "message": "Esquemas MDMS",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.boundaries",
+    "message": "Limites",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.advanced",
+    "message": "Avançado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.switch_to_onboarding",
+    "message": "Mudar para integração",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.header.management_mode",
+    "message": "Modo de gestão",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.header.title",
+    "message": "DIGIT Management Studio",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.complaint_types",
+    "message": "Tipos de reclamação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.departments",
+    "message": "Departamentos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.designations",
+    "message": "Cargos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.tenants",
+    "message": "Entidades",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.employees",
+    "message": "Funcionários",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.users",
+    "message": "Usuários",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.complaints",
+    "message": "Reclamações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.boundaries",
+    "message": "Limites",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.localization",
+    "message": "Mensagens de localização",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.access_roles",
+    "message": "Funções de acesso",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.access_actions",
+    "message": "Ações de acesso",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.role_actions",
+    "message": "Ações de função",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.workflow_services",
+    "message": "Serviços de negócio",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.workflow_processes",
+    "message": "Processos de fluxo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.mdms_schemas",
+    "message": "Esquemas MDMS",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.boundary_hierarchies",
+    "message": "Hierarquias de limites",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.code",
+    "message": "Código",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.name",
+    "message": "Nome",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.description",
+    "message": "Descrição",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.status",
+    "message": "Status",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.active",
+    "message": "Ativo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.service_code",
+    "message": "Código de serviço",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.department",
+    "message": "Departamento",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.sla_hours",
+    "message": "SLA (h)",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.menu_path",
+    "message": "Tipo de reclamação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.parent",
+    "message": "Pai",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.city",
+    "message": "Cidade",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.district",
+    "message": "Distrito",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.mobile",
+    "message": "Celular",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.designation",
+    "message": "Cargo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.username",
+    "message": "Nome de usuário",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.type",
+    "message": "Tipo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.roles",
+    "message": "Funções",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.boundary_type",
+    "message": "Tipo de limite",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.tenant",
+    "message": "Entidade",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.message",
+    "message": "Mensagem",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.module",
+    "message": "Módulo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.locale",
+    "message": "Idioma",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.url",
+    "message": "URL",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.service",
+    "message": "Serviço",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.enabled",
+    "message": "Habilitado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.role_code",
+    "message": "Código de função",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.action_id",
+    "message": "ID da ação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.action_code",
+    "message": "Código da ação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.business_service",
+    "message": "Serviço de negócio",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.business",
+    "message": "Negócio",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.sla",
+    "message": "SLA",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.business_id",
+    "message": "ID de negócio",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.action",
+    "message": "Ação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.state",
+    "message": "Estado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.created",
+    "message": "Criado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.hierarchy_type",
+    "message": "Tipo de hierarquia",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.request_id",
+    "message": "ID da solicitação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.citizen",
+    "message": "Cidadão",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.locality",
+    "message": "Localidade",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.refresh",
+    "message": "Atualizar",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.create",
+    "message": "Criar",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.search",
+    "message": "Pesquisar...",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.loading",
+    "message": "Carregando...",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.error_loading",
+    "message": "Erro ao carregar dados",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.error_unexpected",
+    "message": "Ocorreu um erro inesperado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.try_again",
+    "message": "Tentar novamente",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.no_records",
+    "message": "Nenhum registro encontrado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.adjust_search",
+    "message": "Tente ajustar sua pesquisa",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.showing",
+    "message": "Mostrando %{start}-%{end} de %{total}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.previous",
+    "message": "Anterior",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.next",
+    "message": "Próximo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.page_info",
+    "message": "Página %{page} de %{totalPages}",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.actions",
+    "message": "Ações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.columns",
+    "message": "Colunas",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.show_columns",
+    "message": "Mostrar colunas",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.reset",
+    "message": "Redefinir",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.list.rows_per_page",
+    "message": "Linhas por página:",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.complaint_hierarchy",
+    "message": "Tipos de reclamação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.workflow_business_services",
+    "message": "Serviços de negócio de fluxo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.complaint_hierarchies",
+    "message": "Hierarquias de reclamações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.state_info",
+    "message": "Informações do estado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.city_modules",
+    "message": "Módulos da cidade",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.id_formats",
+    "message": "Formatos de ID",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.workflow_config",
+    "message": "Configuração de fluxo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.auto_escalation",
+    "message": "Escalonamento automático",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.sla_config",
+    "message": "Configuração de SLA",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.roles",
+    "message": "Funções",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.action_mappings",
+    "message": "Mapeamentos de ações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.encryption_policy",
+    "message": "Política de criptografia",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.decryption_abac",
+    "message": "Descriptografia ABAC",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.masking_patterns",
+    "message": "Padrões de máscara",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.security_policy",
+    "message": "Política de segurança",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.inbox_config",
+    "message": "Configuração da caixa de entrada",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.deactivation_reasons",
+    "message": "Motivos de desativação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.degrees",
+    "message": "Graus",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.employment_tests",
+    "message": "Testes de emprego",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.specializations",
+    "message": "Especializações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.gender_types",
+    "message": "Tipos de gênero",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.employee_status",
+    "message": "Status do funcionário",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.employee_type",
+    "message": "Tipo de funcionário",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.cron_jobs",
+    "message": "Tarefas Cron",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.ui_homepage",
+    "message": "Página inicial da UI",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.theme_config",
+    "message": "Configuração de tema",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.user_validation",
+    "message": "Validação de campos do usuário",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.mobile_validation",
+    "message": "Validação de número de celular",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.tenant_boundary",
+    "message": "Limite de entidade (HRMS)",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.auto_escalation_ignore",
+    "message": "Escalonamento automático ignorado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.workflow_bs_master",
+    "message": "Mestre BS de fluxo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.pgr_ui_constants",
+    "message": "Constantes de UI PGR",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.header.brand",
+    "message": "Gestão de reclamações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.pgr_dashboard",
+    "message": "Painel PGR",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.notifications",
+    "message": "Notificações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.dashboard.date.all",
+    "message": "Todo o período",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.dashboard.date.today",
+    "message": "Hoje",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.dashboard.date.yesterday",
+    "message": "Ontem",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.dashboard.date.week",
+    "message": "Esta semana",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.dashboard.date.month",
+    "message": "Este mês",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.notification_routing",
+    "message": "Roteamento de notificações",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.nav.notification_templates",
+    "message": "Modelos de notificação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.notification_routing",
+    "message": "Roteamento de notificações PGR",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.resources.notification_template",
+    "message": "Modelos de notificação PGR",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.from_state",
+    "message": "Estado de origem",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.to_state",
+    "message": "Estado de destino",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.audience",
+    "message": "Público",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.channel",
+    "message": "Canal",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.dashboard.date.3months",
+    "message": "3 meses",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.tenant_id",
+    "message": "ID da entidade",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.path",
+    "message": "Caminho",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.order",
+    "message": "Ordem",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.keywords",
+    "message": "Palavras-chave",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.level_code",
+    "message": "Código de nível",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.parent_code",
+    "message": "Código pai",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.logo_url",
+    "message": "URL do logotipo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.banner_url",
+    "message": "URL do banner",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.qr_code_url",
+    "message": "URL do código QR",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.statelogo",
+    "message": "Logotipo do estado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.logo_url_white",
+    "message": "URL do logotipo (branco)",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.enable_whats_app",
+    "message": "Ativar WhatsApp",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.has_localisation",
+    "message": "Tem localização",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.format",
+    "message": "Formato",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.idname",
+    "message": "Nome do ID",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.uuid",
+    "message": "UUID",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.get_uri",
+    "message": "URI GET",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.post_uri",
+    "message": "URI POST",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.is_state_level",
+    "message": "Nível estadual",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.topic",
+    "message": "Tópico",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.state_sla",
+    "message": "SLA do estado",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.business_sla",
+    "message": "SLA de negócio",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.slot_percentage",
+    "message": "Percentual de faixa",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.middle_slab_color",
+    "message": "Cor da faixa intermediária",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.negative_slab_color",
+    "message": "Cor da faixa negativa",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.positive_slab_color",
+    "message": "Cor da faixa positiva",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.actionid",
+    "message": "ID da ação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.rolecode",
+    "message": "Código de função",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.actioncode",
+    "message": "Código da ação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.id",
+    "message": "ID",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.left_icon",
+    "message": "Ícone esquerdo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.right_icon",
+    "message": "Ícone direito",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.display_name",
+    "message": "Nome de exibição",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.order_number",
+    "message": "Número de ordem",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.parent_module",
+    "message": "Módulo pai",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.navigation_url",
+    "message": "URL de navegação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.key",
+    "message": "Chave",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.pattern",
+    "message": "Padrão",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.pattern_id",
+    "message": "ID do padrão",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.model",
+    "message": "Modelo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.index",
+    "message": "Índice",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.method",
+    "message": "Método",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.job_name",
+    "message": "Nome da tarefa",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.redirect_url",
+    "message": "URL de redirecionamento",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.version",
+    "message": "Versão",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.default",
+    "message": "Padrão",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.is_active",
+    "message": "Ativo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.field_type",
+    "message": "Tipo de campo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.validation_name",
+    "message": "Nome da validação",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.is_statelevel",
+    "message": "Nível estadual",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.reopensla",
+    "message": "SLA de reabertura",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.body",
+    "message": "Corpo",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.subject",
+    "message": "Assunto",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "app.fields.mobile_login_username_help",
+    "message": "Used as the citizen's login username.",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "app.fields.mobile_login_username_help",
+    "message": "नागरिक के लॉगिन उपयोगकर्ता नाम के रूप में उपयोग किया जाता है।",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "app.fields.mobile_login_username_help",
+    "message": "Utilisé comme nom d'utilisateur de connexion du citoyen.",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "app.fields.mobile_login_username_help",
+    "message": "Usado como o nome de usuário de login do cidadão.",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "ERR_INVALID_MOBILE_NUMBER",
+    "message": "Please enter a valid mobile number",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "ERR_INVALID_MOBILE_NUMBER",
+    "message": "अमान्य मोबाइल नंबर",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "ERR_INVALID_MOBILE_NUMBER",
+    "message": "Veuillez saisir un numéro de mobile valide",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "ERR_INVALID_MOBILE_NUMBER",
+    "message": "Por favor, insira um número de celular válido",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_DIGITS",
+    "message": "digits",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_DIGITS",
+    "message": "अंक",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_DIGITS",
+    "message": "chiffres",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_DIGITS",
+    "message": "dígitos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_AT_LEAST",
+    "message": "at least",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_AT_LEAST",
+    "message": "कम से कम",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_AT_LEAST",
+    "message": "au moins",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_AT_LEAST",
+    "message": "pelo menos",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_STARTING_WITH",
+    "message": "starting with",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_STARTING_WITH",
+    "message": "से शुरू होकर",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_STARTING_WITH",
+    "message": "commençant par",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_STARTING_WITH",
+    "message": "começando com",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_OR",
+    "message": "or",
+    "module": "configurator-ui",
+    "locale": "en_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_OR",
+    "message": "या",
+    "module": "configurator-ui",
+    "locale": "hi_IN"
+  },
+  {
+    "code": "MOBILE_VALIDATION_OR",
+    "message": "ou",
+    "module": "configurator-ui",
+    "locale": "fr_FR"
+  },
+  {
+    "code": "MOBILE_VALIDATION_OR",
+    "message": "ou",
+    "module": "configurator-ui",
+    "locale": "pt_BR"
+  }
+]

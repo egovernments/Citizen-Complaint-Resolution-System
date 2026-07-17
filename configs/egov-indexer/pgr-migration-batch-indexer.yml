@@ -43,14 +43,14 @@ ServiceMaps:
                     outJsonPath: $.Data.department
               - path: http://egov-mdms-service.egov:8080/egov-mdms-service/v1/_search
                 moduleName: RAINMAKER-PGR
-                masterName: ServiceDefs
+                masterName: ComplaintHierarchy
                 tenantId: pg
-                filter: "[?((@.serviceCode == $servicecode) && (@.active == true))]"
+                filter: "[?((@.code == $servicecode) && (@.active == true))]"
                 filterMapping:
                   - variable: $servicecode
                     valueJsonpath: $.service.serviceCode
                 uriResponseMapping:
-                  - inJsonPath: $.MdmsRes.RAINMAKER-PGR.ServiceDefs.*.slaHours
+                  - inJsonPath: $.MdmsRes.RAINMAKER-PGR.ComplaintHierarchy.*.slaHours
                     outJsonPath: $.Data.slaHours
               - path: http://egov-mdms-service.egov:8080/egov-mdms-service/v1/_search
                 moduleName: tenant

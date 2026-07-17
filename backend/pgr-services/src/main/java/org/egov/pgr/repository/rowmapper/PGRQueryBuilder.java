@@ -130,6 +130,35 @@ public class PGRQueryBuilder {
             addToPreparedStatement(preparedStmtList, userIds);
         }
 
+        Set<String> serviceRequestIds = criteria.getServiceRequestIds();
+        if (!CollectionUtils.isEmpty(serviceRequestIds)) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ser.serviceRequestId IN (").append(createQuery(serviceRequestIds)).append(")");
+            addToPreparedStatement(preparedStmtList, serviceRequestIds);
+        }
+
+        // Visibility (reportee-scoped All): team-assigned complaints OR the
+        // unassigned queues, in one predicate so pagination and count stay
+        // correct. Set only by VisibilityService.
+        Set<String> visibilityIds = criteria.getVisibilityIds();
+        Set<String> visibilityStates = criteria.getVisibilityUnassignedStates();
+        if (!CollectionUtils.isEmpty(visibilityIds) || !CollectionUtils.isEmpty(visibilityStates)) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ( ");
+            boolean hasIds = !CollectionUtils.isEmpty(visibilityIds);
+            if (hasIds) {
+                builder.append(" ser.serviceRequestId IN (").append(createQuery(visibilityIds)).append(")");
+                addToPreparedStatement(preparedStmtList, visibilityIds);
+            }
+            if (!CollectionUtils.isEmpty(visibilityStates)) {
+                if (hasIds)
+                    builder.append(" OR ");
+                builder.append(" ser.applicationStatus IN (").append(createQuery(visibilityStates)).append(")");
+                addToPreparedStatement(preparedStmtList, visibilityStates);
+            }
+            builder.append(" ) ");
+        }
+
 
         Set<String> localities = criteria.getLocality();
         if(!CollectionUtils.isEmpty(localities)){
@@ -198,8 +227,8 @@ public class PGRQueryBuilder {
         // the FULL paginated result set; a client-side sortFunction only reorders one
         // page at a time, so rows dropped in/out of view as page size changed (#432).
         //
-        // The budget is per complaint type, sourced from MDMS RAINMAKER-PGR.ServiceDefs
-        // (slaHours), matching the inbox's displayed "SLA days remaining". When the map
+        // The budget is per complaint type, sourced from MDMS RAINMAKER-PGR.ComplaintHierarchy
+        // leaf rows (slaHours), matching the inbox's displayed "SLA days remaining". When the map
         // is available we build a CASE ser.servicecode ...; types not present in the map
         // (and the empty-map / MDMS-failure case) fall back to the uniform business-level
         // SLA, which keeps this correct even before per-type slaHours is populated.

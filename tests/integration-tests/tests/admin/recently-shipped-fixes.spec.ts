@@ -38,6 +38,30 @@ async function adminToken(): Promise<string> {
   return t.access_token;
 }
 
+/**
+ * True when the CCRS Kenya-rollout locale (sw_KE) is seeded on this deployment.
+ * The #42 (SERVICEDEFS/COMPLAINT_HIERARCHY categories) and #44 (sw_KE rows)
+ * blocks are tier-3 / deployment-pinned — on a non-Kenya deployment the sw_KE
+ * bundle isn't loaded, so those tests self-skip rather than fail on the
+ * missing seed.
+ */
+async function swKeSeeded(): Promise<boolean> {
+  try {
+    const r = await fetch(
+      `${LOC_SEARCH}?module=rainmaker-common&locale=sw_KE&tenantId=${ROOT_TENANT}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ RequestInfo: { authToken: '' } }),
+      },
+    );
+    const json = await r.json();
+    return (json.messages ?? []).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function adminRequestInfo(token: string) {
   return {
     apiId: 'Rainmaker',
@@ -131,24 +155,40 @@ Tests the upstream data — without it, the UI's statusMap fix is moot.`,
     }
   });
 
-  test('API: pgr-services rejects non-applicationStatus sortBy values', {
+  test('API: pgr-services SortBy accepts `sla` but rejects unknown literals like `serviceSla`', {
     annotation: {
       type: 'description',
-      description: `Documents the platform constraint behind the SLA-sort-icon removal in the PGR inbox. pgr-services accepts only certain SortBy enum values. Sending sortBy=serviceSla returns a 400 with a typeMismatch error code — confirming the backend doesn't support sorting by SLA, hence the UI was right to remove the icon.
+      description: `Pins the pgr-services SortBy contract. The backend enum RequestSearchCriteria.SortBy is {locality, applicationStatus, serviceRequestId, createdTime, sla} — so sorting by SLA IS supported (sortBy=sla is accepted). What is NOT a valid enum value is the literal 'serviceSla'; sending it returns a typeMismatch error. This test asserts both halves: sla is accepted, serviceSla is rejected. (The earlier note claiming "the backend can't sort by SLA" is stale — sla was added to the enum.)
 
 Steps:
 1. Acquire admin token.
-2. POST to /pgr-services/v2/request/_search?tenantId=ke.nairobi&limit=2&sortBy=serviceSla.
-3. Read response.Errors; assert length > 0.
-4. Assert Errors[0].code contains 'typeMismatch'.
+2. Positive: POST /pgr-services/v2/request/_search?tenantId=ke.nairobi&limit=2&sortBy=sla; assert response.Errors is empty (sla is a valid enum value).
+3. Negative: POST the same with sortBy=serviceSla; assert response.Errors length > 0 and Errors[0].code contains 'typeMismatch'.
 
-If pgr-services later adds serviceSla to the SortBy enum, this test flips and the UI can re-enable the icon.`,
+Guards against a caller passing the wrong literal AND documents that SLA sorting is now available in the enum.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:432', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
-    // Documents the platform constraint behind the SLA-sort-icon removal.
-    // If pgr-services later adds `serviceSla` to the SortBy enum, this
-    // test flips and we can re-enable the sort icon in the UI config.
     const token = await adminToken();
+
+    // Positive — `sla` is a valid SortBy enum value (backend enum:
+    // {locality, applicationStatus, serviceRequestId, createdTime, sla}), so
+    // pgr-services accepts it without a typeMismatch.
+    const okRes = await fetch(
+      `${PGR_SEARCH}?tenantId=${TENANT}&limit=2&sortBy=sla`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ RequestInfo: adminRequestInfo(token) }),
+      },
+    );
+    const okJson = await okRes.json();
+    expect(
+      okJson.Errors ?? [],
+      `sortBy=sla should be accepted, got ${JSON.stringify(okJson.Errors ?? [])}`,
+    ).toHaveLength(0);
+
+    // Negative — `serviceSla` is NOT a SortBy enum value, so it's rejected
+    // with a typeMismatch. (Guards a caller passing the wrong literal.)
     const r = await fetch(
       `${PGR_SEARCH}?tenantId=${TENANT}&limit=2&sortBy=serviceSla`,
       {
@@ -261,11 +301,11 @@ If this row goes missing or its copy changes, several PGR UI tests in this suite
 // TODO(Phase 7): add a skip-when-locale-not-seeded guard (probe
 // /localization/messages with module=rainmaker-common,locale=sw_KE and
 // short-circuit if rows === 0) instead of asserting unconditionally.
-test.describe('CCRS#42 — Complaint Type menuPathName labels', () => {
-  test('API: 19 SERVICEDEFS.<menuPath> rows exist in en_IN AND sw_KE', {
+test.describe('CCRS#42 — Complaint Type category labels', () => {
+  test('API: 19 SERVICEDEFS.<categoryCode> rows exist in en_IN AND sw_KE', {
     annotation: {
       type: 'description',
-      description: `Catches CCRS#42 (Complaint Type dropdown blank rows). The 19 SERVICEDEFS.<MENUPATH> localization rows must exist in BOTH en_IN and sw_KE locales. Pre-fix the configurator's complaint type seed didn't push these keys, so the citizen dropdown rendered 19 blank options.
+      description: `Catches CCRS#42 (Complaint Type dropdown blank rows). The 19 SERVICEDEFS.<CATEGORYCODE> localization rows must exist in BOTH en_IN and sw_KE locales. These category codes are the parentCode values of the leaf complaint types (interior category nodes of RAINMAKER-PGR.ComplaintHierarchy) — they replaced the legacy menuPath grouping key, but the localization key form SERVICEDEFS.<code> is unchanged. Pre-fix the configurator's complaint type seed didn't push these keys, so the citizen dropdown rendered 19 blank group options.
 
 Steps:
 1. For each locale in [en_IN, sw_KE]:
@@ -273,15 +313,18 @@ Steps:
    - For each requested code, find the matching message in response.
    - Assert message exists with non-empty text.
 
-Tests 5 representative codes across the 19 menuPath values — fewer assertions but covers the full breadth via locale × multiple codes.`,
+Tests 5 representative codes across the 19 category (parentCode) values — fewer assertions but covers the full breadth via locale × multiple codes.`,
     },
     tag: ['@area:configurator-manage', '@ccrs:42', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
+    test.skip(!(await swKeSeeded()), 'sw_KE (CCRS Kenya rollout) locale not seeded on this deployment');
+    // Complaint-type labels moved off the legacy SERVICEDEFS.* namespace to
+    // key-based COMPLAINT_HIERARCHY.<categoryCode> (seeded for every node).
     const codes = [
-      'SERVICEDEFS.ADMINISTRATION',
-      'SERVICEDEFS.WATERRELATED',
-      'SERVICEDEFS.LANDRATES',
-      'SERVICEDEFS.MOBILITYANDWORKS',
-      'SERVICEDEFS.FINANCEANDREVENUE',
+      'COMPLAINT_HIERARCHY.ADMINISTRATION',
+      'COMPLAINT_HIERARCHY.WATERRELATED',
+      'COMPLAINT_HIERARCHY.LANDRATES',
+      'COMPLAINT_HIERARCHY.MOBILITYANDWORKS',
+      'COMPLAINT_HIERARCHY.FINANCEANDREVENUE',
     ];
     for (const locale of ['en_IN', 'sw_KE']) {
       const r = await fetch(
@@ -320,6 +363,7 @@ Steps:
 Threshold of 100 is far above the empty-result case but below any realistic message count, so it cleanly distinguishes "broken" from "working".`,
     },
     tag: ['@area:configurator-manage', '@ccrs:44', '@kind:regression', '@layer:api', '@persona:admin'] }, async () => {
+    test.skip(!(await swKeSeeded()), 'sw_KE (CCRS Kenya rollout) locale not seeded on this deployment');
     const r = await fetch(
       `${LOC_SEARCH}?module=rainmaker-common&locale=sw_KE&tenantId=${ROOT_TENANT}`,
       {

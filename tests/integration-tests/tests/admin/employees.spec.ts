@@ -22,24 +22,64 @@ import { test, expect } from '@playwright/test';
 import ExcelJS from 'exceljs';
 import { loadAuth, employeeSearch, type AuthInfo } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
-import { TENANT } from '../utils/env';
+import { TENANT, ROOT_TENANT } from '../utils/env';
 import {
   getMobileValidationRule,
   generateInvalidMobile,
+  generateValidMobile,
   type MobileRule,
 } from '../utils/mdms-mobile';
 
-const TENANT_CODE = process.env.TENANT_CODE || 'ke';
+// Root (state) tenant from env — no hardcoded 'ke'.
+const TENANT_CODE = ROOT_TENANT;
 
 let mobileRule: MobileRule;
 test.beforeAll(async () => {
   mobileRule = await getMobileValidationRule(TENANT);
+  await resolveSeedFks();
 });
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 const LIST_PATH = '/configurator/manage/employees';
+
+// Seed FKs for HRMS employee creates. HRMS validates these against the
+// tenant's real boundary / department / designation masters, so they must be
+// live codes. We derive them from an EXISTING employee on the deployment
+// (resolveSeedFks, called in beforeAll) so the API-seed tests are portable to
+// any tenant. An explicit env override still wins; the final fallback is the
+// Kenya seed, used only when neither a live employee nor an override exists.
+let SEED_BOUNDARY = process.env.SEED_BOUNDARY || 'NAIROBI_CITY';
+let SEED_DEPT = process.env.SEED_DEPT || 'DEPT_7';
+let SEED_DESIG = process.env.SEED_DESIG || 'DESIG_58';
+
+/**
+ * Derive boundary / department / designation FKs from a real employee on the
+ * deployment so HRMS _create seeds validate. Env overrides take precedence;
+ * live values only fill the gaps left by unset env vars.
+ */
+async function resolveSeedFks(): Promise<void> {
+  try {
+    const auth = loadAuth();
+    const employees = await employeeSearch(auth, TENANT_CODE, { limit: 25 });
+    for (const e of employees) {
+      const jur = (e.jurisdictions as Array<Record<string, unknown>> | undefined)?.[0];
+      const asg = (e.assignments as Array<Record<string, unknown>> | undefined)?.[0];
+      const boundary = jur?.boundary as string | undefined;
+      const dept = asg?.department as string | undefined;
+      const desig = asg?.designation as string | undefined;
+      if (boundary && dept && desig) {
+        if (!process.env.SEED_BOUNDARY) SEED_BOUNDARY = boundary;
+        if (!process.env.SEED_DEPT) SEED_DEPT = dept;
+        if (!process.env.SEED_DESIG) SEED_DESIG = desig;
+        return;
+      }
+    }
+  } catch {
+    // Fall back to env / Kenya defaults if the lookup fails.
+  }
+}
 
 // HRMS endpoints — the configurator's DigitApiClient hits these verbatim.
 const HRMS_SEARCH = '/egov-hrms/employees/_search';
@@ -149,12 +189,12 @@ test.describe('manage/employees', () => {
   test('1. list renders, search narrows, status filter applies', {
     annotation: {
       type: 'description',
-      description: `Smoke check for /manage/employees: the list renders with the four expected columns (Code, Name, Mobile, Status), search narrows the row count, and the Status filter switches between Active and Inactive without crashing.
+      description: `Smoke check for /manage/employees: the list renders with the four expected columns (Employee Code, Name, Mobile, Status), search narrows the row count, and the Status filter switches between Active and Inactive without crashing.
 
 Steps:
 1. Navigate to /configurator/manage/employees.
 2. Assert role=table is visible.
-3. For each header in ['Code','Name','Mobile','Status'], assert the matching role=columnheader is visible.
+3. For each header in ['Employee Code','Name','Mobile','Status'], assert the matching role=columnheader is visible.
 4. Read initial row count; assert > 1.
 5. Type 'zzz_no_such_employee' in the search input; wait networkidle.
 6. Read filtered count; assert filtered <= initial.
@@ -169,7 +209,8 @@ Multi-purpose smoke that exercises the major surface in one pass.`,
     const table = page.getByRole('table');
     await expect(table).toBeVisible();
 
-    for (const header of ['Code', 'Name', 'Mobile', 'Status']) {
+    // The first column header is "Employee Code" (EmployeeList.tsx), not "Code".
+    for (const header of ['Employee Code', 'Name', 'Mobile', 'Status']) {
       await expect(
         page.getByRole('columnheader', { name: new RegExp(`^${header}$`, 'i') }),
       ).toBeVisible();
@@ -222,8 +263,11 @@ Cleanup uses the inline softDeleteEmployee helper because HRMS has no DELETE end
   }, testInfo) => {
     const code = testCode(testInfo, 'EMP_CREATE');
     const uniq = code.split('_').pop() || '00000';
-    // Kenya-valid mobile: 10 digits, prefix 07, passes ^0?[17][0-9]{8}$.
-    const mobile = `07${String(uniq).padStart(8, '0')}`.slice(0, 10);
+    // Mobile valid for THIS tenant's live MDMS rule (Kenya starts 7/1,
+    // Maputo starts 8). A hardcoded 07-prefix number blocks submit on a
+    // non-Kenya tenant via the EmployeeCreate form's live useMobileValidator,
+    // so the create never fires and the nav wait times out.
+    const mobile = generateValidMobile(mobileRule);
     createdCodes.add(code);
 
     await page.goto(`${LIST_PATH}/create`);
@@ -353,7 +397,7 @@ Code and Username are write-once because HRMS doesn't allow mutating either afte
     // Create one via UI then re-enter Edit.
     const code = testCode(testInfo, 'EMP_EDIT');
     const uniq = code.split('_').pop() || '11111';
-    const mobile = `07${String(uniq).padStart(8, '0')}`.slice(0, 10);
+    const mobile = generateValidMobile(mobileRule);
     createdCodes.add(code);
 
     await page.goto(`${LIST_PATH}/create`);
@@ -425,7 +469,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
     // on fishing a suitable victim out of the shared tenant.
     const code = testCode(testInfo, 'EMP_ROLE');
     const uniq = code.split('_').pop() || '44444';
-    const mobile = `07${String(uniq).padStart(8, '0')}`.slice(0, 10);
+    const mobile = generateValidMobile(mobileRule);
     createdCodes.add(code);
 
     const auth = loadAuth();
@@ -441,8 +485,8 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
           password: 'eGov@123', tenantId: TENANT_CODE,
           roles: [{ code: 'EMPLOYEE', name: 'Employee', tenantId: TENANT_CODE }],
         },
-        jurisdictions: [{ boundary: 'NAIROBI_CITY', boundaryType: 'County', hierarchy: 'ADMIN', hierarchyType: 'ADMIN', tenantId: TENANT_CODE, isActive: true }],
-        assignments: [{ department: 'DEPT_7', designation: 'DESIG_58', fromDate: Date.now() - 24 * 3600_000, isCurrentAssignment: true }],
+        jurisdictions: [{ boundary: SEED_BOUNDARY, boundaryType: 'County', hierarchy: 'ADMIN', hierarchyType: 'ADMIN', tenantId: TENANT_CODE, isActive: true }],
+        assignments: [{ department: SEED_DEPT, designation: SEED_DESIG, fromDate: Date.now() - 24 * 3600_000, isCurrentAssignment: true }],
       }],
     });
 
@@ -524,7 +568,7 @@ The MDMS reason source is asserted indirectly — if the dropdown has no options
   }, testInfo) => {
     const code = testCode(testInfo, 'EMP_DEACT');
     const uniq = code.split('_').pop() || '22222';
-    const mobile = `07${String(uniq).padStart(8, '0')}`.slice(0, 10);
+    const mobile = generateValidMobile(mobileRule);
     createdCodes.add(code);
 
     // Create via API (faster than clicking through) then flip via UI.
@@ -550,12 +594,12 @@ The MDMS reason source is asserted indirectly — if the dropdown has no options
           roles: [{ code: 'EMPLOYEE', name: 'Employee', tenantId: TENANT_CODE }],
         },
         jurisdictions: [{
-          boundary: 'NAIROBI_CITY', boundaryType: 'County',
+          boundary: SEED_BOUNDARY, boundaryType: 'County',
           hierarchy: 'ADMIN', hierarchyType: 'ADMIN',
           tenantId: TENANT_CODE, isActive: true,
         }],
         assignments: [{
-          department: 'DEPT_7', designation: 'DESIG_58',
+          department: SEED_DEPT, designation: SEED_DESIG,
           fromDate: Date.now() - 30 * 24 * 3600_000,
           isCurrentAssignment: true,
         }],
@@ -618,7 +662,7 @@ Affirms the safety contract — admins must explicitly opt-in to password rotati
   }, testInfo) => {
     const code = testCode(testInfo, 'EMP_PWD');
     const uniq = code.split('_').pop() || '33333';
-    const mobile = `07${String(uniq).padStart(8, '0')}`.slice(0, 10);
+    const mobile = generateValidMobile(mobileRule);
     createdCodes.add(code);
 
     const auth = loadAuth();
@@ -634,8 +678,8 @@ Affirms the safety contract — admins must explicitly opt-in to password rotati
           password: 'eGov@123', tenantId: TENANT_CODE,
           roles: [{ code: 'EMPLOYEE', name: 'Employee', tenantId: TENANT_CODE }],
         },
-        jurisdictions: [{ boundary:'NAIROBI_CITY', boundaryType:'County', hierarchy:'ADMIN', hierarchyType:'ADMIN', tenantId: TENANT_CODE, isActive:true }],
-        assignments: [{ department:'DEPT_7', designation:'DESIG_58', fromDate: Date.now()-24*3600_000, isCurrentAssignment:true }],
+        jurisdictions: [{ boundary:SEED_BOUNDARY, boundaryType:'County', hierarchy:'ADMIN', hierarchyType:'ADMIN', tenantId: TENANT_CODE, isActive:true }],
+        assignments: [{ department:SEED_DEPT, designation:SEED_DESIG, fromDate: Date.now()-24*3600_000, isCurrentAssignment:true }],
       }],
     });
 
@@ -704,14 +748,15 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         employeeCode: c,
         name: `PW Bulk ${i + 1}`,
         userName: '',
-        mobileNumber: `07111222${String(i).padStart(2, '0')}`,
+        // Valid for THIS tenant's MDMS mobile rule — no hardcoded '07…'.
+        mobileNumber: generateValidMobile(mobileRule),
         emailId: `${c.toLowerCase()}@example.com`,
         gender: 'FEMALE',
         dob: '1992-03-15',
-        department: 'DEPT_7',
-        designation: 'DESIG_58',
+        department: SEED_DEPT,
+        designation: SEED_DESIG,
         roles: 'EMPLOYEE',
-        jurisdictions: 'NAIROBI_CITY',
+        jurisdictions: SEED_BOUNDARY,
         dateOfAppointment: '2026-02-01',
       })),
       // Invalid row 1 — mobile too short, DOB malformed.
@@ -723,10 +768,10 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         emailId: '',
         gender: 'MALE',
         dob: 'not-a-date',
-        department: 'DEPT_7',
-        designation: 'DESIG_58',
+        department: SEED_DEPT,
+        designation: SEED_DESIG,
         roles: 'EMPLOYEE',
-        jurisdictions: 'NAIROBI_CITY',
+        jurisdictions: SEED_BOUNDARY,
         dateOfAppointment: '',
       },
       // Invalid row 2 — unknown department + unknown role code.
@@ -734,14 +779,15 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         employeeCode: invalidCodes[1],
         name: 'PW Bulk Bad2',
         userName: '',
-        mobileNumber: '0712345699',
+        // Valid mobile so the ONLY validation errors are the unknown dept/role.
+        mobileNumber: generateValidMobile(mobileRule),
         emailId: '',
         gender: 'MALE',
         dob: '1990-01-01',
         department: 'NO_SUCH_DEPT',
-        designation: 'DESIG_58',
+        designation: SEED_DESIG,
         roles: 'NO_SUCH_ROLE',
-        jurisdictions: 'NAIROBI_CITY',
+        jurisdictions: SEED_BOUNDARY,
         dateOfAppointment: '',
       },
     ];

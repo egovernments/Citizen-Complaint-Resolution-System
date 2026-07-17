@@ -2,14 +2,15 @@ import { useMemo } from 'react';
 import { DigitList, DigitDatagrid } from '@/admin';
 import type { DigitColumn } from '@/admin';
 import { useListContext, useResourceContext } from 'ra-core';
-import { getResourceConfig, getResourceLabel, getResourceBySchema } from '@/providers/bridge';
+import { getResourceConfig, getResourceBySchema } from '@/providers/bridge';
+import { useResourceLabel } from '@/providers/useResourceLabel';
 import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
 import { generateColumns, getRefMap, generateFilterElements } from './schemaUtils';
 
 export function MdmsResourcePage() {
   const resource = useResourceContext() ?? '';
   const config = getResourceConfig(resource);
-  const label = getResourceLabel(resource);
+  const label = useResourceLabel()(resource);
   const { definition } = useSchemaDefinition(config?.schema);
 
   // Compute refMap once, reused by columns and filters

@@ -41,6 +41,7 @@ export const ENDPOINTS = {
 
   ENC_ENCRYPT: '/egov-enc-service/crypto/v1/_encrypt',
   ENC_DECRYPT: '/egov-enc-service/crypto/v1/_decrypt',
+  ENC_GENERATE_KEY: '/egov-enc-service/crypto/v1/_generatekey',
   BNDRY_MGMT_PROCESS: '/egov-bndry-mgmnt/v1/_process',
   BNDRY_MGMT_GENERATE: '/egov-bndry-mgmnt/v1/_generate',
   BNDRY_MGMT_PROCESS_SEARCH: '/egov-bndry-mgmnt/v1/_process-search',

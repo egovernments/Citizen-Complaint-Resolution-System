@@ -22,9 +22,7 @@
           "type": "boolean"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -52,9 +50,7 @@
           "type": "string"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -115,9 +111,7 @@
           }
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -150,9 +144,7 @@
           "default": true
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -194,9 +186,7 @@
           "type": "string"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -232,9 +222,7 @@
           "type": "string"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -662,63 +650,42 @@
   },
   {
     "tenantId": "{tenantid}",
-    "code": "common-masters.UserValidation",
-    "description": "common-masters.UserValidation",
+    "code": "common-masters.MobileNumberValidation",
+    "description": "Mobile Number Validation Configuration",
     "isActive": true,
     "definition": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Mobile Number Validation Configuration",
+      "title": "Mobile Number Validation",
       "type": "object",
-      "properties": {
-        "zone": {
-          "type": "string"
-        },
-        "fieldType": {
-          "type": "string"
-        },
-        "rules": {
-          "type": "object",
-          "properties": {
-            "minLength": {
-              "type": "number"
-            },
-            "maxLength": {
-              "type": "number"
-            },
-            "pattern": {
-              "type": "string"
-            },
-            "allowedStartingCharacters": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "errorMessage": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "pattern"
-          ]
-        },
-        "attributes": {
-          "type": "object",
-          "properties": {
-            "prefix": {
-              "type": "string"
-            }
-          }
-        }
-      },
       "required": [
-        "fieldType",
-        "zone",
-        "rules"
+        "countryCode",
+        "mobileNumberRegex"
       ],
       "x-unique": [
-        "zone"
-      ]
+        "countryCode"
+      ],
+      "properties": {
+        "countryCode": {
+          "type": "string"
+        },
+        "mobileNumberRegex": {
+          "type": "string"
+        },
+        "default": {
+          "type": "boolean",
+          "default": false
+        },
+        "emailRegex": {
+          "type": "string",
+          "description": "Optional email validation pattern; frontends fall back to a built-in strict pattern when absent."
+        },
+        "nameRegex": {
+          "type": "string",
+          "description": "Optional person-name validation pattern; frontends fall back to their built-in pattern when absent."
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
     }
   }
 ]

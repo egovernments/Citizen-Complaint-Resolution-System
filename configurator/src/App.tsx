@@ -27,8 +27,15 @@ import {
   WorkflowProcessList, WorkflowProcessShow,
   MdmsSchemaList, MdmsSchemaShow,
   BoundaryHierarchyList, BoundaryHierarchyShow, BoundaryHierarchyCreate,
+  ComplaintHierarchyList, ComplaintHierarchyShow, ComplaintHierarchyCreate,
   AdvancedPage,
 } from '@/resources';
+// Novu-into-configurator read-only screens. Imported directly (not via the
+// @/resources barrel) so the notification surfaces stay self-contained.
+import { NotificationLogList } from '@/resources/notification-logs/NotificationLogList';
+import { NotificationProviderList } from '@/resources/notification-providers/NotificationProviderList';
+import { NotificationPreferenceList } from '@/resources/notification-preferences/NotificationPreferenceList';
+import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import PgrDashboard from './pages/PgrDashboard';
 import OrgChartPage from './pages/org-chart/OrgChartPage';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
@@ -115,7 +122,11 @@ function ManagementAdmin() {
         <Resource name="tenants" list={TenantList} show={TenantShow} edit={TenantEdit} />
         <Resource name="departments" list={DepartmentList} show={DepartmentShow} edit={DepartmentEdit} create={DepartmentCreate} />
         <Resource name="designations" list={DesignationList} show={DesignationShow} edit={DesignationEdit} create={DesignationCreate} />
-        <Resource name="complaint-types" list={ComplaintTypeList} show={ComplaintTypeShow} edit={ComplaintTypeEdit} create={ComplaintTypeCreate} />
+        {/* Complaint types are the LEAF rows of the single ComplaintHierarchy
+            master (registry key 'complaint-hierarchy'); the data provider
+            filters leaves and maps them to the legacy ServiceDefs shape so
+            these dedicated views keep working unchanged. */}
+        <Resource name="complaint-hierarchy" list={ComplaintTypeList} show={ComplaintTypeShow} edit={ComplaintTypeEdit} create={ComplaintTypeCreate} />
         <Resource name="employees" list={EmployeeList} show={EmployeeShow} edit={EmployeeEdit} create={EmployeeCreate} />
         <Resource name="complaints" list={ComplaintList} show={ComplaintShow} edit={ComplaintEdit} create={ComplaintCreate} />
         <Resource name="boundaries" list={BoundaryList} show={BoundaryShow} edit={BoundaryEdit} create={BoundaryCreate} />
@@ -130,6 +141,15 @@ function ManagementAdmin() {
         <Resource name="workflow-processes" list={WorkflowProcessList} show={WorkflowProcessShow} />
         <Resource name="mdms-schemas" list={MdmsSchemaList} show={MdmsSchemaShow} />
         <Resource name="boundary-hierarchies" list={BoundaryHierarchyList} show={BoundaryHierarchyShow} create={BoundaryHierarchyCreate} />
+        <Resource name="complaint-hierarchies" list={ComplaintHierarchyList} show={ComplaintHierarchyShow} create={ComplaintHierarchyCreate} />
+
+        {/* Novu-into-configurator: read-only notification surfaces served by the
+            novu-bridge proxy (not egov-mdms). Names match the 'custom' registry
+            keys the data provider branches on. Routable at
+            /manage/notification-log and /manage/notification-provider. */}
+        <Resource name="notification-log" list={NotificationLogList} />
+        <Resource name="notification-provider" list={NotificationProviderList} />
+        <Resource name="notification-preference" list={NotificationPreferenceList} />
 
         {/* Generic MDMS with Show/Edit/Create (exclude resources with dedicated UI above) */}
         {Object.keys(getGenericMdmsResources()).filter((name) => name !== 'role-actions').map((name) => (
@@ -138,6 +158,7 @@ function ManagementAdmin() {
 
         {/* Custom routes */}
         <CustomRoutes>
+          <Route path="/notification-configure" element={<NotificationConfigure />} />
           <Route path="/advanced" element={<AdvancedPage />} />
           <Route path="/pgr-dashboard" element={<PgrDashboard />} />
           <Route path="/org-chart" element={<OrgChartPage />} />
@@ -153,6 +174,10 @@ function ManagementAdmin() {
 
 // Storage key for persisting auth state
 const AUTH_STORAGE_KEY = 'crs-auth-state';
+
+// One-shot flag (sessionStorage) set when a request is rejected for an expired
+// session, read by LoginPage to explain why the operator was sent back.
+export const SESSION_EXPIRED_KEY = 'crs-session-expired';
 
 // Helper to restore apiClient from localStorage
 function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppState['user']; environment: string; tenant: string; targetTenant: string; mode: AppMode; currentPhase: number; completedPhases: number[] } | null {
@@ -234,6 +259,23 @@ function App() {
       showHelp: false,
     };
   });
+
+  // Drop the session and bounce to /login when any request reports the token
+  // is no longer valid (e.g. it expired while the operator was partway through
+  // a long flow like the Phase 2 OSM boundary fetch). Without this, an expired
+  // token surfaces only on the first write, as a cryptic downstream NPE, with
+  // the UI still pretending to be logged in.
+  useEffect(() => {
+    apiClient.setSessionExpiredHandler(() => {
+      try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1'); } catch { /* ignore */ }
+      clearUser();
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      apiClient.logout();
+      digitClient.clearAuth();
+      resetProviders();
+      setState(s => ({ ...s, isAuthenticated: false, user: null }));
+    });
+  }, []);
 
   // Re-sync apiClient on every render if authenticated (handles HMR)
   useEffect(() => {
@@ -343,7 +385,7 @@ function App() {
     }));
     trackEvent('phase_complete', { phase, tenant: state.tenant });
 
-    // Track onboarding completion
+    // Track onboarding completion (final phase is Phase 4 — Employees)
     if (phase === 4) {
       trackEvent('onboarding_complete', { tenant: state.tenant });
     }

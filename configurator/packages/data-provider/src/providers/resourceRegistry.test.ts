@@ -66,10 +66,27 @@ describe('resourceRegistry', () => {
 
   it('has all expected dedicated resources', () => {
     const dedicated = getDedicatedResources();
-    const expected = ['tenants', 'departments', 'designations', 'complaint-types', 'employees', 'boundaries', 'complaints', 'localization'];
+    // complaint types are now the LEAF view of the single ComplaintHierarchy
+    // master, exposed as the dedicated 'complaint-hierarchy' resource.
+    const expected = ['tenants', 'departments', 'designations', 'complaint-hierarchy', 'employees', 'boundaries', 'complaints', 'localization'];
     for (const name of expected) {
       assert.ok(dedicated[name], `Missing dedicated resource: ${name}`);
     }
+  });
+
+  it('complaint-hierarchy is the ComplaintHierarchy leaf-adapter resource', () => {
+    const config = getResourceConfig('complaint-hierarchy');
+    assert.ok(config);
+    assert.equal(config.schema, 'RAINMAKER-PGR.ComplaintHierarchy');
+    assert.equal(config.idField, 'code');
+    assert.equal(config.leafServiceDefAdapter, true);
+  });
+
+  it('drops the removed ServiceDefs / ClassificationNode resources', () => {
+    assert.equal(getResourceConfig('complaint-types'), undefined);
+    assert.equal(getResourceConfig('classification-nodes'), undefined);
+    assert.equal(getResourceBySchema('RAINMAKER-PGR.ServiceDefs'), undefined);
+    assert.equal(getResourceBySchema('RAINMAKER-PGR.ClassificationNode'), undefined);
   });
 
   it('getAllResources returns both dedicated and generic', () => {
@@ -95,12 +112,11 @@ describe('resourceRegistry', () => {
   });
 
   it('covers schemas registered on ke tenant that previously had no UI', () => {
-    // Pin Stage-0 hygiene: these 7 schemas live on `ke` but were invisible in
+    // Pin Stage-0 hygiene: these schemas live on `ke` but were invisible in
     // the configurator before. If a future refactor drops one, this fails loud.
     const expected: Record<string, string> = {
       'theme-config': 'common-masters.ThemeConfig',
-      'user-validation': 'common-masters.UserValidation',
-      'mobile-validation': 'ValidationConfigs.mobileNumberValidation',
+      'mobile-number-validation': 'common-masters.MobileNumberValidation',
       'tenant-boundary': 'egov-location.TenantBoundary',
       'auto-escalation-ignore': 'Workflow.AutoEscalationStatesToIgnore',
       'workflow-bs-master': 'Workflow.BusinessServiceMasterConfig',
@@ -111,6 +127,9 @@ describe('resourceRegistry', () => {
       assert.ok(cfg, `Missing resource ${resource}`);
       assert.strictEqual(cfg.schema, schema, `${resource} should point to ${schema}`);
     }
+    // Old aliases must be gone — a single canonical key avoids confusion
+    assert.strictEqual(getResourceConfig('user-validation'), undefined, 'user-validation alias must be removed');
+    assert.strictEqual(getResourceConfig('mobile-validation'), undefined, 'mobile-validation alias must be removed');
   });
 
   it('does not register schemas that do not exist on ke (phantom cleanup)', () => {

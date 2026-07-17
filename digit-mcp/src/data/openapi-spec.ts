@@ -231,7 +231,7 @@ function buildPaths(): Record<string, Record<string, unknown>> {
         summary: 'Search MDMS v2 records by schema code',
         description:
           'Search master data records. Common schemas: common-masters.Department, common-masters.Designation, ' +
-          'RAINMAKER-PGR.ServiceDefs, tenant.tenants, ACCESSCONTROL-ROLES.roles, egov-hrms.EmployeeType. ' +
+          'RAINMAKER-PGR.ComplaintHierarchy, tenant.tenants, ACCESSCONTROL-ROLES.roles, egov-hrms.EmployeeType. ' +
           'Returns the data field of each record.',
         requestBody: {
           required: true,
@@ -807,7 +807,7 @@ function buildPaths(): Record<string, Record<string, unknown>> {
         operationId: 'pgrCreate',
         summary: 'Create a new PGR complaint',
         description:
-          'Creates a citizen complaint. Requires a valid service code (from MDMS RAINMAKER-PGR.ServiceDefs), ' +
+          'Creates a citizen complaint. Requires a valid service code (a leaf code from MDMS RAINMAKER-PGR.ComplaintHierarchy), ' +
           'address with locality boundary code, and citizen info. The complaint enters PENDINGFORASSIGNMENT status.',
         parameters: [{ name: 'tenantId', in: 'query', required: true, schema: { type: 'string' } }],
         requestBody: {
@@ -824,7 +824,7 @@ function buildPaths(): Record<string, Record<string, unknown>> {
                     required: ['tenantId', 'serviceCode', 'description', 'address', 'citizen'],
                     properties: {
                       tenantId: { type: 'string', example: 'pg.citya' },
-                      serviceCode: { type: 'string', example: 'StreetLightNotWorking', description: 'From MDMS RAINMAKER-PGR.ServiceDefs' },
+                      serviceCode: { type: 'string', example: 'StreetLightNotWorking', description: 'A leaf code from MDMS RAINMAKER-PGR.ComplaintHierarchy' },
                       description: { type: 'string', example: 'Street light not working on Main Street' },
                       address: { $ref: '#/components/schemas/Address' },
                       citizen: {

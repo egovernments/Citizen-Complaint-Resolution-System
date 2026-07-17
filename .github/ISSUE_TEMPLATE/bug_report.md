@@ -1,38 +1,57 @@
 ---
 name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: bug
-assignees: ''
+about: Something is broken or behaves incorrectly
+title: "[Bug] "
+labels: ["bug"]
+assignees: []
+---
+
+# Description
+
+What went wrong? Be specific.
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+# Steps to Reproduce
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+1.
+2.
+3.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+---
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+# Expected Behavior
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+What should have happened instead?
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+---
 
-**Additional context**
-Add any other context about the problem here.
+# Actual Behavior
+
+What happened? Include error messages if any.
+
+---
+
+# Environment
+
+- **Deployment**: <!-- e.g., Nai Pepea, Maputo, local Docker setup -->
+- **Tenant**: <!-- e.g., ke.nairobi, mz.maputo, pg.citya -->
+- **Browser**: <!-- e.g., Chrome 125, Safari 18 -->
+- **User role**: <!-- e.g., Citizen, Employee/CSR, ADMIN -->
+
+---
+
+# Screenshots / Logs
+
+Attach screenshots, browser console errors, or service logs if available.
+
+---
+
+# Classification
+
+> Add these labels before submitting. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full list.
+
+- **Feature**: <!-- Add ONE feature label: feature:lifecycle-routing, feature:deployment-installation, feature:configuration-onboarding, feature:internationalization, feature:omnichannel, feature:decision-support, feature:privacy-consent, feature:saas-enablement, feature:platform-modernization, feature:knowledge-ecosystem. Skip if pure maintenance bug. -->
+- **Area**: <!-- Add ONE area label: area:frontend, area:backend, area:devops -->
+- **Priority**: <!-- P0 = system down / P1 = major, no workaround / P2 = has workaround / P3 = minor -->
+- **Source**: <!-- Set on the project board: Maputo, Nai Pepea, Sandbox, Local Setup, Unified Dev -->

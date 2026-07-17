@@ -26211,5 +26211,23 @@
       "serviceCode": "MDMS Search",
       "parentModule": "306"
     }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": 4557,
+      "url": "url",
+      "name": "Dashboard",
+      "path": "Dashboard",
+      "enabled": true,
+      "leftIcon": "action:dashboard",
+      "rightIcon": "",
+      "displayName": "Dashboard",
+      "orderNumber": 2,
+      "queryParams": "",
+      "serviceCode": "DASHBOARD",
+      "parentModule": "",
+      "navigationURL": "/digit-ui/employee/dashboard"
+    }
   }
 ]

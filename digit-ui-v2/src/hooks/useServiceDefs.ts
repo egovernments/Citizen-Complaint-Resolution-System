@@ -1,24 +1,67 @@
 /**
- * Fetch the PGR ServiceDefs catalogue (complaint types) from MDMS.
+ * Fetch the PGR complaint catalogue (complaint types) from MDMS.
  *
- * The legacy citizen UI walks a two-level hierarchy: top-level service
- * (e.g. "Public Toilet") with sub-services as its `menuPath` children
- * (e.g. "Damaged", "Cleaning needed"). MDMS stores them flat with a
- * `menuPath` like `Public Toilet.Damaged` — we re-tree by splitting.
+ * TARGET MODEL (2-master complaint hierarchy):
+ *   The catalogue now lives in a single adjacency-list master,
+ *   RAINMAKER-PGR.ComplaintHierarchy, holding BOTH interior nodes and leaf
+ *   complaint types. A row is:
+ *     { hierarchyType, levelCode, code, parentCode, name, order, active, path }
+ *   LEAF rows (the actual complaint types a citizen picks) ALSO carry
+ *   department / departments[] / slaHours / keywords. A leaf row's `code` IS
+ *   the serviceCode stored on a complaint.
  *
- * Cached by react-query at 5 min stale time; the catalogue rarely
- * changes during a citizen session.
+ * ADAPTER PATTERN: we fetch ComplaintHierarchy, keep only LEAF rows, and map
+ * each leaf back to the legacy ServiceDefs shape so downstream code (the
+ * wizard, list/show labels) stays unchanged. The old masters
+ * (ServiceDefs / ClassificationNode / menuPath) are gone — grouping and labels
+ * now derive from the tree:
+ *     group key   = leaf.parentCode
+ *     group label = the parent ComplaintHierarchy node's `name`
+ *
+ * LEAF DETECTION: a row is a leaf iff it has `department` or `slaHours`
+ * present (interior nodes omit them).
+ *
+ * Cached by react-query at 5 min stale time; the catalogue rarely changes
+ * during a citizen session.
  */
 import { useQuery } from '@tanstack/react-query';
 import { apiClient, getApiBaseUrl } from '@/api';
 
 const STATE_TENANT = (import.meta.env.VITE_CITIZEN_STATE_TENANT as string) || 'ke';
 
+/** A raw row from RAINMAKER-PGR.ComplaintHierarchy (adjacency list). */
+interface HierarchyRow {
+  hierarchyType?: string;
+  levelCode?: string;
+  code: string;
+  parentCode?: string;
+  name?: string;
+  order?: number;
+  active?: boolean;
+  path?: string;
+  // Leaf-only fields:
+  department?: string;
+  departments?: string[];
+  slaHours?: number;
+  keywords?: string;
+}
+
+/**
+ * Legacy ServiceDefs shape — preserved so downstream code keeps working.
+ * `menuPath` / `menuPathName` are now DERIVED from the tree (parentCode and the
+ * parent node's name) rather than read from a master field.
+ */
 export interface ServiceDef {
   serviceCode: string;
   name: string;
   menuPath?: string;
+  menuPathName?: string;
+  parentCode?: string;
   department?: string;
+  departments?: string[];
+  slaHours?: number;
+  keywords?: string;
+  order?: number;
   active?: boolean;
 }
 
@@ -30,10 +73,20 @@ export interface ServiceDefNode {
 
 interface MdmsResponse {
   MdmsRes?: {
-    'RAINMAKER-PGR'?: { ServiceDefs?: ServiceDef[] };
+    'RAINMAKER-PGR'?: { ComplaintHierarchy?: HierarchyRow[] };
   };
 }
 
+/** A row is a leaf (a submittable complaint type) iff it carries SLA/department. */
+function isLeaf(row: HierarchyRow): boolean {
+  return row.department != null || row.slaHours != null;
+}
+
+/**
+ * Fetch ComplaintHierarchy, then keep LEAF rows mapped to the legacy
+ * ServiceDef shape. `menuPath` = parentCode; `menuPathName` = the name of the
+ * parent ComplaintHierarchy node (the group label).
+ */
 async function fetchServiceDefs(): Promise<ServiceDef[]> {
   const { token } = apiClient.getAuth();
   const res = await fetch(`${getApiBaseUrl()}/egov-mdms-service/v1/_search?tenantId=${STATE_TENANT}`, {
@@ -46,67 +99,105 @@ async function fetchServiceDefs(): Promise<ServiceDef[]> {
         moduleDetails: [
           {
             moduleName: 'RAINMAKER-PGR',
-            masterDetails: [{ name: 'ServiceDefs', filter: '[?(@.active == true)]' }],
+            // No active-filter here: we need the interior nodes too (to resolve
+            // each leaf's parent name). Inactive rows are dropped below.
+            masterDetails: [{ name: 'ComplaintHierarchy' }],
           },
         ],
       },
     }),
   });
-  if (!res.ok) throw new Error(`MDMS ServiceDefs fetch failed: HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`MDMS ComplaintHierarchy fetch failed: HTTP ${res.status}`);
   const json = (await res.json()) as MdmsResponse;
-  return json.MdmsRes?.['RAINMAKER-PGR']?.ServiceDefs ?? [];
+  const rows = json.MdmsRes?.['RAINMAKER-PGR']?.ComplaintHierarchy ?? [];
+
+  // code → node, for resolving each leaf's parent name (the group label).
+  const byCode = new Map<string, HierarchyRow>();
+  for (const r of rows) {
+    if (r.code) byCode.set(r.code, r);
+  }
+
+  // Set of codes that ARE a parent of some active row (i.e. have children).
+  const hasChildren = new Set<string>();
+  for (const r of rows) {
+    if (r.parentCode && r.active !== false) hasChildren.add(r.parentCode);
+  }
+
+  // A row is SELECTABLE by a citizen if it is a leaf (carries department/SLA)
+  // OR it is a terminal node — nothing else lists it as a parent. The terminal
+  // case covers a branch that stops before the declared leaf level (e.g. 3
+  // levels declared but this SECTOR has no SUB_TYPE): the citizen picks the
+  // SECTOR itself and its real code becomes the serviceCode (a real
+  // ComplaintHierarchy row, so pgr-services accepts it — no INVALID_SERVICECODE).
+  const isSelectable = (r: HierarchyRow) => isLeaf(r) || !hasChildren.has(r.code);
+
+  return rows
+    .filter((r) => isSelectable(r) && r.active !== false && r.code)
+    .map((r) => {
+      const parent = r.parentCode ? byCode.get(r.parentCode) : undefined;
+      return {
+        serviceCode: r.code,
+        name: r.name || r.code,
+        parentCode: r.parentCode,
+        menuPath: r.parentCode,
+        menuPathName: parent?.name ?? r.parentCode,
+        department: r.department,
+        departments: r.departments,
+        slaHours: r.slaHours,
+        keywords: r.keywords,
+        order: r.order,
+        active: r.active,
+      } satisfies ServiceDef;
+    });
 }
 
+/**
+ * Build the citizen-facing two-level pick tree from the adjacency list:
+ *   group node  = the leaf's parent (keyed by parentCode, labelled by the
+ *                 parent node's name = menuPathName)
+ *   leaf        = the complaint type the citizen actually picks (serviceCode)
+ *
+ * Group nodes carry a synthetic serviceCode (`__cat:<parentCode>`) so the
+ * wizard's "type" step can validate a selection; the synthetic value never
+ * reaches the PGR _create payload — the wizard requires a leaf serviceCode
+ * before letting the citizen advance.
+ */
 function toTree(defs: ServiceDef[]): ServiceDefNode[] {
-  // naipepea's PGR ServiceDefs use `menuPath` as a CATEGORY (single token like
-  // "Administration"); every record has a real `serviceCode` of its own (e.g.
-  // "DocumentProcessingDelay") that the PGR backend wants on submit. So:
-  //
-  //   menuPath  →  category (the parent node, NOT submittable itself)
-  //   serviceCode + name  →  leaf the citizen actually picks
-  //
-  // Some deployments use the legacy "Parent.Child" menuPath; we treat both
-  // shapes uniformly: split on '.', the first segment becomes the category
-  // and we accumulate every record's serviceCode as a leaf under it.
-  //
-  // Category nodes carry a synthetic serviceCode (`__cat:<name>`) so the
-  // wizard's "type" step can validate that the citizen picked something,
-  // but the synthetic value never reaches the PGR _create payload — the
-  // wizard requires a leaf serviceCode before letting the citizen advance.
-  const categories = new Map<string, ServiceDefNode>();
+  const groups = new Map<string, ServiceDefNode>();
 
   for (const d of defs) {
-    const path = (d.menuPath || d.name || '').split('.').filter(Boolean);
-    if (path.length === 0 || !d.serviceCode) continue;
+    if (!d.serviceCode) continue;
 
-    const categoryName = path[0];
-    const humanName = path.length > 1 ? path.slice(1).join(' / ') : (d.name || d.serviceCode);
+    // Group by parentCode; label by the parent node's name. Leaves with no
+    // parent fall back to a single "Other" bucket so they remain pickable.
+    const groupKey = d.parentCode || '__root';
+    const groupName = d.menuPathName || d.parentCode || 'Other';
 
-    let cat = categories.get(categoryName);
-    if (!cat) {
-      cat = {
-        serviceCode: `__cat:${categoryName}`,
-        name: categoryName,
+    let group = groups.get(groupKey);
+    if (!group) {
+      group = {
+        serviceCode: `__cat:${groupKey}`,
+        name: groupName,
         children: [],
       };
-      categories.set(categoryName, cat);
+      groups.set(groupKey, group);
     }
-    cat.children.push({
+    group.children.push({
       serviceCode: d.serviceCode,
-      name: humanName,
+      name: d.name,
       children: [],
     });
   }
 
-  // Sort categories alphabetically; sort leaves within each by name.
-  return Array.from(categories.values())
+  // Sort groups alphabetically; sort leaves within each by name.
+  return Array.from(groups.values())
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((c) => ({ ...c, children: c.children.sort((a, b) => a.name.localeCompare(b.name)) }));
+    .map((g) => ({ ...g, children: g.children.sort((a, b) => a.name.localeCompare(b.name)) }));
 }
 
 export function useServiceDefs(): { tree: ServiceDefNode[]; isLoading: boolean; error: unknown } {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['pgr-service-defs', STATE_TENANT],
+    queryKey: ['pgr-complaint-hierarchy', STATE_TENANT],
     queryFn: fetchServiceDefs,
     staleTime: 5 * 60_000,
     gcTime: 10 * 60_000,

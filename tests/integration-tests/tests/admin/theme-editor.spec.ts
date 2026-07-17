@@ -58,11 +58,11 @@ Smoke-tier test — keeps the failure mode clear when the seed has been wiped.`,
 test('edit page renders the flagship editor (tabs + preview)', {
   annotation: {
     type: 'description',
-    description: `Catches regression on PR #4 (flagship theme editor). The /manage/theme-config/<id>/edit URL must render the dedicated editor — tabs (Primary/Link, Text, Grey, Charts) plus a live preview. If the customEditor escape hatch on SchemaDescriptor regresses, the fallback would be the generic MdmsResourceEdit form (no tabs, no preview), which this test would catch.
+    description: `Catches regression on PR #4 (flagship theme editor). The /manage/theme-config/<id>/edit URL must render the dedicated editor — the v3 designer-1:1 token tabs plus a live preview. If the customEditor escape hatch on SchemaDescriptor regresses, the fallback would be the generic MdmsResourceEdit form (no tabs, no preview), which this test would catch.
 
 Steps:
 1. setTimeout 90s; navigate to /configurator/manage/theme-config/kenya-green/edit (45s timeout).
-2. For each tab name in ['Primary / Link', 'Text', 'Grey', 'Charts'], assert the matching role=tab is visible (within 30s).
+2. For each tab name in ['Brand & Surface', 'Text', 'Buttons', 'Inputs', 'Header & Sidebar', 'Status', 'Tables & Misc', 'Charts'] (the ThemeConfig descriptor's non-Identity groups), assert the matching role=tab is visible (within 30s).
 3. Assert at least one element with [data-token] (the live preview marker) is visible within 10s.
 
 Uses the auth.setup.ts storageState — admin token already in localStorage.`,
@@ -77,8 +77,21 @@ Uses the auth.setup.ts storageState — admin token already in localStorage.`,
     timeout: 45_000,
   });
 
-  // Tabs render — means customEditor hatch fired.
-  const tabLabels = ['Primary / Link', 'Text', 'Grey', 'Charts'];
+  // Tabs render — means customEditor hatch fired. These are the
+  // ThemeConfig descriptor's field groups minus the "Identity" strip
+  // (see schemaDescriptors/theme-config.ts). The old v1 tab set
+  // ('Primary / Link', 'Grey', …) no longer exists — the editor is v3
+  // designer-1:1 with flat tokens like colors.primary-1.
+  const tabLabels = [
+    'Brand & Surface',
+    'Text',
+    'Buttons',
+    'Inputs',
+    'Header & Sidebar',
+    'Status',
+    'Tables & Misc',
+    'Charts',
+  ];
   for (const label of tabLabels) {
     const tab = page.getByRole('tab', { name: label }).first();
     await expect(tab, `tab "${label}" should render`).toBeVisible({ timeout: 30_000 });
@@ -89,15 +102,15 @@ Uses the auth.setup.ts storageState — admin token already in localStorage.`,
   await expect(preview, 'live preview should render').toBeVisible({ timeout: 10_000 });
 });
 
-test('editing primary.main updates the preview live', {
+test('editing a brand token updates the preview live', {
   annotation: {
     type: 'description',
-    description: `Round-trip test for the editor's live preview: changing the primary.main color in the form must mutate the matching preview element's computed backgroundColor on the next render. Uses #FF1493 (hot pink) so it can't collide with any kenya-green default. Reverts before exiting so the test is idempotent and never leaves MDMS dirty.
+    description: `Round-trip test for the editor's live preview: changing a color token in the form must mutate the matching preview element's computed backgroundColor on the next render. We drive the "Primary button / bg default" token (colors.button-primary-bg-default) — ThemePreview fans it into the v1 primary.main path that the Primary preview button renders, and it is the last writer to primary.main in ThemePreview's V2_TO_V1_FALLBACK map, so the change is deterministic regardless of the seed record's other tokens. Uses #FF1493 (hot pink) so it can't collide with any kenya-green default. Reverts before exiting so the test is idempotent and never leaves MDMS dirty.
 
 Steps:
 1. setTimeout 90s; navigate to the edit URL.
-2. Click the "Primary / Link" tab.
-3. Locate the Primary/main row, find its <input type="text"> (the form-bound hex input); wait for visibility.
+2. Click the "Buttons" tab.
+3. Locate the "Primary button / bg default" row, find its <input type="text"> (the form-bound hex input); wait for visibility.
 4. Capture the originalHex (default '#006B3F' fallback).
 5. Fill TEST_HEX = '#FF1493' and blur.
 6. Locate the preview button [data-token~="colors.primary.main"] filtered by text "Primary"; assert visible.
@@ -114,15 +127,15 @@ Doesn't actually click Save — the revert keeps MDMS clean even if a stray clic
     timeout: 45_000,
   });
 
-  // Switch to the Primary/Link tab so the input is visible.
-  await page.getByRole('tab', { name: 'Primary / Link' }).first().click({ timeout: 30_000 });
+  // Switch to the Buttons tab so the input is visible.
+  await page.getByRole('tab', { name: 'Buttons' }).first().click({ timeout: 30_000 });
 
   // ColorInput renders a native <input type=color> + a text box. Target the
-  // text box since that binds directly to the form value.
+  // text box since that binds directly to the form value. The label text
+  // comes from the theme-config descriptor (colors.button-primary-bg-default).
   const primaryMainRow = page
-    .locator('text=/Primary\\s*\\/\\s*main/i')
+    .locator('label', { hasText: /Primary button \/ bg default/i })
     .first()
-    .locator('..')
     .locator('..');
   const hexInput = primaryMainRow.locator('input[type="text"]').first();
   await expect(hexInput).toBeVisible({ timeout: 15_000 });
