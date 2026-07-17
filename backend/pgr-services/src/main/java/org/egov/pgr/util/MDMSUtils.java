@@ -37,6 +37,7 @@ import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_MASTER;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_MASTER;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.MDMS_ALL_DEPARTMENTS_JSONPATH;
 
 @Slf4j
 @Component
@@ -56,6 +57,15 @@ public class MDMSUtils {
     // #432). Cache lives for the process lifetime — slaHours changes in MDMS need a
     // pgr-services restart to take effect, same staleness window the migration map had.
     private final Map<String, Map<String, Long>> serviceCodeToSlaCache = new ConcurrentHashMap<>();
+
+    // Department CODE -> NAME, cached per CITY tenant (see getDepartmentCodeToNameMap javadoc for
+    // why state-level keying would be wrong here). Backs EmployeeDepartmentScopeService, which
+    // must filter on both forms since PGRService#getDepartmentFromMDMS stores the NAME whenever
+    // resolvable, only falling back to the CODE on lookup failure. Same restart-to-refresh
+    // staleness window as serviceCodeToSlaCache above — but ONLY for non-empty results (see
+    // getDepartmentCodeToNameMap): an empty map is never cached, so a transient MDMS failure or
+    // not-yet-seeded tenant is retried on the next call instead of being stuck empty until restart.
+    private final Map<String, Map<String, String>> departmentCodeToNameCache = new ConcurrentHashMap<>();
 
     // Config-driven notification masters, cached per state-level tenant with a short TTL
     // (pgr.notification.mdms.cache.ttl.ms, default 60s). Configurator edits to
@@ -99,6 +109,54 @@ public class MDMSUtils {
         } catch (Exception e) {
             log.error("Failed to load serviceCode->SLA map for tenant {}; inbox SLA sort will fall back "
                     + "to the business-level SLA", stateTenant, e);
+        }
+        return map;
+    }
+
+    /**
+     * Department CODE -> NAME for every row in the common-masters Department master, cached per
+     * CITY tenant (not state-level — a city's master can override the state's, so two cities
+     * under the same state must never share a cache entry). Returns an empty map (never null) on
+     * MDMS failure — that result is deliberately NOT cached (unlike a populated map), so a
+     * transient MDMS blip or not-yet-seeded tenant is retried on the next call instead of being
+     * stuck empty for the rest of the process lifetime.
+     */
+    public Map<String, String> getDepartmentCodeToNameMap(String tenantId) {
+        Map<String, String> cached = departmentCodeToNameCache.get(tenantId);
+        if (cached != null)
+            return cached;
+
+        Map<String, String> fetched = fetchDepartmentCodeToNameMap(tenantId);
+        if (!fetched.isEmpty())
+            departmentCodeToNameCache.put(tenantId, fetched);
+        return fetched;
+    }
+
+    /** City tenant first (masters can be overridden per-city); state tenant as fallback. */
+    private Map<String, String> fetchDepartmentCodeToNameMap(String tenantId) {
+        Map<String, String> map = fetchDepartmentCodeToNameMapForTenant(tenantId);
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        if (map.isEmpty() && !tenantId.equals(stateTenant))
+            map = fetchDepartmentCodeToNameMapForTenant(stateTenant);
+        return map;
+    }
+
+    private Map<String, String> fetchDepartmentCodeToNameMapForTenant(String tenantId) {
+        Map<String, String> map = new LinkedHashMap<>();
+        try {
+            MdmsCriteriaReq req = getMDMSRequest(new RequestInfo(), tenantId);
+            Object result = serviceRequestRepository.fetchResult(getMdmsSearchUrl(), req);
+            List<Map<String, Object>> rows = JsonPath.read(result, MDMS_ALL_DEPARTMENTS_JSONPATH);
+            for (Map<String, Object> row : rows) {
+                Object code = row.get("code");
+                Object name = row.get("name");
+                if (code != null && name != null)
+                    map.put(code.toString(), name.toString());
+            }
+        } catch (Exception e) {
+            log.error("Failed to load department code->name map for tenant {} — department-scoped "
+                    + "search will filter on the HRMS code only, missing complaints stored under the "
+                    + "resolved department NAME", tenantId, e);
         }
         return map;
     }
@@ -394,6 +452,7 @@ public class MDMSUtils {
                             @SuppressWarnings("unchecked")
                             Map<String, Object> schema = (Map<String, Object>) schemaObj;
                             cfg.setXSecurity(asStringList(schema.get("x-security")));
+                            cfg.setNoMaskFields(asStringList(schema.get("x-no-mask")));
                             cfg.setFields(parseFieldDefinitions(schema));
                         }
                     }

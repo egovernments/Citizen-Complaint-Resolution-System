@@ -116,14 +116,45 @@ public class EncryptionDecryptionService {
     }
 
     /**
-     * All-or-nothing masking: replaces every dynamic field with "****".
-     * Call instead of decrypt() when the caller lacks CONFIDENTIAL_COMPLAINT_VIEWER.
+     * All-or-nothing masking: replaces every dynamic field with "****", except fields listed in
+     * cfg's MDMS-driven "x-no-mask" (per caseRelatedTo), which are decrypted (if secured) and
+     * left visible instead. Use this overload when ext holds raw stored values (i.e. x-security
+     * fields are still ciphertext) — e.g. the search/read path, which never calls decrypt() first.
+     * cfg may be null (e.g. MDMS config unresolvable) — in that case no-mask fields can't be
+     * safely decrypted either, so they're masked too, same as everything else.
      */
-    public ExtendedAttributes maskAll(ExtendedAttributes ext) {
+    public ExtendedAttributes maskAll(ExtendedAttributes ext, ComplaintTemplateTypeConfig cfg) {
         if (ext == null || ext.getDynamicFields() == null || ext.getDynamicFields().isEmpty())
             return ext;
+
+        Set<String> noMask = noMaskFields(cfg);
+        boolean hasNoMaskField = ext.getDynamicFields().keySet().stream().anyMatch(noMask::contains);
+        if (hasNoMaskField && cfg != null) decrypt(ext, cfg);
+
+        return maskFieldsExcept(ext, noMask);
+    }
+
+    /**
+     * All-or-nothing masking for an ext that already holds plaintext (e.g. a pre-encryption
+     * snapshot like update()'s plainExt) — cfg's no-mask fields are left as-is, no decrypt
+     * attempted. Call instead of decrypt() when the caller lacks CONFIDENTIAL_COMPLAINT_VIEWER.
+     */
+    public ExtendedAttributes maskAllPlaintext(ExtendedAttributes ext, ComplaintTemplateTypeConfig cfg) {
+        if (ext == null || ext.getDynamicFields() == null || ext.getDynamicFields().isEmpty())
+            return ext;
+        return maskFieldsExcept(ext, noMaskFields(cfg));
+    }
+
+    private Set<String> noMaskFields(ComplaintTemplateTypeConfig cfg) {
+        return cfg != null && cfg.getNoMaskFields() != null
+                ? new HashSet<>(cfg.getNoMaskFields()) : Collections.emptySet();
+    }
+
+    private ExtendedAttributes maskFieldsExcept(ExtendedAttributes ext, Set<String> noMask) {
         new ArrayList<>(ext.getDynamicFields().keySet())
-                .forEach(k -> ext.putField(k, MASK_SENTINEL));
+                .forEach(k -> {
+                    if (!noMask.contains(k)) ext.putField(k, MASK_SENTINEL);
+                });
         return ext;
     }
 

@@ -5,6 +5,7 @@ import org.egov.common.contract.request.RequestInfo;
 import org.egov.common.contract.request.User;
 import org.egov.pgr.config.PGRConfiguration;
 import org.egov.pgr.util.HRMSUtil;
+import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.web.models.RequestSearchCriteria;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -13,6 +14,7 @@ import org.springframework.util.CollectionUtils;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -22,8 +24,11 @@ import java.util.Set;
  * unrestricted, unchanged from pre-existing behavior — so upgrading with the default (empty)
  * config is a no-op.
  *
- * Filters directly on the complaint's stored {@code additionalDetails.department} field, matching
- * the employee's raw HRMS department code as-is — no MDMS name resolution.
+ * Filters directly on the complaint's stored {@code additionalDetails.department} field. That
+ * field holds the employee's raw HRMS department CODE only when {@link
+ * org.egov.pgr.service.PGRService#getDepartmentFromMDMS} failed to resolve a name for it — the
+ * normal case stores the MDMS-resolved department NAME instead. So both the HRMS code and its
+ * MDMS name counterpart are matched here to cover complaints created under either form.
  *
  * CITIZEN search is untouched — this is only ever invoked for USERTYPE_EMPLOYEE callers.
  */
@@ -33,11 +38,13 @@ public class EmployeeDepartmentScopeService {
 
     private final HRMSUtil hrmsUtil;
     private final PGRConfiguration config;
+    private final MDMSUtils mdmsUtils;
 
     @Autowired
-    public EmployeeDepartmentScopeService(HRMSUtil hrmsUtil, PGRConfiguration config) {
+    public EmployeeDepartmentScopeService(HRMSUtil hrmsUtil, PGRConfiguration config, MDMSUtils mdmsUtils) {
         this.hrmsUtil = hrmsUtil;
         this.config = config;
+        this.mdmsUtils = mdmsUtils;
     }
 
     /**
@@ -59,9 +66,22 @@ public class EmployeeDepartmentScopeService {
         if (departments.isEmpty())
             return false;
 
-        // (3) restrict criteria to complaints stored under that department code.
-        criteria.setDepartmentCodes(departments);
+        // (3) restrict criteria to complaints stored under that department's code OR its
+        // MDMS-resolved name (see class javadoc for why both forms can appear).
+        criteria.setDepartmentCodes(withResolvedNames(departments, tenantId));
         return true;
+    }
+
+    /** Adds each code's MDMS department NAME alongside it, when resolvable. */
+    private Set<String> withResolvedNames(Set<String> departmentCodes, String tenantId) {
+        Map<String, String> codeToName = mdmsUtils.getDepartmentCodeToNameMap(tenantId);
+        Set<String> resolved = new LinkedHashSet<>(departmentCodes);
+        for (String code : departmentCodes) {
+            String name = codeToName.get(code);
+            if (name != null)
+                resolved.add(name);
+        }
+        return resolved;
     }
 
     /**
