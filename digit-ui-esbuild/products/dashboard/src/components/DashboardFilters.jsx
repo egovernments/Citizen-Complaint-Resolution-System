@@ -5,6 +5,7 @@ import {
   GLOBAL_FILTER_FIELDS,
   hasActiveFilters,
 } from "../config/globalFilterGroups";
+import ComplaintTypeTreeFilter from "./ComplaintTypeTreeFilter";
 import useDashboardT from "../i18n/useDashboardT";
 
 const FunnelIcon = () => (
@@ -81,6 +82,7 @@ const DashboardFilters = ({
   const geographyOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
   const complaintTypeOptions =
     filterOptions?.complaintType ?? COMPLAINT_TYPE_OPTIONS;
+  const complaintTypeTree = filterOptions?.complaintTypeTree ?? null;
 
   const dateFrom = filters?.dateFrom ?? GLOBAL_FILTER_FIELDS.find((f) => f.id === "dateFrom")?.defaultValue;
   const dateTo = filters?.dateTo ?? GLOBAL_FILTER_FIELDS.find((f) => f.id === "dateTo")?.defaultValue;
@@ -155,21 +157,34 @@ const DashboardFilters = ({
           </select>
         </div>
 
-        <div className="dashboard-filter-inline-select-wrap">
-          <select
-            value={filterOptionsLoading && complaintTypeOptions.length <= 1 ? "" : complaintType}
-            disabled={filterOptionsLoading && complaintTypeOptions.length <= 1}
-            onChange={(e) => onFilterChange("complaintType", e.target.value)}
-            aria-label={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
-            className="dashboard-filter-inline-select"
-          >
-            {filterOptionsLoading && complaintTypeOptions.length <= 1 ? (
-              <option value="">{t("DASHBOARD_COMMON_LOADING", "Loading…")}</option>
-            ) : (
-              renderGroupedOptions(complaintTypeOptions)
-            )}
-          </select>
-        </div>
+        {complaintTypeTree ? (
+          // ONE-widget tree traversal (breadcrumb + children dropdown + up),
+          // ABAC-pruned; leaf selection → serviceCode, interior → complaintPath.
+          <ComplaintTypeTreeFilter
+            tree={complaintTypeTree}
+            filters={filters}
+            onFilterChange={onFilterChange}
+            t={t}
+          />
+        ) : (
+          // Degrade: no usable/pruned hierarchy (flat tenant, MDMS fetch
+          // failure, empty scoped distincts) → the previous flat leaf select.
+          <div className="dashboard-filter-inline-select-wrap">
+            <select
+              value={filterOptionsLoading && complaintTypeOptions.length <= 1 ? "" : complaintType}
+              disabled={filterOptionsLoading && complaintTypeOptions.length <= 1}
+              onChange={(e) => onFilterChange("complaintType", e.target.value)}
+              aria-label={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
+              className="dashboard-filter-inline-select"
+            >
+              {filterOptionsLoading && complaintTypeOptions.length <= 1 ? (
+                <option value="">{t("DASHBOARD_COMMON_LOADING", "Loading…")}</option>
+              ) : (
+                renderGroupedOptions(complaintTypeOptions)
+              )}
+            </select>
+          </div>
+        )}
 
         <button
           type="button"

@@ -616,6 +616,34 @@
     pointer-events: none;
   }
 
+  /* ── Complaint-type tree-traversal filter (one-widget subtree nav) ──── */
+
+  .dashboard-type-tree-filter {
+    @apply tw-inline-flex tw-h-7 tw-shrink-0 tw-items-center tw-gap-1 tw-self-center;
+  }
+
+  .dashboard-type-tree-up {
+    @apply tw-px-1;
+  }
+
+  .dashboard-type-tree-crumbs {
+    @apply tw-inline-flex tw-items-center tw-gap-1 tw-text-[11px] tw-leading-none tw-text-muted-foreground;
+  }
+
+  .dashboard-type-tree-crumb {
+    @apply tw-m-0 tw-cursor-pointer tw-border-0 tw-bg-transparent tw-p-0 tw-text-[11px] tw-leading-none tw-text-muted-foreground hover:tw-text-foreground hover:tw-underline;
+    font-family: inherit;
+  }
+
+  .dashboard-type-tree-sep {
+    @apply tw-select-none;
+  }
+
+  .dashboard-type-tree-current {
+    @apply tw-text-[11px] tw-font-medium tw-leading-none tw-text-foreground;
+  }
+
+
   /* ── Responsive layout ─────────────────────────────────────────────── */
 
   .dashboard-main {

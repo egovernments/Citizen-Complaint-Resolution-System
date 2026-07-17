@@ -996,6 +996,62 @@
   pointer-events: none;
 }
 
+/* ── Complaint-type tree-traversal filter (one-widget subtree nav) ──── */
+
+.dashboard-type-tree-filter{
+  display: inline-flex;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+  align-self: center;
+}
+
+.dashboard-type-tree-up{
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.dashboard-type-tree-crumbs{
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted-foreground);
+}
+
+.dashboard-type-tree-crumb{
+  margin: 0px;
+  cursor: pointer;
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted-foreground);
+  font-family: inherit;
+}
+
+.dashboard-type-tree-crumb:hover{
+  color: var(--foreground);
+  text-decoration-line: underline;
+}
+
+.dashboard-type-tree-sep{
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+
+.dashboard-type-tree-current{
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--foreground);
+}
+
+
 /* ── Responsive layout ─────────────────────────────────────────────── */
 
 .dashboard-grid-wrap .react-grid-layout {
