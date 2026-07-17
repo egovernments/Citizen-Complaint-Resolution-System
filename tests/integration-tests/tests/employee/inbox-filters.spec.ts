@@ -251,6 +251,14 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     // further child combobox appears (leaf reached). A single-level tenant
     // still narrows to that boundary.
     let levels = 0;
+    // Remember the TEXT of the deepest option actually picked. The rows render
+    // the localized boundary NAME ("Chesoen"), never the code
+    // ("BOMET_BOMET_CENTRAL_CHESOEN") that the request carries, so the code is
+    // not a legal thing to compare a row against. This spec used to do exactly
+    // that and passed here only by accident: mz.maputo has no boundary
+    // localization, so its rows render the raw code and the two happened to
+    // match. On a localized deployment the same assertion could never hold.
+    let leafLabel = '';
     for (let i = 0; i < 6; i++) {
       const combos = page.locator('button[role="combobox"]');
       const n = await combos.count();
@@ -260,6 +268,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
       await page.waitForTimeout(700);
       const opt = page.getByRole('option').first();
       if (await opt.count() === 0) break;
+      leafLabel = (await opt.innerText().catch(() => ''))?.trim() || leafLabel;
       await opt.click();
       await page.waitForTimeout(900);
       levels++;
@@ -285,7 +294,13 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
       }
     }
     expect(rows.length, `locality=${leaf} returns ≥1 row`).toBeGreaterThan(0);
-    expect(rows.every((r) => r.locality === leaf), `every visible row is in locality ${leaf}`).toBeTruthy();
+    // Accept the localized name we picked OR the raw code, so this reads the
+    // same on a localized deployment and on one still rendering raw keys.
+    const expected = [leafLabel, leaf].filter(Boolean);
+    expect(
+      rows.every((r) => expected.includes(r.locality)),
+      `every visible row is in the chosen locality (expected ${expected.join(' or ')}, saw ${[...new Set(rows.map((r) => r.locality))].join(' | ')})`,
+    ).toBeTruthy();
 
     await clearFilters(page);
     expect((await readInboxRows(page)).length).toBeGreaterThan(0);
