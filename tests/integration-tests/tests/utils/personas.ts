@@ -38,6 +38,15 @@ export interface Candidate {
   password: string;
   /** Provenance, e.g. 'env:GRO_USER' — persisted so a reader can re-derive it. */
   source: string;
+  /**
+   * Tenants this credential may be authenticated against, in order.
+   *
+   * Part of the lockout budget, not a convenience: every entry here is one more
+   * failed login the account absorbs when the password is wrong, so the list is
+   * only ever longer than one element when we have a positive reason to believe
+   * the user might live at the root (see candidateCredentials).
+   */
+  authTenants: string[];
 }
 
 export interface ResolvedPersona {
@@ -68,6 +77,15 @@ export interface SeedPlan {
  * an account after repeated failures, and a locked persona breaks the very
  * deployment the suite is meant to test. Set PERSONA_PASSWORD_GUESSES='' to turn
  * discovery-by-guessing off entirely and rely on env pairs alone.
+ *
+ * The cap is only real if a guess costs exactly ONE failed login. It used not
+ * to: login() probed [TENANT, ROOT_TENANT], so on a deployment with a city
+ * sub-tenant (mz.maputo under mz) three guesses spent SIX failures against the
+ * account — double the budget this constant claims to enforce, and enough to
+ * trip a lockout threshold the cap was chosen to stay under. Hence
+ * `authTenants` on Candidate: a code we discovered by reading HRMS at TENANT is
+ * known to live at TENANT, so probing the root for it buys nothing and costs a
+ * failure. See candidateCredentials().
  */
 const MAX_PASSWORD_GUESSES = 3;
 
@@ -86,17 +104,35 @@ function passwordGuesses(): string[] {
  *
  * Sync by contract, so HRMS codes arrive from the caller rather than being
  * fetched here — resolvePersona() does that read once and shares it.
+ *
+ * Two classes of candidate, and they get different tenant budgets:
+ *
+ *   explicit (env vars, PERSONA_CANDIDATES)
+ *     An operator handed us this pair and did not say where the user lives. It
+ *     may be a city employee or a root admin, so both are probed. The cost is
+ *     bounded at 2 failures for ONE password, and a wrong env password is an
+ *     operator mistake that ought to be loud.
+ *
+ *   discovered (`hrms:<code>+guess`)
+ *     We only know this code because HRMS at TENANT returned it, so TENANT is
+ *     where it authenticates; the root probe could only ever fail. Probing it
+ *     anyway would multiply MAX_PASSWORD_GUESSES by the tenant count and walk
+ *     the account toward a lockout in exchange for no information at all.
  */
 export function candidateCredentials(discoveredCodes: string[] = []): Candidate[] {
   const out: Candidate[] = [];
   const seen = new Set<string>();
-  const push = (username: string | undefined, password: string | undefined, source: string): void => {
+  // First push wins, so an explicit pair that repeats a discovered code keeps
+  // its wider tenant list instead of being narrowed by the guess loop below.
+  const push = (username: string | undefined, password: string | undefined, source: string, authTenants: string[]): void => {
     if (!username || !password) return;
     const key = `${username}\u0000${password}`;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ username, password, source });
+    out.push({ username, password, source, authTenants });
   };
+
+  const explicitTenants = TENANT === ROOT_TENANT ? [TENANT] : [TENANT, ROOT_TENANT];
 
   const envPairs: [string, string, string][] = [
     ['EMPLOYEE_USER', 'EMPLOYEE_PASSWORD', 'env:EMPLOYEE_USER'],
@@ -106,18 +142,18 @@ export function candidateCredentials(discoveredCodes: string[] = []): Candidate[
     ['FLOW5_EMPLOYEE_USER', 'FLOW5_EMPLOYEE_PASSWORD', 'env:FLOW5_EMPLOYEE_USER'],
   ];
   for (const [userVar, passVar, source] of envPairs) {
-    push(process.env[userVar], process.env[passVar] || DEFAULT_PASSWORD, source);
+    push(process.env[userVar], process.env[passVar] || DEFAULT_PASSWORD, source, explicitTenants);
   }
   push(process.env.DIGIT_USERNAME || process.env.ADMIN_USER || 'ADMIN',
-    process.env.DIGIT_PASSWORD || process.env.ADMIN_PASSWORD || DEFAULT_PASSWORD, 'env:ADMIN');
+    process.env.DIGIT_PASSWORD || process.env.ADMIN_PASSWORD || DEFAULT_PASSWORD, 'env:ADMIN', explicitTenants);
 
   for (const pair of (process.env.PERSONA_CANDIDATES || '').split(',')) {
     const [username, password] = pair.split(':');
-    push(username?.trim(), password?.trim(), 'env:PERSONA_CANDIDATES');
+    push(username?.trim(), password?.trim(), 'env:PERSONA_CANDIDATES', explicitTenants);
   }
 
   for (const code of discoveredCodes) {
-    for (const guess of passwordGuesses()) push(code, guess, `hrms:${code}+guess`);
+    for (const guess of passwordGuesses()) push(code, guess, `hrms:${code}+guess`, [TENANT]);
   }
   return out;
 }
@@ -183,16 +219,23 @@ async function employeesAtTenant(): Promise<DiscoveredEmployee[]> {
   return employeeCache;
 }
 
-/** Log in, probing CITY then ROOT — an onboarded employee lives at the city
- *  tenant and 400s against the root, while ADMIN is the reverse. */
+/**
+ * Log in at each tenant the candidate carries, in order.
+ *
+ * The tenant list belongs to the CANDIDATE, not to this function, because it is
+ * a spend decision and only the credential's provenance can make it: an
+ * explicit env pair probes CITY then ROOT (an onboarded employee lives at the
+ * city tenant and 400s against the root, while ADMIN is the reverse), whereas
+ * an HRMS-discovered code is probed only where HRMS said it lives. Hard-coding
+ * [TENANT, ROOT_TENANT] here is what silently doubled the guess budget.
+ */
 async function login(c: Candidate): Promise<Principal | null> {
   const key = `${c.username}\u0000${c.password}`;
   const hit = loginCache.get(key);
   if (hit !== undefined) return hit;
 
-  const tenants = TENANT === ROOT_TENANT ? [TENANT] : [TENANT, ROOT_TENANT];
   let result: Principal | null = null;
-  for (const authTenant of tenants) {
+  for (const authTenant of c.authTenants) {
     try {
       const resp = await getDigitToken({ tenant: authTenant, authTenant, username: c.username, password: c.password });
       if (resp.access_token) {
@@ -209,8 +252,11 @@ async function login(c: Candidate): Promise<Principal | null> {
       // Try the next tenant; a guessed password failing everywhere is normal.
     }
   }
-  // R6: every attempt is logged, so a lockout can be traced to this suite.
-  console.log(`[personas] login ${c.username} (${c.source}) -> ${result ? `ok @ ${result.authTenant}` : 'no'}`);
+  // R6: every attempt is logged, so a lockout can be traced to this suite —
+  // which means logging how many failures it cost, not just the verdict.
+  console.log(
+    `[personas] login ${c.username} (${c.source}) -> ${result ? `ok @ ${result.authTenant}` : `no (tried ${c.authTenants.join(', ')})`}`,
+  );
   loginCache.set(key, result);
   return result;
 }
@@ -302,7 +348,16 @@ async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentP
 
 function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[]): string {
   const seen = tried.length
-    ? tried.map((p) => `${p.username}[roles=${p.roles.join('|') || 'none'} depts=${p.departments.join('|') || 'none'}]`).join(', ')
+    // Jurisdictions are printed because two of the keys below are gated on them
+    // — a reader told "needs a jurisdiction at the hierarchy root" cannot act on
+    // that without seeing which jurisdictions the rejected candidates did hold.
+    ? tried
+        .map(
+          (p) =>
+            `${p.username}[roles=${p.roles.join('|') || 'none'} depts=${p.departments.join('|') || 'none'} ` +
+            `jurisdictions=${p.jurisdictions.join('|') || 'none'}]`,
+        )
+        .join(', ')
     : 'nobody — no candidate credential logged in at all';
   const need: Record<PersonaKey, string> = {
     employee: 'the EMPLOYEE or SUPERUSER role',
@@ -310,7 +365,13 @@ function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[]): string {
     'gro-with-department': 'the GRO role AND an HRMS department assignment',
     lme: 'the PGR_LME role',
     'ward-scoped-csr': 'the CSR role AND an HRMS jurisdiction below the hierarchy root',
-    'inbox-viewer': 'the GRO (or PGR_LME) role AND an HRMS jurisdiction at the hierarchy root so the seeded complaint is in the inbox',
+    // Must state exactly what matches() checks, or the reader onboards the
+    // wrong thing: it said "GRO (or PGR_LME)" when PGR_LME alone never
+    // satisfies it, and omitted the department clause entirely.
+    'inbox-viewer':
+      'the GRO role AND an HRMS jurisdiction at the boundary-hierarchy root (so the seeded complaint is in scope wherever ' +
+      "it lands) AND an HRMS department that owns at least one complaint type (the inbox filters on the viewer's " +
+      'department too, so a department owning no service can never show a seeded complaint)',
   };
   return (
     `No persona '${key}' on ${TENANT}: needs ${need[key]}. Logged in and inspected: ${seen}. ` +
@@ -438,6 +499,71 @@ export async function resolvePersonasForProfile(profile: DeploymentProfile): Pro
   return { resolved, unresolvedDiagnostics };
 }
 
+// ── filing ───────────────────────────────────────────────────────────────────
+
+/** The whole of what pgr-services needs to accept a CREATE. */
+export interface FilingTarget {
+  serviceCode: string;
+  localityCode: string;
+}
+
+/** Services in a stable order, SERVICE_CODE first when it exists. */
+function orderedServices(profile: DeploymentProfile): DeploymentProfile['complaintTypes']['services'] {
+  const preferred = process.env.SERVICE_CODE?.trim();
+  return [...profile.complaintTypes.services].sort((a, b) => {
+    if (a.serviceCode === preferred) return -1;
+    if (b.serviceCode === preferred) return 1;
+    return a.serviceCode.localeCompare(b.serviceCode);
+  });
+}
+
+function localityFor(profile: DeploymentProfile): string | { error: string } {
+  const localityCode = profile.pgr.seedLocalityCode ?? profile.boundary.leafCode;
+  if (!localityCode) {
+    return { error: `No locality on ${TENANT}: boundary hierarchy ${profile.boundary.hierarchyType ?? '(none)'} yielded no leaf, so a complaint has nowhere to be filed.` };
+  }
+  return localityCode;
+}
+
+/**
+ * What a CITIZEN needs in order to file — and nothing more.
+ *
+ * Deliberately weaker than resolveSeedPlan(). Filing is APPLY, which pgr-services
+ * gates on a serviceCode and a locality; it neither knows nor cares whether an
+ * employee exists who could later be ASSIGNed the result. Routing filing through
+ * the full triple made every create- and REJECT-shaped test inherit ASSIGN's
+ * prerequisites, so a deployment missing only an eligible assignee could not run
+ * the tests that had nothing to do with assignment — the seed threw "Cannot seed
+ * a complaint: No employee ... can be an assignee" and took a create test down
+ * with a diagnosis about a feature it never touches.
+ *
+ * The seed plan is still CONSULTED, because when it does resolve its serviceCode
+ * is strictly better: it is the one whose department an assignee actually holds,
+ * so a complaint filed here can still be driven through ASSIGN by
+ * driveToPendingAtLme(). We just no longer make it a preRequisite. When there is
+ * no plan, any service in the catalogue can be filed against, and the first in
+ * deterministic order is taken.
+ */
+export async function resolveFilingTarget(opts?: { profile?: DeploymentProfile }): Promise<FilingTarget | { error: string }> {
+  const profile = opts?.profile ?? getProfile();
+  const services = orderedServices(profile);
+  if (!services.length) {
+    return { error: `No complaint types on ${TENANT}: nothing can be filed at all. Seed RAINMAKER-PGR.ComplaintHierarchy or ServiceDefs.` };
+  }
+
+  const locality = localityFor(profile);
+  if (typeof locality !== 'string') return locality;
+
+  const plan = await resolveSeedPlan({ profile });
+  if (!('error' in plan)) return { serviceCode: plan.serviceCode, localityCode: plan.localityCode };
+
+  console.log(
+    `[seed] no ASSIGN-viable seed plan on ${TENANT} (${plan.error.slice(0, 120)}) — filing against ` +
+      `${services[0].serviceCode} anyway; a complaint can be created and rejected without an assignee.`,
+  );
+  return { serviceCode: services[0].serviceCode, localityCode: locality };
+}
+
 // ── the triple ───────────────────────────────────────────────────────────────
 
 /**
@@ -450,7 +576,7 @@ export async function resolvePersonasForProfile(profile: DeploymentProfile): Pro
  */
 export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): Promise<SeedPlan | { error: string }> {
   const profile = opts?.profile ?? getProfile();
-  const { services } = profile.complaintTypes;
+  const services = orderedServices(profile);
   if (!services.length) {
     return { error: `No complaint types on ${TENANT}: nothing can be filed, so no ASSIGN is testable. Seed RAINMAKER-PGR.ComplaintHierarchy or ServiceDefs.` };
   }
@@ -493,15 +619,8 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
     };
   }
 
-  const preferred = process.env.SERVICE_CODE?.trim();
-  const ordered = [...services].sort((a, b) => {
-    if (a.serviceCode === preferred) return -1;
-    if (b.serviceCode === preferred) return 1;
-    return a.serviceCode.localeCompare(b.serviceCode);
-  });
-
   let picked: { service: (typeof services)[number]; assignee: DiscoveredEmployee } | null = null;
-  for (const service of ordered) {
+  for (const service of services) {
     const assignee = eligible.find((e) => e.departments.includes(service.department));
     if (assignee) {
       picked = { service, assignee };
@@ -518,6 +637,7 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
         'Give an employee with an assignee-capable role one of the catalogue departments in HRMS.',
     };
   }
+  const preferred = process.env.SERVICE_CODE?.trim();
   if (preferred && picked.service.serviceCode !== preferred) {
     console.log(`[seed] SERVICE_CODE=${preferred} has no employee holding its department — using ${picked.service.serviceCode} instead`);
   }
@@ -530,10 +650,8 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
     return { error: personaDiagnostic('gro-with-department') || whyUnresolved('gro', []) };
   }
 
-  const localityCode = profile.pgr.seedLocalityCode ?? profile.boundary.leafCode;
-  if (!localityCode) {
-    return { error: `No locality on ${TENANT}: boundary hierarchy ${profile.boundary.hierarchyType ?? '(none)'} yielded no leaf, so a complaint has nowhere to be filed.` };
-  }
+  const localityCode = localityFor(profile);
+  if (typeof localityCode !== 'string') return localityCode;
 
   return {
     actor,

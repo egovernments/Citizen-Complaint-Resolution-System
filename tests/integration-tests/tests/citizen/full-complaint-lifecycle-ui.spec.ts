@@ -51,8 +51,20 @@ const CITIZEN_NAME = 'E2E UI Citizen';
  * mz.maputo without either deployment declaring anything.
  *
  * CITY_ADMIN_USER still wins when set, so an operator can pin a specific actor.
+ *
+ * `authTenant` is part of the answer, not an afterthought. personas.ts probes
+ * each credential at the city tenant and at the root, and reports the one it
+ * PROVED the login works at. Dropping that and hard-coding TENANT at the call
+ * site only happens to work while the resolved GRO is a city employee (EMP001
+ * on mz.maputo, HS_GRO on bomet, where city and root are the same tenant
+ * anyway); a GRO that authenticates only at the root would fail both the inbox
+ * and the Assign login for a reason no locator error would explain. Step 5
+ * already threads `resolver.tenant` through — this is the same fact.
+ *
+ * Undefined for the CITY_ADMIN_USER branch: nobody proved anything about a
+ * pinned credential, so the caller keeps its existing default.
  */
-async function cityAdmin(): Promise<{ username: string; password: string }> {
+async function cityAdmin(): Promise<{ username: string; password: string; authTenant?: string }> {
   if (process.env.CITY_ADMIN_USER) {
     return {
       username: process.env.CITY_ADMIN_USER,
@@ -60,7 +72,7 @@ async function cityAdmin(): Promise<{ username: string; password: string }> {
     };
   }
   const p = await getPersona('gro-with-department');
-  return { username: p.username, password: p.password };
+  return { username: p.username, password: p.password, authTenant: p.tenant };
 }
 
 /**
@@ -241,8 +253,21 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
         if (!visible) break;
         await expect(combobox).toBeEnabled({ timeout: 8000 }).catch(() => {});
         if (!(await combobox.isEnabled().catch(() => false))) break;
+        // "Is this level still unselected?" — asked differently per build,
+        // because the two builds keep the answer in different places. The v2
+        // combobox is a <button> whose innerText is the chosen label (or
+        // "Select ..."), but the legacy control is an <input>, and innerText is
+        // ALWAYS "" on an <input> — so a single innerText test silently reports
+        // every legacy dropdown as already-selected, skips the click, and
+        // leaves NEXT disabled until the step times out. Read `value` there.
         const hasPlaceholder = await combobox
-          .evaluate((el) => /^Select/i.test((el as HTMLElement).innerText.trim()))
+          .evaluate((el) => {
+            if (el instanceof HTMLInputElement) {
+              const chosen = el.value.trim();
+              return !chosen || /^Select/i.test(chosen);
+            }
+            return /^Select/i.test((el as HTMLElement).innerText.trim());
+          })
           .catch(() => true);
         if (!hasPlaceholder) continue;
         await selectDropdownOption(level);
@@ -411,11 +436,14 @@ Doesn't assert the complaint appears in the inbox because legitimate boundary sc
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     test.skip(!complaintCreated, 'complaint not created');
 
+    // Resolved ONCE. Calling cityAdmin() per field re-entered persona
+    // resolution for each of username and password.
+    const admin = await cityAdmin();
     await loginViaApi(page, {
       tenant: TENANT,
-      authTenant: TENANT,
-      username: (await cityAdmin()).username,
-      password: (await cityAdmin()).password,
+      authTenant: admin.authTenant ?? TENANT,
+      username: admin.username,
+      password: admin.password,
     });
 
     await page.goto(`${BASE_URL}/digit-ui/employee/pgr/inbox`, {
@@ -460,12 +488,14 @@ Status verification is API-only because there's no good DOM signal that the assi
     test.skip(!complaintCreated, 'complaint not created');
     test.setTimeout(120_000);
 
-    // Login as city-level admin (tenantId = TENANT env)
+    // Login as city-level admin (tenantId = TENANT env), authenticating at the
+    // tenant personas.ts proved this credential works at — see cityAdmin().
+    const admin = await cityAdmin();
     await loginViaApi(page, {
       tenant: TENANT,
-      authTenant: TENANT,
-      username: (await cityAdmin()).username,
-      password: (await cityAdmin()).password,
+      authTenant: admin.authTenant ?? TENANT,
+      username: admin.username,
+      password: admin.password,
     });
 
     // Navigate to complaint details

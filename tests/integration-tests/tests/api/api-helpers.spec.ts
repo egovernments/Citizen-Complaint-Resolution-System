@@ -14,14 +14,35 @@ import { TENANT } from '../utils/env';
 // or the setup itself skipped (status:'skipped' — e.g. no viable seed-plan
 // triple), that's a real N/A and the test below says so instead of guessing.
 const fixtures = readLifecycleFixtures();
-const KNOWN_RESOLVED_SRID = process.env.KNOWN_RESOLVED_SRID || fixtures?.complaints?.terminal_rated;
+
+// The fixture file is not guaranteed to be THIS tenant's. It is discovered by
+// path (and can be pointed anywhere via LIFECYCLE_FIXTURES_FILE, which CI
+// matrix runs use to share one file across shards), while the SRID it carries
+// is searched below under TENANT. A leftover file from a maputo run consumed on
+// bomet yields a valid-looking SRID that pgr-services simply cannot find, and
+// the test fails asserting CLOSEDAFTERRESOLUTION against `undefined` — a
+// stale-artifact problem wearing a broken-search costume. `tenant` is recorded
+// in the file precisely so this is checkable; check it.
+const fixtureTenantMismatch =
+  fixtures && fixtures.tenant !== TENANT
+    ? `lifecycle-fixtures.json was generated for ${fixtures.tenant}, not ${TENANT} — its SRIDs do not exist here. ` +
+      'Re-run lifecycle.setup against this deployment, unset LIFECYCLE_FIXTURES_FILE if it points at another run, ' +
+      'or set KNOWN_RESOLVED_SRID to a complaint that really is on this tenant.'
+    : '';
+
+// An explicit env override still wins: the operator named a complaint on the
+// tenant they are pointing at, and no fixture file can contradict that.
+const KNOWN_RESOLVED_SRID =
+  process.env.KNOWN_RESOLVED_SRID || (fixtureTenantMismatch ? undefined : fixtures?.complaints?.terminal_rated);
 const knownSridSkipReason = KNOWN_RESOLVED_SRID
   ? ''
-  : !fixtures
-    ? `no KNOWN_RESOLVED_SRID and lifecycle-fixtures.json not found for ${TENANT} — lifecycle.setup didn't run ` +
-      "ahead of this project (it isn't one of 'api's dependencies); set KNOWN_RESOLVED_SRID or run the full suite " +
-      'so lifecycle-setup executes first'
-    : `no KNOWN_RESOLVED_SRID and lifecycle.setup on ${TENANT} wrote status:'skipped' — ${fixtures.skipped_reason ?? 'no reason recorded'}`;
+  : fixtureTenantMismatch
+    ? `no KNOWN_RESOLVED_SRID and ${fixtureTenantMismatch}`
+    : !fixtures
+      ? `no KNOWN_RESOLVED_SRID and lifecycle-fixtures.json not found for ${TENANT} — lifecycle.setup didn't run ` +
+        "ahead of this project (it isn't one of 'api's dependencies); set KNOWN_RESOLVED_SRID or run the full suite " +
+        'so lifecycle-setup executes first'
+      : `no KNOWN_RESOLVED_SRID and lifecycle.setup on ${TENANT} wrote status:'skipped' — ${fixtures.skipped_reason ?? 'no reason recorded'}`;
 
 test.describe('00-smoke: API helpers reach the configured deployment', () => {
   test('mdms search returns Department schema records', {

@@ -53,6 +53,15 @@ import { getPersona } from '../utils/personas';
 // deployment is not a sane default — with no fixture we skip, naming the cause.
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
 const _fixtures = readLifecycleFixtures();
+
+// The file is found by path, so it is not necessarily THIS tenant's — a
+// leftover (or a LIFECYCLE_FIXTURES_FILE aimed at another run) carries SRIDs
+// that are navigated to under TENANT, render "No Results Found", and burn the
+// same 30s timeouts the no-hardcoded-default rule above exists to prevent. Same
+// class of stale-artifact bug, same answer: trust the recorded tenant.
+const _fixtureTenantMismatch = _fixtures && _fixtures.tenant !== TENANT;
+const _complaints = _fixtureTenantMismatch ? undefined : _fixtures?.complaints;
+
 // NOTE: `?.complaints?.terminal_rated` — BOTH links optional-chained. When
 // lifecycle.setup.ts fails soft it writes a `status:'skipped'` fixture with no
 // `complaints` key; guarding only the call (`?.complaints.x`) threw a
@@ -60,28 +69,44 @@ const _fixtures = readLifecycleFixtures();
 const TERMINAL_COMPLAINT_ID =
   process.env.TERMINAL_COMPLAINT_SRID
   || process.env.FLOW5_TERMINAL_SRID
-  || _fixtures?.complaints?.terminal_rated
+  || _complaints?.terminal_rated
   || '';
 const NONTERMINAL_COMPLAINT_ID =
   process.env.NONTERMINAL_COMPLAINT_SRID
   || process.env.FLOW5_NONTERMINAL_SRID
-  || _fixtures?.complaints?.non_terminal
+  || _complaints?.non_terminal
   || '';
 
-/** Why the lifecycle seed is unusable, or '' when the fixtures are good. */
-const FIXTURE_SKIP = (() => {
-  if (TERMINAL_COMPLAINT_ID && NONTERMINAL_COMPLAINT_ID) return '';
-  const reason = _fixtures?.skipped_reason
-    ? `lifecycle.setup.ts did not seed complaints: ${_fixtures.skipped_reason}`
-    : 'no lifecycle-fixtures.json on disk — lifecycle.setup.ts did not run';
-  return `${reason}. Override with TERMINAL_COMPLAINT_SRID / NONTERMINAL_COMPLAINT_SRID to pin explicit complaints.`;
-})();
+/**
+ * Why THIS fixture is unusable, or '' when it's good.
+ *
+ * Per-fixture on purpose. A single FIXTURE_SKIP demanding both IDs meant one
+ * missing fixture took down every story in the file — including the eight that
+ * only ever open the terminal complaint, which was sitting right there. The
+ * fixtures are seeded by separate steps and fail independently (a deployment
+ * with no eligible assignee gets `non_terminal` but never reaches
+ * `terminal_rated`), so gating them together turns one gap into a whole-file
+ * blackout and hides which fixture is actually absent.
+ */
+function fixtureSkip(srid: string, envVar: string): string {
+  if (srid) return '';
+  const reason = _fixtureTenantMismatch
+    ? `lifecycle-fixtures.json was generated for ${_fixtures!.tenant}, not ${TENANT} — its SRIDs do not exist here`
+    : _fixtures?.skipped_reason
+      ? `lifecycle.setup.ts did not seed complaints: ${_fixtures.skipped_reason}`
+      : 'no lifecycle-fixtures.json on disk — lifecycle.setup.ts did not run';
+  return `${reason}. Override with ${envVar} to pin an explicit complaint.`;
+}
 
-async function openDetails(page: Page, srid: string): Promise<void> {
+const TERMINAL_SKIP = fixtureSkip(TERMINAL_COMPLAINT_ID, 'TERMINAL_COMPLAINT_SRID');
+const NONTERMINAL_SKIP = fixtureSkip(NONTERMINAL_COMPLAINT_ID, 'NONTERMINAL_COMPLAINT_SRID');
+
+async function openDetails(page: Page, srid: string, skipReason: string): Promise<void> {
   // Skip rather than navigate to a complaint we know isn't there. Without this
   // the page renders "No Results Found" and the field-pair wait below times out
-  // after 30s, disguising a missing fixture as a UI regression.
-  test.skip(!!FIXTURE_SKIP, FIXTURE_SKIP);
+  // after 30s, disguising a missing fixture as a UI regression. Gated on the
+  // ONE fixture this story asked for — see fixtureSkip().
+  test.skip(!srid, skipReason);
 
   const employee = await getPersona('inbox-viewer'); // needs nextActions (GRO+jurisdiction) for the 5.24b Take-Action gate
   await loginViaApi(page, {
@@ -127,7 +152,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   // Each test gets its own page context — no shared state between stories.
 
   test('Story 5.1 — details page loads without error (terminal fixture) @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
 
     const heading = page.getByText('Complaint Details', { exact: true }).first();
     await expect(heading).toBeVisible({ timeout: 10_000 });
@@ -138,14 +163,14 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.4 — Complaint No. label + value match the SRID @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
 
     const value = await valueForLabel(page, 'Complaint No.');
     expect(value).toBe(TERMINAL_COMPLAINT_ID);
   });
 
   test('Story 5.5 — Current Status chip renders localized status text @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
 
     const status = await valueForLabel(page, 'Current Status');
     // We deliberately do not lock to a specific localization or terminal
@@ -157,7 +182,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.6 — complaint classification rows render localized values @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
 
     // PGRDetails.js renders the classification block between the
     // "Complaint No." and "Filed Date" rows. FLAT tenants render exactly
@@ -197,14 +222,14 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.9 — Filed Date renders in DD/MM/YYYY @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
 
     const filed = await valueForLabel(page, 'Filed Date');
     expect(filed).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
   });
 
   test('Story 5.16 — Complaint Timeline section renders with checkpoint rows @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
 
     // Accept the localized English label OR the raw i18n key / sw_KE rendering.
     const timelineHeader = page.getByText(/Complaint Timeline|CS_COMPLAINT_DETAILS_COMPLAINT_TIMELINE/i).first();
@@ -223,7 +248,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
     // returns just `person.name`), so this asserts the post-fix shape directly.
     // Previously masked with `test.fail(true)` pending a deploy; unmasked once
     // the bundle shipped.
-    await openDetails(page, TERMINAL_COMPLAINT_ID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
 
     // #524: actor names must not carry the appended role list. We don't
     // pin a specific actor name (varies by deployment/seed) — instead we
@@ -239,7 +264,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.24a — Take Action HIDDEN on terminal-state complaint @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, TERMINAL_COMPLAINT_ID);
+    await openDetails(page, TERMINAL_COMPLAINT_ID, TERMINAL_SKIP);
 
     // CLOSEDAFTERREJECTION has no nextActions for any role, so the
     // button must not render. We do not just check count===0 — that
@@ -254,7 +279,7 @@ test.describe('PGR complaint details — Flow 5 render slice', () => {
   });
 
   test('Story 5.24b — Take Action VISIBLE on non-terminal complaint @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
-    await openDetails(page, NONTERMINAL_COMPLAINT_ID);
+    await openDetails(page, NONTERMINAL_COMPLAINT_ID, NONTERMINAL_SKIP);
 
     // The take-action control renders ONLY when the workflow returns
     // nextActions for the viewing employee (PGRDetails.js gates the

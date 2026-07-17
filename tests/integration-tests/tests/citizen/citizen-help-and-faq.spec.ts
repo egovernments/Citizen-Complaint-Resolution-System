@@ -1,13 +1,15 @@
 /**
- * Citizen auxiliary surfaces — Stories 10.1, 10.2, 10.3.
+ * Citizen auxiliary surfaces — Stories 10.1, 10.2.
  *
  * Currently expected to **fail** on the live build per
  * docs/personas/citizen-flows.md and issue #12 — `/citizen/pgr-faq` and
- * `/citizen/pgr-how-it-works` render "Something went wrong", and the
- * HELPLINE sidebar item is a dead handler. The test is written to PASS
- * when the bugs are fixed (no error fallback present, HELPLINE either
- * navigates or fires a dialog) — green CI on this spec means the
- * upstream fix landed.
+ * `/citizen/pgr-how-it-works` render "Something went wrong". Both tests are
+ * written to PASS when the bugs are fixed (no error fallback present), so
+ * green CI on this spec means the upstream fix landed for those two pages —
+ * and says nothing about anything else in CCRS#12.
+ *
+ * Story 10.3 (the HELPLINE sidebar item, CCRS#12's third sub-issue) is NOT
+ * covered here; see the note at the foot of the file for why it was removed.
  *
  * The user's instruction was "let broken things fail" — no `test.fail()`
  * masking. Red on this spec is the visible signal that the bugs are

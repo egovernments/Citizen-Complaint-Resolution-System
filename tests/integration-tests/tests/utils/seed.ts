@@ -11,9 +11,15 @@
  *    they cannot be — see personas.ts), so ASSIGN takes the actor's token and
  *    the assignee's uuid from the plan rather than assuming one employee does
  *    both.
+ *
+ * Consequently the two halves of this file have DIFFERENT prerequisites, and
+ * that separation is load-bearing: seedComplaintAsCitizen() needs only a
+ * (service, locality), while driveToPendingAtLme()/driveToResolved()/
+ * driveToClosedRated() need the full plan. Collapsing them made a deployment
+ * with no eligible assignee unable to run tests that never assign anything.
  */
 import { BASE_URL, TENANT } from './env';
-import { getPersona, resolveSeedPlan } from './personas';
+import { getPersona, resolveFilingTarget, resolveSeedPlan } from './personas';
 import { pgrCreate } from './launch-fixes/api';
 import { provisionFreshCitizen, readProvisionedCitizen, type ProvisionedCitizen } from './citizen-provision';
 
@@ -42,10 +48,25 @@ async function citizen(): Promise<CitizenIdentity> {
   return citizenCache;
 }
 
+/**
+ * The ASSIGN triple. Only the drive-to-* helpers may demand this.
+ *
+ * seedComplaintAsCitizen() deliberately does NOT: filing has no assignee, so
+ * requiring one here would make a deployment that merely lacks an eligible
+ * assignee unable to run create- or REJECT-shaped tests that never assign
+ * anything. See resolveFilingTarget().
+ */
 async function plan(): Promise<Exclude<Awaited<ReturnType<typeof resolveSeedPlan>>, { error: string }>> {
   const p = await resolveSeedPlan();
-  if ('error' in p) throw new Error(`Cannot seed a complaint: ${p.error}`);
+  if ('error' in p) throw new Error(`Cannot drive this complaint through ASSIGN: ${p.error}`);
   return p;
+}
+
+/** What filing needs: a service and a locality, nothing about assignment. */
+async function filingTarget(): Promise<{ serviceCode: string; localityCode: string }> {
+  const t = await resolveFilingTarget();
+  if ('error' in t) throw new Error(`Cannot file a complaint: ${t.error}`);
+  return t;
 }
 
 async function fetchService(token: string, userInfo: Record<string, unknown>, srid: string): Promise<Record<string, unknown>> {
@@ -91,14 +112,20 @@ export async function seedComplaintAsCitizen(opts?: {
   localityCode?: string;
   description?: string;
 }): Promise<{ srid: string; status: string }> {
-  const p = await plan();
+  // Resolved only when the caller left something to resolve — a spec that pins
+  // both is asking for one specific complaint and should not be gated on the
+  // deployment's ability to produce a default one.
+  const target =
+    opts?.serviceCode && opts?.localityCode
+      ? { serviceCode: opts.serviceCode, localityCode: opts.localityCode }
+      : await filingTarget();
   const who = await citizen();
   const result = await pgrCreate({
     baseUrl: BASE_URL,
     auth: { token: who.token, userInfo: who.userInfo },
     tenantId: TENANT,
-    serviceCode: opts?.serviceCode ?? p.serviceCode,
-    localityCode: opts?.localityCode ?? p.localityCode,
+    serviceCode: opts?.serviceCode ?? target.serviceCode,
+    localityCode: opts?.localityCode ?? target.localityCode,
     description: opts?.description ?? `seed complaint — ${new Date().toISOString()}`,
     citizenName: who.name,
     citizenPhone: who.mobile,
