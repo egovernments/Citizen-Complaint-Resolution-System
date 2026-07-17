@@ -33,6 +33,34 @@ export type PersonaKey = 'employee' | 'gro' | 'gro-with-department' | 'lme' | 'w
 
 export const PERSONA_KEYS: PersonaKey[] = ['employee', 'gro', 'gro-with-department', 'lme', 'ward-scoped-csr', 'inbox-viewer'];
 
+/**
+ * The tenant pair every lookup here is relative to.
+ *
+ * It comes from the PROFILE, never from env.ts, and that distinction is the
+ * whole point. env.ts resolves TENANT/ROOT_TENANT at module-IMPORT time out of
+ * deployment-profile.json, so during discovery — the one moment that file does
+ * not exist yet — importing it hands back the legacy `ke.nairobi`/`ke`
+ * literals. This file is called from inside discoverProfile(), so it used to
+ * derive the tenant correctly from globalConfigs and then go looking for that
+ * tenant's employees at ke.nairobi: local could not cold-start at all, and
+ * survived only because the profile file usually outlives the run. Bomet hid it
+ * completely, because the fallback literal `ke` happens to BE bomet's tenant.
+ *
+ * Every caller already holds the answer — resolvePersonasForProfile() is handed
+ * the draft, resolvePersona() does `opts?.profile ?? getProfile()` — so this is
+ * only ever a matter of using what is already in hand.
+ */
+export interface TenantPair {
+  city: string;
+  root: string;
+}
+
+/** Profile first; env only as the floor for callers that have no profile yet. */
+export function tenantsOf(profile?: DeploymentProfile): TenantPair {
+  if (profile?.tenant?.city) return { city: profile.tenant.city, root: profile.tenant.root };
+  return { city: TENANT, root: ROOT_TENANT };
+}
+
 export interface Candidate {
   username: string;
   password: string;
@@ -119,7 +147,8 @@ function passwordGuesses(): string[] {
  *     anyway would multiply MAX_PASSWORD_GUESSES by the tenant count and walk
  *     the account toward a lockout in exchange for no information at all.
  */
-export function candidateCredentials(discoveredCodes: string[] = []): Candidate[] {
+export function candidateCredentials(discoveredCodes: string[] = [], tenants?: TenantPair): Candidate[] {
+  const { city: tenant, root } = tenants ?? tenantsOf();
   const out: Candidate[] = [];
   const seen = new Set<string>();
   // First push wins, so an explicit pair that repeats a discovered code keeps
@@ -132,7 +161,7 @@ export function candidateCredentials(discoveredCodes: string[] = []): Candidate[
     out.push({ username, password, source, authTenants });
   };
 
-  const explicitTenants = TENANT === ROOT_TENANT ? [TENANT] : [TENANT, ROOT_TENANT];
+  const explicitTenants = tenant === root ? [tenant] : [tenant, root];
 
   const envPairs: [string, string, string][] = [
     ['EMPLOYEE_USER', 'EMPLOYEE_PASSWORD', 'env:EMPLOYEE_USER'],
@@ -153,7 +182,7 @@ export function candidateCredentials(discoveredCodes: string[] = []): Candidate[
   }
 
   for (const code of discoveredCodes) {
-    for (const guess of passwordGuesses()) push(code, guess, `hrms:${code}+guess`, [TENANT]);
+    for (const guess of passwordGuesses()) push(code, guess, `hrms:${code}+guess`, [tenant]);
   }
   return out;
 }
@@ -167,16 +196,29 @@ interface Principal {
   authTenant: string;
 }
 
+/**
+ * All three caches key on the tenant they were filled for.
+ *
+ * Not defensive plumbing — required. discoverProfile() resolves personas
+ * against the DRAFT's tenant, while anything importing env.ts before the
+ * profile lands sees the fallback literals. A single-slot cache would let
+ * whichever ran first pin its answer for the process: one `[]` cached under the
+ * wrong tenant, and every later lookup returns "this deployment has no
+ * employees" — the exact silent-wrong-answer this file keeps being bitten by.
+ */
 const loginCache = new Map<string, Principal | null>();
-let employeeCache: DiscoveredEmployee[] | null = null;
-let adminTokenCache: string | null = null;
+const employeeCache = new Map<string, DiscoveredEmployee[]>();
+const adminTokenCache = new Map<string, string>();
 
 /** Why the admin token is unavailable, when it is — kept so callers can tell a
- *  broken login apart from a deployment that genuinely has no employees. */
-let adminTokenError: string | null = null;
+ *  broken login apart from a deployment that genuinely has no employees.
+ *  Keyed by root tenant for the same reason as the caches above. */
+const adminTokenErrors = new Map<string, string>();
 
-async function adminToken(): Promise<string> {
-  if (adminTokenCache !== null) return adminTokenCache;
+async function adminToken(tenants: TenantPair): Promise<string> {
+  const root = tenants.root;
+  const cached = adminTokenCache.get(root);
+  if (cached !== undefined) return cached;
   const user = process.env.DIGIT_USERNAME || process.env.ADMIN_USER || 'ADMIN';
   // The admin login is retried: it is the single point every HRMS read goes
   // through, and a deployment that has just come up answers the first call
@@ -186,21 +228,21 @@ async function adminToken(): Promise<string> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const r = await getDigitToken({
-        tenant: ROOT_TENANT,
+        tenant: root,
         username: user,
         password: process.env.DIGIT_PASSWORD || process.env.ADMIN_PASSWORD || DEFAULT_PASSWORD,
       });
-      adminTokenCache = r.access_token;
-      adminTokenError = null;
-      return adminTokenCache;
+      adminTokenCache.set(root, r.access_token);
+      adminTokenErrors.delete(root);
+      return r.access_token;
     } catch (err: any) {
-      adminTokenError = `${user}@${ROOT_TENANT}: ${err?.message?.slice(0, 160) ?? err}`;
+      adminTokenErrors.set(root, `${user}@${root}: ${err?.message?.slice(0, 160) ?? err}`);
       if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2_000));
     }
   }
-  console.log(`[personas] admin token unavailable after 3 attempts — ${adminTokenError}`);
-  adminTokenCache = '';
-  return adminTokenCache;
+  console.log(`[personas] admin token unavailable after 3 attempts — ${adminTokenErrors.get(root)}`);
+  adminTokenCache.set(root, '');
+  return '';
 }
 
 /**
@@ -212,11 +254,14 @@ async function adminToken(): Promise<string> {
  * tenant-scoped at all (asking ke for codes=EMP001 hands back an mz.maputo
  * employee) — see probes.ts fetchEmployees.
  */
-async function employeesAtTenant(): Promise<DiscoveredEmployee[]> {
-  if (employeeCache) return employeeCache;
-  const token = await adminToken();
-  employeeCache = token ? await fetchEmployees(TENANT, token) : [];
-  return employeeCache;
+async function employeesAtTenant(tenants: TenantPair): Promise<DiscoveredEmployee[]> {
+  const city = tenants.city;
+  const cached = employeeCache.get(city);
+  if (cached) return cached;
+  const token = await adminToken(tenants);
+  const employees = token ? await fetchEmployees(city, token) : [];
+  employeeCache.set(city, employees);
+  return employees;
 }
 
 /**
@@ -230,7 +275,9 @@ async function employeesAtTenant(): Promise<DiscoveredEmployee[]> {
  * [TENANT, ROOT_TENANT] here is what silently doubled the guess budget.
  */
 async function login(c: Candidate): Promise<Principal | null> {
-  const key = `${c.username}\u0000${c.password}`;
+  // Tenants in the key: the same credential probed at a different tenant is a
+  // different question, and answering it from cache would invent a verdict.
+  const key = `${c.username}\u0000${c.password}\u0000${c.authTenants.join(',')}`;
   const hit = loginCache.get(key);
   if (hit !== undefined) return hit;
 
@@ -261,8 +308,8 @@ async function login(c: Candidate): Promise<Principal | null> {
   return result;
 }
 
-async function toResolved(c: Candidate, p: Principal): Promise<ResolvedPersona> {
-  const employees = await employeesAtTenant();
+async function toResolved(c: Candidate, p: Principal, tenants: TenantPair): Promise<ResolvedPersona> {
+  const employees = await employeesAtTenant(tenants);
   const uuid = String(p.userInfo.uuid ?? '');
   // Joined on uuid, not code: the same ADMIN username exists at both mz and
   // mz.maputo with DIFFERENT uuids and different departments, and only the
@@ -302,7 +349,7 @@ function isWardScopedCsr(p: ResolvedPersona, hrms: DiscoveredEmployee | undefine
 }
 
 async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentProfile): Promise<boolean> {
-  const hrms = (await employeesAtTenant()).find((e) => e.uuid === p.uuid);
+  const hrms = (await employeesAtTenant(tenantsOf(profile))).find((e) => e.uuid === p.uuid);
   switch (key) {
     case 'employee':
       return p.roles.includes('EMPLOYEE') || p.roles.includes('SUPERUSER');
@@ -346,7 +393,7 @@ async function matches(key: PersonaKey, p: ResolvedPersona, profile: DeploymentP
   }
 }
 
-function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[]): string {
+function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[], profile?: DeploymentProfile): string {
   const seen = tried.length
     // Jurisdictions are printed because two of the keys below are gated on them
     // — a reader told "needs a jurisdiction at the hierarchy root" cannot act on
@@ -374,7 +421,7 @@ function whyUnresolved(key: PersonaKey, tried: ResolvedPersona[]): string {
       'department too, so a department owning no service can never show a seeded complaint)',
   };
   return (
-    `No persona '${key}' on ${TENANT}: needs ${need[key]}. Logged in and inspected: ${seen}. ` +
+    `No persona '${key}' on ${tenantsOf(profile).city}: needs ${need[key]}. Logged in and inspected: ${seen}. ` +
     'Point the matching env var (EMPLOYEE_USER / GRO_USER / WARD_CSR_USER / PERSONA_CANDIDATES) at a real ' +
     'persona, or seed one — this is a deployment/seed gap, not an app bug.'
   );
@@ -389,7 +436,7 @@ export async function resolvePersona(key: PersonaKey, opts?: { profile?: Deploym
   if (resolvedCache.has(key)) return resolvedCache.get(key)!;
   const profile = opts?.profile ?? getProfile();
 
-  const codes = (await employeesAtTenant()).map((e) => e.code).sort();
+  const codes = (await employeesAtTenant(tenantsOf(profile))).map((e) => e.code).sort();
   const inspected: ResolvedPersona[] = [];
   let found: ResolvedPersona | null = null;
 
@@ -411,11 +458,11 @@ export async function resolvePersona(key: PersonaKey, opts?: { profile?: Deploym
   // deactivated user — fall through to the full sweep below.
   const recorded = profile.personas?.resolved?.[key]?.username;
   if (recorded) {
-    const candidate = candidateCredentials(codes).find((c) => c.username === recorded);
+    const candidate = candidateCredentials(codes, tenantsOf(profile)).find((c) => c.username === recorded);
     if (candidate) {
       const principal = await login(candidate);
       if (principal) {
-        const persona = await toResolved(candidate, principal);
+        const persona = await toResolved(candidate, principal, tenantsOf(profile));
         if (await matches(key, persona, profile)) {
           resolvedCache.set(key, persona);
           return persona;
@@ -424,10 +471,10 @@ export async function resolvePersona(key: PersonaKey, opts?: { profile?: Deploym
     }
   }
 
-  for (const candidate of candidateCredentials(codes)) {
+  for (const candidate of candidateCredentials(codes, tenantsOf(profile))) {
     const principal = await login(candidate);
     if (!principal) continue;
-    const persona = await toResolved(candidate, principal);
+    const persona = await toResolved(candidate, principal, tenantsOf(profile));
     inspected.push(persona);
     if (await matches(key, persona, profile)) {
       found = persona;
@@ -435,7 +482,7 @@ export async function resolvePersona(key: PersonaKey, opts?: { profile?: Deploym
     }
   }
 
-  if (!found) diagnostics.set(key, whyUnresolved(key, inspected));
+  if (!found) diagnostics.set(key, whyUnresolved(key, inspected, profile));
   resolvedCache.set(key, found);
   return found;
 }
@@ -447,7 +494,7 @@ export async function getPersona(key: PersonaKey, opts?: { profile?: DeploymentP
 }
 
 /** Why `key` could not be resolved. Empty until resolvePersona has tried. */
-export function personaDiagnostic(key: PersonaKey): string {
+export function personaDiagnostic(key: PersonaKey, profile?: DeploymentProfile): string {
   return diagnostics.get(key) ?? '';
 }
 
@@ -494,7 +541,7 @@ export async function resolvePersonasForProfile(profile: DeploymentProfile): Pro
   for (const key of PERSONA_KEYS) {
     const p = await resolvePersona(key, { profile });
     resolved[key] = p ? redact(p) : null;
-    if (!p) unresolvedDiagnostics[key] = personaDiagnostic(key);
+    if (!p) unresolvedDiagnostics[key] = personaDiagnostic(key, profile);
   }
   return { resolved, unresolvedDiagnostics };
 }
@@ -520,7 +567,7 @@ function orderedServices(profile: DeploymentProfile): DeploymentProfile['complai
 function localityFor(profile: DeploymentProfile): string | { error: string } {
   const localityCode = profile.pgr.seedLocalityCode ?? profile.boundary.leafCode;
   if (!localityCode) {
-    return { error: `No locality on ${TENANT}: boundary hierarchy ${profile.boundary.hierarchyType ?? '(none)'} yielded no leaf, so a complaint has nowhere to be filed.` };
+    return { error: `No locality on ${tenantsOf(profile).city}: boundary hierarchy ${profile.boundary.hierarchyType ?? '(none)'} yielded no leaf, so a complaint has nowhere to be filed.` };
   }
   return localityCode;
 }
@@ -548,7 +595,7 @@ export async function resolveFilingTarget(opts?: { profile?: DeploymentProfile }
   const profile = opts?.profile ?? getProfile();
   const services = orderedServices(profile);
   if (!services.length) {
-    return { error: `No complaint types on ${TENANT}: nothing can be filed at all. Seed RAINMAKER-PGR.ComplaintHierarchy or ServiceDefs.` };
+    return { error: `No complaint types on ${tenantsOf(profile).city}: nothing can be filed at all. Seed RAINMAKER-PGR.ComplaintHierarchy or ServiceDefs.` };
   }
 
   const locality = localityFor(profile);
@@ -558,7 +605,7 @@ export async function resolveFilingTarget(opts?: { profile?: DeploymentProfile }
   if (!('error' in plan)) return { serviceCode: plan.serviceCode, localityCode: plan.localityCode };
 
   console.log(
-    `[seed] no ASSIGN-viable seed plan on ${TENANT} (${plan.error.slice(0, 120)}) — filing against ` +
+    `[seed] no ASSIGN-viable seed plan on ${tenantsOf(profile).city} (${plan.error.slice(0, 120)}) — filing against ` +
       `${services[0].serviceCode} anyway; a complaint can be created and rejected without an assignee.`,
   );
   return { serviceCode: services[0].serviceCode, localityCode: locality };
@@ -578,14 +625,14 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
   const profile = opts?.profile ?? getProfile();
   const services = orderedServices(profile);
   if (!services.length) {
-    return { error: `No complaint types on ${TENANT}: nothing can be filed, so no ASSIGN is testable. Seed RAINMAKER-PGR.ComplaintHierarchy or ServiceDefs.` };
+    return { error: `No complaint types on ${tenantsOf(profile).city}: nothing can be filed, so no ASSIGN is testable. Seed RAINMAKER-PGR.ComplaintHierarchy or ServiceDefs.` };
   }
 
   const assign = profile.workflow.pgr.assign;
   if (!assign) {
     return {
       error:
-        `PGR workflow on ${TENANT} defines no ASSIGN transition (actions: ${profile.workflow.pgr.actions.join(', ') || 'none'}), ` +
+        `PGR workflow on ${tenantsOf(profile).city} defines no ASSIGN transition (actions: ${profile.workflow.pgr.actions.join(', ') || 'none'}), ` +
         'so an assignee cannot be validated. Check the businessService seed.',
     };
   }
@@ -594,7 +641,7 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
   // egov-workflow-v2 answers INVALID_ASSIGNEE otherwise. Union of the next
   // state's action roles minus CITIZEN, which no employee carries meaningfully.
   const assigneeRoles = assign.assigneeRoles.filter((r) => r !== 'CITIZEN');
-  const employees = (await employeesAtTenant()).slice().sort((a, b) => a.code.localeCompare(b.code));
+  const employees = (await employeesAtTenant(tenantsOf(profile))).slice().sort((a, b) => a.code.localeCompare(b.code));
   const eligible = employees.filter(
     (e) => e.departments.length > 0 && e.roles.some((r) => assigneeRoles.includes(r)),
   );
@@ -602,17 +649,18 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
     // An empty employee list has two very different causes, and saying "no
     // employee can be an assignee" for the second one sends the reader off to
     // onboard data that already exists.
-    if (!employees.length && adminTokenError) {
+    const tokenErr = adminTokenErrors.get(tenantsOf(profile).root);
+    if (!employees.length && tokenErr) {
       return {
         error:
-          `Could not read HRMS at ${TENANT}: the admin login failed (${adminTokenError}), so the employee list came back ` +
+          `Could not read HRMS at ${tenantsOf(profile).city}: the admin login failed (${tokenErr}), so the employee list came back ` +
           'empty. This is an auth/availability failure, NOT a seed gap — the deployment may well have a valid assignee. ' +
           'Check that the service is up and DIGIT_USERNAME/DIGIT_PASSWORD are right, then re-run.',
       };
     }
     return {
       error:
-        `No employee at ${TENANT} can be an assignee: ASSIGN lands in ${assign.nextState}, which needs one of ` +
+        `No employee at ${tenantsOf(profile).city} can be an assignee: ASSIGN lands in ${assign.nextState}, which needs one of ` +
         `[${assigneeRoles.join(', ')}] plus an HRMS department. Employees present: ` +
         `${employees.map((e) => `${e.code}[roles=${e.roles.join('|')} depts=${e.departments.join('|') || 'none'}]`).join(', ') || 'none'}. ` +
         'Note HRMS has no parent-tenant fallback — an employee at a sub-tenant cannot serve this one.',
@@ -630,7 +678,7 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
   if (!picked) {
     return {
       error:
-        `No (serviceCode, assignee) pair lines up on ${TENANT}. pgr-services validates the ASSIGNEE's HRMS ` +
+        `No (serviceCode, assignee) pair lines up on ${tenantsOf(profile).city}. pgr-services validates the ASSIGNEE's HRMS ` +
         'departments against the complaint type\'s department, and none of the eligible assignees holds one of ' +
         `the catalogue's departments. Complaint types: ${services.map((s) => `${s.serviceCode}->${s.department || 'no-dept'}`).join(', ')}. ` +
         `Eligible assignees: ${eligible.map((e) => `${e.code}->${e.departments.join('|')}`).join(', ')}. ` +
@@ -647,7 +695,7 @@ export async function resolveSeedPlan(opts?: { profile?: DeploymentProfile }): P
   // department-less actors, and preferring one costs nothing.
   const actor = (await resolvePersona('gro-with-department', { profile })) ?? (await resolvePersona('gro', { profile }));
   if (!actor) {
-    return { error: personaDiagnostic('gro-with-department') || whyUnresolved('gro', []) };
+    return { error: personaDiagnostic('gro-with-department', profile) || whyUnresolved('gro', [], profile) };
   }
 
   const localityCode = localityFor(profile);
