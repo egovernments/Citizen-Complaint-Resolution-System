@@ -54,6 +54,7 @@ public class PGRServiceCountScopingTest {
     @Mock private PGRUtils pgrUtils;
     @Mock private ExtendedAttributesValidationService extendedAttributesValidationService;
     @Mock private EncryptionDecryptionService encryptionDecryptionService;
+    @Mock private EmployeeDepartmentScopeService employeeDepartmentScopeService;
 
     private PGRService pgrService;
 
@@ -62,7 +63,7 @@ public class PGRServiceCountScopingTest {
         pgrService = new PGRService(enrichmentService, userService, workflowService,
                 serviceRequestValidator, validator, producer, config, repository, mdmsUtils,
                 complaintDomainEventService, pgrUtils, extendedAttributesValidationService,
-                encryptionDecryptionService);
+                encryptionDecryptionService, employeeDepartmentScopeService);
     }
 
     private RequestInfo requestInfo() {
