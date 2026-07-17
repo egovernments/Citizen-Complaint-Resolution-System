@@ -35,6 +35,13 @@ export const AppModules = ({ stateCode, userType, modules, appTenants, additiona
       </Route>
     );
   });
+  // Always-on fallback for the supervisor dashboard: appRoutes above are built
+  // from initData.modules (MDMS tenant.citymodule ∩ enabledModules), so without
+  // the "Dashboard" citymodule row the route would fall through to AppHome.
+  // When the row IS present the appRoutes entry matches first in the Switch,
+  // so this never double-mounts. Role-gating lives inside DashboardModule.
+  const DashboardFallbackModule = Digit.ComponentRegistryService.getComponent("DashboardModule");
+
   const isSuperUserWithMultipleRootTenant = Digit.UserService.hasAccess("SUPERUSER") && Digit.Utils.getMultiRootTenant();
    const hideClass =
     location.pathname.includes(`${path}/productDetailsPage/`);
@@ -43,6 +50,11 @@ export const AppModules = ({ stateCode, userType, modules, appTenants, additiona
     <div className={isSuperUserWithMultipleRootTenant ? "" : "ground-container digit-home-ground"}>
       <Switch>
         {appRoutes}
+        {DashboardFallbackModule && (
+          <Route path={`${path}/dashboard`}>
+            <DashboardFallbackModule stateCode={stateCode} moduleCode="Dashboard" userType={userType} tenants={appTenants} />
+          </Route>
+        )}
         <Route path={`${path}/login`}>
           <Redirect to={{ pathname: `/${window?.contextPath}/employee/user/login`, state: { from: location.pathname + location.search } }} />
         </Route>

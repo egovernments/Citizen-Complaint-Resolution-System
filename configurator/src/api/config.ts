@@ -16,11 +16,16 @@ export const ENDPOINTS = {
   // MDMS
   MDMS_SEARCH: '/mdms-v2/v2/_search',
   MDMS_CREATE: '/mdms-v2/v2/_create',
+  MDMS_UPDATE: '/mdms-v2/v2/_update',
   MDMS_SCHEMA_SEARCH: '/mdms-v2/schema/v1/_search',
   MDMS_SCHEMA_CREATE: '/mdms-v2/schema/v1/_create',
 
   // User (for tenant bootstrap)
   USER_CREATE: '/user/users/_createnovalidate',
+
+  // Encryption (for tenant bootstrap — register a new tenant with egov-enc-service
+  // before any encrypt/decrypt call targets it; see tenantBootstrap.ts)
+  ENC_GENERATE_KEY: '/egov-enc-service/crypto/v1/_generatekey',
 
   // Workflow (for tenant bootstrap — PGR state machine clone)
   WORKFLOW_BS_SEARCH: '/egov-workflow-v2/egov-wf/businessservice/_search',
@@ -66,6 +71,7 @@ export const MDMS_SCHEMAS = {
   // RAINMAKER-PGR.ServiceDefs / .ClassificationNode masters are gone.
   COMPLAINT_HIERARCHY: 'RAINMAKER-PGR.ComplaintHierarchy',
   TENANT: 'tenant.tenants',
+  MAP_CONFIG: 'RAINMAKER-PGR.MapConfig',
 };
 
 // OAuth credentials

@@ -28,11 +28,12 @@ import { Header, SubHeader } from '@/components/digit/Header';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
 import { Banner } from '@/components/digit/Banner';
-import { apiClient, boundaryService, localizationService, ApiClientError } from '@/api';
+import { apiClient, boundaryService, localizationService, mdmsService, ApiClientError } from '@/api';
 import { parseExcelFile, parseBoundaryExcel } from '@/utils/excelParser';
 import { downloadBoundaryTemplate } from '@/utils/templateBuilder';
 import { parseGeoJsonSidecar, geometryForBoundary, type ParsedGeoJsonSidecar } from '@/utils/boundaryGeoJson';
 import { buildOsmBoundaries, type OsmAdminLevel, type SkippedOsmFeature } from '@/utils/osmBoundaries';
+import { deriveMapPosition } from '@/utils/mapConfigFromBoundaries';
 import osmtogeojson from 'osmtogeojson';
 import type { BoundaryHierarchy, Boundary, BoundaryExcelRow } from '@/api/types';
 
@@ -113,23 +114,59 @@ async function runPostCreatePipeline(
     name: b.name,
   }));
 
-  await localizationService.uploadBoundaryLocalizations(
-    tenantId,
-    boundaryData,
-    hierarchyType,
-    'en_IN'
-  );
+  // Seed under every locale the tenant actually serves (StateInfo.languages),
+  // not a hardcoded en_IN — the digit-ui citizen app reads boundary names under
+  // its ACTIVE locale (e.g. en_KE / sw_KE for Kenya), so seeding only en_IN left
+  // the create-complaint locality dropdown AND the OSM map ward tooltips showing
+  // raw boundary codes. Fall back to en_IN when StateInfo has no languages so an
+  // India tenant behaves exactly as before.
+  const configuredLocales = await mdmsService.getStateInfoLocales(tenantId).catch(() => []);
+  const locales = configuredLocales.length > 0 ? configuredLocales : ['en_IN'];
 
-  // Create level-label localization keys so DIGIT-UI renders "MUNICÍPIO" / "DISTRITO"
-  // instead of the raw key "maputo_hierarchy_type_MUNICÍPIO" in the complaint form.
-  await localizationService.uploadHierarchyLevelLocalizations(
-    tenantId,
-    hierarchyType,
-    levels,
-    'en_IN'
-  ).catch(e => console.warn('hierarchy-level localization failed (non-fatal)', e));
+  for (const locale of locales) {
+    await localizationService.uploadBoundaryLocalizations(
+      tenantId,
+      boundaryData,
+      hierarchyType,
+      locale
+    );
+
+    // Create level-label localization keys so DIGIT-UI renders "MUNICÍPIO" / "DISTRITO"
+    // instead of the raw key "maputo_hierarchy_type_MUNICÍPIO" in the complaint form.
+    await localizationService.uploadHierarchyLevelLocalizations(
+      tenantId,
+      hierarchyType,
+      levels,
+      locale
+    ).catch(e => console.warn(`hierarchy-level localization failed (non-fatal) for ${locale}`, e));
+  }
 
   await localizationService.cacheBust().catch(e => console.warn('cache-bust failed', e));
+
+  // The boundaries just onboarded describe exactly the area this tenant serves,
+  // so they already answer where the citizen map should open, how far in, and
+  // which extent the address search may return results from. Derive all three
+  // rather than asking an admin to type eight numbers they cannot sanity-check
+  // without a map in front of them — and note a wrong search extent is not
+  // cosmetic: Nominatim's bounded search DISCARDS anything outside the box.
+  //
+  // Best-effort. Boundaries are the operator's real work here; failing Phase 2
+  // over a map default would be a poor trade. An unwritten MapConfig just means
+  // the map keeps its built-in defaults.
+  try {
+    const derived = deriveMapPosition(created);
+    if (derived) {
+      await mdmsService.upsertMapConfig(tenantId, {
+        ...derived,
+        // The wards the map draws are the ones we just created, for this tenant.
+        boundaryTenantId: tenantId,
+      });
+    } else {
+      console.warn('[Phase 2] no boundary geometry — leaving MapConfig at its defaults');
+    }
+  } catch (e) {
+    console.warn('[Phase 2] map position not written (non-fatal)', e);
+  }
 
   // Clear ancestralmaterializedpath so boundary-service includeChildren=true
   // doesn't combine two overlapping queries and return each node twice in the
@@ -528,6 +565,22 @@ export default function Phase2Page() {
         ? pickedSuggestion.countryCode.trim().toUpperCase().replace(/[\\"]/g, '\\$&')
         : '';
 
+      // OSM stores a place's primary `name` in the LOCAL language, but the
+      // typeahead (Turbopass) usually surfaces a translated/anglicized name —
+      // e.g. it suggests "Maputo Province" while the OSM relation's name is
+      // "Maputo" (the English label lives only in name:en). A strict
+      // ["name"="Maputo Province"] match then resolves nothing, so the search
+      // dead-ends with "No administrative boundaries found" (issue #757).
+      // Match the picked name against the common name variants so either the
+      // native or the translated form resolves the relation.
+      const NAME_KEYS = ['name', 'name:en', 'int_name', 'alt_name'];
+      const relByName = NAME_KEYS
+        .map(k => `  rel(area.country)["boundary"="administrative"]["${k}"="${escaped}"];`)
+        .join('\n');
+      const areaByName = NAME_KEYS
+        .map(k => `  area["${k}"="${escaped}"]["boundary"="administrative"];`)
+        .join('\n');
+
       // When the operator picked a typeahead suggestion with a country code,
       // scope the lookup to that country and resolve the named relation
       // itself (included in the output so the root level isn't lost).
@@ -536,7 +589,9 @@ export default function Phase2Page() {
       const query = countryCode
         ? `[out:json][timeout:90];
 area["ISO3166-1"="${countryCode}"][admin_level=2]->.country;
-rel(area.country)["boundary"="administrative"]["name"="${escaped}"]->.target;
+(
+${relByName}
+)->.target;
 .target map_to_area ->.searchArea;
 (
   rel(area.searchArea)["boundary"="administrative"];
@@ -546,7 +601,9 @@ out body;
 >;
 out skel qt;`
         : `[out:json][timeout:90];
-area["name"="${escaped}"]["boundary"="administrative"]->.searchArea;
+(
+${areaByName}
+)->.searchArea;
 (
   rel(area.searchArea)["boundary"="administrative"];
 );
@@ -566,10 +623,16 @@ out skel qt;`;
       let targetAdminLevel = 0;
       const sTerm = searchTerm.toLowerCase().trim();
       geojson.features.forEach((feature: any) => {
-        const featName = feature.properties?.name?.toLowerCase() || '';
-        const featAltName = feature.properties?.alt_name?.toLowerCase() || '';
-        if (featName === sTerm || featName.includes(sTerm) || featAltName === sTerm) {
-          const lvl = parseInt(feature.properties.admin_level, 10);
+        const props = feature.properties || {};
+        // Match the search term against the same name variants the query
+        // resolves on (name/name:en/int_name/alt_name) — otherwise a place
+        // picked by its translated name (e.g. "Maputo Province" vs the OSM
+        // name "Maputo") never matches here and the root level isn't found.
+        const featNames = NAME_KEYS
+          .map(k => (typeof props[k] === 'string' ? props[k].toLowerCase() : ''))
+          .filter(Boolean);
+        if (featNames.some(n => n === sTerm || n.includes(sTerm))) {
+          const lvl = parseInt(props.admin_level, 10);
           // If we found a match, we prefer the HIGHEST admin_level number (most specific)
           // Wait, if it's the search target, it should be the ROOT.
           // e.g. "Maputo" matches Level 4 (Cidade de maputo).

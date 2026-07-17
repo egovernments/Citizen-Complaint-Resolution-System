@@ -6,6 +6,15 @@ function todayISO() {
   return `${y}-${m}-${day}`;
 }
 
+function oneMonthAgoISO() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export const GEOGRAPHY_OPTIONS = [
   { id: "all", label: "All wards" },
 ];
@@ -19,7 +28,7 @@ export const COMPLAINT_TYPE_OPTIONS = [
  * timeWindow is retained for volume KPI sub-metric resolution until date-range API wiring.
  */
 export const GLOBAL_FILTER_FIELDS = [
-  { id: "dateFrom", type: "date", label: "From", defaultValue: todayISO() },
+  { id: "dateFrom", type: "date", label: "From", defaultValue: oneMonthAgoISO() },
   { id: "dateTo", type: "date", label: "To", defaultValue: todayISO() },
   {
     id: "geography",
@@ -41,21 +50,35 @@ export const GLOBAL_FILTER_FIELDS = [
 export const GLOBAL_FILTER_GROUPS = GLOBAL_FILTER_FIELDS.filter((f) => f.type === "select");
 
 export function buildDefaultFilters() {
+  const today = todayISO();
+  const monthAgo = oneMonthAgoISO();
   const defaults = Object.fromEntries(
-    GLOBAL_FILTER_FIELDS.map((field) => [field.id, field.defaultValue])
+    GLOBAL_FILTER_FIELDS.map((field) => {
+      if (field.id === "dateFrom") return [field.id, monthAgo];
+      if (field.id === "dateTo") return [field.id, today];
+      return [field.id, field.defaultValue];
+    })
   );
   defaults.timeWindow = "weekly";
-  defaults.dateRangeActive = false;
+  defaults.dateRangeActive = true;
   return defaults;
 }
 
 export function hasActiveFilters(filters) {
   if (!filters) return false;
-  if (filters.dateRangeActive) return true;
   const defaults = buildDefaultFilters();
+  const geography = filters.geography ?? defaults.geography;
+  const complaintType = filters.complaintType ?? defaults.complaintType;
+  const dateFrom = filters.dateFrom ?? defaults.dateFrom;
+  const dateTo = filters.dateTo ?? defaults.dateTo;
+  const dateRangeActive = filters.dateRangeActive ?? defaults.dateRangeActive;
+
   return (
-    filters.geography !== defaults.geography ||
-    filters.complaintType !== defaults.complaintType
+    dateRangeActive !== defaults.dateRangeActive ||
+    dateFrom !== defaults.dateFrom ||
+    dateTo !== defaults.dateTo ||
+    geography !== defaults.geography ||
+    complaintType !== defaults.complaintType
   );
 }
 
@@ -69,6 +92,12 @@ export function sanitizeFilters(raw, dynamicOptions = {}) {
     return defaults;
   }
 
+  // The `= {}` default only applies when the arg is `undefined`. Callers such as
+  // persistDashboardFilters(filters, dynamicOptions) can pass `null` explicitly, which
+  // slips past the default and makes `dynamicOptions[field.id]` throw on the first select
+  // field ("geography") — blanking the dashboard on any date-filter change. Normalize it.
+  const options = dynamicOptions && typeof dynamicOptions === "object" ? dynamicOptions : {};
+
   const next = { ...defaults };
 
   for (const field of GLOBAL_FILTER_FIELDS) {
@@ -77,8 +106,8 @@ export function sanitizeFilters(raw, dynamicOptions = {}) {
       next[field.id] = value;
     }
     if (field.type === "select") {
-      const options = dynamicOptions[field.id] ?? field.options;
-      if (options.some((opt) => opt.id === value)) {
+      const fieldOptions = options[field.id] ?? field.options;
+      if (fieldOptions.some((opt) => opt.id === value)) {
         next[field.id] = value;
       }
     }

@@ -2464,8 +2464,8 @@
   {
     "id": 28,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_create/common-masters.UserValidation",
-    "displayName": "Create Mobile number validation",
+    "url": "/mdms-v2/v2/_create/common-masters.MobileNumberValidation",
+    "displayName": "Create Mobile Number Validation",
     "orderNumber": 1,
     "parentModule": "",
     "enabled": true,
@@ -2473,11 +2473,11 @@
     "code": "null",
     "path": ""
   },
-    {
+  {
     "id": 29,
     "name": "MDMS",
-    "url": "/mdms-v2/v2/_update/common-masters.UserValidation",
-    "displayName": "update Mobile number validation",
+    "url": "/mdms-v2/v2/_update/common-masters.MobileNumberValidation",
+    "displayName": "Update Mobile Number Validation",
     "orderNumber": 1,
     "parentModule": "",
     "enabled": true,

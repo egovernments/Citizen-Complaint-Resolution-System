@@ -32,6 +32,36 @@ import UploadDrawer from "./ImageUpload/UploadDrawer";
 import ImageComponent from "../../../components/ImageComponent";
 
 const DEFAULT_TENANT = Digit?.ULBService?.getStateId?.();
+// CCSD-1989: strict email shape (blank ok) so "a@b." fails client-side with a
+// localized error instead of the unlocalized backend save failure. FALLBACK
+// only — the live pattern comes from common-masters.MobileNumberValidation
+// (emailRegex) via validationConfig, same channel as the mobile pattern.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Derive the maximum digit count from a mobile regex pattern string.
+// Works for exact-count patterns like ^[79][0-9]{8}$ (→9) and optional-prefix
+// patterns like ^0?[17][0-9]{8}$ (→10 max). Returns null when unbounded.
+function mobileRegexMaxLength(pattern) {
+  if (!pattern) return null;
+  const s = pattern.replace(/^\^/, "").replace(/\$$/, "");
+  let max = 0, i = 0;
+  while (i < s.length) {
+    if (s[i] === "[") { const e = s.indexOf("]", i + 1); i = e === -1 ? i + 1 : e + 1; }
+    else if (s[i] === "\\") { i += 2; }
+    else { i++; }
+    if (i < s.length && s[i] === "{") {
+      const e = s.indexOf("}", i);
+      if (e !== -1) {
+        const parts = s.slice(i + 1, e).split(",");
+        max += parseInt(parts[parts.length - 1], 10) || 0;
+        i = e + 1; continue;
+      }
+    } else if (i < s.length && (s[i] === "*" || s[i] === "+")) { return null; }
+    else if (i < s.length && s[i] === "?") { max += 1; i++; continue; }
+    max += 1;
+  }
+  return max > 0 ? max : null;
+}
 
 const defaultImage =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAO4AAADUCAMAAACs0e/bAAAAM1BMVEXK0eL" +
@@ -66,7 +96,11 @@ const defaultValidationConfig = {
       // an unmodified Edit Profile (CCRS#556). Real-world names can also
       // contain "O'Brien" / "Mary-Anne" / "John Jr." which the
       // alpha-only regex rejected too.
-      name: "/^[a-zA-Z0-9 .'\\-]+$/i",
+      // CCSD-1992: forbid a leading separator so a name of just "-" fails
+      // client-side with the localized name error instead of an unhandled
+      // backend UserProfileUpdateDeniedException; O'Brien / Mary-Anne / John Jr.
+      // / mobile-number names still pass.
+      name: "/^(?![ .'\\-])[a-zA-Z0-9 .'\\-]+$/i",
       // Fallback mobile pattern for when the MDMS ValidationConfigs master
       // isn't seeded for the tenant. Pull the tenant's pattern from
       // globalConfigs.CORE_MOBILE_CONFIGS (e.g. Mozambique "^8[0-9]{8}$")
@@ -75,6 +109,7 @@ const defaultValidationConfig = {
       // before the bundle, so getConfig is available at module init. The
       // generic numeric pattern is only a last resort if the config is absent.
       mobileNumber:
+        window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberRegex ||
         window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern ||
         "/^[0-9]{6,15}$/",
       password: "/^([a-zA-Z0-9@#$%]{8,15})$/i",
@@ -149,6 +184,12 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   };
 
   const [validationConfig, setValidationConfig] = useState(mapConfigToRegExp(defaultValidationConfig) || {});
+  const [mobileMaxLength, setMobileMaxLength] = useState(
+    mobileRegexMaxLength(
+      window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberRegex ||
+      window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern
+    ) || 15
+  );
 
   const stateLvlTenantId = Digit.Utils.getMultiRootTenant()
     ? Digit.ULBService.getCurrentTenantId()
@@ -257,29 +298,27 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     }
   };
 
-  // Read from the canonical `ValidationConfigs.mobileNumberValidation`
-  // schema — same swap we made in HRMS create/edit (#415/#420) and the
-  // citizen login (#429). Nai Pepea doesn't seed the legacy
-  // `commonUiConfig.UserValidation` master, so the profile page fell
-  // through to the India default regex and refused to save Kenyan
-  // mobile numbers on submit (closes egovernments/CCRS#444 sub-3).
+  // Read from common-masters.MobileNumberValidation — the single source
+  // of truth for mobile validation across all frontends and backends.
   const { data: mdmsValidationData, isValidationConfigLoading } = Digit.Hooks.useCustomMDMS(
     stateLvlTenantId,
-    "ValidationConfigs",
-    [{ name: "mobileNumberValidation" }],
+    "common-masters",
+    [{ name: "MobileNumberValidation" }],
     {
       select: (data) => {
-        const validationData = data?.ValidationConfigs?.mobileNumberValidation?.find(
-          (x) => x.validationName === "defaultMobileValidation"
-        );
-        const rules = validationData?.rules;
+        const list = data?.["common-masters"]?.MobileNumberValidation || [];
+        const record =
+          list.find((x) => x.default === true && x.isActive !== false) ||
+          list.find((x) => x.isActive !== false) ||
+          null;
+        if (!record) return null;
+        const maxLen = mobileRegexMaxLength(record.mobileNumberRegex) || 15;
         return {
-          UserProfileValidationConfig: [
-            {
-              mobileNumber: rules?.pattern,
-            },
-          ],
-          prefix: rules?.prefix || DEFAULT_MOBILE_PREFIX,
+          // email is optional in the master — undefined entries are dropped
+          // below so the built-in EMAIL_RE fallback stays in effect.
+          UserProfileValidationConfig: [{ mobileNumber: record.mobileNumberRegex, email: record.emailRegex }],
+          prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
+          maxLength: maxLen,
         };
       },
       enabled: !!stateLvlTenantId,
@@ -299,6 +338,9 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         updatedValidationConfig.prefix = mdmsValidationData.prefix;
       }
       setValidationConfig((prev) => ({ ...prev, ...updatedValidationConfig }));
+      if (mdmsValidationData?.maxLength) {
+        setMobileMaxLength(mdmsValidationData.maxLength);
+      }
     }
   }, [mdmsValidationData]);
 
@@ -435,7 +477,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     if (userInfo?.userName !== value) {
       setEmail(value);
 
-      if (value.length && !(value.includes("@") && value.includes("."))) {
+      if (value.length && !(validationConfig?.email || EMAIL_RE).test(value.trim())) {
         setErrors({
           ...errors,
           emailAddress: {
@@ -452,9 +494,10 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   };
 
   const setUserMobileNumber = (value) => {
-    setMobileNo(value);
+    const digits = value.replace(/\D/g, "").slice(0, mobileMaxLength);
+    setMobileNo(digits);
 
-    if (userType === "employee" && !validationConfig?.mobileNumber?.test(value)) {
+    if (!validationConfig?.mobileNumber?.test(digits)) {
       setErrors({
         ...errors,
         mobileNumber: {
@@ -539,25 +582,29 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   const updateProfile = async () => {
     setLoading(true);
     try {
+      // Validate the trimmed value directly: setName is asynchronous, so the
+      // `name` binding below would still hold the untrimmed text (a legacy
+      // profile with leading whitespace would fail Save with no input error).
+      const trimmedName = (name || "").trim();
       if (name) {
-        setName((prev) => prev.trim());
+        setName(trimmedName);
       }
 
-      if (!validationConfig?.name?.test(name) || name === "" || name.length > 50 || name.length < 1) {
+      if (!validationConfig?.name?.test(trimmedName) || trimmedName === "" || trimmedName.length > 50 || trimmedName.length < 1) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_NAME_INVALID"),
         });
       }
 
-      if (userType === "employee" && !validationConfig?.mobileNumber?.test(mobileNumber)) {
+      if (canEditMobile && mobileNumber && !validationConfig?.mobileNumber?.test(mobileNumber)) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_MOBILE_NUMBER_INVALID"),
         });
       }
 
-      if (email.length && !(email.includes("@") && email.includes("."))) {
+      if (email.length && !(validationConfig?.email || EMAIL_RE).test(email.trim())) {
         throw JSON.stringify({
           type: "error",
           message: t("CORE_COMMON_PROFILE_EMAIL_INVALID"),
@@ -1203,9 +1250,9 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     value: g.code,
     label: t(g.i18nKey),
   }));
-  const mobilePrefix =
-    mdmsValidationData?.prefix ||
-    window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobilePrefix ||
+  const countryCode =
+    mdmsValidationData?.countryCode ||
+    window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.countryCode ||
     DEFAULT_MOBILE_PREFIX;
   const isMultiRoot = Digit.Utils.getMultiRootTenant();
 
@@ -1362,7 +1409,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
             >
               {userInfo?.userName ? userInfo.userName : ""}
               {userInfo?.userName && (mobileNumber || email) ? "  ·  " : ""}
-              {mobileNumber ? `${mobilePrefix} ${mobileNumber}` : ""}
+              {mobileNumber ? `${countryCode} ${mobileNumber}` : ""}
               {mobileNumber && email ? "  ·  " : ""}
               {email || ""}
             </div>
@@ -1447,7 +1494,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
                 }}
               >
                 <Phone style={{ height: "0.95rem", width: "0.95rem" }} aria-hidden />
-                {mobilePrefix}
+                {countryCode}
               </span>
               <input
                 id="profile-mobile"
@@ -1458,6 +1505,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
                 value={mobileNumber || ""}
                 onChange={canEditMobile ? (e) => setUserMobileNumber(e.target.value) : undefined}
                 readOnly={!canEditMobile}
+                maxLength={mobileMaxLength}
                 aria-invalid={!!errors?.mobileNumber}
                 aria-readonly={!canEditMobile || undefined}
                 title={canEditMobile ? undefined : tr(

@@ -69,7 +69,7 @@ export default function Phase4Page() {
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [boundaries, setBoundaries] = useState<Boundary[]>([]);
   const [roles, setRoles] = useState<{ code: string; name: string; description?: string }[]>([]);
-  const [mobileRules, setMobileRules] = useState<{ pattern: string; minLength: number; maxLength: number; errorMessage: string; prefix?: string; allowedStartingCharacters?: string[] } | null>(null);
+  const [mobileRules, setMobileRules] = useState<{ mobileNumberRegex: string; pattern: string; countryCode?: string; prefix?: string; errorMessage: string } | null>(null);
   const [loadingRefs, setLoadingRefs] = useState(false);
   // Set when reference data is unavailable (fetch failed, or the boundary
   // tree came back empty). Distinct from per-row validation errors: without
@@ -246,9 +246,8 @@ export default function Phase4Page() {
       if (emp.mobileNumber) {
         if (mobileRules) {
           let compiled: RegExp | null = null;
-          try { compiled = new RegExp(mobileRules.pattern); } catch { compiled = null; }
-          const len = emp.mobileNumber.length;
-          if (len < mobileRules.minLength || len > mobileRules.maxLength || (compiled && !compiled.test(emp.mobileNumber))) {
+          try { compiled = new RegExp(mobileRules.mobileNumberRegex); } catch { compiled = null; }
+          if (compiled && !compiled.test(emp.mobileNumber)) {
             errors.push(mobileRules.errorMessage);
           }
         } else if (!/^\d{9,10}$/.test(emp.mobileNumber)) {
@@ -570,14 +569,9 @@ export default function Phase4Page() {
                 • <strong>mobileNumber</strong> -{' '}
                 {mobileRules
                   ? [
-                      mobileRules.minLength === mobileRules.maxLength
-                        ? `${mobileRules.minLength}-digit`
-                        : `${mobileRules.minLength}-${mobileRules.maxLength} digit`,
                       'mobile number',
-                      mobileRules.allowedStartingCharacters?.length
-                        ? `starting with ${mobileRules.allowedStartingCharacters.join(' / ')}`
-                        : null,
-                      mobileRules.prefix ? `(${mobileRules.prefix})` : null,
+                      mobileRules.countryCode ? `(${mobileRules.countryCode})` : null,
+                      `matching ${mobileRules.mobileNumberRegex}`,
                     ]
                       .filter(Boolean)
                       .join(' ')

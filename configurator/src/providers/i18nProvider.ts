@@ -2,16 +2,20 @@
  * i18n provider bridging react-admin's polyglot with DIGIT's localization API.
  *
  * Architecture:
- * - English is the ONLY fully-bundled locale (needed synchronously on boot).
- * - All `app.*` translations for non-English locales are fetched from DIGIT's
- *   localization API on demand (module: "configurator-ui").
+ * - `app.*` translations for ALL locales (English included) are fetched from
+ *   DIGIT's localization API (module: "configurator-ui") and are the source of
+ *   truth — so edits made in the configurator's own Localization UI take effect
+ *   without a code change. The bundled English `app.*` below is only a
+ *   boot/offline fallback (the default locale must render synchronously before
+ *   the network responds).
  * - `ra.*` framework strings (react-admin internals) are bundled per-locale
  *   since they're not stored in DIGIT. These are compact — just action/page/
  *   navigation/validation strings.
- * - API translations are deep-merged on top of the bundled base, so the DIGIT
- *   backend is the source of truth for all `app.*` keys.
- * - To add a new language: seed it in DIGIT via localization_upsert, add its
- *   `ra.*` bundle below, and add an entry to AVAILABLE_LOCALES.
+ * - API translations are deep-merged on top of the bundled base.
+ * - To add a new language: seed its `app.*` keys in DIGIT under module
+ *   "configurator-ui" (committed bundle at
+ *   local-setup/ansible/files/configurator-localization/, seeded by the deploy
+ *   playbook), add its `ra.*` bundle below, and add an entry to AVAILABLE_LOCALES.
  */
 import polyglotI18nProvider from 'ra-i18n-polyglot';
 import englishMessages from 'ra-language-english';
@@ -36,11 +40,20 @@ const customEnglishMessages: TranslationMessages = {
   app: {
     nav: {
       dashboard: 'Dashboard',
+      notifications: 'Notifications',
+      notification_configure: 'Configure',
+      notification_routing: 'Notification Routing',
+      notification_templates: 'Notification Templates',
+      notification_provider_templates: 'Provider Templates (WhatsApp)',
+      notification_logs: 'Notification Logs',
+      notification_providers: 'Notification Providers',
+      notification_preferences: 'User Preferences',
       tenant_management: 'Tenant Management',
       tenants: 'Tenants',
       departments: 'Departments',
       designations: 'Designations',
       hierarchies: 'Hierarchies',
+      map_config: 'Map Configuration',
       complaint_management: 'Complaint Management',
       complaint_hierarchies: 'Complaint Hierarchies',
       complaint_types: 'Complaint Types',
@@ -57,10 +70,22 @@ const customEnglishMessages: TranslationMessages = {
       boundaries: 'Boundaries',
       advanced: 'Advanced',
       switch_to_onboarding: 'Switch to Onboarding',
+      pgr_dashboard: 'PGR Dashboard',
     },
     header: {
       management_mode: 'Management Mode',
       title: 'DIGIT Management Studio',
+      brand: 'Complaints Management',
+    },
+    dashboard: {
+      date: {
+        all: 'All Time',
+        today: 'Today',
+        yesterday: 'Yesterday',
+        week: 'This Week',
+        month: 'This Month',
+        '3months': '3 Months',
+      },
     },
     resources: {
       complaint_types: 'Complaint Types',
@@ -120,6 +145,7 @@ const customEnglishMessages: TranslationMessages = {
       request_id: 'Request ID',
       citizen: 'Citizen',
       locality: 'Locality',
+      mobile_login_username_help: "Used as the citizen's login username.",
     },
     list: {
       refresh: 'Refresh',
@@ -140,6 +166,71 @@ const customEnglishMessages: TranslationMessages = {
       show_columns: 'Show columns',
       reset: 'Reset',
       rows_per_page: 'Rows per page:',
+    },
+    providers: {
+      // Notification Providers screen — self-service actions.
+      add: 'Add Provider',
+      add_hint: 'Credentials are sent straight to Novu over TLS and are never stored or echoed back.',
+      create: 'Create Provider',
+      credentials: 'Credentials',
+      field_channel: 'Channel',
+      field_provider_id: 'Provider ID',
+      field_name: 'Name',
+      field_identifier: 'Identifier (optional)',
+      field_phone: 'Recipient phone',
+      field_email: 'Recipient email',
+      field_subject: 'Subject (optional)',
+      field_body: 'Message body',
+      field_content_sid: 'Content SID',
+      field_variables: 'Variables (comma-separated)',
+      body_placeholder: 'Test message text',
+      // Column headers.
+      col_channel: 'Channel',
+      col_provider: 'Provider',
+      col_name: 'Name',
+      col_active: 'Active',
+      col_primary: 'Primary',
+      // Credential field labels.
+      cred: {
+        account_sid: 'Account SID',
+        token: 'Auth Token',
+        from: 'From',
+        host: 'SMTP Host',
+        port: 'SMTP Port',
+        user: 'SMTP User',
+        password: 'SMTP Password',
+        secure: 'Use TLS (secure)',
+      },
+      // Row actions.
+      verify: 'Verify',
+      test: 'Test',
+      templates: 'Templates',
+      verified: 'Verified',
+      failed: 'Failed',
+      status: 'Status',
+      // Test dialog.
+      test_title: 'Send Test Message',
+      test_hint: 'Sends one live message through Novu. Use owner-authorized recipients only — each test is logged.',
+      send_test: 'Send Test',
+      view_logs: 'View Notification Logs',
+      whatsapp_sid_hint: 'Approved WhatsApp ContentSids are listed on the Provider Templates screen.',
+      // Templates dialog.
+      templates_title: 'Novu Workflows',
+      templates_hint: 'Delivery workflows configured in Novu for this channel — not provider templates (Twilio has no SMS template registry). SMS/Email message text is managed under Notification Templates. Copy a workflow ID to reference it.',
+      templates_empty: 'No Novu workflows found for this channel.',
+      whatsapp_sid_note: 'WhatsApp ContentSids are managed on the Provider Templates screen, not here.',
+      copy: 'Copy',
+      copied: 'Copied',
+      copy_failed: 'Could not copy to clipboard.',
+      // Toast messages.
+      msg_missing: 'Fill in the name and all required credential fields.',
+      msg_created: 'Provider created.',
+      msg_create_failed: 'Could not create provider.',
+      msg_verify_ok: 'Provider verified.',
+      msg_verify_fail: 'Provider not active.',
+      msg_no_id: 'This provider has no integration id to verify.',
+      msg_test_sent: 'Test dispatched via Novu.',
+      msg_test_failed: 'Test delivery failed.',
     },
   },
 };
@@ -484,11 +575,19 @@ async function fetchAppTranslations(locale: string): Promise<Record<string, stri
     // the localization call at a hardcoded `'pg'` that doesn't exist on every
     // deployment.
     if (!tenantId) return {};
-    const messages = await digitClient.localizationSearch(tenantId, locale, 'configurator-ui');
+
+    // Fetch from both modules in parallel. rainmaker-common provides shared keys
+    // (e.g. ERR_INVALID_MOBILE_NUMBER, MOBILE_VALIDATION_*); configurator-ui
+    // provides app-specific overrides and takes precedence on conflicts.
+    const [configuratorMsgs, commonMsgs] = await Promise.all([
+      digitClient.localizationSearch(tenantId, locale, 'configurator-ui').catch(() => [] as unknown[]),
+      digitClient.localizationSearch(tenantId, locale, 'rainmaker-common').catch(() => [] as unknown[]),
+    ]);
+
     const flat: Record<string, string> = {};
-    for (const msg of messages) {
-      const code = msg.code as string | undefined;
-      const text = msg.message as string | undefined;
+    for (const msg of [...commonMsgs, ...configuratorMsgs]) {
+      const code = (msg as Record<string, unknown>).code as string | undefined;
+      const text = (msg as Record<string, unknown>).message as string | undefined;
       if (code && text) flat[code] = text;
     }
     if (Object.keys(flat).length > 0) {
@@ -528,10 +627,37 @@ async function getMessagesAsync(locale: string): Promise<TranslationMessages> {
   return result;
 }
 
+/**
+ * Build the message tree synchronously from the bundled base plus any backend
+ * app.* strings already sitting in the localStorage cache. Used only for the
+ * default locale's first render, where we cannot await the network.
+ */
+function buildSyncMessages(locale: string): TranslationMessages {
+  const base = JSON.parse(JSON.stringify(customEnglishMessages)) as Record<string, unknown>;
+  const raBundle = RA_BUNDLES[locale];
+  if (raBundle) {
+    deepMerge(base, raBundle);
+  }
+  const cachedFlat = readLocalStorageCache(locale);
+  if (cachedFlat && Object.keys(cachedFlat).length > 0) {
+    deepMerge(base, dotToNested(cachedFlat));
+  }
+  return base as TranslationMessages;
+}
+
 function getMessages(locale: string): TranslationMessages | Promise<TranslationMessages> {
-  // Default locale (en_IN) must return synchronously for polyglot init
+  // The default locale (en_IN) must resolve synchronously for polyglot's first
+  // render, so we can't await the network here. Instead we serve the bundled
+  // base immediately — overlaid with any backend app.* strings already in the
+  // localStorage cache — and kick off a background refresh so the next render
+  // (or locale switch) picks up edits made in the Localization UI. English is
+  // no longer a hardcoded-only locale: its app.* strings live in the
+  // `configurator-ui` backend module like every other locale, and the bundle
+  // is only a boot/offline fallback.
   if (locale === 'en_IN' || locale === 'en') {
-    return customEnglishMessages;
+    const sync = memoryCache.get(locale) ?? buildSyncMessages(locale);
+    void getMessagesAsync(locale);
+    return sync;
   }
   return getMessagesAsync(locale);
 }

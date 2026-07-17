@@ -151,6 +151,28 @@ public class PGRConstants {
 
     public static final String MDMS_DATA_SLA_KEYWORD = "slaHours";
 
+    // --- Config-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate) ---
+    public static final String MDMS_NOTIFICATION_ROUTING_MASTER = "NotificationRouting";
+    public static final String MDMS_NOTIFICATION_TEMPLATE_MASTER = "NotificationTemplate";
+    public static final String MDMS_NOTIFICATION_ROUTING_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationRouting";
+    public static final String MDMS_NOTIFICATION_TEMPLATE_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationTemplate";
+
+    // Channels — must match the MDMS schema enum.
+    public static final String CHANNEL_SMS = "SMS";
+    public static final String CHANNEL_WHATSAPP = "WHATSAPP";
+    public static final String CHANNEL_EMAIL = "EMAIL";
+
+    // Audience normalization (template lookup): any employee-type subscriber -> EMPLOYEE.
+    public static final String AUDIENCE_CITIZEN = "CITIZEN";
+    public static final String AUDIENCE_EMPLOYEE = "EMPLOYEE";
+
+    // Non-notifiable pseudo-audiences: workflow-internal, resolve to no recipients.
+    public static final String AUDIENCE_AUTO_ESCALATE = "AUTO_ESCALATE";
+    public static final String AUDIENCE_SYSTEM = "SYSTEM";
+
+    // Per-recipient event name prefix consumed by novu-bridge.
+    public static final String EVENT_NAME_PREFIX = "COMPLAINTS.WORKFLOW.";
+
     public static final String COMPLAINTS_RESOLVED = "complaintsResolved";
 
     public static final String AVERAGE_RESOLUTION_TIME = "averageResolutionTime";
@@ -165,10 +187,33 @@ public class PGRConstants {
 
     public static final String ESCALATE = "ESCALATE";
 
+    // MDMS master under module RAINMAKER-PGR (mdms-v2 schema code
+    // RAINMAKER-PGR.MDMS_ESCALATION_CONFIG, seeded by default-data-handler):
+    // the per-tenant visibility feature flag + resolver config. The JSONPATH
+    // constant is where that master lands in an MdmsRes payload.
+    
     public static final String MDMS_ESCALATION_CONFIG = "EscalationConfig";
+
+    // MDMS master under module RAINMAKER-PGR (mdms-v2 schema code
+    // RAINMAKER-PGR.InboxVisibilityConfig, seeded by default-data-handler):
+    // the per-tenant visibility feature flag + resolver config. The JSONPATH
+    // constant is where that master lands in an MdmsRes payload.
+    public static final String MDMS_INBOX_VISIBILITY_CONFIG = "InboxVisibilityConfig";
+
+    public static final String MDMS_INBOX_VISIBILITY_CONFIG_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.InboxVisibilityConfig";
 
     public static final String MDMS_ESCALATION_CONFIG_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.EscalationConfig";
 
     public static final String HRMS_REPORTING_TO_JSONPATH = "$.Employees[0].assignments[?(@.isCurrentAssignment==true)].reportingTo";
+
+    // Extended attributes — complaint category config and field schemas
+    public static final String MDMS_COMPLAINT_RELATED_TO_MAP = "ComplaintRelatedToMap";
+    public static final String MDMS_COMPLAINT_TEMPLATE_TYPE  = "ComplaintTemplateType";
+    public static final String MDMS_COMPLAINT_SCHEMA         = "ComplaintExtendedAttributeSchema";
+
+    public static final String ROLE_CONFIDENTIAL_VIEWER = "CONFIDENTIAL_COMPLAINT_VIEWER";
+
+    // Placeholder written over dynamic fields the caller isn't authorized to see in plaintext.
+    public static final String MASK_SENTINEL = "****";
 
 }

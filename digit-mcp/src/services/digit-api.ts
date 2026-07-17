@@ -894,25 +894,64 @@ class DigitApiClient {
     return data.idResponses || [];
   }
 
-  // Location — search boundaries via egov-location service
+  // Location — boundary search.
+  // The legacy /egov-location boundarys API is not served on the Kubernetes stack
+  // (only the compose stack fakes it via a Kong adapter). We call the modern
+  // /boundary-service/boundary-relationships API and reshape its response back into
+  // the legacy TenantBoundary shape (mirroring the compose Kong adapter) so the
+  // location_search tool returns the same structure on both stacks. Like the Kong
+  // adapter, the legacy boundaryType filter is dropped — the full tree is returned.
   async locationBoundarySearch(
     tenantId: string,
     boundaryType?: string,
     hierarchyType?: string
   ): Promise<Record<string, unknown>[]> {
-    const body: Record<string, unknown> = {
-      RequestInfo: this.buildRequestInfo(),
-      tenantId,
-    };
-    if (boundaryType) body.boundaryType = boundaryType;
-    if (hierarchyType) body.hierarchyType = hierarchyType;
+    const hier = hierarchyType || 'ADMIN';
+    const params = new URLSearchParams({ tenantId, hierarchyType: hier, includeChildren: 'true' });
 
     const data = await this.request<{ TenantBoundary?: Record<string, unknown>[] }>(
-      this.endpoint('LOCATION_BOUNDARY_SEARCH'),
-      body
+      `${this.endpoint('BOUNDARY_RELATIONSHIP_SEARCH')}?${params.toString()}`,
+      { RequestInfo: this.buildRequestInfo() }
     );
 
-    return data.TenantBoundary || [];
+    return this.reshapeTenantBoundary(data.TenantBoundary || [], hier);
+  }
+
+  // Reshape a boundary-relationships TenantBoundary tree into the legacy
+  // egov-location shape (mirrors the compose Kong adapter): wrap the hierarchyType
+  // string into { code, name }; recursively add name/localname/label to each
+  // boundary node and normalize missing/empty children to [].
+  private reshapeTenantBoundary(
+    tenantBoundaries: Record<string, unknown>[],
+    hierarchyType: string
+  ): Record<string, unknown>[] {
+    const enrich = (nodes: Record<string, unknown>[]): void => {
+      for (const node of nodes) {
+        if (!node.name) node.name = node.code;
+        if (!node.localname) node.localname = node.code;
+        if (!node.label) node.label = node.boundaryType || '';
+        const children = node.children;
+        if (!Array.isArray(children) || children.length === 0) {
+          node.children = [];
+        } else {
+          enrich(children as Record<string, unknown>[]);
+        }
+      }
+    };
+    for (const tb of tenantBoundaries) {
+      if (typeof tb.hierarchyType === 'string') {
+        tb.hierarchyType = { code: tb.hierarchyType, name: tb.hierarchyType };
+      } else if (tb.hierarchyType == null) {
+        tb.hierarchyType = { code: hierarchyType, name: hierarchyType };
+      }
+      const boundary = tb.boundary;
+      if (!Array.isArray(boundary) || boundary.length === 0) {
+        tb.boundary = [];
+      } else {
+        enrich(boundary as Record<string, unknown>[]);
+      }
+    }
+    return tenantBoundaries;
   }
 
   // Encryption — encrypt values (no RequestInfo needed)
@@ -941,6 +980,31 @@ class DigitApiClient {
 
     const data = await response.json();
     return Array.isArray(data) ? data : [];
+  }
+
+  // Encryption — register a tenant with egov-enc-service (no RequestInfo needed).
+  // egov-enc-service discovers tenants via an MDMS search scoped to its own
+  // STATE_LEVEL_TENANT_ID env var, so a brand-new tenant root is invisible to
+  // it until this is called — every encrypt/decrypt for that tenant (e.g. the
+  // ADMIN user creation below) otherwise fails with "Tenant Id not found".
+  // Idempotent: returns created:false when a key already exists.
+  async generateEncKey(tenantId: string): Promise<boolean> {
+    const url = `${this.environment.url}${this.endpoint('ENC_GENERATE_KEY')}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        RequestInfo: { apiId: 'Citizen', ver: '.01', ts: null },
+        tenantId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`enc-service key generation failed for "${tenantId}": HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    return !!(data as { created?: boolean }).created;
   }
 
   // Decryption — decrypt encrypted values (no RequestInfo needed)

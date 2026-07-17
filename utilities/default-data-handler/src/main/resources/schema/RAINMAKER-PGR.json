@@ -230,5 +230,413 @@
       "x-ref-schema": [],
       "additionalProperties": false
     }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.NotificationRouting",
+    "description": "Config-driven notification routing (the 'who'): one row per (businessService, action, toState, audience, channel) declaring that this transition notifies that audience over that channel. Joins 1:1 with NotificationTemplate. Read by pgr-services NotificationRouter.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "PGR Notification Routing",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "businessService",
+        "action",
+        "toState",
+        "audience",
+        "channel"
+      ],
+      "x-unique": [
+        "businessService",
+        "action",
+        "toState",
+        "audience",
+        "channel"
+      ],
+      "properties": {
+        "businessService": {
+          "type": "string",
+          "description": "Workflow business service, e.g. PGR."
+        },
+        "fromState": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Documentation/UI only. Runtime matching uses action+toState because the notification consumer reconstructs ServiceRequest from the Kafka record, which carries only the resulting applicationStatus (toState)."
+        },
+        "action": {
+          "type": "string",
+          "description": "Workflow action, e.g. ASSIGN, REASSIGN, REJECT, RESOLVE, REOPEN, RATE, APPLY."
+        },
+        "toState": {
+          "type": "string",
+          "description": "Resulting applicationStatus after the action, e.g. PENDINGATLME. Disambiguates same-action transitions (e.g. RATE -> CLOSEDAFTERRESOLUTION vs CLOSEDAFTERREJECTION)."
+        },
+        "audience": {
+          "type": "string",
+          "description": "Role code to notify; CITIZEN=the filer; AUTO_ESCALATE/SYSTEM are non-notifiable."
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "SMS",
+            "WHATSAPP",
+            "EMAIL"
+          ]
+        },
+        "assigneeOnly": {
+          "type": "boolean",
+          "description": "If true and a named assignee exists, notify only the assignee instead of the whole role pool."
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.NotificationTemplate",
+    "description": "Config-driven notification content (the 'what'). One record per (audience, action, toState, channel, locale) holding the message body PGR renders BEFORE publishing to Kafka. audience is the normalized recipient class (CITIZEN, or EMPLOYEE for any employee-type subscriber). Replaces the egov-localization PGR_<ROLE>_<ACTION>_<STATUS>_SMS_MESSAGE keys. Edited via the configurator.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "PGR Notification Template",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "audience",
+        "action",
+        "toState",
+        "channel",
+        "locale",
+        "body"
+      ],
+      "x-unique": [
+        "audience",
+        "action",
+        "toState",
+        "channel",
+        "locale"
+      ],
+      "properties": {
+        "audience": {
+          "type": "string",
+          "description": "Role code to notify; CITIZEN=the filer; AUTO_ESCALATE/SYSTEM are non-notifiable."
+        },
+        "action": {
+          "type": "string"
+        },
+        "toState": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "SMS",
+            "WHATSAPP",
+            "EMAIL"
+          ]
+        },
+        "locale": {
+          "type": "string",
+          "description": "e.g. en_IN, sw_KE."
+        },
+        "subject": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "EMAIL only; null for SMS/WHATSAPP."
+        },
+        "body": {
+          "type": "string",
+          "description": "Message body with {placeholder} tokens filled by pgr-services TemplateRenderer before Kafka publish."
+        },
+        "placeholders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Declared {tokens} this body uses, e.g. id, complaint_type, citizen_name, emp_name, ulb, status, date, download_link, rating, additional_comments."
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.NotificationProviderTemplate",
+    "description": "Config-driven provider template mapping (the 'how it's delivered'): one record per (provider, channel, audience, action, toState, locale) mapping a rendered notification to the external provider's pre-registered template and its ordered variables (e.g. a Twilio Content SID for WhatsApp/SMS). Read by novu-bridge to select the templateId and fill variables in order when the provider requires a pre-approved template. Joins to NotificationTemplate by (audience, action, toState, channel, locale).",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "PGR Notification Provider Template",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "provider",
+        "channel",
+        "audience",
+        "action",
+        "toState",
+        "locale",
+        "templateId",
+        "variables"
+      ],
+      "x-unique": [
+        "provider",
+        "channel",
+        "audience",
+        "action",
+        "toState",
+        "locale"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "External delivery provider whose template registry this row targets, e.g. twilio."
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "SMS",
+            "WHATSAPP",
+            "EMAIL"
+          ]
+        },
+        "audience": {
+          "type": "string",
+          "description": "Role code to notify; CITIZEN=the filer; AUTO_ESCALATE/SYSTEM are non-notifiable."
+        },
+        "action": {
+          "type": "string"
+        },
+        "toState": {
+          "type": "string"
+        },
+        "locale": {
+          "type": "string",
+          "description": "e.g. en_IN, sw_KE."
+        },
+        "templateId": {
+          "type": "string",
+          "description": "Provider-side template identifier, e.g. a Twilio Content SID (HX...)."
+        },
+        "templateName": {
+          "type": "string",
+          "description": "Human-readable provider template name, for reference in the configurator."
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered {token} names substituted into the provider template positionally, e.g. complaint_type, id, date, emp_name."
+        },
+        "approvalStatus": {
+          "type": "string",
+          "description": "Provider approval state of the template, e.g. approved, pending, rejected."
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.MapConfig",
+    "description": "Map tooling and starting map position for the tenant's PGR maps. Every field is optional; the UI resolves each one MDMS -> globalConfigs -> built-in default, so a partial record only overrides what it sets.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "PGR Map Config",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "code"
+      ],
+      "x-unique": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Record key. The map surfaces read a single config, so use \"DEFAULT\" unless you are deliberately keeping several variants."
+        },
+        "baseMapTheme": {
+          "type": "string",
+          "enum": [
+            "voyager",
+            "light",
+            "dark",
+            "osm"
+          ],
+          "description": "Named base-tile preset. Ignored when tileUrl is set. Defaults to voyager."
+        },
+        "tileUrl": {
+          "type": "string",
+          "description": "Raw Leaflet tile-URL template ({s}/{z}/{x}/{y}). Overrides baseMapTheme, letting an operator point at any tile provider."
+        },
+        "tileAttribution": {
+          "type": "string",
+          "description": "HTML attribution paired with a raw tileUrl. Named presets carry their own."
+        },
+        "wardHighlightColor": {
+          "type": "string",
+          "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+          "description": "Hex colour for the ward overlay fill/outline. Defaults to #FFA74F."
+        },
+        "center": {
+          "type": "object",
+          "properties": {
+            "lat": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90,
+              "description": "Latitude the map opens at."
+            },
+            "lng": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180,
+              "description": "Longitude the map opens at."
+            }
+          },
+          "required": [
+            "lat",
+            "lng"
+          ],
+          "additionalProperties": false,
+          "description": "Where the map opens when there is no GPS fix and no complaint location. Replaces the deploy-time globalConfigs MAP_CENTER."
+        },
+        "defaultZoom": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 22,
+          "description": "Zoom level the map opens at once a location is known. Defaults to 13 (neighbourhood level)."
+        },
+        "minZoom": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 22,
+          "description": "Furthest the citizen can zoom out."
+        },
+        "maxZoom": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 22,
+          "description": "Closest the citizen can zoom in."
+        },
+        "boundaryTenantId": {
+          "type": "string",
+          "description": "Tenant whose boundary tree supplies the ward polygons. Replaces the deploy-time globalConfigs MAP_TENANT. No overlay is drawn when this resolves to nothing."
+        },
+        "geocodeCountryCodes": {
+          "type": "string",
+          "description": "Comma-separated ISO country codes the address search is restricted to, e.g. \"ke\". Left unset, the search is worldwide."
+        },
+        "searchViewbox": {
+          "type": "object",
+          "properties": {
+            "minLon": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180,
+              "description": "West edge."
+            },
+            "minLat": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90,
+              "description": "South edge."
+            },
+            "maxLon": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180,
+              "description": "East edge."
+            },
+            "maxLat": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90,
+              "description": "North edge."
+            }
+          },
+          "required": [
+            "minLon",
+            "minLat",
+            "maxLon",
+            "maxLat"
+          ],
+          "additionalProperties": false,
+          "description": "Bounding box the address search is confined to. Results outside it are discarded, so an incorrect box silently hides every valid address — leave unset unless the box genuinely covers the service area."
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.InboxVisibilityConfig",
+    "description": "Feature flag + config for the PGR inbox My/All visibility tabs (Visibility V1, PR #1052 / issue #1020). `enabled: false` (or no record) renders the legacy inbox — no tabs, assigned-to-me radio, open-states default — so per-tenant rollout/rollback is a pure MDMS flip with no frontend redeploy. `version` selects the predicate matrix (v1 role/state, v2 +assignee, v3 +escalation trail) once the server-side resolver (Step 2) lands; the frontend Step 1 only reads `enabled`.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "Generated schema for Root",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "code",
+        "enabled"
+      ],
+      "x-unique": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "INBOX_VISIBILITY"
+          ],
+          "description": "Fixed discriminator so the master is a singleton per tenant."
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string",
+          "enum": [
+            "v1",
+            "v2",
+            "v3"
+          ],
+          "description": "Predicate matrix version (design doc §3). Ignored by FE Step 1."
+        },
+        "reporteeDepth": {
+          "type": "number",
+          "description": "Reportee subtree depth for the All tab (server-side resolver, Step 2). Default 1."
+        },
+        "jurisdictionScoped": {
+          "type": "boolean",
+          "description": "AND the jurisdiction axis onto every predicate (Step 2)."
+        },
+        "serverSide": {
+          "type": "boolean",
+          "description": "Resolve visibility in pgr-services (/request/inbox/_search, reportee-aware Step-2 resolver) instead of composing it client-side. Requires PGR_VISIBILITY_ENABLED on the deployment. Default false."
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
   }
 ]

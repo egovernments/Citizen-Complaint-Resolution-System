@@ -1,7 +1,39 @@
 import React, { useMemo, useRef, useState } from "react";
 import { getProductLabel } from "../config/dashboardConfig";
 import { GEOGRAPHY_OPTIONS } from "../config/globalFilterGroups";
+import { formatDimensionLabel } from "../config/labelFormat";
 import AddKpiDropdown from "./AddKpiDropdown";
+
+/**
+ * Derive the row-scope indicator from the analytics `scope` object the backend
+ * echoes on every /v2/analytics/_query response. Returns null when the scope is
+ * tenant-only (no departments, no boundaryPrefix) so admins/supervisors — who
+ * see everything — get no chip. Also null when `scope` is undefined (older
+ * backend that doesn't emit departments/boundaryPrefix yet).
+ */
+function buildRowScope(scope) {
+  if (!scope || typeof scope !== "object") return null;
+
+  const departments = Array.isArray(scope.departments)
+    ? scope.departments.filter((d) => d != null && d !== "")
+    : [];
+  const boundaryPrefix =
+    typeof scope.boundaryPrefix === "string" && scope.boundaryPrefix.trim()
+      ? scope.boundaryPrefix.trim()
+      : null;
+
+  if (departments.length === 0 && !boundaryPrefix) return null;
+
+  const deptLabel = departments
+    .map((code) => formatDimensionLabel(code))
+    .join(", ");
+  // Last segment of a dotted/slashed boundary code, e.g. "ke.bomet.CENTRAL" → "CENTRAL".
+  const areaLabel = boundaryPrefix
+    ? boundaryPrefix.split(/[./]/).filter(Boolean).pop() || boundaryPrefix
+    : null;
+
+  return { deptLabel, areaLabel, hasDepartments: departments.length > 0 };
+}
 
 function formatDisplayDate(iso) {
   if (!iso) return "";
@@ -42,6 +74,7 @@ const ExportIcon = () => (
 
 const DashboardHeader = ({
   visibleLayoutIds,
+  catalogItems,
   onAddWidget,
   onResetLayout,
   onDragWidgetStart,
@@ -51,10 +84,17 @@ const DashboardHeader = ({
   onExport,
   filters,
   filterOptions,
+  kpiCardData,
+  allowedWidgetIds,
+  scopedRole,
+  officerAccess,
+  visibleKpiCount,
+  scope,
 }) => {
   const [addKpiOpen, setAddKpiOpen] = useState(false);
   const addKpiRef = useRef(null);
   const productLabel = useMemo(() => getProductLabel(), []);
+  const rowScope = useMemo(() => buildRowScope(scope), [scope]);
   const subtitle = useMemo(
     () => buildSubtitle(filters, filterOptions),
     [filters, filterOptions]
@@ -72,6 +112,53 @@ const DashboardHeader = ({
               {title}
             </h1>
             <p className="tw-text-[11px] tw-text-muted-foreground">{subtitle}</p>
+            {scopedRole ? (
+              <span
+                title="Dashboard tiles are scoped to your role by the analytics catalog"
+                className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-border tw-border-border tw-bg-surface-2 tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-medium tw-uppercase tw-tracking-wide tw-text-muted-foreground"
+              >
+                <span
+                  className="tw-h-1.5 tw-w-1.5 tw-rounded-full tw-bg-primary"
+                  aria-hidden
+                />
+                Scoped to: {scopedRole}
+              </span>
+            ) : null}
+            {scopedRole && officerAccess != null ? (
+              <span
+                title={
+                  officerAccess
+                    ? "Your role can see officer-level (per-employee) KPIs"
+                    : "Officer-level (per-employee) KPIs are hidden from your role"
+                }
+                className={
+                  "tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-medium " +
+                  (officerAccess
+                    ? "tw-bg-status-resolved-bg tw-text-status-resolved"
+                    : "tw-bg-status-breach-bg tw-text-destructive")
+                }
+              >
+                {officerAccess ? "Officer KPIs: visible" : "Officer KPIs: hidden"}
+              </span>
+            ) : null}
+            {scopedRole && visibleKpiCount != null ? (
+              <span className="tw-text-[10px] tw-text-muted-foreground">
+                {visibleKpiCount} KPIs available to your role
+              </span>
+            ) : null}
+            {rowScope ? (
+              <span
+                title="Dashboard data is row-scoped to your department(s)"
+                className="tw-inline-flex tw-items-center tw-gap-1 tw-rounded-full tw-bg-status-assigned-bg tw-px-2 tw-py-0.5 tw-text-[10px] tw-font-medium tw-text-status-assigned"
+              >
+                <span
+                  className="tw-h-1.5 tw-w-1.5 tw-rounded-full tw-bg-status-assigned"
+                  aria-hidden
+                />
+                {rowScope.hasDepartments ? `Showing: ${rowScope.deptLabel}` : "Area-scoped"}
+                {rowScope.areaLabel ? ` · Area: ${rowScope.areaLabel}` : ""}
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -102,12 +189,15 @@ const DashboardHeader = ({
             </button>
             <AddKpiDropdown
               visibleLayoutIds={visibleLayoutIds}
+              catalogItems={catalogItems}
               onAddWidget={onAddWidget}
               onDragWidgetStart={onDragWidgetStart}
               onDragWidgetEnd={onDragWidgetEnd}
               open={addKpiOpen}
               onOpenChange={setAddKpiOpen}
               containerRef={addKpiRef}
+              kpiCardData={kpiCardData}
+              allowedWidgetIds={allowedWidgetIds}
             />
           </div>
 

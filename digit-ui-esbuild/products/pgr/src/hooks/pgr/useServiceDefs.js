@@ -3,7 +3,10 @@ import { useTranslation } from "react-i18next";
 const { useState, useEffect } = require("react");
 
 const useServiceDefs = (tenantId, moduleCode) => {
-  const [localMenu, setLocalMenu] = useState([]);
+  // null = still loading; [] = resolved, tenant genuinely has no defs.
+  // Consumers must not use emptiness as a loading signal (an empty-defs
+  // tenant would otherwise spin forever, e.g. PGRInbox's Loader gate).
+  const [localMenu, setLocalMenu] = useState(null);
   const SessionStorage = Digit.SessionStorage;
   const { t } = useTranslation();
 

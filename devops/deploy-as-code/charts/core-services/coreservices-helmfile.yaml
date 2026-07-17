@@ -97,12 +97,15 @@ releases:
     installed: true
     <<: *default
 
+  # service-request / pdf-service: not used by CCRS — zero callers in pgr-services, the
+  # digit-ui app (Utilities/PGR modules), or configs. Disabled to cut footprint + attack
+  # surface. Re-enable if a future CCRS feature needs them.
   - name: service-request
-    installed: true
+    installed: false
     <<: *default
 
   - name: pdf-service
-    installed: true
+    installed: false
     <<: *default
   
   - name: gateway

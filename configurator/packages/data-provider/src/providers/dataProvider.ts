@@ -42,9 +42,8 @@ function normalizeMdmsRecord(mdms: MdmsRecord, config: ResourceConfig): RaRecord
   return {
     ...data,
     // Key by the MDMS uniqueIdentifier (genuinely unique per record) rather
-    // than data[idField]. When two records share the idField value (e.g. two
-    // UserValidation rows both fieldType "mobile"), data[idField] collapsed
-    // them to the same react-admin id, so every row opened the first record.
+    // than data[idField]. When two records share the idField value, data[idField]
+    // collapses them to the same react-admin id, so every row opens the first record.
     // uniqueIdentifier is always distinct; fall back to data[idField] only
     // for legacy records that lack it.
     id: mdms.uniqueIdentifier || extractId(data, config),
@@ -169,6 +168,11 @@ function clientFilter(records: RaRecord[], filter: Record<string, unknown>): RaR
       // Internal control keys never participate in record-level filtering;
       // they're consumed by fetchers (e.g. mdmsGetList honours __tenantId).
       if (key === TENANT_OVERRIDE_KEY) return true;
+      // Localization fetcher control keys — consumed by localizationGetList to
+      // choose which locales to pivot; they are not record fields, so they must
+      // not participate in record-level filtering (else every pivoted row, which
+      // has msg__<locale> fields but no `locales`/`locale` field, gets dropped).
+      if (key === 'locale' || key === 'locale2' || key === 'locales') return true;
       if (key === 'q' && typeof value === 'string') {
         const q = value.toLowerCase();
         return JSON.stringify(record).toLowerCase().includes(q);
@@ -353,6 +357,34 @@ async function localizationGetList(client: DigitApiClient, config: ResourceConfi
   // so the right column starts as all-missing rather than defaulting to a
   // hardcoded locale that may not exist on the tenant.
   const module = filter?.module ? String(filter.module) : undefined;
+  // Multi-locale pivot: when the caller passes `locales` (array or CSV) the
+  // grid wants one editable column per locale (msg__<locale>) instead of the
+  // 2-way message/message2 compare — so every language can be edited side by
+  // side. Rows are keyed by code+module; a code present in one locale but not
+  // another still appears (its missing columns stay empty).
+  const localesRaw = filter?.locales;
+  if (localesRaw) {
+    const locales = (Array.isArray(localesRaw) ? localesRaw : String(localesRaw).split(','))
+      .map((l) => String(l).trim()).filter(Boolean);
+    const perLocale = await Promise.all(locales.map((l) => client.localizationSearch(tenantId, l, module)));
+    const pivotN = new Map<string, Record<string, unknown>>();
+    locales.forEach((loc, i) => {
+      for (const m of perLocale[i] as Record<string, unknown>[]) {
+        const code = String(m.code ?? '');
+        const mod = String(m.module ?? '');
+        const key = `${code}__${mod}`;
+        let row = pivotN.get(key);
+        if (!row) {
+          row = { id: key, code, module: mod };
+          for (const L of locales) row[`msg__${L}`] = '';
+          pivotN.set(key, row);
+        }
+        row[`msg__${loc}`] = String(m.message ?? '');
+      }
+    });
+    return Array.from(pivotN.values()).map((r) => normalizeRecord(r, config));
+  }
+
   const localeA = filter?.locale ? String(filter.locale) : 'en_IN';
   const localeB = filter?.locale2 ? String(filter.locale2) : '';
   const [aMsgs, bMsgs] = await Promise.all([
@@ -461,6 +493,87 @@ async function mdmsSchemaGetList(client: DigitApiClient, config: ResourceConfig,
   return schemas.map((s) => normalizeRecord(s, config));
 }
 
+// --- Custom (non-MDMS, read-only) fetchers ---------------------------------
+//
+// `custom` resources are served by an out-of-band DIGIT service, not egov-mdms.
+// Today that's the novu-bridge read proxy (Notification Logs + Providers). We
+// hit its origin-relative `customPath` with a plain GET, attach the same DIGIT
+// bearer token the rest of the provider uses (pulled from the client's auth
+// info — no new auth plumbing), map react-admin filters onto query params, and
+// return the service's `{data,total}` envelope. Read-only: create/update/delete
+// are intentionally unsupported for this type.
+
+/** Origin the SPA is served from; the novu-bridge route is same-origin
+ *  (`${origin}/novu-bridge/...`) behind Kong/nginx. Falls back to empty in
+ *  non-browser contexts (tests), yielding a relative URL. */
+function customOrigin(): string {
+  return typeof window !== 'undefined' && window.location ? window.location.origin : '';
+}
+
+async function customFetchList(
+  client: DigitApiClient,
+  config: ResourceConfig,
+  tenantId: string,
+  query: Record<string, string | number | boolean | undefined>,
+): Promise<{ records: RaRecord[]; total: number }> {
+  if (!config.customPath) throw new Error(`custom resource missing customPath: ${config.label}`);
+  const params = new URLSearchParams();
+  if (config.customTenantScoped) params.set('tenantId', tenantId);
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined || value === null || value === '') continue;
+    params.set(key, String(value));
+  }
+  const qs = params.toString();
+  const url = `${customOrigin()}${config.customPath}${qs ? `?${qs}` : ''}`;
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = client.getAuthInfo().token;
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const response = await fetch(url, { method: 'GET', headers });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`${config.label} request failed (${response.status}): ${text}`);
+  }
+  const body = (await response.json().catch(() => ({}))) as { data?: unknown[]; total?: number };
+  const rows = Array.isArray(body.data) ? (body.data as Record<string, unknown>[]) : [];
+  // De-dupe synthesized ids within the batch: two Novu integrations that share
+  // providerId+channel (e.g. Twilio SMS + Twilio WhatsApp-as-sms) must never
+  // collapse onto one react-admin id — duplicate ids make the datagrid drop or
+  // mispaint one of the rows on the next re-render.
+  const seenIds = new Set<string>();
+  const records = rows.map((r) => {
+    let withId = ensureId(r, config);
+    let id = String(getNestedValue(withId, config.idField));
+    if (seenIds.has(id)) {
+      let n = 2;
+      while (seenIds.has(`${id}#${n}`)) n += 1;
+      id = `${id}#${n}`;
+      withId = { ...withId, [config.idField]: id };
+    }
+    seenIds.add(id);
+    return normalizeRecord(withId, config);
+  });
+  const total = typeof body.total === 'number' ? body.total : records.length;
+  return { records, total };
+}
+
+/** Custom rows may lack the configured idField (e.g. a Novu integration keyed
+ *  by `_id` that some deployments omit). Synthesise a stable id so react-admin
+ *  never collapses distinct rows onto an empty id. Includes identifier/name so
+ *  two integrations on the same provider+channel stay distinct. */
+function ensureId(raw: Record<string, unknown>, config: ResourceConfig): Record<string, unknown> {
+  const existing = getNestedValue(raw, config.idField);
+  if (existing != null && String(existing) !== '') return raw;
+  // Deterministic fallback: providerId+channel+identifier/name for providers,
+  // txn/ref for logs.
+  const fallback =
+    [raw.providerId, raw.channel, raw.identifier, raw.name, raw.transactionId, raw.referenceNumber, raw.recipientValue]
+      .filter((v) => v != null && v !== '')
+      .join(':') || JSON.stringify(raw);
+  return { ...raw, [config.idField]: fallback };
+}
+
 async function boundaryHierarchyGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string): Promise<RaRecord[]> {
   // Fetch the session tenant's hierarchies first. When at state level,
   // aggregate city-tenant hierarchies too — the boundary service stores each
@@ -507,6 +620,10 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       case 'access-action': return accessActionGetList(client, config, tenantId, filter);
       case 'mdms-schema': return mdmsSchemaGetList(client, config, tenantId);
       case 'boundary-hierarchy': return boundaryHierarchyGetList(client, config, tenantId);
+      // Custom resources normally go through the dedicated getList/getOne
+      // branches; this keeps getMany/getManyReference from throwing by falling
+      // back to a full unfiltered fetch.
+      case 'custom': return (await customFetchList(client, config, tenantId, { limit: 500 })).records;
       default: throw new Error(`Unsupported resource type: ${config.type}`);
     }
   }
@@ -586,6 +703,54 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         return { data: records, total };
       }
 
+      // Custom (non-MDMS) read-only resources served by an out-of-band service.
+      // notification-log pushes pagination + filters to the novu-bridge /logs
+      // proxy (which returns the real total); notification-provider returns the
+      // full integration list, so we paginate/filter/sort it client-side.
+      if (config.type === 'custom') {
+        const filter = (params.filter ?? {}) as Record<string, unknown>;
+        if (resource === 'notification-log') {
+          const { records, total } = await customFetchList(client, config, tenantId, {
+            referenceNumber: typeof filter.referenceNumber === 'string' ? filter.referenceNumber : undefined,
+            // Substring-style search on the complaint number → prefix match server-side.
+            referenceNumberPrefix: typeof filter.referenceNumber === 'string' && filter.referenceNumber ? true : undefined,
+            transactionId: typeof filter.transactionId === 'string' ? filter.transactionId : undefined,
+            channel: typeof filter.channel === 'string' ? filter.channel : undefined,
+            status: typeof filter.status === 'string' ? filter.status : undefined,
+            limit: perPage,
+            offset: (page - 1) * perPage,
+          });
+          return { data: records, total };
+        }
+        // Generic custom list (e.g. notification-provider): fetch-all then
+        // filter/sort/paginate in memory.
+        const { records } = await customFetchList(client, config, tenantId, {});
+        const filtered = clientFilter(records, params.filter);
+        const sorted = clientSort(filtered, field, order);
+        const data = clientPaginate(sorted, page, perPage);
+        return { data, total: filtered.length };
+      }
+
+      // MDMS resources without the leaf-adapter (all schemas except
+      // complaint-hierarchy): push limit/offset to the server when no
+      // client-side filter is active so the API is called with the actual
+      // page size instead of a fixed 500. MDMS v2 does not return a total
+      // count, so we use a heuristic: a full page means "there may be more"
+      // (next button enabled), a partial page means "last page".
+      if (config.type === 'mdms' && !config.leafServiceDefAdapter) {
+        const filter = (params.filter ?? {}) as Record<string, unknown>;
+        const hasClientFilter = Object.keys(filter).some((k) => k !== TENANT_OVERRIDE_KEY);
+        if (!hasClientFilter) {
+          const tenant = pickTenant(tenantId, filter);
+          const offset = (page - 1) * perPage;
+          const raw = await client.mdmsSearch(tenant, config.schema!, { limit: perPage, offset });
+          const data = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
+          const sorted = clientSort(data, field, order);
+          const total = raw.length >= perPage ? offset + perPage + 1 : offset + data.length;
+          return { data: sorted, total };
+        }
+      }
+
       const all = await fetchAll(resource, params.filter);
       const filtered = clientFilter(all, params.filter);
       const sorted = clientSort(filtered, field, order);
@@ -595,6 +760,19 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
 
     async getOne(resource, params): Promise<GetOneResult> {
       const config = resolveConfig(resource);
+      if (config.type === 'custom') {
+        // No single-item endpoint on the proxy; fetch the list and match by id.
+        // Logs are tenant-scoped + transactionId-filterable, so pass it through
+        // when the id looks like a transactionId; otherwise scan the page.
+        const query: Record<string, string | number | boolean | undefined> = { limit: 500 };
+        if (resource === 'notification-log' && config.idField === 'transactionId') {
+          query.transactionId = String(params.id);
+        }
+        const { records } = await customFetchList(client, config, tenantId, query);
+        const found = records.find((r) => String(r.id) === String(params.id));
+        if (!found) throw new Error(`Record not found: ${params.id}`);
+        return { data: found };
+      }
       if (config.type === 'mdms') {
         // Leaf-adapter resources need the full record set to resolve a leaf's
         // menuPathName (its parent node's name), so always go through the
@@ -829,7 +1007,11 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       const config = resolveConfig(resource);
       if (config.type === 'mdms') {
         const records = await client.mdmsSearch(tenantId, config.schema!, { uniqueIdentifiers: [String(params.id)] });
-        const existing = records.find((r) => r.isActive);
+        // Opt-in reactivation: when meta.includeInactive is set, fall back to a
+        // soft-deleted (inactive) row so Remove -> re-Add can resurrect the uid
+        // that delete() left occupied (mdmsUpdate below forces isActive: true).
+        const includeInactive = Boolean((params.meta as { includeInactive?: boolean } | undefined)?.includeInactive);
+        const existing = records.find((r) => r.isActive) ?? (includeInactive ? records[0] : undefined);
         if (!existing) throw new Error(`Record not found: ${params.id}`);
         // Strip the metadata that normalizeMdmsRecord glued onto the
         // record for react-admin's benefit (id, _isActive, _mdmsId,
@@ -882,6 +1064,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const { id: _stringId, ...rest } = data;
         void _stringId;
         const merged: Record<string, unknown> = { ...base, ...rest };
+        // No form input ever edits reActivateEmployee (EmployeeEdit.tsx has no
+        // field for it), so any value present in `rest` is a stale artifact of
+        // the form's initial defaultValues (e.g. a create-response cache that
+        // never set it) rather than an intentional edit. egov-hrms/employees/
+        // _update NPEs on Employee.getReActivateEmployee().booleanValue() when
+        // this is null, so `rest`'s value silently overriding the freshly
+        // re-fetched `base` — the same failure mode `id` is guarded against
+        // above — breaks editing (closes #813). Always trust the fresh fetch.
+        merged.reActivateEmployee = base.reActivateEmployee ?? false;
         const [employee] = await client.employeeUpdate(targetTenantId, [merged]);
         return { data: normalizeRecord(employee, config) };
       }
@@ -934,6 +1125,23 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const prev = (params.previousData ?? {}) as Record<string, unknown>;
         const code = String(data.code || params.id);
         const mod = String(data.module ?? '');
+
+        // Multi-locale grid: an inline edit emits msg__<locale> fields. Upsert
+        // only the locales whose value actually changed.
+        const msgKeys = Object.keys(data).filter((k) => k.startsWith('msg__'));
+        if (msgKeys.length) {
+          const localeWrites: Promise<unknown>[] = [];
+          for (const k of msgKeys) {
+            if (data[k] === prev[k]) continue;
+            const loc = k.slice('msg__'.length);
+            localeWrites.push(client.localizationUpsert(tenantId, loc, [
+              { code, message: String(data[k] ?? ''), module: mod },
+            ]));
+          }
+          await Promise.all(localeWrites);
+          return { data: { ...data, id: String(data.id ?? `${code}__${mod}`) } as RaRecord };
+        }
+
         const localeA = String(data.locale ?? 'en_IN');
         const localeB = String(data.locale2 ?? '');
         const writes: Promise<unknown>[] = [];

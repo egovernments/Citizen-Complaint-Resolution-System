@@ -363,13 +363,30 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
   const oldHistory = readHistory(opts.publicHistoryPath ?? opts.historyPath);
   const priorCatalog = readPriorCatalog(opts.publicCatalogPath ?? null);
 
-  // Compute the surviving run-id set after this run is published. publish.sh
-  // prunes runs/ on the host to RUN_LIMIT (=HISTORY_LIMIT here, 5). Any
-  // latestRun pointer to a run NOT in this set is about to be unreachable, so
-  // we drop it. Pointers into still-extant runs are preserved.
+  // The runs/ folders on disk are the source of truth for what the dashboard
+  // can actually open. In the local-serve model the published history/catalog
+  // live in the webroot next to runs/, so drop any prior-history run whose
+  // runs/<id>/ folder no longer exists — otherwise a folder that an earlier
+  // cycle pruned (or that a failed-no-report run occupied without ever writing
+  // a report/catalog entry) leaves the catalog pointing at a 404, and the
+  // reportless-but-newer folder that evicted it stays invisible (#907 skew).
+  // Only trust disk when the runs are actually local (the current run's own
+  // folder is present); the CI rsync model publishes runs elsewhere, so there
+  // we keep the old purely-logical window and this stays a no-op.
+  const runsDir = opts.publicHistoryPath
+    ? path.join(path.dirname(opts.publicHistoryPath), 'runs')
+    : null;
+  const runsAreLocal = !!runsDir && fs.existsSync(path.join(runsDir, opts.runId));
+  const runExists = (id: string): boolean =>
+    !runsAreLocal || fs.existsSync(path.join(runsDir!, id));
+  const priorRuns = oldHistory.runs.filter(r => r.id !== opts.runId && runExists(r.id));
+
+  // Surviving run-id set after this run is published: the current run plus the
+  // still-extant prior runs, capped at the rolling window. run-cycle.sh prunes
+  // runs/ to exactly this set, so a latestRun pointer into it is guaranteed
+  // reachable; pointers to anything else are dropped below.
   const survivingRunIds = new Set<string>(
-    [opts.runId, ...oldHistory.runs.map(r => r.id).filter(id => id !== opts.runId)]
-      .slice(0, HISTORY_LIMIT)
+    [opts.runId, ...priorRuns.map(r => r.id)].slice(0, HISTORY_LIMIT)
   );
 
   // Merge: every test from disk → CatalogTest. Tests that ran get latestRun.
@@ -487,7 +504,7 @@ function buildCatalog(opts: BuildOptions): { catalog: Catalog; nextHistory: Hist
     lastRunId: opts.runId,
     tagFacets,
     tests: tests.sort((a, b) => a.id.localeCompare(b.id)),
-    runs: [newRun, ...oldHistory.runs.filter(r => r.id !== opts.runId)].slice(0, HISTORY_LIMIT),
+    runs: [newRun, ...priorRuns].slice(0, HISTORY_LIMIT),
   };
 
   // Persist next history.json.
