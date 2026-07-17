@@ -189,7 +189,13 @@ which expresses "all time by default" explicitly instead of by omission.)*
   (weighted averages, count-FILTER ratios — never an average of leaf averages).
 - **Fallbacks**: rows with a NULL/empty path (flat tenants, legacy dotted-code imports — see the
   `V20260716000000` migration) fall back to their leaf `service_code`; a level deeper than a
-  row's own depth clamps to its leaf segment.
+  row's own depth clamps to its leaf segment. The NULLing heuristic is two-part: the node's own
+  code containing `'.'` (`V20260716000000`) OR its `parentCode` containing `'.'`
+  (`V20260717000000` — bomet integration data had clean-code nodes parented under dotted legacy
+  codes, e.g. `DamagedRoad` with stored path `complaints.categories.DamagedRoad.DamagedRoad`,
+  whose polluted paths survived the first predicate as a garbage `complaints` level-1 bucket).
+  A new migration rather than an edit because `V20260716000000` was already applied on live
+  deployments (flyway is append-only).
 - **`service_group` is dropped** at `hierLevel != leaf`: once `service_code` is rolled up, the
   root-category dimension collapses into a duplicate of (or an ancestor of) the level bucket.
   The FE table simply sees no `service_group` column values for that row shape. Column
