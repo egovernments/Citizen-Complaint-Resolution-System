@@ -506,13 +506,27 @@ def find_dangling(monitored_hosts, all_targets):
 
 
 def find_drift(compose_eps, k8s_eps):
-    a = {e["name"]: e for e in compose_eps}
-    b = {e["name"]: e for e in k8s_eps}
+    """Endpoints in one tier only, or differing between tiers.
+
+    Keyed by _gatus_key (group+name), not name alone. Gatus's identity for an
+    endpoint is the pair, and _validate_endpoints deliberately permits the same name
+    in different groups -- so keying by name let two legitimate endpoints collapse
+    into one dict entry, last-wins, and took the drift with them. Both of these
+    reported "no drift" while keying by name:
+
+        Core/Health diverges, Optional/Health identical -> differs=[]  (last wins,
+            so the tier that actually diverged was never compared)
+        Core/Health missing from k3s entirely           -> only_compose=[]
+
+    That is failure mode 3 -- the one this function exists for -- going silent.
+    """
+    a = {_gatus_key(e): e for e in compose_eps}
+    b = {_gatus_key(e): e for e in k8s_eps}
     only_compose = sorted(set(a) - set(b))
     only_k8s = sorted(set(b) - set(a))
     differing = sorted(
-        n for n in (set(a) & set(b))
-        if json.dumps(a[n], sort_keys=True) != json.dumps(b[n], sort_keys=True)
+        k for k in (set(a) & set(b))
+        if json.dumps(a[k], sort_keys=True) != json.dumps(b[k], sort_keys=True)
     )
     return only_compose, only_k8s, differing
 
@@ -634,12 +648,31 @@ def self_test() -> int:
     if find_dangling({"ghost"}, {"real": "real"}) != ["ghost"]:
         failures.append("dangling detector missed a check with no service")
 
-    # 5. tier drift is caught, in both directions and on value changes
-    a = [{"name": "X", "url": "http://x:1/h"}, {"name": "OnlyC", "url": "http://c:1/h"}]
-    b = [{"name": "X", "url": "http://x:2/h"}, {"name": "OnlyK", "url": "http://k:1/h"}]
+    # 5. tier drift is caught, in both directions and on value changes.
+    #    Keys are _gatus_key (group+name, lowercased) -- gatus's own identity.
+    a = [{"name": "X", "group": "G", "url": "http://x:1/h"},
+         {"name": "OnlyC", "group": "G", "url": "http://c:1/h"}]
+    b = [{"name": "X", "group": "G", "url": "http://x:2/h"},
+         {"name": "OnlyK", "group": "G", "url": "http://k:1/h"}]
     only_c, only_k, differ = find_drift(a, b)
-    if only_c != ["OnlyC"] or only_k != ["OnlyK"] or differ != ["X"]:
-        failures.append("drift detector missed only-compose / only-k3s / differing endpoints")
+    if only_c != ["g_onlyc"] or only_k != ["g_onlyk"] or differ != ["g_x"]:
+        failures.append(
+            f"drift detector missed only-compose / only-k3s / differing endpoints: "
+            f"{only_c} {only_k} {differ}")
+
+    # 5b. two endpoints may legitimately share a NAME in different GROUPS -- gatus's
+    #     identity is the pair, and _validate_endpoints permits it. Keying drift by
+    #     name alone collapsed them last-wins and took the drift with them.
+    same_name_c = [{"name": "Health", "group": "Core", "url": "http://a:1/h"},
+                   {"name": "Health", "group": "Optional", "url": "http://b:2/h"}]
+    #     the FIRST one diverges; the last is identical, so last-wins hid it entirely
+    same_name_k = [{"name": "Health", "group": "Core", "url": "http://GHOST:9/h"},
+                   {"name": "Health", "group": "Optional", "url": "http://b:2/h"}]
+    if find_drift(same_name_c, same_name_k)[2] != ["core_health"]:
+        failures.append("drift hid in a same-name/different-group pair (divergence)")
+    #     ...and a whole endpoint missing from one tier must not vanish either
+    if find_drift(same_name_c, [same_name_c[1]])[0] != ["core_health"]:
+        failures.append("drift hid in a same-name/different-group pair (missing endpoint)")
 
     # 6. identical catalogues are clean
     if any(find_drift(a, a)):
