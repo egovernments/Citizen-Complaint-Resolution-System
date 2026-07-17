@@ -192,6 +192,13 @@ public class PGRConfiguration {
     @Value("${employee.allowed.search.params}")
     private String allowedEmployeeSearchParameters;
 
+    // Department scope — opt-in: an employee is restricted to their own HRMS department(s) in
+    // complaint search/count/plainSearch ONLY if they hold one of these roles. Empty (default) =
+    // no employee role is department-scoped, preserving pre-existing unrestricted search behavior
+    // on upgrade. See EmployeeDepartmentScopeService.
+    @Value("${pgr.department.scope.roles:}")
+    private List<String> departmentScopeRoles;
+
     //Sources
     @Value("${allowed.source}")
     private String allowedSource;

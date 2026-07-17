@@ -107,6 +107,13 @@ public class PGRQueryBuilder {
             addToPreparedStatement(preparedStmtList, ids);
         }
 
+        //department is stored under ser.additionaldetails (JSON), not a column - see PGRService#getDepartmentFromMDMS.
+        if (StringUtils.hasText(criteria.getDepartment())) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ser.additionaldetails->>'department' = ? ");
+            preparedStmtList.add(criteria.getDepartment());
+        }
+
         //When UI tries to fetch "escalated" complaints count.
         if(criteria.getSlaDeltaMaxLimit() != null && criteria.getSlaDeltaMinLimit() == null){
             addClauseIfRequired(preparedStmtList, builder);
@@ -135,6 +142,16 @@ public class PGRQueryBuilder {
             addClauseIfRequired(preparedStmtList, builder);
             builder.append(" ser.serviceRequestId IN (").append(createQuery(serviceRequestIds)).append(")");
             addToPreparedStatement(preparedStmtList, serviceRequestIds);
+        }
+
+        // Server-resolved department scope (see EmployeeDepartmentScopeService) — never bound
+        // from the request body. additionaldetails.department is populated with the raw MDMS
+        // department code (see PGRService#getDepartmentFromMDMS), matching HRMS's code directly.
+        Set<String> departmentCodes = criteria.getDepartmentCodes();
+        if (!CollectionUtils.isEmpty(departmentCodes)) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ser.additionaldetails->>'department' IN (").append(createQuery(departmentCodes)).append(")");
+            addToPreparedStatement(preparedStmtList, departmentCodes);
         }
 
         // Visibility (reportee-scoped All): team-assigned complaints OR the

@@ -27,8 +27,10 @@ import { Button, Card } from "@egovernments/digit-ui-components-v2";
 import { ChevronRight, FilePlus2, Inbox } from "lucide-react";
 import { LOCALE, LOCALIZATION_KEY } from "../../constants/Localization";
 
-const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CLOSEDAFTERREJECTION", "CLOSEDAFTERRESOLUTION"];
-const REJECTED_STATUSES = ["REJECTED", "CLOSEDAFTERREJECTION"];
+// Terminal states across standard PGR + the mz.igsae CMS workflow (CANCELLED/CLOSEDAFTER*
+// are CMS terminals). Keyed by status name — see ComplaintDetails.js for the rationale.
+const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CLOSEDAFTERREJECTION", "CLOSEDAFTERRESOLUTION", "CANCELLED"];
+const REJECTED_STATUSES = ["REJECTED", "CLOSEDAFTERREJECTION", "CANCELLED"];
 
 function statusToTone(status) {
   if (REJECTED_STATUSES.includes(status)) return "rejected";
@@ -80,11 +82,39 @@ function StatusPill({ status, t }) {
   );
 }
 
-function ComplaintRow({ data, onClick, t, typeCode, typeName }) {
+function ComplaintRow({ data, onClick, t, typeName }) {
   const { serviceRequestId, applicationStatus, auditDetails } = data;
-  // Complaint Type label = key-based (COMPLAINT_HIERARCHY.<code>) like every
-  // other service, falling back to the node name; OTHERS for no resolvable group.
-  const title = complaintLabel(t, typeCode, typeName) || t("CS_COMPLAINT_TYPE_OTHERS");
+  // The list aggregates complaints across authority tenants (mz.ige/mz.igsae/…)
+  // while the list-level serviceDefs are fetched at the CITIZEN's tenant — so
+  // foreign complaints missed the map and rendered the raw serviceCode. Fetch
+  // the hierarchy at THIS complaint's tenant (same read-at-complaint-tenant fix
+  // as the details page; react-query dedupes rows of the same tenant into one
+  // request, cached indefinitely). NOTE the useCustomMDMS v2 quirk: the tenant
+  // must ride inside the 5th (mdmsv2) arg — the positional one is ignored.
+  const { data: ownRows } = Digit.Hooks.useCustomMDMS(
+    data.tenantId,
+    "RAINMAKER-PGR",
+    [{ name: "ComplaintHierarchy" }],
+    {
+      cacheTime: Infinity,
+      enabled: !!data.tenantId,
+      select: (raw) => raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [],
+    },
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS", tenantId: data.tenantId }
+  );
+  const own = React.useMemo(() => {
+    const rows = Array.isArray(ownRows) ? ownRows : [];
+    const self = rows.find((n) => n?.code === data.serviceCode);
+    return self ? { code: self.code, name: self.name } : null;
+  }, [ownRows, data.serviceCode]);
+  // Card title = the LEAF complaint type (what the citizen actually filed —
+  // "Operating without a licence"), not a hierarchy ancestor: on a personal
+  // list the specific type is how people recognize their complaint, while the
+  // 1st level ("Business") would render near-identical cards. Key-based
+  // localization (COMPLAINT_HIERARCHY.<code>) with the node name as fallback;
+  // OTHERS when nothing resolves.
+  const title =
+    complaintLabel(t, own?.code || data.serviceCode, own?.name || typeName) || t("CS_COMPLAINT_TYPE_OTHERS");
   const dateStr = auditDetails?.createdTime
     ? Digit.DateUtils.ConvertTimestampToDate(auditDetails.createdTime)
     : "";
@@ -229,16 +259,14 @@ export const ComplaintsList = () => {
     mobileNumber
   );
 
-  // Service defs give us serviceCode -> menuPath so each card can show the
-  // Complaint Type (category) rather than the sub-type. Cached via MDMS.
+  // serviceCode → the LEAF's own name, as a mount-time fallback while each
+  // row's own-tenant hierarchy fetch resolves (only helps complaints filed at
+  // the citizen's tenant; foreign-tenant rows resolve via the row fetch).
   const serviceDefs = Digit.Hooks.pgr.useServiceDefs(tenantId, "PGR");
-  // serviceCode → the complaint TYPE label (parent node name) straight from the
-  // hierarchy adapter (def.menuPathName); for an interior-node complaint not in
-  // the leaf set, fall back to the full code→name map cached by the adapter.
   const typeBySvcCode = React.useMemo(() => {
     const map = {};
     (serviceDefs || []).forEach((def) => {
-      if (def?.serviceCode) map[def.serviceCode] = { code: def.menuPath, name: def.menuPathName || def.name };
+      if (def?.serviceCode) map[def.serviceCode] = { name: def.name };
     });
     return map;
   }, [serviceDefs]);
@@ -339,7 +367,6 @@ export const ComplaintsList = () => {
                 key={service.serviceRequestId}
                 data={service}
                 t={t}
-                typeCode={typeBySvcCode[service.serviceCode]?.code || service.serviceCode}
                 typeName={typeBySvcCode[service.serviceCode]?.name || (Digit.SessionStorage.get("complaintHierarchyNameByCode") || {})[service.serviceCode]}
                 onClick={() => history.push(`${path}/${service.serviceRequestId}`)}
               />

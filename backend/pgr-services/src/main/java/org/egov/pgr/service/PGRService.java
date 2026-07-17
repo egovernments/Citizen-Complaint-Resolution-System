@@ -27,6 +27,7 @@ import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_NAME_SEARCH;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICENAME_SEARCH;
 import static org.egov.pgr.util.PGRConstants.ROLE_CONFIDENTIAL_VIEWER;
 import static org.egov.pgr.util.PGRConstants.MASK_SENTINEL;
+import static org.egov.pgr.util.PGRConstants.USERTYPE_EMPLOYEE;
 
 import java.util.stream.Collectors;
 
@@ -62,13 +63,16 @@ public class PGRService {
 
     private EncryptionDecryptionService encryptionDecryptionService;
 
+    private EmployeeDepartmentScopeService employeeDepartmentScopeService;
+
     @Autowired
     public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
                       ServiceRequestValidator serviceRequestValidator, ServiceRequestValidator validator, Producer producer,
                       PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils,
                       ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils,
                       ExtendedAttributesValidationService extendedAttributesValidationService,
-                      EncryptionDecryptionService encryptionDecryptionService) {
+                      EncryptionDecryptionService encryptionDecryptionService,
+                      EmployeeDepartmentScopeService employeeDepartmentScopeService) {
         this.enrichmentService = enrichmentService;
         this.userService = userService;
         this.workflowService = workflowService;
@@ -82,6 +86,7 @@ public class PGRService {
         this.pgrUtils = pgrUtils;
         this.extendedAttributesValidationService = extendedAttributesValidationService;
         this.encryptionDecryptionService = encryptionDecryptionService;
+        this.employeeDepartmentScopeService = employeeDepartmentScopeService;
     }
 
 
@@ -147,6 +152,9 @@ public class PGRService {
         validator.validateSearch(requestInfo, criteria);
 
         enrichmentService.enrichSearchRequest(requestInfo, criteria);
+
+        if (!applyEmployeeDepartmentScope(requestInfo, criteria))
+            return new ArrayList<>();
 
         if(criteria.isEmpty())
             return new ArrayList<>();
@@ -296,13 +304,37 @@ public class PGRService {
         }
 
         criteria.setIsPlainSearch(false);
+
+        if (!applyEmployeeDepartmentScope(requestInfo, criteria))
+            return 0;
+
         Integer count = repository.getCount(criteria);
         return count;
+    }
+
+    /**
+     * Employee-only, opt-in: restricts {@code criteria} to the searching employee's own
+     * department(s) only if they hold a role in {@code pgr.department.scope.roles}. Every other
+     * employee role, and citizen/system callers (including plainSearch calls with no userInfo at
+     * all), are untouched. Returns false when the caller must see nothing (search/count/plainSearch
+     * should short-circuit).
+     */
+    private boolean applyEmployeeDepartmentScope(RequestInfo requestInfo, RequestSearchCriteria criteria) {
+        if (requestInfo.getUserInfo() == null
+                || !USERTYPE_EMPLOYEE.equalsIgnoreCase(requestInfo.getUserInfo().getType()))
+            return true;
+
+        String scopeTenantId = criteria.getTenantId() != null
+                ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+        return employeeDepartmentScopeService.applyScope(requestInfo, scopeTenantId, criteria);
     }
 
 
     public List<ServiceWrapper> plainSearch(RequestInfo requestInfo, RequestSearchCriteria criteria) {
         validator.validatePlainSearch(criteria);
+
+        if (!applyEmployeeDepartmentScope(requestInfo, criteria))
+            return new ArrayList<>();
 
         criteria.setIsPlainSearch(true);
 

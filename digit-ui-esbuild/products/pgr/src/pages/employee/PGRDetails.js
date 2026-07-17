@@ -10,240 +10,89 @@ import PGRWorkflowModal from "../../components/PGRWorkflowModal";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
 import Urls from "../../utils/urls";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
+import { buildExtendedAttributeRows } from "../../components/PgrExtendedAttributesView";
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
-const ACTION_CONFIGS = [
-  {
-    actionType: "ASSIGN",
-    formConfig: {
-      label: {
-        heading: "CS_ACTION_ASSIGN",
-        cancel: "CS_COMMON_CANCEL",
-        submit: "CS_COMMON_SUBMIT",
+// Generic action-modal form builder — replaces the hardcoded ACTION_CONFIGS allowlist so the UI
+// renders a sensible modal for ANY workflow action (standard PGR *and* the mz.igsae CMS workflow),
+// with no per-action code. Field labels/headings are localization KEYS resolved by the modal.
+//   • reason dropdown — reject-type actions (RejectionReasons MDMS)
+//   • assignee picker — when the action forwards to a NON-terminal state that has assignable roles
+//                       (mandatory for ASSIGN, optional otherwise)
+//   • doc upload      — when the action's target state is flagged docUploadRequired on the
+//                       BusinessService (verification documents plumbed into workflow.verificationDocuments)
+//   • comments        — always
+// Per-action extras can later be driven by an MDMS master (RAINMAKER-PGR.WorkflowActionUiConfig)
+// without touching this code.
+// additionalDetail arrives as an OBJECT on some complaints and a JSON STRING on
+// others (citizen create sends "{}", employee create sends a stringified object).
+// Parse both shapes; anything unparseable is treated as empty.
+const parseAdditionalDetail = (ad) => {
+  if (ad && typeof ad === "object") return ad;
+  if (typeof ad === "string") {
+    try { const o = JSON.parse(ad); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; }
+  }
+  return {};
+};
+
+const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false, docUploadRequired = false, assigneeMandatory }) => {
+  const body = [];
+  if (action === "REJECT") {
+    body.push({
+      isMandatory: false,
+      key: "SelectedReason",
+      type: "dropdown",
+      label: "CS_REJECT_COMPLAINT",
+      disable: false,
+      populators: {
+        name: "SelectedReason",
+        optionsKey: "name",
+        error: "Required",
+        mdmsConfig: { masterName: "RejectionReasons", moduleName: "RAINMAKER-PGR", localePrefix: "CS_REJECTION_" },
       },
-      form: [
-        {
-          body: [
-            {
-              type: "component",
-              isMandatory: false,
-              component: "PGRAssigneeComponent",
-              key: "SelectedAssignee",
-              label: "CS_COMMON_EMPLOYEE_NAME",
-              populators: { name: "SelectedAssignee" },
-            },
-            {
-              type: "textarea",
-              isMandatory: true,
-              key: "SelectedComments",
-              label: "CS_COMMON_EMPLOYEE_COMMENTS",
-              populators: {
-                name: "SelectedComments",
-                maxLength: 1000,
-                validation: { required: true },
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
-              },
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    actionType: "REOPEN",
-    formConfig: {
-      label: {
-        heading: "CS_COMMON_REOPEN",
-        cancel: "CS_COMMON_CANCEL",
-        submit: "CS_COMMON_SUBMIT",
-      },
-      form: [
-        {
-          body: [
-            {
-              type: "component",
-              isMandatory: false,
-              component: "PGRAssigneeComponent",
-              key: "SelectedAssignee",
-              label: "CS_COMMON_EMPLOYEE_NAME",
-              populators: { name: "SelectedAssignee" },
-            },
-            {
-              type: "textarea",
-              isMandatory: true,
-              key: "SelectedComments",
-              label: "CS_COMMON_EMPLOYEE_COMMENTS",
-              populators: {
-                name: "SelectedComments",
-                maxLength: 1000,
-                validation: { required: true },
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
-              },
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    actionType: "REJECT",
-    formConfig: {
-      label: {
-        heading: "PGR_ACTION_REJECT",
-        cancel: "CS_COMMON_CANCEL",
-        submit: "CS_COMMON_SUBMIT",
-      },
-      form: [
-        {
-          body: [
-            {
-              isMandatory: false,
-              key: "SelectedReason",
-              type: "dropdown",
-              label: "CS_REJECT_COMPLAINT",
-              disable: false,
-              populators: {
-                name: "SelectedReason",
-                optionsKey: "name",
-                error: "Required",
-                mdmsConfig: {
-                  masterName: "RejectionReasons",
-                  moduleName: "RAINMAKER-PGR",
-                  localePrefix: "CS_REJECTION_",
-                },
-              },
-            },
-            {
-              type: "textarea",
-              isMandatory: true,
-              key: "SelectedComments",
-              label: "CS_COMMON_EMPLOYEE_COMMENTS",
-              populators: {
-                name: "SelectedComments",
-                maxLength: 1000,
-                validation: { required: true },
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
-              },
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    actionType: "RESOLVE",
-    formConfig: {
-      label: {
-        heading: "PGR_ACTION_RESOLVE",
-        cancel: "CS_COMMON_CANCEL",
-        submit: "CS_COMMON_SUBMIT",
-      },
-      form: [
-        {
-          body: [
-            {
-              type: "textarea",
-              isMandatory: true,
-              key: "SelectedComments",
-              label: "CS_COMMON_EMPLOYEE_COMMENTS",
-              populators: {
-                name: "SelectedComments",
-                maxLength: 1000,
-                validation: { required: true },
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
-              },
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    actionType: "REASSIGN",
-    formConfig: {
-      label: {
-        heading: "CS_ACTION_REASSIGN",
-        cancel: "CS_COMMON_CANCEL",
-        submit: "CS_COMMON_SUBMIT",
-      },
-      form: [
-        {
-          body: [
-            {
-              type: "component",
-              isMandatory: false,
-              component: "PGRAssigneeComponent",
-              key: "SelectedAssignee",
-              label: "CS_COMMON_EMPLOYEE_NAME",
-              populators: { name: "SelectedAssignee" },
-            },
-            {
-              type: "textarea",
-              isMandatory: true,
-              key: "SelectedComments",
-              label: "CS_COMMON_EMPLOYEE_COMMENTS",
-              populators: {
-                name: "SelectedComments",
-                maxLength: 1000,
-                validation: { required: true },
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
-              },
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    // ESCALATE was missing from this list, so getUpdatedConfig() returned null
-    // and PGRWorkflowModal short-circuited (`if (!config) return null`) — the
-    // "Escalate" action rendered an empty no-op modal (issue #521). The PGR
-    // BusinessService defines ESCALATE as a valid action at PENDINGFORASSIGNMENT
-    // (GRO/PGR_VIEWER) and PENDINGATLME (GRO/PGR_LME/PGR_VIEWER), so the backend
-    // already accepts the transition; only this front-end config was absent.
-    // Mirrors REASSIGN: pick a forward assignee + mandatory comments. The
-    // assignee role set is injected dynamically by computeAssigneeRoles()/
-    // getUpdatedConfig(), and handleActionSubmit() already maps
-    // SelectedAssignee.uuid -> workflow.assignes/hrmsAssignes.
-    actionType: "ESCALATE",
-    formConfig: {
-      label: {
-        heading: "CS_ACTION_ESCALATE",
-        cancel: "CS_COMMON_CANCEL",
-        submit: "CS_COMMON_SUBMIT",
-      },
-      form: [
-        {
-          body: [
-            {
-              type: "component",
-              isMandatory: false,
-              component: "PGRAssigneeComponent",
-              key: "SelectedAssignee",
-              label: "CS_COMMON_EMPLOYEE_NAME",
-              populators: { name: "SelectedAssignee" },
-            },
-            {
-              type: "textarea",
-              isMandatory: true,
-              key: "SelectedComments",
-              label: "CS_COMMON_EMPLOYEE_COMMENTS",
-              populators: {
-                name: "SelectedComments",
-                maxLength: 1000,
-                validation: { required: true },
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
-              },
-            },
-          ],
-        },
-      ],
-    },
-  },
-];
+    });
+  }
+  if (!isTerminal && (assigneeRoles?.length || 0) > 0) {
+    body.push({
+      type: "component",
+      // Callers pass assigneeMandatory (dept-mapping + actor aware); default
+      // preserves the original rule: picking a person is required on ASSIGN.
+      isMandatory: assigneeMandatory !== undefined ? assigneeMandatory : action === "ASSIGN",
+      component: "PGRAssigneeComponent",
+      key: "SelectedAssignee",
+      label: "CS_COMMON_EMPLOYEE_NAME",
+      populators: { name: "SelectedAssignee" },
+    });
+  }
+  // Attachments on EVERY workflow action (CCSD-1965): the uploader always
+  // renders; it is MANDATORY only when the action's target state is flagged
+  // docUploadRequired on the BusinessService (previously that flag also gated
+  // visibility, so most actions had no way to attach evidence). The backend
+  // persists workflow.verificationDocuments per transition unconditionally.
+  body.push({
+    type: "component",
+    isMandatory: !!docUploadRequired,
+    component: "PGRActionUploadComponent",
+    key: "SelectedDocuments",
+    label: "CS_COMMON_ATTACHMENTS",
+    populators: { name: "SelectedDocuments" },
+  });
+  body.push({
+    type: "textarea",
+    isMandatory: true,
+    key: "SelectedComments",
+    label: "CS_COMMON_EMPLOYEE_COMMENTS",
+    populators: { name: "SelectedComments", maxLength: 1000, validation: { required: true }, error: "CORE_COMMON_REQUIRED_ERRMSG" },
+  });
+  return {
+    label: { heading: `CS_ACTION_${action}`, cancel: "CS_COMMON_CANCEL", submit: "CS_COMMON_SUBMIT" },
+    form: [{ body }],
+  };
+};
+
 
 const PGRDetails = () => {
   // Hooks for local state management
@@ -402,11 +251,25 @@ const PGRDetails = () => {
     setToast({ show: false, label: "", type: "" });
   };
 
+  // Assignee requirement on ASSIGN:
+  // - complaint type mapped to a department  -> mandatory (scoped routing; a person must be picked)
+  // - unmapped type ("NA"/absent department) -> OPTIONAL — the complaint may move forward
+  //   unassigned (pgr skips department validation and the workflow accepts empty assignes)
+  // - EXCEPT a CMS_SCREENING_OFFICER (incl. multi-role users): routing IS their job,
+  //   so the assignee stays mandatory for them even on unmapped types.
+  const isAssigneeMandatory = (action) => {
+    if (action?.action !== "ASSIGN") return false;
+    const roles = userInfo?.info?.roles?.map((r) => r.code) || [];
+    if (roles.includes("CMS_SCREENING_OFFICER")) return true;
+    const def = serviceDefs?.find((d) => d.serviceCode === pgrData?.ServiceWrappers?.[0]?.service?.serviceCode);
+    const department = def?.department;
+    return !!department && department !== "NA";
+  };
+
   // Prepare and submit the update complaint request
   const handleActionSubmit = (_data) => {
-    const actionConfig = ACTION_CONFIGS.find((config) => config.actionType === selectedAction.action);
-
-    if (!actionConfig) return;
+    // Build the same generic form config the modal renders, so mandatory-field validation stays in sync.
+    const actionConfig = { formConfig: buildActionFormConfig({ ...selectedAction, assigneeMandatory: isAssigneeMandatory(selectedAction) }) };
 
     const missingFields = [];
 
@@ -461,10 +324,9 @@ const PGRDetails = () => {
     // department is picked (REJECT/RESOLVE etc. leave additionalDetail untouched).
     const baseService = pgrData?.ServiceWrappers[0].service;
     const assigneeDept = _data?.SelectedAssignee?.department;
-    const baseAdditionalDetail =
-      baseService?.additionalDetail && typeof baseService.additionalDetail === "object"
-        ? baseService.additionalDetail
-        : {};
+    // Parse (object OR stringified) so stamping never discards existing keys
+    // like supervisorName / serviceName that older flows stored as a string.
+    const baseAdditionalDetail = parseAdditionalDetail(baseService?.additionalDetail);
     const updateRequest = {
       service: assigneeDept
         ? { ...baseService, additionalDetail: { ...baseAdditionalDetail, department: assigneeDept } }
@@ -474,6 +336,11 @@ const PGRDetails = () => {
         assignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
         hrmsAssignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
         comments: composedComment,
+        // Verification documents captured when the target state is docUploadRequired
+        // (VerificationDocsComponent already shapes them as {documentType,fileStoreId,…}).
+        ...(Array.isArray(_data?.SelectedDocuments) && _data.SelectedDocuments.length > 0
+          ? { verificationDocuments: _data.SelectedDocuments }
+          : {}),
       },
     };
     handleResponseForUpdateComplaint(updateRequest);
@@ -505,10 +372,18 @@ const PGRDetails = () => {
 
   // Enhance config with roles and department dynamically
   const getUpdatedConfig = (selectedAction, workflowData, configs, serviceDefs, complaintData) => {
-    const actionConfig = configs.find((config) => config.actionType === selectedAction.action);
     const def = serviceDefs?.find((d) => d.serviceCode === complaintData?.ServiceWrappers[0]?.service?.serviceCode);
-    const department = def?.department;
-    if (!actionConfig) return null;
+    // Assignee-scoping department, in precedence order:
+    //   1. the complaint TYPE's mapped department (MDMS — authoritative, backend enforces it)
+    //   2. the ROUTED department stamped on additionalDetail at the previous ASSIGN
+    //      (screening picked the department; every later stage stays inside it)
+    //   3. none -> the assignee list stays unscoped (all departments, grouped)
+    const typeDept = def?.department;
+    const routedDept = parseAdditionalDetail(complaintData?.ServiceWrappers?.[0]?.service?.additionalDetail)?.department;
+    const department = typeDept && typeDept !== "NA" ? typeDept : routedDept || typeDept;
+    // Build the modal form generically from workflow metadata — no hardcoded per-action allowlist,
+    // so ANY action defined on the BusinessService (standard PGR + the CMS workflow) renders a form.
+    const actionConfig = { formConfig: buildActionFormConfig({ ...selectedAction, assigneeMandatory: isAssigneeMandatory(selectedAction) }) };
     // The dropdown is the *assignee* picker, so we want the roles that can ACT on
     // the next state — not the roles that can perform the current action. The
     // latter (selectedAction.roles) was returning the GRO/PGR_VIEWER set, which
@@ -536,6 +411,10 @@ const PGRDetails = () => {
             roles,
             department,
             allDepartments,
+            // Filestore is tenant-scoped — the uploader must write to the
+            // COMPLAINT's tenant so the attachment renders later (the display
+            // side fetches at service.tenantId).
+            tenantId: complaintTenantId,
             props: { ...bodyItem.populators.props, department, allDepartments },
           },
         })),
@@ -545,7 +424,7 @@ const PGRDetails = () => {
 
   // Roles that should never appear in an assignee dropdown even if a workflow
   // state lists them (system or non-employee actors).
-  const NON_ASSIGNEE_ROLES = new Set(["CITIZEN", "AUTO_ESCALATE", "ANONYMOUS"]);
+  const NON_ASSIGNEE_ROLES = new Set(["CITIZEN", "AUTO_ESCALATE", "ANONYMOUS", "CMS_VIEWER"]);
 
   // Compute the assignee role set for an action by looking at the *forward*
   // (non-self-looping) actions defined on the next state and unioning their
@@ -570,13 +449,23 @@ const PGRDetails = () => {
     const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
     return matchingState.actions
       ? matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)))
-        .map((action) => ({
-          action: action.action,
-          roles: action.roles,
-          nextState: action.nextState,
-          assigneeRoles: computeAssigneeRoles(action.nextState, businessServiceResponse),
-          uuid: action.uuid,
-        }))
+        .map((action) => {
+          // Look up the target state so the modal can adapt generically (terminal → no assignee,
+          // docUploadRequired → future doc capture) with no per-action code.
+          const nextStateData = businessServiceResponse?.states?.find((s) => s.uuid === action.nextState);
+          return {
+            action: action.action,
+            // Raw workflow action code, shown as-is — the WF_PGR_* keys hold past-tense
+            // timeline labels ("Rejected"), which read as states in an action menu.
+            name: action.action,
+            roles: action.roles,
+            nextState: action.nextState,
+            assigneeRoles: computeAssigneeRoles(action.nextState, businessServiceResponse),
+            isTerminal: !!nextStateData?.isTerminateState,
+            docUploadRequired: !!nextStateData?.docUploadRequired,
+            uuid: action.uuid,
+          };
+        })
       : [];
   };
 
@@ -705,6 +594,22 @@ const PGRDetails = () => {
                   },
                 ],
               },
+              // Read-only "Additional Details" — fetch service.extendedAttributes
+              // and show it as label:value rows; backend returns masked ("****")
+              // values. Renders nothing when there are no extended attributes.
+              ...(buildExtendedAttributeRows(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes, t).length > 0
+                ? [{
+                  cardType: "primary",
+                  header: t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS"),
+                  fieldPairs: buildExtendedAttributeRows(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes, t).map((r) => ({
+                    inline: true,
+                    label: r.label,
+                    type: "text",
+                    value: r.value,
+                  })),
+                }]
+                : []
+              ),
               ...(pgrData?.ServiceWrappers[0]?.workflow?.verificationDocuments?.length > 0
                 ? [{
                   cardType: "primary",
@@ -766,7 +671,16 @@ const PGRDetails = () => {
                     inline: false,
                     type: "custom",
                     renderCustomContent: () => (
-                      <TimelineWrapper isWorkFlowLoading={isWorkflowLoading} workflowData={workflowData} businessId={id} labelPrefix="WF_PGR_" />
+                      <TimelineWrapper
+                        isWorkFlowLoading={isWorkflowLoading}
+                        workflowData={workflowData}
+                        businessId={id}
+                        labelPrefix="WF_PGR_"
+                        tenantId={complaintTenantId}
+                        // CCSD-1971 (B4): confidential complaints hide the
+                        // citizen's identity from the employee timeline.
+                        maskConfidential={!!pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes?.isConfidential}
+                      />
                     ),
                   },
                 ],
@@ -795,12 +709,24 @@ const PGRDetails = () => {
               key="action-button"
               label={t("ES_COMMON_TAKE_ACTION")}
               onOptionSelect={(selected) => {
-                console.log("*** Log ===> selected", selected);
+                // The modal's form values persist in the GLOBAL "COMPLAINT_UPDATE"
+                // session key — without scoping, values from a previous modal
+                // (a canceled attempt, a DIFFERENT action, or even a different
+                // complaint) silently restore into this one: stale attachments/
+                // comments would submit with the new action. Stamp the session
+                // with complaint+action and start clean on any mismatch; the
+                // restore convenience is kept for reopening the SAME action on
+                // the SAME complaint.
+                const sessionFor = `${id}:${selected?.action}`;
+                if (sessionFormData?.__for !== sessionFor) {
+                  clearSessionFormData();
+                  setSessionFormData({ __for: sessionFor });
+                }
                 setSelectedAction(selected);
                 setOpenModal(true);
               }}
               options={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0])}
-              optionsKey="action"
+              optionsKey="name"
               type="actionButton"
             />,
           ]}
@@ -822,7 +748,7 @@ const PGRDetails = () => {
           sessionFormData={sessionFormData}
           setSessionFormData={setSessionFormData}
           clearSessionFormData={clearSessionFormData}
-          config={getUpdatedConfig(selectedAction, workflowData, ACTION_CONFIGS, serviceDefs, pgrData)}
+          config={getUpdatedConfig(selectedAction, workflowData, null, serviceDefs, pgrData)}
           closeModal={() => setOpenModal(false)}
           onSubmit={handleActionSubmit}
         />

@@ -484,6 +484,24 @@
               try_files $uri $uri/ /digit-ui/index.html;
 
               sub_filter '</head>' '<script src="/digit-ui/globalConfigs.js"></script></head>';
+
+              # gzip SCOPED to this static-UI location only (not server-level),
+              # so the Kong proxy in `location /` below is byte-identical to
+              # before. Serves files from disk; ~4x smaller over the wire.
+              # sub_filter runs before gzip, so the globalConfigs.js injection
+              # is unaffected.
+              gzip on;
+              gzip_vary on;
+              gzip_min_length 1024;
+              gzip_comp_level 5;
+              gzip_types text/css application/javascript text/javascript application/json image/svg+xml;
+
+              # The bundle filename is NOT content-hashed (fixed index.js), so
+              # revalidate on every load: a cheap ETag round-trip returns 304
+              # when unchanged, and picks up a redeploy immediately instead of
+              # serving a heuristically-cached stale bundle. Do NOT switch to
+              # immutable/long max-age until filenames are content-hashed.
+              add_header Cache-Control "no-cache" always;
             }
 
             # globalConfigs.js + silent-check-sso.html are served from /host-nginx,
@@ -1928,6 +1946,7 @@
           mode: '0644'
         notify: Reload nginx
         when: not (nginx_preserve_vhost | default(false))
+        tags: ['nginx']
 
       - name: "Host nginx — enable site"
         ansible.builtin.file:
@@ -1937,6 +1956,7 @@
           force: yes   # convert pre-existing regular-file copies (older deploys) into a symlink
         notify: Reload nginx
         when: not (nginx_preserve_vhost | default(false))
+        tags: ['nginx']
 
       - name: "Host nginx — remove default site"
         ansible.builtin.file:
@@ -1944,9 +1964,11 @@
           state: absent
         notify: Reload nginx
         when: not (nginx_preserve_vhost | default(false))
+        tags: ['nginx']
 
       - name: "Host nginx — flush handlers so reload happens before validation"
         ansible.builtin.meta: flush_handlers
+        tags: ['nginx']
 
     # macOS thin path: run nginx as a container instead of host nginx.
     # Renders the same template (upstream host -> host.docker.internal so

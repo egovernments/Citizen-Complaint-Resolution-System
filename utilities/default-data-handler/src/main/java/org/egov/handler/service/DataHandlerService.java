@@ -58,6 +58,12 @@ public class DataHandlerService {
 
     private final RestTemplate restTemplate;
 
+    // Which PGR workflow a new tenant gets: "standard" (GRO/LME single-tier) or
+    // "cms" (multi-tier CMS_* officer chain). Deploy-level switch — a tenant has
+    // exactly one PGR BusinessService, so the variant is chosen per deployment.
+    @org.springframework.beans.factory.annotation.Value("${pgr.workflow.variant:standard}")
+    private String pgrWorkflowVariant;
+
     @Autowired
     public DataHandlerService(MdmsV2Util mdmsV2Util, HrmsUtil hrmsUtil, LocalizationUtil localizationUtil, TenantManagementUtil tenantManagementUtil, ServiceConfiguration serviceConfig, ObjectMapper objectMapper, ResourceLoader resourceLoader, WorkflowUtil workflowUtil, CustomKafkaTemplate producer, MdmsBulkLoader mdmsBulkLoader, RestTemplate restTemplate) {
         this.mdmsV2Util = mdmsV2Util;
@@ -490,8 +496,12 @@ public class DataHandlerService {
      * PGR (novu-bridge) later READS those MDMS rows at runtime.
      */
     public void createPgrWorkflowConfig(String targetTenantId) {
-        // Load the JSON file
-        Resource resource = resourceLoader.getResource("classpath:PgrWorkflowConfig.json");
+        // Load the JSON file for the configured workflow variant
+        String wfConfigFile = "cms".equalsIgnoreCase(pgrWorkflowVariant)
+                ? "classpath:CmsPgrWorkflowConfig.json"
+                : "classpath:PgrWorkflowConfig.json";
+        log.info("Creating PGR workflow for tenant {} from {} (variant={})", targetTenantId, wfConfigFile, pgrWorkflowVariant);
+        Resource resource = resourceLoader.getResource(wfConfigFile);
         try (InputStream inputStream = resource.getInputStream()) {
             // (a) PARSE raw tree (same readTree pattern used by addMdmsData).
             JsonNode root = objectMapper.readTree(inputStream);

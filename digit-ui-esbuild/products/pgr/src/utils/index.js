@@ -166,7 +166,7 @@ export const convertEpochFormateToDate = (dateEpoch) => {
 
 
 
-export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
+export const formPayloadToCreateComplaint = (formData, tenantId, user, extOpts) => {
   const userInfo =  {
     "name": formData?.ComplainantName?.trim()?.length > 0 ? formData?.ComplainantName?.trim() : null,
     "mobileNumber": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
@@ -215,6 +215,40 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
       "hrmsAssignes": [],
       "comments": ""
     }
+  }
+
+  // Additive: attach a FLAT top-level service.extendedAttributes when the
+  // employee's tenant mapped to a category (extOpts.caseRelatedTo). Backward
+  // compatible — existing 3-arg callers and non-mapped tenants are unchanged.
+  if (extOpts && extOpts.caseRelatedTo) {
+    const sct = formData?.SelectComplaintType;
+    const sst = formData?.SelectSubComplaintType;
+    const lvl1 = sct?.code ?? sct?.serviceCode ?? sct?.name;
+    const lvl2 = sst?.code ?? sst?.serviceCode ?? sst?.name;
+    const ext = {
+      caseRelatedTo: extOpts.caseRelatedTo,
+      isConfidential: !!formData?.isConfidential,
+      schemaVersion: "1.0",
+    };
+    if (lvl1) ext.hierarchyLevel1 = lvl1;
+    if (lvl2) ext.hierarchyLevel2 = lvl2;
+    (extOpts.fieldKeys || []).forEach((k) => {
+      const v = formData?.[k];
+      if (v !== undefined && v !== null && String(v).length > 0) ext[k] = v;
+    });
+    complaint.service.extendedAttributes = ext;
+  }
+
+  // Complainant address (citizen-flow parity — same extendedAttributes key the
+  // citizen "Your details" card writes). Attached even when the tenant has no
+  // category mapping so the field never silently drops its value; deliberately
+  // NOT citizen.correspondenceAddress, which would round-trip the user service.
+  const complainantAddress = formData?.ComplainantAddress?.trim();
+  if (complainantAddress) {
+    complaint.service.extendedAttributes = {
+      ...(complaint.service.extendedAttributes || {}),
+      complainantAddress,
+    };
   }
 
   return complaint;

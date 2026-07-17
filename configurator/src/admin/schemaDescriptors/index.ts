@@ -9,6 +9,9 @@ import { stateInfoDescriptor } from './state-info';
 import { notificationRoutingDescriptor } from './notification-routing';
 import { notificationTemplateDescriptor } from './notification-template';
 import { mapConfigDescriptor } from './map-config';
+import { landingSectionDescriptor } from './landing-section';
+import { landingPageConfigDescriptor } from './landing-page-config';
+import { cityModuleDescriptor } from './city-module';
 
 /** Map of schema code -> descriptor. Add new entries as we cover more schemas. */
 const DESCRIPTORS: Record<string, SchemaDescriptor> = {
@@ -22,6 +25,9 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [notificationRoutingDescriptor.schema]: notificationRoutingDescriptor,
   [notificationTemplateDescriptor.schema]: notificationTemplateDescriptor,
   [mapConfigDescriptor.schema]: mapConfigDescriptor,
+  [landingSectionDescriptor.schema]: landingSectionDescriptor,
+  [landingPageConfigDescriptor.schema]: landingPageConfigDescriptor,
+  [cityModuleDescriptor.schema]: cityModuleDescriptor,
 };
 
 export function getDescriptor(schemaCode?: string): SchemaDescriptor | undefined {

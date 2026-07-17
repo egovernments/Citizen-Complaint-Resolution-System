@@ -1,7 +1,7 @@
 [
   {
     "code": "IGE",
-    "name": "Institutions of Governance and Education",
+    "name": "PGR_RELATEDTO_NAME_IGE",
     "active": true,
     "shortName": "IGE",
     "displayOrder": 1,
@@ -9,7 +9,7 @@
   },
   {
     "code": "IGSAE",
-    "name": "Institutions of Governance, Services, and Economic Activity",
+    "name": "PGR_RELATEDTO_NAME_IGSAE",
     "active": true,
     "shortName": "IGSAE",
     "displayOrder": 2,

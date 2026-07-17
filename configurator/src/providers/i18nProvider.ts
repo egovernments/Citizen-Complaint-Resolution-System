@@ -59,6 +59,10 @@ const customEnglishMessages: TranslationMessages = {
       complaint_types: 'Complaint Types',
       complaints: 'Complaints',
       localization: 'Localization',
+      landing_page: 'Landing Page',
+      landing_builder: 'Page Builder',
+      landing_sections: 'Landing Sections',
+      landing_page_config: 'Page Settings',
       people: 'People',
       employees: 'Employees',
       users: 'Users',
@@ -105,6 +109,8 @@ const customEnglishMessages: TranslationMessages = {
       workflow_processes: 'Workflow Processes',
       mdms_schemas: 'MDMS Schemas',
       boundary_hierarchies: 'Boundary Hierarchies',
+      // CCSD-1997: StateInfo master is surfaced as "Branding".
+      state_info: 'Branding',
     },
     fields: {
       code: 'Code',

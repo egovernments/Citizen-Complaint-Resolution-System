@@ -1,0 +1,196 @@
+[
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.LandingSection",
+    "description": "One row per configurable public-landing section (config-driven landing, CCSD-2005). type selects the section component (v1 catalog: hero, navigation, types, steps, channels, privacy, news, institutions, cta, footer) — intentionally NOT enum-constrained here so new types can be added later without a schema recreation (MDMS schema _update is unsupported); the catalog is enforced by the runtime LandingRenderer type->component registry and the Configurator type picker. order sorts; enabled toggles; status gates DRAFT vs PUBLISHED (runtime renders PUBLISHED). Text is carried as PGR_LANDING_* localization keys (never inline translated text); media is a filestore id; items are cards/links/steps for the section. WhatsApp FAB and the utility bar are page-level toggles on LandingPageConfig, not section types.",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "LandingSection",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "code",
+        "type",
+        "order",
+        "enabled"
+      ],
+      "x-unique": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "description": "Section component key. v1 catalog: hero | navigation | types | steps | channels | privacy | news | institutions | cta | footer. Not enum-constrained (schema _update is unsupported); enforced by the LandingRenderer registry + Configurator picker so new types are addable without recreating the schema."
+        },
+        "order": {
+          "type": "number"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "PUBLISHED"
+          ]
+        },
+        "version": {
+          "type": "number"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "titleKey": {
+          "type": "string"
+        },
+        "subtitleKey": {
+          "type": "string"
+        },
+        "bodyKey": {
+          "type": "string"
+        },
+        "media": {
+          "type": "object",
+          "properties": {
+            "imageId": {
+              "type": "string"
+            },
+            "altKey": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "labelKey": {
+                "type": "string"
+              },
+              "descKey": {
+                "type": "string"
+              },
+              "iconId": {
+                "type": "string"
+              },
+              "navigationUrl": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "order": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "theme": {
+          "type": "object",
+          "properties": {
+            "accent": {
+              "type": "string"
+            },
+            "bg": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "RAINMAKER-PGR.LandingPageConfig",
+    "description": "Singleton (code=default) page-level landing config: master enable, global section-order override, default locale, page theme tokens, SEO keys, WhatsApp FAB toggle, and the publish pointer (config-driven landing, CCSD-2005).",
+    "isActive": true,
+    "definition": {
+      "type": "object",
+      "title": "LandingPageConfig",
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "required": [
+        "code"
+      ],
+      "x-unique": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "defaultLocale": {
+          "type": "string"
+        },
+        "showWhatsAppFab": {
+          "type": "boolean"
+        },
+        "showUtilityBar": {
+          "type": "boolean"
+        },
+        "sectionOrder": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "seo": {
+          "type": "object",
+          "properties": {
+            "titleKey": {
+              "type": "string"
+            },
+            "descriptionKey": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "theme": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "publish": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string"
+            },
+            "publishedVersion": {
+              "type": "number"
+            },
+            "publishedAt": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  }
+]

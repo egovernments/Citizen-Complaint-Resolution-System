@@ -1,0 +1,1454 @@
+[
+    {
+        "code": "CS_COMMON_COMPLAINT_NO",
+        "message": "N.º da Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_MOBILE_NO",
+        "message": "N.º de Telemóvel",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_SEARCH",
+        "message": "Pesquisar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_HOME",
+        "message": "Início",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_CURRENT_STATUS",
+        "message": "Estado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_TIMELINE_ATTACHMENT",
+        "message": "Anexo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_TIMELINE_ATTACHMENTS",
+        "message": "Anexos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_OPTIONAL_SUFFIX",
+        "message": "(Opcional)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ACTIONS",
+        "message": "Acções",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ASC",
+        "message": "Asc",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_BACK",
+        "message": "Voltar ao Painel",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CLEAR",
+        "message": "Limpar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CNO_PH",
+        "message": "Introduza o número da manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_COMPLAINTS",
+        "message": "Manifestações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_COMPLAINT_NO_INVALID",
+        "message": "Formato de número de manifestação inválido",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CREATED_DATE",
+        "message": "Data de Criação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DEPARTMENTS",
+        "message": "Departamentos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DEPT_NA",
+        "message": "Sem Departamento Atribuído",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DESC",
+        "message": "Desc",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ENTRIES",
+        "message": "registos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERROR",
+        "message": "Ocorreu um erro ao obter as manifestações.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERR_FUTURE",
+        "message": "A data inicial não pode ser no futuro",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERR_RANGE_ORDER",
+        "message": "A data final deve ser igual ou posterior à data inicial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ERR_RANGE_SPAN",
+        "message": "O intervalo de datas não pode exceder 365 dias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_FROM_DATE",
+        "message": "Data Inicial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_1",
+        "message": "Seleccione pelo menos um critério de pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_2",
+        "message": "O intervalo de datas não pode exceder 365 dias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_3",
+        "message": "A data final deve ser igual ou posterior à data inicial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_GUIDE_TITLE",
+        "message": "Orientações de Pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_HEADER_DEPARTMENT",
+        "message": "Departamento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_CLOSED",
+        "message": "Encerradas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_INPROGRESS",
+        "message": "Em Andamento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_OPEN",
+        "message": "Abertas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_RESOLVED",
+        "message": "Resolvidas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_TOTAL",
+        "message": "Total de Manifestações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_KPI_TOTAL_SUB",
+        "message": "Em todos os departamentos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_LAST_MODIFIED",
+        "message": "Última Actualização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_NO_RESULTS",
+        "message": "Não foram encontradas manifestações para os critérios indicados.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_OF",
+        "message": "de",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_REFRESH",
+        "message": "Actualizar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RESULTS",
+        "message": "Resultados",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RETRY",
+        "message": "Tentar novamente",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_ROWS_PER_PAGE",
+        "message": "Linhas por página",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH",
+        "message": "Pesquisa Administrativa de Manifestações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH_SUB",
+        "message": "Pesquise e consulte manifestações de todos os departamentos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SELECT_DEPARTMENTS",
+        "message": "Selecionar departamentos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SHOWING",
+        "message": "A mostrar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SORT_BY",
+        "message": "Ordenar por",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_TO",
+        "message": "a",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_TO_DATE",
+        "message": "Data Final",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_VIEW",
+        "message": "Ver",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH_FILTERS",
+        "message": "Filtros de Pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH_RESULTS",
+        "message": "Resultados da Pesquisa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORT",
+        "message": "Exportar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORTING",
+        "message": "A exportar…",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DATE_RANGE",
+        "message": "Intervalo de Datas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CREATED_ON",
+        "message": "Criado Em",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_CREATED_TIME",
+        "message": "Data de Criação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_TENANT_BANNER",
+        "message": "Está a visualizar dados de",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RESULTS_WORD",
+        "message": "resultados",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_COMPLAINTS_FOUND",
+        "message": "Manifestações Encontradas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_UPDATED",
+        "message": "Actualizado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SECS_AGO",
+        "message": "seg atrás",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_MINS_AGO",
+        "message": "min atrás",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_HOURS_AGO",
+        "message": "h atrás",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DATE_RANGE_PH",
+        "message": "Seleccione o intervalo de datas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_DEPT_SEARCH_PH",
+        "message": "Pesquisar departamentos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_RECENT",
+        "message": "Pesquisas recentes",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORT_CAPPED",
+        "message": "Exportadas apenas as primeiras 500 linhas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_EXPORT_FAILED",
+        "message": "A exportação falhou — tente novamente",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CONSENT_DATA_PROCESSING_LABEL",
+        "message": "Autorizo o tratamento dos meus dados pessoais para a tramitação desta manifestação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CONSENT_TRUTHFULNESS_LABEL",
+        "message": "Declaro que as informações prestadas são verdadeiras e exactas.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_INBOX",
+        "message": "Caixa de Reclamações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ASSIGNED_TO_ME",
+        "message": "Atribuídas a mim",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ASSIGNED_TO_ALL",
+        "message": "Todas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_FILTER_STATUS",
+        "message": "Estado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",
+        "message": "Subtipo de Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_INBOX_HEADER_LOCALITY",
+        "message": "Localidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "WF_INBOX_HEADER_CURRENT_OWNER",
+        "message": "Responsável Atual",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ROWS_PER_PAGE",
+        "message": "Linhas por página",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGFORASSIGNMENT",
+        "message": "Pendente de Atribuição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_REFERRED",
+        "message": "Encaminhada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_INVESTIGATION",
+        "message": "Em Investigação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_INFOFROMCITIZEN",
+        "message": "Aguarda Informação do Cidadão",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGFORREASSIGNMENT",
+        "message": "Pendente de Reatribuição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_REJECTED",
+        "message": "Rejeitada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_RESOLVED",
+        "message": "Resolvida",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_CLOSEDAFTERREJECTION",
+        "message": "Fechada após Rejeição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_CLOSEDAFTERRESOLUTION",
+        "message": "Fechada após Resolução",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_CANCELLED",
+        "message": "Cancelada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PENDINGFORASSIGNMENT",
+        "message": "Pendente de Atribuição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_INVESTIGATION",
+        "message": "Em Investigação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_AWAITINGINFORMATION",
+        "message": "Aguarda Informação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_RESOLVED",
+        "message": "Resolvida",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_REJECTED",
+        "message": "Rejeitada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_DESC_MIN_CHARS",
+        "message": "Descreva o problema em 20 a 1000 caracteres (use palavras, não apenas números).",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_DESC_NEEDS_WORDS",
+        "message": "Descreva o problema por palavras, não apenas números.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_RELATEDTO_NAME_IGE",
+        "message": "Serviços do Governo (Entidades Públicas)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_RELATEDTO_NAME_IGSAE",
+        "message": "Empresas e Estabelecimentos Comerciais (Entidades Privadas)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_GOV_NAME",
+        "message": "República de Moçambique",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_PORTAL_NAME",
+        "message": "Portal de Reclamações e Denúncias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_ORG_NAMES",
+        "message": "IGE e IGSAE",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TAGLINE",
+        "message": "O cidadão fala. O Estado responde.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_MOTTO_VALUES",
+        "message": "Transparência · Integridade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_SKIP_LINK",
+        "message": "Saltar para o conteúdo principal",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_UTILITY_PHONE_LABEL",
+        "message": "+258 21 490 000",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_UTILITY_GREEN_LINE",
+        "message": "Linha Verde 1490",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_UTILITY_GREEN_LINE_FREE",
+        "message": "gratuita",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_LOGIN",
+        "message": "Entrar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_ARIA_LANGUAGE",
+        "message": "Idioma",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_ARIA_UTILITY",
+        "message": "Informação de serviço",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_ARIA_MAIN_NAV",
+        "message": "Navegação principal",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_MENU_OPEN",
+        "message": "Abrir menu",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_MENU_CLOSE",
+        "message": "Fechar menu",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_HOME",
+        "message": "Início",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_SUBMIT",
+        "message": "Submeter Manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_TRACK",
+        "message": "Acompanhar Processo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_TRAINING",
+        "message": "Formação e Ajuda",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_ABOUT",
+        "message": "Sobre o Portal",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NAV_CONTACTS",
+        "message": "Contactos",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_EYEBROW",
+        "message": "República de Moçambique · IGE · IGSAE",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TITLE",
+        "message": "Portal de Reclamações e Denúncias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_LEDE",
+        "message": "Canal nacional para reclamações, queixas, petições e denúncias sobre serviços públicos, administração pública e actividades económicas — com acompanhamento simples, seguro e transparente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CTA_SUBMIT",
+        "message": "Submeter Manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CTA_TRACK",
+        "message": "Acompanhar Processo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TRUST_CONFIDENTIAL",
+        "message": "Tratamento confidencial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TRUST_CASE_NUMBER",
+        "message": "Número de processo único",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_TRUST_NOTIFICATIONS",
+        "message": "Notificações por SMS e WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNELS_LABEL",
+        "message": "Também disponível em:",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNEL_APP",
+        "message": "Aplicação Android",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNEL_WA",
+        "message": "WhatsApp Oficial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HERO_CHANNEL_LINE",
+        "message": "Linha Verde 1490",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPES_TITLE",
+        "message": "Tipos de Manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPES_INTRO",
+        "message": "Escolha o tipo que melhor descreve a sua situação. Em caso de dúvida, seleccione o mais próximo — os serviços encaminham a manifestação correctamente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_COMPLAINT_TITLE",
+        "message": "Reclamações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_COMPLAINT_DESC",
+        "message": "Insatisfação com a qualidade, disponibilidade ou atendimento dos serviços prestados por órgãos e instituições da Administração Pública.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_GRIEVANCE_TITLE",
+        "message": "Queixas",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_GRIEVANCE_DESC",
+        "message": "Comunicação de má conduta, negligência, abuso de poder ou incumprimento de deveres por funcionários, agentes ou instituições públicas.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_PETITION_TITLE",
+        "message": "Petições",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_PETITION_DESC",
+        "message": "Pedidos formais dirigidos ao Estado para apreciação, intervenção, revisão de decisões ou adopção de medidas de interesse público.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_REPORT_TITLE",
+        "message": "Denúncias",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_REPORT_DESC",
+        "message": "Comunicação de factos ligados a actividades económicas, defesa do consumidor, segurança alimentar ou infracções de operadores económicos.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_TYPE_CTA",
+        "message": "Submeter",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_TITLE",
+        "message": "Como Funciona",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_LABEL",
+        "message": "Passo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_1",
+        "message": "Submeta a sua manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_2",
+        "message": "Receba o número de processo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_3",
+        "message": "A manifestação é analisada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_4",
+        "message": "A entidade competente é accionada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_5",
+        "message": "Acompanhe o estado do processo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_STEP_6",
+        "message": "Receba a decisão final",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_TITLE",
+        "message": "Acompanhamento garantido",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_NOTIFY",
+        "message": "Recebe notificações por SMS ou WhatsApp sempre que o estado do processo muda.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_RECORD",
+        "message": "Todo o processo fica registado digitalmente, garantindo transparência, rastreabilidade e responsabilização.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_HOW_NOTE_CHANNELS",
+        "message": "Qualquer canal — Portal, Aplicação ou WhatsApp — gera um número único de processo para acompanhamento.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNELS_TITLE",
+        "message": "Canais de Atendimento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNELS_INTRO",
+        "message": "Use o Portal Web para a experiência completa de submissão e acompanhamento, ou escolha o canal mais conveniente para si.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_TITLE",
+        "message": "Portal Web",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_DESC",
+        "message": "Submissão e acompanhamento completos, com histórico do processo.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_CTA",
+        "message": "Submeter agora",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WEB_BADGE",
+        "message": "Está aqui",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_APP_TITLE",
+        "message": "Aplicação Android",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_APP_DESC",
+        "message": "Submeta e acompanhe manifestações a partir do telemóvel.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_APP_CTA",
+        "message": "Obter no Google Play",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WA_TITLE",
+        "message": "WhatsApp Oficial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WA_DESC",
+        "message": "Submeta manifestações e receba apoio pela conversa oficial.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_WA_CTA",
+        "message": "Conversar no WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_LINE_TITLE",
+        "message": "Linha Verde 1490",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_LINE_DESC",
+        "message": "Chamada gratuita para apoio, orientação e submissão assistida.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_LINE_CTA",
+        "message": "Ligar 1490",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_TITLE",
+        "message": "Confidencialidade e Protecção de Dados",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_P1",
+        "message": "O portal protege os dados pessoais dos cidadãos de acordo com a legislação aplicável.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_P2",
+        "message": "Ao submeter uma manifestação, pode solicitar tratamento confidencial dos seus dados. Nesses casos, a sua identidade não fica visível aos utilizadores responsáveis pela gestão e tramitação do processo, excepto quando exigido por lei.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_LINK",
+        "message": "Ler a Política de Privacidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NEWS_TITLE",
+        "message": "Últimas Actualizações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NEWS_READ_MORE",
+        "message": "Ler mais",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_NEWS_VIEW_ALL",
+        "message": "Ver todas as actualizações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_INST_TITLE",
+        "message": "IGE e IGSAE ao serviço do cidadão",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_INST_IGE_TITLE",
+        "message": "Inspecção-Geral do Estado (IGE)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_INST_IGE_DESC",
+        "message": "Órgão central de controlo interno da Administração Pública, responsável pela auditoria, fiscalização e inspecção da legalidade, regularidade, eficiência e eficácia da utilização dos recursos públicos.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_INST_IGSAE_TITLE",
+        "message": "Inspecção-Geral de Segurança Alimentar e Económica (IGSAE)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_INST_IGSAE_DESC",
+        "message": "Órgão responsável pela fiscalização das actividades económicas, defesa do consumidor e segurança alimentar, promovendo o cumprimento da legislação aplicável e a protecção do interesse público.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FINAL_TITLE",
+        "message": "Tem uma Reclamação, Queixa, Petição ou Denúncia?",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FINAL_TEXT",
+        "message": "Participe na melhoria dos serviços públicos e da actividade económica. Submeta a sua manifestação e acompanhe o tratamento através do portal.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FINAL_CTA",
+        "message": "Submeter Manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_CHANNELS",
+        "message": "Canais Oficiais",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_LINKS",
+        "message": "Links Úteis",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_ACCESS",
+        "message": "Acesso",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_LEGAL",
+        "message": "Informação Legal",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_PORTAL_WEB",
+        "message": "Portal Web",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_ANDROID",
+        "message": "Aplicação Android",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_WHATSAPP",
+        "message": "WhatsApp Oficial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_GREEN_LINE",
+        "message": "Linha Verde 1490",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_FAQ",
+        "message": "Perguntas Frequentes",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_CITIZEN_LOGIN",
+        "message": "Entrar como Cidadão",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_EMPLOYEE_LOGIN",
+        "message": "Acesso de Funcionário",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_PRIVACY",
+        "message": "Política de Privacidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_TERMS",
+        "message": "Termos de Utilização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_ACCESSIBILITY",
+        "message": "Acessibilidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_COPYRIGHT",
+        "message": "Portal de Reclamações e Denúncias · República de Moçambique. Todos os direitos reservados.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FAB_LABEL",
+        "message": "Falar connosco no WhatsApp",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_PLACEHOLDER_PENDING",
+        "message": "Página em configuração",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_EXTERNAL_LINK_NOTE",
+        "message": "abre numa nova janela",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_NO_COMPLAINTS_TITLE",
+        "message": "Sem Nenhuma Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_VIEW_COMPLAINT",
+        "message": "Ver Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_TIMELINE",
+        "message": "Cronologia da Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_EASY_SUBMIT",
+        "message": "É fácil apresentar a reclamação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_RESOLUTION_TIME",
+        "message": "Tempo de resolução",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_FEEDBACK_COMMUNICATION",
+        "message": "Comunicação e atualizações",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RATING_COMMENTS_PLACEHOLDER",
+        "message": "Compartilhe qualquer outra informação que você gostaria que a equipe soubesse…",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_RATE_SUBTEXT",
+        "message": "Sua avaliação nos ajuda a melhorar. Leva apenas um instante.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REPORTER_FULL_NAME_LABEL",
+        "message": "Nome Completo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REPORTER_ADDRESS_LABEL",
+        "message": "Endereço",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_OPTIONAL",
+        "message": "Opcional",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_CATEGORY",
+        "message": "Categoria de Manifestação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "NEXT",
+        "message": "Próximo",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "BACK",
+        "message": "Voltar",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_INSTITUTE_NAME_LABEL",
+        "message": "Nome da Instituição",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_NAME_LABEL",
+        "message": "Nome da Testemunha",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_ADDRESS_LABEL",
+        "message": "Endereço da Testemunha",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_WITNESS_NOTE_LABEL",
+        "message": "Nota da Testemunha",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_IS_CONFIDENTIAL_LABEL",
+        "message": "Mantenha os detalhes confidenciais.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_IS_CONFIDENTIAL_HINT",
+        "message": "A visibilidade é garantida assim que o processamento seguro é ativado; por enquanto, isso sinaliza a reclamação para que a equipe esteja ciente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_ERROR",
+        "message": "Não foi possível obter a sua localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_PERMISSION_DENIED",
+        "message": "Permissão de localização negada — permita o acesso à localização no seu navegador",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_UNAVAILABLE",
+        "message": "A sua localização não está disponível de momento",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_TIMEOUT",
+        "message": "Tempo esgotado ao obter a sua localização — tente novamente",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_GEOLOCATION_NOT_SUPPORTED",
+        "message": "O seu navegador não suporta localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOCATION_NOT_FOUND",
+        "message": "Localização não encontrada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_SEARCH_ERROR",
+        "message": "Não foi possível pesquisar a localização",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_CANCELLED",
+        "message": "Cancelado",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_INFOFROMCITIZEN",
+        "message": "Aguarda Informação do Cidadão",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PENDINGATSUPERVISOR",
+        "message": "Pendente com o supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGATLME",
+        "message": "Funcionário pendente na última etapa",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_PENDINGATSUPERVISOR",
+        "message": "Pendente no Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_PGR_STATE_RESOLVEDBYSUPERVISOR",
+        "message": "Resolvida pelo Supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_REFERRED",
+        "message": "Encaminhada",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_RESOLVEDBYSUPERVISOR",
+        "message": "Resolvido pelo supervisor",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_DATE_OF_FACT_LABEL",
+        "message": "Data do Facto",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_ENTITY_NAME_LABEL",
+        "message": "Nome da Entidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_EXT_ENTITY_ADDRESS_LABEL",
+        "message": "Endereço da Entidade",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_COMPLAINT_TYPE",
+        "message": "Tipo de Reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    }
+]

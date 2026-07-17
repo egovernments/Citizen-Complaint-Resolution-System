@@ -5,7 +5,10 @@ import { useTranslation } from "react-i18next";
 
 const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }) => {
 
-  const tenantId = Digit.ULBService.getCurrentTenantId();
+  // Boundaries are tenant-scoped. Callers that resolve a tenant at runtime
+  // (e.g. the citizen authority→tenant flow) pass it via `config.tenantId`;
+  // everyone else falls back to the logged-in tenant (unchanged behaviour).
+  const tenantId = config?.tenantId || Digit.ULBService.getCurrentTenantId();
 
   // Employee jurisdiction gate (egovernments/CCRS#496).
   //
@@ -80,16 +83,18 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
     return hasAny ? filtered : rawChildrenData;
   }, [rawChildrenData, allowedRoots]);
 
-  // boundaryHierarchyOrder is populated by usePGRInitialization at
-  // module mount and changes when the operator switches city. Reading
-  // it once at render meant a city switch left the cascade pointing at
-  // the previous tenant's hierarchy — a 2-level tenant after coming
-  // from a 3-level tenant would still try to render a Sub-County
-  // dropdown that the new tenant doesn't have.
+  // boundaryHierarchyOrder is written by fetchBoundaries just before its data
+  // resolves (lazy loading — no more module-mount prefetch). The memo must be
+  // keyed on the fetched DATA, not just tenantId: on first visit the order
+  // lands AFTER mount, and a tenantId-only memo cached [] for the tenant's
+  // lifetime — blank cascade until a full page refresh remounted with the
+  // storage already seeded. Re-keying on rawChildrenData recomputes exactly
+  // when the tree (and therefore the freshly written order) arrives; the
+  // tenantId key still handles operator city switches.
   const boundaryHierarchy = useMemo(() => {
     const order = Digit.SessionStorage.get("boundaryHierarchyOrder");
     return Array.isArray(order) ? order.map((item) => item.code) : [];
-  }, [tenantId]);
+  }, [tenantId, rawChildrenData]);
   const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
 
   // State to manage selected values and dropdown options
@@ -147,9 +152,25 @@ useEffect(() => {
   // pick manually.
   const wardHintCode = formData?.GeoLocationsPoint?.ward?.code;
   const wardHintName = formData?.GeoLocationsPoint?.ward?.name;
+  // The hint key this mount has already handled. Guards two replays:
+  // (1) a session-restored draft replays the OLD pin's hint on remount — if
+  //     the draft also carries a SelectedBoundary (possibly a manual
+  //     correction of that very hint), the saved boundary is the user's final
+  //     intent and wins; only a hint CHANGE (fresh pin drop) re-derives;
+  // (2) childrenData is recreated when the HRMS jurisdiction filter settles —
+  //     without the key guard that re-ran the effect and re-applied the same
+  //     hint over a manual correction mid-session.
+  const processedHintRef = React.useRef(null);
   useEffect(() => {
     if (!wardHintCode && !wardHintName) return;
     if (!childrenData || childrenData.length === 0) return;
+    const hintKey = (wardHintCode || "") + "|" + (wardHintName || "");
+    if (processedHintRef.current === hintKey) return;
+    if (processedHintRef.current === null && formData?.SelectedBoundary?.code) {
+      // First hint of this mount with a saved boundary — the draft wins.
+      processedHintRef.current = hintKey;
+      return;
+    }
     // boundaryHierarchyOrder may not be seeded yet (usePGRInitialization
     // still in flight / city just switched). Without it the deepest-level
     // targetType is undefined and findWardPath would match the hint at
@@ -193,11 +214,59 @@ useEffect(() => {
     // locality validation was firing only when children happened to
     // be attached, so County-level selections silently passed).
     const deepest = path[path.length - 1];
+    // Childless node = branch ends here in the data → leaf (same rule as
+    // handleSelection below; don't hold NEXT hostage to unseeded levels).
     const isDeepestLevel =
-      deepest?.boundaryType === hierarchy[hierarchy.length - 1];
+      deepest?.boundaryType === hierarchy[hierarchy.length - 1] ||
+      !(Array.isArray(deepest?.children) && deepest.children.length > 0);
+    processedHintRef.current = hintKey;
     onSelect(config.key, { ...deepest, isLeaf: isDeepestLevel });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wardHintCode, wardHintName, childrenData]);
+
+  // Draft-restore repaint: a session-restored form holds a valid
+  // SelectedBoundary while selectedValues (private state) starts empty, so the
+  // cascade rendered blank after a refresh even though the value was set.
+  // While the picker is untouched, rebuild the visible chain by locating the
+  // saved node in the tree. Runs regardless of any ward hint — the hint effect
+  // above yields its mount round to the saved boundary (which may be a manual
+  // correction of that very hint, and repaints anyway when they agree). No
+  // onSelect emit — the value is already in the form.
+  const savedBoundaryCode = formData?.SelectedBoundary?.code;
+  useEffect(() => {
+    if (!savedBoundaryCode) return;
+    if (Object.keys(selectedValues).length > 0) return;
+    if (!childrenData || childrenData.length === 0) return;
+    const findPathByCode = (nodes, code, path = []) => {
+      for (const n of nodes || []) {
+        const p = [...path, n];
+        if (n.code === code) return p;
+        const found = findPathByCode(n.children, code, p);
+        if (found) return found;
+      }
+      return null;
+    };
+    const path = findPathByCode(childrenData[0]?.boundary, savedBoundaryCode);
+    if (!path || path.length === 0) return;
+    const newSelectedValues = {};
+    const newValue = {};
+    let levelOptions = childrenData[0]?.boundary || [];
+    for (const node of path) {
+      newSelectedValues[node.boundaryType] = node;
+      newValue[node.boundaryType] = levelOptions;
+      levelOptions = node.children || [];
+    }
+    // A mid-cascade draft (SelectedBoundary saved at every level pick) restores
+    // a NON-leaf node: its children are the next level's options. Without this,
+    // the init effect's first-chain walk leaks another parent's children into
+    // the next dropdown (pick County B, refresh -> Sub-Counties of county A).
+    if (levelOptions.length > 0 && levelOptions[0]?.boundaryType) {
+      newValue[levelOptions[0].boundaryType] = levelOptions;
+    }
+    setSelectedValues(newSelectedValues);
+    setValue((prev) => ({ ...prev, ...newValue }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedBoundaryCode, childrenData]);
 
   /**
    * Handle dropdown selection.
@@ -236,7 +305,15 @@ useEffect(() => {
     // `isLeaf` so validators can trust hierarchy depth instead of the
     // `.children` array (which isn't reliably preserved on the picked
     // node and let County-level selections pass — egovernments/CCRS#478).
-    const isDeepestLevel = index === boundaryHierarchy.length - 1;
+    // A branch may also END above the deepest configured level (data simply
+    // not seeded that deep — prod Tete→Tsangano has no Municípios): the last
+    // node that exists IS the finest answer for that branch, so a childless
+    // pick counts as leaf too. Safe against #478 because `selectedBoundary`
+    // here is the live tree node (children intact) — only downstream
+    // form-state copies lose `.children`, and those never reach this emit.
+    const isDeepestLevel =
+      index === boundaryHierarchy.length - 1 ||
+      !(Array.isArray(selectedBoundary.children) && selectedBoundary.children.length > 0);
     onSelect(config.key, { ...selectedBoundary, isLeaf: isDeepestLevel });
 
     // Load child boundaries
@@ -276,7 +353,23 @@ useEffect(() => {
               <BoundaryDropdown
                 key={key}
                 fieldKey={key}
-                label={`${t(`${hierarchyType}_${key?.toUpperCase()}`)}`}
+                // Level-heading localization: onboarding seeds several key shapes
+                // (accents KEPT): "divisao_administrativa_PROVÍNCIA",
+                // "DIVISAO_ADMINISTRATIVA_PROVÍNCIA", "divisao_administrativa_Província".
+                // Try each; if none is loaded, show the human boundaryType
+                // ("Província") — never the raw composite key.
+                label={(() => {
+                  const candidates = [
+                    `${hierarchyType}_${key?.toUpperCase()}`,
+                    `${String(hierarchyType).toUpperCase()}_${key?.toUpperCase()}`,
+                    `${hierarchyType}_${key}`,
+                  ];
+                  for (const c of candidates) {
+                    const l = t(c);
+                    if (l !== c) return l;
+                  }
+                  return key;
+                })()}
                 data={value[key]}
                 onChange={(selectedValue) => handleSelection(selectedValue)}
                 selected={selectedAtLevel}

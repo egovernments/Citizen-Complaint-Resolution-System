@@ -10,7 +10,7 @@
 // the rest of the modernized citizen surface.
 
 import React, { useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { Loader } from "@egovernments/digit-ui-react-components";
@@ -19,12 +19,19 @@ import { AlertCircle } from "lucide-react";
 
 import { LOCALIZATION_KEY } from "../../constants/Localization";
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
-import TimeLine from "../../components/TimeLine";
+import TimelineWrapper from "../../components/TimeLineWrapper";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
+import { buildExtendedAttributeRows } from "../../components/PgrExtendedAttributesView";
+import StarRated from "../../components/timelineInstances/StarRated";
 
-const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CLOSEDAFTERREJECTION", "CLOSEDAFTERRESOLUTION"];
-const REJECTED_STATUSES = ["REJECTED", "CLOSEDAFTERREJECTION"];
+// Terminal (non-active) states across standard PGR *and* the mz.igsae CMS workflow.
+// CANCELLED / CLOSEDAFTER* are CMS terminals; without them CANCELLED wrongly showed
+// as "open" (active). A fully workflow-driven derivation would read isTerminateState
+// off the BusinessService, but that state is not fetched on the citizen detail page,
+// so we key off the status name (which the BusinessService states are named after).
+const REJECTED_STATUSES = ["REJECTED", "CLOSEDAFTERREJECTION", "CANCELLED"];
+const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CLOSEDAFTERREJECTION", "CLOSEDAFTERRESOLUTION", "CANCELLED"];
 
 function statusToTone(status) {
   if (REJECTED_STATUSES.includes(status)) return "rejected";
@@ -123,14 +130,26 @@ function renderRowValue(val, t) {
 }
 
 function WorkflowComponent({ complaintDetails, id }) {
+  const { t } = useTranslation();
   const tenantId =
     Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code ||
     complaintDetails.service.tenantId;
-  const workFlowDetails = Digit.Hooks.useWorkflowDetails({ tenantId, id, moduleCode: "PGR" });
 
-  // Pre-fetched MDMS for downstream rules; kept to avoid changing fetch
-  // cadence vs. the legacy file (some hooks gate on its cache hit).
-  Digit.Hooks.useCustomMDMS(
+  // Workflow-driven timeline: fetch the raw process instances (same source the
+  // employee side uses) and render them via the generic TimelineWrapper. This
+  // renders whatever states a BusinessService defines (standard PGR *and* the
+  // mz.igsae CMS workflow) with no hardcoded status list, replacing the legacy
+  // status-ordered <TimeLine>.
+  const { isLoading: isWorkFlowLoading, data: workflowData, revalidate } = Digit.Hooks.useCustomAPIHook({
+    url: "/egov-workflow-v2/egov-wf/process/_search",
+    params: { tenantId, history: true, businessIds: id },
+    changeQueryName: id,
+  });
+
+  // Reopen window (RAINMAKER-PGR.ComplainClosingTime → cct): REOPEN is offered
+  // to the citizen only within this many ms of the last workflow update —
+  // same rule the legacy status-ordered <TimeLine> applied.
+  const { data: complainMaxIdleTime } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
     [{ name: "ComplainClosingTime" }],
@@ -138,18 +157,66 @@ function WorkflowComponent({ complaintDetails, id }) {
   );
 
   useEffect(() => {
-    workFlowDetails.revalidate();
+    revalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (workFlowDetails.isLoading) return null;
+  // Citizen actions for the CURRENT state (RATE / REOPEN / …) straight from the
+  // workflow's nextActions — the legacy <TimeLine> rendered these links inside
+  // its Resolved/Rejected checkpoints, so the TimelineWrapper swap dropped them.
+  // COMMENT is excluded (no citizen page for it); REOPEN honors the idle-window.
+  const current = workflowData?.ProcessInstances?.[0];
+  const lastModifiedTime = complaintDetails?.service?.auditDetails?.lastModifiedTime;
+  const maxIdle = typeof complainMaxIdleTime === "number" ? complainMaxIdleTime : 3600000;
+  const reopenWindowOpen =
+    typeof lastModifiedTime === "number" && Number.isFinite(lastModifiedTime) && Date.now() - lastModifiedTime < maxIdle;
+  const citizenActions = (current?.nextActions || [])
+    .filter((a) => Array.isArray(a?.roles) && a.roles.includes("CITIZEN"))
+    .map((a) => a?.action)
+    .filter((a) => a && a !== "COMMENT")
+    .filter((a) => a !== "REOPEN" || reopenWindowOpen);
+
+  // Rendered INSIDE the current-state timeline row (legacy-checkpoint parity):
+  // action buttons while actions are open; the given star rating once rated.
+  const rating = complaintDetails?.service?.rating;
+  const currentStateChildren =
+    rating || citizenActions.length > 0 ? (
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", marginTop: "0.5rem" }}>
+        {rating ? <StarRated text={t("CS_ADDCOMPLAINT_YOU_RATED")} rating={rating} /> : null}
+        {citizenActions
+          .filter((action) => !(rating && action === "RATE"))
+          .map((action) => {
+            const key = `CS_COMMON_${action}`;
+            const label = t(key) === key ? action : t(key);
+            return (
+              <Link key={action} to={`/digit-ui/citizen/pgr/${action.toLowerCase()}/${id}`}>
+                <button
+                  type="button"
+                  style={{
+                    padding: "0.4rem 1.1rem",
+                    fontWeight: 600,
+                    color: "#fff",
+                    background: "var(--color-primary-1, var(--color-primary-main, #c84c0e))",
+                    border: "none",
+                    borderRadius: "0.375rem",
+                    cursor: "pointer",
+                  }}
+                >
+                  {label}
+                </button>
+              </Link>
+            );
+          })}
+      </div>
+    ) : null;
+
   return (
-    <TimeLine
-      data={workFlowDetails.data}
-      serviceRequestId={id}
-      complaintWorkflow={complaintDetails.workflow}
-      rating={complaintDetails.audit?.rating}
-      complaintDetails={complaintDetails}
+    <TimelineWrapper
+      businessId={id}
+      isWorkFlowLoading={isWorkFlowLoading}
+      workflowData={workflowData}
+      labelPrefix="WF_PGR_"
+      currentStateChildren={currentStateChildren}
     />
   );
 }
@@ -171,8 +238,14 @@ const ComplaintDetailsPage = () => {
   // Single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes +
   // leaf complaint types). buildComplaintPath finds the leaf (code===serviceCode)
   // and walks parentCode up through these same rows.
+  // The hierarchy (nodes + their names) is onboarded at the COMPLAINT'S tenant
+  // (e.g. mz.igsae) — not the citizen's home city, which on multi-authority envs
+  // is the state root with no such rows. Read it where it lives, else the
+  // Type/Sub-Type rows render raw COMPLAINT_HIERARCHY.* keys with no name
+  // fallback (nodes absent at the home tenant too).
+  const hierarchyTenant = complaintDetails?.service?.tenantId || tenantId;
   const { data: hier } = Digit.Hooks.useCustomMDMS(
-    tenantId,
+    hierarchyTenant,
     "RAINMAKER-PGR",
     [{ name: "ComplaintHierarchyDefinition" }, { name: "ComplaintHierarchy" }],
     {
@@ -180,18 +253,38 @@ const ComplaintDetailsPage = () => {
       select: (raw) => {
         const defs = (raw?.["RAINMAKER-PGR"]?.ComplaintHierarchyDefinition || []).filter((d) => d?.active !== false);
         const allRows = raw?.["RAINMAKER-PGR"]?.ComplaintHierarchy || [];
-        const def = defs.find((d) => allRows.some((n) => n?.hierarchyType === d?.hierarchyType)) || defs[0] || null;
-        const nodes = def ? allRows.filter((n) => n?.hierarchyType === def.hierarchyType) : [];
-        return { def, nodes };
+        return { defs, allRows };
       },
     },
-    { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
+    // NOTE: this 5th arg switches useCustomMDMS into its v2 branch, which
+    // IGNORES the positional tenantId — the tenant must ride inside this
+    // object (mdmsv2.tenantId) or the fetch silently uses the logged-in
+    // tenant (the citizen's home/state root) no matter what we pass above.
+    { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS", tenantId: hierarchyTenant }
   );
+
+  // Pick the hierarchy DEFINITION that owns this complaint's leaf node — a
+  // tenant can hold several hierarchies (e.g. the state root aggregates every
+  // authority's), and "first def with any rows" mis-picked for complaints of
+  // the other authority, collapsing the view to the legacy flat rows.
+  const { hierDef, hierNodes } = React.useMemo(() => {
+    const defs = hier?.defs || [];
+    const allRows = hier?.allRows || [];
+    const sc = complaintDetails?.service?.serviceCode;
+    const leaf = sc ? allRows.find((n) => n?.code === sc) : null;
+    const def =
+      (leaf && defs.find((d) => d?.hierarchyType === leaf?.hierarchyType)) ||
+      defs.find((d) => allRows.some((n) => n?.hierarchyType === d?.hierarchyType)) ||
+      defs[0] ||
+      null;
+    const nodes = def ? allRows.filter((n) => n?.hierarchyType === def.hierarchyType) : [];
+    return { hierDef: def, hierNodes: nodes };
+  }, [hier, complaintDetails?.service?.serviceCode]);
 
   const classification = buildComplaintPath({
     serviceCode: complaintDetails?.service?.serviceCode,
-    def: hier?.def,
-    nodes: hier?.nodes,
+    def: hierDef,
+    nodes: hierNodes,
     t,
   });
 
@@ -354,6 +447,22 @@ const ComplaintDetailsPage = () => {
                 </div>
               ) : null}
             </Card>
+
+            {(() => {
+              // Read-only "Additional Details" — just fetch service.extendedAttributes
+              // and show it; the backend already returns masked ("****") values.
+              const extAttrRows = buildExtendedAttributeRows(complaintDetails?.service?.extendedAttributes, t);
+              return extAttrRows.length > 0 ? (
+                <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <SectionTitle>{tr("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS", "Additional Details")}</SectionTitle>
+                  <div>
+                    {extAttrRows.map((r) => (
+                      <DetailRow key={r.fieldKey} label={r.label} value={r.value} />
+                    ))}
+                  </div>
+                </Card>
+              ) : null;
+            })()}
 
             {Number.isFinite(geoLocation?.latitude) && Number.isFinite(geoLocation?.longitude) ? (
               <Card style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>

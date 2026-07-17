@@ -473,6 +473,11 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
     }
   };
 
+  // Same rule as the complaint form (CCSD-1978): blank is fine, a typed value
+  // must be a well-formed address. The old check (has "@" AND has ".") passed
+  // shapes like "a@b." which then failed the SAVE round-trip with an
+  // unlocalized backend error (CCSD-1989).
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const setUserEmailAddress = (value) => {
     if (userInfo?.userName !== value) {
       setEmail(value);
@@ -805,8 +810,11 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   // `CORE_COMMON_GENDER_*` ("Male" / "Female" / "Transgender") in
   // rainmaker-common, so switch to that prefix and the dropdown
   // renders readable labels (CCRS#556 follow-up).
+  // CCSD-1971 (Moz feedback A6): only Female and Male are offered — filter
+  // TRANSGENDER out of the MDMS GenderType list on the FE so the change
+  // holds regardless of per-env master seeding.
   Menu &&
-    Menu.map((genderDetails) => {
+    Menu.filter((genderDetails) => genderDetails?.code !== "TRANSGENDER").map((genderDetails) => {
       menu.push({
         i18nKey: `CORE_COMMON_GENDER_${genderDetails.code}`,
         code: `${genderDetails.code}`,
@@ -906,7 +914,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
               lineHeight: 1.25,
             }}
           >
-            {tr("CORE_COMMON_PROFILE", "Edit Profile")}
+            {tr("EDIT_PROFILE", "Edit Profile")}
           </h1>
         </header>
         <div
@@ -1294,7 +1302,7 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
             lineHeight: 1.25,
           }}
         >
-          {tr("CORE_COMMON_PROFILE", "Edit Profile")}
+          {tr("EDIT_PROFILE", "Edit Profile")}
         </h1>
       </header>
 

@@ -1644,11 +1644,28 @@ export const UICustomizations = {
       // When the operator hasn't explicitly checked any state, default to
       // open / actionable states only — the inbox is otherwise dominated
       // by closed/resolved/rejected/cancelled rows that nobody can act on.
+      //
+      // Non-terminal (actionable) states across the supported PGR BusinessServices:
+      //   • standard PGR — PENDINGFORASSIGNMENT / PENDINGFORREASSIGNMENT / PENDINGATLME / PENDINGATSUPERVISOR
+      //   • mz.igsae CMS — PENDINGFORASSIGNMENT / PENDINGFORREASSIGNMENT / REFERRED / INVESTIGATION / INFOFROMCITIZEN
+      // We union them so the default works for either workflow without per-tenant code —
+      // a status absent from a given tenant's workflow simply matches nothing (harmless).
+      // (A fully dynamic default would read the BusinessService's non-terminal states, but this
+      //  preProcess is synchronous and has no BusinessService in scope.)
+      // NOTE: pgr search filters on applicationStatus (not state name). Two CMS states
+      // have state ≠ applicationStatus — PENDINGFORREASSIGNMENT→"REASSIGND" (spec's
+      // spelling) and INFOFROMCITIZEN→"AWAITINGINFORMATION" — so both spellings are
+      // included; a value unknown to a tenant's workflow simply matches nothing.
       const OPEN_STATES = [
         "PENDINGFORASSIGNMENT",
         "PENDINGFORREASSIGNMENT",
         "PENDINGATLME",
         "PENDINGATSUPERVISOR",
+        "REFERRED",
+        "INVESTIGATION",
+        "INFOFROMCITIZEN",
+        "REASSIGND",
+        "AWAITINGINFORMATION",
       ];
       const rawStatuses = filterForm.status || {};
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);

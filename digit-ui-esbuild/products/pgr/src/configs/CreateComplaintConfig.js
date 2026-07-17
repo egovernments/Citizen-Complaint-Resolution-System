@@ -81,6 +81,22 @@ export const CreateComplaintConfig = {
                 }
               },
             },
+            {
+              // Complainant address — citizen-flow parity ("Your details" card).
+              // Optional; travels as extendedAttributes.complainantAddress so it
+              // shows on the employee details page and never round-trips the
+              // user service.
+              inline: true,
+              label: "ES_CREATECOMPLAINT_ADDRESS",
+              isMandatory: false,
+              type: "text",
+              key: "ComplainantAddress",
+              disable: false,
+              populators: {
+                name: "ComplainantAddress",
+                validation: { maxLength: 300 },
+              },
+            },
 
           ],
         },
@@ -201,34 +217,6 @@ export const CreateComplaintConfig = {
                 name: "GeoLocationsPoint",
               },
             },
-            {
-              inline: true,
-              label: "CS_COMPLAINT_POSTALCODE__DETAILS",
-              type: "number",
-              disable: false,
-              populators: {
-                name: "postalCode",
-                // Postal code is optional in Nairobi — the boundary picker
-                // already pins the complaint to a Ward, and many citizens
-                // don't know the postal code (which is the post-office area
-                // code, not a residential identifier in KE). We still
-                // validate format if anything is entered.
-                required: false,
-                validation: {
-                  required: false,
-                  // Postal-code shape is per-country. Read the pattern from
-                  // globalConfigs CORE_POSTAL_CONFIGS (e.g. MZ = 4 digits)
-                  // instead of hardcoding 5, so this field rule matches the
-                  // config-driven check in createComplaintForm.js. Falls back
-                  // to the legacy 5-digit default when the host hasn't set it.
-                  pattern: new RegExp(
-                    window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS")?.postalCodePattern || "^[0-9]{5}$"
-                  ),
-                },
-                error: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR",
-              },
-            },
-
             // Boundary cascade — replaces the old City + Locality pair.
             // Renders N dropdowns derived from `boundaryHierarchyOrder`
             // (populated by `usePGRInitialization` on employee module
@@ -278,12 +266,15 @@ export const CreateComplaintConfig = {
                 maxLength: 1000,
                 validation: {
                   required: true,
-                  // CCSD-1980: reject numbers-only / whitespace-only descriptions
-                  // (e.g. "000000000000") — require at least 3 letters (any
-                  // language). Non-empty is implied.
-                  pattern: /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u,
+                  // CCSD-1956 + Moz QA: 20-1000 chars AND at least 3 letters, so
+                  // "00000000000000000000" (20 digits) and all-whitespace are
+                  // both rejected. The single `error` message below is worded to
+                  // cover both the length and the words requirement so a short or
+                  // numeric-only entry never reads as a bare "required" error.
+                  minLength: 20,
+                  pattern: /^(?=[\s\S]{20,1000}$)(?=(?:[\s\S]*?\p{L}){3})[\s\S]*$/u,
                 },
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
+                error: "CS_DESC_MIN_CHARS",
               },
             },
           ],

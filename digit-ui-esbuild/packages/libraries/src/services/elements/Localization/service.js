@@ -94,12 +94,79 @@ export const LocalizationService = {
     // fell back to en_IN, so picking Swahili in the UI did nothing.
     // Locale codes already carry their region (xx_YY), so the append is
     // never correct. Drop it.
+    // City overlay: modules are loaded at the STATE tenant, but data
+    // onboarding seeds label keys at the LOGGED-IN city tenant
+    // (COMPLAINT_HIERARCHY.*, COMMON_MASTERS_DEPARTMENT_*, boundary level
+    // headings, …) — those never loaded, so employee screens rendered raw
+    // codes. Fetch the same modules at the current tenant and let the city
+    // copy win per code (a city can override a state label, and the state
+    // set — often newer — fills everything the city copy lacks).
+    // Best-effort: a city fetch failure must never break the load.
+    const cityTenant = (() => {
+      try { return Digit.ULBService.getCurrentTenantId(); } catch (e) { return null; }
+    })();
+    const wantCityOverlay = !!cityTenant && cityTenant !== tenantId && String(cityTenant).includes(".");
+    const CITY_MARK = (module) => `Locale.${locale}.${module}.__city`;
+
     const [newModules, messages] = LocalizationStore.get(locale, modules);
+
+    // Back-fill: modules cached BEFORE a city tenant was known (the bootstrap
+    // set — rainmaker-common etc. — loads on the LOGIN page, where no city
+    // exists yet) never got the overlay, so city-seeded keys like the
+    // department names stayed unresolved. Re-fetch just the CITY copy for any
+    // cached module whose overlay marker doesn't match the current city.
+    const overlayPending = wantCityOverlay
+      ? modules.filter((m) => !newModules.includes(m) && LocalizationStore.getCaheData(CITY_MARK(m)) !== cityTenant)
+      : [];
+
     if (newModules.length > 0) {
-      const data = await Request({ url: Urls.localization, params: { module: newModules.join(","), locale, tenantId }, useCache: false });
-      messages.push(...data.messages);
-      setTimeout(() => LocalizationStore.store(locale, newModules, data.messages), 100);
+      const [data, cityData] = await Promise.all([
+        Request({ url: Urls.localization, params: { module: newModules.join(","), locale, tenantId }, useCache: false }),
+        wantCityOverlay
+          ? Request({ url: Urls.localization, params: { module: newModules.join(","), locale, tenantId: cityTenant }, useCache: false }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      let merged = data.messages;
+      if (cityData?.messages?.length) {
+        const cityCodes = new Set(cityData.messages.map((m) => m.code));
+        merged = [...merged.filter((m) => !cityCodes.has(m.code)), ...cityData.messages];
+      }
+      messages.push(...merged);
+      setTimeout(() => {
+        LocalizationStore.store(locale, newModules, merged);
+        if (wantCityOverlay) newModules.forEach((m) => LocalizationStore.setCacheData(CITY_MARK(m), cityTenant));
+      }, 100);
     }
+
+    if (overlayPending.length > 0) {
+      const cityData = await Request({
+        url: Urls.localization,
+        params: { module: overlayPending.join(","), locale, tenantId: cityTenant },
+        useCache: false,
+      }).catch(() => null);
+      if (cityData?.messages?.length) {
+        // Later entries win in updateResources' reduce — pushing the city copy
+        // after the cached state copy overrides per code.
+        messages.push(...cityData.messages);
+        // Persist the merge so future cache hits include the city keys.
+        setTimeout(() => {
+          overlayPending.forEach((m) => {
+            const cityForModule = cityData.messages.filter((msg) => msg.module === m);
+            if (cityForModule.length === 0) return;
+            const cached = LocalizationStore.getCaheData(LOCALE_MODULE(locale, m)) || [];
+            const cityCodes = new Set(cityForModule.map((msg) => msg.code));
+            LocalizationStore.setCacheData(LOCALE_MODULE(locale, m), [
+              ...cached.filter((msg) => !cityCodes.has(msg.code)),
+              ...cityForModule,
+            ]);
+          });
+        }, 100);
+      }
+      // Mark even on empty results so a city without extra keys isn't re-queried
+      // on every call.
+      setTimeout(() => overlayPending.forEach((m) => LocalizationStore.setCacheData(CITY_MARK(m), cityTenant)), 100);
+    }
+
     LocalizationStore.updateResources(locale, messages);
     return messages;
   },

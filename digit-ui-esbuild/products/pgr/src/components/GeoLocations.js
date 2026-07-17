@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { MapContainer, TileLayer, Marker, Tooltip, Polygon, GeoJSON, useMapEvents, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { CardLabel, Loader, Toast } from "@egovernments/digit-ui-react-components";
+import { CardLabel, Loader } from "@egovernments/digit-ui-react-components";
+import { Toast } from "@egovernments/digit-ui-components";
 import { useTranslation } from "react-i18next";
 import _ from "lodash";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
@@ -376,14 +377,32 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           setIsSearching(false);
         },
         (error) => {
-          console.error("Error getting location:", error);
-          setShowToast({ key: "error", label: t("CS_GEOLOCATION_ERROR") });
+          // Surface the specific GeolocationPositionError instead of one opaque
+          // toast — a permission denial, an insecure-origin block (code 1,
+          // "Only secure origins are allowed"), a missing GPS fix and a timeout
+          // are otherwise indistinguishable. code: 1=PERMISSION_DENIED,
+          // 2=POSITION_UNAVAILABLE, 3=TIMEOUT.
+          console.error("Error getting location:", error?.code, error?.message, error);
+          const KEY_BY_CODE = {
+            1: "CS_GEOLOCATION_PERMISSION_DENIED",
+            2: "CS_GEOLOCATION_UNAVAILABLE",
+            3: "CS_GEOLOCATION_TIMEOUT",
+          };
+          const specificKey = KEY_BY_CODE[error?.code];
+          const specific = specificKey ? t(specificKey) : null;
+          // Only ever show localized text — the raw browser message stays in the
+          // console (QA: no technical detail in the toast).
+          const label = specific && specific !== specificKey ? specific : t("CS_GEOLOCATION_ERROR");
+          setShowToast({ key: "error", label });
           setIsSearching(false);
         },
         {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
+          // Coarse (network) positioning with a recent cached fix accepted:
+          // high-accuracy + maximumAge 0 guarantees a timeout on GPS-less
+          // desktops. 15s cap for slow network lookups.
+          enableHighAccuracy: false,
+          timeout: 15000,
+          maximumAge: 30000,
         }
       );
     } else {
@@ -424,9 +443,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
 
   return (
     <div style={{ marginBottom: "24px" }}>
-      <CardLabel>{t("CS_ADDCOMPLAINT_SELECT_GEOLOCATION_TEXT")}</CardLabel>
+      {!config?.withoutLabel && <CardLabel>{t("CS_ADDCOMPLAINT_SELECT_GEOLOCATION_TEXT")}</CardLabel>}
 
-      <div style={{ position: "relative", height: "calc(100vh - 400px)", minHeight: "390px", width: "100%" }}>
+      <div style={{ position: "relative", height: config?.mapHeight || "calc(100vh - 400px)", minHeight: config?.mapHeight || "390px", width: "100%" }}>
 
         {/* Map Container - Responsible for the curved look */}
         <div style={{
@@ -745,10 +764,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
 
       {showToast && (
         <Toast
-          error={showToast.key === "error"}
+          type={showToast.key === "error" ? "error" : "success"}
           label={showToast.label}
           onClose={closeToast}
-          isDleteBtn={true}
         />
       )}
     </div>

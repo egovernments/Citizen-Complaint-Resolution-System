@@ -105,8 +105,73 @@
     "description": "WORKFLOW User that can create and search Workflow"
   },
   {
+    "code": "DGRO",
+    "name": "Department GRO",
+    "description": "Department-level Grievance Routing Officer; routes and manages complaints within a specific department"
+  },
+  {
     "code": "PGR_VIEWER",
     "name": "PGR Viewer role",
     "description": " "
+  },
+  {
+    "code": "CMS_RECEPTION_OFFICER",
+    "name": "CMS Reception Officer",
+    "description": "Intake officer who registers complaints on behalf of citizens via counter, green line, or letters"
+  },
+  {
+    "code": "CMS_CASE_MANAGER",
+    "name": "CMS Case Manager",
+    "description": "Manages complaint investigation and coordinates resolution with relevant departments"
+  },
+  {
+    "code": "CMS_SUPERVISOR",
+    "name": "CMS Supervisor",
+    "description": "Supervises complaint handling; can assign, escalate, reject, and override decisions"
+  },
+  {
+    "code": "CMS_DASHBOARD_VIEWER",
+    "name": "CMS Dashboard Viewer",
+    "description": "Read-only access to complaint search, count, and status reports"
+  },
+  {
+    "code": "CMS_ADMIN",
+    "name": "CMS Admin",
+    "description": "System administrator; manages master data, categories, and system configuration"
+  },
+  {
+    "code": "CMS_VIEWER",
+    "name": "CMS Viewer",
+    "description": "Oversight role for the CMS complaint workflow; can view and act on complaints per the workflow definition"
+  },
+  {
+    "code": "CENTRAL_USER",
+    "name": "Central User",
+    "description": "Scope role: user belongs to the central IGE/IGSAE unit and can see complaints across all tenants"
+  },
+  {
+    "code": "DEPARTMENT_USER",
+    "name": "Department User",
+    "description": "Scope role: user belongs to a specific department and sees only that department's complaints"
+  },
+  {
+    "code": "COMPLAINTS_VIEWER",
+    "name": "Complaints Viewer",
+    "description": "Permission role: grants read-only access to complaint search, count, and status"
+  },
+  {
+    "code": "COMPLAINTS_EDITOR",
+    "name": "Complaints Editor",
+    "description": "Permission role: grants access to update complaints and perform workflow transitions"
+  },
+  {
+    "code": "COMPLAINTS_CREATOR",
+    "name": "Complaints Creator",
+    "description": "Permission role: grants access to register new complaints"
+  },
+  {
+    "code": "CONFIDENTIAL_COMPLAINT_VIEWER",
+    "name": "Confidential Complaint Viewer",
+    "description": "Permission role: grants access to view unmasked confidential complaint data and extended attributes"
   }
 ]
