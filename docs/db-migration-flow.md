@@ -89,6 +89,14 @@ exists`) or the migration silently doesn't apply.
    on a from-empty build. See the `pgr-services-migration` gates for the pattern.
 7. **App has embedded Flyway off.** Each converted app sets `SPRING_FLYWAY_ENABLED:
    "false"` so the init container is the single source of migration truth.
+8. **No exceptions.** Every service that owns a schema has a migration init
+   container — there is no `embedded` opt-out in `flyway-history-map.yml` any more
+   (Phase 4). An app that migrates itself can silently *not* migrate and still
+   report healthy (novu-bridge's Flyway pointed at a hardcoded `localhost` and
+   applied nothing for months), and a service with no mechanism at all is worse
+   still: `egov-bndry-mgmnt`'s tables existed only because the dump shipped them,
+   so a from-empty build produced no schema and nothing noticed. If you are adding
+   a service, it gets a migrator.
 
 ---
 
@@ -214,7 +222,36 @@ migrator's `SCHEMA_TABLE` has no map entry.
 ./local-setup/db/normalize/test-integration.sh /path/to/dump.sql
 ```
 
-It loads the dump into a throwaway database, normalizes, runs all eleven pinned `-db`
-migrators, and asserts every pre-existing table is byte-identical afterwards. It also
-runs the same dump *without* the normalizer and asserts the data IS destroyed — if
-that half ever stops failing, the guard has been silently disabled.
+It loads the dump into a throwaway database, normalizes, runs all fifteen pinned `-db`
+migrators, and asserts every pre-existing **data** table is byte-identical afterwards
+(Flyway history tables are excluded — they legitimately gain a row when a migration
+newer than the dump applies). It also runs the same dump *without* the normalizer and
+asserts the data IS destroyed — if that half ever stops failing, the guard has been
+silently disabled.
+
+It also proves the guard on a **synthesised operator dump** (our dump with its history
+tables renamed back to the legacy names — our own dump is already canonical, so it is
+the *safe* input and proves nothing here): without the normalizer the data is destroyed
+(so the guard is needed); with it, the renames happen and every row survives (so the
+guard works). That second half is the only test that exercises the rename path against
+a real database.
+
+> Note the simulation renames each history table's **indexes** too. Flyway names them
+> after the table (`<table>_pk`, `<table>_s_idx`) and Postgres's `ALTER TABLE ... RENAME`
+> does not touch them. Renaming only the table yields a state that cannot occur
+> naturally, and Flyway then dies on `relation <x>_pk already exists` instead of
+> replaying — the run fails rather than destroying data, and the test reads as
+> "the guard isn't needed" for entirely the wrong reason.
+
+It then runs the **convergence** check: build the schema a second time from an EMPTY
+database with every migrator, and assert the two paths end at an identical schema —
+same columns, indexes, and matview definitions.
+
+> **Why this matters.** The dump is a shortcut for DATA and TIME. It is never a source
+> of schema truth. Anything the dump has that the migrations cannot reproduce is drift,
+> and it fails *silently*: from-empty builds lack it while the fast path keeps working
+> by accident. Neither the positive test (which only proves existing data survives) nor
+> the CI alignment check (which only compares history-table *names*) can see it.
+> This is not hypothetical — it caught `eg_user.countrycode`, which existed only in the
+> dump because the app ran `egov-user:mobilevalidation-*` while its migrator was pinned
+> to `master-d69ce29`, a lineage that predates the countrycode migration.

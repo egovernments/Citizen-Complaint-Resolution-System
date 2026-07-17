@@ -179,21 +179,18 @@ public class PGRService {
         Map<String, ComplaintTemplateTypeConfig> configCache = buildConfigCache(requestInfo, tenantIdForMdms, enrichedServiceWrappers);
         applyDecryptOrMask(enrichedServiceWrappers, requestInfo, configCache);
 
-        Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
-        for(ServiceWrapper svc : enrichedServiceWrappers){
-            if(sortedWrappers.containsKey(svc.getService().getAuditDetails().getCreatedTime())){
-                sortedWrappers.get(svc.getService().getAuditDetails().getCreatedTime()).add(svc);
-            }else{
-                List<ServiceWrapper> serviceWrapperList = new ArrayList<>();
-                serviceWrapperList.add(svc);
-                sortedWrappers.put(svc.getService().getAuditDetails().getCreatedTime(), serviceWrapperList);
-            }
-        }
-        List<ServiceWrapper> sortedServiceWrappers = new ArrayList<>();
-        for(Long createdTimeDesc : sortedWrappers.keySet()){
-            sortedServiceWrappers.addAll(sortedWrappers.get(createdTimeDesc));
-        }
-        return sortedServiceWrappers;
+        // NOTE: do not re-sort enrichedServiceWrappers here. It used to be
+        // regrouped into a createdTime-descending TreeMap unconditionally,
+        // which silently discarded whatever ORDER BY
+        // PGRQueryBuilder.addOrderByClause built from criteria.sortBy/sortOrder
+        // (locality/applicationStatus/serviceRequestId/sla) — every inbox
+        // column-header sort landed on this endpoint and always came back in
+        // createdTime-descending order regardless of what was requested
+        // (issue #922). The query builder already defaults to
+        // "ORDER BY ser_createdtime DESC" when no sortBy is given, so trusting
+        // the DB's order here preserves that default while finally letting an
+        // explicit sortBy take effect.
+        return enrichedServiceWrappers;
     }
 
 
@@ -261,6 +258,29 @@ public class PGRService {
      * @return
      */
     public Integer count(RequestInfo requestInfo, RequestSearchCriteria criteria){
+
+        // Mirrors search()'s guards. The tenant and ownership predicates in PGRQueryBuilder are
+        // conditional, so an unfiltered criteria does not narrow the count — it removes the filter.
+        // Validate before scoping, as search() does: scoping clears mobileNumber for a pure citizen,
+        // which would otherwise hide that param from the allowed-params check.
+        validator.validateSearch(requestInfo, criteria);
+
+        // CCRS #1071: /_count shares RequestSearchCriteria and PGRQueryBuilder with /_search, so it
+        // needs the same record-level ownership scoping — otherwise a citizen counts every complaint
+        // in the tenant, and can use serviceRequestId/ids as an existence oracle for other citizens'
+        // complaints. Only the scoping half of the enrichment applies here: the count query wraps the
+        // search query including its LIMIT, so applying the pagination defaults would cap the count.
+        // Applied before the early returns below so ownership is pinned on every path that queries.
+        enrichmentService.scopeSearchCriteria(requestInfo, criteria);
+
+        if(criteria.isEmpty())
+            return 0;
+
+        // A mobileNumber that resolved to no user must count 0, not fall through to an unscoped
+        // count: an empty userIds drops the ownership clause entirely.
+        if(criteria.getMobileNumber()!=null && CollectionUtils.isEmpty(criteria.getUserIds()))
+            return 0;
+
         // Mirror search()'s assignee handling: resolve the assignee to
         // serviceRequestIds via workflow before counting. Without this the
         // assignee param was silently ignored on _count, so count and search
@@ -274,6 +294,7 @@ public class PGRService {
             }
             criteria.setServiceRequestIds(serviceRequestIds);
         }
+
         criteria.setIsPlainSearch(false);
         Integer count = repository.getCount(criteria);
         return count;

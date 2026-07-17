@@ -178,6 +178,11 @@ const ComplaintHierarchyComponent = ({ onSelect }) => {
               disabled={disabled}
               onValueChange={(v) => handleChange(i, v)}
               options={opts}
+              // Complaint type/sub-type must always be type-to-filter (CCRS#941),
+              // even for short lists — don't leave it to V2Select's length
+              // threshold, which hid the search box on sub-types with <8 options.
+              searchable
+              searchPlaceholder={t("CS_COMMON_SEARCH") === "CS_COMMON_SEARCH" ? "Search" : t("CS_COMMON_SEARCH")}
               placeholder={disabled ? "Select the level above first" : `Select ${labelFor(lvl)}`}
             />
           </V2Field>

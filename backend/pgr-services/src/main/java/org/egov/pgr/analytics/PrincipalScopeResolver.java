@@ -1,5 +1,7 @@
 package org.egov.pgr.analytics;
 
+import static org.egov.pgr.util.PGRConstants.USERTYPE_CITIZEN;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +54,17 @@ public class PrincipalScopeResolver {
     /** Sentinel department for a denied principal — matches no real row (fail-closed). */
     private static final String DENY_ALL_DEPARTMENT = "__scope_denied__";
 
+    /**
+     * Employee base-role markers. In DIGIT, HRMS stamps {@code EMPLOYEE} (and {@code COMMON_EMPLOYEE})
+     * on every employee principal in addition to their functional roles (GRO, PGR_LME, admin, …); a
+     * citizen never carries these. Holding any of them disqualifies a principal from being a pure
+     * citizen, regardless of what other (citizen-side) roles they also hold.
+     */
+    private static final Set<String> EMPLOYEE_ROLE_CODES = Set.of("EMPLOYEE", "COMMON_EMPLOYEE");
+
+    /** The citizen role code every self-registered citizen carries. */
+    private static final String CITIZEN_ROLE_CODE = "CITIZEN";
+
     private final PGRConfiguration config;
     private final RestTemplate restTemplate;
     private final ObjectMapper mapper;
@@ -74,20 +87,53 @@ public class PrincipalScopeResolver {
         if (u == null)
             return new AnalyticsScope(tenantId, stateLevel, null, null, null);
 
-        boolean isCitizen = "CITIZEN".equalsIgnoreCase(u.getType());
-        boolean hasEmployeeRole = false;
-        List<Role> roles = u.getRoles();
-        if (roles != null) for (Role r : roles) {
-            String c = r.getCode() == null ? "" : r.getCode().toUpperCase();
-            if (!c.equals("CITIZEN")) hasEmployeeRole = true;
-        }
-
         // a pure citizen is locked to their own records; no department/boundary axis applies.
-        if (isCitizen && !hasEmployeeRole)
+        if (isPureCitizen(requestInfo))
             return new AnalyticsScope(tenantId, stateLevel, u.getUuid(), null, null);
 
         // employee principal → derive department/jurisdiction scope from HRMS.
         return resolveEmployeeScope(requestInfo, u, tenantId, stateLevel);
+    }
+
+    /**
+     * A "pure citizen" is a principal that HOLDS the {@code CITIZEN} role and holds NO employee
+     * role (see {@link #EMPLOYEE_ROLE_CODES}). Such a principal is locked to their OWN records
+     * everywhere — analytics self-scope here, and complaint-search ownership scoping in
+     * {@code EnrichmentService.enrichSearchRequest}. This is the single source of truth for that
+     * security-relevant classification, so the two call sites cannot drift.
+     *
+     * <p>Classification is role-based, NOT "type CITIZEN with only the CITIZEN role". A citizen may
+     * legitimately carry additional non-employee (citizen-side) roles; requiring CITIZEN to be the
+     * SOLE role would misclassify those principals as employees and push them down the HRMS employee
+     * path where they fail-close. Conversely, an employee who also holds the CITIZEN role is still
+     * an employee (they carry {@code EMPLOYEE}) and is not self-scoped.
+     *
+     * <p>Roles decide first, but a principal carrying NO employee role and no recognisable CITIZEN
+     * role falls back to the declared user type so that an abnormal role state (role-sync gap, a
+     * legacy/OTP session with empty roles, a citizen role coded differently) cannot silently demote
+     * a citizen out of self-scoping. That fallback is what keeps this fail-CLOSED: without it such a
+     * principal matches neither branch in {@code enrichSearchRequest}, userIds stays empty, and the
+     * query builder drops the ownership clause entirely — reopening #1071.
+     */
+    public boolean isPureCitizen(RequestInfo requestInfo) {
+        User u = requestInfo == null ? null : requestInfo.getUserInfo();
+        if (u == null)
+            return false;
+
+        boolean hasCitizenRole = false;
+        boolean hasEmployeeRole = false;
+        if (u.getRoles() != null) {
+            for (Role r : u.getRoles()) {
+                if (r == null || r.getCode() == null) continue;
+                String c = r.getCode().trim().toUpperCase();
+                if (c.equals(CITIZEN_ROLE_CODE)) hasCitizenRole = true;
+                else if (EMPLOYEE_ROLE_CODES.contains(c)) hasEmployeeRole = true;
+            }
+        }
+
+        if (hasEmployeeRole) return false;
+        if (hasCitizenRole) return true;
+        return USERTYPE_CITIZEN.equalsIgnoreCase(u.getType());
     }
 
     /**

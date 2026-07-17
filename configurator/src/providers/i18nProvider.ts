@@ -62,6 +62,7 @@ const customEnglishMessages: TranslationMessages = {
       people: 'People',
       employees: 'Employees',
       users: 'Users',
+      org_chart: 'Org Chart',
       system: 'System',
       access_roles: 'Access Roles',
       workflows: 'Workflows',

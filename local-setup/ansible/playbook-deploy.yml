@@ -1037,10 +1037,13 @@
         - digit_ui_mode == "static"
         - (digit_ui_bundle_image | default('')) | length > 0
 
-    - name: "digit-ui mode=static — install Node 20 if missing (esbuild.build.js needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Node 20 + npm for the on-host esbuild build. esbuild.build.js needs
+    # Node 20 + npm; see tasks/ensure-node20.yml for why apt's nodejs isn't
+    # enough on Ubuntu (Node 18, no npm) and how the version gate works.
+    - name: "digit-ui mode=static — ensure Node 20 + npm (NodeSource) for on-host build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "digit-ui static"
       when:
         - digit_ui_mode == "static"
         - ansible_system != "Darwin"
@@ -1054,15 +1057,27 @@
         # node_modules is stale and esbuild.build.js fails to resolve.
         # Re-run if package.json or package-lock.json is newer than the
         # node_modules root, or if node_modules doesn't exist at all.
+        #
+        # Fail LOUD: this block previously had no error handling, so a
+        # missing npm (Ubuntu apt nodejs ships no npm) or a failed install
+        # still echoed "installed" and reported success — the real error
+        # only surfaced one task later as a confusing "Cannot find module
+        # esbuild". Detect a broken environment here, at the right task.
+        # -e so a failed `cd` aborts instead of running the npm checks (and
+        # echoing a false "skipped"/"installed") in the wrong directory.
+        set -euo pipefail
         cd /opt/digit-ui-esbuild
+        command -v npm >/dev/null || { echo "ERROR: npm not on PATH (apt nodejs ships no npm on Ubuntu; NodeSource task above should have fixed this)"; exit 1; }
         if [ ! -d node_modules ] \
            || [ package.json -nt node_modules ] \
            || [ package-lock.json -nt node_modules ]; then
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps || { echo "ERROR: npm install failed"; exit 1; }
           echo installed
         else
           echo skipped
         fi
+      args:
+        executable: /bin/bash
       register: npm_install
       changed_when: npm_install.stdout == "installed"
       when:
@@ -1173,10 +1188,11 @@
         force: true
       when: enable_digit_ui_v2 | default(false)
 
-    - name: "digit-ui-v2 — install Node 20 if missing (Vite build needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Node 20 + npm for the Vite build (see tasks/ensure-node20.yml).
+    - name: "digit-ui-v2 — ensure Node 20 + npm (NodeSource) for Vite build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "digit-ui-v2"
       when:
         - enable_digit_ui_v2 | default(false)
         - ansible_system != "Darwin"
@@ -1728,10 +1744,11 @@
     # nginx_preserve_vhost (e.g. Bomet) the template is NOT rendered, so wire
     # the blocks from tests/integration-tests/deploy/nginx-integration-tests.conf
     # by hand there.
-    - name: "integration-tests — install Node 20 if missing (Vite build needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Node 20 + npm for the Vite build (see tasks/ensure-node20.yml).
+    - name: "integration-tests — ensure Node 20 + npm (NodeSource) for Vite build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "integration-tests"
       when:
         - enable_integration_tests | default(false)
         - ansible_system != "Darwin"
@@ -3093,14 +3110,13 @@
         msg: "Claude Code install disabled. Set install_claude_code: true in host_vars to enable."
       when: not (install_claude_code | default(false))
 
-    - name: Install Node.js 20 LTS (needed for CC and tests)
-      shell: |
-        if ! node --version 2>/dev/null | grep -qE "^v2[02]"; then
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-          apt-get install -y nodejs
-        fi
-      register: nodejs_install
-      changed_when: "'nodejs is already' not in nodejs_install.stdout"
+    # Node 20 + npm for Claude Code + tests (see tasks/ensure-node20.yml).
+    # (Was an inline `^v2[02]` check that would needlessly downgrade a
+    # Node 24 box; the shared gate accepts any Node >=20.)
+    - name: "Claude Code — ensure Node.js 20 LTS (needed for CC and tests)"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "Claude Code"
       when:
         - install_claude_code | default(false)
         - ansible_system != "Darwin"

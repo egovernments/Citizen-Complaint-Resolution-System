@@ -144,11 +144,11 @@ emits `scope_incomplete`, which currently falls through to the raw-code default 
 | role R sees only its own department's numbers | give the user an HRMS assignment with that department; keep R out of `TENANT_WIDE_ROLES` | HRMS + (code constant, deploy) |
 | role R sees the whole tenant | grant one of the `TENANT_WIDE_ROLES` (e.g. `PGR_SUPERVISOR`) | HRMS/user roles |
 | anonymous/public page shows KPI X | add `"PUBLIC"` to X's `visibleTo` | `dss.KpiDefinition` (MDMS) |
-| role R can *open the dashboard view at all* (home card, deep-link route) | add R to `DASHBOARD_ROLES` (FE gate) **and** a `Dashboard` `tenant.citymodule` row (home card) — **a different system entirely** | `70-esbuild-embedding.md` §4, `30-view-access.md` |
+| role R can *open the dashboard view at all* (home card, deep-link route) | add R to `dss.DashboardConfig` `allowedRoles` (MDMS; the FE falls back to its built-in `DASHBOARD_ROLES` when the record is absent) **and** a `Dashboard` `tenant.citymodule` row (home card) — **a different system entirely** | `70-esbuild-embedding.md` §4, `30-view-access.md` |
 | role R gets a *sidebar* entry for the dashboard | ACCESSCONTROL actions/roleactions | `30-view-access.md` §2 (note the live bomet sidebar outage, `80-live-bomet-state.md` §5) |
 
 The last rows are the classic confusion: `visibleTo`/packs govern *what renders inside* the
-dashboard; whether the user can *navigate to* it is a different stack — the FE `DASHBOARD_ROLES`
-gate + home card + always-on deep-link route (`70-esbuild-embedding.md`), plus the optional
+dashboard; whether the user can *navigate to* it is a different stack — the FE gate resolved from
+`dss.DashboardConfig` + home card + always-on deep-link route (`70-esbuild-embedding.md`), plus the optional
 digit-ui sidebar access-control surface (`30-view-access.md`). Three independent gates; align all
 that apply.
