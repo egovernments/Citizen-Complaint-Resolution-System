@@ -178,9 +178,29 @@ class _StrictLoader(yaml.SafeLoader):
     """
 
 
+_MERGE_TAG = "tag:yaml.org,2002:merge"
+
+
 def _no_duplicate_keys(loader, node, deep=False):
-    seen, out = {}, {}
-    for key_node, value_node in node.value:
+    """Reject keys written twice in the same mapping; allow everything else.
+
+    Only *explicit* keys are checked, and the check runs before any merge key is
+    resolved. Both details matter:
+
+      * `<<: *anchor` is the standard way to DRY up compose files, and it is valid
+        input -- `docker compose config` accepts it. Rejecting it would be a false
+        RED, which is the same sin as a false green wearing the other hat.
+      * a merge deliberately supplies keys that an explicit one may then override
+        (that is what merge means). Those collide by design, so checking after the
+        merge is flattened would fail the very idiom this is meant to permit.
+
+    So: scan the raw pairs, skip the merge keys, then hand off to SafeConstructor,
+    which flattens the merge itself and lets explicit keys win as YAML specifies.
+    """
+    seen = {}
+    for key_node, _ in node.value:
+        if key_node.tag == _MERGE_TAG:
+            continue
         key = loader.construct_object(key_node, deep=deep)
         if key in seen:
             raise yaml.constructor.ConstructorError(
@@ -192,8 +212,7 @@ def _no_duplicate_keys(loader, node, deep=False):
                 key_node.start_mark,
             )
         seen[key] = key_node.start_mark.line
-        out[key] = loader.construct_object(value_node, deep=deep)
-    return out
+    return loader.construct_mapping(node, deep=deep)
 
 
 _StrictLoader.add_constructor(
@@ -592,6 +611,34 @@ def self_test() -> int:
                 failures.append("port published in one overlay file was lost when merging files")
         except GuardError as e:
             failures.append(f"legitimate repeated alias wrongly rejected: {e}")
+
+    # 8g. the strict loader must not become a FALSE RED. `<<: *anchor` is the standard
+    #     way to DRY up compose files and `docker compose config` accepts it, so the
+    #     guard has to as well -- including the override case, where an explicit key
+    #     deliberately beats the merged one and is NOT a duplicate.
+    def _expect_accepted(what, text, check=None):
+        with tempfile.TemporaryDirectory() as td:
+            p = pathlib.Path(td) / "docker-compose.probe.yml"
+            p.write_text(text)
+            try:
+                doc = _load_strict(p.read_text(), "probe")
+            except GuardError as e:
+                failures.append(f"{what}: {e}")
+                return
+            if check and not check(doc):
+                failures.append(f"{what}: parsed, but merge semantics are wrong: {doc}")
+
+    _expect_accepted(
+        "a plain '<<: *anchor' merge was rejected as untrustworthy",
+        "x-common: &common\n  restart: always\nservices:\n  svc-a:\n    <<: *common\n    image: curl\n",
+        lambda d: d["services"]["svc-a"]["restart"] == "always",
+    )
+    _expect_accepted(
+        "an explicit key overriding a merged one was miscounted as a duplicate",
+        "x-common: &common\n  restart: always\nservices:\n  svc-a:\n    <<: *common\n"
+        "    restart: 'no'\n    image: curl\n",
+        lambda d: d["services"]["svc-a"]["restart"] == "no",  # explicit must win
+    )
 
     # 9. the perimeter is derived from disk, not memory: every compose file present
     #    must be scanned, so a newly added one cannot be invisible to this guard.
