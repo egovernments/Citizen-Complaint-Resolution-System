@@ -124,7 +124,7 @@ test("chip smoke: deep leaf shows parent › leaf with elision marker", () => {
   // "… › Water quality › Muddy water" — nearest ancestor + leaf, middle elided.
   assert.match(html, /Water quality/);
   assert.match(html, /Muddy water/);
-  assert.match(html, /dashboard-popover-chip-seg--muted/);
+  assert.match(html, /dashboard-popover-trigger-seg--muted/);
   // full trail is recoverable from the title
   assert.match(html, /title="Infrastructure › Water supply › Water quality › Muddy water"/);
 });
@@ -212,7 +212,7 @@ test("group-by smoke: settings gear icon button, no native select, menu semantic
   assert.doesNotMatch(html, /<select/);
   // icon-only anchor in the remove-button idiom — NOT a text chip
   assert.match(html, /dashboard-popover-iconbtn/);
-  assert.doesNotMatch(html, /dashboard-popover-chip/);
+  assert.doesNotMatch(html, /dashboard-popover-trigger/);
   assert.match(html, /<svg/);
   assert.match(html, /aria-haspopup="menu"/);
   assert.match(html, /aria-expanded="false"/);

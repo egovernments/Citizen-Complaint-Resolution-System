@@ -1016,6 +1016,9 @@
 }
 
 /* ── Shared popover/menu primitive (chip anchor + portaled panel) ───── */
+/* Named "trigger" NOT "chip": the host theme (vendor/overrides.css, outside
+   this build) has a [class*="chip"] catch-all that pills ANY class containing
+   that substring — never rename these classes back to *chip*. */
 
 /* Anchor chip: a strict visual PEER of .dashboard-filter-inline-select —
      same h-7 / min-w-[7.5rem] / rounded-sm / border-border / bg-surface /
@@ -1023,7 +1026,7 @@
      select's focus treatment (border-foreground + 15% ring); the only
      divergence is aria-expanded reusing the focus border while open. */
 
-.dashboard-popover-chip{
+.dashboard-popover-trigger{
   margin: 0px;
   box-sizing: border-box;
   display: inline-flex;
@@ -1056,21 +1059,21 @@
        appearance: none;
 }
 
-.dashboard-popover-chip:focus{
+.dashboard-popover-trigger:focus{
   border-color: var(--foreground);
   outline: 2px solid transparent;
   outline-offset: 2px;
 }
 
-.dashboard-popover-chip:focus-visible {
+.dashboard-popover-trigger:focus-visible {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
 }
 
-.dashboard-popover-chip[aria-expanded="true"]{
+.dashboard-popover-trigger[aria-expanded="true"]{
   border-color: var(--foreground);
 }
 
-.dashboard-popover-chip:disabled {
+.dashboard-popover-trigger:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -1116,7 +1119,7 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
 }
 
-.dashboard-popover-chip-value{
+.dashboard-popover-trigger-value{
   display: inline-flex;
   min-width: 0px;
   align-items: center;
@@ -1128,7 +1131,7 @@
      select-wrap's ::after caret at right: 0.5rem) when the label is
      shorter than the shared 7.5rem min width. */
 
-.dashboard-popover-chip-caret{
+.dashboard-popover-trigger-caret{
   margin-left: auto;
   flex-shrink: 0;
   color: var(--muted-foreground);
@@ -1137,14 +1140,14 @@
 /* Chip content for hierarchical selections: "… › Parent › Node" — each
      segment ellipsizes on its own so deep leaves stay chip-sized. */
 
-.dashboard-popover-chip-trail{
+.dashboard-popover-trigger-trail{
   display: inline-flex;
   min-width: 0px;
   align-items: center;
   gap: 0.25rem;
 }
 
-.dashboard-popover-chip-seg{
+.dashboard-popover-trigger-seg{
   min-width: 0px;
   max-width: 9rem;
   overflow: hidden;
@@ -1152,12 +1155,12 @@
   white-space: nowrap;
 }
 
-.dashboard-popover-chip-seg--muted{
+.dashboard-popover-trigger-seg--muted{
   font-weight: 400;
   color: var(--muted-foreground);
 }
 
-.dashboard-popover-chip-sep{
+.dashboard-popover-trigger-sep{
   flex-shrink: 0;
   -webkit-user-select: none;
      -moz-user-select: none;
@@ -1393,7 +1396,7 @@
      like .dashboard-filter-inline-select in the 639px block below. */
 
 @media (max-width: 639px) {
-  .dashboard-popover-chip {
+  .dashboard-popover-trigger {
     width: 100%;
     min-width: 0;
   }
@@ -2654,7 +2657,7 @@
   pointer-events: auto;
 }
 
-.dashboard-map-filter-chip {
+.dashboard-map-filter-badge {
   z-index: 1000;
 }
 
@@ -2742,7 +2745,7 @@
   padding-right: 0.625rem;
 }
 
-.dashboard-map-filter-chip {
+.dashboard-map-filter-badge {
   -webkit-backdrop-filter: blur(4px);
           backdrop-filter: blur(4px);
 }

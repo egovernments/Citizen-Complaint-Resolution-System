@@ -9,7 +9,7 @@ import { createPortal } from "react-dom";
  *
  * Anatomy:
  *   - anchor CHIP: a real <button> styled like the inline filter controls
- *     (.dashboard-popover-chip — same h-7/rounded-sm/border-border/bg-surface
+ *     (.dashboard-popover-trigger — same h-7/rounded-sm/border-border/bg-surface
  *     language as .dashboard-filter-inline-select), with aria-haspopup/
  *     aria-expanded and a caret; OR, when `icon` is passed, an ICON-ONLY
  *     anchor (.dashboard-popover-iconbtn — the muted 1.5rem-square idiom of
@@ -53,7 +53,7 @@ const ITEM_SELECTOR = "[data-menu-item]:not(:disabled)";
 
 const CaretIcon = () => (
   <svg
-    className="dashboard-popover-chip-caret"
+    className="dashboard-popover-trigger-caret"
     width="12"
     height="12"
     viewBox="0 0 24 24"
@@ -298,7 +298,7 @@ const PopoverMenu = ({
         aria-expanded={open}
         aria-label={ariaLabel}
         title={chipTitle}
-        className={`${icon ? "dashboard-popover-iconbtn" : "dashboard-popover-chip"}${
+        className={`${icon ? "dashboard-popover-iconbtn" : "dashboard-popover-trigger"}${
           chipClassName ? ` ${chipClassName}` : ""
         }`}
         onClick={() => (open ? close() : setOpen(true))}
@@ -306,7 +306,7 @@ const PopoverMenu = ({
       >
         {icon ?? (
           <>
-            <span className="dashboard-popover-chip-value">{chip}</span>
+            <span className="dashboard-popover-trigger-value">{chip}</span>
             <CaretIcon />
           </>
         )}

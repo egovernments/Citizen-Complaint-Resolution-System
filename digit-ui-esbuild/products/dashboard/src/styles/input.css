@@ -623,32 +623,35 @@
   }
 
   /* ── Shared popover/menu primitive (chip anchor + portaled panel) ───── */
+  /* Named "trigger" NOT "chip": the host theme (vendor/overrides.css, outside
+     this build) has a [class*="chip"] catch-all that pills ANY class containing
+     that substring — never rename these classes back to *chip*. */
 
   /* Anchor chip: a strict visual PEER of .dashboard-filter-inline-select —
      same h-7 / min-w-[7.5rem] / rounded-sm / border-border / bg-surface /
      12px metrics, no resting hover treatment (the select has none), the
      select's focus treatment (border-foreground + 15% ring); the only
      divergence is aria-expanded reusing the focus border while open. */
-  .dashboard-popover-chip {
+  .dashboard-popover-trigger {
     @apply tw-box-border tw-m-0 tw-inline-flex tw-h-7 tw-min-w-[7.5rem] tw-max-w-full tw-shrink tw-cursor-pointer tw-select-none tw-items-center tw-gap-1.5 tw-self-center tw-whitespace-nowrap tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-px-2 tw-text-[12px] tw-leading-none tw-text-foreground;
     font-family: inherit;
     -webkit-appearance: none;
     appearance: none;
   }
 
-  .dashboard-popover-chip:focus {
+  .dashboard-popover-trigger:focus {
     @apply tw-border-foreground tw-outline-none;
   }
 
-  .dashboard-popover-chip:focus-visible {
+  .dashboard-popover-trigger:focus-visible {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
   }
 
-  .dashboard-popover-chip[aria-expanded="true"] {
+  .dashboard-popover-trigger[aria-expanded="true"] {
     @apply tw-border-foreground;
   }
 
-  .dashboard-popover-chip:disabled {
+  .dashboard-popover-trigger:disabled {
     opacity: 0.5;
     cursor: default;
   }
@@ -677,32 +680,32 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
   }
 
-  .dashboard-popover-chip-value {
+  .dashboard-popover-trigger-value {
     @apply tw-inline-flex tw-min-w-0 tw-items-center tw-overflow-hidden tw-font-normal;
   }
 
   /* ml-auto pins the caret to the chip's right edge (px-2, like the
      select-wrap's ::after caret at right: 0.5rem) when the label is
      shorter than the shared 7.5rem min width. */
-  .dashboard-popover-chip-caret {
+  .dashboard-popover-trigger-caret {
     @apply tw-ml-auto tw-shrink-0 tw-text-muted-foreground;
   }
 
   /* Chip content for hierarchical selections: "… › Parent › Node" — each
      segment ellipsizes on its own so deep leaves stay chip-sized. */
-  .dashboard-popover-chip-trail {
+  .dashboard-popover-trigger-trail {
     @apply tw-inline-flex tw-min-w-0 tw-items-center tw-gap-1;
   }
 
-  .dashboard-popover-chip-seg {
+  .dashboard-popover-trigger-seg {
     @apply tw-min-w-0 tw-max-w-[9rem] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap;
   }
 
-  .dashboard-popover-chip-seg--muted {
+  .dashboard-popover-trigger-seg--muted {
     @apply tw-font-normal tw-text-muted-foreground;
   }
 
-  .dashboard-popover-chip-sep {
+  .dashboard-popover-trigger-sep {
     @apply tw-shrink-0 tw-select-none tw-text-muted-foreground;
   }
 
@@ -830,7 +833,7 @@
   /* Stacked (mobile) filter bar: the chip stretches full-width, exactly
      like .dashboard-filter-inline-select in the 639px block above. */
   @media (max-width: 639px) {
-    .dashboard-popover-chip {
+    .dashboard-popover-trigger {
       width: 100%;
       min-width: 0;
     }
@@ -1892,7 +1895,7 @@
     pointer-events: auto;
   }
 
-  .dashboard-map-filter-chip {
+  .dashboard-map-filter-badge {
     z-index: 1000;
   }
 
@@ -1951,7 +1954,7 @@
     @apply tw-px-2.5;
   }
 
-  .dashboard-map-filter-chip {
+  .dashboard-map-filter-badge {
     backdrop-filter: blur(4px);
   }
 

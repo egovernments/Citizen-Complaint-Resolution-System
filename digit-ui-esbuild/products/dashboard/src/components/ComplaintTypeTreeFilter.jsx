@@ -211,13 +211,13 @@ const ComplaintTypeTreeFilter = ({ tree, filters, onFilterChange, t: tProp }) =>
   };
 
   const chip = (
-    <span className="dashboard-popover-chip-trail">
+    <span className="dashboard-popover-trigger-trail">
       {elided && (
         <>
-          <span className="dashboard-popover-chip-seg dashboard-popover-chip-seg--muted" aria-hidden>
+          <span className="dashboard-popover-trigger-seg dashboard-popover-trigger-seg--muted" aria-hidden>
             …
           </span>
-          <span className="dashboard-popover-chip-sep" aria-hidden>
+          <span className="dashboard-popover-trigger-sep" aria-hidden>
             ›
           </span>
         </>
@@ -225,13 +225,13 @@ const ComplaintTypeTreeFilter = ({ tree, filters, onFilterChange, t: tProp }) =>
       {segments.map((segment, index) => (
         <React.Fragment key={`${index}-${segment}`}>
           {index > 0 && (
-            <span className="dashboard-popover-chip-sep" aria-hidden>
+            <span className="dashboard-popover-trigger-sep" aria-hidden>
               ›
             </span>
           )}
           <span
-            className={`dashboard-popover-chip-seg${
-              index < segments.length - 1 ? " dashboard-popover-chip-seg--muted" : ""
+            className={`dashboard-popover-trigger-seg${
+              index < segments.length - 1 ? " dashboard-popover-trigger-seg--muted" : ""
             }`}
           >
             {segment}
