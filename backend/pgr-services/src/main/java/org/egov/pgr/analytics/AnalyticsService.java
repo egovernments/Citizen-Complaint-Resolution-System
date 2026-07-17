@@ -268,15 +268,24 @@ public class AnalyticsService {
      * (the dss.KpiDefinition schema requires the key, so complaintPath is seeded with an empty
      * list) — and for undeclared params (composer vocabulary applies).
      * Runs on BOTH the normal kpiId path and the compose path (each calls this on its own def).
+     * Malformed shapes are rejected outright: a non-object {@code params} node, or an object/array
+     * value for a declared allow-listed param, is {@code invalid_param} (never a silent bypass).
      */
     void validateAllowedParams(KpiDefinition def, JsonNode reqParams) {
-        if (reqParams == null || def.getParams() == null) return;
+        if (reqParams == null || reqParams.isNull()) return;
+        if (!reqParams.isObject())
+            throw new IllegalArgumentException("invalid_param: params must be an object");
+        if (def.getParams() == null) return;
         for (KpiDefinition.KpiParam p : def.getParams()) {
             if (p == null || p.getName() == null) continue;
             List<String> allowed = p.getAllowed();
             if (allowed == null || allowed.isEmpty()) continue;
             if (!reqParams.hasNonNull(p.getName())) continue;
-            String requested = reqParams.get(p.getName()).asText();
+            JsonNode value = reqParams.get(p.getName());
+            if (!value.isValueNode())
+                throw new IllegalArgumentException(
+                        "invalid_param: " + p.getName() + " must be a scalar value");
+            String requested = value.asText();
             if (requested.isEmpty()) continue;
             if (!allowed.contains(requested))
                 throw new IllegalArgumentException(

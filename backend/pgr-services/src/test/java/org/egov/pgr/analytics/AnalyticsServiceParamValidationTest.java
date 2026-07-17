@@ -82,7 +82,37 @@ public class AnalyticsServiceParamValidationTest {
         service.validateAllowedParams(def(SEEDED_PARAMS), json("{\"hierLevel\":\"\"}"));
         service.validateAllowedParams(def(SEEDED_PARAMS), json("{}"));
         service.validateAllowedParams(def(SEEDED_PARAMS), null);
+        service.validateAllowedParams(def(SEEDED_PARAMS), json("null"));
         service.validateAllowedParams(def("null"), json("{\"hierLevel\":\"7\"}"));
+    }
+
+    @Test
+    public void nonObjectParamsNodeIsRejected() {
+        // Malformed shapes must be invalid_param, not a silent allow-list bypass.
+        for (String malformed : new String[]{"[\"last_7d\"]", "\"last_7d\"", "42", "true"}) {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                    service.validateAllowedParams(def(SEEDED_PARAMS), json(malformed)));
+            assertTrue(ex.getMessage().startsWith("invalid_param"), ex.getMessage());
+        }
+    }
+
+    @Test
+    public void nonScalarValueForAllowListedParamIsRejected() {
+        // Object/array values would asText() to "" and previously slipped past the allow-list.
+        for (String malformed : new String[]{"{\"hierLevel\":[\"1\"]}", "{\"hierLevel\":{\"v\":\"1\"}}",
+                "{\"window\":[]}"}) {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                    service.validateAllowedParams(def(SEEDED_PARAMS), json(malformed)));
+            assertTrue(ex.getMessage().startsWith("invalid_param"), ex.getMessage());
+        }
+    }
+
+    @Test
+    public void nonTextScalarsStillMatchTheAllowListByText() {
+        // A JSON number 2 must keep behaving like "2" (callers legitimately send numbers).
+        service.validateAllowedParams(def(SEEDED_PARAMS), json("{\"hierLevel\":2}"));
+        assertThrows(IllegalArgumentException.class, () ->
+                service.validateAllowedParams(def(SEEDED_PARAMS), json("{\"hierLevel\":7}")));
     }
 
     // ------------------------------------------------------------------------------------------
