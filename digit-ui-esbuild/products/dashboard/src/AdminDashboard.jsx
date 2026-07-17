@@ -651,18 +651,34 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         </div>
       )}
 
-      {showEmpty ? (
-        <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface tw-py-16 tw-text-center">
-          <p className="tw-text-[12px] tw-text-muted-foreground">
-            {t("DASHBOARD_COMMON_NO_TILES_FOR_ROLE", "No tiles in the catalog pack for this role.")}
-          </p>
-        </div>
-      ) : (
-        <div ref={gridWrapRef}>
+      {/* The grid stays mounted even when the layout is empty: it is the sole
+          drop target for picker drags (isDroppable/onDrop) AND the anchor for
+          the cancelled-drag synthetic-drop recovery (gridWrapRef), and an
+          empty-seed role's first load / a fully-cleared layout must still
+          accept drag-and-drop (review on #1287). The empty-state copy overlays
+          the (zero-tile) grid instead of replacing it — pointer-events-none so
+          HTML5 dragover/drop reach react-grid-layout underneath — and hides
+          while a picker drag is live so RGL's drop placeholder stays visible
+          inside the dashed drop surface. */}
+      <div
+        ref={gridWrapRef}
+        className={
+          showEmpty
+            ? "tw-relative tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface"
+            : undefined
+        }
+      >
+        {showEmpty && !droppingKpiId && (
+          <div className="tw-pointer-events-none tw-absolute tw-inset-0 tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-text-center">
+            <p className="tw-text-[12px] tw-text-muted-foreground">
+              {t("DASHBOARD_COMMON_NO_TILES_FOR_ROLE", "No tiles in the catalog pack for this role.")}
+            </p>
+          </div>
+        )}
         <GridLayoutWithWidth
           className={`dashboard-grid-layout layout${
             droppingKpiId ? " dashboard-grid-layout--dropping" : ""
-          }`}
+          }${showEmpty ? " dashboard-grid-layout--empty" : ""}`}
           layout={gridLayout}
           cols={GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}
@@ -770,8 +786,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             );
           })}
         </GridLayoutWithWidth>
-        </div>
-      )}
+      </div>
     </DashboardLayout>
   );
 };

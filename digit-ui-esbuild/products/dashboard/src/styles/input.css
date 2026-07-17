@@ -407,6 +407,14 @@
     @apply tw-pointer-events-none;
   }
 
+  /* Zero-tile layout: RGL sets an inline height of 0 when it holds no items,
+     which would collapse the drop surface (and the empty-state overlay
+     anchored to it). min-height beats the inline height, keeping a drop-onto
+     area alive for the Add-KPI picker on a first-load/reset dashboard. */
+  .dashboard-grid-layout--empty {
+    min-height: 160px;
+  }
+
   .dashboard-add-kpi-header {
     @apply tw-shrink-0 tw-border-b tw-border-border tw-px-4 tw-py-2.5 tw-text-[10px] tw-font-normal tw-uppercase tw-tracking-wider;
     color: var(--muted-foreground, #6b6860);
