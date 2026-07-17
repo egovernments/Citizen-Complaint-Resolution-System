@@ -6436,5 +6436,11 @@
         "message": "Pin Location",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE",
+        "message": "The window for reopening this complaint has closed",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]
