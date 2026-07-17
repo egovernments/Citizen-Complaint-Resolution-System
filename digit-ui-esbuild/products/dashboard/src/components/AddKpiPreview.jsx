@@ -23,7 +23,7 @@ const AddKpiPreview = ({ item, anchorRect, panelLeft, kpiCardData }) => {
         width: ADD_KPI_PREVIEW_WIDTH_PX,
         zIndex: 10000,
       }}
-      role="tooltip"
+      aria-hidden="true"
     >
       <div className="dashboard-add-kpi-preview-card">
         <div className="dashboard-add-kpi-preview-title">{content.title}</div>
@@ -33,10 +33,10 @@ const AddKpiPreview = ({ item, anchorRect, panelLeft, kpiCardData }) => {
         {content.target ? (
           <div className="dashboard-add-kpi-preview-target">{content.target}</div>
         ) : null}
+        {content.description ? (
+          <p className="dashboard-add-kpi-preview-desc">{content.description}</p>
+        ) : null}
       </div>
-      {content.description ? (
-        <p className="dashboard-add-kpi-preview-desc">{content.description}</p>
-      ) : null}
     </div>,
     document.body
   );

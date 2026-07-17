@@ -167,9 +167,15 @@ function PasswordInput({ id, value, onChange, autoComplete, invalid }) {
   );
 }
 
-const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased }) => {
-  const { data: cities, isLoading } = Digit.Hooks.useTenants();
+const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }) => {
+  const { data: hookCities, isLoading: isHookCitiesLoading } = Digit.Hooks.useTenants();
   const { data: storeData, isLoading: isStoreLoading } = Digit.Hooks.useStore.getInitData();
+  const cities = appTenants?.length
+    ? appTenants
+    : storeData?.tenants?.length
+      ? storeData.tenants
+      : hookCities;
+  const isLoading = isHookCitiesLoading || isStoreLoading;
   const [user, setUser] = useState(null);
   const [showToast, setShowToast] = useState(null);
   const [disable, setDisable] = useState(false);

@@ -60,6 +60,10 @@ const DATA_TABLE_STYLES = {
   headerChrome: "dashboard-data-table-header-bar",
   title: SHARED_CHROME.dragHandleTitle,
   subtitle: SHARED_CHROME.dragHandleSubtitle,
+  frame: "dashboard-table-frame",
+  headPane: "dashboard-table-head-pane",
+  tableHead: "dashboard-table--head",
+  tableBody: "dashboard-table--body",
   scroll: "dashboard-table-scroll",
   table: "dashboard-table",
   tableEqualCols: "dashboard-table--equal-cols",
@@ -154,6 +158,7 @@ export const VISUALIZATION_STYLES = {
   },
   [VIZ_TYPE.DATA_TABLE]: DATA_TABLE_STYLES,
   [VIZ_TYPE.SLA_RISK_TABLE]: {
+    header: DATA_TABLE_STYLES.header,
     table: "dashboard-sla-risk-table",
     link: "dashboard-sla-link",
     linkButton: "dashboard-sla-link dashboard-sla-link--button",

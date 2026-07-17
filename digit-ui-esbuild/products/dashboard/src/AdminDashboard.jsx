@@ -8,14 +8,13 @@ import DashboardLayout from "./components/DashboardLayout";
 import KpiTile from "./components/KpiTile";
 import CardUpdatedStamp from "./components/CardUpdatedStamp";
 import ResizeGrip from "./components/ResizeGrip";
-import SubtleScroll from "./components/SubtleScroll";
 import GroupByLevelSelect, { levelDisplayLabel } from "./components/GroupByLevelSelect";
+import SubtleScroll from "./components/SubtleScroll";
 import {
   VIZ_TYPE,
   SHARED_CHROME,
   buildWidgetHeaderClassName,
   getWidgetBodyClassName,
-  getWidgetScrollClassName,
 } from "./config/visualizationStyles";
 import DashboardLogin, {
   hasDashboardSession,
@@ -27,10 +26,10 @@ import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useFilterOptions } from "./hooks/useFilterOptions";
 import { useCatalog } from "./hooks/useCatalog";
-import { useCatalogLayout } from "./hooks/useCatalogLayout";
+import { useCatalogLayout, getDroppingItemForKpi, defaultSizeForKpi } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
-import { GRID_COLS, KPI_ROW_HEIGHT } from "./constants/layoutConfig";
+import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM, DROPPING_ITEM_ID } from "./constants/layoutConfig";
 import {
   isCardKind,
   isSparklineKind,
@@ -119,6 +118,19 @@ const WidgetRemoveButton = ({ label, onClick }) => {
 
 const GridLayoutWithWidth = WidthProvider(GridLayout);
 const GRID_MARGIN = [16, 16];
+
+function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, kpiId, kpis) {
+  const { w, h } = defaultSizeForKpi(kpiId, kpis);
+  const colWidth = (containerWidth - GRID_MARGIN[0] * (GRID_COLS + 1)) / GRID_COLS;
+  const left = clientX - gridRect.left;
+  const top = clientY - gridRect.top;
+  let x = Math.round((left - GRID_MARGIN[0]) / (colWidth + GRID_MARGIN[0]));
+  let y = Math.round((top - GRID_MARGIN[1]) / (KPI_ROW_HEIGHT + GRID_MARGIN[1]));
+  x = Math.max(0, Math.min(GRID_COLS - w, x));
+  y = Math.max(0, y);
+  return { x, y };
+}
+
 
 /* -------------------------------------------------------------------------- */
 /* Auth gate (mirrors AdminDashboard)                                          */
@@ -347,14 +359,199 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
 
   const {
     layout,
+    gridSyncKey,
     onLayoutChange,
+    onDragStop,
+    onResizeStop,
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
     visibleLayoutIds,
+    findDragHoverTarget,
   } = useCatalogLayout(kpis, pack?.layout);
 
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [draggingWidgetId, setDraggingWidgetId] = useState(null);
+  const draggingWidgetIdRef = useRef(null);
+  const gridWrapRef = useRef(null);
+  const externalDropLockRef = useRef(false);
+  const postDropWidgetRef = useRef(null);
+  const userDragWidgetRef = useRef(null);
+  const dragSwapTargetRef = useRef(null);
+  const dragOriginLayoutRef = useRef(null);
+  const lastHoverTargetRef = useRef(null);
+  const [isGridDragging, setIsGridDragging] = useState(false);
+
+  const handleDragWidgetStart = useCallback((widgetId) => {
+    draggingWidgetIdRef.current = widgetId;
+    setDraggingWidgetId(widgetId);
+  }, []);
+
+  const handleDragWidgetEnd = useCallback(() => {
+    draggingWidgetIdRef.current = null;
+    setDraggingWidgetId(null);
+  }, [layout.length]);
+
+  const isExternalDrag = Boolean(draggingWidgetId);
+
+  const droppingItem = useMemo(() => {
+    if (draggingWidgetId && kpis[draggingWidgetId]) {
+      return getDroppingItemForKpi(draggingWidgetId, kpis);
+    }
+    return DROPPING_ITEM;
+  }, [draggingWidgetId, kpis]);
+
+  const completeExternalDrop = useCallback(
+    (widgetId, position, clientX, clientY) => {
+      if (externalDropLockRef.current) return;
+      const activeId = widgetId || draggingWidgetIdRef.current;
+      if (!activeId || !kpis[activeId]) return;
+      if (layout.some((entry) => entry.i === activeId)) return;
+
+      let dropPosition = position;
+      if (!dropPosition && clientX != null && clientY != null && gridWrapRef.current) {
+        const gridEl = gridWrapRef.current.querySelector(".react-grid-layout");
+        if (gridEl) {
+          const rect = gridEl.getBoundingClientRect();
+          dropPosition = pixelToGridPosition(
+            rect.width,
+            clientX,
+            clientY,
+            rect,
+            activeId,
+            kpis
+          );
+        }
+      }
+      if (!dropPosition) return;
+
+      externalDropLockRef.current = true;
+      postDropWidgetRef.current = activeId;
+      requestAnimationFrame(() => {
+        addKpiToLayout(activeId, dropPosition);
+        handleDragWidgetEnd();
+        externalDropLockRef.current = false;
+      });
+    },
+    [addKpiToLayout, handleDragWidgetEnd, kpis, layout]
+  );
+
+  const handleWrapDragOver = useCallback(
+    (event) => {
+      if (!draggingWidgetIdRef.current) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    },
+    []
+  );
+
+  const handleWrapDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const widgetId = event.dataTransfer?.getData("text/plain");
+      completeExternalDrop(widgetId, null, event.clientX, event.clientY);
+    },
+    [completeExternalDrop]
+  );
+
+  const handleGridDrop = useCallback(
+    (gridLayout, item, event) => {
+      const widgetId = event.dataTransfer.getData("text/plain");
+      const position = item ? { x: item.x, y: item.y } : null;
+      const clientX = event.nativeEvent?.clientX ?? event.clientX;
+      const clientY = event.nativeEvent?.clientY ?? event.clientY;
+      completeExternalDrop(widgetId, position, clientX, clientY);
+    },
+    [completeExternalDrop]
+  );
+
+  const handleDropDragOver = useCallback(() => {
+    const activeId = draggingWidgetIdRef.current;
+    if (!activeId || !kpis[activeId]) return false;
+    if (layout.some((entry) => entry.i === activeId)) return false;
+    return defaultSizeForKpi(activeId, kpis);
+  }, [kpis, layout]);
+
+  const handleLayoutChange = useCallback(
+    (next) => {
+      if (draggingWidgetIdRef.current) return;
+      const withoutPlaceholder = next.filter((item) => item.i !== DROPPING_ITEM_ID);
+      onLayoutChange(withoutPlaceholder);
+    },
+    [onLayoutChange]
+  );
+
+  const handleInternalDragStart = useCallback((_, __, newItem) => {
+    const widgetId = newItem?.i;
+    setIsGridDragging(true);
+    dragOriginLayoutRef.current = layout.map(({ i, x, y, w, h }) => ({ i, x, y, w, h }));
+    lastHoverTargetRef.current = null;
+    dragSwapTargetRef.current = null;
+    if (widgetId && postDropWidgetRef.current === widgetId) {
+      return;
+    }
+    if (postDropWidgetRef.current && widgetId && postDropWidgetRef.current !== widgetId) {
+      postDropWidgetRef.current = null;
+    }
+    userDragWidgetRef.current = widgetId ?? null;
+  }, [layout]);
+
+  const handleInternalDrag = useCallback(
+    (currentLayout, _oldItem, newItem) => {
+      if (!newItem?.i || !findDragHoverTarget) return;
+      const staticLayout = dragOriginLayoutRef.current ?? currentLayout;
+      const originItem = staticLayout.find((item) => item.i === newItem.i) ?? null;
+      const target = findDragHoverTarget(staticLayout, newItem, newItem.i, originItem);
+      if (target) {
+        lastHoverTargetRef.current = target.i;
+        dragSwapTargetRef.current = target.i;
+      } else {
+        lastHoverTargetRef.current = null;
+        dragSwapTargetRef.current = null;
+      }
+    },
+    [findDragHoverTarget]
+  );
+
+  const handleDragStop = useCallback(
+    (nextLayout, oldItem, newItem) => {
+      if (draggingWidgetIdRef.current) return;
+      const widgetId = newItem?.i;
+      if (widgetId && postDropWidgetRef.current === widgetId) {
+        userDragWidgetRef.current = null;
+        dragSwapTargetRef.current = null;
+        dragOriginLayoutRef.current = null;
+        lastHoverTargetRef.current = null;
+        setIsGridDragging(false);
+        return;
+      }
+      if (userDragWidgetRef.current === widgetId) {
+        postDropWidgetRef.current = null;
+      }
+      userDragWidgetRef.current = null;
+      setIsGridDragging(false);
+      const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
+      const hoverTargetId = lastHoverTargetRef.current ?? dragSwapTargetRef.current;
+      const originLayout = dragOriginLayoutRef.current;
+      dragSwapTargetRef.current = null;
+      dragOriginLayoutRef.current = null;
+      lastHoverTargetRef.current = null;
+      onDragStop(withoutPlaceholder, oldItem, newItem, hoverTargetId, originLayout);
+    },
+    [onDragStop]
+  );
+
+  const handleResizeStop = useCallback(
+    (nextLayout, oldItem, newItem) => {
+      if (draggingWidgetIdRef.current) return;
+      const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
+      onResizeStop(withoutPlaceholder, oldItem, newItem);
+    },
+    [onResizeStop]
+  );
+
 
   const tiles = useMemo(
     () => layout.map((item) => ({ kpiId: item.i })),
@@ -539,8 +736,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       catalogItems={catalogItems}
       onAddWidget={addKpiToLayout}
       onResetLayout={resetLayout}
-      onDragWidgetStart={() => {}}
-      onDragWidgetEnd={() => {}}
+      onDragWidgetStart={handleDragWidgetStart}
+      onDragWidgetEnd={handleDragWidgetEnd}
       searchQuery={searchQuery}
       onSearchQueryChange={setSearchQuery}
       onExport={handleExport}
@@ -576,19 +773,37 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           </p>
         </div>
       ) : (
+        <div
+          ref={gridWrapRef}
+          className={`dashboard-grid-wrap${isExternalDrag ? " dashboard-external-drag" : ""}${
+            isGridDragging ? " dashboard-grid-dragging" : ""
+          }`}
+          onDragOver={handleWrapDragOver}
+          onDrop={handleWrapDrop}
+        >
         <GridLayoutWithWidth
+          key={gridSyncKey}
           className="dashboard-grid-layout layout"
           layout={gridLayout}
           cols={GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}
           margin={GRID_MARGIN}
           containerPadding={[0, 0]}
-          compactType="vertical"
+          compactType={null}
+          allowOverlap={false}
           isDraggable
           isResizable
+          isDroppable
+          droppingItem={droppingItem}
+          onDrop={handleGridDrop}
+          onDropDragOver={handleDropDragOver}
           draggableHandle=".dashboard-widget-surface"
-          draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
-          onLayoutChange={onLayoutChange}
+          draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .dashboard-widget-header-subtitle, .leaflet-container, a, button, input, select, textarea"
+          onLayoutChange={handleLayoutChange}
+          onDragStart={handleInternalDragStart}
+          onDrag={handleInternalDrag}
+          onDragStop={handleDragStop}
+          onResizeStop={handleResizeStop}
         >
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
@@ -634,6 +849,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             // so one placement covers charts AND tables; card tiles never
             // declare hierLevel and KpiTile carries no header of its own (R7b).
             const groupBy = groupByStateFor(item.i);
+            const hasGroupBy = Boolean(groupBy.options && !selfHeaders);
             return (
               <section
                 key={item.i}
@@ -641,22 +857,24 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
               >
                 {removeBtn}
                 {!selfHeaders && (
-                  <header className={`${buildWidgetHeaderClassName(vizType)} tw-min-w-0`}>
-                    <div className="tw-min-w-0 tw-flex-1">
-                      <h2 className={`${SHARED_CHROME.dragHandleTitle} tw-truncate`}>
+                  <header className={`${buildWidgetHeaderClassName(vizType)} dashboard-widget-header tw-min-w-0`}>
+                    <div className="dashboard-widget-header-title-row tw-flex tw-min-w-0 tw-items-start tw-gap-2">
+                      <h2 className={`${SHARED_CHROME.dragHandleTitle} tw-min-w-0 tw-flex-1 tw-truncate`}>
                         {headerTitle}
                       </h2>
-                      {headerSubtitle && (
-                        <p className={SHARED_CHROME.dragHandleSubtitle}>{headerSubtitle}</p>
+                      {hasGroupBy && (
+                        <GroupByLevelSelect
+                          value={groupBy.value}
+                          options={groupBy.options}
+                          hierarchyType={hierarchy?.hierarchyType}
+                          onChange={(value) => setHierLevelOverride(item.i, value)}
+                        />
                       )}
                     </div>
-                    {groupBy.options && (
-                      <GroupByLevelSelect
-                        value={groupBy.value}
-                        options={groupBy.options}
-                        hierarchyType={hierarchy?.hierarchyType}
-                        onChange={(value) => setHierLevelOverride(item.i, value)}
-                      />
+                    {headerSubtitle && (
+                      <SubtleScroll className="dashboard-widget-header-subtitle">
+                        <p className={SHARED_CHROME.dragHandleSubtitle}>{headerSubtitle}</p>
+                      </SubtleScroll>
                     )}
                   </header>
                 )}
@@ -667,13 +885,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                       : getWidgetBodyClassName(vizType, { isTable })
                   }
                 >
-                  {isTable ? (
-                    <SubtleScroll className={getWidgetScrollClassName()}>
-                      {renderTile(item.i, groupBy.info)}
-                    </SubtleScroll>
-                  ) : (
-                    renderTile(item.i, groupBy.info)
-                  )}
+                  {renderTile(item.i, groupBy.info)}
                 </div>
                 <CardUpdatedStamp label={lastUpdatedLabel} />
                 <ResizeGrip />
@@ -681,6 +893,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             );
           })}
         </GridLayoutWithWidth>
+        </div>
       )}
     </DashboardLayout>
   );

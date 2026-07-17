@@ -37,15 +37,33 @@ export function levelDisplayLabel(level, hierarchyType) {
   return code;
 }
 
+const ChevronIcon = () => (
+  <svg
+    className="dashboard-widget-group-by-chevron"
+    xmlns="http://www.w3.org/2000/svg"
+    width="10"
+    height="10"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
 const GroupByLevelSelect = ({ value, options, hierarchyType, onChange }) => {
   // Subscribes the control to language/bundle changes so option labels
   // re-resolve on a language switch.
   const { t: tt } = useDashboardT();
   const label = tt("DASHBOARD_GROUPBY_LABEL", "Group by");
   return (
-    <span className="dashboard-filter-inline-select-wrap tw-ml-2 tw-mr-6">
+    <span className="dashboard-filter-inline-select-wrap dashboard-widget-group-by-wrap">
       <select
-        className="dashboard-filter-inline-select tw-min-w-0"
+        className="dashboard-filter-inline-select dashboard-widget-group-by-select"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label={label}
@@ -59,6 +77,7 @@ const GroupByLevelSelect = ({ value, options, hierarchyType, onChange }) => {
           </option>
         ))}
       </select>
+      <ChevronIcon />
     </span>
   );
 };

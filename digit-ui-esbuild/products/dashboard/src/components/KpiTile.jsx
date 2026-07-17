@@ -493,6 +493,8 @@ function adaptHorizontalRows(ctx) {
   }));
   // Drop zero-denominator categories (reference filters created<=0).
   if (isRatio) rows = rows.filter((r) => (r.created || 0) > 0);
+  // Hide categories with a zero metric — no bar to show.
+  rows = rows.filter((r) => Number(r.value) > 0);
   if (viz.sort !== 'none') rows = rows.sort((a, b) => a.value - b.value);
   if (viz.limit) rows = rows.slice(0, viz.limit);
   return rows;

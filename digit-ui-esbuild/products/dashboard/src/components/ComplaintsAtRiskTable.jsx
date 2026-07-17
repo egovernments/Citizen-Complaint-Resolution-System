@@ -11,6 +11,7 @@ import { complaintDetailHref } from "../config/complaintsAtRiskPresentation";
 import useDashboardT from "../i18n/useDashboardT";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
+import DashboardTableFrame from "./DashboardTableFrame";
 
 // Built at render (never a module constant) so headers track the language.
 const buildColumns = (t) => [
@@ -35,16 +36,19 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
     defaultDirection: "desc",
   });
   const sortedRows = useMemo(() => sortRows(rows), [rows, sortRows]);
+  const tableClass = `${tableStyles.table} ${tableStyles.tableEqualCols} ${slaStyles.table}`;
 
-  return (
-    <table
-      className={`${tableStyles.table} ${tableStyles.tableEqualCols} ${slaStyles.table}`}
-    >
-      <colgroup>
-        {COLUMNS.map((col) => (
-          <col key={col.id} style={{ width: `${100 / COLUMNS.length}%` }} />
-        ))}
-      </colgroup>
+  const colgroup = (
+    <colgroup>
+      {COLUMNS.map((col) => (
+        <col key={col.id} style={{ width: `${100 / COLUMNS.length}%` }} />
+      ))}
+    </colgroup>
+  );
+
+  const headTable = (
+    <table className={`${tableClass} ${DATA_TABLE_STYLES.tableHead}`}>
+      {colgroup}
       <thead>
         <tr>
           {COLUMNS.map((col) => (
@@ -54,6 +58,12 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
           ))}
         </tr>
       </thead>
+    </table>
+  );
+
+  const bodyTable = (
+    <table className={`${tableClass} ${DATA_TABLE_STYLES.tableBody}`}>
+      {colgroup}
       <tbody>
         {sortedRows.length === 0 ? (
           <tr>
@@ -107,6 +117,8 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
       </tbody>
     </table>
   );
+
+  return <DashboardTableFrame head={headTable} body={bodyTable} />;
 };
 
 export default ComplaintsAtRiskTable;
