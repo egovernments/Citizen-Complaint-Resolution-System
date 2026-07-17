@@ -9,6 +9,7 @@ import KpiTile from "./components/KpiTile";
 import CardUpdatedStamp from "./components/CardUpdatedStamp";
 import ResizeGrip from "./components/ResizeGrip";
 import SubtleScroll from "./components/SubtleScroll";
+import GroupByLevelSelect, { levelDisplayLabel } from "./components/GroupByLevelSelect";
 import {
   VIZ_TYPE,
   SHARED_CHROME,
@@ -30,7 +31,20 @@ import { useFilterOptions } from "./hooks/useFilterOptions";
 import { useCatalog } from "./hooks/useCatalog";
 import { useCatalogLayout } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
+import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
 import { GRID_COLS, KPI_ROW_HEIGHT } from "./constants/layoutConfig";
+import {
+  isCardKind,
+  isSparklineKind,
+  isMapKind,
+  buildRefs,
+  buildRefsKey,
+} from "./utils/queryPlan";
+import {
+  hierLevelParam,
+  effectiveHierLevel,
+  buildGroupByOptions,
+} from "./utils/hierLevelGrouping";
 
 // Map the catalog's viz.kind onto the reference dashboard's VIZ_TYPE so each widget
 // gets its type-specific header/body chrome (padding, insets, legend tuning) instead
@@ -153,88 +167,37 @@ const AdminDashboard = ({ embedded = false }) => {
 /* -------------------------------------------------------------------------- */
 /* Query-plan helpers                                                          */
 /* -------------------------------------------------------------------------- */
-
-const CARD_KINDS = new Set([
-  "number-tile-delta",
-  "number-tile",
-  "scalar",
-  "number-tile-sparkline",
-  "sparkline-card",
-]);
-const SPARKLINE_KINDS = new Set(["number-tile-sparkline", "sparkline-card"]);
-const MAP_KINDS = new Set(["map", "choropleth-map"]);
-
-// The internal pin source: map tiles fetch this alongside their ward aggregates
-// to overlay per-complaint pins (the FE map widget has the pin layer; this feeds it).
-const PIN_KPI_ID = "cl_map_complaint_pins";
-
-function isCardKind(kind) {
-  return CARD_KINDS.has(kind);
-}
-function isSparklineKind(kind) {
-  return SPARKLINE_KINDS.has(kind);
-}
-function isMapKind(kind) {
-  return MAP_KINDS.has(kind);
-}
+// globalParams / buildRefs / buildRefsKey and the kind sets live in
+// utils/queryPlan.js (pure, unit-tested); this file owns the React state that
+// feeds them.
 
 /**
- * Map the dashboard filter bar -> the KpiQueryComposer param names.
- * Mirrors config/kpiQueries.js buildGlobalApiFilters: an active date range maps
- * to dateFrom/dateTo (yyyy-MM-dd, which the composer turns into a gte/lt on the
- * grain's time column and which drops the def's base window); a non-"all"
- * geography/complaintType narrows via ward/serviceCode. No global `window` is
- * emitted, so each def keeps its own baked window when no range is active —
- * exactly the reference path's behaviour.
+ * Per-widget "Group by" hierarchy-level overrides (#1111 PR2), persisted like
+ * the saved layout: localStorage, kpiId-keyed. NOT part of `filters` state on
+ * purpose — a Group-by level is structurally NOT a filter: it changes the
+ * widget's own aggregation dimension (which hierarchy level the service_code
+ * buckets roll up to), never which complaints qualify. Hierarchy FILTERS were
+ * built and deliberately abandoned; this control must stay out of the filter
+ * store so it can never be mistaken for (or grow into) one.
  */
-function globalParams(filters) {
-  const params = {};
-  if (filters?.geography && filters.geography !== "all") {
-    params.ward = filters.geography;
+const HIER_OVERRIDES_STORAGE_KEY = "ccrs.dashboard.hier-level-overrides.v1";
+
+function readHierOverrides() {
+  try {
+    const raw = window.localStorage?.getItem(HIER_OVERRIDES_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
   }
-  if (filters?.complaintType && filters.complaintType !== "all") {
-    params.serviceCode = filters.complaintType;
-  }
-  if (filters?.dateRangeActive && filters?.dateFrom && filters?.dateTo) {
-    params.dateFrom = filters.dateFrom; // yyyy-MM-dd
-    params.dateTo = filters.dateTo; // yyyy-MM-dd
-  }
-  return params;
 }
 
-/**
- * Build the per-tile refs map for runKpiBatch. The tileKey convention is:
- *   <kpiId>           base query (global params applied)
- *   <kpiId>__prior    delta cards: same params + compare:'prior'
- *   <kpiId>__series   sparkline cards: same params + series:'daily'
- *
- * The prior/series refs are gated on viz.kind (the only series signal exposed by
- * the catalog tile — supportsSeries is not serialised), so non-card tiles only
- * issue the single base query.
- */
-function buildRefs(tiles, kpis, filters) {
-  const gp = globalParams(filters);
-  const refs = {};
-  for (const tile of tiles) {
-    const kpiId = tile.kpiId;
-    const def = kpis[kpiId];
-    if (!def) continue;
-    const kind = def.viz?.kind;
-
-    refs[kpiId] = { kpiId, params: { ...gp } };
-
-    if (isCardKind(kind)) {
-      refs[`${kpiId}__prior`] = { kpiId, params: { ...gp, compare: "prior" } };
-    }
-    if (isSparklineKind(kind)) {
-      refs[`${kpiId}__series`] = { kpiId, params: { ...gp, series: "daily" } };
-    }
-    if (isMapKind(kind)) {
-      // Per-complaint pins (same filters/scope) overlaid on the ward choropleth.
-      refs[`${kpiId}__pins`] = { kpiId: PIN_KPI_ID, params: { ...gp } };
-    }
+function persistHierOverrides(overrides) {
+  try {
+    window.localStorage?.setItem(HIER_OVERRIDES_STORAGE_KEY, JSON.stringify(overrides));
+  } catch {
+    /* ignore quota/serialisation errors — override state is non-critical */
   }
-  return refs;
 }
 
 /**
@@ -372,6 +335,30 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   const { loading: catalogLoading, kpis, pack, error: catalogError } =
     useCatalog(tenantId);
 
+  // Deployment complaint-hierarchy levels for the per-widget "Group by"
+  // control. NO_HIERARCHY-shaped until the fetch resolves (control hidden).
+  const [hierarchy, setHierarchy] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchComplaintHierarchyLevels().then((h) => {
+      if (!cancelled) setHierarchy(h);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Per-widget hierLevel overrides — see the module comment on
+  // HIER_OVERRIDES_STORAGE_KEY for why this is NOT in `filters`.
+  const [hierOverrides, setHierOverrides] = useState(readHierOverrides);
+  const setHierLevelOverride = useCallback((kpiId, value) => {
+    setHierOverrides((prev) => {
+      const next = { ...prev, [kpiId]: value };
+      persistHierOverrides(next);
+      return next;
+    });
+  }, []);
+
   const [batch, setBatch] = useState({
     loading: true,
     results: {},
@@ -429,18 +416,14 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     [kpis, language, i18nTick]
   );
 
-  // Re-run the batch whenever the catalog resolves or the filters change.
-  // Include each tile's viz.kind: it drives buildRefs' __prior/__series companion
-  // refs, so a def flipping card<->chart (or gaining sparkline) must re-trigger the
-  // batch even when the id set and global params are unchanged.
+  // Re-run the batch whenever the catalog resolves, the filters change, or a
+  // per-widget "Group by" override changes. buildRefsKey includes each tile's
+  // viz.kind (a def flipping card<->chart must re-trigger even when ids/params
+  // are unchanged) AND the applied hierLevel overrides (R7c — without them a
+  // Group-by change would never refire this effect).
   const refsKey = useMemo(
-    () =>
-      JSON.stringify({
-        ids: tiles.map((t) => t.kpiId),
-        kinds: tiles.map((t) => kpis[t.kpiId]?.viz?.kind),
-        gp: globalParams(filters),
-      }),
-    [tiles, filters, kpis]
+    () => buildRefsKey(tiles, kpis, filters, hierOverrides),
+    [tiles, filters, kpis, hierOverrides]
   );
 
   useEffect(() => {
@@ -448,7 +431,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       setBatch({ loading: false, results: {}, errors: null, partial: false });
       return;
     }
-    const refs = buildRefs(tiles, kpis, filters);
+    const refs = buildRefs(tiles, kpis, filters, hierOverrides);
     const reqId = ++reqIdRef.current;
     setBatch((prev) => ({ ...prev, loading: true }));
 
@@ -490,7 +473,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   // viz.kind-derived constraints), so the grid layout passes items through verbatim.
   const gridLayout = useMemo(() => layout, [layout]);
 
-  const renderTile = (kpiId) => {
+  const renderTile = (kpiId, groupBy = null) => {
     const def = kpis[kpiId];
     if (!def) return null;
 
@@ -505,8 +488,31 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         results={batch.results}
         error={tileError}
         loading={batch.loading && !assembled}
+        groupBy={groupBy}
       />
     );
+  };
+
+  /**
+   * Group-by state for one widget: select options (null hides the control),
+   * the effective level shown in the select, and — when the effective level is
+   * non-leaf — the { level, label } info table tiles need to hide the
+   * service_group ("Type") column and relabel service_code (R4). The effective
+   * level mirrors the def's declared default even before the user touches the
+   * control, because the backend applies that default server-side.
+   */
+  const groupByStateFor = (kpiId) => {
+    const def = kpis[kpiId];
+    const param = hierLevelParam(def);
+    if (!param || !hierarchy?.hasHierarchy) return { options: null, value: null, info: null };
+    const options = buildGroupByOptions(hierarchy.levels, param);
+    if (!options) return { options: null, value: null, info: null };
+    const value = effectiveHierLevel(def, hierOverrides);
+    const level = value !== "leaf" ? hierarchy.levels[Number(value) - 1] : null;
+    const info = level
+      ? { level: value, label: levelDisplayLabel(level, hierarchy.hierarchyType) }
+      : null;
+    return { options, value, info };
   };
 
   // CSV export of the laid-out tiles (title + scalar value, or row count for
@@ -649,6 +655,11 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             // the card tiles' KpiTile resolvers.
             const headerTitle = resolveTitle(kpis[item.i]) || item.i;
             const headerSubtitle = resolveSubtitle(viz);
+            // Per-widget "Group by" hierarchy-level control (#1111 PR2). Table
+            // kinds share this same header chrome (they are not selfHeaders),
+            // so one placement covers charts AND tables; card tiles never
+            // declare hierLevel and KpiTile carries no header of its own (R7b).
+            const groupBy = groupByStateFor(item.i);
             return (
               <section
                 key={item.i}
@@ -665,6 +676,14 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                         <p className={SHARED_CHROME.dragHandleSubtitle}>{headerSubtitle}</p>
                       )}
                     </div>
+                    {groupBy.options && (
+                      <GroupByLevelSelect
+                        value={groupBy.value}
+                        options={groupBy.options}
+                        hierarchyType={hierarchy?.hierarchyType}
+                        onChange={(value) => setHierLevelOverride(item.i, value)}
+                      />
+                    )}
                   </header>
                 )}
                 <div
@@ -676,10 +695,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                 >
                   {isTable ? (
                     <SubtleScroll className={getWidgetScrollClassName()}>
-                      {renderTile(item.i)}
+                      {renderTile(item.i, groupBy.info)}
                     </SubtleScroll>
                   ) : (
-                    renderTile(item.i)
+                    renderTile(item.i, groupBy.info)
                   )}
                 </div>
                 <CardUpdatedStamp label={lastUpdatedLabel} />

@@ -10,6 +10,7 @@ import DashboardTable from './DashboardTable';
 import ComplaintsAtRiskTable from './ComplaintsAtRiskTable';
 import OpenComplaintsByGeographyWidget from './OpenComplaintsByGeographyWidget';
 import { evaluateCompose } from '../utils/composeKpi';
+import { applyGroupByToColumns } from '../utils/hierLevelGrouping';
 import { formatNumber } from '../utils/numberFormat';
 import { getNumberTileDeltaClass, formatOfficerLabel, dimensionKindForName } from '../config/kpiDisplay';
 import {
@@ -58,8 +59,13 @@ import { resolveTitle, resolveSubtitle, seriesEntryLabel, resolveSeriesLabel } f
  * - vizOverride: optional user-chosen viz kind
  * - loading: pass-through loading flag for the child components
  * - onRemove: pass-through remove handler for card chrome
+ * - groupBy: { level, label } | null — the widget's effective non-leaf
+ *   "Group by" hierarchy level (#1111 PR2). The backend already aliases the
+ *   level code back AS service_code, so charts need nothing; table kinds use
+ *   this to drop the now-redundant service_group column and relabel the
+ *   service_code column to the level's name.
  */
-export function KpiTile({ def, result, results, error, vizOverride, loading = false, onRemove }) {
+export function KpiTile({ def, result, results, error, vizOverride, loading = false, onRemove, groupBy = null }) {
   // Subscribes the whole tile to language/bundle changes so every label
   // computed below re-renders on a language switch.
   const { language } = useDashboardT();
@@ -83,7 +89,7 @@ export function KpiTile({ def, result, results, error, vizOverride, loading = fa
   }
 
   const kind = vizOverride || viz.kind || 'scalar';
-  const ctx = { def, viz, result, results, title, loading, onRemove, locale: language?.replace('_', '-') };
+  const ctx = { def, viz, result, results, title, loading, onRemove, groupBy, locale: language?.replace('_', '-') };
 
   const content = renderByKind(kind, ctx);
 
@@ -746,8 +752,13 @@ function renderLine(ctx) {
 // ---------------------------------------------------------------------------
 
 function renderTable(ctx) {
-  const { viz, result, loading } = ctx;
-  const columns = viz.columns || deriveColumnsFromResult(result);
+  const { viz, result, loading, groupBy } = ctx;
+  // #1111 PR2 (R4): at a non-leaf "Group by" level, drop the redundant
+  // service_group ("Type") column and relabel service_code to the level's
+  // name — see applyGroupByToColumns. The ideal_sla_ms avg-of-heterogeneous-
+  // SLAs caveat at non-leaf levels is documented in the KPI catalog docs
+  // (PR1), not surfaced in-cell.
+  const columns = applyGroupByToColumns(viz.columns || deriveColumnsFromResult(result), groupBy);
   const rows = result.rows || [];
   if (loading && !rows.length) return <Placeholder message={t("DASHBOARD_COMMON_LOADING", "Loading…")} />;
   return <DashboardTable columns={columns} rows={rows} emptyMessage={viz.emptyMessage || t("DASHBOARD_COMMON_NO_DATA", "No data")} />;
