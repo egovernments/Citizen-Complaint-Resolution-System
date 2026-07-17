@@ -173,18 +173,26 @@ as the canonical reference for which events exist and the ordered `variables` ea
 (`[complaint_type, id, date, …]` → Twilio `{{1}},{{2}},…`). It carries the naming/variable layout,
 **not** approved bodies — you author those in Twilio.
 
-### 5.1 Pull the templates your account exposes
+### 5.1 Sync + persist from the configurator (primary path)
+Configurator → **Notification Providers** → **Sync WhatsApp templates**. The dialog pulls your
+account's approved templates, auto-matches them to routing rows (approved pre-selected; unmatched
+shown as diagnostics), and **Persist** upserts them into `RAINMAKER-PGR.NotificationProviderTemplate`.
+Idempotent (create-or-update by routing tuple).
+
+![Notification Providers → Sync WhatsApp templates](https://raw.githubusercontent.com/KDwevedi/Citizen-Complaint-Resolution-System/screenshots-notifications/notifications/configurator-notification-providers.png)
+![Sync dialog — 14 matched, review + Persist](https://raw.githubusercontent.com/KDwevedi/Citizen-Complaint-Resolution-System/screenshots-notifications/notifications/configurator-sync-twilio-templates.png)
+
+### 5.2 …or the same thing headless (CLI)
 ```bash
+# pull
 curl -H "Authorization: Bearer <token>" \
   http://<host>/novu-bridge/novu-adapter/v1/providers/twilio-templates
+# pull + upsert your SIDs into MDMS (--dry-run to preview)
+DIGIT_URL=http://<host> NOTIF_TENANT=<root> DIGIT_USERNAME=SUPERADMIN DIGIT_PASSWORD=eGov@123 \
+  python3 local-setup/scripts/persist-provider-templates.py
 ```
-Returns your account's Content templates (Content SID + friendly name + variables).
-
-### 5.2 Persist your SIDs into MDMS
-Match each pulled template to a routing key and upsert `RAINMAKER-PGR.NotificationProviderTemplate`
-with **your** Content SIDs. Scripted:
-[`local-setup/scripts/persist-provider-templates.py`](../../local-setup/scripts/persist-provider-templates.py)
-(pulls the matched templates → upserts the MDMS master).
+[`persist-provider-templates.py`](../../local-setup/scripts/persist-provider-templates.py) exits
+non-zero if coverage is incomplete (< 7 stock routing keys), so you know WhatsApp isn't fully wired.
 
 ### 5.3 Test-send
 ```bash
