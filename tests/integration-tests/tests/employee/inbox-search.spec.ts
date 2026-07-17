@@ -16,7 +16,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { BASE_URL } from '../utils/env';
 import { getPersona, serviceCodesFor } from '../utils/personas';
-import { seedComplaintAsCitizen } from '../utils/seed';
+import { seedComplaintAsCitizen, driveToPendingAtLme } from '../utils/seed';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
 import { loginEmployeeBrowser, readInboxRows } from '../utils/employee-ui';
 
@@ -58,6 +58,21 @@ test.beforeAll(async () => {
       description: `inbox-search seed ${new Date().toISOString()}`,
     });
     srid = created.srid;
+
+    // ...and ASSIGN it to the viewer, because inbox-v2 defaults to
+    // "assigned to me" (inboxConfigPGR.js defaultValues.assignee =
+    // ASSIGNED_TO_ME) and hands that straight to pgr-services as
+    // `assignee=<self uuid>`. A freshly filed complaint sits at
+    // PENDINGFORASSIGNMENT with nobody on it, so it is invisible to its own
+    // viewer no matter which department or locality it carries — the search
+    // returned 0 rows on bomet for exactly this reason. Assigning also parks
+    // it at PENDINGATLME, which is in the inbox's status set.
+    //
+    // Not clicking "Assigned to all" instead: that radio is configured but
+    // does not render on every build (bomet shows no such control), so there
+    // is no UI escape from the default to rely on. Owning the assignment is
+    // the only thing true on both deployments.
+    await driveToPendingAtLme(srid, employee.uuid);
   } catch (err: any) {
     setupSkip = `seed failed: ${err?.message?.slice(0, 200)}`;
   }
