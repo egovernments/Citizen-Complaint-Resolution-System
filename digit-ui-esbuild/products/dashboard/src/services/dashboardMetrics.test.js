@@ -385,3 +385,63 @@ test("flushWithBeacon restores everything when both beacons fail", () => {
   assert.deepEqual(Object.keys(m._inspect().pending.hist).sort(), hist);
   assert.equal(m._inspect().pending.logs.length, logsCount);
 });
+
+/* ------------------------------------------------------------------ */
+/* fetch path partial failure (same per-payload rule as the beacon)   */
+/* ------------------------------------------------------------------ */
+
+test("flush restores per payload: metrics 200 + logs 429 re-queues ONLY the logs", async () => {
+  const m = loadFreshModule();
+  seedPendingSignals(m);
+  global.fetch = (url) =>
+    Promise.resolve(
+      url === "/otel/v1/metrics" ? { ok: true, status: 200 } : { ok: false, status: 429 }
+    );
+
+  m.flush("test");
+  await new Promise((r) => setTimeout(r, 0));
+
+  // metrics (hist + sums) were accepted — resending them would inflate the
+  // deltatocumulative counters, so they must NOT come back
+  assert.deepEqual(Object.keys(m._inspect().pending.hist), []);
+  assert.deepEqual(Object.keys(m._inspect().pending.sums), []);
+  // the 429'd logs payload is restored for the next flush
+  assert.ok(m._inspect().pending.logs.length > 0);
+  // 429 takes the backoff path, never the 4xx session mute
+  assert.equal(m._inspect().muted, false);
+  assert.equal(m._inspect().consecutiveFailures, 1);
+});
+
+test("flush restores per payload: logs 200 + metrics network error re-queues ONLY the metrics", async () => {
+  const m = loadFreshModule();
+  seedPendingSignals(m);
+  const hist = Object.keys(m._inspect().pending.hist).sort();
+  global.fetch = (url) =>
+    url === "/otel/v1/logs"
+      ? Promise.resolve({ ok: true, status: 200 })
+      : Promise.reject(new Error("network down"));
+
+  m.flush("test");
+  await new Promise((r) => setTimeout(r, 0));
+
+  // delivered logs must NOT come back (would duplicate records in Loki)
+  assert.deepEqual(m._inspect().pending.logs, []);
+  // the failed metrics payload is restored intact
+  assert.deepEqual(Object.keys(m._inspect().pending.hist).sort(), hist);
+  assert.ok(Object.keys(m._inspect().pending.sums).length > 0);
+  assert.equal(m._inspect().muted, false);
+});
+
+test("flush restores everything when both POSTs fail", async () => {
+  const m = loadFreshModule();
+  seedPendingSignals(m);
+  const hist = Object.keys(m._inspect().pending.hist).sort();
+  const logsCount = m._inspect().pending.logs.length;
+  global.fetch = () => Promise.resolve({ ok: false, status: 503 });
+
+  m.flush("test");
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert.deepEqual(Object.keys(m._inspect().pending.hist).sort(), hist);
+  assert.equal(m._inspect().pending.logs.length, logsCount);
+});

@@ -797,7 +797,12 @@ function trySelfMuteRecord() {
 /**
  * Flush pending telemetry: TWO separate OTLP payloads (metrics -> /v1/metrics,
  * logs -> /v1/logs). Pending data is snapshotted and re-merged on failure so a
- * transient error never loses records.
+ * transient error never loses records. The two POSTs succeed or fail
+ * independently (separate Kong routes, each with its own rate limit), so
+ * restore per payload — restoring both when only one failed would re-send the
+ * already-accepted DELTA metrics (permanently inflating the cumulative series
+ * behind deltatocumulative) or duplicate delivered log records in Loki. Same
+ * rule as flushWithBeacon.
  */
 export function flush(reason) {
   if (!on() || state.inFlight || !isDirty()) return;
@@ -805,28 +810,34 @@ export function flush(reason) {
   const taken = takePending();
   const metricsPayload = buildMetricsPayload(taken.hist, taken.sums);
   const logsPayload = buildLogsPayload(taken.logs);
-  const posts = [];
-  if (metricsPayload) posts.push(postJson(METRICS_URL, metricsPayload));
-  if (logsPayload) posts.push(postJson(LOGS_URL, logsPayload));
-  if (!posts.length) return;
+  if (!metricsPayload && !logsPayload) return;
+
+  // Each post settles to {ok, status}; a network error settles to {ok:false, status:0}.
+  const settle = (url, payload) =>
+    payload
+      ? postJson(url, payload).then(
+          (r) => ({ ok: r.ok, status: r.status }),
+          () => ({ ok: false, status: 0 })
+        )
+      : Promise.resolve({ ok: true, status: 0 });
 
   state.inFlight = true;
-  Promise.all(posts)
-    .then((responses) => {
+  Promise.all([settle(METRICS_URL, metricsPayload), settle(LOGS_URL, logsPayload)]).then(
+    ([metricsRes, logsRes]) => {
       state.inFlight = false;
-      const failed = responses.find((r) => !r.ok);
-      if (failed) {
-        restorePending(taken);
-        noteFailure(failed.status);
-      } else {
+      if (metricsRes.ok && logsRes.ok) {
         noteSuccess();
+        return;
       }
-    })
-    .catch(() => {
-      state.inFlight = false;
-      restorePending(taken);
-      noteFailure(0);
-    });
+      // keep only what actually failed
+      restorePending({
+        hist: metricsRes.ok ? {} : taken.hist,
+        sums: metricsRes.ok ? {} : taken.sums,
+        logs: logsRes.ok ? [] : taken.logs,
+      });
+      noteFailure((metricsRes.ok ? logsRes : metricsRes).status);
+    }
+  );
 }
 
 function sendBeaconJson(url, payload) {
