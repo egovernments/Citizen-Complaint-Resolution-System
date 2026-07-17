@@ -6,9 +6,17 @@ name: Tilt CI
 # only this workflow (breaking the negative control, or making the load step a no-op)
 # triggers no run at all: no red, no green, no signal. gatus-coverage.yml watches itself
 # for exactly this reason.
+#
+# `develop` is in the push branches because it is the default branch and the one this
+# repo actually merges into -- without it, the push filter never fires at all. Two
+# individually-green PRs can merge into a broken combination (one reintroducing the
+# Tiltfile's gatus-config generation while another keeps the manifest -- precisely the
+# duplicate this job detects), and develop would sit broken with no signal until the
+# next PR that happens to touch local-setup/. That is how the tier stayed broken for
+# two months. gatus-coverage.yml already pushes on develop for the same reason.
 on:
   push:
-    branches: [main, master, feature/*]
+    branches: [main, master, develop, feature/*]
     paths:
       - 'local-setup/**'
       - '.github/workflows/tilt-ci.yaml'
