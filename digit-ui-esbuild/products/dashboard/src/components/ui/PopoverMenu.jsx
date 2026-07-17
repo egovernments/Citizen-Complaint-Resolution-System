@@ -49,6 +49,7 @@ import { createPortal } from "react-dom";
 
 const GAP_PX = 6;
 const VIEWPORT_PAD_PX = 8;
+const MIN_PANEL_MAX_PX = 64;
 const ITEM_SELECTOR = "[data-menu-item]:not(:disabled)";
 
 const CaretIcon = () => (
@@ -179,9 +180,12 @@ const PopoverMenu = ({
   }, []);
 
   // Position: below the anchor (start- or end-aligned), clamped to the
-  // viewport, flipped above when there is no room below but there is above.
-  // Re-synced on scroll/resize and (when supported) on panel size changes —
-  // the tree panel grows/shrinks as the user descends.
+  // viewport, flipped above when there is no room below but more above; when
+  // NEITHER side fits (very short viewports) the roomier side wins and the
+  // panel's max height is capped to that side's space so every option stays
+  // reachable (the item list scrolls internally). Re-synced on scroll/resize
+  // and (when supported) on panel size changes — the tree panel grows/shrinks
+  // as the user descends.
   useLayoutEffect(() => {
     if (!open) return undefined;
     const sync = () => {
@@ -196,15 +200,24 @@ const PopoverMenu = ({
         VIEWPORT_PAD_PX,
         Math.min(left, window.innerWidth - width - VIEWPORT_PAD_PX)
       );
-      let top = rect.bottom + GAP_PX;
-      if (
-        height &&
-        top + height > window.innerHeight - VIEWPORT_PAD_PX &&
-        rect.top - GAP_PX - height >= VIEWPORT_PAD_PX
-      ) {
-        top = rect.top - GAP_PX - height;
-      }
-      setPos((prev) => (prev && prev.top === top && prev.left === left ? prev : { top, left }));
+      // Floored so a sub-pixel space difference can't flip sides between
+      // ResizeObserver passes (offsetHeight is integral).
+      const spaceBelow = Math.floor(
+        window.innerHeight - VIEWPORT_PAD_PX - (rect.bottom + GAP_PX)
+      );
+      const spaceAbove = Math.floor(rect.top - GAP_PX - VIEWPORT_PAD_PX);
+      const above = !!height && height > spaceBelow && spaceAbove > spaceBelow;
+      // Never below MIN_PANEL_MAX_PX: a degenerate viewport gets a slightly
+      // anchor-overlapping panel rather than an unusably thin one.
+      const maxHeight = Math.max(above ? spaceAbove : spaceBelow, MIN_PANEL_MAX_PX);
+      const top = above
+        ? Math.max(VIEWPORT_PAD_PX, rect.top - GAP_PX - Math.min(height, maxHeight))
+        : rect.bottom + GAP_PX;
+      setPos((prev) =>
+        prev && prev.top === top && prev.left === left && prev.maxHeight === maxHeight
+          ? prev
+          : { top, left, maxHeight }
+      );
     };
     sync();
     window.addEventListener("resize", sync);
@@ -325,7 +338,7 @@ const PopoverMenu = ({
                 top: pos?.top ?? -9999,
                 left: pos?.left ?? -9999,
                 width: panelWidth,
-                maxHeight: "min(22rem, 70vh)",
+                maxHeight: pos ? `min(22rem, 70vh, ${pos.maxHeight}px)` : "min(22rem, 70vh)",
                 zIndex: 9999,
                 visibility: pos ? "visible" : "hidden",
               }}
