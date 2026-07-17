@@ -34,7 +34,9 @@ import { useCatalogLayout } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
 import * as dashboardMetrics from "./services/dashboardMetrics";
-import { GRID_COLS, KPI_ROW_HEIGHT } from "./constants/layoutConfig";
+import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM_ID } from "./constants/layoutConfig";
+import { defaultSizeForKpi } from "./utils/layoutStore";
+import { createPickerDragLifecycle } from "./utils/pickerDragLifecycle";
 import {
   isCardKind,
   isSparklineKind,
@@ -414,6 +416,86 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
 
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Drag-and-drop placement from the Add-KPI picker: the picker item is an
+  // HTML5 drag source (dataTransfer carries the kpiId); the grid accepts it
+  // via RGL's external-drop support. isDroppable is only enabled while a
+  // picker drag is live, so foreign drags (files, text) never conjure a
+  // placeholder. The drop funnels into the SAME addKpiToLayout path as a
+  // picker click — one code path for attach + persist + batch refetch.
+  const [droppingKpiId, setDroppingKpiId] = useState(null);
+  const droppingKpiIdRef = useRef(null);
+  // RGL 1.3.4 has no cancel path for external drags: a drag that engaged the
+  // grid (placeholder shown, synthetic GridItem drag started → activeDrag set)
+  // but ended WITHOUT a drop on the grid leaves activeDrag/droppingDOMNode/
+  // __dropping-elem__ stuck forever. With activeDrag stuck, RGL ignores every
+  // future layout prop, so all later adds (drop OR click) persist to storage
+  // but never render — the "does not attach" + collapsed-grid repro (#1287).
+  // Track the drag lifecycle and, on a cancelled-after-engage dragend, fire a
+  // synthetic drop at the grid so RGL runs its own onDrop cleanup (counter
+  // reset + removeDroppingPlaceholder). droppingKpiIdRef is nulled FIRST, so
+  // handleGridDrop treats the synthetic drop as cleanup, never as an add.
+  const dragLifecycleRef = useRef(null);
+  if (!dragLifecycleRef.current) dragLifecycleRef.current = createPickerDragLifecycle();
+  const gridWrapRef = useRef(null);
+  const handlePickerDragStart = useCallback((kpiId) => {
+    dragLifecycleRef.current.start();
+    droppingKpiIdRef.current = kpiId;
+    setDroppingKpiId(kpiId);
+  }, []);
+  // RGL calls onDropDragOver on every dragover tick — the earliest reliable
+  // signal that its dropping state now exists. Return undefined so the
+  // droppingItem prop is used as-is.
+  const handleGridDropDragOver = useCallback(() => {
+    dragLifecycleRef.current.gridDragOver();
+    return undefined;
+  }, []);
+  const handlePickerDragEnd = useCallback(() => {
+    droppingKpiIdRef.current = null;
+    const { needsSyntheticCleanup } = dragLifecycleRef.current.end();
+    if (needsSyntheticCleanup) {
+      // Must dispatch before setDroppingKpiId(null) commits: RGL's onDrop is
+      // detached once isDroppable flips false, and only onDrop resets the
+      // dragEnterCounter and removes the dropping placeholder + activeDrag.
+      const gridEl = gridWrapRef.current?.querySelector(".react-grid-layout");
+      if (gridEl && typeof DragEvent === "function") {
+        try {
+          gridEl.dispatchEvent(
+            new DragEvent("drop", { bubbles: true, cancelable: true })
+          );
+        } catch {
+          /* jsdom/older engines: nothing to clean without real DnD anyway */
+        }
+      }
+    }
+    setDroppingKpiId(null);
+  }, []);
+  // RGL sizes the drop placeholder from droppingItem, and its calcXY uses the
+  // same w/h to compute the drop cell — matching the tile's real default size
+  // keeps the preview honest and the landing coordinates in-bounds.
+  const droppingItem = useMemo(() => {
+    if (!droppingKpiId) return undefined;
+    return { i: DROPPING_ITEM_ID, ...defaultSizeForKpi(droppingKpiId, kpis) };
+  }, [droppingKpiId, kpis]);
+  const handleGridDrop = useCallback(
+    (_layout, item, e) => {
+      dragLifecycleRef.current.gridDrop();
+      // Prefer the dataTransfer payload (survives re-renders mid-drag); the
+      // ref covers browsers that gate getData to the drop handler proper.
+      let kpiId = null;
+      try {
+        kpiId = e?.dataTransfer?.getData("text/plain") || null;
+      } catch {
+        /* some browsers throw on getData outside dragstart/drop */
+      }
+      if (!kpiId) kpiId = droppingKpiIdRef.current;
+      droppingKpiIdRef.current = null;
+      setDroppingKpiId(null);
+      if (!kpiId || !item) return;
+      addKpiToLayout(kpiId, { x: item.x, y: item.y });
+    },
+    [addKpiToLayout]
+  );
+
   const tiles = useMemo(
     () => layout.map((item) => ({ kpiId: item.i })),
     [layout]
@@ -630,8 +712,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       catalogItems={catalogItems}
       onAddWidget={addKpiToLayout}
       onResetLayout={resetLayout}
-      onDragWidgetStart={() => {}}
-      onDragWidgetEnd={() => {}}
+      onDragWidgetStart={handlePickerDragStart}
+      onDragWidgetEnd={handlePickerDragEnd}
       searchQuery={searchQuery}
       onSearchQueryChange={setSearchQuery}
       onExport={handleExport}
@@ -660,15 +742,34 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         </div>
       )}
 
-      {showEmpty ? (
-        <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface tw-py-16 tw-text-center">
-          <p className="tw-text-[12px] tw-text-muted-foreground">
-            {t("DASHBOARD_COMMON_NO_TILES_FOR_ROLE", "No tiles in the catalog pack for this role.")}
-          </p>
-        </div>
-      ) : (
+      {/* The grid stays mounted even when the layout is empty: it is the sole
+          drop target for picker drags (isDroppable/onDrop) AND the anchor for
+          the cancelled-drag synthetic-drop recovery (gridWrapRef), and an
+          empty-seed role's first load / a fully-cleared layout must still
+          accept drag-and-drop (review on #1287). The empty-state copy overlays
+          the (zero-tile) grid instead of replacing it — pointer-events-none so
+          HTML5 dragover/drop reach react-grid-layout underneath — and hides
+          while a picker drag is live so RGL's drop placeholder stays visible
+          inside the dashed drop surface. */}
+      <div
+        ref={gridWrapRef}
+        className={
+          showEmpty
+            ? "tw-relative tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface"
+            : undefined
+        }
+      >
+        {showEmpty && !droppingKpiId && (
+          <div className="tw-pointer-events-none tw-absolute tw-inset-0 tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-text-center">
+            <p className="tw-text-[12px] tw-text-muted-foreground">
+              {t("DASHBOARD_COMMON_NO_TILES_FOR_ROLE", "No tiles in the catalog pack for this role.")}
+            </p>
+          </div>
+        )}
         <GridLayoutWithWidth
-          className="dashboard-grid-layout layout"
+          className={`dashboard-grid-layout layout${
+            droppingKpiId ? " dashboard-grid-layout--dropping" : ""
+          }${showEmpty ? " dashboard-grid-layout--empty" : ""}`}
           layout={gridLayout}
           cols={GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}
@@ -677,6 +778,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           compactType="vertical"
           isDraggable
           isResizable
+          isDroppable={Boolean(droppingKpiId)}
+          droppingItem={droppingItem}
+          onDrop={handleGridDrop}
+          onDropDragOver={handleGridDropDragOver}
           draggableHandle=".dashboard-widget-surface"
           draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
           onLayoutChange={onLayoutChange}
@@ -780,7 +885,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             );
           })}
         </GridLayoutWithWidth>
-      )}
+      </div>
     </DashboardLayout>
   );
 };

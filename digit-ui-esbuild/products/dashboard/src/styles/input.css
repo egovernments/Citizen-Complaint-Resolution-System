@@ -394,6 +394,27 @@
     @apply tw-pointer-events-none tw-invisible;
   }
 
+  /* While a picker item is dragged over the grid, the tiles must not become
+     dragenter/dragleave targets: react-grid-layout balances a dragEnterCounter
+     across those events, and a hovered child node that gets replaced mid-drag
+     (chart redraws) leaks an enter with no matching leave — the counter never
+     returns to 0, the drop placeholder survives the drag, and RGL is left in
+     a stuck activeDrag state that silently swallows every later add (#1287).
+     Routing all drag events to the grid container keeps the counter balanced
+     AND makes layerX/layerY (which RGL reads relative to the event target)
+     grid-relative, so the placeholder tracks the cursor instead of jumping. */
+  .dashboard-grid-layout--dropping .react-grid-item {
+    @apply tw-pointer-events-none;
+  }
+
+  /* Zero-tile layout: RGL sets an inline height of 0 when it holds no items,
+     which would collapse the drop surface (and the empty-state overlay
+     anchored to it). min-height beats the inline height, keeping a drop-onto
+     area alive for the Add-KPI picker on a first-load/reset dashboard. */
+  .dashboard-grid-layout--empty {
+    min-height: 160px;
+  }
+
   .dashboard-add-kpi-header {
     @apply tw-shrink-0 tw-border-b tw-border-border tw-px-4 tw-py-2.5 tw-text-[10px] tw-font-normal tw-uppercase tw-tracking-wider;
     color: var(--muted-foreground, #6b6860);

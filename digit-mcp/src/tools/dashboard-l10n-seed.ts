@@ -421,7 +421,7 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD",
-    "message": "All KPIs are on the dashboard",
+    "message": "All available KPIs are already on your dashboard",
     "module": "rainmaker-dashboard"
   },
   {
@@ -462,6 +462,11 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "DASHBOARD_HEADER_LAST_7_DAYS",
     "message": "Last 7 days",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_NO_KPIS_FOR_ROLE",
+    "message": "No KPIs available for your role",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1587,7 +1592,7 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
 ];
 
 /**
- * pt_PT (European Portuguese) pack — same 314 codes as the en_IN pack, 1:1.
+ * pt_PT (European Portuguese) pack — same codes as the en_IN pack, 1:1.
  * Translations follow European/Mozambique conventions (bairro/distrito geo
  * terms, "reclamações" agreement); placeholder tokens verified identical to
  * the en_IN messages.
@@ -2000,7 +2005,7 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   },
   {
     "code": "DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD",
-    "message": "Todos os KPIs estão no painel",
+    "message": "Todos os KPIs disponíveis já estão no seu painel",
     "module": "rainmaker-dashboard"
   },
   {
@@ -2041,6 +2046,11 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_HEADER_LAST_7_DAYS",
     "message": "Últimos 7 dias",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_NO_KPIS_FOR_ROLE",
+    "message": "Nenhum KPI disponível para a sua função",
     "module": "rainmaker-dashboard"
   },
   {
