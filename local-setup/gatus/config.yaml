@@ -2,8 +2,11 @@
 # https://github.com/TwiN/gatus
 #
 # Kept in sync with the k3s tier: local-setup/k8s/tools/gatus.yaml (gatus-config ConfigMap).
-# Shared services must have identical names, groups, URLs and conditions in both files.
-# Entries marked "compose-only" have no k8s manifest and so exist here only.
+# Both files define the SAME endpoint catalogue -- identical names, groups, URLs and
+# conditions, with no tier-only entries. Only runtime enablement differs: the
+# GATUS_PROFILE_* / GATUS_PROXIES toggles are set per deployment to match what that
+# deployment actually runs. Add an endpoint to one file, add it to the other.
+# CI enforces this (.github/workflows/gatus-coverage.yml).
 
 storage:
   type: memory
@@ -153,6 +156,17 @@ endpoints:
   - name: URL Shortening Service
     group: Core Services
     url: "http://egov-url-shortening:8080/egov-url-shortening/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # audit-service exists only in docker-compose.egov-digit.yaml (the tenant path
+  # ansible deploys); docker-compose.yml and the k3s tier have none, so it carries
+  # a toggle rather than being dropped from their catalogues.
+  - name: Audit Service
+    group: Core Services
+    enabled: ${GATUS_AUDIT}
+    url: "http://audit-service:8080/audit-service/actuator/health"
     interval: 30s
     conditions:
       - "[STATUS] == 200"

@@ -1,10 +1,15 @@
 # Gatus health dashboard for the k3s tier.
 #
 # Kept in sync with the compose tier: local-setup/gatus/config.yaml.
-# Shared services must have identical names, groups, URLs and conditions in both files.
-# The compose tier additionally monitors egov-otp, user-otp, egov-notification-sms,
-# egov-user-proxy and egov-workflow-proxy; those have no manifest under local-setup/k8s/
-# and are deliberately absent here. Add them once the manifests exist.
+# Both files define the SAME endpoint catalogue -- identical names, groups, URLs and
+# conditions, with no tier-only entries. Only runtime enablement differs.
+#
+# The optional stacks (otp/search/keycloak/mcp/notifications) and the two nginx proxies
+# have no manifests under local-setup/k8s/ yet, so their checks are DEFINED here and
+# switched OFF via the GATUS_PROFILE_* / GATUS_PROXIES values in the Deployment env
+# below. When those manifests land, flip the matching toggle to "true" -- the endpoint
+# blocks already exist, so do not add new ones.
+# CI enforces tier parity (.github/workflows/gatus-coverage.yml).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -155,6 +160,17 @@ data:
       - name: URL Shortening Service
         group: Core Services
         url: "http://egov-url-shortening:8080/egov-url-shortening/actuator/health"
+        interval: 30s
+        conditions:
+          - "[STATUS] == 200"
+
+      # audit-service exists only in docker-compose.egov-digit.yaml (the tenant path
+      # ansible deploys); this tier has no audit-service manifest, so GATUS_AUDIT is
+      # "false" below -- defined here only to keep both catalogues identical.
+      - name: Audit Service
+        group: Core Services
+        enabled: ${GATUS_AUDIT}
+        url: "http://audit-service:8080/audit-service/actuator/health"
         interval: 30s
         conditions:
           - "[STATUS] == 200"
@@ -489,6 +505,9 @@ spec:
             - name: GATUS_PROFILE_NOTIFICATIONS
               value: "false"
             # No nginx proxy Deployments in the k3s tier either.
+            # No audit-service Deployment in the k3s tier either.
+            - name: GATUS_AUDIT
+              value: "false"
             - name: GATUS_PROXIES
               value: "false"
             - name: GATUS_SMS_PORT

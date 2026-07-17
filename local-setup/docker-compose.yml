@@ -1130,6 +1130,7 @@ services:
       GATUS_PROFILE_MCP: "false"
       GATUS_PROFILE_KEYCLOAK: "false"
       GATUS_PROFILE_NOTIFICATIONS: "false"
+      GATUS_AUDIT: "false"
       GATUS_PROXIES: "true"
       GATUS_SMS_PORT: "8080"
     deploy:
