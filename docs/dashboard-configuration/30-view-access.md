@@ -43,7 +43,8 @@ first-class product with an **always-on route fallback** (`70-esbuild-embedding.
 - The **route** `/employee/dashboard` is mounted by `AppModules.js` from the registered
   `DashboardModule` **whether or not** a `Dashboard` citymodule row exists — so the dashboard is
   always reachable by **deep link**. Role-gating is inside `DashboardModule`
-  (`DASHBOARD_ROLES`, `70` §4).
+  (MDMS `dss.DashboardConfig` `allowedRoles`, falling back to the built-in
+  `DASHBOARD_ROLES` when the record is absent — `70` §4).
 - The **home card** *does* follow the citymodule rule: the employee home renders one card per
   entry in `initData.modules`, so the card appears only when a `Dashboard` citymodule row is
   present **and** `"Dashboard"` is in the build's `enabledModules` (it is — `App.js`).

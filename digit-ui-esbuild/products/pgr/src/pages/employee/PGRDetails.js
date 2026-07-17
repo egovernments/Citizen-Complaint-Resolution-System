@@ -103,6 +103,8 @@ const PGRDetails = () => {
   const { id } = useParams();
   const [selectedAction, setSelectedAction] = useState(null);
   const [toast, setToast] = useState({ show: false, label: "", type: "" });
+  // Derived address levels (County / Sub-County / Ward …) for the summary card.
+  const [boundaryRows, setBoundaryRows] = useState([]);
   const userInfo = Digit.UserService.getUser();
 
   // Persist session data for complaint update
@@ -174,6 +176,49 @@ const PGRDetails = () => {
   // Use the complaint's tenantId for workflow queries (complaints live at city level,
   // but getCurrentTenantId() may return root tenant for root-level ADMIN users)
   const complaintTenantId = pgrData?.ServiceWrappers?.[0]?.service?.tenantId || tenantId;
+
+  // County / Sub-County / Ward are NOT stored on the complaint (only the leaf
+  // locality code is) and the backend does not enrich them — verified against
+  // live PGR data (CCRS#927). Derive the full chain from boundary-service so the
+  // summary card can show one labelled row per level. Same localization
+  // convention as the create-side cascade:
+  //   label -> t(`${hierarchyType}_${boundaryType}`)  e.g. ADMIN_COUNTY -> "County"
+  //   value -> t(code)                                e.g. BOMET        -> "Bomet"
+  // Tenant-agnostic (Maputo's Município/Distrito/… works too); degrades to the
+  // plain locality row on any failure.
+  const complaintLocalityCode = pgrData?.ServiceWrappers?.[0]?.service?.address?.locality?.code;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!complaintTenantId || !complaintLocalityCode) {
+        if (!cancelled) setBoundaryRows([]);
+        return;
+      }
+      const hierarchyType = window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
+      try {
+        const res = await Digit.CustomService.getResponse({
+          url: "/boundary-service/boundary-relationships/_search",
+          useCache: false,
+          method: "POST",
+          userService: false,
+          params: { tenantId: complaintTenantId, hierarchyType, codes: complaintLocalityCode, includeParents: true },
+        });
+        const rows = [];
+        let node = res?.TenantBoundary?.[0]?.boundary?.[0];
+        while (node) {
+          rows.push({ label: t(`${hierarchyType}_${String(node.boundaryType).toUpperCase()}`), value: t(node.code) });
+          if (node.code === complaintLocalityCode) break;
+          node = node.children && node.children[0];
+        }
+        if (!cancelled) setBoundaryRows(rows);
+      } catch (e) {
+        if (!cancelled) setBoundaryRows([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [complaintTenantId, complaintLocalityCode, t]);
 
   // Hook to update the complaint
   const { mutate: UpdateComplaintMutation } = Digit.Hooks.pgr.usePGRUpdate(complaintTenantId);
@@ -503,11 +548,24 @@ const PGRDetails = () => {
                     label: t("CS_COMPLAINT_FILED_DATE"),
                     value: convertEpochFormateToDate(pgrData?.ServiceWrappers[0].service?.auditDetails?.createdTime) || t("NA"),
                   },
-                  {
-                    inline: true,
-                    label: t("CS_COMPLAINT_DETAILS_AREA"),
-                    value: t(pgrData?.ServiceWrappers[0].service?.address?.locality?.code || "NA"),
-                  },
+                  // Full address: County / Sub-County / Ward derived from the
+                  // boundary hierarchy (CCRS#927). Falls back to the single
+                  // locality row if the lookup hasn't resolved.
+                  ...(boundaryRows.length > 0
+                    ? boundaryRows.map((r) => ({
+                        inline: true,
+                        label: r.label,
+                        type: "text",
+                        value: r.value || "NA",
+                      }))
+                    : [
+                        {
+                          inline: true,
+                          label: t("CS_COMPLAINT_DETAILS_AREA"),
+                          type: "text",
+                          value: t(pgrData?.ServiceWrappers[0].service?.address?.locality?.code || "NA"),
+                        },
+                      ]),
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_CURRENT_STATUS"),
@@ -518,6 +576,17 @@ const PGRDetails = () => {
                     label: t("CS_COMPLAINT_LANDMARK__DETAILS"),
                     value: pgrData?.ServiceWrappers[0].service?.address?.landmark || "NA",
                   },
+                  // Pincode is optional in this deployment; only show it when set.
+                  ...(pgrData?.ServiceWrappers[0].service?.address?.pincode
+                    ? [
+                        {
+                          inline: true,
+                          label: t("CORE_COMMON_PINCODE"),
+                          type: "text",
+                          value: pgrData?.ServiceWrappers[0].service?.address?.pincode,
+                        },
+                      ]
+                    : []),
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION"),

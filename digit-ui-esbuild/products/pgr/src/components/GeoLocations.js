@@ -89,16 +89,45 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   // address-text path; map TILE labels are baked into the CARTO raster
   // tiles and require a vector-tile provider swap to translate.)
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
-  // Country scoping for the OSM geocoder (was hardcoded to a Kenya viewbox).
-  const nominatimCountry = window?.globalConfigs?.getConfig?.("NOMINATIM_COUNTRYCODES") || "mz";
-  // Zero Mile Stone, Nagpur (Geographical Center of India) — used only as the last-resort fallback when the tenant has not configured MAP_CENTER in globalConfigs.
-  const INDIA_CENTER = { lat: 21.1498, lng: 79.0806 };
-  const DEFAULT_CENTER = window?.globalConfigs?.getConfig?.("MAP_CENTER") || INDIA_CENTER;
-  // Pin-step default zoom — 13 is neighborhood / district level, so the
-  // user lands on a frame that shows the surrounding area instead of a
-  // single block at street level (z 15). Stays close enough that a tap
-  // is meaningful for routing, but they can recognise the locality.
-  const DEFAULT_ZOOM = 13;
+
+  // Base tile theme, ward highlight, starting position and geocoding scope are
+  // all resolved per tenant from MDMS RAINMAKER-PGR.MapConfig, each falling
+  // back to the deploy-time globalConfigs key and then to a built-in default.
+  const {
+    isReady,
+    tileUrl,
+    tileAttribution,
+    wardHighlightColor: wardColor,
+    center,
+    defaultZoom,
+    minZoom,
+    maxZoom,
+    geocodeCountryCodes,
+    searchViewbox,
+  } = useMapConfig();
+
+  const nominatimCountry = useMemo(
+    () => (geocodeCountryCodes ? `&countrycodes=${encodeURIComponent(geocodeCountryCodes)}` : ""),
+    [geocodeCountryCodes]
+  );
+
+  // Forward search only. Nominatim honours `viewbox` alongside `bounded=1`,
+  // which discards every result outside the box — so send neither unless the
+  // tenant configured one. Unset, the search is merely broad; a box belonging to
+  // another city hides every address the citizen could legitimately pick.
+  const nominatimSearchScope = useMemo(() => {
+    if (!searchViewbox) return nominatimCountry;
+    const { minLon, minLat, maxLon, maxLat } = searchViewbox;
+    return `${nominatimCountry}&viewbox=${minLon},${minLat},${maxLon},${maxLat}&bounded=1`;
+  }, [nominatimCountry, searchViewbox]);
+
+  // 13 is neighbourhood / district level, so the user lands on a frame showing
+  // the surrounding area instead of a single block at street level.
+  const DEFAULT_CENTER = center;
+  const DEFAULT_ZOOM = defaultZoom;
+  // Shown before any pin exists (and after Clear): a deliberately wide frame the
+  // citizen zooms in from. Clamped so it can't sit outside the tenant's bounds.
+  const OVERVIEW_ZOOM = Math.max(minZoom, Math.min(5, maxZoom));
   const [coords, setCoords] = useState(DEFAULT_CENTER);
   const [markerPos, setMarkerPos] = useState([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -126,9 +155,6 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     return v || "#F47738";
   }, []);
 
-  // Map theming (base tile theme + ward highlight) resolved per tenant from
-  // MDMS RAINMAKER-PGR.MapConfig; defaults to the light voyager basemap.
-  const { tileUrl, tileAttribution, wardHighlightColor: wardColor } = useMapConfig();
   const wardStyle = useMemo(() => wardStyleFor(wardColor, selectedWard, hoveredWard), [wardColor, selectedWard, hoveredWard]);
   const onEachWard = useCallback((feature, layer) => {
     const code = feature?.properties?.code;
@@ -139,11 +165,8 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     // the raw code rather than blank, and the label re-localizes on language
     // switch (i18n.language is in the dep list).
     const label = (code && trans(code)) || feature?.properties?.name || code;
-    // Leaflet bindTooltip renders its content as HTML. `label` derives from
-    // tenant-controlled data (boundary code, localization message, or GeoJSON
-    // `name`), so escape it before binding — otherwise a crafted ward
-    // name/localization value could inject markup/script (CCSD, HTML-escape
-    // audit). Escaped text still displays correctly.
+    // CCSD-1993: Leaflet bindTooltip renders HTML; label is tenant-controlled
+    // (boundary code / localization / GeoJSON name) — escape before binding.
     if (label) {
       const safeLabel = String(label).replace(/[&<>"']/g, (ch) =>
         ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
@@ -155,29 +178,34 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     });
   }, [selectedWard, trans, i18n.language]);
 
+  // Waits for MapConfig: the seeded lat/lng below is latched once, so running
+  // this before MDMS resolves would pin the citizen to the fallback centre and
+  // silently discard the tenant's configured starting position.
   useEffect(() => {
-    if (!hasInitialized.current) {
-      if (formData?.[config.key]) {
+    if (!isReady || hasInitialized.current) return;
+    if (formData?.[config.key]) {
+      hasInitialized.current = true;
+    } else {
+      const savedLocation = Digit.SessionStorage.get("PGR_MAP_LOCATION");
+      if (savedLocation) {
         hasInitialized.current = true;
+        const { lat, lng, address: savedAddress } = savedLocation;
+        setCoords({ lat, lng });
+        setMarkerPos([lat, lng]);
+        setAddress(savedAddress);
+        setSearchQuery(savedAddress);
+        onSelect(config.key, savedLocation);
       } else {
-        const savedLocation = Digit.SessionStorage.get("PGR_MAP_LOCATION");
-        if (savedLocation) {
-          hasInitialized.current = true;
-          const { lat, lng, address: savedAddress } = savedLocation;
-          setCoords({ lat, lng });
-          setMarkerPos([lat, lng]);
-          setAddress(savedAddress);
-          setSearchQuery(savedAddress);
-          onSelect(config.key, savedLocation);
-        } else {
-          hasInitialized.current = true;
-          // Seed lat/lng immediately so a quick Next click still captures something.
-          onSelect(config.key, { lat: DEFAULT_CENTER.lat, lng: DEFAULT_CENTER.lng });
-          fetchAddress(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
-        }
+        hasInitialized.current = true;
+        setCoords(DEFAULT_CENTER);
+        setMarkerPos([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
+        mapRef.current?.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], DEFAULT_ZOOM);
+        // Seed lat/lng immediately so a quick Next click still captures something.
+        onSelect(config.key, { lat: DEFAULT_CENTER.lat, lng: DEFAULT_CENTER.lng });
+        fetchAddress(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
       }
     }
-  }, []);
+  }, [isReady, DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
 
   useEffect(() => {
     if (formData?.[config.key]) {
@@ -201,7 +229,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setSelectedWard(ward?.code || null);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&countrycodes=${nominatimCountry}`,
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1${nominatimCountry}`,
         { headers: { "Accept-Language": nominatimLang } }
       );
       const data = await response.json();
@@ -257,7 +285,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     }
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&countrycodes=${nominatimCountry}`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1${nominatimSearchScope}`,
         { headers: { "Accept-Language": nominatimLang } }
       );
       const data = await response.json();
@@ -301,7 +329,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setIsSearching(true);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&countrycodes=${nominatimCountry}`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1${nominatimSearchScope}`,
         { headers: { "Accept-Language": nominatimLang } }
       );
       const data = await response.json();
@@ -402,7 +430,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setPolygonPoints([]);
     setCoords(DEFAULT_CENTER);
     if (mapRef.current) {
-      mapRef.current.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], 5);
+      mapRef.current.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], OVERVIEW_ZOOM);
     }
     // Clear location from formData
     onSelect(config.key, null);
@@ -434,7 +462,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
         }}>
           <MapContainer
             center={[coords.lat, coords.lng]}
-            zoom={markerPos ? DEFAULT_ZOOM : 5}
+            zoom={markerPos ? DEFAULT_ZOOM : OVERVIEW_ZOOM}
+            minZoom={minZoom}
+            maxZoom={maxZoom}
             style={{ height: "100%", width: "100%" }}
             zoomControl={false}
           >

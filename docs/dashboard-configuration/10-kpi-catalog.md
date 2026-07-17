@@ -121,7 +121,7 @@ passed through verbatim** (`KpiDefinition.KpiViz.extra`, `@JsonAnySetter`) — `
 schema change**, only a KpiTile capability.
 
 **Titles / localization**: the FE currently prefers the human `viz.title` string
-(`KpiTile.resolveTitle`); `viz.titleKey` (convention `RAINMAKER-PGR.DASHBOARD_KPI_<ID>`) is
+(`KpiTile.resolveTitle`); `viz.titleKey` (convention `CMS-DASHBOARD.DASHBOARD_KPI_<ID>`) is
 retained for a future i18n layer and is only ever *prettified* as a last-resort fallback, never
 rendered verbatim. Ship both: `title` for today, `titleKey` so the def is i18n-ready.
 
@@ -216,7 +216,7 @@ Goal: a "Complaints via WhatsApp (last 30d)" number card for supervisors.
        "accent": "blue",
        "group": "complaint-landscape",
        "title": "WhatsApp complaints",
-       "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_WHATSAPP_COUNT",
+       "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_WHATSAPP_COUNT",
        "delta": { "compare": "prior" },
        "deltaLabel": "vs prior period"
      },

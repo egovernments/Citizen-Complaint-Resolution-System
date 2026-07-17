@@ -7450,5 +7450,17 @@
         "message": "Describe the issue and attach any photos as evidence.",
         "module": "rainmaker-pgr",
         "locale": "default"
+    },
+    {
+        "code": "PGR_INBOX_TAB_MY",
+        "message": "My Complaints",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_INBOX_TAB_ALL",
+        "message": "All Complaints",
+        "module": "rainmaker-pgr",
+        "locale": "default"
     }
 ]
