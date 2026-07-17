@@ -136,6 +136,19 @@ export interface DeploymentProfile {
   mdms: {
     rejectionReasonsCount: number;
   };
+  /**
+   * Probes that could not be read at all, label -> last error. EMPTY IS THE ONLY
+   * GOOD VALUE: a field in here degraded to its fallback because the deployment
+   * could not be reached, NOT because the deployment said the thing is missing.
+   * Discovery cannot tell the difference downstream — `boundary: null` looks the
+   * same either way — so the difference is recorded here, at the only point that
+   * still knows it, and the smoke test refuses to trust a profile with entries.
+   *
+   * Optional because profiles written before this field existed are still valid
+   * for the schemaVersion; absent reads as "none". Always go through
+   * probeFailuresOf().
+   */
+  probeFailures?: Record<string, string>;
   locales: string[];
   personas: {
     adminRoles: string[];
@@ -149,34 +162,109 @@ export const PROFILE_PATH = resolve('deployment-profile.json');
 
 export const PROFILE_SCHEMA_VERSION = 1;
 
+/** Probe failures, defaulted — a profile predating the field reports none. */
+export function probeFailuresOf(p: DeploymentProfile): Record<string, string> {
+  return p.probeFailures ?? {};
+}
+
+// ── target identity ──────────────────────────────────────────────────────────
+
+/** Trailing slashes are cosmetic; compare and build URLs without them. */
+function normalizeBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+/** The deployment THIS process is pointed at, by the same rules discovery uses. */
+export function currentTarget(): { baseUrl: string; tenant?: string; root?: string } {
+  return {
+    baseUrl: normalizeBaseUrl(envOr('BASE_URL') ?? 'http://localhost'),
+    tenant: envOr('DIGIT_TENANT'),
+    root: envOr('ROOT_TENANT'),
+  };
+}
+
+/**
+ * Ways this profile describes a deployment other than the one we are aimed at.
+ *
+ * deployment-profile.json outlives the run that wrote it, and schemaVersion says
+ * nothing about WHICH deployment it came from. Without this, a `--no-deps` run
+ * after `export BASE_URL=…` reads yesterday's bomet profile and cheerfully gates,
+ * seeds and asserts the local stack with `ke`'s tenant, boundaries and personas
+ * — every value wrong, nothing obviously broken. Compared per field so the
+ * message names the drift instead of just alleging it.
+ *
+ * Only EXPLICIT env values are compared. DIGIT_TENANT unset is not a mismatch:
+ * discovery is then entitled to learn the tenant from globalConfigs, and
+ * demanding a match would reject every profile that did its job. BASE_URL always
+ * compares because it is never discovered — it is discovery's input, and it has
+ * the same 'http://localhost' default on both sides.
+ */
+export function profileTargetMismatches(p: DeploymentProfile): string[] {
+  const want = currentTarget();
+  const out: string[] = [];
+  if (normalizeBaseUrl(p.baseUrl ?? '') !== want.baseUrl) {
+    out.push(`baseUrl: profile has '${p.baseUrl}', this run targets '${want.baseUrl}' (BASE_URL)`);
+  }
+  if (want.tenant && p.tenant?.city !== want.tenant) {
+    out.push(`tenant: profile has '${p.tenant?.city}', this run targets '${want.tenant}' (DIGIT_TENANT)`);
+  }
+  if (want.root && p.tenant?.root !== want.root) {
+    out.push(`root tenant: profile has '${p.tenant?.root}', this run targets '${want.root}' (ROOT_TENANT)`);
+  }
+  return out;
+}
+
 // ── read / write ─────────────────────────────────────────────────────────────
 
 let cached: DeploymentProfile | null = null;
+/** Why the on-disk profile was refused, for getProfile()'s message. */
+let rejection: string | null = null;
 
 /**
  * Synchronous, non-throwing, cached. All three matter: Stage 1's env.ts calls
  * this at import time to back its exports, which happens before any async hook
  * can run and must not explode on the many entry points (a lone `--no-deps`
  * spec run, a lint pass) where profile-setup never ran.
+ *
+ * A profile for a DIFFERENT target is refused exactly like a missing one — it is
+ * worse than missing, since missing fails loudly and wrong passes quietly.
  */
 export function tryGetProfile(): DeploymentProfile | null {
   if (cached) return cached;
-  if (!existsSync(PROFILE_PATH)) return null;
-  try {
-    const parsed = JSON.parse(readFileSync(PROFILE_PATH, 'utf8')) as DeploymentProfile;
-    if (parsed?.schemaVersion !== PROFILE_SCHEMA_VERSION) return null;
-    cached = parsed;
-    return cached;
-  } catch {
+  if (!existsSync(PROFILE_PATH)) {
+    rejection = `no file at ${PROFILE_PATH}`;
     return null;
   }
+  let parsed: DeploymentProfile;
+  try {
+    parsed = JSON.parse(readFileSync(PROFILE_PATH, 'utf8')) as DeploymentProfile;
+  } catch (err) {
+    rejection = `${PROFILE_PATH} is not readable JSON: ${err instanceof Error ? err.message : String(err)}`;
+    return null;
+  }
+  if (parsed?.schemaVersion !== PROFILE_SCHEMA_VERSION) {
+    rejection = `${PROFILE_PATH} has schemaVersion ${parsed?.schemaVersion}, this code speaks ${PROFILE_SCHEMA_VERSION}`;
+    return null;
+  }
+  const mismatches = profileTargetMismatches(parsed);
+  if (mismatches.length) {
+    rejection =
+      `${PROFILE_PATH} was discovered against a DIFFERENT deployment:\n  - ${mismatches.join('\n  - ')}\n` +
+      'It is stale — re-run the profile-setup project (drop `--no-deps`) so discovery re-reads the ' +
+      'deployment this run actually targets, or delete the file.';
+    return null;
+  }
+  rejection = null;
+  cached = parsed;
+  return cached;
 }
 
 export function getProfile(): DeploymentProfile {
   const p = tryGetProfile();
   if (!p) {
     throw new Error(
-      `No deployment profile at ${PROFILE_PATH}. It is written by the 'profile-setup' project, ` +
+      `No usable deployment profile: ${rejection}\n\n` +
+        `It is written by the 'profile-setup' project, ` +
         'which every spec project depends on — so this means the run skipped the DAG. Either drop ' +
         "`--no-deps`, run `npx playwright test --project=profile-setup` once first, or set " +
         'PROFILE_INLINE=1 and await ensureProfile() to discover it in-process.',
@@ -324,24 +412,41 @@ function envOr(name: string): string | undefined {
   return v && v.trim() ? v.trim() : undefined;
 }
 
+/** How many times a discoverer is tried before it is called a probe failure. */
+const PROBE_ROUNDS = 2;
+
 /**
  * Run a discoverer with one retry, degrading to `fallback` instead of failing
  * the whole run. profile-setup is a single point of failure for every project
  * downstream, so only the handful of hard asserts there may kill a run; a field
  * that cannot be read becomes null and its capability reads as absent, which the
  * expectations file then judges.
+ *
+ * The retry only means anything because the probes now THROW instead of
+ * returning null (see probes.ts): a probe that swallows its own errors reports
+ * success on round 1, is never retried, and turns a blip into a permanent
+ * "capability absent". The `failures` sink is the other half — degrading to
+ * `fallback` is a decision to keep the run alive, not a decision that the
+ * fallback is TRUE, and only this function still knows the difference.
  */
-async function attempt<T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> {
-  for (let round = 1; round <= 2; round++) {
-    try {
-      return await fn();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`[profile] ${label} attempt ${round}/2 failed: ${msg.slice(0, 200)}`);
+function makeAttempt(failures: Record<string, string>) {
+  return async function attempt<T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> {
+    let last = '';
+    for (let round = 1; round <= PROBE_ROUNDS; round++) {
+      try {
+        return await fn();
+      } catch (err) {
+        last = err instanceof Error ? err.message : String(err);
+        console.log(`[profile] ${label} attempt ${round}/${PROBE_ROUNDS} failed: ${last.slice(0, 200)}`);
+      }
     }
-  }
-  console.log(`[profile] ${label} unavailable — recording as absent`);
-  return fallback;
+    failures[label] = last;
+    console.log(
+      `[profile] ${label} FAILED ${PROBE_ROUNDS}/${PROBE_ROUNDS} — using the fallback to keep the run alive, but ` +
+        'recording a probe failure: this is "could not read", NOT "the deployment does not have it".',
+    );
+    return fallback;
+  };
 }
 
 function countNodes(root: BoundaryNode | null): number {
@@ -378,12 +483,13 @@ function firstBranch(root: BoundaryNode): BoundaryNode[] {
 async function discoverComplaintTypes(
   tenants: string[],
   authToken: string,
+  baseUrl: string,
 ): Promise<DeploymentProfile['complaintTypes']> {
   const byCode = new Map<string, string>();
   let hierarchyDepth = 0;
 
   for (const tenantId of tenants) {
-    for (const row of await fetchMdms(tenantId, 'RAINMAKER-PGR.ComplaintHierarchy', authToken)) {
+    for (const row of await fetchMdms(tenantId, 'RAINMAKER-PGR.ComplaintHierarchy', authToken, { baseUrl })) {
       const d = row?.data;
       // isActive is the MDMS row flag, data.active the master's own — the pg
       // demo's Garbage/StreetLights nodes are data.active but row-inactive here.
@@ -395,7 +501,7 @@ async function discoverComplaintTypes(
       if (!dept) continue;
       byCode.set(d.code, String(dept));
     }
-    for (const row of await fetchMdms(tenantId, 'RAINMAKER-PGR.ServiceDefs', authToken)) {
+    for (const row of await fetchMdms(tenantId, 'RAINMAKER-PGR.ServiceDefs', authToken, { baseUrl })) {
       const d = row?.data;
       const code = d?.serviceCode ?? row?.uniqueIdentifier;
       if (!code || row.isActive === false || d?.active === false) continue;
@@ -420,10 +526,15 @@ async function discoverComplaintTypes(
  * without pinning a magic row count that would rot the first time a real locale
  * is half-translated.
  */
-async function discoverLocales(tenants: string[], authToken: string, localeDefault: string | null): Promise<string[]> {
+async function discoverLocales(
+  tenants: string[],
+  authToken: string,
+  localeDefault: string | null,
+  baseUrl: string,
+): Promise<string[]> {
   const candidates = new Set<string>();
   for (const tenantId of tenants) {
-    for (const row of await fetchMdms(tenantId, 'common-masters.StateInfo', authToken)) {
+    for (const row of await fetchMdms(tenantId, 'common-masters.StateInfo', authToken, { baseUrl })) {
       for (const lang of row?.data?.languages || []) {
         if (lang?.value) candidates.add(String(lang.value));
       }
@@ -435,7 +546,10 @@ async function discoverLocales(tenants: string[], authToken: string, localeDefau
 
   const counted: { locale: string; count: number }[] = [];
   for (const locale of [...candidates].sort()) {
-    counted.push({ locale, count: await fetchLocalizationCount(tenants[0], locale, { module: 'rainmaker-common', authToken }) });
+    counted.push({
+      locale,
+      count: await fetchLocalizationCount(tenants[0], locale, { module: 'rainmaker-common', authToken, baseUrl }),
+    });
   }
   const richest = Math.max(...counted.map((c) => c.count));
   if (richest === 0) return [];
@@ -443,7 +557,15 @@ async function discoverLocales(tenants: string[], authToken: string, localeDefau
 }
 
 export async function discoverProfile(opts?: { baseUrl?: string }): Promise<DeploymentProfile> {
-  const baseUrl = opts?.baseUrl ?? envOr('BASE_URL') ?? 'http://localhost';
+  const baseUrl = normalizeBaseUrl(opts?.baseUrl ?? currentTarget().baseUrl);
+  // Every probe below MUST be handed this baseUrl. A probe that falls back to
+  // env.ts's module-level BASE_URL instead reads a DIFFERENT deployment, and the
+  // result is a profile that is individually plausible and jointly fiction —
+  // bomet's tenant and workflow welded to localhost's MDMS and localization.
+  // Nothing type-checks that; the probes take `baseUrl` optionally so specs can
+  // call them bare. Keep the discipline here.
+  const probeFailures: Record<string, string> = {};
+  const attempt = makeAttempt(probeFailures);
 
   // globalConfigs must be read BEFORE anything else: it is the deployment's own
   // boot config, so it — not an env var — is what tells us which tenant we are
@@ -551,7 +673,7 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
     },
   };
 
-  const complaintTypes = await attempt('complaint types', () => discoverComplaintTypes(tenants, authToken), {
+  const complaintTypes = await attempt('complaint types', () => discoverComplaintTypes(tenants, authToken, baseUrl), {
     hierarchyDepth: 0,
     serviceDefCount: 0,
     services: [],
@@ -561,7 +683,7 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
     'rejection reasons',
     async () => {
       for (const tenantId of tenants) {
-        const rows = (await fetchMdms(tenantId, 'RAINMAKER-PGR.RejectionReasons', authToken)).filter(
+        const rows = (await fetchMdms(tenantId, 'RAINMAKER-PGR.RejectionReasons', authToken, { baseUrl })).filter(
           (r) => r?.isActive !== false && r?.data?.active !== false,
         );
         if (rows.length) return rows.length;
@@ -574,8 +696,13 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
   // The SPA boots in localeDefault+localeRegion ('en'+'IN'), so that locale is
   // real by construction even if StateInfo forgot to list it.
   const bootLocale = gc.localeDefault && gc.localeRegion ? `${gc.localeDefault}_${gc.localeRegion}` : null;
-  const locales = await attempt('locales', () => discoverLocales(tenants, authToken, bootLocale), []);
+  const locales = await attempt('locales', () => discoverLocales(tenants, authToken, bootLocale, baseUrl), []);
 
+  // KNOWN GAP: getPgrIdPrefix (pgr-idgen.ts) takes no baseUrl and reads env.ts's
+  // BASE_URL, so a discoverProfile({ baseUrl }) that disagrees with the env reads
+  // the prefix off the wrong deployment. Harmless on every shipped entry point —
+  // both take baseUrl from BASE_URL, so they agree — but it is the one probe this
+  // function cannot aim. Give it a baseUrl option to close it.
   const idPrefix = await attempt('idgen PGR prefix', () => getPgrIdPrefix({ tenant: city }), null as string | null);
 
   const draft: DeploymentProfile = {
@@ -598,6 +725,7 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
     workflow,
     pgr: { idPrefix, seedServiceCode: null, seedLocalityCode: boundary.leafCode },
     mdms: { rejectionReasonsCount },
+    probeFailures,
     locales,
     personas: { adminRoles, resolved: {}, unresolvedDiagnostics: {} },
   };

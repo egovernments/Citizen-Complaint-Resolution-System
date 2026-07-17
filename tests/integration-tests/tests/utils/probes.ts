@@ -16,14 +16,81 @@ function requestInfo(authToken?: string): Record<string, unknown> {
   return { apiId: 'Rainmaker', ver: '.01', ts: null, msgId: 'probe', authToken };
 }
 
-async function postJson<T>(url: string, body: unknown): Promise<T | null> {
-  const r = await fetch(url, {
+/**
+ * Per-request ceiling. A probe that hangs must not hang the whole run: every
+ * project depends on profile-setup, so one stuck socket stalls everything.
+ */
+const PROBE_TIMEOUT_MS = Number(process.env.PROBE_TIMEOUT_MS) || 20_000;
+
+/** A probe could not talk to the deployment (transport, timeout, bad body). */
+export class ProbeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProbeError';
+  }
+}
+
+/** The deployment answered, but not with a 2xx. Carries the status for callers. */
+export class ProbeHttpError extends ProbeError {
+  constructor(
+    readonly status: number,
+    readonly body: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ProbeHttpError';
+  }
+}
+
+/**
+ * THE RULE THIS FILE IS BUILT ON: only a 2xx body may say a thing is absent.
+ *
+ * Every failure below throws — transport, timeout, non-2xx, unparseable body.
+ * It would be less code to collapse them into `null`, and that is exactly the
+ * bug: profile.ts's attempt() retries a throw and, if it still fails, records a
+ * probe FAILURE, whereas a `null` is indistinguishable from the deployment
+ * calmly answering "not configured". Collapse them and a 502 or an expired
+ * token reads as "this capability is absent" — a confident, wrong diagnosis
+ * that sends a reader off to seed data that already exists.
+ *
+ * The distinction is cheap to keep because the deployments make it for us:
+ * verified on BOTH, every search here answers a genuinely-missing master with
+ * 200 + an empty array (MDMS with an unknown schemaCode, workflow with an
+ * unknown businessService, localization with an unknown locale, HRMS with an
+ * unknown tenant). So "absent" always arrives as a 2xx, and a non-2xx is always
+ * a real failure. fetchBoundaryTree documents the one exception.
+ */
+async function probeFetch(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
+    throw new ProbeError(
+      timedOut ? `${url} — no response within ${PROBE_TIMEOUT_MS}ms` : `${url} — request failed: ${msg}`,
+    );
+  }
+}
+
+/** Reads at most this much of an error body into the message — enough to name the cause. */
+const ERROR_BODY_CHARS = 400;
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const r = await probeFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }).catch(() => null);
-  if (!r || !r.ok) return null;
-  return (await r.json().catch(() => null)) as T | null;
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new ProbeHttpError(r.status, text, `${url} — HTTP ${r.status}: ${text.slice(0, ERROR_BODY_CHARS)}`);
+  }
+  const text = await r.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new ProbeError(`${url} — HTTP 200 but body is not JSON: ${text.slice(0, ERROR_BODY_CHARS)}`);
+  }
 }
 
 // ── globalConfigs ────────────────────────────────────────────────────────────
@@ -49,10 +116,20 @@ export interface GlobalConfigs {
  * It is a plain script (`var hierarchyType = "ADMIN";`), not JSON, so the values
  * are lifted with a regex rather than parsed. Ansible emits non-ASCII as \uXXXX
  * escapes ("Município"), which JSON.parse decodes for us.
+ *
+ * A 404 is the one tolerated failure: a deployment that serves no globalConfigs
+ * at all is a shape profile.ts explicitly floors for, so it yields {} rather
+ * than a retry. Anything else (5xx, timeout, TLS) throws — an unreachable SPA
+ * config must not silently hand discovery an empty deployment.
  */
 export async function fetchGlobalConfigs(baseUrl = BASE_URL): Promise<GlobalConfigs> {
-  const r = await fetch(`${baseUrl}/digit-ui/globalConfigs.js`).catch(() => null);
-  if (!r || !r.ok) return {};
+  const url = `${baseUrl}/digit-ui/globalConfigs.js`;
+  const r = await probeFetch(url);
+  if (r.status === 404) return {};
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new ProbeHttpError(r.status, text, `${url} — HTTP ${r.status}: ${text.slice(0, ERROR_BODY_CHARS)}`);
+  }
   const src = await r.text();
 
   const read = (name: string): unknown => {
@@ -109,7 +186,7 @@ export async function fetchTenantLabel(
     { RequestInfo: requestInfo(opts?.authToken) },
   );
   const want = tenantLabelKey(tenantId);
-  return (data?.messages || []).find((m) => m.code === want)?.message;
+  return (data.messages || []).find((m) => m.code === want)?.message;
 }
 
 // ── boundary tree ────────────────────────────────────────────────────────────
@@ -142,6 +219,13 @@ export interface BoundaryNode {
  * The full tree (not just the shape below) is what lets a caller count nodes,
  * verify a configured locality actually exists, and take a leaf's ancestors —
  * things a spec must not hardcode per deployment.
+ *
+ * The lone exception to this file's 2xx rule: boundary-service answers a
+ * hierarchy it has never heard of with 400 HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR
+ * rather than an empty tree (verified on both deployments). That is a real "not
+ * configured", so it returns null instead of throwing — retrying it twice would
+ * only slow the run down to reach the same answer. Every other non-2xx still
+ * throws.
  */
 export async function fetchBoundaryTree(
   tenantId: string,
@@ -149,13 +233,21 @@ export async function fetchBoundaryTree(
   opts?: { authToken?: string; baseUrl?: string },
 ): Promise<BoundaryNode | null> {
   const baseUrl = opts?.baseUrl ?? BASE_URL;
-  const data = await postJson<{ TenantBoundary?: any[] }>(
-    `${baseUrl}/boundary-service/boundary-relationships/_search` +
-      `?tenantId=${encodeURIComponent(tenantId)}&hierarchyType=${encodeURIComponent(hierarchyType)}` +
-      `&includeChildren=true`,
-    { RequestInfo: requestInfo(opts?.authToken) },
-  );
-  const root = data?.TenantBoundary?.[0]?.boundary?.[0];
+  let data: { TenantBoundary?: any[] };
+  try {
+    data = await postJson<{ TenantBoundary?: any[] }>(
+      `${baseUrl}/boundary-service/boundary-relationships/_search` +
+        `?tenantId=${encodeURIComponent(tenantId)}&hierarchyType=${encodeURIComponent(hierarchyType)}` +
+        `&includeChildren=true`,
+      { RequestInfo: requestInfo(opts?.authToken) },
+    );
+  } catch (err) {
+    if (err instanceof ProbeHttpError && err.status === 400 && err.body.includes('HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR')) {
+      return null;
+    }
+    throw err;
+  }
+  const root = data.TenantBoundary?.[0]?.boundary?.[0];
   return root?.code ? (root as BoundaryNode) : null;
 }
 
@@ -218,7 +310,7 @@ export async function fetchWorkflowShape(
       `?tenantId=${encodeURIComponent(tenantId)}&businessServices=${businessService}`,
     { RequestInfo: requestInfo(opts?.authToken) },
   );
-  const svc = data?.BusinessServices?.[0];
+  const svc = data.BusinessServices?.[0];
   if (!svc?.states?.length) return null;
 
   const actions = new Set<string>();
@@ -288,7 +380,7 @@ export async function fetchEmployees(
     `${baseUrl}/egov-hrms/employees/_search?tenantId=${encodeURIComponent(tenantId)}&isActive=true`,
     { RequestInfo: requestInfo(authToken) },
   );
-  return (data?.Employees || []).map((e) => ({
+  return (data.Employees || []).map((e) => ({
     code: e.code,
     uuid: e.uuid,
     roles: [...new Set(((e.user?.roles || []) as any[]).map((r) => r.code))] as string[],
@@ -323,7 +415,7 @@ export async function fetchLocalizationCount(
       `?tenantId=${encodeURIComponent(tenantId)}&locale=${encodeURIComponent(locale)}${moduleParam}`,
     { RequestInfo: requestInfo(opts?.authToken) },
   );
-  return data?.messages?.length ?? 0;
+  return data.messages?.length ?? 0;
 }
 
 // ── MDMS ─────────────────────────────────────────────────────────────────────
@@ -343,5 +435,5 @@ export async function fetchMdms(
     RequestInfo: requestInfo(authToken),
     MdmsCriteria: { tenantId, schemaCode, limit: opts?.limit ?? 500 },
   });
-  return data?.mdms || [];
+  return data.mdms || [];
 }
