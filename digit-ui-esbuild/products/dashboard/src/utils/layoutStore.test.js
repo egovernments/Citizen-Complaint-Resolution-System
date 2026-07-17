@@ -243,7 +243,7 @@ test("drop position is honoured and clamped into the grid", () => {
   assert.ok(lc.x + lc.w <= GRID_COLS, `x ${lc.x} + w ${lc.w} inside ${GRID_COLS} cols`);
 });
 
-test("drop onto occupied coordinates keeps both tiles (vertical compaction, no drop-out)", () => {
+test("drop onto occupied coordinates keeps both tiles (push-down, no drop-out)", () => {
   const layout = addItemToLayout([], "chart_a", KPIS, { x: 0, y: 0 });
   const next = addItemToLayout(layout, "map_a", KPIS, { x: 0, y: 0 });
   assert.deepEqual(next.map((l) => l.i).sort(), ["chart_a", "map_a"]);
@@ -252,6 +252,48 @@ test("drop onto occupied coordinates keeps both tiles (vertical compaction, no d
   const overlap =
     a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   assert.equal(overlap, false);
+});
+
+/* ------------------------------------------------------------------ */
+/* Drop placement parity with the legacy dashboard (lands where you    */
+/* hover, pushing others — not below the occupant)                     */
+/* ------------------------------------------------------------------ */
+
+test("drop at an OCCUPIED cell lands THERE; the prior occupant is pushed down", () => {
+  // card_a occupies (0,0,2x2). Dropping card_b onto that exact cell must give
+  // card_b the cell and push card_a below it — plain reading-order compaction
+  // would instead let card_a keep the cell and bounce card_b under it.
+  const layout = addItemToLayout([], "card_a", KPIS, { x: 0, y: 0 });
+  const next = addItemToLayout(layout, "card_b", KPIS, { x: 0, y: 0 });
+
+  const dropped = next.find((l) => l.i === "card_b");
+  const occupant = next.find((l) => l.i === "card_a");
+  assert.deepEqual({ x: dropped.x, y: dropped.y }, { x: 0, y: 0 }, "dropped tile owns the hovered cell");
+  assert.deepEqual(
+    { x: occupant.x, y: occupant.y },
+    { x: 0, y: dropped.h },
+    "prior occupant pushed directly below the dropped tile"
+  );
+});
+
+test("drop at an EMPTY cell lands exactly there (pinned — no relocation to row 0)", () => {
+  const layout = addItemToLayout([], "card_a", KPIS, { x: 0, y: 0 });
+  const next = addItemToLayout(layout, "card_b", KPIS, { x: 4, y: 3 });
+
+  const dropped = next.find((l) => l.i === "card_b");
+  assert.deepEqual({ x: dropped.x, y: dropped.y }, { x: 4, y: 3 });
+  // The untouched tile keeps its slot.
+  const untouched = next.find((l) => l.i === "card_a");
+  assert.deepEqual({ x: untouched.x, y: untouched.y }, { x: 0, y: 0 });
+});
+
+test("click add is UNCHANGED by drop-placement parity: appends at the first open slot", () => {
+  const layout = addItemToLayout([], "card_a", KPIS, { x: 0, y: 0 });
+  const next = addItemToLayout(layout, "card_b", KPIS); // no position = click
+  const added = next.find((l) => l.i === "card_b");
+  assert.deepEqual({ x: added.x, y: added.y }, { x: 2, y: 0 });
+  const untouched = next.find((l) => l.i === "card_a");
+  assert.deepEqual({ x: untouched.x, y: untouched.y }, { x: 0, y: 0 });
 });
 
 test("defaultSizeForKpi sizes cards/charts/maps/tables distinctly", () => {
@@ -300,11 +342,12 @@ test("REGRESSION #1287: NaN drop coordinates never persist — clamped to a vali
 });
 
 test("fractional drop coordinates are rounded to whole grid cells", () => {
-  // x rounds (3.4 -> 3); y also rounds, then vertical compaction owns the
-  // final row (a lone tile is pulled to y 0 regardless).
+  // x rounds (3.4 -> 3) and y rounds (1.6 -> 2); the drop cell is then honoured
+  // verbatim (clamped, never relocated — RGL's own vertical compaction may pull
+  // a floating tile up at render time, matching the hover preview).
   const next = addItemToLayout([], "card_a", KPIS, { x: 3.4, y: 1.6 });
   const l = next.find((it) => it.i === "card_a");
-  assert.deepEqual({ x: l.x, y: l.y }, { x: 3, y: 0 });
+  assert.deepEqual({ x: l.x, y: l.y }, { x: 3, y: 2 });
   assert.ok(next.every((it) => Number.isInteger(it.x) && Number.isInteger(it.y)));
 });
 

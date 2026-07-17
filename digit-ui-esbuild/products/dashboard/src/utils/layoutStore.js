@@ -6,7 +6,7 @@ import {
   FULL_WIDTH_TABLE_GRID,
   findFirstOpenPosition,
 } from "../constants/layoutConfig";
-import { compactVertically } from "./gridGeometry";
+import { compactVertically, compactAroundPinned } from "./gridGeometry";
 
 /**
  * layoutStore — the PURE half of useCatalogLayout (extracted so the
@@ -134,17 +134,32 @@ export function resolveInitialLayout(saved, seed, kpis) {
 /**
  * Add a tile to the layout. Returns the SAME array reference when the add is a
  * no-op (unknown kpiId or already placed) so callers can cheaply detect it.
- * `position` (grid coords, e.g. from a drag-drop) is optional — omitted, the
- * tile lands at the first open slot in reading order. Geometry is normalised
- * (clamped to the tile's constraints and the grid width) either way.
+ * Geometry is normalised (clamped to the tile's constraints and the grid
+ * width — clamp, never relocate) on both paths:
+ *
+ * - No `position` (picker CLICK): the tile lands at the first open slot in
+ *   reading order and the whole layout is compacted — plain append.
+ * - With `position` (drag-DROP, grid coords from RGL's onDrop placeholder):
+ *   the tile lands AT that cell and existing tiles are pushed/reflowed around
+ *   it (compactAroundPinned). Plain compactVertically would give the existing
+ *   occupant reading-order priority and bounce the new tile below the cell the
+ *   hover preview promised — the legacy dashboard's swap-then-compact pipeline
+ *   resolved this in the dropped tile's favour, and so does this.
  */
 export function addItemToLayout(layout, kpiId, kpis, position) {
   if (!kpis?.[kpiId]) return layout;
   if (layout.some((item) => item.i === kpiId)) return layout; // no duplicates
   const { w, h } = defaultSizeForKpi(kpiId, kpis);
-  const pos = position || findFirstOpenPosition(layout, w, h, GRID_COLS);
-  const item = normalizeItem({ i: kpiId, x: pos.x, y: pos.y, w, h }, kpis);
-  return compactVertically([...layout, item]);
+  if (!position) {
+    const pos = findFirstOpenPosition(layout, w, h, GRID_COLS);
+    const item = normalizeItem({ i: kpiId, x: pos.x, y: pos.y, w, h }, kpis);
+    return compactVertically([...layout, item]);
+  }
+  const item = normalizeItem(
+    { i: kpiId, x: position.x, y: position.y, w, h },
+    kpis
+  );
+  return compactAroundPinned(layout, item);
 }
 
 /**
