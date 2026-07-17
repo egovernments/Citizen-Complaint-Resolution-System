@@ -17,10 +17,14 @@
 #   data_tables    real tables this service's migrations CREATE. Derived from the
 #                  CREATE TABLE statements in its own migration SQL — NOT guessed.
 #                  Materialized views are excluded: they can always be rebuilt.
-#   embedded       true = no migration init container. The normalizer skips these
-#                  entirely; nothing would replay against them.
 #   baseline_fresh true = legitimately absent from the dump (migrates from empty).
 #                  Consumed by .github/scripts/check-flyway-dump-alignment.py.
+#
+# INVARIANT: every service with a schema has a migration init container. There is
+# no `embedded` escape hatch — if you are tempted to add one, you are re-opening
+# the failure mode this file exists to close (an app that silently does not
+# migrate, e.g. novu-bridge's hardcoded-localhost Flyway URL, or a service with no
+# mechanism at all, e.g. egov-bndry-mgmnt before Phase 4).
 
 boundary-service:
   canonical: boundary_service_schema
@@ -130,12 +134,20 @@ audit-service:
 egov-indexer:
   canonical: egov_indexer_schema
   aliases: []
-  data_tables: []
-  embedded: true           # embedded Flyway; no migration init container
-  baseline_fresh: true
+  data_tables: [eg_indexer_job]
+  baseline_fresh: true     # [search]-gated; absent from the dump, migrates from empty
 
 egov-accesscontrol:
   canonical: accesscontrol_schema_version
-  aliases: []
-  data_tables: []
-  embedded: true           # K8s chart declares no schemaTable; stays embedded
+  aliases: []              # legacy name IS the canonical here — the dump ships it
+  data_tables: [eg_action, eg_ms_role, eg_roleaction, service]
+
+egov-bndry-mgmnt:
+  canonical: "egov-bndry-mgmnt_schema"   # hyphenated, as in the K8s chart
+  aliases: []              # no history exists under ANY name — see baseline_fresh
+  data_tables: [eg_bm_generated_template, eg_bm_processed_template]
+  # The dump ships both tables but NO history for them under any name (compose
+  # never ran this migrator; K8s always did). Both are empty in the dump, so
+  # normalize takes the DROP branch and the migrator rebuilds them with a real
+  # history — i.e. it does migrate from empty, hence baseline_fresh.
+  baseline_fresh: true

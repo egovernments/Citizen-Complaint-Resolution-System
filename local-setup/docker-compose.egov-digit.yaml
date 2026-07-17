@@ -574,31 +574,12 @@ services:
   # via configs/egov-persister/audit-service-persister.yml. K8s runs this too
   # (coreservices-helmfile: audit-service installed:true). Compose previously lacked
   # it, so audit capture was non-functional (no eg_audit_logs table). This restores
-  # cross-stack parity. Schema is created by the audit-service-db Flyway image below.
-  audit-service-migration:
-    image: egovio/audit-service-db:v2.9.2-4a60f20
-    container_name: audit-service-migration
-    depends_on:
-      # DIRECT to postgres-db (never the pgbouncer 'postgres' alias, which runs in
-      # transaction mode and breaks Flyway's session locks).
-      postgres-db:
-        condition: service_healthy
-    environment:
-      DB_URL: jdbc:postgresql://postgres-db:5432/egov
-      SCHEMA_TABLE: audit_service_schema
-      FLYWAY_USER: egov
-      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      FLYWAY_LOCATIONS: filesystem:/flyway/sql
-      FLYWAY_VALIDATE_ON_MIGRATE: "false"
-    restart: "no"
-    networks:
-      - egov-network
-
+  # cross-stack parity. Its schema is owned by an audit-service-db Flyway init
+  # container, declared with every other migrator in docker-compose.migrations.yml
+  # (which the playbook always layers) — this file stays free of migration wiring.
   audit-service:
     image: egovio/audit-service:v2.9.2-4a60f20
     depends_on:
-      audit-service-migration:
-        condition: service_completed_successfully
       pgbouncer:
         condition: service_healthy
       redpanda:
@@ -611,7 +592,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
-      # Flyway disabled on the app — the audit-service-migration init ran it.
+      # Flyway disabled on the app — its migration init container owns the schema
+      # (docker-compose.migrations.yml). Also set there, alongside the migrator.
       SPRING_FLYWAY_ENABLED: 'false'
       KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
