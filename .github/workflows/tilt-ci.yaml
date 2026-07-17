@@ -40,10 +40,19 @@ jobs:
   tiltfile-k8s-load:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # This job reads the tree and shells out to tilt/kubectl; it never pushes, never
+    # calls the API, and talks to no cluster. So: read-only token, and don't leave it
+    # in .git/config afterwards for the tilt/kubectl subprocesses to inherit.
+    # (Scoped to this job rather than the whole file so `tilt-test` below keeps its
+    # current behaviour untouched -- it is pre-existing and not this PR's business.)
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install Tilt
         working-directory: .
