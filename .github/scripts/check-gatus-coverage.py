@@ -67,8 +67,10 @@ LS = ROOT / "local-setup"
 # This list is the guard's whole perimeter. Anything not in it is unwatched, so it is
 # checked against the directory listing below rather than maintained by memory.
 #
-# NOTE: .github/workflows/gatus-coverage.yml must list every one of these in BOTH of
-# its `paths:` filters, or a PR touching only an unlisted file never triggers the guard.
+# NOTE: .github/workflows/gatus-coverage.yml's `paths:` globs (local-setup/docker-compose*
+# .yml / *.yaml) must match every entry here, or a PR touching only an unmatched file never
+# triggers the guard. The globs already cover any docker-compose*.yml in local-setup/, so
+# adding one here needs no change there -- do not reintroduce a hand-maintained name list.
 COMPOSE_FILES = [
     LS / "docker-compose.yml",
     LS / "docker-compose.egov-digit.yaml",
@@ -497,10 +499,10 @@ def self_test() -> int:
         a.write_text("services:\n  pgbouncer: {ports: ['5432'], networks: {digit: {aliases: [postgres]}}}\n")
         b.write_text("services:\n  pgbouncer: {networks: {digit: {aliases: [postgres]}}}\n")
         try:
-            t, l = compose_targets([a, b])
-            if t.get("postgres") != "pgbouncer":
-                failures.append(f"legitimate alias was not resolved: {t}")
-            if not l.get("pgbouncer"):
+            targets, listens = compose_targets([a, b])
+            if targets.get("postgres") != "pgbouncer":
+                failures.append(f"legitimate alias was not resolved: {targets}")
+            if not listens.get("pgbouncer"):
                 failures.append("port published in one overlay file was lost when merging files")
         except GuardError as e:
             failures.append(f"legitimate repeated alias wrongly rejected: {e}")
