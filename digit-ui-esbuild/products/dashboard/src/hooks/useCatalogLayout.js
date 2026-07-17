@@ -87,6 +87,19 @@ export function useCatalogLayout(kpis, packLayout) {
     persistTimerRef.current = setTimeout(() => persist(lay), 300);
   }, []);
 
+  // Synchronous persistence for structural changes (add / remove / reset).
+  // MUST cancel any pending debounced write: the debounce captured the layout
+  // at schedule time, so a drag-tick write landing up to 300ms later would
+  // overwrite the just-persisted add/remove with the pre-change layout — the
+  // change survives on screen but is gone from storage (and thus on reload).
+  const persistNow = useCallback((lay) => {
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    persist(lay);
+  }, []);
+
   /**
    * The single source of layout truth during interaction. With compactType=
    * "vertical" (set on the grid), react-grid-layout owns collision + compaction:
@@ -118,11 +131,11 @@ export function useCatalogLayout(kpis, packLayout) {
     (kpiId) => {
       setLayout((prev) => {
         const next = compactVertically(prev.filter((item) => item.i !== kpiId));
-        persist(next);
+        persistNow(next);
         return next;
       });
     },
-    []
+    [persistNow]
   );
 
   const addKpiToLayout = useCallback(
@@ -130,18 +143,18 @@ export function useCatalogLayout(kpis, packLayout) {
       setLayout((prev) => {
         const next = addItemToLayout(prev, kpiId, kpis, position);
         if (next === prev) return prev; // unknown kpi or already placed
-        persist(next);
+        persistNow(next);
         return next;
       });
     },
-    [kpis]
+    [kpis, persistNow]
   );
 
   const resetLayout = useCallback(() => {
     const fresh = buildSeedLayout(packLayout, kpis);
     setLayout(fresh);
-    persist(fresh);
-  }, [packLayout, kpis]);
+    persistNow(fresh);
+  }, [packLayout, kpis, persistNow]);
 
   const visibleLayoutIds = useMemo(() => layout.map((item) => item.i), [layout]);
 
