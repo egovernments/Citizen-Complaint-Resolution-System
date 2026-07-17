@@ -104,7 +104,10 @@ defensively; older clients ignore them):
 - **`recordCount`** — the **tenant corpus** size of `complaint_facts`, computed with the
   planner's tenant scope semantics: state-level tenant → `tenant_id LIKE 'ke%'`, city
   tenant → exact match. Cached in-memory for 5 minutes per tenant; `null` on error
-  (never fails the response).
+  (never fails the response). Gated by the same pack-match check as `packId`/`persona`:
+  when no pack matched the caller's roles (e.g. the anonymous PUBLIC floor on a tenant
+  with no public pack) it is `null` — otherwise any caller could enumerate every
+  tenant's complaint volume.
 
   **Semantics — read this:** `recordCount` is the **tenant's data volume**, deliberately
   **NOT the caller's ABAC-visible subset** (department/citizen/boundary scope is not

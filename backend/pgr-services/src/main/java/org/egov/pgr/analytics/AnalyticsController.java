@@ -113,8 +113,14 @@ public class AnalyticsController {
             // (tenant corpus on complaint_facts, NOT the caller's ABAC-visible subset).
             out.put("packId", pack.map(DashboardPack::getId).orElse(null));
             out.put("persona", pack.map(p -> matchingRole(p, callerRoles)).orElse(null));
+            // recordCount is live tenant data, so it takes the same coarse pack-match
+            // gate as packId/persona: no matching pack (e.g. the anonymous PUBLIC floor
+            // on a tenant with no public pack) -> null. Without this gate an
+            // unauthenticated caller could POST arbitrary tenantIds and enumerate every
+            // tenant's complaint volume. The corpus-not-ABAC-subset semantics (R9-C9)
+            // are unchanged for callers that do match a pack.
             int stateLen = config.getStateLevelTenantIdLength() == null ? 1 : config.getStateLevelTenantIdLength();
-            out.put("recordCount", service.recordCount(tenantId, stateLen));
+            out.put("recordCount", pack.isPresent() ? service.recordCount(tenantId, stateLen) : null);
             return ResponseEntity.ok(out);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e));
