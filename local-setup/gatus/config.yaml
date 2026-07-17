@@ -157,11 +157,22 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
 
-  # ==================== Notification (compose-only) ====================
-  # These have no k8s manifest under local-setup/k8s/, so they are not mirrored
-  # into the k3s tier. Add them there if/when the manifests land.
+  # ==================== Optional stacks (profile-gated) ====================
+  # These services only exist when their compose profile is active (see
+  # docker-compose.egov-digit.yaml), so their checks are gated on a matching
+  # GATUS_PROFILE_* variable rather than always running. Gatus treats `enabled`
+  # as true when the variable is unset, so every compose file that mounts this
+  # config MUST pass each variable explicitly -- the `${VAR:-false}` defaults on
+  # the gatus service are what make an unset toggle mean "off" instead of "red".
+  #
+  # Profiles are declared only in docker-compose.egov-digit.yaml. In the other
+  # compose files these services are ungated and always start, so those files
+  # pass "true" directly. Keep the toggles beside COMPOSE_PROFILES in .env.
+
+  # -------------------- profile: otp --------------------
   - name: OTP Service
-    group: Notification
+    group: OTP
+    enabled: ${GATUS_PROFILE_OTP}
     url: "http://egov-otp:8089/otp/health"
     interval: 30s
     conditions:
@@ -169,19 +180,164 @@ endpoints:
 
   # No documented health endpoint; TCP probe only.
   - name: User OTP Service
-    group: Notification
+    group: OTP
+    enabled: ${GATUS_PROFILE_OTP}
     url: "tcp://user-otp:8090"
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
 
-  # No documented health endpoint; TCP probe only.
+  # No documented health endpoint; TCP probe only. The port is a variable because
+  # this service listens on 8005 under docker-compose.egov-digit.yaml but on 8080
+  # in every other compose file, and they all share this config.
   - name: Notification SMS Service
-    group: Notification
-    url: "tcp://egov-notification-sms:8080"
+    group: OTP
+    enabled: ${GATUS_PROFILE_OTP}
+    url: "tcp://egov-notification-sms:${GATUS_SMS_PORT}"
     interval: 30s
     conditions:
       - "[CONNECTED] == true"
+
+  # -------------------- profile: search --------------------
+  - name: Elasticsearch
+    group: Search
+    enabled: ${GATUS_PROFILE_SEARCH}
+    url: "http://elasticsearch:9200/_cluster/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Indexer Service
+    group: Search
+    enabled: ${GATUS_PROFILE_SEARCH}
+    url: "http://egov-indexer:8080/egov-indexer/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Inbox Service
+    group: Search
+    enabled: ${GATUS_PROFILE_SEARCH}
+    url: "http://inbox:8080/inbox/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # -------------------- profile: mcp --------------------
+  - name: DIGIT MCP
+    group: MCP
+    enabled: ${GATUS_PROFILE_MCP}
+    url: "http://digit-mcp:3000/healthz"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: MCP Postgres
+    group: MCP
+    enabled: ${GATUS_PROFILE_MCP}
+    url: "tcp://mcp-postgres:5432"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  # -------------------- profile: keycloak --------------------
+  - name: Keycloak
+    group: Keycloak
+    enabled: ${GATUS_PROFILE_KEYCLOAK}
+    url: "http://keycloak:8180/realms/master"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Keycloak Postgres
+    group: Keycloak
+    enabled: ${GATUS_PROFILE_KEYCLOAK}
+    url: "tcp://keycloak-postgres:5432"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: Token Exchange Service
+    group: Keycloak
+    enabled: ${GATUS_PROFILE_KEYCLOAK}
+    url: "http://token-exchange-svc:3000/healthz"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # -------------------- profile: notifications --------------------
+  # novu-worker exposes no port and so cannot be probed; it is deliberately absent.
+  - name: Novu API
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://novu-api:3000/v1/health-check"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Novu WS
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "tcp://novu-ws:3002"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: Novu Dashboard
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "tcp://novu-dashboard:4000"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: Novu Mongo
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "tcp://novu-mongo:27017"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: Novu Bridge
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://novu-bridge:8080/novu-bridge/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Novu Bridge Endpoint
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://novu-bridge-endpoint:3000/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Config Service
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://digit-config-service:8080/config-service/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: User Preferences Service
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://digit-user-preferences-service:8080/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: OTP Publisher
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://otp-publisher:3030/healthz"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
 
   # ==================== API Gateway ====================
   - name: Kong Gateway (Proxy)
@@ -205,9 +361,12 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
 
-  # nginx proxies fronting egov-user / egov-workflow-v2 (compose-only).
+  # nginx proxies fronting egov-user / egov-workflow-v2. Not profile-gated, but
+  # absent from docker-compose.deploy.yaml and docker-compose.db-migrations.yml,
+  # so they carry a toggle for the same reason the profiled stacks do.
   - name: User Service Proxy
     group: API Gateway
+    enabled: ${GATUS_PROXIES}
     url: "http://egov-user-proxy:8107/health"
     interval: 30s
     conditions:
@@ -215,6 +374,7 @@ endpoints:
 
   - name: Workflow Service Proxy
     group: API Gateway
+    enabled: ${GATUS_PROXIES}
     url: "http://egov-workflow-proxy:8109/health"
     interval: 30s
     conditions:
