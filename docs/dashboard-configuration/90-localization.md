@@ -43,7 +43,7 @@ table to stay exhaustive.
 | family | pattern | examples | source of the key |
 |---|---|---|---|
 | chrome | `DASHBOARD_<AREA>_<NAME>` (AREAS: HEADER, FILTERS, SIDEBAR, LOGIN, MAP, TILE, TABLE, COMMON, COL, UNIT, DOW, BADGE, PERIOD, KPI_DISPLAY) | `DASHBOARD_HEADER_EXPORT`, `DASHBOARD_MAP_LEGEND_TITLE`, `DASHBOARD_COMMON_NO_DATA` | `t("KEY", "…")` literals in `products/dashboard/` |
-| KPI titles | `RAINMAKER-PGR.DASHBOARD_KPI_<ID_UPPER>` | `RAINMAKER-PGR.DASHBOARD_KPI_CL_NEW_CREATED_COUNT` | `viz.titleKey` on every `dss.KpiDefinition` |
+| KPI titles | `CMS-DASHBOARD.DASHBOARD_KPI_<ID_UPPER>` | `CMS-DASHBOARD.DASHBOARD_KPI_CL_NEW_CREATED_COUNT` | `viz.titleKey` on every `dss.KpiDefinition` |
 | KPI subtitles | `…DASHBOARD_KPI_<ID_UPPER>_SUBTITLE` | `…CL_REOPEN_RATE_COUNT_SUBTITLE` = "Reopened ÷ resolved" | `viz.subtitleKey` |
 | chart series | `DASHBOARD_WF_STAGE_<STATUS>`, `DASHBOARD_CHANNEL_<ID>`, `DASHBOARD_SLA_<STATE>` | `DASHBOARD_WF_STAGE_PENDINGATLME` = "Assigned", `DASHBOARD_CHANNEL_WALK_IN`, `DASHBOARD_SLA_APPROACHING` | `labelKey` on `stackSeries`/`channelMap` entries in the defs; also used directly by the `workflowStatus`/`channel`/`slaState` dimension kinds |
 | table columns | `DASHBOARD_COL_<LABEL_UPPER_SNAKE>` | `DASHBOARD_COL_AVG_RESOLUTION_TIME` | `labelKey` on column descriptors in the defs + FE-built columns (at-risk table) |
@@ -77,7 +77,7 @@ screen therefore means *neither* a localization message *nor* an operator-author
 | what renders | missing message | fix |
 |---|---|---|
 | `DASHBOARD_…` key | that key, module `rainmaker-dashboard`, active locale, state root | upsert it (locale gap ⇒ the whole pack for that locale is probably missing) |
-| `RAINMAKER-PGR.DASHBOARD_KPI_…` | title/subtitle for a def | upsert; if it's a new KPI, the def's author skipped the localization step (§2) |
+| `CMS-DASHBOARD.DASHBOARD_KPI_…` | title/subtitle for a def | upsert; if it's a new KPI, the def's author skipped the localization step (§2) |
 | a complaint-type code (`ServiceSchedulingComplaints`) | `COMPLAINT_HIERARCHY.<code>` in `rainmaker-pgr` | upsert — known gap for **legacy** type-level codes created before the `COMPLAINT_HIERARCHY` namespace (bomet `ke` has these) |
 | a department code (`WATER_ENV`) | `COMMON_MASTERS_DEPARTMENT_<CODE>` in `rainmaker-common` | upsert — known gap on bomet `ke` |
 | a boundary code | bare code in `rainmaker-boundary-<hier>` | re-run the configurator boundary localization / upsert (per locale) |

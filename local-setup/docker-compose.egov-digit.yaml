@@ -568,6 +568,53 @@ services:
     networks:
     - egov-network
 
+  # audit-service (deployment-parity item #13). Adds the audit QUERY API + the
+  # processor that turns raw audit events (process-audit-records) into persist-ready
+  # records (persist-audit-records); egov-persister then writes them to eg_audit_logs
+  # via configs/egov-persister/audit-service-persister.yml. K8s runs this too
+  # (coreservices-helmfile: audit-service installed:true). Compose previously lacked
+  # it, so audit capture was non-functional (no eg_audit_logs table). This restores
+  # cross-stack parity. Its schema is owned by an audit-service-db Flyway init
+  # container, declared with every other migrator in docker-compose.migrations.yml
+  # (which the playbook always layers) — this file stays free of migration wiring.
+  audit-service:
+    image: egovio/audit-service:v2.9.2-4a60f20
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      egov-enc-service:
+        condition: service_healthy
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx128m"
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      # Flyway disabled on the app — its migration init container owns the schema
+      # (docker-compose.migrations.yml). Also set there, alongside the migrator.
+      SPRING_FLYWAY_ENABLED: 'false'
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_KAFKA_CONSUMER_GROUP_ID: audit-service
+      PROCESS_AUDIT_LOGS_KAFKA_TOPIC: process-audit-records
+      PERSIST_AUDIT_LOGS_KAFKA_TOPIC: persist-audit-records
+      # integrity-hash signing goes through enc-service (same as K8s EGOV_ENC_SIGN_HOST)
+      EGOV_ENC_SIGN_HOST: http://egov-enc-service:1234
+      SERVER_PORT: 8080
+      SECURITY_BASIC_ENABLED: 'false'
+      MANAGEMENT_SECURITY_ENABLED: 'false'
+      MANAGEMENT_HEALTH_DB_ENABLED: 'false'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/audit-service/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+      - egov-network
+
   # Unified database migrations for all DIGIT services
   # Runs all Flyway migrations in one container before services start
   db-migrations:
@@ -716,7 +763,12 @@ services:
       EGOV_MDMS_HOST: http://egov-mdms-service:8094/
       EGOV_MDMS_SEARCH_ENDPOINT: mdms-v2/v1/_search
       EGOV_USER_HOST: http://egov-user-proxy:8107/
-      STATE_LEVEL_TENANT_ID: pg.citya
+      # STATE_LEVEL_TENANT_ID MUST be the state ROOT (pg → rewritten to state_root),
+      # NOT the city tier. egov-workflow-v2 resolves the businessservice (PGR) at this
+      # tenant, and the businessservice is seeded at the state root. Grouping this with
+      # enc-service on `pg.citya` (city) makes workflow look for PGR at the city, find
+      # nothing, and fail every complaint APPLY. Refs #1160.
+      STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
       # Disable schema-per-tenant mode - use public schema for all tenants
       IS_ENVIRONMENT_CENTRAL_INSTANCE: 'false'
@@ -1475,6 +1527,12 @@ services:
       PGR_STATELEVEL_TENANTID: pg
       STATE_LEVEL_TENANT_ID: pg
       EGOV_STATE_LEVEL_TENANT_ID: pg
+      # Visibility V1 Step-2 (reportee-scoped inbox tabs). Deploy-level
+      # switch for the /request/inbox/_search|_count endpoints + the HRMS
+      # projection consumer/rebuild; per-tenant enablement (and the
+      # client->server cutover) stays in MDMS
+      # RAINMAKER-PGR.InboxVisibilityConfig (enabled / serverSide).
+      PGR_VISIBILITY_ENABLED: 'true'
       JAVA_OPTS: '-Xmx384m -Xms384m'
       JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar ${MAC_JVM_OPTS:-}
       OTEL_TRACES_EXPORTER: otlp
@@ -1500,12 +1558,21 @@ services:
     container_name: egov-url-shortening
     restart: unless-stopped
     depends_on:
+      # pgbouncer for the app datasource, postgres-db for Flyway's direct migration.
+      pgbouncer:
+        condition: service_healthy
       postgres-db:
         condition: service_healthy
     environment:
       SERVER_PORT: '8080'
       SERVER_CONTEXTPATH: /egov-url-shortening
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/egov
+      # The image pins spring.datasource.driver-class-name to OpenTelemetryDriver,
+      # which only accepts jdbc:otel: URLs -- a plain jdbc:postgresql:// one makes
+      # Hikari throw "claims to not accept jdbcUrl" and the DataSource never opens.
+      # App traffic goes through pgbouncer (the 'postgres' alias), as every other
+      # service does; Flyway below stays direct on postgres-db, because it takes a
+      # session-level advisory lock that transaction-mode pooling would break.
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_URL: jdbc:postgresql://postgres-db:5432/egov
@@ -1607,6 +1674,16 @@ services:
       - "18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
+      # Profile-gated stacks: keep these beside COMPOSE_PROFILES in .env.
+      # Unset means off -- gatus enables an endpoint when its variable is missing.
+      GATUS_PROFILE_OTP: ${GATUS_PROFILE_OTP:-false}
+      GATUS_PROFILE_SEARCH: ${GATUS_PROFILE_SEARCH:-false}
+      GATUS_PROFILE_MCP: ${GATUS_PROFILE_MCP:-false}
+      GATUS_PROFILE_KEYCLOAK: ${GATUS_PROFILE_KEYCLOAK:-false}
+      GATUS_PROFILE_NOTIFICATIONS: ${GATUS_PROFILE_NOTIFICATIONS:-false}
+      GATUS_AUDIT: "true"
+      GATUS_PROXIES: "true"
+      GATUS_SMS_PORT: "8005"
     networks:
       - egov-network
 

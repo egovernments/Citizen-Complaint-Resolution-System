@@ -154,6 +154,28 @@ public class PGRQueryBuilder {
             addToPreparedStatement(preparedStmtList, departmentCodes);
         }
 
+        // Visibility (reportee-scoped All): team-assigned complaints OR the
+        // unassigned queues, in one predicate so pagination and count stay
+        // correct. Set only by VisibilityService.
+        Set<String> visibilityIds = criteria.getVisibilityIds();
+        Set<String> visibilityStates = criteria.getVisibilityUnassignedStates();
+        if (!CollectionUtils.isEmpty(visibilityIds) || !CollectionUtils.isEmpty(visibilityStates)) {
+            addClauseIfRequired(preparedStmtList, builder);
+            builder.append(" ( ");
+            boolean hasIds = !CollectionUtils.isEmpty(visibilityIds);
+            if (hasIds) {
+                builder.append(" ser.serviceRequestId IN (").append(createQuery(visibilityIds)).append(")");
+                addToPreparedStatement(preparedStmtList, visibilityIds);
+            }
+            if (!CollectionUtils.isEmpty(visibilityStates)) {
+                if (hasIds)
+                    builder.append(" OR ");
+                builder.append(" ser.applicationStatus IN (").append(createQuery(visibilityStates)).append(")");
+                addToPreparedStatement(preparedStmtList, visibilityStates);
+            }
+            builder.append(" ) ");
+        }
+
 
         Set<String> localities = criteria.getLocality();
         if(!CollectionUtils.isEmpty(localities)){

@@ -727,7 +727,7 @@ const CalendarIcon = (props,fill="black" ,width="24",height="24") => (
   </svg>
 );
 
-const SortDown = (style,onClick,fill="#C84C0E" ,width="24",height="24") => (
+const SortDown = ({ style, onClick, fill="#C84C0E" ,width="24",height="24" }={}) => (
   <svg
     style={{ display: "inline-block" ,...style }}
     xmlns="http://www.w3.org/2000/svg"
@@ -743,7 +743,7 @@ const SortDown = (style,onClick,fill="#C84C0E" ,width="24",height="24") => (
   </svg>
 );
 
-const SortUp = (style,onClick,fill="#C84C0E" ,width="24",height="24") => (
+const SortUp = ({ style, onClick, fill="#C84C0E" ,width="24",height="24" }={}) => (
   <svg
     style={{ display: "inline-block", ...style }}
     xmlns="http://www.w3.org/2000/svg"

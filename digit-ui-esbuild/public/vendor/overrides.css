@@ -2945,6 +2945,49 @@ button[class*="toast-close"] svg,
   min-height: 100%;
 }
 
+/* My/All visibility tabs (Visibility V1, PR #1052). Rendered inside the
+ * composer's results column (`resultsHeader` slot) so the strip sits
+ * directly above the complaint list per the PRD. `sticky; left: 0` keeps
+ * it in place when wide tables give the wrapper `overflow-x: auto`.
+ * Colours come from the brand palette vars (same pattern as the table
+ * header rules below) so tenant theming applies. */
+.v2-pgr-inbox .pgr-inbox-tabs {
+  display: flex;
+  gap: 2rem;
+  border-bottom: 1px solid var(--color-border, #d6d5d4);
+  margin-bottom: 8px;
+  position: sticky;
+  left: 0;
+  flex-shrink: 0;
+}
+.v2-pgr-inbox .pgr-inbox-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-text-secondary, #505a5f);
+}
+.v2-pgr-inbox .pgr-inbox-tab.active {
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+  border-bottom-color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+  font-weight: 700;
+}
+.v2-pgr-inbox .pgr-inbox-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-error, #d4351c);
+  display: inline-block;
+}
+
 /* react-data-table-component header colour — vendor renders header
  * cells as `.rdt_TableCol` (styled-components), which inherits its
  * legacy dark-teal `#0B4B66` colour. Force it through the brand

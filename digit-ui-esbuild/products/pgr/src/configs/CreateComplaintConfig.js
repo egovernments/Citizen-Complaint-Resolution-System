@@ -54,13 +54,30 @@ export const CreateComplaintConfig = {
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
                 validation: {
                   required: true,
-                  // Moz QA (CCSD-1990): minimum length must be 1, not 4 — a
-                  // single-character name (e.g. "A") is valid. The quantifier
-                  // counts chars AFTER the leading letter, so {0,29} = total
-                  // length 1–30. The rest of the hygiene is kept: must start
-                  // with a letter, no leading/trailing separator, no doubled
-                  // space/underscore/hyphen.
-                  pattern: /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{0,29}$)^.*$/,
+                  // Read order (canonical UserValidation pattern, same as the
+                  // mobile field above):
+                  //   1. `window.__DIGIT_USER_VALIDATION.name` — populated by
+                  //      `useMobileValidation` from the validation MDMS master
+                  //      (nameRegex, optional field).
+                  //   2. Built-in fallback below — always valid, so an
+                  //      unseeded or malformed master value can't break the form.
+                  // Getter re-evaluates on every read, so the MDMS value wins
+                  // as soon as the hook resolves.
+                  // CCRS#437: Allow 4-character names (e.g. "John"). The
+                  // quantifier counts characters AFTER the leading letter,
+                  // CCSD-1990: min length 1 (was 4). {0,29} = total 1–30.
+                  // Letter-first / no leading-trailing-doubled separator kept.
+                  get pattern() {
+                    const raw = window?.__DIGIT_USER_VALIDATION?.name?.pattern;
+                    if (raw) {
+                      try {
+                        return raw instanceof RegExp ? raw : new RegExp(raw);
+                      } catch (e) {
+                        console.error("Invalid nameRegex in validation master:", e);
+                      }
+                    }
+                    return /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{0,29}$)^.*$/;
+                  },
                 }
               },
             },

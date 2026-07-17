@@ -14,6 +14,7 @@ import {
   Users,
   LayoutDashboard,
   BarChart3,
+  Network,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -33,6 +34,7 @@ import {
   SlidersHorizontal,
   MessageCircle,
   UserCog,
+  Map,
   LayoutTemplate,
   Paintbrush,
 } from 'lucide-react';
@@ -65,6 +67,7 @@ const navGroups = [
       { id: 'departments', nameKey: 'app.nav.departments', path: '/manage/departments', icon: Briefcase },
       { id: 'designations', nameKey: 'app.nav.designations', path: '/manage/designations', icon: Award },
       { id: 'boundary-hierarchies', nameKey: 'app.nav.hierarchies', path: '/manage/boundary-hierarchies', icon: GitBranch },
+      { id: 'map-config', nameKey: 'app.nav.map_config', path: '/manage/map-config', icon: Map },
     ],
   },
   {
@@ -90,6 +93,7 @@ const navGroups = [
     labelKey: 'app.nav.people',
     items: [
       { id: 'employees', nameKey: 'app.nav.employees', path: '/manage/employees', icon: Users },
+      { id: 'org-chart', nameKey: 'app.nav.org_chart', path: '/manage/org-chart', icon: Network },
       { id: 'users', nameKey: 'app.nav.users', path: '/manage/users', icon: User },
     ],
   },
@@ -173,12 +177,12 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           : 'custom';
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen overflow-hidden bg-background flex">
       {/* Sidebar */}
       <aside
         className={`${
           sidebarCollapsed ? 'w-16' : 'w-64'
-        } bg-card border-r border-border flex flex-col transition-all duration-200`}
+        } bg-card border-r border-border flex flex-col transition-all duration-200 h-full`}
       >
         {/* Sidebar Header — DIGIT Admin Console branding */}
         <div className="h-16 border-b border-border flex items-center px-4 gap-2">
@@ -434,7 +438,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         </header>
 
         {/* Main content */}
-        <main id="main-content" className="flex-1 p-6 overflow-auto">
+        <main id="main-content" className="flex-1 p-6 overflow-auto min-h-0">
           {children}
         </main>
       </div>

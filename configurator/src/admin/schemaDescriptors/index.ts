@@ -8,6 +8,7 @@ import { pgrUiConstantsDescriptor } from './pgr-ui-constants';
 import { stateInfoDescriptor } from './state-info';
 import { notificationRoutingDescriptor } from './notification-routing';
 import { notificationTemplateDescriptor } from './notification-template';
+import { mapConfigDescriptor } from './map-config';
 import { landingSectionDescriptor } from './landing-section';
 import { landingPageConfigDescriptor } from './landing-page-config';
 import { cityModuleDescriptor } from './city-module';
@@ -23,6 +24,7 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [stateInfoDescriptor.schema]: stateInfoDescriptor,
   [notificationRoutingDescriptor.schema]: notificationRoutingDescriptor,
   [notificationTemplateDescriptor.schema]: notificationTemplateDescriptor,
+  [mapConfigDescriptor.schema]: mapConfigDescriptor,
   [landingSectionDescriptor.schema]: landingSectionDescriptor,
   [landingPageConfigDescriptor.schema]: landingPageConfigDescriptor,
   [cityModuleDescriptor.schema]: cityModuleDescriptor,

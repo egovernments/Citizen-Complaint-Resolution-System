@@ -1571,24 +1571,38 @@ export const UICustomizations = {
     test: "yes",
   },
   PGRInboxConfig: {
-    preProcess: (data) => {
+    preProcess: (data, additionalDetails) => {
       const clonedData = _.cloneDeep(data);
       const searchForm = clonedData?.state?.searchForm || {};
       const filterForm = clonedData?.state?.filterForm || {};
+
+      // Visibility V1 tab context (passed from PGRInbox via additionalDetails;
+      // absent when the visibility feature flag is off -> legacy behaviour).
+      const activeTab = additionalDetails?.activeTab;
+      const allStates = additionalDetails?.allStates || [];
 
       // Build clean params from form state
       const params = {
         tenantId: Digit.ULBService.getCurrentTenantId(),
         limit: clonedData?.state?.tableForm?.limit || 10,
         offset: clonedData?.state?.tableForm?.offset ?? 0,
-        // Order by SLA remaining (most urgent first) server-side, so the order
-        // is consistent across the FULL paginated result set. The table's
-        // column-header sort is client-side react-table — it only reorders the
-        // current page, so rows appeared to drop in/out as page size changed
-        // (issue #432). pgr-services now supports sortBy=sla; see
+        // Order server-side, so the order is consistent across the FULL
+        // paginated result set (a client-side sort only reorders the current
+        // page — issue #432). Default to SLA remaining, most urgent first;
+        // ResultsDataTableWrapper's onSort handler overrides sortBy/sortOrder
+        // in tableForm when the operator clicks a sortable column header
+        // (issue #922). pgr-services supports both; see
         // PGRQueryBuilder.addOrderByClause.
-        sortBy: "sla",
-        sortOrder: "ASC",
+        //
+        // sortOrder is uppercased defensively: SearchComponent's own
+        // clearSearch()/onSubmit (unrelated "sort" toggle in the
+        // search/filter form, not the table header click this issue is
+        // about) writes a lowercase "asc"/"desc" into this same tableForm
+        // slot on mount. pgr-services' SortOrder enum match is case-exact,
+        // so a stray lowercase value 400s every search — regardless of
+        // whether the operator ever touched a column header.
+        sortBy: clonedData?.state?.tableForm?.sortBy || "sla",
+        sortOrder: (clonedData?.state?.tableForm?.sortOrder || "ASC").toUpperCase(),
       };
 
       // Search form fields
@@ -1655,9 +1669,36 @@ export const UICustomizations = {
       ];
       const rawStatuses = filterForm.status || {};
       const statuses = Object.keys(rawStatuses).filter((key) => rawStatuses[key] === true);
-      params.applicationStatus = statuses.length > 0 ? statuses : OPEN_STATES;
+      // Status scope: an explicit filter wins; otherwise both tabs default to
+      // every open/actionable state. The tabs differ on the ASSIGNEE axis, not
+      // the status axis (PO decision 2026-07-15).
+      if (statuses.length > 0) {
+        params.applicationStatus = statuses;
+      } else {
+        params.applicationStatus = allStates.length > 0 ? allStates : OPEN_STATES;
+      }
 
-      // Filter: assigned to me
+      // My = complaints whose workflow assignee is me. The tabs replaced the
+      // assigned-to-me radio, so "My" keeps the radio's person semantics
+      // (this is the design matrix's V2 "My", pulled forward — see design §3).
+      // All = every open complaint; a GRO's unassigned assignment queue
+      // therefore lives in All, not My (accepted tradeoff).
+      //
+      // Server mode (InboxVisibilityConfig.serverSide): pgr-services resolves
+      // visibility from the `scope` filter param — MINE = assignee-me, TEAM =
+      // reportee subtree + unassigned queues — so the client sends no
+      // assignee. MY/ALL stay UI tab ids; MINE/TEAM are the API semantics.
+      if (additionalDetails?.serverSide) {
+        if (activeTab) params.scope = activeTab === "MY" ? "MINE" : "TEAM";
+      } else if (activeTab === "MY") {
+        const userInfo = Digit.UserService.getUser()?.info;
+        if (userInfo?.uuid) {
+          params.assignee = [userInfo.uuid];
+        }
+      }
+
+      // Legacy assigned-to-me radio (only present in the filter form when the
+      // visibility-tabs feature flag is OFF — see PGRSearchInboxConfig).
       const assignedFilter = filterForm.assignedToMe;
       if (assignedFilter?.code === "ASSIGNED_TO_ME") {
         const userInfo = Digit.UserService.getUser()?.info;

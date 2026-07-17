@@ -1071,7 +1071,7 @@ function normalizeSeg(value) {
  * Title resolution for the inverted catalog. The MDMS def now carries a human
  * `viz.title` (the single source of truth, sourced from the reference dashboard
  * labels); prefer it. `titleKey` is retained on the def for a future i18n layer
- * but is a raw key (RAINMAKER-PGR.DASHBOARD_KPI_*) so it is only ever used as a
+ * but is a raw key (CMS-DASHBOARD.DASHBOARD_KPI_*) so it is only ever used as a
  * last-resort, prettified, fallback — never rendered verbatim.
  */
 function resolveTitle(def) {
