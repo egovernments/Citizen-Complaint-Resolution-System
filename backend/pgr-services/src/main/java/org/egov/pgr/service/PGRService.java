@@ -179,21 +179,18 @@ public class PGRService {
         Map<String, ComplaintTemplateTypeConfig> configCache = buildConfigCache(requestInfo, tenantIdForMdms, enrichedServiceWrappers);
         applyDecryptOrMask(enrichedServiceWrappers, requestInfo, configCache);
 
-        Map<Long, List<ServiceWrapper>> sortedWrappers = new TreeMap<>(Collections.reverseOrder());
-        for(ServiceWrapper svc : enrichedServiceWrappers){
-            if(sortedWrappers.containsKey(svc.getService().getAuditDetails().getCreatedTime())){
-                sortedWrappers.get(svc.getService().getAuditDetails().getCreatedTime()).add(svc);
-            }else{
-                List<ServiceWrapper> serviceWrapperList = new ArrayList<>();
-                serviceWrapperList.add(svc);
-                sortedWrappers.put(svc.getService().getAuditDetails().getCreatedTime(), serviceWrapperList);
-            }
-        }
-        List<ServiceWrapper> sortedServiceWrappers = new ArrayList<>();
-        for(Long createdTimeDesc : sortedWrappers.keySet()){
-            sortedServiceWrappers.addAll(sortedWrappers.get(createdTimeDesc));
-        }
-        return sortedServiceWrappers;
+        // NOTE: do not re-sort enrichedServiceWrappers here. It used to be
+        // regrouped into a createdTime-descending TreeMap unconditionally,
+        // which silently discarded whatever ORDER BY
+        // PGRQueryBuilder.addOrderByClause built from criteria.sortBy/sortOrder
+        // (locality/applicationStatus/serviceRequestId/sla) — every inbox
+        // column-header sort landed on this endpoint and always came back in
+        // createdTime-descending order regardless of what was requested
+        // (issue #922). The query builder already defaults to
+        // "ORDER BY ser_createdtime DESC" when no sortBy is given, so trusting
+        // the DB's order here preserves that default while finally letting an
+        // explicit sortBy take effect.
+        return enrichedServiceWrappers;
     }
 
 
