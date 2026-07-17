@@ -22,8 +22,19 @@
  * and each test self-skips with a clear reason when the deployment can't
  * support the case (e.g. a single-complaint-type or single-locality tenant).
  *
- * Auth: getPersona('inbox-viewer') logs into the inbox UI; the default
- * "Assigned to All" radio means it sees every complaint, not just its own.
+ * Auth: getPersona('inbox-viewer') logs into the inbox UI.
+ *
+ * KNOWN RED on a deployment that applies the inbox's assignee default (bomet):
+ * the status/REJECTED case cannot pass there, and not for want of seeding.
+ * inboxConfigPGR.js defaults the filter to assignee = ASSIGNED_TO_ME, which
+ * useInboxGeneral hands to pgr-services as `assignee=<self uuid>`; meanwhile
+ * egov-workflow-v2 refuses an assignee on REJECT ("INVALID_ASSIGNEE: cannot
+ * assign to the user") because the REJECTED state has no roles able to act on
+ * it. So every REJECTED complaint has no assignee, the inbox only ever asks
+ * for complaints WITH one, and the Rejected checkbox the UI offers can never
+ * return a row. Nor can the spec click its way out: bomet renders no
+ * "Assigned to all" radio at all. See docs/LOCAL-VS-BOMET-PARITY.md.
+ * It passes on mz.maputo only because that build never adds the param.
  */
 import { test, expect, type Page } from '@playwright/test';
 import { BASE_URL } from '../utils/env';
