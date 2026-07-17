@@ -46,14 +46,22 @@ public class AnalyticsMetrics {
     private final LongCounter queryRows;
 
     public AnalyticsMetrics() {
-        Meter meter = GlobalOpenTelemetry.getMeter(METER_NAME);
+        this(GlobalOpenTelemetry.getMeter(METER_NAME));
+    }
+
+    /** Visible for tests: lets a test pass an SDK meter to assert instrument shape. */
+    AnalyticsMetrics(Meter meter) {
+        // NOTE: no unit on purpose. The metric NAMES already carry their unit (.ms),
+        // and the collector's prometheus exporter appends a unit-derived suffix when
+        // unit is set — validated live on bomet: unit "ms" surfaced as
+        // pgr_analytics_query_duration_ms_milliseconds_*. Omitting the unit keeps the
+        // scraped names exactly pgr_analytics_query_duration_ms_* /
+        // pgr_analytics_query_rows_total (same fix as the client's dashboardMetrics.js, #1268).
         this.queryDuration = meter.histogramBuilder("pgr.analytics.query.duration.ms")
                 .setDescription("Duration of one executed analytics SQL query (per batch entry / compose source)")
-                .setUnit("ms")
                 .build();
         this.queryRows = meter.counterBuilder("pgr.analytics.query.rows")
                 .setDescription("Rows returned by executed analytics SQL queries")
-                .setUnit("{row}")
                 .build();
     }
 

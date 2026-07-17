@@ -27,6 +27,12 @@ call is a no-op** — no config change, no compose change, safe in tests/CI.
 | `pgr.analytics.query.duration.ms` | `pgr_analytics_query_duration_ms_bucket` / `_sum` / `_count` | histogram |
 | `pgr.analytics.query.rows` | `pgr_analytics_query_rows_total` | counter |
 
+The instruments deliberately set **no OTLP `unit`** — the unit lives in the name
+(`.ms`). The collector's prometheus exporter appends a unit-derived suffix whenever
+`unit` is set (validated live on bomet: `unit: "ms"` scraped as
+`pgr_analytics_query_duration_ms_milliseconds_*`), which would break the names above.
+Same convention as the client-side `dashboardMetrics.js` (#1268).
+
 Labels on both: `kpi_id` (the KPI id, or `inline` for inline-grammar queries), `grain`
 (`facts`/`events`/`daily`/`compose` never appears — sources record their real grain),
 `tenant` (the request tenantId). Resource attributes (`service.name="pgr-services"` →

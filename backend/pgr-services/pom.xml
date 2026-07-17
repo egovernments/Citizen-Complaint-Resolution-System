@@ -127,6 +127,14 @@
             <artifactId>opentelemetry-api</artifactId>
             <version>1.45.0</version>
         </dependency>
+        <!-- SDK + in-memory reader, tests only: lets AnalyticsMetricsTest assert the
+             exact instrument names/units the collector's prometheus exporter surfaces. -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
+            <version>1.45.0</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
