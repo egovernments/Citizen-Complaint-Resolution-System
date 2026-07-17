@@ -30,8 +30,26 @@ RUN chmod +x ./install-deps.sh
 RUN ./install-deps.sh
 RUN yarn config set network-timeout 600000
 
-# Use frozen-lockfile for deterministic installs in CI
-RUN yarn install --frozen-lockfile
+# Install strictly from the committed yarn.lock. --pure-lockfile installs the locked tree and
+# never rewrites the lockfile, so an image build can't quietly drift from what's in git.
+#
+# Why not --frozen-lockfile (which additionally errors if the lockfile is out of date)?
+# It cannot pass in this project, and the reason is worth knowing before anyone puts it back:
+# react-scripts depends on babel-loader at exactly 8.1.0, while the `resolutions` block below
+# force-overrides `**/babel-loader` to 8.2.2. yarn v1 honours the resolution, installs 8.2.2, and
+# writes the lockfile entry `babel-loader@8.1.0, babel-loader@8.2.2: version "8.2.2"` — an entry it
+# then rejects when it reads the file back ("Lockfile has incorrect entry ... Ignoring it"),
+# because 8.2.2 does not satisfy the exact range 8.1.0. yarn generates a lockfile it will not
+# accept, so --frozen-lockfile fails 100% of the time regardless of whether anything has drifted.
+# Removing the resolution would fix the guard but changes the installed tree, which is a separate
+# decision.
+#
+# NOTE: before yarn.lock was committed, --frozen-lockfile was a silent no-op here (yarn v1 does not
+# fail when the lockfile is merely absent), so this is not a loss of a guarantee we ever had.
+# For a real drift guard, run `yarn install && git diff --exit-code web/yarn.lock` in CI — a plain
+# install against a current lockfile is byte-stable, so any diff means package.json moved without
+# the lockfile.
+RUN yarn install --pure-lockfile
 RUN yarn build:webpack
 
 FROM nginx:mainline-alpine
