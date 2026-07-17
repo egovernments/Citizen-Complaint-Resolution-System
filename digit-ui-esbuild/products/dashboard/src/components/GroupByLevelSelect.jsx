@@ -1,15 +1,19 @@
 import React from "react";
 import useDashboardT from "../i18n/useDashboardT";
 import { translate as t, exists } from "../i18n/localeRuntime";
+import PopoverMenu, { PopoverMenuItem } from "./ui/PopoverMenu";
 
 /**
- * Per-widget "Group by" hierarchy-level control (#1111 PR2).
+ * Per-widget "Group by" hierarchy-level control (#1111 PR2), design pass:
+ * a small labeled chip ("Group: Category") in the widget header's title row
+ * opening the level menu through the shared PopoverMenu primitive — no
+ * native <select>. The compact chip keeps to one line (prefix fixed, value
+ * truncates) so it never wraps narrow widgets, and end-aligns its panel so
+ * the menu stays on-screen for tiles hugging the right edge.
  *
- * A compact select rendered in the widget header's title row (right-aligned)
- * for tiles whose KPI def declares the `hierLevel` param on a tenant with a
- * usable complaint hierarchy. Options come from buildGroupByOptions
- * (definition levels + Leaf); the RGL draggableCancel whitelist already
- * covers `select`, so interacting with it never starts a widget drag.
+ * RGL: the chip is a <button> (already in AdminDashboard's draggableCancel
+ * list) and the panel portals to document.body, outside the grid item — so
+ * using the menu can never start a widget drag.
  *
  * This is deliberately NOT a dashboard filter: it changes the widget's own
  * aggregation dimension (which level the service_code buckets roll up to),
@@ -42,23 +46,40 @@ const GroupByLevelSelect = ({ value, options, hierarchyType, onChange }) => {
   // re-resolve on a language switch.
   const { t: tt } = useDashboardT();
   const label = tt("DASHBOARD_GROUPBY_LABEL", "Group by");
+  const optionLabel = (opt) =>
+    opt.leaf
+      ? tt("DASHBOARD_GROUPBY_LEAF", "Leaf")
+      : levelDisplayLabel(opt.level, hierarchyType);
+  const current = options.find((opt) => opt.value === value);
+
   return (
-    <span className="dashboard-filter-inline-select-wrap tw-ml-2 tw-mr-6">
-      <select
-        className="dashboard-filter-inline-select tw-min-w-0"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={label}
-        title={label}
+    <span className="dashboard-groupby-chip-wrap">
+      <PopoverMenu
+        compact
+        align="end"
+        panelWidth={200}
+        ariaLabel={label}
+        chipTitle={label}
+        chipPrefix={tt("DASHBOARD_GROUPBY_CHIP", "Group")}
+        chip={current ? optionLabel(current) : String(value)}
       >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.leaf
-              ? tt("DASHBOARD_GROUPBY_LEAF", "Leaf")
-              : levelDisplayLabel(opt.level, hierarchyType)}
-          </option>
-        ))}
-      </select>
+        {({ close }) => (
+          <div className="dashboard-popover-list">
+            {options.map((opt) => (
+              <PopoverMenuItem
+                key={opt.value}
+                selected={opt.value === value}
+                onSelect={() => {
+                  onChange(opt.value);
+                  close();
+                }}
+              >
+                {optionLabel(opt)}
+              </PopoverMenuItem>
+            ))}
+          </div>
+        )}
+      </PopoverMenu>
     </span>
   );
 };
