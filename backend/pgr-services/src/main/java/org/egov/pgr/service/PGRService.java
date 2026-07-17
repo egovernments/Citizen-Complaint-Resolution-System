@@ -262,13 +262,27 @@ public class PGRService {
      */
     public Integer count(RequestInfo requestInfo, RequestSearchCriteria criteria){
 
+        // Mirrors search()'s guards. The tenant and ownership predicates in PGRQueryBuilder are
+        // conditional, so an unfiltered criteria does not narrow the count — it removes the filter.
+        // Validate before scoping, as search() does: scoping clears mobileNumber for a pure citizen,
+        // which would otherwise hide that param from the allowed-params check.
+        validator.validateSearch(requestInfo, criteria);
+
         // CCRS #1071: /_count shares RequestSearchCriteria and PGRQueryBuilder with /_search, so it
         // needs the same record-level ownership scoping — otherwise a citizen counts every complaint
         // in the tenant, and can use serviceRequestId/ids as an existence oracle for other citizens'
         // complaints. Only the scoping half of the enrichment applies here: the count query wraps the
         // search query including its LIMIT, so applying the pagination defaults would cap the count.
-        // Applied FIRST so ownership is pinned before any early return below.
+        // Applied before the early returns below so ownership is pinned on every path that queries.
         enrichmentService.scopeSearchCriteria(requestInfo, criteria);
+
+        if(criteria.isEmpty())
+            return 0;
+
+        // A mobileNumber that resolved to no user must count 0, not fall through to an unscoped
+        // count: an empty userIds drops the ownership clause entirely.
+        if(criteria.getMobileNumber()!=null && CollectionUtils.isEmpty(criteria.getUserIds()))
+            return 0;
 
         // Mirror search()'s assignee handling: resolve the assignee to
         // serviceRequestIds via workflow before counting. Without this the
