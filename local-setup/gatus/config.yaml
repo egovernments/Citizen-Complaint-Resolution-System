@@ -1,5 +1,9 @@
 # Gatus Configuration for DIGIT Core Services
 # https://github.com/TwiN/gatus
+#
+# Kept in sync with the k3s tier: local-setup/k8s/tools/gatus.yaml (gatus-config ConfigMap).
+# Shared services must have identical names, groups, URLs and conditions in both files.
+# Entries marked "compose-only" have no k8s manifest and so exist here only.
 
 storage:
   type: memory
@@ -15,7 +19,17 @@ ui:
 
 endpoints:
   # ==================== Infrastructure ====================
+  # NOTE: `postgres` is a network alias for PgBouncer, not for Postgres itself.
+  # The database is reachable as `postgres-db`. Both are checked separately so a
+  # dead database cannot hide behind a healthy pooler.
   - name: PostgreSQL
+    group: Infrastructure
+    url: "tcp://postgres-db:5432"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: PgBouncer
     group: Infrastructure
     url: "tcp://postgres:5432"
     interval: 30s
@@ -36,10 +50,24 @@ endpoints:
     conditions:
       - "[CONNECTED] == true"
 
+  - name: MinIO
+    group: Infrastructure
+    url: "http://minio:9000/minio/health/live"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
   # ==================== Core Services ====================
   - name: MDMS Service
     group: Core Services
     url: "http://egov-mdms-service:8094/mdms-v2/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: MDMS Backend
+    group: Core Services
+    url: "http://mdms-backend:8094/mdms-v2/health"
     interval: 30s
     conditions:
       - "[STATUS] == 200"
@@ -72,12 +100,27 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
 
+  - name: Localization Service
+    group: Core Services
+    url: "http://egov-localization:8096/localization/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
   - name: Boundary Service
     group: Core Services
     url: "http://boundary-service:8081/boundary-service/actuator/health"
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+
+  # No HTTP health endpoint exposed; its own container healthcheck is a TCP probe.
+  - name: Boundary Management Service
+    group: Core Services
+    url: "tcp://egov-bndry-mgmnt:8080"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
 
   - name: Access Control Service
     group: Core Services
@@ -92,6 +135,53 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+
+  - name: Filestore Service
+    group: Core Services
+    url: "http://egov-filestore:8083/filestore/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: HRMS Service
+    group: Core Services
+    url: "http://egov-hrms:8092/egov-hrms/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: URL Shortening Service
+    group: Core Services
+    url: "http://egov-url-shortening:8080/egov-url-shortening/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # ==================== Notification (compose-only) ====================
+  # These have no k8s manifest under local-setup/k8s/, so they are not mirrored
+  # into the k3s tier. Add them there if/when the manifests land.
+  - name: OTP Service
+    group: Notification
+    url: "http://egov-otp:8089/otp/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # No documented health endpoint; TCP probe only.
+  - name: User OTP Service
+    group: Notification
+    url: "tcp://user-otp:8090"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  # No documented health endpoint; TCP probe only.
+  - name: Notification SMS Service
+    group: Notification
+    url: "tcp://egov-notification-sms:8080"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
 
   # ==================== API Gateway ====================
   - name: Kong Gateway (Proxy)
@@ -111,6 +201,21 @@ endpoints:
   - name: Kong Status
     group: API Gateway
     url: "http://kong:8100/status"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # nginx proxies fronting egov-user / egov-workflow-v2 (compose-only).
+  - name: User Service Proxy
+    group: API Gateway
+    url: "http://egov-user-proxy:8107/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Workflow Service Proxy
+    group: API Gateway
+    url: "http://egov-workflow-proxy:8109/health"
     interval: 30s
     conditions:
       - "[STATUS] == 200"
@@ -166,3 +271,16 @@ endpoints:
       - "[STATUS] == 200"
       - "[BODY].responseInfo.status == SUCCESSFUL"
 
+  - name: Localization API - Message Search
+    group: API Tests
+    url: "http://egov-localization:8096/localization/messages/v1/_search?tenantId=pg&locale=en_IN&module=rainmaker-common"
+    method: POST
+    headers:
+      Content-Type: application/json
+    body: |
+      {
+        "RequestInfo": {"apiId": "digit", "ver": "1.0"}
+      }
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
