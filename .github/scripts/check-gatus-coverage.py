@@ -28,8 +28,10 @@ worse than no check at all -- it is a dashboard people believe. So a missing
 source file, or an ambiguous network alias, is a hard failure rather than a skip.
 
 Sources of truth:
-  compose:  every local-setup/docker-compose*.yml, enumerated in COMPOSE_FILES and
-            cross-checked against the directory so a new one cannot go unscanned
+  compose:  every local-setup/docker-compose* file -- BOTH the .yml and .yaml halves
+            (docker-compose.egov-digit.yaml and docker-compose.deploy.yaml are .yaml) --
+            enumerated in COMPOSE_FILES and cross-checked against the directory so a
+            new one cannot go unscanned
   k3s:      local-setup/k8s/**/*.yaml            (kind: Service)
   gatus:    local-setup/gatus/config.yaml        (compose tier)
             local-setup/k8s/tools/gatus.yaml     (k3s tier, gatus-config ConfigMap)
@@ -160,6 +162,61 @@ def _is_exempt(name: str, listens: bool = True):
     return None
 
 
+class _StrictLoader(yaml.SafeLoader):
+    """SafeLoader that rejects duplicate mapping keys instead of last-key-wins.
+
+    PyYAML silently keeps the last of a repeated key; `docker compose` rejects the
+    file outright. That gap is a false green with the guard's name on it: the file
+    docker compose refuses to parse at all is one this guard would happily certify,
+    reading a mangled half-parse as fact.
+
+    It is not hypothetical. docker-compose.db-migrations.yml had `db-seed:` indented
+    4 spaces instead of 2, so it merged into the preceding pgr-workflow-seed service:
+    `db-seed` vanished as a service, pgr-workflow-seed silently became postgres:16,
+    and user-seed depended on a service that did not exist. Broken since a7286953,
+    the first local-setup commit, and read as valid by every yaml.safe_load in here.
+    """
+
+
+def _no_duplicate_keys(loader, node, deep=False):
+    seen, out = {}, {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in seen:
+            raise yaml.constructor.ConstructorError(
+                None, None,
+                f"duplicate key {key!r} on line {key_node.start_mark.line + 1} "
+                f"(first defined on line {seen[key] + 1}). PyYAML would keep the last "
+                f"one and `docker compose` would reject the file; either way this guard "
+                f"cannot trust what it just read. Usually a mis-indented service key.",
+                key_node.start_mark,
+            )
+        seen[key] = key_node.start_mark.line
+        out[key] = loader.construct_object(value_node, deep=deep)
+    return out
+
+
+_StrictLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_duplicate_keys
+)
+
+
+def _rel(p: pathlib.Path) -> str:
+    """Repo-relative path for messages; falls back to the full path (self-test tmpdirs)."""
+    try:
+        return str(p.relative_to(ROOT))
+    except ValueError:
+        return str(p)
+
+
+def _load_strict(text: str, where: str):
+    """Parse compose YAML, refusing a document with duplicate keys."""
+    try:
+        return yaml.load(text, Loader=_StrictLoader) or {}
+    except yaml.YAMLError as e:
+        raise GuardError(f"{where} is not trustworthy YAML: {e}")
+
+
 def _load(path: pathlib.Path):
     return yaml.safe_load(path.read_text())
 
@@ -187,11 +244,11 @@ def compose_targets(paths):
             # it still reported OK. A source it cannot read is a broken guard, and
             # a broken guard must fail loudly rather than certify an empty perimeter.
             raise GuardError(
-                f"{p.relative_to(ROOT)} is listed in COMPOSE_FILES but does not exist. "
+                f"{_rel(p)} is listed in COMPOSE_FILES but does not exist. "
                 f"If it was renamed or removed, update COMPOSE_FILES (and the paths: "
                 f"filters in .github/workflows/gatus-coverage.yml) to match."
             )
-        doc = yaml.safe_load(_stub_vars(p.read_text())) or {}
+        doc = _load_strict(_stub_vars(p.read_text()), _rel(p))
         for svc, body in (doc.get("services") or {}).items():
             body = body or {}
             names[svc] = svc
@@ -496,6 +553,28 @@ def self_test() -> int:
         "services:\n"
         "  postgres-db: {ports: ['5432:5432']}\n"
         "  evil-svc: {networks: {digit: {aliases: [postgres-db]}}}\n",
+    )
+
+    # 8e. a duplicate key -- PyYAML keeps the last silently, docker compose rejects
+    #     the file. Reading a mangled half-parse as fact is a false green.
+    _expect_guard_error(
+        "a duplicate mapping key was silently last-key-wins'd instead of failing",
+        "services:\n"
+        "  svc-a:\n"
+        "    image: curl\n"
+        "    image: postgres:16\n",
+    )
+
+    # 8f. the real shape it takes: a service key mis-indented into its predecessor,
+    #     which is how db-seed vanished out of docker-compose.db-migrations.yml.
+    _expect_guard_error(
+        "a mis-indented service key merged into its predecessor without complaint",
+        "services:\n"
+        "  first-svc:\n"
+        "    image: curl\n"
+        "    restart: 'no'\n"
+        "    second-svc:\n"          # 4 spaces: merges into first-svc
+        "    image: postgres:16\n",  # -> duplicate 'image' on first-svc
     )
 
     # 8d. a legitimate alias (postgres -> pgbouncer) must still be accepted, and
