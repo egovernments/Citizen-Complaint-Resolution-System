@@ -549,7 +549,7 @@ public class AnalyticsService {
             recordCountCache.put(tenantId, new long[]{count, now + RECORD_COUNT_TTL_MS});
             return count;
         } catch (Exception e) {
-            log.debug("recordCount for tenant {} failed (returning null): {}", tenantId, e.toString());
+            log.debug("recordCount for tenant {} failed (returning null)", tenantId, e);
             return null;
         }
     }

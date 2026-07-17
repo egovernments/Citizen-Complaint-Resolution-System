@@ -75,7 +75,7 @@ public class AnalyticsMetrics {
             queryDuration.record(tookMs, attrs);
             queryRows.add(rowCount, attrs);
         } catch (RuntimeException e) {
-            log.debug("analytics metrics record failed (ignored): {}", e.toString());
+            log.debug("analytics metrics record failed (ignored)", e);
         }
     }
 
