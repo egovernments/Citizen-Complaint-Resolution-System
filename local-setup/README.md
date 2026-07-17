@@ -672,7 +672,8 @@ docker compose up -d                       # Fresh start
 ```
 local-setup/
 ├── docker-compose.yml              # Main service definitions (~3.8GB RAM, local builds)
-├── docker-compose.registry.yml     # All images from public registry (for Ansible deploy)
+├── docker-compose.registry.yml     # All images from public registry (NOT the Ansible
+│                                   # deploy — that uses docker-compose.egov-digit.yaml)
 ├── docker-compose.deploy.yaml      # Deploy variant (no resource limits)
 ├── docker-compose.db-migrations.yml # DB migrations variant
 ├── docker-compose.tilt.yml         # Overlay: points pgr-services/digit-ui at Tilt's locally built images
