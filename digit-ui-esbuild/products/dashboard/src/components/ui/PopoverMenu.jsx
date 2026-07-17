@@ -106,7 +106,8 @@ const ChevronRightIcon = () => (
  * rows. `descend` marks an interior tree row: trailing chevron, always a
  * plain menuitem (activating it navigates within the panel, it is not a
  * checkable option itself — but it still shows the selected treatment when
- * `selected` is passed, e.g. the applied subtree's own row).
+ * `selected` is passed, e.g. the applied subtree's own row, announced via
+ * aria-current since menuitem carries no aria-checked).
  */
 export const PopoverMenuItem = ({
   selected,
@@ -123,6 +124,7 @@ export const PopoverMenuItem = ({
       type="button"
       role={checkable ? "menuitemradio" : "menuitem"}
       aria-checked={checkable ? !!selected : undefined}
+      aria-current={!checkable && selected ? "true" : undefined}
       data-menu-item=""
       data-selected={selected ? "true" : undefined}
       title={title}

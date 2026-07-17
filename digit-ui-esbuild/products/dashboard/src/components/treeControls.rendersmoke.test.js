@@ -25,6 +25,7 @@ import React from "react";
 import ReactDOMServer from "react-dom/server";
 import ComplaintTypeTreeFilter, { ComplaintTypeTreePanel } from "./ComplaintTypeTreeFilter.jsx";
 import GroupByLevelSelect from "./GroupByLevelSelect.jsx";
+import { PopoverMenuItem } from "./ui/PopoverMenu.jsx";
 import { buildComplaintTree } from "../utils/complaintTypeTree";
 
 export { buildComplaintTree };
@@ -34,6 +35,8 @@ export const renderPanel = (props) =>
   ReactDOMServer.renderToStaticMarkup(React.createElement(ComplaintTypeTreePanel, props));
 export const renderGroupBy = (props) =>
   ReactDOMServer.renderToStaticMarkup(React.createElement(GroupByLevelSelect, props));
+export const renderMenuItem = (props, label) =>
+  ReactDOMServer.renderToStaticMarkup(React.createElement(PopoverMenuItem, props, label));
 `;
 
 function bundleEntry() {
@@ -63,7 +66,8 @@ function bundleEntry() {
   return require(out);
 }
 
-const { renderFilter, renderPanel, renderGroupBy, buildComplaintTree } = bundleEntry();
+const { renderFilter, renderPanel, renderGroupBy, renderMenuItem, buildComplaintTree } =
+  bundleEntry();
 
 // t: echo the seed English so assertions read naturally (the real runtime
 // echoes the KEY when unseeded — copy is not what this smoke verifies).
@@ -189,6 +193,27 @@ test("panel smoke: deeper than TRAIL_MAX — trail middle-truncates with ellipsi
   // elided levels stay recoverable from the ellipsis title
   assert.match(html, /title="Infrastructure › Water supply"/);
   assert.match(html, /All in Muddy water/);
+});
+
+/* ---------------- menu-row semantics ---------------- */
+
+test("menu-item smoke: applied descend row announces via aria-current", () => {
+  // An interior child that IS the applied subtree (ComplaintTypeTreePanel
+  // passes selected=true + descend when browsing the applied node's parent):
+  // plain menuitem (navigation row), no aria-checked, aria-current instead.
+  const html = renderMenuItem({ selected: true, descend: true, onSelect: noop }, "Water supply");
+  assert.match(html, /role="menuitem"/);
+  assert.match(html, /aria-current="true"/);
+  assert.doesNotMatch(html, /aria-checked/);
+  // unselected descend rows carry neither state
+  const off = renderMenuItem({ descend: true, onSelect: noop }, "Roads");
+  assert.doesNotMatch(off, /aria-current/);
+  assert.doesNotMatch(off, /aria-checked/);
+  // checkable rows keep their radio semantics untouched
+  const radio = renderMenuItem({ selected: true, onSelect: noop }, "Pothole");
+  assert.match(radio, /role="menuitemradio"/);
+  assert.match(radio, /aria-checked="true"/);
+  assert.doesNotMatch(radio, /aria-current/);
 });
 
 /* ---------------- Group-by chip ---------------- */
