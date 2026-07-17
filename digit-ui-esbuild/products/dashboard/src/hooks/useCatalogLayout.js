@@ -48,21 +48,29 @@ function persist(layout) {
 
 export function useCatalogLayout(kpis, packLayout) {
   const seed = useMemo(() => buildSeedLayout(packLayout, kpis), [packLayout, kpis]);
+  // The catalog is the hydration signal, NOT the seed: /packs returns
+  // defaultLayout: [] when no DashboardPack matches the caller's roles
+  // (AnalyticsController.getPacks), and a role-filtered catalog can empty the
+  // seed too. Gating on seed.length left those users with a hook that never
+  // read the saved layout — picker adds worked in-session, then vanished on
+  // every reload (#1276).
+  const catalogReady = useMemo(() => Object.keys(kpis || {}).length > 0, [kpis]);
 
   const [layout, setLayout] = useState([]);
 
-  // Seed once the catalog + pack resolve. Prefer a SAVED layout (the user's
-  // arrangement, including an intentional empty one) over the pack seed; drop
-  // tiles the role can no longer see and re-normalise geometry so a viz.kind
-  // change or a malformed entry can't leave a stale/invalid clamp. Only seeds
-  // from the pack when there is no saved layout at all (saved === null). A saved
-  // layout is taken as-is — newly-published pack tiles are added via the picker
-  // or a layout reset, not auto-injected.
+  // Hydrate once the catalog resolves (even when the pack seed is empty).
+  // Prefer a SAVED layout (the user's arrangement, including an intentional
+  // empty one) over the pack seed; drop tiles the role can no longer see and
+  // re-normalise geometry so a viz.kind change or a malformed entry can't
+  // leave a stale/invalid clamp. Only seeds from the pack when there is no
+  // saved layout at all (saved === null). A saved layout is taken as-is —
+  // newly-published pack tiles are added via the picker or a layout reset,
+  // not auto-injected.
   useEffect(() => {
-    if (!seed.length) return;
+    if (!catalogReady) return;
     setLayout(resolveInitialLayout(readSaved(), seed, kpis));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seed]);
+  }, [seed, catalogReady]);
 
   // Debounced persistence — onLayoutChange fires on every drag/resize tick.
   const persistTimerRef = useRef(null);
