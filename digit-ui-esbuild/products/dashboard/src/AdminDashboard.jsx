@@ -32,6 +32,7 @@ import { runKpiBatch, getTenantId } from "./services/analyticsService";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
 import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM_ID } from "./constants/layoutConfig";
 import { defaultSizeForKpi } from "./utils/layoutStore";
+import { createPickerDragLifecycle } from "./utils/pickerDragLifecycle";
 import {
   isCardKind,
   isSparklineKind,
@@ -365,12 +366,49 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   // picker click — one code path for attach + persist + batch refetch.
   const [droppingKpiId, setDroppingKpiId] = useState(null);
   const droppingKpiIdRef = useRef(null);
+  // RGL 1.3.4 has no cancel path for external drags: a drag that engaged the
+  // grid (placeholder shown, synthetic GridItem drag started → activeDrag set)
+  // but ended WITHOUT a drop on the grid leaves activeDrag/droppingDOMNode/
+  // __dropping-elem__ stuck forever. With activeDrag stuck, RGL ignores every
+  // future layout prop, so all later adds (drop OR click) persist to storage
+  // but never render — the "does not attach" + collapsed-grid repro (#1287).
+  // Track the drag lifecycle and, on a cancelled-after-engage dragend, fire a
+  // synthetic drop at the grid so RGL runs its own onDrop cleanup (counter
+  // reset + removeDroppingPlaceholder). droppingKpiIdRef is nulled FIRST, so
+  // handleGridDrop treats the synthetic drop as cleanup, never as an add.
+  const dragLifecycleRef = useRef(null);
+  if (!dragLifecycleRef.current) dragLifecycleRef.current = createPickerDragLifecycle();
+  const gridWrapRef = useRef(null);
   const handlePickerDragStart = useCallback((kpiId) => {
+    dragLifecycleRef.current.start();
     droppingKpiIdRef.current = kpiId;
     setDroppingKpiId(kpiId);
   }, []);
+  // RGL calls onDropDragOver on every dragover tick — the earliest reliable
+  // signal that its dropping state now exists. Return undefined so the
+  // droppingItem prop is used as-is.
+  const handleGridDropDragOver = useCallback(() => {
+    dragLifecycleRef.current.gridDragOver();
+    return undefined;
+  }, []);
   const handlePickerDragEnd = useCallback(() => {
     droppingKpiIdRef.current = null;
+    const { needsSyntheticCleanup } = dragLifecycleRef.current.end();
+    if (needsSyntheticCleanup) {
+      // Must dispatch before setDroppingKpiId(null) commits: RGL's onDrop is
+      // detached once isDroppable flips false, and only onDrop resets the
+      // dragEnterCounter and removes the dropping placeholder + activeDrag.
+      const gridEl = gridWrapRef.current?.querySelector(".react-grid-layout");
+      if (gridEl && typeof DragEvent === "function") {
+        try {
+          gridEl.dispatchEvent(
+            new DragEvent("drop", { bubbles: true, cancelable: true })
+          );
+        } catch {
+          /* jsdom/older engines: nothing to clean without real DnD anyway */
+        }
+      }
+    }
     setDroppingKpiId(null);
   }, []);
   // RGL sizes the drop placeholder from droppingItem, and its calcXY uses the
@@ -382,6 +420,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   }, [droppingKpiId, kpis]);
   const handleGridDrop = useCallback(
     (_layout, item, e) => {
+      dragLifecycleRef.current.gridDrop();
       // Prefer the dataTransfer payload (survives re-renders mid-drag); the
       // ref covers browsers that gate getData to the drop handler proper.
       let kpiId = null;
@@ -619,8 +658,11 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           </p>
         </div>
       ) : (
+        <div ref={gridWrapRef}>
         <GridLayoutWithWidth
-          className="dashboard-grid-layout layout"
+          className={`dashboard-grid-layout layout${
+            droppingKpiId ? " dashboard-grid-layout--dropping" : ""
+          }`}
           layout={gridLayout}
           cols={GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}
@@ -632,6 +674,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           isDroppable={Boolean(droppingKpiId)}
           droppingItem={droppingItem}
           onDrop={handleGridDrop}
+          onDropDragOver={handleGridDropDragOver}
           draggableHandle=".dashboard-widget-surface"
           draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
           onLayoutChange={onLayoutChange}
@@ -727,6 +770,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             );
           })}
         </GridLayoutWithWidth>
+        </div>
       )}
     </DashboardLayout>
   );

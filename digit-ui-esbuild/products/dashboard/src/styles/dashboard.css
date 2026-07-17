@@ -277,7 +277,8 @@
   color: var(--muted-foreground);
   font: inherit;
   -webkit-appearance: none;
-  appearance: none;
+  -moz-appearance: none;
+       appearance: none;
 }
 
 .dashboard-widget-remove-btn:hover{
@@ -504,39 +505,24 @@
   display: block;
   height: 2rem;
   width: 14rem;
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
   border-radius: 4px;
   border-width: 1px;
   border-color: var(--border);
   background-color: var(--surface);
   padding-top: 0px;
   padding-bottom: 0px;
-  /* A global digit-ui `input[type=...]:not(.a):not(.b)…` rule matches this
-     type=search input too, and its long :not() chain inflates specificity far
-     above this class — overriding the left padding down to ~12px so the text
-     slides under the search icon (~10–26px). !important is the scoped escape
-     hatch (matching that specificity with plain selectors isn't practical). */
-  padding-left: 2rem !important;
+  padding-left: 2rem;
   padding-right: 0.75rem;
   font-size: 12px;
   line-height: 1;
   color: var(--foreground);
-  -webkit-appearance: none;
-  appearance: none;
 }
 
-/* The global digit-ui `input[type=...]:not(.a):not(.b)…` rule is !important and
-   its long :not(.class) chain inflates specificity above a plain class, so it
-   overrides this search input's left padding down to ~12px and the text renders
-   under the icon. A no-op `:not(#…)` lifts this selector into the ID-specificity
-   column (beating the class/attr chain) and, with !important, wins definitively. */
-.dashboard-header-search-input:not(#dashboard-search-noop){
-  padding-left: 2rem !important;
-}
-
-.dashboard-header-search-input::-webkit-search-decoration,
-.dashboard-header-search-input::-webkit-search-cancel-button{
-  -webkit-appearance: none;
-  appearance: none;
+.dashboard-header-search-input::-moz-placeholder{
+  color: var(--muted-foreground);
 }
 
 .dashboard-header-search-input::placeholder{
@@ -547,6 +533,28 @@
   border-color: var(--foreground);
   outline: 2px solid transparent;
   outline-offset: 2px;
+}
+
+.dashboard-header-search-input {
+  -webkit-appearance: none;
+}
+
+/* A global digit-ui input[type=...]:not(.a):not(.b)… rule is !important and its
+     long :not(.class) chain outranks this class, forcing the left padding to
+     ~12px so text slides under the search icon. A no-op :not(#…) lifts this into
+     the ID-specificity column and, with !important, wins. */
+
+.dashboard-header-search-input:not(#dashboard-search-noop) {
+  padding-left: 2rem !important;
+}
+
+.dashboard-header-search-input::-webkit-search-decoration,
+  .dashboard-header-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.dashboard-header-search-input:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
 }
 
@@ -577,7 +585,8 @@
   font-family: inherit;
   vertical-align: middle;
   -webkit-appearance: none;
-  appearance: none;
+  -moz-appearance: none;
+       appearance: none;
 }
 
 .dashboard-header-controls .dashboard-header-btn:hover{
@@ -622,6 +631,20 @@
   visibility: hidden;
 }
 
+/* While a picker item is dragged over the grid, the tiles must not become
+     dragenter/dragleave targets: react-grid-layout balances a dragEnterCounter
+     across those events, and a hovered child node that gets replaced mid-drag
+     (chart redraws) leaks an enter with no matching leave — the counter never
+     returns to 0, the drop placeholder survives the drag, and RGL is left in
+     a stuck activeDrag state that silently swallows every later add (#1287).
+     Routing all drag events to the grid container keeps the counter balanced
+     AND makes layerX/layerY (which RGL reads relative to the event target)
+     grid-relative, so the placeholder tracks the cursor instead of jumping. */
+
+.dashboard-grid-layout--dropping .react-grid-item{
+  pointer-events: none;
+}
+
 .dashboard-add-kpi-header{
   flex-shrink: 0;
   border-bottom-width: 1px;
@@ -655,6 +678,7 @@
   padding: 0.625rem 1rem;
   cursor: grab;
   -webkit-user-select: none;
+     -moz-user-select: none;
           user-select: none;
   font-weight: 400;
   background-color: #ffffff;
@@ -724,7 +748,8 @@
   font-weight: 400;
   color: var(--muted-foreground, #6b6860);
   -webkit-appearance: none;
-  appearance: none;
+  -moz-appearance: none;
+       appearance: none;
 }
 
 .dashboard-add-kpi-add-btn:hover {
@@ -815,7 +840,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  column-gap: 0.75rem;
+  -moz-column-gap: 0.75rem;
+       column-gap: 0.75rem;
   row-gap: 0.5rem;
 }
 
@@ -925,6 +951,7 @@
   min-height: 1.75rem;
   min-width: 7.5rem;
   -webkit-appearance: none;
+     -moz-appearance: none;
           appearance: none;
   border-radius: 4px;
   border-width: 1px;
@@ -1448,7 +1475,6 @@
   color: var(--dashboard-muted-foreground, #6b6860) !important;
   vertical-align: bottom;
   padding-top: 0.125rem !important;
-  position: -webkit-sticky;
   position: sticky;
   top: 0;
   z-index: 2;
@@ -1538,7 +1564,8 @@
   min-width: 0px;
   flex-wrap: wrap;
   align-items: flex-start;
-  column-gap: 0.25rem;
+  -moz-column-gap: 0.25rem;
+       column-gap: 0.25rem;
   row-gap: 0.125rem;
 }
 
@@ -2246,8 +2273,7 @@
   border-radius: 0.125rem;
   background: color-mix(in srgb, var(--surface) 98%, transparent);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
-  -webkit-backdrop-filter: blur(6px);
-          backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   pointer-events: auto;
 }
 
@@ -2289,8 +2315,7 @@
 }
 
 .dashboard-map-zoom-badge {
-  -webkit-backdrop-filter: blur(4px);
-          backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
 
 .dashboard-map-controls{
@@ -2340,8 +2365,7 @@
 }
 
 .dashboard-map-filter-chip {
-  -webkit-backdrop-filter: blur(4px);
-          backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
 
 .dashboard-map-filter-clear{
@@ -2666,6 +2690,14 @@
   margin-bottom: 1rem;
 }
 
+.tw-ml-2{
+  margin-left: 0.5rem;
+}
+
+.tw-mr-6{
+  margin-right: 1.5rem;
+}
+
 .tw-mt-1{
   margin-top: 0.25rem;
 }
@@ -2715,7 +2747,7 @@
 }
 
 .tw-max-h-\[min\(24rem\,70vh\)\]{
-  max-height: min(24rem,70vh);
+  max-height: min(24rem, 70vh);
 }
 
 .tw-min-h-0{
@@ -2829,7 +2861,8 @@
 }
 
 .tw-gap-x-3{
-  column-gap: 0.75rem;
+  -moz-column-gap: 0.75rem;
+       column-gap: 0.75rem;
 }
 
 .tw-gap-y-0\.5{
@@ -3300,6 +3333,29 @@
   font-family: var(--dashboard-font-family) !important;
 }
 
+/* ── Embedded-in-DigitUI overrides ─────────────────────────────────────
+   Applied when the dashboard is mounted inside the DigitUI employee
+   chrome (products/dashboard/Module.js renders <AdminDashboard embedded />,
+   which adds .dashboard-embedded next to .dashboard-root). The host chrome
+   owns the viewport and scrolling, so the standalone full-viewport shell
+   (h-screen root, internal overflow scrollers) is neutralized; the internal
+   dark Sidebar is simply not rendered in embedded mode. Plain CSS outside
+   the tailwind layers, so regeneration passes it through verbatim. */
+
+.dashboard-root.dashboard-embedded {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.dashboard-root.dashboard-embedded > div {
+  overflow: visible;
+}
+
+.dashboard-root.dashboard-embedded > div > main {
+  overflow: visible;
+}
+
 .hover\:tw-bg-\[color-mix\(in_srgb\2c var\(--chrome-foreground\)_12\%\2c transparent\)\]:hover{
   background-color: color-mix(in srgb,var(--chrome-foreground) 12%,transparent);
 }
@@ -3327,24 +3383,4 @@
     padding-left: 1.5rem;
     padding-right: 1.5rem;
   }
-}
-
-/* ── Embedded-in-DigitUI overrides ─────────────────────────────────────
-   Applied when the dashboard is mounted inside the DigitUI employee
-   chrome (products/dashboard/Module.js renders <AdminDashboard embedded />,
-   which adds .dashboard-embedded next to .dashboard-root). The host chrome
-   owns the viewport and scrolling, so the standalone full-viewport shell
-   (h-screen root, internal overflow scrollers) is neutralized; the internal
-   dark Sidebar is simply not rendered in embedded mode. Mirrored in
-   input.css so `npm run build:dashboard-css` regeneration keeps it. */
-.dashboard-root.dashboard-embedded {
-  height: auto;
-  min-height: 100%;
-  overflow: visible;
-}
-.dashboard-root.dashboard-embedded > div {
-  overflow: visible;
-}
-.dashboard-root.dashboard-embedded > div > main {
-  overflow: visible;
 }
