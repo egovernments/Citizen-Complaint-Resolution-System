@@ -150,8 +150,7 @@ public class KpiCatalogService {
         } catch (Exception e) {
             // Fail-safe: any unexpected error means "enforced" (current behavior), never a throw
             // that could flip the caller's HRMS-error path to deny-all.
-            log.warn("departmentScoping lookup failed for tenant {}; treating as enforced. Cause: {}",
-                    tenantId, e.toString());
+            log.warn("departmentScoping lookup failed for tenant {}; treating as enforced", tenantId, e);
             return false;
         }
     }
