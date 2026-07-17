@@ -184,8 +184,43 @@ export function ancestorsOf(tree, code) {
 }
 
 /**
- * The persisted selection trio for applying a node: descend/ascend/jump all
- * funnel through here (APPLY-ON-SELECT — there is no staged state).
+ * Where the traversal panel starts browsing for an applied selection:
+ *   root / unknown code → the virtual root ("all"),
+ *   interior node       → the node itself (its children are on show),
+ *   leaf node           → the leaf's PARENT, so the leaf renders selected
+ *                         among its siblings and switching leaves stays a
+ *                         one-click operation.
+ */
+export function browseBaseCode(tree, code) {
+  const node = nodeOf(tree, code);
+  if (!node) return ALL;
+  return node.isLeaf ? parentOf(tree, code) : node.code;
+}
+
+/**
+ * Sentinel marking elided entries in a truncated ancestor trail. A string
+ * that can never be an MDMS code (codes are [A-Za-z0-9._/-], see
+ * COMPLAINT_PATH_RE) so it cannot collide with a real trail entry.
+ */
+export const TRAIL_ELLIPSIS = "…<elided>";
+
+/**
+ * Middle-truncate a trail for DEEP trees: when there are more than `max`
+ * entries, keep the FIRST (the "All types" root) and the LAST `max - 2`
+ * (the nearest ancestors + current node), replacing the middle with
+ * TRAIL_ELLIPSIS — the endpoints matter for orientation, the middle is
+ * recoverable by stepping up. Short trails come back untouched (same array).
+ */
+export function truncateTrail(entries, max = 4) {
+  if (!Array.isArray(entries) || entries.length <= max || max < 3) return entries;
+  return [entries[0], TRAIL_ELLIPSIS, ...entries.slice(entries.length - (max - 2))];
+}
+
+/**
+ * The persisted selection trio for applying a node: leaf pick, "All in <X>"
+ * subtree apply and the "All types" reset all funnel through here. (In-panel
+ * traversal is browse-only local state; nothing is persisted until one of
+ * those explicit applies calls this.)
  */
 export function selectionFromCode(tree, code) {
   if (code == null || code === ALL) return clearedSelection();

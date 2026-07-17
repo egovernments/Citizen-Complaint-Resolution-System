@@ -50,6 +50,9 @@ const {
   repairSelection,
   normalizeComplaintTypeValue,
   humanizeTypeCode,
+  browseBaseCode,
+  truncateTrail,
+  TRAIL_ELLIPSIS,
 } = bundle("complaintTypeTree.js");
 
 const { globalParams, buildRefs } = bundle("queryPlan.js");
@@ -471,6 +474,73 @@ test("tree-fetch failure: persisted interior selection survives a reload cycle, 
   } finally {
     restore();
   }
+});
+
+/* ------------------------------------------------------------------ */
+/* Traversal-panel browse state (chip + panel design pass)              */
+/* ------------------------------------------------------------------ */
+
+// ke's PGR_TEST-shaped 4-level tree (Category → Type → SubType → leaf),
+// deeper than the 2-level live PGR tree — the trail-truncation case.
+const DEEP_RECORDS = [
+  rec("Infra", null, { name: "Infrastructure" }),
+  rec("Water", "Infra", { name: "Water supply" }),
+  rec("WaterQuality", "Water", { name: "Water quality" }),
+  rec("WaterMuddy", "WaterQuality", { name: "Muddy water" }),
+  rec("WaterSmelly", "WaterQuality", { name: "Smelly water" }),
+  rec("WaterPressure", "Water", { name: "Low pressure" }),
+];
+const deepTree = () => buildComplaintTree(DEEP_RECORDS);
+
+test("browseBaseCode: root/unknown → all, interior → itself, leaf → parent", () => {
+  const t = tree();
+  assert.equal(browseBaseCode(t, ALL), ALL);
+  assert.equal(browseBaseCode(t, "NOPE"), ALL);
+  assert.equal(browseBaseCode(null, "GARBAGE"), ALL);
+  // interior: its children are on show
+  assert.equal(browseBaseCode(t, "GARBAGE"), "GARBAGE");
+  // leaf: siblings on show with the leaf selected (one-click switching)
+  assert.equal(browseBaseCode(t, "GarbageFull"), "GARBAGE");
+  // root-level leaf's parent is the virtual root
+  const pruned = pruneComplaintTree(t, ["GarbageFull", "STRAY"]);
+  assert.equal(browseBaseCode(pruned, "STRAY"), ALL);
+});
+
+test("browseBaseCode: 4-level tree opens a deep leaf at its direct parent", () => {
+  const t = deepTree();
+  assert.equal(browseBaseCode(t, "WaterMuddy"), "WaterQuality");
+  assert.equal(browseBaseCode(t, "WaterQuality"), "WaterQuality");
+});
+
+test("truncateTrail: short trails come back untouched (same array)", () => {
+  const short = ["all", "Infra", "Water"];
+  assert.equal(truncateTrail(short, 4), short);
+  const exact = ["all", "Infra", "Water", "WaterQuality"];
+  assert.equal(truncateTrail(exact, 4), exact);
+});
+
+test("truncateTrail: deep trails keep root + nearest, elide the middle", () => {
+  const t = deepTree();
+  // Browsing at depth 3 of the 4-level tree: all › Infra › Water › WaterQuality
+  const full = [ALL, ...ancestorsOf(t, "WaterQuality"), "WaterQuality"];
+  assert.deepEqual(full, ["all", "Infra", "Water", "WaterQuality"]);
+  assert.equal(truncateTrail(full, 4), full); // depth 3 still fits
+
+  // One level deeper than max: middle elided, endpoints kept.
+  const deeper = [...full, "WaterMuddy"];
+  assert.deepEqual(truncateTrail(deeper, 4), [
+    "all",
+    TRAIL_ELLIPSIS,
+    "WaterQuality",
+    "WaterMuddy",
+  ]);
+
+  // Degenerate max (< 3) can't hold first+ellipsis+last → untouched.
+  assert.equal(truncateTrail(deeper, 2), deeper);
+});
+
+test("TRAIL_ELLIPSIS can never collide with a real code", () => {
+  assert.equal(isValidComplaintPath(TRAIL_ELLIPSIS), false);
 });
 
 /* ------------------------------------------------------------------ */
