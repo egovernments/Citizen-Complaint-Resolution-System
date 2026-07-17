@@ -27,12 +27,14 @@ check every uncertainty resolves toward a false green, and a false green here is
 worse than no check at all -- it is a dashboard people believe. So a missing
 source file, or an ambiguous network alias, is a hard failure rather than a skip.
 
-Sources of truth:
-  compose:  every local-setup/docker-compose* file -- BOTH the .yml and .yaml halves
-            (docker-compose.egov-digit.yaml and docker-compose.deploy.yaml are .yaml) --
-            enumerated in COMPOSE_FILES and cross-checked against the directory so a
-            new one cannot go unscanned
-  k3s:      local-setup/k8s/**/*.yaml            (kind: Service)
+Sources of truth (every one of these names BOTH extensions on purpose -- betting a
+coverage gap on a file-naming convention nothing enforces is how they hide):
+  compose:  every local-setup/**/*compose*.{yml,yaml} -- enumerated in COMPOSE_FILES and
+            cross-checked against the directory so a new one cannot go unscanned.
+            Not just `docker-compose*` at the top level: `compose.yaml` is docker
+            compose's default, highest-precedence name, and would shadow
+            docker-compose.yml for the bare `docker compose up -d` CI runs.
+  k3s:      local-setup/k8s/**/*.{yaml,yml}      (kind: Service)
   gatus:    local-setup/gatus/config.yaml        (compose tier)
             local-setup/k8s/tools/gatus.yaml     (k3s tier, gatus-config ConfigMap)
 
@@ -79,10 +81,10 @@ LS = ROOT / "local-setup"
 # This list is the guard's whole perimeter. Anything not in it is unwatched, so it is
 # checked against the directory listing below rather than maintained by memory.
 #
-# NOTE: .github/workflows/gatus-coverage.yml's `paths:` globs (local-setup/docker-compose*
-# .yml / *.yaml) must match every entry here, or a PR touching only an unmatched file never
-# triggers the guard. The globs already cover any docker-compose*.yml in local-setup/, so
-# adding one here needs no change there -- do not reintroduce a hand-maintained name list.
+# NOTE: .github/workflows/gatus-coverage.yml watches `local-setup/**`, so it already
+# triggers on every entry here wherever it lives -- adding one needs no change there. Do
+# not narrow that filter to a list of names: when a paths: filter guesses wrong the
+# workflow never runs, so the guard cannot report what it was never invoked to see.
 COMPOSE_FILES = [
     LS / "docker-compose.yml",
     LS / "docker-compose.egov-digit.yaml",
@@ -419,8 +421,10 @@ def _validate_endpoints(endpoints, where):
             panic: invalid endpoint infrastructure_postgresql:
                    name and group combination must be unique
         and the guard printed `OK ... 51 endpoints per tier, no drift` -- contradicting
-        itself in its own success line, because find_drift keys by name and the
-        duplicate silently vanished.
+        itself in its own success line: find_drift keyed by name at the time, so the
+        duplicate silently vanished. (It keys by group+name now -- same identity as
+        this check -- but a duplicate still has to be rejected here, because two
+        endpoints with one identity collapse wherever they are keyed.)
       * `enabled: "false"` (quoted) ->
             panic: cannot unmarshal !!str `false` into bool
         and the guard counted it as live coverage, since `"false" is False` is False.
@@ -433,7 +437,7 @@ def _validate_endpoints(endpoints, where):
                 f"{where}: two endpoints share the group+name {key!r} "
                 f"({seen[key]!r} and {e.get('name')!r}). Gatus refuses to start on this "
                 f"(\"name and group combination must be unique\"), and the drift check "
-                f"keys by name, so the duplicate would vanish silently."
+                f"keys by group+name too, so the duplicate would collapse there silently."
             )
         seen[key] = e.get("name")
 
