@@ -297,7 +297,19 @@ The registry is read-only — push operations return `405 Method Not Allowed`.
 
 ### What the Ansible playbook deploys
 
-The playbook uses `docker-compose.registry.yml` which includes:
+The playbook deploys `docker-compose.egov-digit.yaml` plus overlays — **not**
+`docker-compose.registry.yml`, which it never references. The exact stack is built in
+`ansible/playbook-deploy.yml` ("Compute compose -f flags"):
+
+```
+-f docker-compose.egov-digit.yaml
+[-f docker-compose.fast-path.yml]          # when db_fast_path is set
+-f docker-compose.migrations.yml
+-f docker-compose.migrations.ansible.yml
+[-f docker-compose.<tenant>.yml]           # when a per-tenant overlay exists
+```
+
+Between them these include:
 
 | Category | Services |
 |----------|----------|
