@@ -17,7 +17,7 @@ public class AnalyticsServiceParamValidationTest {
 
     private final ObjectMapper om = new ObjectMapper();
     private final AnalyticsService service =
-            new AnalyticsService(null, null, null, null, null, null, new AnalyticsMetrics());
+            new AnalyticsService(null, null, null, null, null, null, new AnalyticsMetrics(), null);
 
     private KpiDefinition def(String paramsJson) {
         try {

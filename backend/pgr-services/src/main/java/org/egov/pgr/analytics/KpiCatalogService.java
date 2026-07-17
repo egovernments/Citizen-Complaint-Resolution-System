@@ -39,7 +39,6 @@ public class KpiCatalogService {
 
     /** The only departmentScoping value that turns employee department scoping OFF (#1280). */
     private static final String DEPT_SCOPING_DISABLED = "disabled";
-    private static final long CONFIG_TTL_MS = 5 * 60_000L;
     /** stateRoot -> [Boolean disabled, Long expiresAtMs]. Mirrors AnalyticsService.recordCountCache. */
     private final java.util.concurrent.ConcurrentHashMap<String, Object[]> deptScopingCache =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -123,9 +122,10 @@ public class KpiCatalogService {
      * {@code false} ("enforced", today's behavior). Fail-safe by construction; this method never
      * throws.
      *
-     * <p>Cached in-memory for 5 minutes per state root (both outcomes), mirroring the
-     * {@code recordCount} cache idiom in AnalyticsService — a config flip takes effect within
-     * 5 minutes without a redeploy.
+     * <p>Cached in-memory per state root (both outcomes) for
+     * {@code pgr.analytics.config-cache-ttl-ms} (the single TTL shared by every analytics
+     * config cache; default 5 minutes), mirroring the {@code recordCount} cache idiom in
+     * AnalyticsService — a config flip takes effect within one TTL without a redeploy.
      */
     public boolean isDepartmentScopingDisabled(String tenantId) {
         try {
@@ -145,7 +145,7 @@ public class KpiCatalogService {
             if (disabled)
                 log.info("dss.DashboardConfig.departmentScoping=disabled at {} — employee department scoping OFF",
                         stateRoot);
-            deptScopingCache.put(stateRoot, new Object[]{disabled, now + CONFIG_TTL_MS});
+            deptScopingCache.put(stateRoot, new Object[]{disabled, now + configCacheTtlMs()});
             return disabled;
         } catch (Exception e) {
             // Fail-safe: any unexpected error means "enforced" (current behavior), never a throw
@@ -153,6 +153,16 @@ public class KpiCatalogService {
             log.warn("departmentScoping lookup failed for tenant {}; treating as enforced", tenantId, e);
             return false;
         }
+    }
+
+    /**
+     * The shared analytics config-cache TTL ({@code pgr.analytics.config-cache-ttl-ms});
+     * falls back to the 5-minute default when the config mock/bean has no value.
+     * Same accessor idiom as AnalyticsService.configCacheTtlMs().
+     */
+    private long configCacheTtlMs() {
+        Long v = config == null ? null : config.getAnalyticsConfigCacheTtlMs();
+        return v != null ? v : PGRConfiguration.DEFAULT_ANALYTICS_CONFIG_CACHE_TTL_MS;
     }
 
     // ---- private MDMS helpers ----

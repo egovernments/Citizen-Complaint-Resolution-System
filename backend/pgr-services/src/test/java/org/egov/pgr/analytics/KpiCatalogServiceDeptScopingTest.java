@@ -47,6 +47,9 @@ public class KpiCatalogServiceDeptScopingTest {
     public void setUp() {
         when(config.getMdmsHost()).thenReturn("http://mdms-v2:8080");
         when(config.getMdmsEndPoint()).thenReturn("/mdms-v2/v1/_search");
+        // the @Value default Spring would inject (an unstubbed mock returns 0 -> cache off)
+        when(config.getAnalyticsConfigCacheTtlMs())
+                .thenReturn(PGRConfiguration.DEFAULT_ANALYTICS_CONFIG_CACHE_TTL_MS);
         // "ke" and "ke.bomet" both resolve to state root "ke"
         when(multiStateInstanceUtil.getStateLevelTenant(anyString()))
                 .thenAnswer(inv -> inv.getArgument(0, String.class).split("\\.")[0]);
@@ -154,6 +157,25 @@ public class KpiCatalogServiceDeptScopingTest {
         assertTrue(service.isDepartmentScopingDisabled("ke.bomet"));
         clock.addAndGet(5 * 60_000L + 1L);        // past the TTL
         assertFalse(service.isDepartmentScopingDisabled("ke.bomet"));   // flip applied
+
+        verify(repo, times(2)).fetchResult(any(), any());
+    }
+
+    @Test
+    public void ttlIsConfigurableViaTheSharedAnalyticsCacheConfig() {
+        // Same single property as the recordCount cache: pgr.analytics.config-cache-ttl-ms.
+        when(config.getAnalyticsConfigCacheTtlMs()).thenReturn(1_000L);
+        service = new KpiCatalogService(config, repo, multiStateInstanceUtil, new ObjectMapper());
+        ReflectionTestUtils.setField(service, "configClock", (LongSupplier) clock::get);
+        when(repo.fetchResult(any(), any()))
+                .thenReturn(mdmsResult(record("disabled")))
+                .thenReturn(mdmsResult(record("enforced")));
+
+        assertTrue(service.isDepartmentScopingDisabled("ke.bomet"));
+        clock.addAndGet(999L);                    // inside the configured 1s TTL
+        assertTrue(service.isDepartmentScopingDisabled("ke.bomet"));
+        clock.addAndGet(2L);                      // past it — flip applied
+        assertFalse(service.isDepartmentScopingDisabled("ke.bomet"));
 
         verify(repo, times(2)).fetchResult(any(), any());
     }

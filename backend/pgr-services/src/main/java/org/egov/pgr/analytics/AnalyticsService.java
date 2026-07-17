@@ -7,6 +7,7 @@ import org.egov.common.contract.request.Role;
 import org.egov.common.contract.request.User;
 import org.egov.pgr.analytics.AnalyticsCatalog.Grain;
 import org.egov.pgr.analytics.model.KpiDefinition;
+import org.egov.pgr.config.PGRConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -69,14 +70,16 @@ public class AnalyticsService {
     private final PrincipalScopeResolver scopeResolver;
     private final KpiQueryComposer queryComposer;
     private final AnalyticsMetrics metrics;
+    private final PGRConfiguration config;
 
     @Autowired
     public AnalyticsService(AnalyticsPlanner planner, AnalyticsCatalog catalog, JdbcTemplate jdbc,
                             KpiCatalogService kpiCatalogService, PrincipalScopeResolver scopeResolver,
-                            KpiQueryComposer queryComposer, AnalyticsMetrics metrics){
+                            KpiQueryComposer queryComposer, AnalyticsMetrics metrics,
+                            PGRConfiguration config){
         this.planner = planner; this.catalog = catalog; this.jdbc = jdbc;
         this.kpiCatalogService = kpiCatalogService; this.scopeResolver = scopeResolver;
-        this.queryComposer = queryComposer; this.metrics = metrics;
+        this.queryComposer = queryComposer; this.metrics = metrics; this.config = config;
     }
 
     /** Back-compat entry point (no trace correlation header). */
@@ -544,7 +547,6 @@ public class AnalyticsService {
 
     // ---- #1110: tenant record-count for /packs (record_count_tier tag source) ----
 
-    private static final long RECORD_COUNT_TTL_MS = 5 * 60_000L;
     /** tenantId -> [count, expiresAtMs]. Concurrent; a stale entry is simply recomputed. */
     private final java.util.concurrent.ConcurrentHashMap<String, long[]> recordCountCache =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -559,8 +561,9 @@ public class AnalyticsService {
      * {@code record_count_tier} tag, which must describe the tenant's data volume so
      * render-lag comparisons across personas share a denominator (#1110/R9-C9).
      *
-     * <p>Cached in-memory for 5 minutes per tenant; errors return null (additive,
-     * never fails the /packs response) and are not cached.
+     * <p>Cached in-memory per tenant for {@code pgr.analytics.config-cache-ttl-ms}
+     * (the single TTL shared by every analytics config cache; default 5 minutes);
+     * errors return null (additive, never fails the /packs response) and are not cached.
      */
     public Long recordCount(String tenantId, int stateLevelLen) {
         if (tenantId == null || tenantId.isEmpty()) return null;
@@ -576,12 +579,22 @@ public class AnalyticsService {
                     : jdbc.queryForObject("SELECT count(*) FROM complaint_facts WHERE tenant_id = ?",
                                           Long.class, tenantId);
             if (count == null) return null;
-            recordCountCache.put(tenantId, new long[]{count, now + RECORD_COUNT_TTL_MS});
+            recordCountCache.put(tenantId, new long[]{count, now + configCacheTtlMs()});
             return count;
         } catch (Exception e) {
             log.debug("recordCount for tenant {} failed (returning null)", tenantId, e);
             return null;
         }
+    }
+
+    /**
+     * The shared analytics config-cache TTL ({@code pgr.analytics.config-cache-ttl-ms});
+     * falls back to the 5-minute default when constructed without a Spring config
+     * (tests). Same accessor idiom as KpiCatalogService.configCacheTtlMs().
+     */
+    private long configCacheTtlMs() {
+        Long v = config == null ? null : config.getAnalyticsConfigCacheTtlMs();
+        return v != null ? v : PGRConfiguration.DEFAULT_ANALYTICS_CONFIG_CACHE_TTL_MS;
     }
 
     private Map<String,Object> scopeInfo(AnalyticsScope s){
