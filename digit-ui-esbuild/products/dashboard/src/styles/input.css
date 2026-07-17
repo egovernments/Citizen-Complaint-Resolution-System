@@ -624,17 +624,16 @@
 
   /* ── Shared popover/menu primitive (chip anchor + portaled panel) ───── */
 
-  /* Anchor chip: the inline filter-control language (h-7 / rounded-sm /
-     border-border / bg-surface / 12px), as a real button. */
+  /* Anchor chip: a strict visual PEER of .dashboard-filter-inline-select —
+     same h-7 / min-w-[7.5rem] / rounded-sm / border-border / bg-surface /
+     12px metrics, no resting hover treatment (the select has none), the
+     select's focus treatment (border-foreground + 15% ring); the only
+     divergence is aria-expanded reusing the focus border while open. */
   .dashboard-popover-chip {
-    @apply tw-box-border tw-m-0 tw-inline-flex tw-h-7 tw-min-w-0 tw-max-w-full tw-shrink tw-cursor-pointer tw-select-none tw-items-center tw-gap-1.5 tw-self-center tw-whitespace-nowrap tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-px-2 tw-text-[12px] tw-leading-none tw-text-foreground;
+    @apply tw-box-border tw-m-0 tw-inline-flex tw-h-7 tw-min-w-[7.5rem] tw-max-w-full tw-shrink tw-cursor-pointer tw-select-none tw-items-center tw-gap-1.5 tw-self-center tw-whitespace-nowrap tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-px-2 tw-text-[12px] tw-leading-none tw-text-foreground;
     font-family: inherit;
     -webkit-appearance: none;
     appearance: none;
-  }
-
-  .dashboard-popover-chip:hover:not(:disabled) {
-    @apply tw-border-foreground;
   }
 
   .dashboard-popover-chip:focus {
@@ -664,11 +663,14 @@
   }
 
   .dashboard-popover-chip-value {
-    @apply tw-inline-flex tw-min-w-0 tw-items-center tw-overflow-hidden tw-font-medium;
+    @apply tw-inline-flex tw-min-w-0 tw-items-center tw-overflow-hidden tw-font-normal;
   }
 
+  /* ml-auto pins the caret to the chip's right edge (px-2, like the
+     select-wrap's ::after caret at right: 0.5rem) when the label is
+     shorter than the shared 7.5rem min width. */
   .dashboard-popover-chip-caret {
-    @apply tw-shrink-0 tw-text-muted-foreground;
+    @apply tw-ml-auto tw-shrink-0 tw-text-muted-foreground;
   }
 
   /* Chip content for hierarchical selections: "… › Parent › Node" — each
@@ -790,8 +792,11 @@
     @apply tw-inline-flex tw-shrink-0 tw-items-center tw-text-muted-foreground;
   }
 
+  /* currentColor, not --primary: selection reads as weight + check in the
+     row's own neutral foreground — the filter bar has no brand accent and
+     the menus don't introduce one. */
   .dashboard-menu-item-check {
-    color: var(--primary, #1a1917);
+    color: currentColor;
   }
 
   /* Non-interactive section label between runs of related items (the flat
