@@ -1,3 +1,5 @@
+import { withTraceHeaders, recordApiCall } from "./dashboardMetrics";
+
 /** Browser-facing analytics API base (relative path or absolute URL). */
 export function getAnalyticsBase() {
   if (process.env.REACT_APP_ANALYTICS_BASE) {
@@ -53,9 +55,12 @@ function buildRequestInfo() {
 }
 
 async function postAnalytics(path, body) {
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
   const response = await fetch(`${ANALYTICS_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    // Per-load W3C traceparent + x-trace-id (dashboardMetrics) — Kong's otel
+    // plugin and the pgr javaagent continue the browser's trace id end-to-end.
+    headers: withTraceHeaders({ "Content-Type": "application/json" }),
     credentials: "omit",
     body: JSON.stringify({
       RequestInfo: buildRequestInfo(),
@@ -64,6 +69,8 @@ async function postAnalytics(path, body) {
   });
 
   if (!response.ok) {
+    const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    recordApiCall(`${ANALYTICS_BASE}${path}`, endedAt - startedAt, 0, false);
     const error = new Error(`Analytics request failed (${response.status})`);
     error.status = response.status;
     try {
