@@ -11,8 +11,11 @@
 -- paths on '.' survives R5 and still fabricates a garbage 'complaints' level-1
 -- bucket (30 live fact rows on bomet at authoring time).
 --
--- Fix: the cnp CTE now emits NULL complaint_node_path when the matched node's
--- own code contains '.' OR its parentCode contains '.'; those rows take the
+-- Fix: the cnp CTE now emits NULL complaint_node_path when a dotted code OR
+-- parentCode appears ANYWHERE in the matched node's ancestor chain (the chwalk
+-- rows; the node itself is depth 1, so this contains the node+parent check —
+-- a clean leaf under `legacy.dotted -> CleanParent -> CleanLeaf` is caught
+-- too, review finding on #1282); those rows take the
 -- SAME leaf fallback the query-time level expression already has for
 -- flat/legacy tenants (coalesce(nullif(split_part(...)),''), service_code) —
 -- i.e. they roll up as themselves instead of polluting level buckets.
@@ -131,12 +134,18 @@ cnp AS (   -- #1079: complaint_node_path per code = master path, else recursive 
            -- imports carry dots INSIDE one code, so any '.'-split of their path would
            -- fabricate garbage level buckets; NULL path => the query-time level expr
            -- falls back to the leaf service_code instead.
-           -- R5 widening: ALSO NULL when the node's parentCode contains '.' — clean-code
-           -- nodes parented under a dotted legacy code inherit a polluted path/built_path
-           -- and would otherwise survive as the same garbage buckets.
+           -- R5 widening: ALSO NULL when a dotted code/parentCode appears ANYWHERE in the
+           -- node's ancestor chain (chwalk carries the node itself at depth 1, so this
+           -- strictly contains the old node+parent predicate) — clean-code nodes anywhere
+           -- under a dotted legacy code inherit a polluted path/built_path and would
+           -- otherwise survive as the same garbage buckets.
   SELECT ch.code,
-         CASE WHEN position('.' IN ch.code) > 0
-                OR position('.' IN coalesce(ch.parent_code, '')) > 0 THEN NULL
+         CASE WHEN EXISTS (
+                SELECT 1 FROM chwalk w
+                WHERE w.leaf_code = ch.code
+                  AND (position('.' IN w.code) > 0
+                       OR position('.' IN coalesce(w.parent_code, '')) > 0)
+              ) THEN NULL
               ELSE coalesce(ch.node_path, walk.built_path) END AS complaint_node_path
   FROM ch
   LEFT JOIN LATERAL (
@@ -307,12 +316,18 @@ cnp AS (   -- #1079: complaint_node_path per code = master path, else recursive 
            -- imports carry dots INSIDE one code, so any '.'-split of their path would
            -- fabricate garbage level buckets; NULL path => the query-time level expr
            -- falls back to the leaf service_code instead.
-           -- R5 widening: ALSO NULL when the node's parentCode contains '.' — clean-code
-           -- nodes parented under a dotted legacy code inherit a polluted path/built_path
-           -- and would otherwise survive as the same garbage buckets.
+           -- R5 widening: ALSO NULL when a dotted code/parentCode appears ANYWHERE in the
+           -- node's ancestor chain (chwalk carries the node itself at depth 1, so this
+           -- strictly contains the old node+parent predicate) — clean-code nodes anywhere
+           -- under a dotted legacy code inherit a polluted path/built_path and would
+           -- otherwise survive as the same garbage buckets.
   SELECT ch.code,
-         CASE WHEN position('.' IN ch.code) > 0
-                OR position('.' IN coalesce(ch.parent_code, '')) > 0 THEN NULL
+         CASE WHEN EXISTS (
+                SELECT 1 FROM chwalk w
+                WHERE w.leaf_code = ch.code
+                  AND (position('.' IN w.code) > 0
+                       OR position('.' IN coalesce(w.parent_code, '')) > 0)
+              ) THEN NULL
               ELSE coalesce(ch.node_path, walk.built_path) END AS complaint_node_path
   FROM ch
   LEFT JOIN LATERAL (
