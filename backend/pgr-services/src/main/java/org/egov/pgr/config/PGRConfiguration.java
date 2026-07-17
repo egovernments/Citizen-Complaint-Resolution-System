@@ -192,6 +192,13 @@ public class PGRConfiguration {
     @Value("${employee.allowed.search.params}")
     private String allowedEmployeeSearchParameters;
 
+    // Department scope — opt-in: an employee is restricted to their own HRMS department(s) in
+    // complaint search/count/plainSearch ONLY if they hold one of these roles. Empty (default) =
+    // no employee role is department-scoped, preserving pre-existing unrestricted search behavior
+    // on upgrade. See EmployeeDepartmentScopeService.
+    @Value("${pgr.department.scope.roles:}")
+    private List<String> departmentScopeRoles;
+
     //Sources
     @Value("${allowed.source}")
     private String allowedSource;
@@ -245,6 +252,22 @@ public class PGRConfiguration {
 
     @Value("${complaints.domain.events.default.locale:en_IN}")
     private String complaintsDomainEventDefaultLocale;
+
+    // Config-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate)
+    @Value("${pgr.notification.config.driven:false}")
+    private Boolean notificationConfigDriven;
+
+    @Value("${pgr.notification.default.locale:en_IN}")
+    private String notificationDefaultLocale;
+
+    @Value("${pgr.notification.rolepool.page.size:100}")
+    private Integer notificationRolePoolPageSize;
+
+    @Value("${pgr.notification.rolepool.max.pages:10}")
+    private Integer notificationRolePoolMaxPages;
+
+    @Value("${pgr.notification.mdms.cache.ttl.ms:60000}")
+    private Long notificationMdmsCacheTtlMs;
 
     // Escalation
     @Value("${pgr.escalation.enabled}")

@@ -204,7 +204,13 @@ export class DigitApiClient {
       RequestInfo: this.buildRequestInfo(),
       Mdms: { tenantId, schemaCode, uniqueIdentifier, data: recordData, isActive: true },
     });
-    return (data.mdms || [])[0] as MdmsRecord;
+    const record = (data.mdms || [])[0] as MdmsRecord | undefined;
+    if (!record) {
+      // MDMS v2 "phantom 200": duplicate creates return 200 with an empty mdms
+      // array. Surface it as a typed, matchable error instead of undefined.
+      throw new Error(`MDMS_DUPLICATE: create for '${uniqueIdentifier}' returned no record — a record with this uniqueIdentifier already exists (possibly inactive).`);
+    }
+    return record;
   }
 
   async mdmsUpdate(record: MdmsRecord, isActive: boolean): Promise<MdmsRecord> {

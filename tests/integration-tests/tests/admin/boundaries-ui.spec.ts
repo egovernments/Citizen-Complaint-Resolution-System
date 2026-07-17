@@ -13,15 +13,16 @@
  * `/manage/boundaries` → search for our PW-prefixed codes → assert both
  * rows render.
  *
- * Known failure on Nairobi (2026-05-07): the BoundaryList resource fires
- * `boundary-relationships/_search` and `boundary-hierarchy-definition/_search`
- * scoped to the session tenant (root `ke`), not the wizard's
- * `targetTenant` (the freshly-created child). Boundaries created at the
- * child tenant therefore never appear in the admin list. Tracked under
- * #21 — fix is either a tenant picker in Manage mode or BoundaryList
- * reading `state.targetTenant` when present. The spec is intentionally
- * left asserting the post-fix behavior so it stays red until the manage
- * UI is corrected.
+ * Regression guard (#21 gap D — fixed): the BoundaryList data provider now
+ * aggregates city sub-tenants when the session is at state level. When the
+ * logged-in tenant is the root (`ke`), dataProvider.ts walks every active
+ * `ke.*` sub-tenant's boundary tree and concatenates them (see the
+ * "aggregate city sub-tenants" branch in
+ * packages/data-provider/src/providers/dataProvider.ts). So a boundary
+ * created at a freshly-onboarded child tenant now surfaces in the admin
+ * list viewed from root — which is exactly what this spec asserts. This was
+ * previously left intentionally red (BoundaryList queried only the session
+ * tenant); with the aggregation in place it is a normal green regression.
  *
  * Per CLAUDE.md the body of the test is UI-only. The afterAll teardown
  * deactivates the freshly-created tenant via API because the configurator
@@ -157,7 +158,7 @@ Steps:
 6. Navigate to /manage/boundaries; assert "Boundaries" heading is visible within 30s.
 7. If a search input exists: fill BOUNDARY_ROOT, wait networkidle, assert matching row visible within 30s; clear and fill BOUNDARY_CHILD, assert matching row visible.
 
-KNOWN FAILURE on Nairobi (2026-05-07): BoundaryList queries the session tenant (root 'ke') instead of the wizard's targetTenant. Boundaries created at the child tenant don't appear here. The test is intentionally left red until the manage UI reads state.targetTenant. Teardown is API-only because the configurator has no UI delete affordance for tenants — tracked in CCRS#21.`,
+Regression (#21 gap D, fixed): the BoundaryList data provider aggregates city sub-tenants at state level — when the session is the root tenant ('ke'), dataProvider.ts concatenates every active 'ke.*' sub-tenant's boundary tree, so boundaries created at the freshly-onboarded child tenant now surface in the admin list viewed from root. This spec asserts that post-fix behaviour and is expected to pass. Teardown is API-only because the configurator has no UI delete affordance for tenants — tracked in CCRS#21.`,
     },
     tag: ['@area:manage-boundaries', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     test.setTimeout(180_000);

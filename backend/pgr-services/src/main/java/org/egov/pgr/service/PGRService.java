@@ -26,6 +26,8 @@ import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_SEARCH;
 import static org.egov.pgr.util.PGRConstants.MDMS_DEPARTMENT_NAME_SEARCH;
 import static org.egov.pgr.util.PGRConstants.MDMS_SERVICENAME_SEARCH;
 import static org.egov.pgr.util.PGRConstants.ROLE_CONFIDENTIAL_VIEWER;
+import static org.egov.pgr.util.PGRConstants.MASK_SENTINEL;
+import static org.egov.pgr.util.PGRConstants.USERTYPE_EMPLOYEE;
 
 import java.util.stream.Collectors;
 
@@ -61,13 +63,16 @@ public class PGRService {
 
     private EncryptionDecryptionService encryptionDecryptionService;
 
+    private EmployeeDepartmentScopeService employeeDepartmentScopeService;
+
     @Autowired
     public PGRService(EnrichmentService enrichmentService, UserService userService, WorkflowService workflowService,
                       ServiceRequestValidator serviceRequestValidator, ServiceRequestValidator validator, Producer producer,
                       PGRConfiguration config, PGRRepository repository, MDMSUtils mdmsUtils,
                       ComplaintDomainEventService complaintDomainEventService, PGRUtils pgrUtils,
                       ExtendedAttributesValidationService extendedAttributesValidationService,
-                      EncryptionDecryptionService encryptionDecryptionService) {
+                      EncryptionDecryptionService encryptionDecryptionService,
+                      EmployeeDepartmentScopeService employeeDepartmentScopeService) {
         this.enrichmentService = enrichmentService;
         this.userService = userService;
         this.workflowService = workflowService;
@@ -81,6 +86,7 @@ public class PGRService {
         this.pgrUtils = pgrUtils;
         this.extendedAttributesValidationService = extendedAttributesValidationService;
         this.encryptionDecryptionService = encryptionDecryptionService;
+        this.employeeDepartmentScopeService = employeeDepartmentScopeService;
     }
 
 
@@ -147,6 +153,9 @@ public class PGRService {
 
         enrichmentService.enrichSearchRequest(requestInfo, criteria);
 
+        if (!applyEmployeeDepartmentScope(requestInfo, criteria))
+            return new ArrayList<>();
+
         if(criteria.isEmpty())
             return new ArrayList<>();
 
@@ -211,7 +220,10 @@ public class PGRService {
         Service updateService = request.getService();
 		Map<String, Object> existing = pgrUtils.extractAdditionalDetails(updateService.getAdditionalDetail());
 		Map<String, Object> backend = new HashMap<>();
-		backend.put("department", getDepartmentFromMDMS(request, mdmsData));
+		Object clientDept = existing.get("department");
+        if (clientDept == null || (clientDept instanceof String s && (s.isBlank() || s.equalsIgnoreCase("NA")))) {
+            backend.put("department", getDepartmentFromMDMS(request, mdmsData));
+        }
 		backend.put("serviceName", getServiceNameFromMDMS(request, mdmsData));
 		Map<String, Object> merged = pgrUtils.deepMerge(existing, backend);
 		updateService.setAdditionalDetail(merged);
@@ -227,8 +239,13 @@ public class PGRService {
 			if (cfg == null)
 				throw new CustomException("INVALID_CASE_RELATED_TO",
 						"No MDMS config found for caseRelatedTo: " + updatedExt.getCaseRelatedTo());
+			restoreMaskedPlaceholders(updatedExt, updateService.getId(), tenantId, cfg);
 			extendedAttributesValidationService.validate(updatedExt, cfg, updateService);
 			plainExt = updatedExt.copy(); // snapshot before encrypt — avoids decrypt round-trip for response
+			// A restored value may be real confidential data the caller isn't cleared to see —
+			// persist it correctly either way, but don't leak it back in this response.
+			if (updatedExt.getIsConfidentialSafe() && !isAuthorizedForConfidential(request.getRequestInfo(), updateService, cfg))
+				encryptionDecryptionService.maskAll(plainExt);
 			updateService.setExtendedAttributes(
 					encryptionDecryptionService.encrypt(updatedExt, cfg, tenantId));
 			enrichmentService.enrichUserContactDetails(request);
@@ -252,13 +269,37 @@ public class PGRService {
      */
     public Integer count(RequestInfo requestInfo, RequestSearchCriteria criteria){
         criteria.setIsPlainSearch(false);
+
+        if (!applyEmployeeDepartmentScope(requestInfo, criteria))
+            return 0;
+
         Integer count = repository.getCount(criteria);
         return count;
+    }
+
+    /**
+     * Employee-only, opt-in: restricts {@code criteria} to the searching employee's own
+     * department(s) only if they hold a role in {@code pgr.department.scope.roles}. Every other
+     * employee role, and citizen/system callers (including plainSearch calls with no userInfo at
+     * all), are untouched. Returns false when the caller must see nothing (search/count/plainSearch
+     * should short-circuit).
+     */
+    private boolean applyEmployeeDepartmentScope(RequestInfo requestInfo, RequestSearchCriteria criteria) {
+        if (requestInfo.getUserInfo() == null
+                || !USERTYPE_EMPLOYEE.equalsIgnoreCase(requestInfo.getUserInfo().getType()))
+            return true;
+
+        String scopeTenantId = criteria.getTenantId() != null
+                ? criteria.getTenantId() : requestInfo.getUserInfo().getTenantId();
+        return employeeDepartmentScopeService.applyScope(requestInfo, scopeTenantId, criteria);
     }
 
 
     public List<ServiceWrapper> plainSearch(RequestInfo requestInfo, RequestSearchCriteria criteria) {
         validator.validatePlainSearch(criteria);
+
+        if (!applyEmployeeDepartmentScope(requestInfo, criteria))
+            return new ArrayList<>();
 
         criteria.setIsPlainSearch(true);
 
@@ -342,13 +383,55 @@ public class PGRService {
     }
 
     /**
+     * Clients that fetched a complaint while it was masked (e.g. a transient MDMS lookup
+     * failure, or the citizen UI caching a stale view) may echo the "****" sentinel back
+     * on a later update — the citizen RATE flow resubmits the whole cached service object.
+     * Restore the currently-stored value for any field the client sends back as the
+     * sentinel, so a masked placeholder never permanently overwrites real data.
+     */
+    private void restoreMaskedPlaceholders(ExtendedAttributes updatedExt, String serviceId, String tenantId,
+                                            ComplaintTemplateTypeConfig cfg) {
+        boolean hasMasked = updatedExt.getDynamicFields().values().stream().anyMatch(MASK_SENTINEL::equals);
+        if (!hasMasked) return;
+
+        RequestSearchCriteria criteria = RequestSearchCriteria.builder()
+                .ids(Collections.singleton(serviceId)).tenantId(tenantId).build();
+        criteria.setIsPlainSearch(false);
+        List<ServiceWrapper> existing = repository.getServiceWrappers(criteria);
+        if (CollectionUtils.isEmpty(existing)) return;
+
+        ExtendedAttributes existingExt = existing.get(0).getService().getExtendedAttributes();
+        if (existingExt == null) return;
+
+        // existingExt's x-security fields are ciphertext at rest — decrypt before copying
+        // back, otherwise validation runs on ciphertext and encrypt() double-encrypts it.
+        encryptionDecryptionService.decrypt(existingExt, cfg);
+
+        for (String key : new ArrayList<>(updatedExt.getDynamicFields().keySet())) {
+            if (!MASK_SENTINEL.equals(updatedExt.getField(key))) continue;
+            Object existingValue = existingExt.getField(key);
+            if (existingValue == null) {
+                updatedExt.removeField(key);
+            } else if (MASK_SENTINEL.equals(existingValue)) {
+                // decrypt() falls back to the sentinel on failure (e.g. enc-service down) —
+                // treating that as a real value would persist "****" as if it were genuine,
+                // the exact corruption this method exists to prevent. Fail closed instead.
+                throw new CustomException("MASK_RESTORE_FAILED",
+                        "Could not recover the original value for field '" + key
+                                + "'; rejecting update to avoid persisting a placeholder.");
+            } else {
+                updatedExt.putField(key, existingValue);
+            }
+        }
+    }
+
+    /**
      * Decrypts or masks extendedAttributes for each wrapper.
      * All-or-nothing: confidential + no viewer role → maskAll. Creator always decrypts.
      * If MDMS config is gone for a confidential complaint, mask to avoid leaking ciphertext.
      */
     private void applyDecryptOrMask(List<ServiceWrapper> wrappers, RequestInfo requestInfo,
                                      Map<String, ComplaintTemplateTypeConfig> configCache) {
-        String callerUuid = requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getUuid() : null;
         for (ServiceWrapper wrapper : wrappers) {
             Service svc = wrapper.getService();
             if (svc.getExtendedAttributes() == null) continue;
@@ -358,16 +441,21 @@ public class PGRService {
                     encryptionDecryptionService.maskAll(svc.getExtendedAttributes());
                 continue;
             }
-            List<String> viewerRoles = !CollectionUtils.isEmpty(cfg.getAllowedViewerRoles())
-                    ? cfg.getAllowedViewerRoles() : List.of(ROLE_CONFIDENTIAL_VIEWER);
-            boolean isCreator = callerUuid != null && callerUuid.equals(svc.getAccountId());
-            if (svc.getExtendedAttributes().getIsConfidentialSafe() && !isCreator
-                    && !hasAnyRole(requestInfo, viewerRoles)) {
+            if (svc.getExtendedAttributes().getIsConfidentialSafe() && !isAuthorizedForConfidential(requestInfo, svc, cfg)) {
                 encryptionDecryptionService.maskAll(svc.getExtendedAttributes());
             } else {
                 encryptionDecryptionService.decrypt(svc.getExtendedAttributes(), cfg);
             }
         }
+    }
+
+    /** Creator always qualifies; otherwise the caller needs one of cfg's allowed viewer roles. */
+    private boolean isAuthorizedForConfidential(RequestInfo requestInfo, Service svc, ComplaintTemplateTypeConfig cfg) {
+        String callerUuid = requestInfo.getUserInfo() != null ? requestInfo.getUserInfo().getUuid() : null;
+        if (callerUuid != null && callerUuid.equals(svc.getAccountId())) return true;
+        List<String> viewerRoles = !CollectionUtils.isEmpty(cfg.getAllowedViewerRoles())
+                ? cfg.getAllowedViewerRoles() : List.of(ROLE_CONFIDENTIAL_VIEWER);
+        return hasAnyRole(requestInfo, viewerRoles);
     }
 
     private String getDepartmentFromMDMS(ServiceRequest request, Object mdmsData) {

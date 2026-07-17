@@ -106,6 +106,7 @@ const defaultValidationConfig = {
       // before the bundle, so getConfig is available at module init. The
       // generic numeric pattern is only a last resort if the config is absent.
       mobileNumber:
+        window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberRegex ||
         window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern ||
         "/^[0-9]{6,15}$/",
       password: "/^([a-zA-Z0-9@#$%]{8,15})$/i",
@@ -181,8 +182,10 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
 
   const [validationConfig, setValidationConfig] = useState(mapConfigToRegExp(defaultValidationConfig) || {});
   const [mobileMaxLength, setMobileMaxLength] = useState(
-    mobileRegexMaxLength(window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern) ||
-    15
+    mobileRegexMaxLength(
+      window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberRegex ||
+      window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS")?.mobileNumberPattern
+    ) || 15
   );
 
   const stateLvlTenantId = Digit.Utils.getMultiRootTenant()

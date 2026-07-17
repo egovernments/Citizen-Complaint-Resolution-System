@@ -43,6 +43,11 @@ public class PGRConstants {
 
     public static final String HRMS_DEPARTMENT_JSONPATH = "$.Employees.*.assignments.*.department";
 
+    // Only the ACTIVE assignment's department — used for department-scoped employee search
+    // (EmployeeDepartmentScopeService), where a past/ended assignment must not widen access.
+    public static final String HRMS_CURRENT_DEPARTMENT_JSONPATH =
+            "$.Employees[0].assignments[?(@.isCurrentAssignment==true)].department";
+
     public static final String HRMS_DESIGNATION_JSONPATH = "$.Employees.*.assignments[?(@.department=='{department}')].designation";
 
     public static final String HRMS_EMP_NAME_JSONPATH = "$.Employees.*.user.name";
@@ -151,6 +156,28 @@ public class PGRConstants {
 
     public static final String MDMS_DATA_SLA_KEYWORD = "slaHours";
 
+    // --- Config-driven notifications (RAINMAKER-PGR.NotificationRouting / NotificationTemplate) ---
+    public static final String MDMS_NOTIFICATION_ROUTING_MASTER = "NotificationRouting";
+    public static final String MDMS_NOTIFICATION_TEMPLATE_MASTER = "NotificationTemplate";
+    public static final String MDMS_NOTIFICATION_ROUTING_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationRouting";
+    public static final String MDMS_NOTIFICATION_TEMPLATE_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationTemplate";
+
+    // Channels — must match the MDMS schema enum.
+    public static final String CHANNEL_SMS = "SMS";
+    public static final String CHANNEL_WHATSAPP = "WHATSAPP";
+    public static final String CHANNEL_EMAIL = "EMAIL";
+
+    // Audience normalization (template lookup): any employee-type subscriber -> EMPLOYEE.
+    public static final String AUDIENCE_CITIZEN = "CITIZEN";
+    public static final String AUDIENCE_EMPLOYEE = "EMPLOYEE";
+
+    // Non-notifiable pseudo-audiences: workflow-internal, resolve to no recipients.
+    public static final String AUDIENCE_AUTO_ESCALATE = "AUTO_ESCALATE";
+    public static final String AUDIENCE_SYSTEM = "SYSTEM";
+
+    // Per-recipient event name prefix consumed by novu-bridge.
+    public static final String EVENT_NAME_PREFIX = "COMPLAINTS.WORKFLOW.";
+
     public static final String COMPLAINTS_RESOLVED = "complaintsResolved";
 
     public static final String AVERAGE_RESOLUTION_TIME = "averageResolutionTime";
@@ -174,8 +201,11 @@ public class PGRConstants {
     // Extended attributes — complaint category config and field schemas
     public static final String MDMS_COMPLAINT_RELATED_TO_MAP = "ComplaintRelatedToMap";
     public static final String MDMS_COMPLAINT_TEMPLATE_TYPE  = "ComplaintTemplateType";
-    public static final String MDMS_COMPLAINT_SCHEMA         = "ComplaintSchema";
+    public static final String MDMS_COMPLAINT_SCHEMA         = "ComplaintExtendedAttributeSchema";
 
     public static final String ROLE_CONFIDENTIAL_VIEWER = "CONFIDENTIAL_COMPLAINT_VIEWER";
+
+    // Placeholder written over dynamic fields the caller isn't authorized to see in plaintext.
+    public static final String MASK_SENTINEL = "****";
 
 }

@@ -103,6 +103,11 @@ public class RequestSearchCriteria {
     @JsonIgnore
     private Set<String> serviceRequestIds;
 
+    // Server-resolved only (see EmployeeDepartmentScopeService) — never bound from the request
+    // body. Restricts results to the searching employee's own HRMS department code(s).
+    @JsonIgnore
+    private Set<String> departmentCodes;
+
     public boolean isEmpty(){
         return (this.tenantId==null && this.serviceCode==null && this.mobileNumber==null && this.serviceRequestId==null
         && this.applicationStatus==null && this.ids==null && this.userIds==null && this.locality==null
