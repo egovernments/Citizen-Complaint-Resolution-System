@@ -206,9 +206,10 @@ def _no_duplicate_keys(loader, node, deep=False):
             raise yaml.constructor.ConstructorError(
                 None, None,
                 f"duplicate key {key!r} on line {key_node.start_mark.line + 1} "
-                f"(first defined on line {seen[key] + 1}). PyYAML would keep the last "
-                f"one and `docker compose` would reject the file; either way this guard "
-                f"cannot trust what it just read. Usually a mis-indented service key.",
+                f"(first defined on line {seen[key] + 1}). PyYAML keeps the last one "
+                f"silently, so whatever the first said is gone and this guard cannot "
+                f"trust what it just read. Usually a key indented one level too deep, "
+                f"merging into its predecessor.",
                 key_node.start_mark,
             )
         seen[key] = key_node.start_mark.line
@@ -229,15 +230,27 @@ def _rel(p: pathlib.Path) -> str:
 
 
 def _load_strict(text: str, where: str):
-    """Parse compose YAML, refusing a document with duplicate keys."""
+    """Parse YAML, refusing a document with duplicate keys.
+
+    EVERY input this guard reads goes through here -- compose files, k8s manifests,
+    and both gatus configs. Not just compose: the first cut hardened only
+    compose_targets and left the other three loads on plain safe_load, so the
+    docstring's "refuses to run on inputs it cannot trust" was true of a quarter of
+    the inputs. A duplicate `kind:` in a k8s manifest silently dropped that Service
+    out of the perimeter and the guard still printed OK.
+    """
     try:
         return yaml.load(text, Loader=_StrictLoader) or {}
     except yaml.YAMLError as e:
         raise GuardError(f"{where} is not trustworthy YAML: {e}")
 
 
-def _load(path: pathlib.Path):
-    return yaml.safe_load(path.read_text())
+def _load_all_strict(text: str, where: str):
+    """Same, for multi-document YAML (k8s manifests)."""
+    try:
+        return [d for d in yaml.load_all(text, Loader=_StrictLoader) if d]
+    except yaml.YAMLError as e:
+        raise GuardError(f"{where} is not trustworthy YAML: {e}")
 
 
 def _stub_vars(text: str) -> str:
@@ -327,7 +340,7 @@ def k8s_targets(root: pathlib.Path):
     """
     docs = []
     for f in sorted(root.rglob("*.yaml")):
-        docs.extend(d for d in yaml.safe_load_all(_stub_vars(f.read_text())) if d)
+        docs.extend(_load_all_strict(_stub_vars(f.read_text()), _rel(f)))
     return k8s_targets_from_docs(docs)
 
 
@@ -349,10 +362,30 @@ def k8s_targets_from_docs(docs):
     return out
 
 
+def _is_literally_disabled(endpoint) -> bool:
+    """True only for `enabled: false` written as a literal in the file.
+
+    A `${GATUS_PROFILE_*}` value is NOT disabled: it is resolved at runtime to match
+    what that deployment actually runs, which is the whole point of the toggles, and
+    static analysis cannot know the answer. (_stub_vars has already rewritten those
+    to __NAME__ by the time we get here, so they read as neither true nor false.)
+
+    A literal `false`, though, is knowable right now: the endpoint is inert in every
+    deployment, so counting it as coverage means the dashboard claims a service is
+    watched by a probe that can never run.
+    """
+    return endpoint.get("enabled") is False
+
+
 def _hosts(endpoints):
-    """Hostname of each endpoint URL, e.g. http://egov-user:8107/x -> egov-user."""
+    """Hostname of each ENABLED endpoint URL, e.g. http://egov-user:8107/x -> egov-user.
+
+    Literally-disabled endpoints are skipped, so they cannot pass as coverage.
+    """
     hosts = set()
     for e in endpoints:
+        if _is_literally_disabled(e):
+            continue
         m = re.match(r"^[a-z]+://([^:/]+)", str(e.get("url", "")))
         if m:
             hosts.add(m.group(1))
@@ -360,13 +393,18 @@ def _hosts(endpoints):
 
 
 def gatus_compose_endpoints():
-    return (yaml.safe_load(_stub_vars(GATUS_COMPOSE.read_text())) or {}).get("endpoints") or []
+    doc = _load_strict(_stub_vars(GATUS_COMPOSE.read_text()), _rel(GATUS_COMPOSE))
+    return doc.get("endpoints") or []
 
 
 def gatus_k8s_endpoints():
-    for doc in yaml.safe_load_all(_stub_vars(GATUS_K8S.read_text())):
-        if doc and doc.get("kind") == "ConfigMap" and "config.yaml" in (doc.get("data") or {}):
-            return (yaml.safe_load(_stub_vars(doc["data"]["config.yaml"])) or {}).get("endpoints") or []
+    for doc in _load_all_strict(_stub_vars(GATUS_K8S.read_text()), _rel(GATUS_K8S)):
+        if doc.get("kind") == "ConfigMap" and "config.yaml" in (doc.get("data") or {}):
+            # The embedded config is its own YAML document; a duplicate key in there
+            # is just as untrustworthy as one in the manifest around it.
+            inner = _load_strict(_stub_vars(doc["data"]["config.yaml"]),
+                                 f"{_rel(GATUS_K8S)} (embedded config.yaml)")
+            return inner.get("endpoints") or []
     return []
 
 
@@ -639,6 +677,35 @@ def self_test() -> int:
         "    restart: 'no'\n    image: curl\n",
         lambda d: d["services"]["svc-a"]["restart"] == "no",  # explicit must win
     )
+
+    # 8h. strictness must apply to EVERY input, not just compose. A duplicate key in a
+    #     k8s manifest silently dropped that Service out of the perimeter while the
+    #     guard printed OK -- the same last-key-wins class, three loads it did not cover.
+    try:
+        _load_all_strict("kind: Service\nkind: ConfigMap\n", "probe")
+        failures.append("multi-doc loader accepted a duplicate key instead of failing")
+    except GuardError:
+        pass
+    #     ...and a legitimate multi-document manifest still parses.
+    try:
+        docs = _load_all_strict("kind: Service\nmetadata: {name: a}\n---\nkind: Deployment\n", "probe")
+        if [d.get("kind") for d in docs] != ["Service", "Deployment"]:
+            failures.append(f"multi-doc loader mangled a valid manifest: {docs}")
+    except GuardError as e:
+        failures.append(f"multi-doc loader rejected a valid manifest: {e}")
+
+    # 8i. a literally-disabled endpoint is not coverage: it can never run, in any
+    #     deployment, so counting it means claiming a probe that does nothing.
+    if _hosts([{"url": "tcp://postgres-db:5432", "enabled": False}]):
+        failures.append("an `enabled: false` endpoint was counted as coverage")
+    #     ...but a ${GATUS_PROFILE_*} endpoint IS coverage -- it is resolved at runtime
+    #     to match what that deployment runs, which static analysis cannot second-guess.
+    #     (_stub_vars has already rewritten it to __NAME__ by this point.)
+    if _hosts([{"url": "tcp://postgres-db:5432", "enabled": "__GATUS_PROFILE_MCP__"}]) != {"postgres-db"}:
+        failures.append("a runtime-gated ${GATUS_PROFILE_*} endpoint was wrongly discounted")
+    #     ...and an endpoint with no `enabled:` at all is enabled (Gatus's own default).
+    if _hosts([{"url": "tcp://postgres-db:5432"}]) != {"postgres-db"}:
+        failures.append("an endpoint with no `enabled:` key was wrongly discounted")
 
     # 9. the perimeter is derived from disk, not memory: every compose file present
     #    must be scanned, so a newly added one cannot be invisible to this guard.
