@@ -87,8 +87,20 @@ export default defineConfig({
     {
       // Token-injection auth — writes auth-api.json storage state.
       // Used by smoke + api projects which do not exercise the UI login form.
+      //
+      // Depends on profile-setup because api.setup.ts imports utils/env.ts, and
+      // env.ts resolves TENANT/ROOT_TENANT at MODULE-IMPORT time from
+      // deployment-profile.json. With no edge here the two setups race, and on
+      // the run where api-setup wins there is no profile on disk yet — so env.ts
+      // silently falls back to its legacy `ke.nairobi`/`ke` literals and this
+      // project authenticates against a tenant that isn't the one under test.
+      // On maputo that surfaces as `ROPC token request failed (400)`; on bomet
+      // it would pass for the worst possible reason — the fallback literal `ke`
+      // happens to BE bomet's real tenant, so the bug is invisible there.
+      // `setup` needs no such edge: it does not import env.ts.
       name: 'api-setup',
       testMatch: /tests\/fixtures\/api\.setup\.ts$/,
+      dependencies: ['profile-setup'],
     },
     {
       // Provisions ONE fresh citizen per `npx playwright test` invocation

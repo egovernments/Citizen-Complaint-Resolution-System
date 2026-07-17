@@ -51,10 +51,17 @@ test('discover the deployment profile', async () => {
   expect(profile.workflow.pgr.found, `no PGR businessService on ${profile.tenant.city} — no workflow to drive`).toBe(true);
   expect(profile.workflow.pgr.actions.length, 'PGR businessService defines no actions').toBeGreaterThan(0);
   expect(profile.complaintTypes.services.length, `no complaint types on ${profile.tenant.city} — nothing to file`).toBeGreaterThan(0);
+  // toBeTruthy, not .not.toBeNull(): `resolved` starts life as `{}` and only
+  // gains a key when a persona resolves, so an unresolved employee is
+  // UNDEFINED, not null — and `expect(undefined).not.toBeNull()` passes. This
+  // guard has therefore never once fired for the case it exists to catch. The
+  // whole point of failing here is that a suite with no employee persona cannot
+  // test anything downstream, so it must stop at setup with the diagnostic
+  // rather than let every employee spec skip with its own vaguer reason.
   expect(
     profile.personas.resolved.employee,
     `no employee persona on ${profile.tenant.city}: ${profile.personas.unresolvedDiagnostics.employee ?? ''}`,
-  ).not.toBeNull();
+  ).toBeTruthy();
   expect(profile.tenant.label, `tenant ${profile.tenant.city} has no display label`).not.toBe('');
 
   console.log(`[profile.setup] wrote ${writeProfile(profile)}`);
