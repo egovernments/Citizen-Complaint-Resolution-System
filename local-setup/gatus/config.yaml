@@ -178,25 +178,27 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
 
-  # No documented health endpoint; TCP probe only.
   - name: User OTP Service
     group: OTP
     enabled: ${GATUS_PROFILE_OTP}
-    url: "tcp://user-otp:8090"
+    url: "http://user-otp:8090/user-otp/actuator/health"
     interval: 30s
     conditions:
-      - "[CONNECTED] == true"
+      - "[STATUS] == 200"
+      - "[BODY].status == UP"
 
-  # No documented health endpoint; TCP probe only. The port is a variable because
-  # this service listens on 8005 under docker-compose.egov-digit.yaml but on 8080
-  # in every other compose file, and they all share this config.
+  # The port is a variable because this service listens on 8005 under
+  # docker-compose.egov-digit.yaml but on 8080 in every other compose file, and
+  # they all share this config. Both work -- SERVER_PORT is honoured either way
+  # and the context path is /notification-sms regardless.
   - name: Notification SMS Service
     group: OTP
     enabled: ${GATUS_PROFILE_OTP}
-    url: "tcp://egov-notification-sms:${GATUS_SMS_PORT}"
+    url: "http://egov-notification-sms:${GATUS_SMS_PORT}/notification-sms/actuator/health"
     interval: 30s
     conditions:
-      - "[CONNECTED] == true"
+      - "[STATUS] == 200"
+      - "[BODY].status == UP"
 
   # -------------------- profile: search --------------------
   - name: Elasticsearch
