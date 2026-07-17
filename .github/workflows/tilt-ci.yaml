@@ -1,14 +1,22 @@
 name: Tilt CI
 
+# Both paths lists must also name this file. The jobs below carry logic of their own --
+# tiltfile-k8s-load's negative control asserts a duplicate ConfigMap is rejected -- and
+# that logic lives here, not under local-setup/. Without the self-reference, a PR editing
+# only this workflow (breaking the negative control, or making the load step a no-op)
+# triggers no run at all: no red, no green, no signal. gatus-coverage.yml watches itself
+# for exactly this reason.
 on:
   push:
     branches: [main, master, feature/*]
     paths:
       - 'local-setup/**'
+      - '.github/workflows/tilt-ci.yaml'
   pull_request:
     branches: [main, master, develop]
     paths:
       - 'local-setup/**'
+      - '.github/workflows/tilt-ci.yaml'
   workflow_dispatch:
 
 defaults:
