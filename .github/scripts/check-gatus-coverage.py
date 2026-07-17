@@ -53,10 +53,14 @@ LS = ROOT / "local-setup"
 #   docker-compose.yml          the local / CI path (.github/workflows/local-setup-ci.yaml
 #                               runs a bare `docker compose up -d` against it).
 #   docker-compose.egov-digit.yaml
-#                               the tenant path. ansible deploys ONLY this file plus the
-#                               migration/fast-path overlays -- never docker-compose.yml
-#                               (see playbook-deploy.yml "Compute compose file stack").
-#   deploy.yaml / registry.yml / db-migrations.yml / bomet.yml / core.yml
+#                               the tenant path -- never docker-compose.yml. ansible
+#                               deploys this file plus the fast-path/migrations overlays
+#                               AND a per-tenant overlay when one exists, i.e.
+#                               docker-compose.<inventory_hostname>.yml -- which is what
+#                               docker-compose.bomet.yml is. See playbook-deploy.yml
+#                               "Compute compose -f flags (fast-path + migrations +
+#                               per-tenant overlay)".
+#   deploy.yaml / registry.yml / db-migrations.yml / core.yml
 #                               variants that mostly duplicate the above, but are real
 #                               usage paths of their own (the digit-mcp docs deploy with
 #                               deploy.yaml). They contributed nothing but duplicate
@@ -116,7 +120,9 @@ EXEMPT = {
     # serving-stack dashboard, and these failing costs visibility, not service.
     # Monitoring the monitoring is a separate decision -- if it is ever wanted,
     # they need a GATUS_OBSERVABILITY toggle, since none of them exist in the
-    # k3s tier or in docker-compose.yml, only in docker-compose.egov-digit.yaml.
+    # k3s tier or in docker-compose.yml: they are defined in
+    # docker-compose.egov-digit.yaml, and grafana/tempo/otel-collector also in
+    # docker-compose.registry.yml.
     "grafana": "observability plumbing: dashboards UI, not a serving dependency",
     "prometheus": "observability plumbing: metrics store, not a serving dependency",
     "loki": "observability plumbing: log store, not a serving dependency",
@@ -325,9 +331,14 @@ def find_unlisted_compose_files():
     from covered. Adding one now forces the decision.
     """
     listed = {p.resolve() for p in COMPOSE_FILES}
-    on_disk = {p.resolve() for p in LS.glob("docker-compose*.yml")} | \
-              {p.resolve() for p in LS.glob("docker-compose*.yaml")}
-    return sorted(p.name for p in on_disk - listed)
+    # rglob, and *compose* rather than docker-compose*: `compose.yaml` is docker
+    # compose's DEFAULT, highest-precedence filename -- it would shadow
+    # docker-compose.yml for the bare `docker compose up -d` that local-setup-ci runs,
+    # while sitting wholly outside this perimeter. A name-shaped check only sees the
+    # names it already expects.
+    on_disk = {p.resolve() for p in LS.rglob("*compose*.yml")} | \
+              {p.resolve() for p in LS.rglob("*compose*.yaml")}
+    return sorted(str(p.relative_to(LS)) for p in on_disk - listed)
 
 
 def k8s_targets(root: pathlib.Path):
@@ -358,7 +369,11 @@ def k8s_targets_from_docs(docs):
             continue
         name = doc["metadata"]["name"]
         sel = doc.get("spec", {}).get("selector") or {}
-        key = tuple(sorted(sel.items())) or ("__none__", name)
+        # Namespace is part of the identity: two Services in different namespaces with
+        # the same selector front DIFFERENT workloads, and collapsing them would mask
+        # one. Everything is in `digit` today, which is exactly when this looks safe.
+        ns = doc["metadata"].get("namespace", "default")
+        key = (ns, tuple(sorted(sel.items()))) if sel else (ns, "__none__", name)
         by_selector.setdefault(key, []).append(name)
     out = {}
     for names in by_selector.values():
@@ -383,6 +398,57 @@ def _is_literally_disabled(endpoint) -> bool:
     return endpoint.get("enabled") is False
 
 
+_STUB = re.compile(r"^__[A-Z0-9_]+__$")   # what _stub_vars leaves behind for ${VAR}
+
+
+def _gatus_key(endpoint) -> str:
+    """Gatus's own identity for an endpoint: group + name, lowercased, spaces dashed."""
+    raw = f"{endpoint.get('group', '')}_{endpoint.get('name', '')}"
+    return raw.lower().replace(" ", "-")
+
+
+def _validate_endpoints(endpoints, where):
+    """Reject a Gatus config Gatus itself would refuse to start on.
+
+    The guard validated its own model of the config and never asked whether Gatus
+    could load it, so it green-lit files that make the dashboard die on boot -- the
+    exact failure the duplicate-key work exists to prevent, one level up. Both of
+    these were verified against twinproduction/gatus:latest:
+
+      * two endpoints sharing (group, name) ->
+            panic: invalid endpoint infrastructure_postgresql:
+                   name and group combination must be unique
+        and the guard printed `OK ... 51 endpoints per tier, no drift` -- contradicting
+        itself in its own success line, because find_drift keys by name and the
+        duplicate silently vanished.
+      * `enabled: "false"` (quoted) ->
+            panic: cannot unmarshal !!str `false` into bool
+        and the guard counted it as live coverage, since `"false" is False` is False.
+    """
+    seen = {}
+    for e in endpoints:
+        key = _gatus_key(e)
+        if key in seen:
+            raise GuardError(
+                f"{where}: two endpoints share the group+name {key!r} "
+                f"({seen[key]!r} and {e.get('name')!r}). Gatus refuses to start on this "
+                f"(\"name and group combination must be unique\"), and the drift check "
+                f"keys by name, so the duplicate would vanish silently."
+            )
+        seen[key] = e.get("name")
+
+        enabled = e.get("enabled")
+        if enabled is None or isinstance(enabled, bool):
+            continue
+        if isinstance(enabled, str) and _STUB.match(enabled):
+            continue          # ${GATUS_PROFILE_*}: resolved at runtime, not our business
+        raise GuardError(
+            f"{where}: endpoint {e.get('name')!r} has enabled: {enabled!r}, which is "
+            f"neither a bool nor a ${{VAR}}. Gatus unmarshals `enabled` into a bool and "
+            f"panics on anything else (a quoted \"false\" is a string, not false)."
+        )
+
+
 def _hosts(endpoints):
     """Hostname of each ENABLED endpoint URL, e.g. http://egov-user:8107/x -> egov-user.
 
@@ -400,7 +466,9 @@ def _hosts(endpoints):
 
 def gatus_compose_endpoints():
     doc = _load_strict(_stub_vars(GATUS_COMPOSE.read_text()), _rel(GATUS_COMPOSE))
-    return doc.get("endpoints") or []
+    eps = doc.get("endpoints") or []
+    _validate_endpoints(eps, _rel(GATUS_COMPOSE))
+    return eps
 
 
 def gatus_k8s_endpoints():
@@ -408,9 +476,11 @@ def gatus_k8s_endpoints():
         if doc.get("kind") == "ConfigMap" and "config.yaml" in (doc.get("data") or {}):
             # The embedded config is its own YAML document; a duplicate key in there
             # is just as untrustworthy as one in the manifest around it.
-            inner = _load_strict(_stub_vars(doc["data"]["config.yaml"]),
-                                 f"{_rel(GATUS_K8S)} (embedded config.yaml)")
-            return inner.get("endpoints") or []
+            where = f"{_rel(GATUS_K8S)} (embedded config.yaml)"
+            inner = _load_strict(_stub_vars(doc["data"]["config.yaml"]), where)
+            eps = inner.get("endpoints") or []
+            _validate_endpoints(eps, where)
+            return eps
     return []
 
 
@@ -726,8 +796,47 @@ def self_test() -> int:
     if _hosts([{"url": "tcp://postgres-db:5432"}]) != {"postgres-db"}:
         failures.append("an endpoint with no `enabled:` key was wrongly discounted")
 
+    # 8k. the guard must not certify a config Gatus itself panics on. Both of these
+    #     were verified against twinproduction/gatus:latest.
+    def _expect_endpoint_error(what, eps):
+        try:
+            _validate_endpoints(eps, "probe")
+        except GuardError:
+            return
+        failures.append(what)
+
+    #     duplicate (group, name): "name and group combination must be unique"
+    _expect_endpoint_error(
+        "two endpoints sharing group+name passed -- gatus would refuse to start",
+        [{"name": "PostgreSQL", "group": "Infrastructure", "url": "tcp://postgres-db:5432"},
+         {"name": "PostgreSQL", "group": "Infrastructure", "url": "tcp://redis:6379"}],
+    )
+    #     ...case/spacing folded the way gatus folds it, so `Foo Bar` == `foo-bar`.
+    _expect_endpoint_error(
+        "group+name duplicate slipped through on case/spacing",
+        [{"name": "Foo Bar", "group": "G", "url": "tcp://a:1"},
+         {"name": "foo-bar", "group": "g", "url": "tcp://b:1"}],
+    )
+    #     enabled must be a bool: a quoted "false" is a string and gatus panics
+    #     ("cannot unmarshal !!str `false` into bool").
+    _expect_endpoint_error(
+        "enabled: \"false\" (a string) passed -- gatus would refuse to start",
+        [{"name": "Redis", "group": "Infrastructure", "url": "tcp://redis:6379", "enabled": "false"}],
+    )
+    #     ...but real bools, absent keys, and ${VAR} stubs are all fine.
+    try:
+        _validate_endpoints([
+            {"name": "a", "group": "G", "url": "tcp://a:1", "enabled": True},
+            {"name": "b", "group": "G", "url": "tcp://b:1", "enabled": False},
+            {"name": "c", "group": "G", "url": "tcp://c:1"},
+            {"name": "d", "group": "G", "url": "tcp://d:1", "enabled": "__GATUS_PROFILE_MCP__"},
+        ], "probe")
+    except GuardError as e:
+        failures.append(f"a valid endpoint set was rejected: {e}")
+
     # 9. the perimeter is derived from disk, not memory: every compose file present
     #    must be scanned, so a newly added one cannot be invisible to this guard.
+    #    Both tiers' real configs must also satisfy the gatus-loadability rules above.
     unlisted = find_unlisted_compose_files()
     if unlisted:
         failures.append(f"compose files exist that COMPOSE_FILES does not scan: {unlisted}")
