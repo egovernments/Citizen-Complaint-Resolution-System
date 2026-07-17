@@ -6,6 +6,7 @@ import {
   hasActiveFilters,
 } from "../config/globalFilterGroups";
 import ComplaintTypeTreeFilter from "./ComplaintTypeTreeFilter";
+import PopoverMenu, { PopoverMenuItem, PopoverMenuGroupLabel } from "./ui/PopoverMenu";
 import useDashboardT from "../i18n/useDashboardT";
 
 const FunnelIcon = () => (
@@ -26,48 +27,53 @@ const FunnelIcon = () => (
 );
 
 /**
- * Render a flat {id,label,group?} option list, batching consecutive same-group
- * runs into native <optgroup>s. The list arrives group-contiguous (sentinel
- * first, grouped options sorted by group, strays last), so a single pass
- * yields: plain sentinel option → one <optgroup> per root complaint category →
- * plain trailing options for codes missing from the hierarchy master. Lists
- * without any `group` (wards; hierarchy-fetch failure) render exactly as the
- * old flat <option> list.
+ * Degrade path for the complaint-type filter when no usable/pruned hierarchy
+ * exists (flat tenant, MDMS fetch failure, empty scoped distincts): the same
+ * flat {id,label,group?} option list the old native <select> showed, now
+ * rendered through the shared PopoverMenu primitive (owner design pass — no
+ * native selects). Consecutive same-group runs get a non-interactive group
+ * label, exactly where the old <optgroup>s sat; the wire contract is
+ * untouched (a bare leaf-code string through onFilterChange).
  */
-function renderGroupedOptions(options) {
-  const rendered = [];
-  let run = null; // { group, items } — current <optgroup> being accumulated
-
-  const flushRun = () => {
-    if (!run) return;
-    rendered.push(
-      <optgroup key={`group-${run.group}`} label={run.group}>
-        {run.items}
-      </optgroup>
-    );
-    run = null;
-  };
-
-  for (const opt of options) {
-    const node = (
-      <option key={opt.id} value={opt.id}>
-        {opt.label}
-      </option>
-    );
-    if (opt.group) {
-      if (!run || run.group !== opt.group) {
-        flushRun();
-        run = { group: opt.group, items: [] };
-      }
-      run.items.push(node);
-    } else {
-      flushRun();
-      rendered.push(node);
-    }
-  }
-  flushRun();
-  return rendered;
-}
+const FlatComplaintTypeMenu = ({ options, value, loading, onChange, t }) => {
+  const selected = options.find((opt) => opt.id === value);
+  return (
+    <PopoverMenu
+      ariaLabel={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
+      chip={loading ? t("DASHBOARD_COMMON_LOADING", "Loading…") : selected?.label ?? String(value)}
+      chipTitle={selected?.label}
+      disabled={loading}
+      panelWidth={272}
+    >
+      {({ close }) => {
+        const rows = [];
+        let lastGroup = null;
+        for (const opt of options) {
+          if (opt.group && opt.group !== lastGroup) {
+            rows.push(
+              <PopoverMenuGroupLabel key={`group-${opt.group}`}>{opt.group}</PopoverMenuGroupLabel>
+            );
+          }
+          lastGroup = opt.group || null;
+          rows.push(
+            <PopoverMenuItem
+              key={opt.id}
+              selected={opt.id === value}
+              title={opt.label}
+              onSelect={() => {
+                onChange(opt.id);
+                close();
+              }}
+            >
+              {opt.label}
+            </PopoverMenuItem>
+          );
+        }
+        return <div className="dashboard-popover-list">{rows}</div>;
+      }}
+    </PopoverMenu>
+  );
+};
 
 const DashboardFilters = ({
   filters,
@@ -158,8 +164,8 @@ const DashboardFilters = ({
         </div>
 
         {complaintTypeTree ? (
-          // ONE-widget tree traversal (breadcrumb + children dropdown + up),
-          // ABAC-pruned; leaf selection → serviceCode, interior → complaintPath.
+          // ONE chip + traversal panel (trail, descend-in-place, "All in <X>",
+          // reset), ABAC-pruned; leaf → serviceCode, interior → complaintPath.
           <ComplaintTypeTreeFilter
             tree={complaintTypeTree}
             filters={filters}
@@ -167,23 +173,13 @@ const DashboardFilters = ({
             t={t}
           />
         ) : (
-          // Degrade: no usable/pruned hierarchy (flat tenant, MDMS fetch
-          // failure, empty scoped distincts) → the previous flat leaf select.
-          <div className="dashboard-filter-inline-select-wrap">
-            <select
-              value={filterOptionsLoading && complaintTypeOptions.length <= 1 ? "" : complaintType}
-              disabled={filterOptionsLoading && complaintTypeOptions.length <= 1}
-              onChange={(e) => onFilterChange("complaintType", e.target.value)}
-              aria-label={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
-              className="dashboard-filter-inline-select"
-            >
-              {filterOptionsLoading && complaintTypeOptions.length <= 1 ? (
-                <option value="">{t("DASHBOARD_COMMON_LOADING", "Loading…")}</option>
-              ) : (
-                renderGroupedOptions(complaintTypeOptions)
-              )}
-            </select>
-          </div>
+          <FlatComplaintTypeMenu
+            options={complaintTypeOptions}
+            value={complaintType}
+            loading={filterOptionsLoading && complaintTypeOptions.length <= 1}
+            onChange={(id) => onFilterChange("complaintType", id)}
+            t={t}
+          />
         )}
 
         <button

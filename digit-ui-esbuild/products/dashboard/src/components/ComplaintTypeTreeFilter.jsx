@@ -1,45 +1,50 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import useDashboardT from "../i18n/useDashboardT";
 import { dimensionLabel } from "../i18n/dimensionLabel";
+import PopoverMenu, { PopoverMenuItem } from "./ui/PopoverMenu";
 import {
   ALL,
+  TRAIL_ELLIPSIS,
   ancestorsOf,
+  browseBaseCode,
   childrenOf,
+  clearedSelection,
   humanizeTypeCode,
   nodeOf,
-  parentOf,
   selectionFromCode,
-  clearedSelection,
+  truncateTrail,
 } from "../utils/complaintTypeTree";
 
 /**
- * ONE compact tree-traversal widget for the complaint-type filter — replaces
- * the flat leaf <select> in the filter bar (owner design; the exhumed July
- * demo's growing chain-of-selects is deliberately NOT reproduced).
+ * The complaint-type filter as ONE compact chip + ONE traversal panel (owner
+ * design pass: "tree traversing clean widget", no native <select>).
  *
- * From the current node:
- *   - breadcrumb-ish label: clickable ancestors ("All types" at root) — a
- *     click applies the filter AT that level (the up/back affordance),
- *   - one dropdown listing the CHILDREN of the current node — selecting a
- *     child descends AND applies (interior child → subtree filter, leaf
- *     child → exact type filter),
- *   - an up-chevron that applies the parent level (root clears).
+ * CHIP (filter bar anchor): shows the applied selection — "All types" at
+ * root, the node's label at depth 1, "Parent › Node" deeper (prefixed with
+ * "… ›" when more ancestors are elided). Clicking opens the panel.
  *
- * APPLY-ON-SELECT everywhere (validation required-change #3): traversal IS
- * application; there is no staged state and no Apply button — consistent with
- * the instant date/geography controls beside it.
+ * PANEL (the whole traversal, via the shared PopoverMenu primitive):
+ *   - ancestor TRAIL across the top — clickable crumbs BROWSE to that level
+ *     (middle-truncated with an ellipsis for deep trees, endpoints kept);
+ *   - the current node's CHILDREN as a scrollable list — an interior child
+ *     (chevron) DESCENDS within the panel, a leaf click APPLIES + closes;
+ *   - an explicit "All in <current>" first row applies the subtree + closes;
+ *   - an "All types" reset row pinned at the bottom.
  *
- * When a LEAF is applied, the dropdown shows the parent's children with the
- * leaf selected (a leaf has no children), so switching between sibling leaves
- * stays a one-click operation — exactly the old flat-select ergonomics at
- * that level. The dropdown's first option re-applies the current interior
- * level itself ("All types" at root / "All in <node>"), which is also how a
- * leaf selection steps back up without hunting for the chevron.
+ * Interaction choice — BROWSE-THEN-APPLY for interior traversal: descending
+ * is navigation-in-progress, and applying every intermediate hop would fire
+ * a full dashboard refetch per step of a drill-down; the subtree apply stays
+ * one deliberate click ("All in <X>"), leaves apply instantly. Persistence
+ * is untouched: applies still emit the { code, path, leaf } trio through
+ * onFilterChange (leaf → serviceCode, interior → complaintPath) and browse
+ * state lives only inside the open panel (it resets to the applied node on
+ * every open, leaf selections opening at their parent so sibling switching
+ * stays one click — the old flat-select ergonomics at that level).
  *
  * Labels resolve through the dimensionLabel seam (COMPLAINT_HIERARCHY.<code>
  * first, then the master's data-owned name); interior nodes whose MDMS name
  * is just the code fall back to a humanised last-segment — never a raw
- * dotted code in the breadcrumb (validation risk #3ii).
+ * dotted code in the chip or trail (validation risk #3ii).
  */
 
 export function nodeDisplayLabel(tree, code) {
@@ -48,45 +53,151 @@ export function nodeDisplayLabel(tree, code) {
   return resolved === String(code) ? humanizeTypeCode(code) : resolved;
 }
 
-const UpIcon = () => (
-  <svg
-    width="12"
-    height="12"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <path d="m18 15-6-6-6 6" />
-  </svg>
-);
+/** Max rendered trail entries (root + ellipsis + 2 nearest) — ke's PGR_TEST
+ *  4-level tree browses at depth 4 as: All types › … › <parent> › <node>. */
+const TRAIL_MAX = 4;
 
-const CRUMB_STYLE = {
-  maxWidth: "9rem",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
+/**
+ * The panel body. Exported (also for the ReactDOMServer render smoke): pure
+ * React against the tree + applied code, owns only the transient browse
+ * location. Mounted fresh on every open, so browse state self-resets.
+ */
+export function ComplaintTypeTreePanel({ tree, appliedCode, onApply, t }) {
+  const [browseCode, setBrowseCode] = useState(() => browseBaseCode(tree, appliedCode));
+  const rootRef = useRef(null);
+  const mountedRef = useRef(false);
+
+  // After an in-panel browse hop the clicked row unmounts and DOM focus dies
+  // on <body>; hand it to the new level's first row so arrow keys keep
+  // working. Initial focus on open is the primitive's job, not ours.
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    rootRef.current?.querySelector("[data-menu-item]:not(:disabled)")?.focus();
+  }, [browseCode]);
+
+  const allTypesLabel = t("DASHBOARD_FILTERS_ALL_TYPES", "All types");
+  const label = (c) => (c === ALL ? allTypesLabel : nodeDisplayLabel(tree, c));
+
+  const atRoot = browseCode === ALL || !nodeOf(tree, browseCode);
+  const browse = atRoot ? ALL : browseCode;
+  const children = childrenOf(tree, browse);
+  const trailCodes = atRoot ? [ALL] : [ALL, ...ancestorsOf(tree, browse), browse];
+  const trail = truncateTrail(trailCodes, TRAIL_MAX);
+  const elided =
+    trail === trailCodes ? [] : trailCodes.filter((c) => !trail.includes(c));
+
+  return (
+    <div ref={rootRef} className="dashboard-popover-tree">
+      <div className="dashboard-popover-trail" role="presentation">
+        {trail.map((crumb, index) => {
+          const isCurrent = index === trail.length - 1;
+          if (crumb === TRAIL_ELLIPSIS) {
+            return (
+              <React.Fragment key={TRAIL_ELLIPSIS}>
+                <span
+                  className="dashboard-popover-trail-ellipsis"
+                  title={elided.map(label).join(" › ")}
+                  aria-hidden
+                >
+                  …
+                </span>
+                <span className="dashboard-popover-trail-sep" aria-hidden>
+                  ›
+                </span>
+              </React.Fragment>
+            );
+          }
+          if (isCurrent) {
+            return (
+              <span key={crumb} className="dashboard-popover-trail-current" title={label(crumb)}>
+                {label(crumb)}
+              </span>
+            );
+          }
+          return (
+            <React.Fragment key={crumb}>
+              <button
+                type="button"
+                role="menuitem"
+                data-menu-item=""
+                className="dashboard-popover-trail-crumb"
+                title={label(crumb)}
+                onClick={() => setBrowseCode(crumb)}
+              >
+                {label(crumb)}
+              </button>
+              <span className="dashboard-popover-trail-sep" aria-hidden>
+                ›
+              </span>
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      <div className="dashboard-popover-list">
+        {!atRoot && (
+          <PopoverMenuItem
+            selected={appliedCode === browse}
+            title={`${t("DASHBOARD_TYPE_FILTER_ALL_IN", "All in")} ${label(browse)}`}
+            onSelect={() => onApply(browse)}
+          >
+            {`${t("DASHBOARD_TYPE_FILTER_ALL_IN", "All in")} ${label(browse)}`}
+          </PopoverMenuItem>
+        )}
+        {children.map((child) => (
+          <PopoverMenuItem
+            key={child.code}
+            selected={appliedCode === child.code ? true : child.isLeaf ? false : undefined}
+            descend={!child.isLeaf}
+            title={label(child.code)}
+            onSelect={() =>
+              child.isLeaf ? onApply(child.code) : setBrowseCode(child.code)
+            }
+          >
+            {label(child.code)}
+          </PopoverMenuItem>
+        ))}
+      </div>
+
+      <div className="dashboard-popover-footer">
+        <PopoverMenuItem
+          muted
+          selected={appliedCode === ALL || !nodeOf(tree, appliedCode)}
+          onSelect={() => onApply(ALL)}
+        >
+          {allTypesLabel}
+        </PopoverMenuItem>
+      </div>
+    </div>
+  );
+}
+
+/** Chip content for the applied code: trailing segments + elision marker. */
+function chipModel(tree, code, allTypesLabel) {
+  const node = nodeOf(tree, code);
+  if (!node) return { segments: [allTypesLabel], elided: false, title: allTypesLabel };
+  const chain = [...ancestorsOf(tree, code), code].map((c) => nodeDisplayLabel(tree, c));
+  const segments = chain.slice(-2);
+  return {
+    segments,
+    elided: chain.length > 2,
+    title: chain.join(" › "),
+  };
+}
 
 const ComplaintTypeTreeFilter = ({ tree, filters, onFilterChange, t: tProp }) => {
   const { t: tHook } = useDashboardT();
   const t = tProp || tHook;
 
   const code = filters?.complaintType ?? ALL;
-  const current = nodeOf(tree, code); // null at root (or stale code pre-repair)
-  const atRoot = !current;
-
-  // The level the dropdown lists: the current node when it can be descended
-  // into (root/interior), else the applied leaf's parent (sibling switching).
-  const baseCode = atRoot || !current.isLeaf ? (atRoot ? ALL : code) : parentOf(tree, code);
-  const children = childrenOf(tree, baseCode);
-
   const allTypesLabel = t("DASHBOARD_FILTERS_ALL_TYPES", "All types");
-  const label = (c) => nodeDisplayLabel(tree, c);
+  const { segments, elided, title } = chipModel(tree, code, allTypesLabel);
 
+  // UNCHANGED wire/persistence contract: applies emit the selection trio
+  // (leaf → serviceCode, interior → complaintPath) through onFilterChange.
   const apply = (nextCode) => {
     onFilterChange(
       "complaintType",
@@ -94,79 +205,56 @@ const ComplaintTypeTreeFilter = ({ tree, filters, onFilterChange, t: tProp }) =>
     );
   };
 
-  // Breadcrumb trail: root sentinel + ancestors (clickable = applies at that
-  // level), then the current node as plain text. At root only the sentinel
-  // shows (as text — nothing to go back to).
-  const trail = atRoot ? [] : [ALL, ...ancestorsOf(tree, code)];
-
-  return (
-    <div
-      className="dashboard-type-tree-filter"
-      role="group"
-      aria-label={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
-    >
-      <button
-        type="button"
-        className="dashboard-filters-clear-inline dashboard-type-tree-up"
-        onClick={() => apply(atRoot ? ALL : parentOf(tree, code))}
-        disabled={atRoot}
-        aria-disabled={atRoot}
-        title={t("DASHBOARD_TYPE_FILTER_UP", "Up one level")}
-        aria-label={t("DASHBOARD_TYPE_FILTER_UP", "Up one level")}
-      >
-        <UpIcon />
-      </button>
-
-      <span className="dashboard-type-tree-crumbs">
-        {trail.map((crumbCode) => (
-          <React.Fragment key={crumbCode}>
-            <button
-              type="button"
-              className="dashboard-type-tree-crumb"
-              style={CRUMB_STYLE}
-              onClick={() => apply(crumbCode)}
-              title={crumbCode === ALL ? allTypesLabel : label(crumbCode)}
-            >
-              {crumbCode === ALL ? allTypesLabel : label(crumbCode)}
-            </button>
-            <span className="dashboard-type-tree-sep" aria-hidden>
+  const chip = (
+    <span className="dashboard-popover-chip-trail">
+      {elided && (
+        <>
+          <span className="dashboard-popover-chip-seg dashboard-popover-chip-seg--muted" aria-hidden>
+            …
+          </span>
+          <span className="dashboard-popover-chip-sep" aria-hidden>
+            ›
+          </span>
+        </>
+      )}
+      {segments.map((segment, index) => (
+        <React.Fragment key={`${index}-${segment}`}>
+          {index > 0 && (
+            <span className="dashboard-popover-chip-sep" aria-hidden>
               ›
             </span>
-          </React.Fragment>
-        ))}
-        <span
-          className="dashboard-type-tree-current"
-          style={CRUMB_STYLE}
-          title={atRoot ? allTypesLabel : label(code)}
-        >
-          {atRoot ? allTypesLabel : label(code)}
-        </span>
-      </span>
-
-      {children.length > 0 && (
-        <span className="dashboard-filter-inline-select-wrap">
-          <select
-            className="dashboard-filter-inline-select"
-            // Leaf applied → the leaf (a sibling pick); else the base level itself.
-            value={current?.isLeaf ? code : baseCode}
-            onChange={(e) => apply(e.target.value)}
-            aria-label={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
+          )}
+          <span
+            className={`dashboard-popover-chip-seg${
+              index < segments.length - 1 ? " dashboard-popover-chip-seg--muted" : ""
+            }`}
           >
-            <option value={baseCode}>
-              {baseCode === ALL
-                ? allTypesLabel
-                : `${t("DASHBOARD_TYPE_FILTER_ALL_IN", "All in")} ${label(baseCode)}`}
-            </option>
-            {children.map((child) => (
-              <option key={child.code} value={child.code}>
-                {label(child.code)}
-                {!child.isLeaf ? " ›" : ""}
-              </option>
-            ))}
-          </select>
-        </span>
+            {segment}
+          </span>
+        </React.Fragment>
+      ))}
+    </span>
+  );
+
+  return (
+    <PopoverMenu
+      ariaLabel={t("DASHBOARD_FILTERS_COMPLAINT_TYPE_FILTER", "Complaint type filter")}
+      chipTitle={title}
+      chip={chip}
+      panelWidth={288}
+    >
+      {({ close }) => (
+        <ComplaintTypeTreePanel
+          tree={tree}
+          appliedCode={code}
+          t={t}
+          onApply={(nextCode) => {
+            apply(nextCode);
+            close();
+          }}
+        />
       )}
-    </div>
+    </PopoverMenu>
   );
 };
 
