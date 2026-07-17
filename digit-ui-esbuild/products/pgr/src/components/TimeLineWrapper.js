@@ -210,6 +210,7 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                     // per-step below so the timeline keeps the FULL history, not
                     // just the latest upload — same on citizen + employee UIs.
                     documents: Array.isArray(instance?.documents) ? instance.documents : [],
+                    documentTenantId: instance?.tenantId || tenantId,
                     showConnector: true,
                 };
             });
