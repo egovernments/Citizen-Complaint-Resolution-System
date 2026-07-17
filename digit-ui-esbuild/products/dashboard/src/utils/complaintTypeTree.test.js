@@ -317,6 +317,48 @@ test("repair: vanished node walks UP its stored path to nearest ancestor", () =>
   });
 });
 
+test("repair: dotted CODES repair to the surviving ancestor, not cleared", () => {
+  // Real MDMS codes contain "." (e.g. "complaints.categories.sanitation") —
+  // the stored path must be matched by node-path prefix, never split into
+  // segments (which would shred one dotted code into several non-codes).
+  const full = buildComplaintTree([
+    rec("complaints.categories.sanitation", null, { name: "Sanitation" }),
+    rec("complaints.types.garbage", "complaints.categories.sanitation", {
+      name: "Garbage",
+    }),
+    rec("complaints.types.sewage", "complaints.categories.sanitation", {
+      name: "Sewage",
+    }),
+  ]);
+  // ABAC re-scope drops the garbage leaf; its stored selection must repair
+  // UP to the surviving dotted-code ancestor.
+  const pruned = pruneComplaintTree(full, ["complaints.types.sewage"]);
+  assert.deepEqual(
+    repairSelection(pruned, {
+      code: "complaints.types.garbage",
+      path: "complaints.categories.sanitation.complaints.types.garbage",
+      leaf: true,
+    }),
+    {
+      code: "complaints.categories.sanitation",
+      path: "complaints.categories.sanitation",
+      leaf: false,
+    }
+  );
+});
+
+test("repair: ancestor prefix match respects dot boundaries (ROADS ≠ ROADSIDE)", () => {
+  const pruned = pruneComplaintTree(tree(), ["Pothole"]); // ROADS branch only
+  assert.deepEqual(
+    repairSelection(pruned, {
+      code: "RoadsideDump",
+      path: "ROADSIDE.RoadsideDump", // "ROADS" is NOT a dot-boundary prefix
+      leaf: true,
+    }),
+    clearedSelection()
+  );
+});
+
 test("repair: nothing on the stored path survives → cleared", () => {
   const pruned = pruneComplaintTree(tree(), ["Pothole"]); // ROADS branch only
   assert.deepEqual(

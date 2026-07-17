@@ -273,6 +273,12 @@ export function complaintTypeParams(selection) {
  * ancestor (the exhumed demo's sanitize-and-repair idea); nothing valid →
  * cleared. Also normalises path/leaf drift (e.g. a node that used to be a
  * leaf and now has children keeps working as a subtree filter).
+ *
+ * The ancestor walk matches surviving node PATHS as dot-boundary prefixes of
+ * the stored path — never by splitting the stored path into segments, because
+ * codes may themselves contain "." (e.g. "complaints.categories.sanitation")
+ * and would be shredded into non-codes, mis-clearing a repairable selection.
+ * The deepest (longest-path) surviving prefix wins.
  */
 export function repairSelection(tree, selection) {
   const code = String(selection?.code ?? "").trim();
@@ -282,10 +288,13 @@ export function repairSelection(tree, selection) {
 
   const path = String(selection?.path ?? "").trim();
   if (path) {
-    const segments = path.split(".").filter(Boolean);
-    for (let i = segments.length - 1; i >= 0; i--) {
-      if (tree.byCode.has(segments[i])) return selectionFromCode(tree, segments[i]);
+    let ancestor = null;
+    for (const node of tree.byCode.values()) {
+      const nodePath = String(node.path ?? "");
+      if (!nodePath || (nodePath !== path && !path.startsWith(`${nodePath}.`))) continue;
+      if (!ancestor || nodePath.length > String(ancestor.path).length) ancestor = node;
     }
+    if (ancestor) return selectionFromCode(tree, ancestor.code);
   }
   return clearedSelection();
 }
