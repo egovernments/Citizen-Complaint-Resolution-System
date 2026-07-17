@@ -2354,9 +2354,12 @@
         status_code: [200]
         timeout: 60
       register: mcp_rekey_root
-      failed_when: >-
-        mcp_rekey_root.status != 200 or
-        not (mcp_rekey_root.json.admin_user_provisioned | default(false))
+      # A DB pre-seeded from a LIVE environment dump (instead of the stock pg
+      # dump) already carries ADMIN under the state key — the shim then errors
+      # on the existing row and `admin_user_provisioned` stays false even
+      # though login works. Only require the shim to be reachable here; the
+      # configurator-i18n ADMIN login below (6 retries) is the real gate.
+      failed_when: mcp_rekey_root.status != 200
       when: state_root != 'pg'
       no_log: true
 
@@ -2377,11 +2380,41 @@
         status_code: [200]
         timeout: 60
       register: mcp_rekey_city
-      failed_when: >-
-        mcp_rekey_city.status != 200 or
-        not (mcp_rekey_city.json.admin_user_provisioned | default(false))
+      # Same pre-seeded-dump tolerance as the state_root task above.
+      failed_when: mcp_rekey_city.status != 200
       when: state_root != 'pg' and tenant_id != state_root
       no_log: true
+
+    # The authoritative check the softened asserts above rely on: ADMIN must
+    # actually authenticate at the city tenant (covers both the stock-dump
+    # re-key path and the pre-seeded-dump path).
+    - name: "post-bootstrap — verify ADMIN authenticates at the city tenant"
+      ansible.builtin.uri:
+        url: "{{ 'https://' + domain if (tls_enabled | default(true)) else 'http://127.0.0.1' }}/user/oauth/token"
+        method: POST
+        headers: >-
+          {{
+            {'Authorization': 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+             'Content-Type': 'application/x-www-form-urlencoded'}
+            | combine({'Host': domain} if not (tls_enabled | default(true)) else {})
+          }}
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          username: "{{ bootstrap_user | default('ADMIN') }}"
+          password: "{{ bootstrap_password | default('eGov@123') }}"
+          scope: read
+          tenantId: "{{ tenant_id }}"
+          userType: EMPLOYEE
+        status_code: [200]
+        timeout: 15
+        validate_certs: "{{ tls_enabled | default(true) }}"
+      register: admin_login_city
+      retries: 6
+      delay: 10
+      until: admin_login_city.status == 200
+      no_log: true
+      when: state_root != 'pg' and tenant_id != state_root
 
     # ────────────────────────────────────────────────────────────────
     # Configurator UI localization seed. The configurator's own chrome —
