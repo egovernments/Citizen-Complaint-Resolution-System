@@ -1,5 +1,6 @@
 import {
   GRID_COLS,
+  DROPPING_ITEM_ID,
   UNIFORM_CHART_SIZE_CONSTRAINTS,
   MAP_SIZE_CONSTRAINTS,
   FULL_WIDTH_TABLE_GRID,
@@ -141,6 +142,24 @@ export function addItemToLayout(layout, kpiId, kpis, position) {
   const pos = position || findFirstOpenPosition(layout, w, h, GRID_COLS);
   const item = normalizeItem({ i: kpiId, x: pos.x, y: pos.y, w, h }, kpis);
   return compactVertically([...layout, item]);
+}
+
+/**
+ * Merge a layout emitted by react-grid-layout's onLayoutChange into the
+ * current state: accept RGL's flowed geometry verbatim but re-attach the
+ * per-item min/max constraints RGL strips, and drop RGL's synthetic external-
+ * drop placeholder (__dropping-elem__) — it must never enter state or storage
+ * (the real tile arrives via addItemToLayout on drop).
+ */
+export function mergeEmittedLayout(prev, next) {
+  return next
+    .filter((item) => item.i !== DROPPING_ITEM_ID)
+    .map((item) => {
+      const existing = prev.find((p) => p.i === item.i);
+      return existing
+        ? { ...existing, x: item.x, y: item.y, w: item.w, h: item.h }
+        : item;
+    });
 }
 
 /**

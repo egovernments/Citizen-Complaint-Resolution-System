@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DROPPING_ITEM_ID } from "../constants/layoutConfig";
 import { compactVertically } from "../utils/gridGeometry";
 import {
   LEGACY_STORAGE_KEY,
@@ -7,6 +6,7 @@ import {
   buildSeedLayout,
   resolveInitialLayout,
   addItemToLayout,
+  mergeEmittedLayout,
   readSavedLayout,
   persistLayout,
   sizeConstraintsForKpi,
@@ -115,17 +115,7 @@ export function useCatalogLayout(kpis, packLayout) {
   const onLayoutChange = useCallback(
     (next) => {
       setLayout((prev) => {
-        // While a picker item hovers the grid (isDroppable), RGL injects its
-        // synthetic __dropping-elem__ placeholder into the layout it emits —
-        // never let it into state/storage (the real tile arrives via
-        // addKpiToLayout on drop).
-        const real = next.filter((item) => item.i !== DROPPING_ITEM_ID);
-        const merged = real.map((item) => {
-          const existing = prev.find((p) => p.i === item.i);
-          return existing
-            ? { ...existing, x: item.x, y: item.y, w: item.w, h: item.h }
-            : item;
-        });
+        const merged = mergeEmittedLayout(prev, next);
         persistDebounced(merged);
         return merged;
       });
