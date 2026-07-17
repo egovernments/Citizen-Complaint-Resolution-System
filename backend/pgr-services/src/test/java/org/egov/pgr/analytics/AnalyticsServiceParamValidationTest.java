@@ -84,4 +84,49 @@ public class AnalyticsServiceParamValidationTest {
         service.validateAllowedParams(def(SEEDED_PARAMS), null);
         service.validateAllowedParams(def("null"), json("{\"hierLevel\":\"7\"}"));
     }
+
+    // ------------------------------------------------------------------------------------------
+    // Seed-schema pinning: the registered dss.KpiDefinition schema requires `default` + `allowed`
+    // on EVERY params entry, so free-form params (complaintPath) are seeded as
+    // {"default":"","allowed":[]}. These pin the server semantics that make that encoding safe:
+    // an empty allow-list = unvalidated free-form, an empty-string default = no-op.
+    // ------------------------------------------------------------------------------------------
+
+    private static final String FREE_FORM_PARAMS =
+            "[{\"name\":\"complaintPath\",\"default\":\"\",\"allowed\":[]}]";
+
+    @Test
+    public void emptyAllowedListMeansUnvalidatedFreeForm() {
+        // "allowed":[] must behave exactly like an absent allow-list: any value passes.
+        service.validateAllowedParams(def(FREE_FORM_PARAMS),
+                json("{\"complaintPath\":\"RoadsAndFootpaths.DamagedRoad\"}"));
+        service.validateAllowedParams(def(FREE_FORM_PARAMS),
+                json("{\"complaintPath\":\"anything.at.all\"}"));
+    }
+
+    @Test
+    public void emptyStringDefaultIsNoOp() {
+        // "default":"" must never be injected as an effective param value.
+        assertNull(service.withDeclaredDefaults(def(FREE_FORM_PARAMS), null));
+        JsonNode reqParams = json("{\"window\":\"last_7d\"}");
+        JsonNode effective = service.withDeclaredDefaults(def(FREE_FORM_PARAMS), reqParams);
+        assertSame(reqParams, effective);                       // untouched, nothing merged in
+        assertFalse(effective.has("complaintPath"));
+    }
+
+    @Test
+    public void seededFreeFormEntryAlongsideRealDefaultsAndAllowLists() {
+        // The exact seeded shape on the 5 type-dimension KPIs: window + hierLevel keep their
+        // defaults/allow-lists, complaintPath stays free-form and un-defaulted.
+        String seeded = "[{\"name\":\"window\",\"default\":\"last_7d\",\"allowed\":[\"last_1d\",\"last_7d\"]},"
+                + "{\"name\":\"hierLevel\",\"default\":\"1\",\"allowed\":[\"leaf\",\"1\",\"2\"]},"
+                + "{\"name\":\"complaintPath\",\"default\":\"\",\"allowed\":[]}]";
+        JsonNode effective = service.withDeclaredDefaults(def(seeded), json("{}"));
+        assertEquals("last_7d", effective.get("window").asText());
+        assertEquals("1", effective.get("hierLevel").asText());
+        assertFalse(effective.has("complaintPath"));            // empty default not injected
+        service.validateAllowedParams(def(seeded), effective);  // and the effective set validates
+        service.validateAllowedParams(def(seeded),
+                json("{\"window\":\"last_7d\",\"complaintPath\":\"Roads.Potholes\"}"));
+    }
 }

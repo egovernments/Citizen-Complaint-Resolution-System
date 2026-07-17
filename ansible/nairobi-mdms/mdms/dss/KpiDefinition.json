@@ -837,7 +837,9 @@
           ]
         },
         {
-          "name": "complaintPath"
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "rbac": {
@@ -1166,7 +1168,9 @@
           ]
         },
         {
-          "name": "complaintPath"
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "rbac": {
@@ -1668,7 +1672,9 @@
           ]
         },
         {
-          "name": "complaintPath"
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "rbac": {
@@ -3312,7 +3318,9 @@
           ]
         },
         {
-          "name": "complaintPath"
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "status": "published",
@@ -3424,7 +3432,9 @@
           ]
         },
         {
-          "name": "complaintPath"
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "status": "published",

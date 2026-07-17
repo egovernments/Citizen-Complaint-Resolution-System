@@ -236,8 +236,11 @@ public class AnalyticsService {
      * > the def's baked query (a defaulted param flows through {@link KpiQueryComposer#mergeParams}
      * exactly like a caller-sent one, and the C1 window allow-list check runs on the EFFECTIVE
      * params). Returns {@code reqParams} untouched (possibly null) when no default applies.
+     * An EMPTY-STRING default is a no-op (skipped like an absent one) — the dss.KpiDefinition
+     * schema requires {@code default} on every params entry, so free-form params (complaintPath)
+     * are seeded with {@code "default":""}. Package-private for tests.
      */
-    private JsonNode withDeclaredDefaults(KpiDefinition def, JsonNode reqParams) {
+    JsonNode withDeclaredDefaults(KpiDefinition def, JsonNode reqParams) {
         List<KpiDefinition.KpiParam> declared = def.getParams();
         if (declared == null || declared.isEmpty()) return reqParams;
         com.fasterxml.jackson.databind.node.ObjectNode merged = null;
@@ -261,7 +264,9 @@ public class AnalyticsService {
      * def's declared params carrying a non-empty {@code allowed} list, an effective (caller-sent or
      * defaulted) value must be in that list. Out-of-list (incl. arbitrary {@code last_Nd} windows,
      * out-of-range {@code hierLevel}s) → {@code invalid_param}. No-op for params the def declares
-     * without an allow-list (open values) and for undeclared params (composer vocabulary applies).
+     * without an allow-list — absent OR empty {@code "allowed":[]} both mean unvalidated free-form
+     * (the dss.KpiDefinition schema requires the key, so complaintPath is seeded with an empty
+     * list) — and for undeclared params (composer vocabulary applies).
      * Runs on BOTH the normal kpiId path and the compose path (each calls this on its own def).
      */
     void validateAllowedParams(KpiDefinition def, JsonNode reqParams) {
