@@ -15,7 +15,7 @@
  * identical react-query key — same useCustomMDMS(stateId, "dss",
  * [{ name: "DashboardConfig" }]) call, staleTime/cacheTime Infinity — so
  * whichever lands first, the record costs ONE request per login and #1258's
- * useDashboardAccess should be refactored onto this hook when both are in.
+ * useDashboardAccess (roles.js) consumes this hook — one fetch for gate + config.
  *
  * Fetched through the same MDMS v1-compat search the rest of the UI uses
  * (Digit.Hooks.useCustomMDMS -> /egov-mdms-service/v1/_search; the mdmsv2

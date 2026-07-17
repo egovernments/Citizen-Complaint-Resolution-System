@@ -1586,14 +1586,23 @@ export const UICustomizations = {
         tenantId: Digit.ULBService.getCurrentTenantId(),
         limit: clonedData?.state?.tableForm?.limit || 10,
         offset: clonedData?.state?.tableForm?.offset ?? 0,
-        // Order by SLA remaining (most urgent first) server-side, so the order
-        // is consistent across the FULL paginated result set. The table's
-        // column-header sort is client-side react-table — it only reorders the
-        // current page, so rows appeared to drop in/out as page size changed
-        // (issue #432). pgr-services now supports sortBy=sla; see
+        // Order server-side, so the order is consistent across the FULL
+        // paginated result set (a client-side sort only reorders the current
+        // page — issue #432). Default to SLA remaining, most urgent first;
+        // ResultsDataTableWrapper's onSort handler overrides sortBy/sortOrder
+        // in tableForm when the operator clicks a sortable column header
+        // (issue #922). pgr-services supports both; see
         // PGRQueryBuilder.addOrderByClause.
-        sortBy: "sla",
-        sortOrder: "ASC",
+        //
+        // sortOrder is uppercased defensively: SearchComponent's own
+        // clearSearch()/onSubmit (unrelated "sort" toggle in the
+        // search/filter form, not the table header click this issue is
+        // about) writes a lowercase "asc"/"desc" into this same tableForm
+        // slot on mount. pgr-services' SortOrder enum match is case-exact,
+        // so a stray lowercase value 400s every search — regardless of
+        // whether the operator ever touched a column header.
+        sortBy: clonedData?.state?.tableForm?.sortBy || "sla",
+        sortOrder: (clonedData?.state?.tableForm?.sortOrder || "ASC").toUpperCase(),
       };
 
       // Search form fields
