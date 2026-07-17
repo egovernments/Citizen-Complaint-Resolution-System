@@ -47,6 +47,12 @@ initContainers:
                 key: flyway-locations
 
 # Container Configs
+# PARITY / BUILD NOTE: pgr-services has BACKEND source changes that the stock
+# `v2.11-a520687` image predates. Rebuild + repin the image from a branch that
+# contains, at minimum:
+#   #1100 (fix/pgr-search-citizen-scoping) — PrincipalScopeResolver.java, EnrichmentService.java
+#     (the citizen-scoping / search-IDOR fix). Without a rebuild, PGR search is not
+#     citizen-scoped. See PARITY-FIXES.md.
 image:
   repository: "pgr-services"
   tag: "v2.11-a520687"

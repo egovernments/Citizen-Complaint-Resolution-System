@@ -19,9 +19,17 @@ initContainers:
       tag: "hrms-boundary-0a4e737"
 
 # Container Configs
+# PARITY / IMAGE NOTE — why this is NOT the chart-default tag:
+#   egov-hrms wasn't deployed on k8s at all (§2.5); the base chart tag
+#   (hrms-boundary-0a4e737) differs from what Compose runs. Compose pins
+#   registry.preview…/egov-hrms:800-preview (local-setup/docker-compose.egov-digit.yaml)
+#   and the restored HRMS DB was seeded by it — pinned the same here so k8s matches
+#   Compose. Reverting would re-diverge. Keep both on this tag; revisit when a
+#   released egovio/egov-hrms tag is chosen.
 image:
-  repository: "egov-hrms"
-  tag: "hrms-boundary-0a4e737"
+  repository: "registry.preview.egov.theflywheel.in/egovio/egov-hrms"
+  tag: "800-preview"
+  pullPolicy: "IfNotPresent"
 replicas: "1"
 healthChecks:
   enabled: true

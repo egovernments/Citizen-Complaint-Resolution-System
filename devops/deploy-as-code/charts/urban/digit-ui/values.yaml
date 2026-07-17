@@ -12,6 +12,11 @@ ingress:
 initContainers: {}
 
 # Container Configs
+# PARITY / BUILD NOTE: digit-ui has FRONTEND source changes that the stock
+# `v2.11-a520687` image predates. Rebuild + repin the image from a branch that
+# contains, at minimum:
+#   #1098 (fix/egov-location-boundary-migration) — digit-ui-v2/packages/data-provider/src/client/endpoints.ts
+# Without a rebuild the boundary/location UI wiring is stale. See PARITY-FIXES.md.
 image:
   repository: "digit-ui"
   tag: "v2.11-a520687"
