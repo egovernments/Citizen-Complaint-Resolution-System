@@ -141,3 +141,15 @@ mcp_ref: main
 # at a fork.
 digit_ui_esbuild_repo: https://github.com/theflywheel/digit-ui-esbuild.git
 digit_ui_esbuild_branch: main
+
+# Prebuilt digit-ui bundle (static mode) — the ROBUST alternative to building
+# the SPA on-host. When set, the playbook pulls this image and extracts its
+# baked /var/web/digit-ui into build/, skipping the on-host node/npm/esbuild
+# build entirely (no Node-version / missing-npm fragility). The image below is
+# public and pulls off-VPC.
+#
+# Left commented so existing tenants keep their current on-host build. To make
+# the bundle the default for ALL tenants, uncomment this line; to opt in for a
+# single tenant, set digit_ui_bundle_image in that host_vars file (as pg.test
+# does). Set to "" in host_vars to force an on-host build even if this is on.
+# digit_ui_bundle_image: "ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop"
