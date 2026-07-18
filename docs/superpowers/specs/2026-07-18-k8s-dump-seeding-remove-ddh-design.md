@@ -49,6 +49,17 @@ The only viable "dump-based process" against a managed DB is a **Kubernetes Job 
 - **Credentials:** reuse the existing `db` secret / `egov-config` `db-url` used by the `dbMigration` initContainers.
 - **Restart policy:** `OnFailure`; the Job should be idempotent (guard makes re-runs safe no-ops).
 
+#### Why an explicit sentinel is needed here (the ansible parallel)
+
+The two-layer guard is not a new invention — it reproduces, against a managed DB, protection the compose/ansible path gets for free:
+
+| Layer | Compose / ansible | K8S restore Job |
+| --- | --- | --- |
+| Opt-in flag | `db_fast_path` (default `false`) — computed into the compose `-f` flags in `playbook-deploy.yml`, so the fast-path overlay is layered in only when a tenant opts in; live tenants never mount the dump. | `dbDump.enabled` (default `false`). |
+| Empty-DB check | **Implicit — Postgres does it.** The overlay just mounts the dump at `/docker-entrypoint-initdb.d/01-full-dump.sql`; the Postgres entrypoint runs init scripts **only when PGDATA is empty** (fresh volume / first boot) and skips them entirely on a volume that already holds a cluster. The filesystem state *is* the sentinel — no SQL probe. | **Explicit `SELECT` sentinel** (see below). |
+
+Against the external managed DB (Azure/RDS) there is no PGDATA volume we control, no `/docker-entrypoint-initdb.d/` hook, and no "runs only on empty data directory" behavior. So the implicit Layer-2 guarantee disappears, and the Job must **re-implement that emptiness check explicitly**. This framing is also how to choose the query: pick whatever most faithfully reproduces "the data directory was already initialized" — hence treat *any* sign of prior provisioning (Flyway history present, not just `tenant.tenants` rows) as "skip," rather than only checking for tenant rows.
+
 ### 3. Flyway coexistence
 
 In Helm, migrations run in each service's separate `dbMigration` initContainer (a Flyway image), with the history table set via `initContainers.dbMigration.schemaTable` → `SCHEMA_TABLE` env (default `SCHEMA_NAME: public`). If the dump pre-creates a service's tables but its Flyway history table name does **not** match that service's `schemaTable`, Flyway sees no applied history, re-runs `CREATE`, and fails with `42P07 relation already exists` (the exact failure the compose fast-path fixed for url-shortening via `SPRING_FLYWAY_TABLE`).
@@ -76,6 +87,6 @@ Implementation task: enumerate every service with `dbMigration.enabled: true`, l
 
 ## Open items for the plan
 
-- Exact sentinel table/query for the empty-DB probe.
+- Exact sentinel table/query for the empty-DB probe (rationale settled — see "Why an explicit sentinel is needed here"; still need to pin the precise query and its handling of the half-provisioned edge case).
 - Whether the `db-dump` image builds in the same CI pipeline/workflow as the service db images.
 - Full per-service `schemaTable` ↔ dump-history-table cross-check list.
