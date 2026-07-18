@@ -1,0 +1,6 @@
+apiVersion: v2
+name: db-dump-restore
+description: One-shot guarded Job that restores full-dump.sql into a fresh managed Postgres
+type: application
+version: 0.1.0
+appVersion: "1.0"

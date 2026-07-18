@@ -1,0 +1,11 @@
+dbDump:
+  # Master opt-in. Default false: no Job is rendered, deploy is a normal upgrade.
+  enabled: false
+  image:
+    repository: db-dump   # operator overrides with the full registry path
+    tag: latest
+    pullPolicy: IfNotPresent
+  # Namespace where the `db` secret and `egov-config` configmap live.
+  namespace: egov
+  # backoffLimit for the Job; guard makes re-runs safe no-ops.
+  backoffLimit: 1

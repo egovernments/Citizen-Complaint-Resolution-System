@@ -1,0 +1,62 @@
+{{- if .Values.dbDump.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-dump-restore
+  namespace: {{ .Values.dbDump.namespace }}
+  labels:
+    app: db-dump-restore
+    group: db-seed
+spec:
+  backoffLimit: {{ .Values.dbDump.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        app: db-dump-restore
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: db-dump-restore
+          image: "{{ .Values.dbDump.image.repository }}:{{ .Values.dbDump.image.tag }}"
+          imagePullPolicy: {{ .Values.dbDump.image.pullPolicy }}
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: egov-config
+                  key: db-host
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: egov-config
+                  key: db-name
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db
+                  key: password
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              # db-host may be "host" or "host:port"; split it.
+              HOST="${DB_HOST%%:*}"
+              PORT="${DB_HOST##*:}"
+              [ "$PORT" = "$DB_HOST" ] && PORT=5432
+              PSQL="psql -h $HOST -p $PORT -U $DB_USER -d $DB_NAME -v ON_ERROR_STOP=1 -tA"
+              echo "Checking whether $DB_NAME on $HOST:$PORT is already provisioned..."
+              PROVISIONED=$($PSQL -c "SELECT (to_regclass('public.egov_user_schema_version') IS NOT NULL)::int;")
+              if [ "$PROVISIONED" = "1" ]; then
+                echo "DB already provisioned (public.egov_user_schema_version exists) — skipping restore."
+                exit 0
+              fi
+              echo "DB is empty — restoring /dump/full-dump.sql ..."
+              $PSQL -f /dump/full-dump.sql
+              echo "Restore complete."
+{{- end }}
