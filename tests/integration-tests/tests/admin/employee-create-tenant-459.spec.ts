@@ -15,7 +15,7 @@ import { BASE_URL, ROOT_TENANT, ADMIN_USER, ADMIN_PASS, generateEmployeePhone } 
 const EMPLOYEES_URL = '/configurator/manage/employees';
 
 test.describe('admin employee create — tenant + form-clears #459 #471 #476', () => {
-  test('fills the create form and submits — tenant correct + form clears', async ({ page }) => {
+  test('fills the create form and submits — tenant correct + form clears', { tag: ['@persona:admin'] }, async ({ page }) => {
     // Onboarding-data gap: this walk creates an employee AT THE ROOT (state)
     // tenant, whose jurisdiction picker needs leaf boundaries. Stock state
     // tenants carry no leaf boundaries (they live under the city sub-tenant),

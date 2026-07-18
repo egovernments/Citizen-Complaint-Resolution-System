@@ -390,6 +390,26 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_GROUPBY_LABEL",
+    "message": "Group by",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GROUPBY_LEAF",
+    "message": "Leaf",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GROUPBY_LEVEL_CATEGORY",
+    "message": "Category",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GROUPBY_LEVEL_SUB_TYPE",
+    "message": "Sub-type",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_ADD",
     "message": "Add",
     "module": "rainmaker-dashboard"
@@ -401,7 +421,7 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   },
   {
     "code": "DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD",
-    "message": "All KPIs are on the dashboard",
+    "message": "All available KPIs are already on your dashboard",
     "module": "rainmaker-dashboard"
   },
   {
@@ -442,6 +462,11 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
   {
     "code": "DASHBOARD_HEADER_LAST_7_DAYS",
     "message": "Last 7 days",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_NO_KPIS_FOR_ROLE",
+    "message": "No KPIs available for your role",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1165,6 +1190,16 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_TYPE_FILTER_ALL_IN",
+    "message": "All in",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TYPE_FILTER_NOT_APPLIED",
+    "message": "Type filter not applied",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_UNIT_D",
     "message": "d",
     "module": "rainmaker-dashboard"
@@ -1557,7 +1592,7 @@ export const DASHBOARD_L10N_MESSAGES: { code: string; message: string; module: s
 ];
 
 /**
- * pt_PT (European Portuguese) pack — same 308 codes as the en_IN pack, 1:1.
+ * pt_PT (European Portuguese) pack — same codes as the en_IN pack, 1:1.
  * Translations follow European/Mozambique conventions (bairro/distrito geo
  * terms, "reclamações" agreement); placeholder tokens verified identical to
  * the en_IN messages.
@@ -1939,6 +1974,26 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_GROUPBY_LABEL",
+    "message": "Agrupar por",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GROUPBY_LEAF",
+    "message": "Folha",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GROUPBY_LEVEL_CATEGORY",
+    "message": "Categoria",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_GROUPBY_LEVEL_SUB_TYPE",
+    "message": "Subtipo",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_HEADER_ADD",
     "message": "Adicionar",
     "module": "rainmaker-dashboard"
@@ -1950,7 +2005,7 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   },
   {
     "code": "DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD",
-    "message": "Todos os KPIs estão no painel",
+    "message": "Todos os KPIs disponíveis já estão no seu painel",
     "module": "rainmaker-dashboard"
   },
   {
@@ -1991,6 +2046,11 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_HEADER_LAST_7_DAYS",
     "message": "Últimos 7 dias",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_HEADER_NO_KPIS_FOR_ROLE",
+    "message": "Nenhum KPI disponível para a sua função",
     "module": "rainmaker-dashboard"
   },
   {
@@ -2711,6 +2771,16 @@ export const DASHBOARD_L10N_MESSAGES_PT_PT: { code: string; message: string; mod
   {
     "code": "DASHBOARD_TILE_SERIES_RESOLUTION_RATE",
     "message": "Taxa de resolução",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TYPE_FILTER_ALL_IN",
+    "message": "Tudo em",
+    "module": "rainmaker-dashboard"
+  },
+  {
+    "code": "DASHBOARD_TYPE_FILTER_NOT_APPLIED",
+    "message": "Filtro de tipo não aplicado",
     "module": "rainmaker-dashboard"
   },
   {

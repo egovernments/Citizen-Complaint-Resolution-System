@@ -17,10 +17,27 @@ CI_MODE = os.getenv('CI', '') != '' or os.getenv('TILT_CI', '') != ''
 
 # ==================== ConfigMaps from files ====================
 # Generated dynamically so edits to source files auto-apply on tilt up
-k8s_yaml(local('kubectl create configmap persister-config --from-file=configs/persister/ -n digit --dry-run=client -o yaml'))
+# NB: the directory is configs/egov-persister, not configs/persister. 09a8ec2e renamed
+# it and missed this line, so `tilt up -f Tiltfile.k8s` aborted here ("no such file or
+# directory") before loading anything.
+k8s_yaml(local('kubectl create configmap persister-config --from-file=configs/egov-persister/ -n digit --dry-run=client -o yaml'))
 k8s_yaml(local('kubectl create configmap kong-config --from-file=kong.yml=kong/kong.yml -n digit --dry-run=client -o yaml'))
 k8s_yaml(local('kubectl create configmap nginx-configs --from-file=mdms-proxy.conf=nginx/mdms-proxy.conf --from-file=digit-ui.conf=nginx/digit-ui.conf --from-file=globalConfigs.js=nginx/globalConfigs.js -n digit --dry-run=client -o yaml'))
-k8s_yaml(local('kubectl create configmap gatus-config --from-file=config.yaml=gatus/config.yaml -n digit --dry-run=client -o yaml'))
+#
+# gatus-config is deliberately NOT generated here. It is defined in
+# k8s/tools/gatus.yaml alongside the gatus Deployment (loaded below), because the
+# k3s tier pins its own GATUS_PROFILE_*/GATUS_PROXIES values -- it deploys none of
+# the optional stacks, so it cannot share the compose tier's config verbatim.
+#
+# Generating it from gatus/config.yaml here as well would define the same
+# ConfigMap twice (same kind/name/namespace) and Tilt aborts the whole Tiltfile
+# with "Duplicate YAML: ConfigMap gatus-config (Namespace: digit)" -- taking down
+# every resource in this tier, not just gatus.
+#
+# The trade this loses: generating from the compose config made tier drift
+# impossible by construction. That invariant is now enforced mechanically instead,
+# by .github/workflows/gatus-coverage.yml, which fails a PR when the two tiers'
+# endpoint catalogues diverge.
 
 # ==================== K8s Manifests ====================
 k8s_yaml([

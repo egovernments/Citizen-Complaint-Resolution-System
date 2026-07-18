@@ -66,7 +66,7 @@ class DispatchPipelineWhatsappNoProviderTest {
 
         when(preferenceServiceClient.isChannelAllowed(anyString(), any(), any(), anyString()))
                 .thenReturn(true);
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(201).response(Map.of("acknowledged", true)).build());
 
         service = new DispatchPipelineService(envelopeValidator, preferenceServiceClient, novuClient,
@@ -87,6 +87,9 @@ class DispatchPipelineWhatsappNoProviderTest {
                 .channel("WHATSAPP").subscriberId("ke.bomet:uuid-123").contact(contact)
                 .renderedBody("Dear Jane, your complaint PGR-001 is assigned.")
                 .transactionId("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP")
+                // An approved provider-template (Twilio Content SID) is required for a WhatsApp
+                // send to pass the template gate; PGR carries it on the event.
+                .templateId("HX00000000000000000000000000000000")
                 .data(data)
                 .build();
     }
@@ -118,8 +121,27 @@ class DispatchPipelineWhatsappNoProviderTest {
         // resolving the complaints-whatsapp workflow id internally.
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
         verify(novuClient).identifyThenTrigger(eq("ke.bomet:uuid-123"), any(), eq("WHATSAPP"),
-                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP"), any());
+                body.capture(), any(), eq("PGR-001:ASSIGN:PENDINGATLME:ke.bomet:uuid-123:WHATSAPP"), any(), any(), any());
         assertEquals("Dear Jane, your complaint PGR-001 is assigned.", body.getValue());
+    }
+
+    @Test
+    void whatsappEvent_gateEnabled_noApprovedTemplate_skipsTemplateNotApproved_neverTriggersNovu() {
+        config.setChannelsEnabled(List.of("SMS", "EMAIL", "WHATSAPP"));
+        ComplaintsDomainEvent event = whatsappEvent();
+        event.setTemplateId(null);   // PGR found no approved NotificationProviderTemplate for this leg
+
+        DispatchResult result = assertDoesNotThrow(() -> service.process(event, true, null));
+
+        assertFalse(result.getNovuTriggered());
+        // Business-initiated WhatsApp with no approved Content template must NOT fall through to a
+        // free-form send (Twilio rejects it, 63016) — it is an auditable SKIP instead.
+        verifyNoInteractions(novuClient);
+        ArgumentCaptor<DispatchLogEntry> captor = ArgumentCaptor.forClass(DispatchLogEntry.class);
+        verify(dispatchLogRepository, times(1)).upsert(captor.capture());
+        assertEquals("SKIPPED", captor.getValue().getStatus());
+        assertEquals("NB_TEMPLATE_NOT_APPROVED", captor.getValue().getLastErrorCode());
+        assertEquals("WHATSAPP", captor.getValue().getChannel());
     }
 
     @Test

@@ -12,6 +12,8 @@
 import { test, expect } from '@playwright/test';
 import { loginEmployee } from '../utils/launch-fixes/api.js';
 import { BASE_URL, POSTAL_CODE_PATTERN, POSTAL_CODE_VALID } from '../utils/env';
+import { getProfile } from '../utils/profile';
+import { fetchGlobalConfigs } from '../utils/probes';
 
 const BASE = BASE_URL;
 
@@ -76,5 +78,38 @@ Pins the rationale in code so a future "standardize the regex" PR can't silently
     tag: ['@area:pgr', '@ccrs:478', '@kind:edge-case', '@kind:regression', '@layer:api', '@persona:citizen'] }, () => {
     const LEGACY = /^[1-9][0-9]{5}$/i;
     expect(LEGACY.test(POSTAL_CODE_VALID)).toBe(false);
+  });
+
+  test('the discovered postal pattern is self-consistent with the deployment\'s own globalConfigs', {
+    annotation: {
+      type: 'description',
+      description: `Guards profile.ts's postal-pattern extraction against silent drift: deployment-profile.json's postal.pattern is baked in once per run by profile-setup, while this test re-fetches /digit-ui/globalConfigs.js live (independent of the cached profile) and compares. If the deployment configures corePostalConfigs.postalCodePattern explicitly, the profile must mirror it exactly. If it doesn't (bomet ships corePostalConfigs as '{}'), the profile must have fallen back to the SPA's own hardcoded 5-digit default rather than inventing a value — the same default the form itself validates against when unconfigured.
+
+Steps:
+1. getProfile() — the run's discovered profile.
+2. fetchGlobalConfigs(BASE_URL) — a fresh, independent read of globalConfigs.js.
+3. If globalConfigs declares a pattern: assert profile.postal.pattern === that live pattern, and profile.postal.configuredExplicitly === true.
+4. Else: assert profile.postal.pattern === '^[0-9]{5}$' and profile.postal.configuredExplicitly === false.
+
+Catches a regression where profile.ts's regex extraction or fallback logic disagrees with what the SPA itself boots with.`,
+    },
+    tag: ['@area:pgr', '@ccrs:478', '@kind:regression', '@layer:api', '@persona:citizen'] }, async () => {
+    const profile = getProfile();
+    const live = await fetchGlobalConfigs(BASE_URL);
+    const livePattern = live.corePostalConfigs?.postalCodePattern ?? null;
+
+    if (livePattern) {
+      expect(
+        profile.postal.pattern,
+        'profile.postal.pattern must mirror the deployment\'s live globalConfigs.corePostalConfigs.postalCodePattern',
+      ).toBe(livePattern);
+      expect(profile.postal.configuredExplicitly).toBe(true);
+    } else {
+      expect(
+        profile.postal.pattern,
+        'no explicit postal config on this deployment — profile.postal.pattern must fall back to the SPA\'s own 5-digit default',
+      ).toBe('^[0-9]{5}$');
+      expect(profile.postal.configuredExplicitly).toBe(false);
+    }
   });
 });

@@ -33,11 +33,22 @@ Options A and B run locally. Option C deploys to a remote server, pulling pre-bu
 
 | Tool | Install Link | When you need it |
 |------|-------------|------------------|
-| [Tilt](https://docs.tilt.dev/install.html) | [See Tilt install section](#installing-tilt) | Only if using Option B |
+| [Tilt](https://docs.tilt.dev/install.html) | [See Tilt install section](#step-1-install-tilt) | Only if using Option B |
 | [Node.js 20+](https://nodejs.org/en/download/) | [Download](https://nodejs.org/) | Running Postman tests with Newman (`npx`) |
 | [Python 3.8+](https://www.python.org/downloads/) | [Download](https://www.python.org/downloads/) | Running the CI dataloader script |
+| **JDK 17 or 21** | [Temurin 17](https://adoptium.net/temurin/releases/?version=17) | Hot reload for PGR Java code (Tilt only) — see note below |
 | [Maven 3.9+](https://maven.apache.org/download.cgi) | [Download](https://maven.apache.org/download.cgi) | Hot reload for PGR Java code (Tilt only) |
 | [Yarn](https://yarnpkg.com/getting-started/install) | [Download](https://yarnpkg.com/) | Hot reload for DIGIT UI (Tilt only) |
+
+> **JDK version matters.** `backend/pgr-services` sets `<java.version>17</java.version>` and builds only on
+> **JDK 17 or 21**. JDK 23 and 25 fail: Lombok 1.18.30 (inherited from the Spring Boot 3.2.2 parent) cannot
+> run on their compiler internals, so every `@Builder`-generated method silently disappears and the build
+> dies with dozens of `cannot find symbol: method builder()` errors. The error never mentions Lombok or
+> your JDK, so it is easy to misread as broken source.
+>
+> Ubuntu's `default-jdk` may be newer than 21. Check with `mvn -version` (it reports the JDK Maven actually
+> uses, which is what matters — not `java -version`), and switch with
+> `sudo update-alternatives --config java` if needed.
 
 ---
 
@@ -106,20 +117,30 @@ Tilt wraps Docker Compose with a web dashboard showing live logs, service health
 
 ### Step 1: Install Tilt
 
-This project works best with a [patched version of Tilt](https://github.com/ChakshuGautam/tilt/releases/tag/v0.36.3-healthcheck) that waits for Docker Compose health checks. The upstream Tilt has a bug where it marks containers "ready" before they're healthy.
+Install upstream Tilt from https://docs.tilt.dev/install.html.
 
 ```bash
 # Linux amd64
-curl -fsSL https://github.com/ChakshuGautam/tilt/releases/download/v0.36.3-healthcheck/tilt-linux-amd64.gz \
-  | gunzip > /usr/local/bin/tilt
-chmod +x /usr/local/bin/tilt
+curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | bash
 
 # Verify
 tilt version
 ```
 
-> PR to upstream: https://github.com/tilt-dev/tilt/pull/6682.
-> If using upstream Tilt, install from https://docs.tilt.dev/install.html.
+> **Do not use the `v0.36.3-healthcheck` fork.** We previously recommended a
+> [patched Tilt](https://github.com/ChakshuGautam/tilt/releases/tag/v0.36.3-healthcheck) that waits for
+> Docker Compose health checks, because upstream Tilt marks containers "ready" before they are healthy
+> (upstream PR: https://github.com/tilt-dev/tilt/pull/6682).
+>
+> That release is currently **broken and unusable**: the published binary ships without its web assets, so
+> `tilt up` exits immediately with `Could not find Tilt web static files`. Its version string is
+> `v0.36.3-dev`, and the `-dev` suffix makes Tilt serve the UI from the build machine's source tree
+> (`/root/code/tilt-fork/web`) instead of embedded assets. `--web-mode=prod` fails too, so there is no
+> workaround short of rebuilding and re-releasing the fork.
+>
+> Consequence of using upstream: Tilt may show a service as ready before its health check passes. The
+> stack still comes up — `docker-compose.yml` enforces ordering via `depends_on: service_healthy` — but
+> don't trust the dashboard's "ready" as "healthy". Check the `gatus` resource for real health.
 
 ### Step 2: Clone and start
 
@@ -276,7 +297,19 @@ The registry is read-only — push operations return `405 Method Not Allowed`.
 
 ### What the Ansible playbook deploys
 
-The playbook uses `docker-compose.registry.yml` which includes:
+The playbook deploys `docker-compose.egov-digit.yaml` plus overlays — **not**
+`docker-compose.registry.yml`, which it never references. The exact stack is built in
+`ansible/playbook-deploy.yml` ("Compute compose -f flags"):
+
+```
+-f docker-compose.egov-digit.yaml
+[-f docker-compose.fast-path.yml]          # when db_fast_path is set
+-f docker-compose.migrations.yml
+-f docker-compose.migrations.ansible.yml
+[-f docker-compose.<tenant>.yml]           # when a per-tenant overlay exists
+```
+
+Between them these include:
 
 | Category | Services |
 |----------|----------|
@@ -295,7 +328,10 @@ local-setup/
 ├── ansible/
 │   ├── playbook-deploy.yml         # Main deployment playbook
 │   └── inventory.ini.example       # Template inventory
-├── docker-compose.registry.yml     # Compose with public registry images
+├── docker-compose.egov-digit.yaml  # What the playbook actually deploys
+├── docker-compose.fast-path.yml    # Overlay: db_fast_path
+├── docker-compose.migrations.yml   # Overlay: schema migrations
+├── docker-compose.migrations.ansible.yml # Overlay: ansible-specific migrators
 ├── kong/
 │   └── kong.yml                    # API gateway routes + auth enrichment + RBAC (pre-function)
 ├── nginx/
@@ -313,8 +349,8 @@ local-setup/
 │   └── user-seed.sh                # Creates ADMIN + GRO users via API
 ├── data/
 │   └── Bomet county...xlsx         # Sample county data for E2E tests
-├── configs/persister/              # Kafka consumer configs (9 YAML files)
-├── db/                             # SQL seeds + workflow JSON
+├── configs/egov-persister/         # Kafka consumer configs (9 YAML files)
+├── db/                             # Full DB dump + flyway history map
 ├── gatus/                          # Health monitoring config
 ├── jupyter/                        # DataLoader library + notebook
 ├── scripts/                        # CI dataloader scripts
@@ -515,8 +551,8 @@ The last 3 lines are the values to pass to Newman.
 | IDGEN | 18088 | 256 MB | `/egov-idgen/health` |
 | ENC | 11234 | 300 MB | `/egov-enc-service/actuator/health` |
 | Persister | 18091 | 256 MB | `/common-persist/actuator/health` |
-| Filestore | - | 384 MB | `/filestore/health` |
-| HRMS | - | 256 MB | `/egov-hrms/health` |
+| Filestore | 18084 | 384 MB | `/filestore/health` |
+| HRMS | 18092 | 256 MB | `/egov-hrms/health` |
 
 ### Application
 
@@ -638,10 +674,12 @@ docker compose up -d                       # Fresh start
 
 ```
 local-setup/
-├── docker-compose.yml              # Main service definitions (~3.8GB RAM, local builds)
-├── docker-compose.registry.yml     # All images from public registry (for Ansible deploy)
+├── docker-compose.yml              # Main service definitions (~3.8GB RAM, registry images)
+├── docker-compose.registry.yml     # All images from public registry (NOT the Ansible
+│                                   # deploy — that uses docker-compose.egov-digit.yaml)
 ├── docker-compose.deploy.yaml      # Deploy variant (no resource limits)
 ├── docker-compose.db-migrations.yml # DB migrations variant
+├── docker-compose.tilt.yml         # Overlay: points pgr-services/digit-ui at Tilt's locally built images
 ├── Tiltfile                        # Tilt with hot reload (requires Maven/Yarn)
 ├── Tiltfile.db-dump                # Tilt with pre-built images (recommended)
 ├── ansible/
@@ -665,13 +703,13 @@ local-setup/
 ├── data/
 │   └── Bomet county...xlsx         # Sample county data (47 types, 25 wards)
 ├── db/
-│   ├── full-dump.sql               # Database seed (tenants, MDMS, users)
-│   ├── seed.sql                    # Core MDMS + access control data
-│   ├── tenant-seed.sql             # Root + city tenant records
-│   ├── localization-seed.sql       # UI label translations
-│   └── pgr-workflow-config.json    # PGR 11-state workflow definition
+│   ├── full-dump.sql               # Database seed (tenants, MDMS, users, localization)
+│   ├── keycloak-init.sql           # Keycloak schema bootstrap
+│   ├── flyway-history-map.yml      # Maps dump state -> flyway baseline
+│   ├── normalize/                  # Flyway history normalisation job
+│   └── notif-mdms-seed/            # Notification MDMS seed data
 ├── configs/
-│   └── persister/                  # Persister YAML configs (9 files)
+│   └── egov-persister/             # Persister YAML configs (9 files)
 ├── jupyter/
 │   ├── Dockerfile                  # Jupyter container build
 │   └── dataloader/

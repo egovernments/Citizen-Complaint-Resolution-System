@@ -1375,6 +1375,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         // (ServiceDefs/ComplaintHierarchy) stays operator-owned; these are not.
         'dss.KpiDefinition',
         'dss.DashboardPack',
+        // Per-tenant dashboard config: nav/route role gate (allowedRoles,
+        // #1258) + number display mask (numberFormat, #1213). Nothing else
+        // seeds this master on a new root — without it both features silently
+        // fall back to built-in behavior.
+        'dss.DashboardConfig',
         'ACCESSCONTROL-ROLEACTIONS.roleactions',
       ];
 

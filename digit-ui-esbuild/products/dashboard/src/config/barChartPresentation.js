@@ -4,6 +4,7 @@
  */
 
 import { resolveDashboardCssColor } from "./chartColors";
+import { formatNumber } from "../utils/numberFormat";
 
 export const BAR_CHART_SERIES_COLOR = "var(--chart-1)";
 export const BAR_CHART_DATA_LABEL_COLOR = "var(--foreground)";
@@ -101,11 +102,16 @@ export function buildBarChartYAxis({ tickAmount = 5, seriesMax = 0, percent = fa
   };
 }
 
+// Numeric parts go through the tenant mask (formatNumber, null when
+// unconfigured -> each `??` fallback keeps the pre-#1213 expression); the %
+// suffix stays here.
 export function formatBarChartPercentOneDecimal(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "";
   const rounded = Math.round(n * 10) / 10;
-  const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  const formatted =
+    formatNumber(rounded, { decimals: 1, trim: true }) ??
+    (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
   return `${formatted}%`;
 }
 
@@ -114,7 +120,10 @@ export function buildBarChartDataLabels({ valueFormat } = {}) {
   const formatter =
     valueFormat === "percent"
       ? (val) => formatBarChartPercentOneDecimal(val)
-      : (val) => (Number.isFinite(Number(val)) ? String(Math.round(Number(val))) : "");
+      : (val) =>
+          Number.isFinite(Number(val))
+            ? formatNumber(val, { decimals: 0 }) ?? String(Math.round(Number(val)))
+            : "";
 
   return {
     enabled: true,

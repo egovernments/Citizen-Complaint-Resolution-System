@@ -277,7 +277,8 @@
   color: var(--muted-foreground);
   font: inherit;
   -webkit-appearance: none;
-  appearance: none;
+  -moz-appearance: none;
+       appearance: none;
 }
 
 .dashboard-widget-remove-btn:hover{
@@ -504,39 +505,24 @@
   display: block;
   height: 2rem;
   width: 14rem;
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
   border-radius: 4px;
   border-width: 1px;
   border-color: var(--border);
   background-color: var(--surface);
   padding-top: 0px;
   padding-bottom: 0px;
-  /* A global digit-ui `input[type=...]:not(.a):not(.b)…` rule matches this
-     type=search input too, and its long :not() chain inflates specificity far
-     above this class — overriding the left padding down to ~12px so the text
-     slides under the search icon (~10–26px). !important is the scoped escape
-     hatch (matching that specificity with plain selectors isn't practical). */
-  padding-left: 2rem !important;
+  padding-left: 2rem;
   padding-right: 0.75rem;
   font-size: 12px;
   line-height: 1;
   color: var(--foreground);
-  -webkit-appearance: none;
-  appearance: none;
 }
 
-/* The global digit-ui `input[type=...]:not(.a):not(.b)…` rule is !important and
-   its long :not(.class) chain inflates specificity above a plain class, so it
-   overrides this search input's left padding down to ~12px and the text renders
-   under the icon. A no-op `:not(#…)` lifts this selector into the ID-specificity
-   column (beating the class/attr chain) and, with !important, wins definitively. */
-.dashboard-header-search-input:not(#dashboard-search-noop){
-  padding-left: 2rem !important;
-}
-
-.dashboard-header-search-input::-webkit-search-decoration,
-.dashboard-header-search-input::-webkit-search-cancel-button{
-  -webkit-appearance: none;
-  appearance: none;
+.dashboard-header-search-input::-moz-placeholder{
+  color: var(--muted-foreground);
 }
 
 .dashboard-header-search-input::placeholder{
@@ -547,6 +533,28 @@
   border-color: var(--foreground);
   outline: 2px solid transparent;
   outline-offset: 2px;
+}
+
+.dashboard-header-search-input {
+  -webkit-appearance: none;
+}
+
+/* A global digit-ui input[type=...]:not(.a):not(.b)… rule is !important and its
+     long :not(.class) chain outranks this class, forcing the left padding to
+     ~12px so text slides under the search icon. A no-op :not(#…) lifts this into
+     the ID-specificity column and, with !important, wins. */
+
+.dashboard-header-search-input:not(#dashboard-search-noop) {
+  padding-left: 2rem !important;
+}
+
+.dashboard-header-search-input::-webkit-search-decoration,
+  .dashboard-header-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.dashboard-header-search-input:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
 }
 
@@ -577,7 +585,8 @@
   font-family: inherit;
   vertical-align: middle;
   -webkit-appearance: none;
-  appearance: none;
+  -moz-appearance: none;
+       appearance: none;
 }
 
 .dashboard-header-controls .dashboard-header-btn:hover{
@@ -622,6 +631,29 @@
   visibility: hidden;
 }
 
+/* While a picker item is dragged over the grid, the tiles must not become
+     dragenter/dragleave targets: react-grid-layout balances a dragEnterCounter
+     across those events, and a hovered child node that gets replaced mid-drag
+     (chart redraws) leaks an enter with no matching leave — the counter never
+     returns to 0, the drop placeholder survives the drag, and RGL is left in
+     a stuck activeDrag state that silently swallows every later add (#1287).
+     Routing all drag events to the grid container keeps the counter balanced
+     AND makes layerX/layerY (which RGL reads relative to the event target)
+     grid-relative, so the placeholder tracks the cursor instead of jumping. */
+
+.dashboard-grid-layout--dropping .react-grid-item{
+  pointer-events: none;
+}
+
+/* Zero-tile layout: RGL sets an inline height of 0 when it holds no items,
+     which would collapse the drop surface (and the empty-state overlay
+     anchored to it). min-height beats the inline height, keeping a drop-onto
+     area alive for the Add-KPI picker on a first-load/reset dashboard. */
+
+.dashboard-grid-layout--empty {
+  min-height: 160px;
+}
+
 .dashboard-add-kpi-header{
   flex-shrink: 0;
   border-bottom-width: 1px;
@@ -655,6 +687,7 @@
   padding: 0.625rem 1rem;
   cursor: grab;
   -webkit-user-select: none;
+     -moz-user-select: none;
           user-select: none;
   font-weight: 400;
   background-color: #ffffff;
@@ -724,7 +757,8 @@
   font-weight: 400;
   color: var(--muted-foreground, #6b6860);
   -webkit-appearance: none;
-  appearance: none;
+  -moz-appearance: none;
+       appearance: none;
 }
 
 .dashboard-add-kpi-add-btn:hover {
@@ -815,7 +849,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  column-gap: 0.75rem;
+  -moz-column-gap: 0.75rem;
+       column-gap: 0.75rem;
   row-gap: 0.5rem;
 }
 
@@ -925,6 +960,7 @@
   min-height: 1.75rem;
   min-width: 7.5rem;
   -webkit-appearance: none;
+     -moz-appearance: none;
           appearance: none;
   border-radius: 4px;
   border-width: 1px;
@@ -994,6 +1030,412 @@
   opacity: 0.4;
   cursor: default;
   pointer-events: none;
+}
+
+/* Per-tile note when the backend reports the subtree filter could not be
+     honoured on a grain (paramsIgnored: complaintPath — daily-grain KPIs). */
+
+.dashboard-type-filter-ignored{
+  pointer-events: none;
+  position: absolute;
+  bottom: 0.25rem;
+  left: 1.25rem;
+  z-index: 2;
+  border-radius: 0.25rem;
+  background-color: var(--surface);
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+  font-size: 10px;
+  font-style: italic;
+  line-height: 1.25;
+  color: var(--muted-foreground);
+}
+
+/* ── Shared popover/menu primitive (chip anchor + portaled panel) ───── */
+/* Named "trigger" NOT "chip": the host theme (vendor/overrides.css, outside
+   this build) has a [class*="chip"] catch-all that pills ANY class containing
+   that substring — never rename these classes back to *chip*. */
+
+/* Anchor chip: a strict visual PEER of .dashboard-filter-inline-select —
+     same h-7 / min-w-[7.5rem] / rounded-sm / border-border / bg-surface /
+     12px metrics, no resting hover treatment (the select has none), the
+     select's focus treatment (border-foreground + 15% ring); the only
+     divergence is aria-expanded reusing the focus border while open. */
+
+.dashboard-popover-trigger{
+  margin: 0px;
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 1.75rem;
+  min-width: 7.5rem;
+  max-width: 100%;
+  flex-shrink: 1;
+  cursor: pointer;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+  align-items: center;
+  gap: 0.375rem;
+  align-self: center;
+  white-space: nowrap;
+  border-radius: 4px;
+  border-width: 1px;
+  border-color: var(--border);
+  background-color: var(--surface);
+  padding-top: 0px;
+  padding-bottom: 0px;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--foreground);
+  font-family: inherit;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-popover-trigger:focus{
+  border-color: var(--foreground);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.dashboard-popover-trigger:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
+}
+
+.dashboard-popover-trigger[aria-expanded="true"]{
+  border-color: var(--foreground);
+}
+
+.dashboard-popover-trigger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Icon-only anchor for widget-header placement (per-widget settings
+     gear): the .dashboard-widget-remove-btn idiom — 1.5rem square, muted,
+     transparent resting, bg-muted on hover/open — minus the absolute
+     positioning (this one sits in the title-row flex flow). */
+
+.dashboard-popover-iconbtn{
+  margin: 0px;
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 1.5rem;
+  width: 1.5rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
+  color: var(--muted-foreground);
+  font: inherit;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-popover-iconbtn:hover:not(:disabled),
+  .dashboard-popover-iconbtn[aria-expanded="true"]{
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+.dashboard-popover-iconbtn:focus{
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.dashboard-popover-iconbtn:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
+}
+
+.dashboard-popover-trigger-value{
+  display: inline-flex;
+  min-width: 0px;
+  align-items: center;
+  overflow: hidden;
+  font-weight: 400;
+}
+
+/* ml-auto pins the caret to the chip's right edge (px-2, like the
+     select-wrap's ::after caret at right: 0.5rem) when the label is
+     shorter than the shared 7.5rem min width. */
+
+.dashboard-popover-trigger-caret{
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+/* Chip content for hierarchical selections: "… › Parent › Node" — each
+     segment ellipsizes on its own so deep leaves stay chip-sized. */
+
+.dashboard-popover-trigger-trail{
+  display: inline-flex;
+  min-width: 0px;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.dashboard-popover-trigger-seg{
+  min-width: 0px;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-popover-trigger-seg--muted{
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+
+.dashboard-popover-trigger-sep{
+  flex-shrink: 0;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+  color: var(--muted-foreground);
+}
+
+/* Panel: mirrors .dashboard-add-kpi-panel's surface language. */
+
+.dashboard-popover-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border, #e5e2db);
+  border-radius: 6px;
+  background-color: var(--popover, #ffffff);
+  box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.08),
+      0 2px 4px -2px rgb(0 0 0 / 0.06);
+  color: var(--foreground, #1a1917);
+  isolation: isolate;
+}
+
+/* Tree-traversal panel body (ComplaintTypeTreePanel). */
+
+.dashboard-popover-tree{
+  display: flex;
+  min-height: 0px;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Ancestor trail across the top of the tree panel. */
+
+.dashboard-popover-trail{
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  border-bottom-width: 1px;
+  border-color: var(--border);
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted-foreground);
+}
+
+.dashboard-popover-trail-crumb{
+  margin: 0px;
+  min-width: 0px;
+  max-width: 7rem;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 4px;
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted-foreground);
+}
+
+.dashboard-popover-trail-crumb:hover{
+  color: var(--foreground);
+  text-decoration-line: underline;
+}
+
+.dashboard-popover-trail-crumb {
+  font-family: inherit;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-popover-trail-crumb:focus{
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.dashboard-popover-trail-crumb:focus-visible{
+  color: var(--foreground);
+  text-decoration-line: underline;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 35%, transparent);
+}
+
+.dashboard-popover-trail-sep,
+  .dashboard-popover-trail-ellipsis{
+  flex-shrink: 0;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+
+.dashboard-popover-trail-current{
+  min-width: 0px;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+/* Scrollable item region (deep trees) and pinned footer (reset row). */
+
+.dashboard-popover-list {
+  -webkit-overflow-scrolling: touch;
+  margin: 0px;
+  min-height: 0px;
+  flex: 1 1 0%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem;
+}
+
+.dashboard-popover-footer{
+  flex-shrink: 0;
+  border-top-width: 1px;
+  border-color: var(--border);
+  padding: 0.25rem;
+}
+
+.dashboard-menu-item{
+  margin: 0px;
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 4px;
+  border-width: 0px;
+  background-color: transparent;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.375;
+  color: var(--foreground);
+  font-family: inherit;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-menu-item:hover {
+  background-color: var(--muted, #f5f4f1);
+}
+
+.dashboard-menu-item:focus{
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.dashboard-menu-item:focus-visible {
+  background-color: var(--muted, #f5f4f1);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ring) 35%, transparent);
+}
+
+.dashboard-menu-item[data-selected="true"]{
+  font-weight: 500;
+}
+
+.dashboard-menu-item--muted {
+  color: var(--muted-foreground, #6b6860);
+}
+
+.dashboard-menu-item--muted:hover,
+  .dashboard-menu-item--muted:focus-visible {
+  color: var(--foreground, #1a1917);
+}
+
+.dashboard-menu-item-label{
+  min-width: 0px;
+  flex: 1 1 0%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-menu-item-trailing{
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: var(--muted-foreground);
+}
+
+/* currentColor, not --primary: selection reads as weight + check in the
+     row's own neutral foreground — the filter bar has no brand accent and
+     the menus don't introduce one. */
+
+.dashboard-menu-item-check {
+  color: currentColor;
+}
+
+/* Non-interactive section label between runs of related items (the flat
+     complaint-type degrade path's category groups). */
+
+.dashboard-menu-group-label{
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-bottom: 0.25rem;
+  padding-top: 0.5rem;
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+}
+
+/* Widget-header wrapper for the per-widget settings gear: right-aligned
+     in the title row (same slot on every header that has options; absent
+     otherwise); mr-6 clears the absolute remove button. */
+
+.dashboard-widget-settings-wrap{
+  margin-left: 0.5rem;
+  margin-right: 1.5rem;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  align-self: center;
+}
+
+/* Stacked (mobile) filter bar: the chip stretches full-width, exactly
+     like .dashboard-filter-inline-select in the 639px block below. */
+
+@media (max-width: 639px) {
+  .dashboard-popover-trigger {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
 /* ── Responsive layout ─────────────────────────────────────────────── */
@@ -1448,7 +1890,6 @@
   color: var(--dashboard-muted-foreground, #6b6860) !important;
   vertical-align: bottom;
   padding-top: 0.125rem !important;
-  position: -webkit-sticky;
   position: sticky;
   top: 0;
   z-index: 2;
@@ -1538,7 +1979,8 @@
   min-width: 0px;
   flex-wrap: wrap;
   align-items: flex-start;
-  column-gap: 0.25rem;
+  -moz-column-gap: 0.25rem;
+       column-gap: 0.25rem;
   row-gap: 0.125rem;
 }
 
@@ -2246,12 +2688,11 @@
   border-radius: 0.125rem;
   background: color-mix(in srgb, var(--surface) 98%, transparent);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
-  -webkit-backdrop-filter: blur(6px);
-          backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   pointer-events: auto;
 }
 
-.dashboard-map-filter-chip {
+.dashboard-map-filter-badge {
   z-index: 1000;
 }
 
@@ -2289,8 +2730,7 @@
 }
 
 .dashboard-map-zoom-badge {
-  -webkit-backdrop-filter: blur(4px);
-          backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
 
 .dashboard-map-controls{
@@ -2339,7 +2779,7 @@
   padding-right: 0.625rem;
 }
 
-.dashboard-map-filter-chip {
+.dashboard-map-filter-badge {
   -webkit-backdrop-filter: blur(4px);
           backdrop-filter: blur(4px);
 }
@@ -2666,6 +3106,14 @@
   margin-bottom: 1rem;
 }
 
+.tw-ml-2{
+  margin-left: 0.5rem;
+}
+
+.tw-mr-6{
+  margin-right: 1.5rem;
+}
+
 .tw-mt-1{
   margin-top: 0.25rem;
 }
@@ -2715,7 +3163,7 @@
 }
 
 .tw-max-h-\[min\(24rem\,70vh\)\]{
-  max-height: min(24rem,70vh);
+  max-height: min(24rem, 70vh);
 }
 
 .tw-min-h-0{
@@ -2829,7 +3277,8 @@
 }
 
 .tw-gap-x-3{
-  column-gap: 0.75rem;
+  -moz-column-gap: 0.75rem;
+       column-gap: 0.75rem;
 }
 
 .tw-gap-y-0\.5{
@@ -3025,11 +3474,6 @@
 .tw-py-1\.5{
   padding-top: 0.375rem;
   padding-bottom: 0.375rem;
-}
-
-.tw-py-16{
-  padding-top: 4rem;
-  padding-bottom: 4rem;
 }
 
 .tw-py-2{
@@ -3300,6 +3744,29 @@
   font-family: var(--dashboard-font-family) !important;
 }
 
+/* ── Embedded-in-DigitUI overrides ─────────────────────────────────────
+   Applied when the dashboard is mounted inside the DigitUI employee
+   chrome (products/dashboard/Module.js renders <AdminDashboard embedded />,
+   which adds .dashboard-embedded next to .dashboard-root). The host chrome
+   owns the viewport and scrolling, so the standalone full-viewport shell
+   (h-screen root, internal overflow scrollers) is neutralized; the internal
+   dark Sidebar is simply not rendered in embedded mode. Plain CSS outside
+   the tailwind layers, so regeneration passes it through verbatim. */
+
+.dashboard-root.dashboard-embedded {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.dashboard-root.dashboard-embedded > div {
+  overflow: visible;
+}
+
+.dashboard-root.dashboard-embedded > div > main {
+  overflow: visible;
+}
+
 .hover\:tw-bg-\[color-mix\(in_srgb\2c var\(--chrome-foreground\)_12\%\2c transparent\)\]:hover{
   background-color: color-mix(in srgb,var(--chrome-foreground) 12%,transparent);
 }
@@ -3347,4 +3814,19 @@
 }
 .dashboard-root.dashboard-embedded > div > main {
   overflow: visible;
+}
+
+/* The host app's vendor/overrides.css forces height:44px !important on all
+   text inputs/selects via a high-specificity :not() chain. The dashboard uses
+   compact 1.75rem controls (owner preference). Stacked-class specificity +
+   !important re-asserts the compact size; both !important -> specificity wins.
+   Scoped to the wards select only (calendars keep the host size by owner choice). */
+.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select {
+  height: 1.75rem !important;
+  min-height: 1.75rem !important;
+  max-height: 1.75rem !important;
+  font-size: 12px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 1 !important;
 }

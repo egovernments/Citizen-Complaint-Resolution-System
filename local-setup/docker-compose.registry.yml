@@ -247,7 +247,7 @@ services:
       otel-collector:
         condition: service_started
     volumes:
-      - ./configs/indexer:/indexer-config:ro
+      - ./configs/egov-indexer:/indexer-config:ro
       - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
@@ -1037,7 +1037,7 @@ services:
       # Kafka consumer concurrency — process more messages in parallel
       SPRING_KAFKA_LISTENER_CONCURRENCY: '3'
     volumes:
-    - ./configs/persister:/persister-config:ro
+    - ./configs/egov-persister:/persister-config:ro
     - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
     ports:
     - 18091:8091
@@ -1544,12 +1544,21 @@ services:
     container_name: egov-url-shortening
     restart: unless-stopped
     depends_on:
+      # pgbouncer for the app datasource, postgres-db for Flyway's direct migration.
+      pgbouncer:
+        condition: service_healthy
       postgres-db:
         condition: service_healthy
     environment:
       SERVER_PORT: '8080'
       SERVER_CONTEXTPATH: /egov-url-shortening
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/egov
+      # The image pins spring.datasource.driver-class-name to OpenTelemetryDriver,
+      # which only accepts jdbc:otel: URLs -- a plain jdbc:postgresql:// one makes
+      # Hikari throw "claims to not accept jdbcUrl" and the DataSource never opens.
+      # App traffic goes through pgbouncer (the 'postgres' alias), as every other
+      # service does; Flyway below stays direct on postgres-db, because it takes a
+      # session-level advisory lock that transaction-mode pooling would break.
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: egov123
       SPRING_FLYWAY_URL: jdbc:postgresql://postgres-db:5432/egov
@@ -1641,6 +1650,16 @@ services:
       - "18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
+      # These services are ungated in this file, so the toggles are fixed:
+      # "true" where the service always starts, "false" where it is absent.
+      GATUS_PROFILE_OTP: "true"
+      GATUS_PROFILE_SEARCH: "true"
+      GATUS_PROFILE_MCP: "false"
+      GATUS_PROFILE_KEYCLOAK: "false"
+      GATUS_PROFILE_NOTIFICATIONS: "false"
+      GATUS_AUDIT: "false"
+      GATUS_PROXIES: "true"
+      GATUS_SMS_PORT: "8080"
     networks:
       - egov-network
 

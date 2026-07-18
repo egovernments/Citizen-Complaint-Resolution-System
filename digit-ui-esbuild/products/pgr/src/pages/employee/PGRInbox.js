@@ -5,7 +5,7 @@ import _ from "lodash";
 import PGRSearchInboxConfig from "../../configs/PGRSearchInboxConfig";
 import { useLocation } from "react-router-dom";
 import useBusinessServiceStates from "../../hooks/pgr/useBusinessServiceStates";
-import useTabCounts from "../../hooks/pgr/useTabCounts";
+// import useTabCounts from "../../hooks/pgr/useTabCounts"; // badges disabled — see PGRInboxTabs.js NOTE
 import useInboxVisibility from "../../hooks/pgr/useInboxVisibility";
 import PGRInboxTabs from "../../components/PGRInboxTabs";
 import Urls from "../../utils/urls";
@@ -82,14 +82,17 @@ const PGRSearchInbox = () => {
     enabled: visibilityEnabled,
   });
 
-  const { counts, markSeen } = useTabCounts({ tenantId, allStates, enabled: visibilityEnabled, serverSide: visibilityServerSide });
+  // Tab notification numbers DISABLED (product call — see the NOTE in
+  // PGRInboxTabs.js). Restoring the two commented blocks below re-enables the
+  // alert-count badges and their _count polling; useTabCounts itself is kept.
+  // const { counts, markSeen } = useTabCounts({ tenantId, allStates, enabled: visibilityEnabled, serverSide: visibilityServerSide });
 
   // A tab is "seen" once it's the visible tab -> its badge clears, and the other
   // tab's badge keeps surfacing newly-arrived complaints.
-  useEffect(() => {
-    if (visibilityEnabled && !bsLoading) markSeen(activeTab);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, bsLoading, visibilityEnabled]);
+  // useEffect(() => {
+  //   if (visibilityEnabled && !bsLoading) markSeen(activeTab);
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [activeTab, bsLoading, visibilityEnabled]);
 
   // Fetch mobile validation config from MDMS
   const { validationRules, isLoading: isValidationLoading, getMinMaxValues } = Digit.Hooks.pgr.useMobileValidation(tenantId);
@@ -268,7 +271,7 @@ const PGRSearchInbox = () => {
           <InboxSearchComposer
             key={activeTab}
             configs={tabConfig}
-            resultsHeader={<PGRInboxTabs activeTab={activeTab} onChange={setActiveTab} counts={counts} />}
+            resultsHeader={<PGRInboxTabs activeTab={activeTab} onChange={setActiveTab} /* counts={counts} */ />}
           />
         ) : (
           <InboxSearchComposer configs={updatedConfig} />
