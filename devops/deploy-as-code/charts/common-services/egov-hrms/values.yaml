@@ -13,7 +13,7 @@ ingress:
 initContainers:
   dbMigration:
     enabled: true
-    schemaTable: "egov_hrms_schema"
+    schemaTable: "hrms_schema_version"
     image:
       repository: "egov-hrms-db"
       tag: "hrms-boundary-0a4e737"

@@ -12,7 +12,7 @@ ingress:
 initContainers:
   dbMigration:
     enabled: true
-    schemaTable: "boundary_service_schema"
+    schemaTable: "boundary_schema_version"
     image:
       repository: "boundary-service-db"
       tag: "v2.9.2-4a60f20"

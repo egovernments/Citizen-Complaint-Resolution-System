@@ -7,7 +7,7 @@ labels:
 initContainers:
   dbMigration:
     enabled: true
-    schemaTable: "egov_filestore_schema"
+    schemaTable: "filestore_schema_version"
     image:
       repository: "egov-filestore-db"
       tag: v2.9.2-4a60f20

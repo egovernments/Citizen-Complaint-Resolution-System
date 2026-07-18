@@ -13,7 +13,7 @@ ingress:
 initContainers:
   dbMigration:
     enabled: true
-    schemaTable: "egov_user_schema"
+    schemaTable: "egov_user_schema_version"
     image:
       repository: "egov-user-db"
       tag: master-d69ce29

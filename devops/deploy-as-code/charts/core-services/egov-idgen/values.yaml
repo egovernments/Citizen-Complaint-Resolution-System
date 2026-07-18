@@ -13,7 +13,7 @@ ingress:
 initContainers:
   dbMigration:
     enabled: true
-    schemaTable: "egov_idgen_schema"
+    schemaTable: "egov_idgen_schema_version"
     image:
       repository: "egov-idgen-db"
       tag: v2.9.2-4a60f20
