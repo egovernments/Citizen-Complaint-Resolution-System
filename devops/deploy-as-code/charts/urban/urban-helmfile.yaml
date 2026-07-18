@@ -27,8 +27,8 @@ releases:
     installed: true
     <<: *default
 
-  - name: default-data-handler # Replace with your desired namespace
-    installed: true
+  - name: default-data-handler # Retired: dump-based seeding replaces DDH. Kept for rollback.
+    installed: false
     <<: *default
 
   - name: egov-bndry-mgmnt # Replace with your desired namespace
