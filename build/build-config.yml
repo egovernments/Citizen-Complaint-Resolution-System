@@ -64,6 +64,11 @@ config:
       - work-dir: "utilities/default-data-handler"
         image-name: "default-data-handler"
         dockerfile: "build/maven/Dockerfile"
+  - name: "builds/Citizen-Complaint-Resolution-System/local-setup/db"
+    build:
+      - work-dir: "local-setup/db"
+        image-name: "db-dump"
+        dockerfile: "local-setup/db/Dockerfile"
   - name: builds/Citizen-Complaint-Resolution-System/frontend/micro-ui/digit-ui
     build:
       - work-dir: frontend/micro-ui/
