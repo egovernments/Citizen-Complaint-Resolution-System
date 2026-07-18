@@ -101,7 +101,7 @@ export function EmployeeCreate() {
           optionText="code"
           validate={v.codeRequired}
           placeholder="Select tenant"
-          help="Employee is created on this tenant — must match the login subdomain (e.g. ke.nairobi)."
+          help="Employee is created on this tenant — must match the login subdomain (the city tenant code, e.g. <root>.<city>)."
         />
       </FieldSection>
 

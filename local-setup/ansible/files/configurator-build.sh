@@ -19,6 +19,19 @@ set -uo pipefail
 REPO_DIR="$1"; REPO_URL="$2"; REF="${3:-main}"
 NEED_NODE="20.19.0"
 
+# VITE_STATE_TENANT_ID is baked into the SPA at build time — it drives the
+# configurator login screen's tenant-code placeholder AND its pre-login default
+# tenant. The playbook exports it from host_vars `state_tenant_id`; a manual /
+# direct rebuild that forgets to export it silently reverts the login screen to
+# the neutral "tenant code" placeholder with no pre-fill (the exact regression
+# that re-redded hardcoding.spec.ts). Echo what got baked in, and warn loudly
+# when it's missing so the operator notices before shipping the dist.
+if [ -n "${VITE_STATE_TENANT_ID:-}" ]; then
+  echo "configurator-build: VITE_STATE_TENANT_ID=${VITE_STATE_TENANT_ID} (baked into the login tenant default/placeholder)" >&2
+else
+  echo "configurator-build: WARNING — VITE_STATE_TENANT_ID is unset; the login screen will show the neutral 'tenant code' placeholder with no pre-filled tenant. Export it to match your deployment (e.g. VITE_STATE_TENANT_ID=ke) before a manual rebuild." >&2
+fi
+
 command -v npm >/dev/null 2>&1 || { echo "ERROR: npm not on PATH (need Node >= $NEED_NODE)" >&2; exit 1; }
 NV="$(node -v 2>/dev/null | sed 's/^v//')"
 ver_ge(){ [ "$(printf '%s\n%s\n' "$2" "$1" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" = "$2" ]; }

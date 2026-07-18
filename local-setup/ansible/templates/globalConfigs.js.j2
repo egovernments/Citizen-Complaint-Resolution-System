@@ -45,6 +45,7 @@ var globalConfigs = (function () {
   var pgrBoundaryLowestLevel = {{ pgr_boundary_lowest_level | to_json }};
   var boundaryType = {{ boundary_type | to_json }};
   var hierarchyType = {{ hierarchy_type | default('ADMIN') | to_json }};
+  // var mapCenter = {{ map_center | default({'lat': 0, 'lng': 0}) | to_json }};
   // COMPLAINT hierarchy pin (distinct from the boundary hierarchyType above):
   // which RAINMAKER-PGR.ComplaintHierarchyDefinition the dashboard's per-widget
   // "Group by" control enumerates. Optional — when empty the SPA resolves the

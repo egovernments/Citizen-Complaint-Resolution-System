@@ -10,8 +10,14 @@ export interface MobileRules {
   errorMessage: string;
 }
 
-const FALLBACK_REGEX = '^[6-9][0-9]{9}$';
-const FALLBACK_COUNTRY_CODE = '+91';
+// Last-resort fallback used only when BOTH the MDMS `mobile-number-validation`
+// master AND globalConfigs are unavailable. Deliberately country-neutral: a
+// permissive 7–15 digit rule (E.164 subscriber range) with no dialling-prefix
+// assumption, so an unseeded tenant can still create/edit citizen users instead
+// of being bricked by a rule shaped for a different country. MDMS/globalConfigs
+// remain authoritative when present.
+const FALLBACK_REGEX = '^[0-9]{7,15}$';
+const FALLBACK_COUNTRY_CODE = '';
 
 // ── regex analysers ──────────────────────────────────────────────────────────
 // Parse a regex string to derive min/max digit length and the first mandatory
@@ -172,9 +178,19 @@ function readGlobalMobileConfig(): { mobileNumberRegex: string; countryCode: str
     window as unknown as Record<string, { getConfig?: (key: string) => Record<string, unknown> | undefined }>
   ).globalConfigs?.getConfig?.('CORE_MOBILE_CONFIGS');
   if (!gc) return null;
-  const regex = (gc.mobileNumberRegex as string | undefined);
+  // The ansible playbook renders CORE_MOBILE_CONFIGS from host_vars
+  // `core_mobile_configs`, whose keys are `mobileNumberPattern` / `mobilePrefix`.
+  // Accept those alongside the `mobileNumberRegex` / `countryCode` aliases so
+  // the globalConfigs fallback actually resolves the deployment's rule when
+  // MDMS `mobile-number-validation` isn't seeded.
+  const regex =
+    (gc.mobileNumberRegex as string | undefined) ??
+    (gc.mobileNumberPattern as string | undefined);
   if (!regex) return null;
-  const countryCode = (gc.countryCode as string | undefined) ?? '';
+  const countryCode =
+    (gc.countryCode as string | undefined) ??
+    (gc.mobilePrefix as string | undefined) ??
+    '';
   return { mobileNumberRegex: regex, countryCode };
 }
 

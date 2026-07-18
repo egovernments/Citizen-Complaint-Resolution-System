@@ -95,9 +95,25 @@ const TURBOPASS_BASE: string = import.meta.env.VITE_TURBOPASS_URL || '/turbopass
 // the enable_overpass gate) at configurator build time.
 const OVERPASS_URL: string = import.meta.env.VITE_OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
 
-// The OSM path always writes the ADMIN hierarchy (the Excel path lets the
-// operator name it).
-const OSM_HIERARCHY_TYPE = 'ADMIN';
+// Hierarchy type the OSM onboarding path writes. Deployment-agnostic: reads the
+// configured HIERARCHY_TYPE from the served globalConfigs (ansible renders it
+// from host_vars `hierarchy_type`) so the hierarchy created here matches what
+// the citizen/PGR UI later resolves boundaries against — otherwise the citizen
+// complaint form's boundary picker 400s (HIERARCHY_DEFINITION_DOES_NOT_EXIST).
+// Falls back to DIGIT's default 'ADMIN' when globalConfigs isn't present, so a
+// deployment that doesn't override HIERARCHY_TYPE keeps the previous behaviour.
+// globalConfigs.js is injected as a <script> before this bundle, so the read
+// resolves at module-eval time in the built app.
+function getConfiguredHierarchyType(): string {
+  if (typeof window !== 'undefined') {
+    const gc = (
+      window as unknown as { globalConfigs?: { getConfig?: (k: string) => unknown } }
+    ).globalConfigs?.getConfig?.('HIERARCHY_TYPE');
+    if (typeof gc === 'string' && gc) return gc;
+  }
+  return 'ADMIN';
+}
+const OSM_HIERARCHY_TYPE = getConfiguredHierarchyType();
 
 // Post-create pipeline shared by BOTH paths after createBoundaries succeeds:
 // localizations (boundary names are required for the citizen UI; the rest is

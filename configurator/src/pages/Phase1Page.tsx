@@ -337,6 +337,23 @@ export default function Phase1Page() {
     // Create a workbook with template sheets
     const wb = XLSX.utils.book_new();
 
+    // Sample values are deployment-agnostic: the tenant-code prefix comes from
+    // the configured root tenant (never a hardcoded country code) and the
+    // example coordinates come from the deployment's globalConfigs MAP_CENTER
+    // rather than a fixed city. Both are just illustrative — the operator
+    // overwrites them in the sheet.
+    const sampleRoot =
+      state.tenant && state.tenant.includes('.')
+        ? state.tenant.split('.')[0]
+        : state.tenant || 'root';
+    const mapCenter =
+      (typeof window !== 'undefined'
+        ? (window as unknown as { globalConfigs?: { getConfig?: (k: string) => unknown } })
+            .globalConfigs?.getConfig?.('MAP_CENTER')
+        : undefined) as { lat?: number; lng?: number } | undefined;
+    const sampleLat = mapCenter?.lat != null ? String(mapCenter.lat) : '';
+    const sampleLng = mapCenter?.lng != null ? String(mapCenter.lng) : '';
+
     // Tenant Info sheet
     const tenantHeaders = [
       'Tenant Display Name*',
@@ -350,11 +367,11 @@ export default function Phase1Page() {
     ];
     const tenantSample = [
       'My City Council',                       // Tenant Display Name*
-      'ke.mycity',                             // Tenant Code* — convention: <root>.<city>, lowercase
+      `${sampleRoot}.mycity`,                  // Tenant Code* — convention: <root>.<city>, lowercase
       'City',                                  // Tenant Type*
       '',                                      // Logo File Path* — leave blank to upload in Step 1.2
-      '-1.2921',                               // Latitude — example: Nairobi
-      '36.8219',                               // Longitude
+      sampleLat,                               // Latitude — example: deployment map center
+      sampleLng,                               // Longitude
       'My City',                               // City Name
       'My District',                           // District Name
     ];
