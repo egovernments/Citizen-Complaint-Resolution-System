@@ -6,61 +6,69 @@
  * A complaint is walked PENDINGFORASSIGNMENT → PENDINGATLME → RESOLVED using
  * the actual Take-Action modal (not an ADMIN-masked API call):
  *
- *   1. ASSIGN  as a GRO (EMPLOYEE_USER) — pick an LME assignee + mandatory
- *      comment → assert the workflow moves to PENDINGATLME.
- *   2. RESOLVE as an LME (whichever env principal actually carries PGR_LME in
- *      its OAuth token) — mandatory comment → assert RESOLVED.
+ *   1. ASSIGN  as resolveSeedPlan()'s actor (holds GRO) — pick an assignee
+ *      from the UI's own department-grouped picker + mandatory comment →
+ *      assert the workflow moves to PENDINGATLME.
+ *   2. RESOLVE as getPersona('lme') (whoever actually carries PGR_LME) —
+ *      mandatory comment → assert RESOLVED.
  *
  * Each state transition is verified out-of-band via PGR _search, and each
  * mandatory comment is asserted to land on the complaint timeline.
  *
- * Role reality on mz.maputo: EMP001's token carries GRO+EMPLOYEE (its HRMS
- * PGR_LME grant hasn't propagated to user-service), so the RESOLVE step —
- * which the workflow gates on PGR_LME — is performed by the ADMIN principal
- * whose token does carry PGR_LME. That is exactly the gap doc's intent:
- * "assign as a GRO, resolve as the LME". The spec picks the LME principal
- * dynamically, so on a deployment where EMPLOYEE_USER's token has PGR_LME it
- * uses that single officer for both.
+ * Role reality on mz.maputo: EMP001 carries GRO+EMPLOYEE+PGR_LME, so one
+ * officer does both steps there. On bomet the two are necessarily DIFFERENT
+ * PEOPLE (see personas.ts's persona-triple comment: HS_GRO has GRO but not
+ * PGR_LME, DEMO_WATER has PGR_LME but not GRO) — resolveSeedPlan()'s actor is
+ * only ever asked for GRO, and getPersona('lme') is asked separately for
+ * whoever holds PGR_LME, so the two steps below log in as different
+ * principals there without either knowing it's happening.
+ *
+ * The UI's own Assign-Complaint picker chooses the assignee (department-
+ * grouped, first option) — this file never needs the specific uuid
+ * resolveSeedPlan() computed for API-driven seeding, only that plan.serviceCode
+ * is one the deployment can actually assign, which is exactly what
+ * resolveSeedPlan() guarantees.
  */
 import { test, expect, type Page, type Browser } from '@playwright/test';
-import { pgrCreate, resolveServiceCode, resolveLocalityCode } from '../utils/launch-fixes/api';
+import { BASE_URL } from '../utils/env';
+import { resolveSeedPlan, getPersona, type ResolvedPersona } from '../utils/personas';
+import { seedComplaintAsCitizen } from '../utils/seed';
 import {
-  BASE_URL, TENANT, EMPLOYEE_USER, EMPLOYEE_PASS, ADMIN_USER, ADMIN_PASS,
-  SERVICE_CODE, LOCALITY_CODE, generateCitizenPhone,
-} from '../utils/env';
-import {
-  getPrincipal, loginEmployeeBrowser, apiStatus, takeAction, type Principal,
+  loginEmployeeBrowser, apiStatus, takeAction, type Principal,
 } from '../utils/employee-ui';
 
-let admin: Principal | null = null;
+/** Adapt a personas.ts ResolvedPersona to employee-ui.ts's Principal shape. */
+function toPrincipal(p: ResolvedPersona): Principal {
+  return { token: p.token, userInfo: p.userInfo, roles: p.roles, authTenant: p.tenant };
+}
+
+let reader: Principal | null = null;
+let actorUser = '';
+let actorPass = '';
 let lmeUser = '';
 let lmePass = '';
 let srid = '';
 let setupSkip = '';
 
 test.beforeAll(async () => {
-  admin = await getPrincipal(ADMIN_USER, ADMIN_PASS);
-  const gro = await getPrincipal(EMPLOYEE_USER, EMPLOYEE_PASS);
-  if (!admin) { setupSkip = `ADMIN (${ADMIN_USER}) login failed`; return; }
-  if (!gro) { setupSkip = `employee/GRO (${EMPLOYEE_USER}) login failed`; return; }
-  if (!gro.roles.includes('GRO')) { setupSkip = `${EMPLOYEE_USER} token lacks GRO — cannot ASSIGN via UI`; return; }
-
-  // Pick a principal whose TOKEN carries PGR_LME (RESOLVE is gated on it).
-  if (gro.roles.includes('PGR_LME')) { lmeUser = EMPLOYEE_USER; lmePass = EMPLOYEE_PASS; }
-  else if (admin.roles.includes('PGR_LME')) { lmeUser = ADMIN_USER; lmePass = ADMIN_PASS; }
-  else { setupSkip = 'no configured principal carries PGR_LME in its token — cannot RESOLVE via UI'; return; }
+  const plan = await resolveSeedPlan();
+  if ('error' in plan) { setupSkip = plan.error; return; }
+  actorUser = plan.actor.username;
+  actorPass = plan.actor.password;
+  reader = toPrincipal(plan.actor);
 
   try {
-    const serviceCode = await resolveServiceCode(BASE_URL, admin.token, TENANT, SERVICE_CODE);
-    const localityCode = await resolveLocalityCode(BASE_URL, admin.token, TENANT, LOCALITY_CODE);
-    const created = await pgrCreate({
-      baseUrl: BASE_URL, auth: { token: admin.token, userInfo: admin.userInfo }, tenantId: TENANT,
-      serviceCode, localityCode, description: `lifecycle-ui seed ${new Date().toISOString()}`,
-      citizenName: 'Lifecycle UI Seed', citizenPhone: generateCitizenPhone(),
-    });
-    srid = created.serviceRequestId;
-    if (created.applicationStatus !== 'PENDINGFORASSIGNMENT') {
-      setupSkip = `seed landed at ${created.applicationStatus}, not PENDINGFORASSIGNMENT`;
+    // getPersona throws (rather than returning null) when nobody on this
+    // deployment carries PGR_LME — caught below and reported as a normal
+    // skip reason, same as every other setup failure in this block.
+    const lme = await getPersona('lme');
+    lmeUser = lme.username;
+    lmePass = lme.password;
+
+    const created = await seedComplaintAsCitizen({ description: `lifecycle-ui seed ${new Date().toISOString()}` });
+    srid = created.srid;
+    if (created.status !== 'PENDINGFORASSIGNMENT') {
+      setupSkip = `seed landed at ${created.status}, not PENDINGFORASSIGNMENT`;
     }
   } catch (err: any) {
     setupSkip = `seed failed: ${err?.message?.slice(0, 200)}`;
@@ -90,7 +98,7 @@ async function timelineText(page: Page): Promise<string> {
 test.describe('employee PGR lifecycle through the Take-Action UI', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('ASSIGN (GRO) → PENDINGATLME, then RESOLVE (LME) → RESOLVED @p0', async ({ browser }) => {
+  test('ASSIGN (GRO) → PENDINGATLME, then RESOLVE (LME) → RESOLVED @p0', { tag: ['@persona:employee'] }, async ({ browser }) => {
     test.skip(!!setupSkip, setupSkip);
     expect(srid).not.toBe('');
 
@@ -98,8 +106,8 @@ test.describe('employee PGR lifecycle through the Take-Action UI', () => {
     const resolveComment = `UI-RESOLVE ${Date.now()}`;
 
     // ---------- 1. ASSIGN as GRO ----------
-    let page = await openDetailsAs(browser, EMPLOYEE_USER, EMPLOYEE_PASS);
-    expect(await apiStatus(admin!, srid)).toBe('PENDINGFORASSIGNMENT');
+    let page = await openDetailsAs(browser, actorUser, actorPass);
+    expect(await apiStatus(reader!, srid)).toBe('PENDINGFORASSIGNMENT');
 
     await takeAction(page, /^assign$/i);
     await expect(page.getByText(/Assign Complaint|CS_ACTION_ASSIGN/i).first()).toBeVisible({ timeout: 10_000 });
@@ -116,7 +124,7 @@ test.describe('employee PGR lifecycle through the Take-Action UI', () => {
     await page.locator('textarea').first().fill(assignComment);
     await page.getByRole('button', { name: /^SUBMIT$|^Submit$/ }).first().click();
 
-    await expect.poll(async () => apiStatus(admin!, srid), { timeout: 25_000, intervals: [1500] })
+    await expect.poll(async () => apiStatus(reader!, srid), { timeout: 25_000, intervals: [1500] })
       .toBe('PENDINGATLME');
 
     // Comment on the timeline.
@@ -132,7 +140,7 @@ test.describe('employee PGR lifecycle through the Take-Action UI', () => {
     await page.locator('textarea').first().fill(resolveComment);
     await page.getByRole('button', { name: /^SUBMIT$|^Submit$/ }).first().click();
 
-    await expect.poll(async () => apiStatus(admin!, srid), { timeout: 25_000, intervals: [1500] })
+    await expect.poll(async () => apiStatus(reader!, srid), { timeout: 25_000, intervals: [1500] })
       .toBe('RESOLVED');
 
     await page.reload({ waitUntil: 'domcontentloaded' });

@@ -36,15 +36,14 @@ Steps:
 5. Step 1: open type dropdown → pick first item; if a subtype dropdown appears, pick its first item too. NEXT.
 6. Step 2: Pin Location — don't touch the map. NEXT.
 7. Assert no "pincode not serviceable" toast appeared after step 2.
-8. Step 3 Location Details (cascade): assert exactly 1 cascade dropdown initially (top-level Region/County).
-9. Pick Region; assert dropdown count becomes 2 (Sub-Region appeared).
-10. Pick Sub-Region; assert count becomes 3 (Woreda/Ward appeared).
-11. Pick Woreda/Ward (a leaf). NEXT becomes enabled.
-12. Assert pageErrors === [].
+8. Step 3 Location Details (cascade): assert exactly 1 cascade dropdown initially (top-level Region/County) — true on every tenant, regardless of hierarchy depth.
+9. Pick the top level; assert dropdown count grows to MORE than 1 (at least one child level appeared).
+10. Walk any remaining unset levels generically until none are left. NEXT becomes enabled once the leaf is picked.
+11. Assert pageErrors === [].
 
 The cascade dropdowns use button[role="combobox"] on modern digit-ui (Ethiopia) or
 input[class*="select-wrap--elipses"] on older builds — the locator covers both.
-Long-running with explicit DOM count assertions to lock in the cascade gating contract — pre-fix it was always 3, post-fix it grows 1 → 2 → 3.`,
+Long-running with explicit DOM count assertions to lock in the cascade gating contract — pre-fix the count was already >1 (every level rendered eagerly); post-fix it starts at exactly 1 and grows by at least one level per pick. The total depth is NOT pinned — it varies by tenant boundary tree (2 levels on some deployments, 4 on mz.maputo) — only the "gate one at a time, starting from 1" shape is asserted.`,
     },
     tag: ['@area:pgr', '@ccrs:74', '@kind:regression', '@layer:ui', '@persona:citizen', '@pr:74'] }, async ({ page }) => {
     test.setTimeout(180_000);
@@ -85,29 +84,38 @@ Long-running with explicit DOM count assertions to lock in the cascade gating co
     const cascadeDropdowns = page.locator(
       'button[role="combobox"], input[class*="select-wrap--elipses"]',
     );
-    // Item selector covers both shadcn [role="option"] and older .digit-dropdown-item.
-    const firstOption = page.locator('[role="option"], .digit-dropdown-item').first();
-
-    // ── Step 1: Complaint Details (Type + Subtype) ──────────────────
+    // ── Step 1: Complaint Details — walk EVERY hierarchy level ──────
+    // The complaint-type hierarchy depth is tenant-defined (MDMS
+    // RAINMAKER-PGR.ComplaintHierarchyDefinition): 2 levels on mz.maputo
+    // (CATEGORY → SUB_TYPE) but 4 on ke (AUTHORITY_TYPE → MAIN_CATEGORY →
+    // SECTOR → SUB_TYPE). EVERY level with options is mandatory, so NEXT
+    // stays disabled until the deepest one is picked. Assuming a fixed
+    // Type+Subtype pair left SECTOR/SUB_TYPE unset on ke and the test hung
+    // on a permanently-disabled NEXT. Walk until no enabled, unset level
+    // remains; safety limit of 8 covers every known deployment.
     await dropdowns.first().waitFor({ state: 'visible', timeout: 15_000 });
-    await dropdowns.first().click();
-    await page.waitForTimeout(800);
-    await firstOption.click();
-    await page.waitForTimeout(1500);
-
-    // Subtype is the 2nd dropdown — appears or becomes enabled after Type pick.
-    // On ke (CRS digit-ui) the Sub-Type combobox renders immediately but starts
-    // disabled; it enables after the Category MDMS response arrives. Wait for it.
-    const subtypeVisible = await dropdowns.nth(1).isVisible({ timeout: 3000 }).catch(() => false);
-    if (subtypeVisible) {
-      await expect(dropdowns.nth(1)).toBeEnabled({ timeout: 8000 }).catch(() => {});
-      const subtypeEnabled = await dropdowns.nth(1).isEnabled().catch(() => false);
-      if (subtypeEnabled) {
-        await dropdowns.nth(1).click();
-        await page.waitForTimeout(800);
-        await page.locator('[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible').first().click();
-        await page.waitForTimeout(1000);
-      }
+    for (let level = 0; level < 8; level++) {
+      const combobox = dropdowns.nth(level);
+      const visible = await combobox
+        .isVisible({ timeout: level === 0 ? 5000 : 3000 })
+        .catch(() => false);
+      if (!visible) break;
+      // Child levels render disabled until the parent's MDMS lookup lands.
+      await expect(combobox).toBeEnabled({ timeout: 8000 }).catch(() => {});
+      if (!(await combobox.isEnabled().catch(() => false))) break;
+      // Skip any level the app already auto-filled.
+      const hasPlaceholder = await combobox
+        .evaluate((el) => /^Select/i.test((el as HTMLElement).innerText.trim()))
+        .catch(() => true);
+      if (!hasPlaceholder) continue;
+      await combobox.click();
+      await page.waitForTimeout(800);
+      const option = page
+        .locator('[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible')
+        .first();
+      if (!(await option.isVisible({ timeout: 5000 }).catch(() => false))) break;
+      await option.click();
+      await page.waitForTimeout(1500);
     }
     await clickNext();
 

@@ -55,14 +55,14 @@ async function assertAdminCanOauth(request: APIRequestContext): Promise<void> {
 test.describe('lifecycle — enc-key drift after STATE_LEVEL_TENANT_ID flip #622', () => {
   // Basic guard — always valid now that bootstrap re-provisions ADMIN with the
   // correct post-flip encryption key. Runs on every deployment.
-  test('ADMIN can oauth/token (post-bootstrap enc-key guard)', async ({ request }) => {
+  test('ADMIN can oauth/token (post-bootstrap enc-key guard)', { tag: ['@persona:system'] }, async ({ request }) => {
     await assertAdminCanOauth(request);
   });
 
   // Destructive stress variant — only meaningful after a real STATE_LEVEL_TENANT_ID
   // flip + `docker compose up -d --force-recreate`. Gated so it doesn't run on
   // ordinary deployments where the flip silently no-ops.
-  test('ADMIN can still oauth/token immediately after a force-recreate flip', async ({ request }) => {
+  test('ADMIN can still oauth/token immediately after a force-recreate flip', { tag: ['@persona:system'] }, async ({ request }) => {
     test.skip(
       process.env.PLAYWRIGHT_FORCE_RECREATE_FLIP !== '1',
       'Set PLAYWRIGHT_FORCE_RECREATE_FLIP=1 to run — requires a deployment with STATE_LEVEL_TENANT_ID flipped + `docker compose up --force-recreate`.',

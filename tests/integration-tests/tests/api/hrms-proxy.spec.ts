@@ -46,7 +46,7 @@ test.describe('HRMS Proxy', () => {
   });
 
   test('HRMS _count returns employee count without offset/limit in URL', {
-    tag: ['@area:hrms', '@layer:api'],
+    tag: ['@area:hrms', '@layer:api', '@persona:system'],
   }, async () => {
     // The proxy should inject offset=0&limit=100&tenantId automatically
     const resp = await fetch(`${BASE_URL}/egov-hrms/employees/_count`, {
@@ -69,7 +69,7 @@ test.describe('HRMS Proxy', () => {
   });
 
   test('HRMS _search returns employee data without offset/limit in URL', {
-    tag: ['@area:hrms', '@layer:api'],
+    tag: ['@area:hrms', '@layer:api', '@persona:system'],
   }, async () => {
     const resp = await fetch(`${BASE_URL}/egov-hrms/employees/_search`, {
       method: 'POST',
@@ -92,7 +92,7 @@ test.describe('HRMS Proxy', () => {
   });
 
   test('HRMS _search response contains employee records', {
-    tag: ['@area:hrms', '@layer:api'],
+    tag: ['@area:hrms', '@layer:api', '@persona:system'],
   }, async () => {
     const resp = await fetch(`${BASE_URL}/egov-hrms/employees/_search`, {
       method: 'POST',
@@ -119,7 +119,7 @@ test.describe('HRMS Proxy', () => {
   });
 
   test('HRMS _search with explicit offset/limit preserves them', {
-    tag: ['@area:hrms', '@layer:api'],
+    tag: ['@area:hrms', '@layer:api', '@persona:system'],
   }, async () => {
     const resp = await fetch(
       `${BASE_URL}/egov-hrms/employees/_search?offset=0&limit=1&tenantId=${TENANT}`,
