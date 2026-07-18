@@ -1,0 +1,22 @@
+environments:
+  env:
+    values:
+      - ../environments/env-secrets.yaml
+      - ../environments/env.yaml
+---
+templates:
+  default: &default
+    chart: ./{{`{{ .Release.Name }}`}}
+    namespace: egov
+    missingFileHandler: Warn
+    # Block helmfile until the restore Job completes, so core-services
+    # Flyway initContainers see the pre-loaded schema.
+    wait: true
+    timeout: 900
+    values:
+      - {{ .Values | toYaml | nindent 8 }}
+
+releases:
+  - name: db-dump-restore
+    installed: true
+    <<: *default
