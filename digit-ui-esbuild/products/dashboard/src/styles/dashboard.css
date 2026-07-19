@@ -200,6 +200,46 @@
   padding-bottom: 0.625rem;
 }
 
+.dashboard-widget-surface > header.dashboard-drag-handle,
+  .dashboard-widget-surface > header.dashboard-widget-header{
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding-top: 1rem;
+  padding-bottom: 0px;
+  /* Single source of title ↔ description spacing for charts + tables */
+  gap: 0.125rem;
+}
+
+.dashboard-widget-header-title-row{
+  min-width: 0px;
+  align-items: flex-start;
+  padding-right: 1.75rem;
+}
+
+.dashboard-widget-header-subtitle{
+  margin: 0px;
+  min-width: 0px;
+  flex-shrink: 0;
+  max-height: 3.25rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 1.75rem;
+}
+
+.dashboard-widget-header-subtitle .dashboard-drag-handle-subtitle{
+  margin: 0px;
+  line-height: 1.25;
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-filter-inline-select-wrap.dashboard-widget-group-by-wrap::after {
+  content: none !important;
+}
+
 @media (max-width: 1023px) {
   .dashboard-kpi-list-item .dashboard-drag-handle-title,
     .dashboard-kpi-card .dashboard-drag-handle-title {
@@ -215,9 +255,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
   font-weight: 600;
   color: var(--foreground);
+  font-size: 18px;
+  line-height: 1.3;
+  letter-spacing: normal;
+  text-transform: none;
+  margin: 0;
 }
 
 @media (max-width: 1023px) {
@@ -232,6 +276,7 @@
 }
 
 .dashboard-drag-handle-subtitle{
+  margin: 0px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -244,6 +289,10 @@
   pointer-events: none;
 }
 
+.dashboard-external-drag .react-grid-placeholder {
+  transition: none;
+}
+
 .dashboard-external-drag .dashboard-grid-layout .react-grid-placeholder,
   .dashboard-grid-dragging .dashboard-grid-layout .react-grid-placeholder {
   opacity: 1 !important;
@@ -251,6 +300,11 @@
   border-radius: 4px;
   border: 1px dashed color-mix(in srgb, var(--chart-1, #2563eb) 35%, transparent) !important;
   background: color-mix(in srgb, var(--chart-1, #2563eb) 5%, transparent) !important;
+}
+
+.dashboard-grid-dragging .react-grid-placeholder,
+  .dashboard-external-drag .react-grid-placeholder {
+  transition: none;
 }
 
 .dashboard-grid-dragging .react-grid-item.react-draggable-dragging,
@@ -323,7 +377,7 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.025em;
-  color: var(--muted-foreground);
+  color: var(--foreground);
   font-size: 11px;
   line-height: 1.25;
 }
@@ -773,7 +827,8 @@
 .dashboard-add-kpi-preview {
   border: 1px solid var(--border, #e5e2db);
   border-radius: 8px;
-  background-color: #ffffff;
+  background-color: var(--surface, #ffffff) !important;
+  color: var(--foreground, #1a1917) !important;
   box-shadow:
       0 10px 24px -8px rgb(0 0 0 / 0.12),
       0 4px 8px -4px rgb(0 0 0 / 0.08);
@@ -784,17 +839,18 @@
 .dashboard-add-kpi-preview-card {
   border: 1px solid var(--border, #e5e2db);
   border-radius: 6px;
-  background-color: #ffffff;
-  padding: 0.625rem 0.75rem;
+  background-color: var(--surface, #ffffff);
+  padding: 0.75rem;
 }
 
 .dashboard-add-kpi-preview-title{
-  font-size: 10px;
+  margin: 0px;
+  font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted-foreground, #6b6860);
-  line-height: 1.3;
+  letter-spacing: 0.025em;
+  color: var(--foreground, #1a1917) !important;
+  line-height: 1.25;
 }
 
 .dashboard-add-kpi-preview-value{
@@ -802,7 +858,7 @@
   font-size: 22px;
   font-weight: 600;
   line-height: 1.25;
-  color: var(--foreground, #1a1917);
+  color: var(--foreground, #1a1917) !important;
   font-variant-numeric: tabular-nums;
 }
 
@@ -810,15 +866,15 @@
   margin-top: 0.125rem;
   font-size: 11px;
   line-height: 1.375;
-  color: var(--muted-foreground, #6b6860);
+  color: var(--muted-foreground, #6b6860) !important;
 }
 
 .dashboard-add-kpi-preview-desc{
   margin-bottom: 0px;
-  margin-top: 0.625rem;
+  margin-top: 0.125rem;
   font-size: 11px;
-  line-height: 1.375;
-  color: var(--muted-foreground, #6b6860);
+  line-height: 1.25;
+  color: var(--muted-foreground, #6b6860) !important;
 }
 
 .dashboard-header-top {
@@ -837,10 +893,10 @@
   border-width: 1px;
   border-color: var(--border);
   background-color: var(--surface);
-  padding-left: 0.75rem;
-  padding-right: 0.75rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
   min-width: 0;
   max-width: 100%;
 }
@@ -849,9 +905,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  -moz-column-gap: 0.75rem;
-       column-gap: 0.75rem;
-  row-gap: 0.5rem;
+  -moz-column-gap: 0.5rem;
+       column-gap: 0.5rem;
+  row-gap: 0.375rem;
 }
 
 .dashboard-filters-heading{
@@ -859,13 +915,13 @@
   height: 1.75rem;
   flex-shrink: 0;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.25rem;
   align-self: center;
-  padding-right: 0.25rem;
+  padding-right: 0.125rem;
 }
 
 .dashboard-filters-title{
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   line-height: 1;
   color: var(--muted-foreground);
@@ -876,12 +932,12 @@
   height: 1.75rem;
   flex-shrink: 0;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.25rem;
   align-self: center;
 }
 
 .dashboard-filters-date-arrow{
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1;
   color: var(--muted-foreground);
 }
@@ -890,9 +946,9 @@
   position: relative;
   display: inline-flex;
   height: 1.75rem;
+  width: 6.75rem;
   flex-shrink: 0;
   align-items: center;
-  overflow: hidden;
 }
 
 .dashboard-filter-inline-date{
@@ -902,16 +958,17 @@
   height: 1.75rem;
   max-height: 1.75rem;
   min-height: 1.75rem;
-  width: 7.25rem;
+  width: 100%;
+  min-width: 0px;
   border-radius: 4px;
   border-width: 1px;
   border-color: var(--border);
   background-color: var(--surface);
   padding-top: 0px;
   padding-bottom: 0px;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
-  font-size: 12px;
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+  font-size: 11px;
   line-height: 1;
   color: var(--foreground);
 }
@@ -933,14 +990,18 @@
 
 .dashboard-filter-inline-date-wrap .dashboard-filter-inline-date::-webkit-calendar-picker-indicator {
   position: absolute;
-  right: 0;
-  top: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
   margin: 0;
   padding: 0;
   cursor: pointer;
   opacity: 0;
+}
+
+.dashboard-filter-inline-date-wrap .dashboard-filter-inline-date::-webkit-datetime-edit,
+  .dashboard-filter-inline-date-wrap .dashboard-filter-inline-date::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
 }
 
 .dashboard-filter-inline-select-wrap{
@@ -958,7 +1019,7 @@
   height: 1.75rem;
   max-height: 1.75rem;
   min-height: 1.75rem;
-  min-width: 7.5rem;
+  min-width: 6.5rem;
   -webkit-appearance: none;
      -moz-appearance: none;
           appearance: none;
@@ -968,9 +1029,9 @@
   background-color: var(--surface);
   padding-top: 0px;
   padding-bottom: 0px;
-  padding-left: 0.5rem;
-  padding-right: 1.75rem;
-  font-size: 12px;
+  padding-left: 0.375rem;
+  padding-right: 1.5rem;
+  font-size: 11px;
   line-height: 1;
   color: var(--foreground);
 }
@@ -990,14 +1051,17 @@
 }
 
 .dashboard-filter-inline-select-wrap::after {
-  content: "⌄";
+  content: none;
+}
+
+.dashboard-filter-inline-chevron {
   position: absolute;
-  right: 0.5rem;
+  right: 0.35rem;
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
-  font-size: 0.8rem;
-  line-height: 1;
+  width: 10px;
+  height: 10px;
   color: var(--dashboard-muted-foreground, #6b6860);
 }
 
@@ -1012,8 +1076,8 @@
   border-radius: 4px;
   border-width: 0px;
   background-color: transparent;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
   padding-top: 0px;
   padding-bottom: 0px;
   font-size: 11px;
@@ -1052,9 +1116,10 @@
 }
 
 /* ── Shared popover/menu primitive (chip anchor + portaled panel) ───── */
+
 /* Named "trigger" NOT "chip": the host theme (vendor/overrides.css, outside
-   this build) has a [class*="chip"] catch-all that pills ANY class containing
-   that substring — never rename these classes back to *chip*. */
+     this build) has a [class*="chip"] catch-all that pills ANY class containing
+     that substring — never rename these classes back to *chip*. */
 
 /* Anchor chip: a strict visual PEER of .dashboard-filter-inline-select —
      same h-7 / min-w-[7.5rem] / rounded-sm / border-border / bg-surface /
@@ -1429,7 +1494,7 @@
 }
 
 /* Stacked (mobile) filter bar: the chip stretches full-width, exactly
-     like .dashboard-filter-inline-select in the 639px block below. */
+     like .dashboard-filter-inline-select in the 639px block above. */
 
 @media (max-width: 639px) {
   .dashboard-popover-trigger {
@@ -1439,6 +1504,16 @@
 }
 
 /* ── Responsive layout ─────────────────────────────────────────────── */
+
+.dashboard-main {
+  overflow-x: clip;
+}
+
+.dashboard-grid-wrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
 
 .dashboard-grid-wrap .react-grid-layout {
   width: 100% !important;
@@ -1590,10 +1665,10 @@
 
   .dashboard-filters-card {
     align-items: stretch;
-    padding-left: 0.625rem;
-    padding-right: 0.625rem;
-    padding-top: 0.625rem;
-    padding-bottom: 0.625rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
   }
 
   .dashboard-filters-row {
@@ -1610,6 +1685,7 @@
   .dashboard-filter-inline-date-wrap {
     flex: 1 1 auto;
     min-width: 0;
+    width: auto;
   }
 
   .dashboard-filter-inline-date {
@@ -1771,7 +1847,7 @@
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   padding-bottom: 0px;
-  padding-top: 0.25rem;
+  padding-top: 1rem;
 }
 
 .dashboard-data-table-header-bar{
@@ -1783,19 +1859,20 @@
   border-bottom-width: 0px;
   padding-left: 1rem;
   padding-bottom: 0px;
-  padding-top: 0.5rem;
+  padding-top: 1rem;
   padding-right: 2rem;
 }
 
 .dashboard-data-table-header .dashboard-drag-handle-title,
   .dashboard-data-table-header-bar .dashboard-drag-handle-title{
+  margin: 0px;
   line-height: 1.25;
 }
 
 .dashboard-data-table-header .dashboard-drag-handle-subtitle,
   .dashboard-data-table-header-bar .dashboard-drag-handle-subtitle{
-  margin-top: 0px;
-  line-height: 1;
+  margin: 0px;
+  line-height: 1.25;
 }
 
 .dashboard-data-table-body{
@@ -1807,8 +1884,8 @@
   overflow: hidden;
   padding-left: 0.75rem;
   padding-right: 0.75rem;
-  padding-top: 0px;
-  margin-top: -2px;
+  padding-top: 0.5rem;
+  margin-top: 0;
   padding-bottom: 1.125rem;
 }
 
@@ -1829,11 +1906,45 @@
   font-size: 12px;
 }
 
+/* Split head/body tables — header pinned outside scroll (grid transform breaks sticky). */
+
+.dashboard-table-frame{
+  display: flex;
+  min-height: 0px;
+  width: 100%;
+  flex: 1 1 0%;
+  flex-direction: column;
+}
+
+.dashboard-table-head-pane{
+  width: 100%;
+  flex-shrink: 0;
+  overflow-x: hidden;
+  background: var(--dashboard-surface, #fff);
+  border-bottom: 1px solid var(--dashboard-border, var(--border, #e5e2db));
+}
+
+.dashboard-root table.dashboard-table.dashboard-table--head {
+  margin-bottom: 0;
+}
+
+.dashboard-root table.dashboard-table.dashboard-table--body thead {
+  display: none;
+}
+
+.dashboard-root table.dashboard-table.dashboard-table--head th.dashboard-table-th {
+  position: static;
+  top: auto;
+  box-shadow: none;
+}
+
 /* Override global digit-ui-components bare `table/th/td` rules from index.html */
 
 .dashboard-root table.dashboard-table {
   width: 100%;
-  border-collapse: collapse;
+  /* separate (not collapse) — required for position:sticky on thead/th */
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
   font-family: inherit;
   font-size: 12px;
@@ -1869,7 +1980,6 @@
   padding: 0.375rem 0.625rem !important;
   border: 0 !important;
   box-shadow: none !important;
-  background: transparent !important;
   font-family: var(--dashboard-font-family) !important;
   font-size: 12px !important;
   font-weight: 400 !important;
@@ -1885,6 +1995,16 @@
   color: var(--dashboard-foreground, #1b1b1b);
 }
 
+.dashboard-root table.dashboard-table td.dashboard-table-td {
+  background: transparent !important;
+}
+
+.dashboard-root table.dashboard-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
 .dashboard-root table.dashboard-table th.dashboard-table-th {
   font-weight: 500 !important;
   color: var(--dashboard-muted-foreground, #6b6860) !important;
@@ -1892,8 +2012,9 @@
   padding-top: 0.125rem !important;
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 4;
   background: var(--dashboard-surface, #fff) !important;
+  box-shadow: inset 0 -1px 0 var(--dashboard-border, var(--border, #e5e2db));
 }
 
 .dashboard-table-sort-btn{
@@ -2141,7 +2262,7 @@
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   padding-bottom: 0px;
-  padding-top: 0.125rem;
+  padding-top: 1rem;
 }
 
 .dashboard-bar-chart-header .dashboard-drag-handle-title{
@@ -2149,8 +2270,8 @@
 }
 
 .dashboard-bar-chart-header .dashboard-drag-handle-subtitle{
-  margin-top: 0px;
-  line-height: 1;
+  margin: 0px;
+  line-height: 1.25;
 }
 
 .dashboard-chart-scroll-viewport{
@@ -2188,7 +2309,7 @@
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   padding-bottom: 0px;
-  padding-top: 0.25rem;
+  padding-top: 1rem;
 }
 
 .dashboard-gauge-header .dashboard-drag-handle-title{
@@ -2340,7 +2461,7 @@
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   padding-bottom: 0px;
-  padding-top: 0.375rem;
+  padding-top: 1rem;
 }
 
 .dashboard-horizontal-bar-header .dashboard-drag-handle-title{
@@ -2348,8 +2469,8 @@
 }
 
 .dashboard-horizontal-bar-header .dashboard-drag-handle-subtitle{
-  margin-top: 0px;
-  line-height: 1;
+  margin: 0px;
+  line-height: 1.25;
 }
 
 .dashboard-horizontal-bar .apexcharts-canvas,
@@ -2405,7 +2526,7 @@
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   padding-bottom: 0.25rem;
-  padding-top: 0.375rem;
+  padding-top: 1rem;
 }
 
 .dashboard-stacked-bar-header .dashboard-drag-handle-title{
@@ -2413,8 +2534,8 @@
 }
 
 .dashboard-stacked-bar-header .dashboard-drag-handle-subtitle{
-  margin-top: 0px;
-  line-height: 1;
+  margin: 0px;
+  line-height: 1.25;
 }
 
 .dashboard-stacked-bar .apexcharts-canvas,
@@ -2468,7 +2589,7 @@
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   padding-bottom: 0px;
-  padding-top: 0.375rem;
+  padding-top: 1rem;
 }
 
 .dashboard-line-chart-header .dashboard-drag-handle-title{
@@ -2476,8 +2597,8 @@
 }
 
 .dashboard-line-chart-header .dashboard-drag-handle-subtitle{
-  margin-top: 0px;
-  line-height: 1;
+  margin: 0px;
+  line-height: 1.25;
 }
 
 .dashboard-line-chart .apexcharts-canvas,
@@ -2592,7 +2713,7 @@
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   padding-bottom: 0px;
-  padding-top: 0.375rem;
+  padding-top: 1rem;
 }
 
 .dashboard-pie-chart-header .dashboard-drag-handle-title{
@@ -2600,8 +2721,8 @@
 }
 
 .dashboard-pie-chart-header .dashboard-drag-handle-subtitle{
-  margin-top: 0px;
-  line-height: 1;
+  margin: 0px;
+  line-height: 1.25;
 }
 
 /* Viz type: map — geographic distribution */
@@ -2625,7 +2746,7 @@
   padding-left: 0.75rem;
   padding-right: 0.75rem;
   padding-bottom: 0px;
-  padding-top: 0.375rem;
+  padding-top: 1rem;
 }
 
 .dashboard-map-header .dashboard-drag-handle-title{
@@ -2780,8 +2901,7 @@
 }
 
 .dashboard-map-filter-badge {
-  -webkit-backdrop-filter: blur(4px);
-          backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
 
 .dashboard-map-filter-clear{
@@ -3090,6 +3210,10 @@
   z-index: 1100;
 }
 
+.tw-z-\[1\]{
+  z-index: 1;
+}
+
 .tw-z-\[2\]{
   z-index: 2;
 }
@@ -3104,14 +3228,6 @@
 
 .tw-mb-4{
   margin-bottom: 1rem;
-}
-
-.tw-ml-2{
-  margin-left: 0.5rem;
-}
-
-.tw-mr-6{
-  margin-right: 1.5rem;
 }
 
 .tw-mt-1{
@@ -3170,6 +3286,10 @@
   min-height: 0px;
 }
 
+.tw-min-h-\[12rem\]{
+  min-height: 12rem;
+}
+
 .tw-min-h-\[220px\]{
   min-height: 220px;
 }
@@ -3206,6 +3326,10 @@
   max-width: 220px;
 }
 
+.tw-max-w-full{
+  max-width: 100%;
+}
+
 .tw-flex-1{
   flex: 1 1 0%;
 }
@@ -3238,6 +3362,10 @@
 
 .tw-flex-wrap{
   flex-wrap: wrap;
+}
+
+.tw-items-start{
+  align-items: flex-start;
 }
 
 .tw-items-center{
@@ -3311,6 +3439,10 @@
 
 .tw-overflow-y-auto{
   overflow-y: auto;
+}
+
+.tw-overflow-x-clip{
+  overflow-x: clip;
 }
 
 .tw-overscroll-contain{
@@ -3508,12 +3640,12 @@
   padding-right: 2rem;
 }
 
-.tw-pt-2{
-  padding-top: 0.5rem;
-}
-
 .tw-pt-2\.5{
   padding-top: 0.625rem;
+}
+
+.tw-pt-4{
+  padding-top: 1rem;
 }
 
 .tw-text-center{
@@ -3756,15 +3888,248 @@
 .dashboard-root.dashboard-embedded {
   height: auto;
   min-height: 100%;
-  overflow: visible;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+  box-sizing: border-box;
+  --digit-sidebar-width: 3rem;
+  --dashboard-embedded-inset: 12px;
 }
 
 .dashboard-root.dashboard-embedded > div {
-  overflow: visible;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
 }
 
-.dashboard-root.dashboard-embedded > div > main {
-  overflow: visible;
+.dashboard-root.dashboard-embedded > div > main,
+.dashboard-root.dashboard-embedded .dashboard-main {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+  padding: 0 !important;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-grid-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+  box-sizing: border-box;
+  padding-left: var(--dashboard-embedded-inset);
+  padding-right: var(--dashboard-embedded-inset);
+}
+
+.dashboard-root.dashboard-embedded .dashboard-grid-wrap .react-grid-layout {
+  max-width: 100% !important;
+  min-width: 0;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-grid-layout .react-grid-item {
+  overflow: hidden;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-header-top {
+  padding-left: var(--dashboard-embedded-inset) !important;
+  padding-right: var(--dashboard-embedded-inset) !important;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-filters-bar {
+  padding-left: var(--dashboard-embedded-inset);
+  padding-right: var(--dashboard-embedded-inset);
+  margin-bottom: 12px;
+}
+
+.dashboard-root.dashboard-embedded .dashboard-grid-layout {
+  box-sizing: border-box;
+}
+
+/* Host employee shell (.ground-container padding, health-css left gutter)
+   adds a visible gap between the nav chrome and the dashboard — flush it. */
+
+.employee .ground-container.digit-home-ground:has(.dashboard-root.dashboard-embedded) {
+  margin: 0 !important;
+  padding: 0 !important;
+  max-width: 100vw;
+  overflow-x: clip;
+}
+
+.employee .employee-app-wrapper.digit-home-app-wrapper:has(.dashboard-root.dashboard-embedded) {
+  margin: 0 !important;
+  padding: 0 !important;
+  max-width: 100vw;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.employee .main.digit-home-main:has(.dashboard-root.dashboard-embedded) {
+  margin-left: 0 !important;
+  padding-left: var(--digit-sidebar-width, 3rem) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-x: clip !important;
+  padding-top: 56px !important;
+  box-sizing: border-box !important;
+}
+
+/* Block digit-ui global heading colors (h2[class*="title"] etc.) inside the dashboard. */
+
+.dashboard-root h1,
+.dashboard-root h2,
+.dashboard-root h3,
+.dashboard-root h4,
+.dashboard-root h5,
+.dashboard-root h6 {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  line-height: inherit;
+  margin: 0;
+}
+
+.dashboard-root .dashboard-kpi-title {
+  color: var(--foreground) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+}
+
+.dashboard-root h2.dashboard-drag-handle-title,
+.dashboard-root .dashboard-drag-handle-title {
+  color: var(--foreground) !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+/* Compact filter controls — beat vendor 44px select/date height. */
+
+.dashboard-root .dashboard-filter-inline-date,
+.dashboard-root .dashboard-filter-inline-select {
+  height: 1.75rem !important;
+  min-height: 1.75rem !important;
+  max-height: 1.75rem !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-radius: 4px !important;
+  box-sizing: border-box !important;
+}
+
+/* Beat vendor `input[type=date] { border… !important }` (higher specificity). */
+
+.dashboard-root input.dashboard-filter-inline-date[type="date"] {
+  border: 1px solid var(--border, #e5e2db) !important;
+  background-color: var(--surface, #ffffff) !important;
+  box-shadow: none !important;
+  padding-left: 0.375rem !important;
+  padding-right: 0.375rem !important;
+  width: 100% !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+       appearance: none !important;
+}
+
+.dashboard-root .dashboard-filter-inline-date-wrap {
+  height: 1.75rem !important;
+  width: 6.75rem;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.dashboard-root .dashboard-filter-inline-select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: none !important;
+  padding-right: 1.5rem !important;
+  border: 1px solid var(--border, #e5e2db) !important;
+  background-color: var(--surface, #ffffff) !important;
+}
+
+.dashboard-root .dashboard-filter-inline-select::-ms-expand,
+.dashboard-root .dashboard-widget-group-by-select::-ms-expand {
+  display: none;
+}
+
+.dashboard-root .dashboard-widget-group-by-select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: none !important;
+}
+
+.dashboard-root .dashboard-filter-inline-select-wrap::after {
+  content: none !important;
+  display: none !important;
+}
+
+.dashboard-root .dashboard-filter-inline-select-wrap,
+.dashboard-root .dashboard-filter-inline-date-wrap,
+.dashboard-root .dashboard-filters-heading,
+.dashboard-root .dashboard-filters-date-range,
+.dashboard-root .dashboard-filters-clear-inline {
+  height: 1.75rem !important;
+}
+
+.dashboard-root .dashboard-filters-card {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+/* Header search — same height as Add KPI / Reset / Export (vendor forces 44px). */
+
+.dashboard-root .dashboard-header-search,
+.dashboard-root .dashboard-header-search-input:not(#dashboard-search-noop) {
+  height: 2rem !important;
+  min-height: 2rem !important;
+  max-height: 2rem !important;
+}
+
+.dashboard-root .dashboard-header-search-input:not(#dashboard-search-noop) {
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: 2rem !important;
+  border-radius: 4px !important;
+  box-sizing: border-box !important;
+}
+
+.dashboard-root .dashboard-header-controls .dashboard-header-btn {
+  height: 2rem !important;
+  min-height: 2rem !important;
+  max-height: 2rem !important;
+  box-sizing: border-box !important;
+}
+
+/* The host app's vendor/overrides.css forces height:44px !important on all
+   text inputs/selects via a high-specificity :not() chain. The dashboard uses
+   compact 1.75rem controls (owner preference). Stacked-class specificity +
+   !important re-asserts the compact size; both !important -> specificity wins.
+   Scoped to the wards select only (calendars keep the host size by owner choice). */
+
+.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select {
+  height: 1.75rem !important;
+  min-height: 1.75rem !important;
+  max-height: 1.75rem !important;
+  font-size: 12px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 1 !important;
 }
 
 .hover\:tw-bg-\[color-mix\(in_srgb\2c var\(--chrome-foreground\)_12\%\2c transparent\)\]:hover{
@@ -3796,37 +4161,16 @@
   }
 }
 
-/* ── Embedded-in-DigitUI overrides ─────────────────────────────────────
-   Applied when the dashboard is mounted inside the DigitUI employee
-   chrome (products/dashboard/Module.js renders <AdminDashboard embedded />,
-   which adds .dashboard-embedded next to .dashboard-root). The host chrome
-   owns the viewport and scrolling, so the standalone full-viewport shell
-   (h-screen root, internal overflow scrollers) is neutralized; the internal
-   dark Sidebar is simply not rendered in embedded mode. Mirrored in
-   input.css so `npm run build:dashboard-css` regeneration keeps it. */
-.dashboard-root.dashboard-embedded {
-  height: auto;
-  min-height: 100%;
-  overflow: visible;
-}
-.dashboard-root.dashboard-embedded > div {
-  overflow: visible;
-}
-.dashboard-root.dashboard-embedded > div > main {
-  overflow: visible;
-}
-
-/* The host app's vendor/overrides.css forces height:44px !important on all
-   text inputs/selects via a high-specificity :not() chain. The dashboard uses
-   compact 1.75rem controls (owner preference). Stacked-class specificity +
-   !important re-asserts the compact size; both !important -> specificity wins.
-   Scoped to the wards select only (calendars keep the host size by owner choice). */
-.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select {
-  height: 1.75rem !important;
-  min-height: 1.75rem !important;
-  max-height: 1.75rem !important;
-  font-size: 12px !important;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-  line-height: 1 !important;
+/* Screen-reader-only header row inside the scrollable body table — restores
+   column semantics lost by the pinned-header split (DashboardTableFrame). */
+.dashboard-table-sr-head {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

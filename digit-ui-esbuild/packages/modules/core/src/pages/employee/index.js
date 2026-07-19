@@ -94,7 +94,7 @@ const EmployeeApp = ({
             <Switch>
               {!Digit.Utils.getMultiRootTenant() && (
                 <Route exact path={`${path}/user/login`}>
-                  <EmployeeLogin stateCode={stateCode} />
+                  <EmployeeLogin stateCode={stateCode} appTenants={appTenants} />
                 </Route>
               )}
               <Route exact path={`${path}/user/login/otp`}>

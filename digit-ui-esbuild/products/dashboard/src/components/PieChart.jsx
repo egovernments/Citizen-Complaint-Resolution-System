@@ -3,6 +3,8 @@ import { resolveDashboardCssColor } from "../config/chartColors";
 import {
   getPieChartValueLabelColor,
   normalizePieChartData,
+  PIE_CHART_LABEL_FONT_SIZE,
+  PIE_CHART_VALUE_FONT_SIZE,
   PIE_CHART_VIEWBOX,
 } from "../config/pieChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE, SHARED_CHROME } from "../config/visualizationStyles";
@@ -54,7 +56,7 @@ const PieChart = ({ data = [] }) => {
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fill={valueLabelColor}
-                  fontSize="10"
+                  fontSize={PIE_CHART_VALUE_FONT_SIZE}
                   fontWeight="600"
                   pointerEvents="none"
                 >
@@ -67,7 +69,7 @@ const PieChart = ({ data = [] }) => {
                 textAnchor={slice.labelAnchor}
                 dominantBaseline="middle"
                 fill={fill}
-                fontSize="11"
+                fontSize={PIE_CHART_LABEL_FONT_SIZE}
                 fontWeight="500"
                 pointerEvents="none"
               >
@@ -75,7 +77,7 @@ const PieChart = ({ data = [] }) => {
                   <tspan
                     key={`${slice.label}-${lineIndex}`}
                     x={slice.labelX}
-                    dy={lineIndex === 0 ? 0 : 12}
+                    dy={lineIndex === 0 ? 0 : 11}
                   >
                     {line}
                   </tspan>

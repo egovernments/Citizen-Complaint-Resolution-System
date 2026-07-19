@@ -58,7 +58,7 @@ export function computeBreachDurationMs(openAgeMs, slaTargetMs, slaBucket) {
 
 export function complaintDetailHref(serviceRequestId) {
   const ctx = window?.contextPath ?? "digit-ui";
-  return `/${ctx}/employee/pgr/complaint/details/${encodeURIComponent(serviceRequestId)}`;
+  return `/${ctx}/employee/pgr/complaint-details/${encodeURIComponent(serviceRequestId)}`;
 }
 
 export function formatWorkflowStatusLabel(status) {

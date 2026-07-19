@@ -12,6 +12,7 @@ import { translate as t } from "../i18n/localeRuntime";
 import { seriesEntryLabel } from "../i18n/textResolver";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
+import DashboardTableFrame, { SrOnlyTableHead } from "./DashboardTableFrame";
 import { formatNumber } from "../utils/numberFormat";
 
 // Cell formatters route their NUMERIC part through the tenant mask
@@ -221,17 +222,21 @@ const DashboardTable = ({ columns, rows, emptyMessage }) => {
   const { sortState, handleSort, sortRows } = useTableSort(columns);
   const sortedRows = useMemo(() => sortRows(annotatedRows), [annotatedRows, sortRows]);
 
-  return (
-    <table className={styles.table}>
-      <colgroup>
-        {columns.map((col) => (
-          <col
-            key={col.id}
-            className={col.width ? styles.colFixed : undefined}
-            style={col.width ? { width: col.width } : undefined}
-          />
-        ))}
-      </colgroup>
+  const colgroup = (
+    <colgroup>
+      {columns.map((col) => (
+        <col
+          key={col.id}
+          className={col.width ? styles.colFixed : undefined}
+          style={col.width ? { width: col.width } : undefined}
+        />
+      ))}
+    </colgroup>
+  );
+
+  const headTable = (
+    <table className={`${styles.table} ${DATA_TABLE_STYLES.tableHead}`}>
+      {colgroup}
       <thead>
         <tr>
           {columns.map((col) => (
@@ -241,6 +246,13 @@ const DashboardTable = ({ columns, rows, emptyMessage }) => {
           ))}
         </tr>
       </thead>
+    </table>
+  );
+
+  const bodyTable = (
+    <table className={`${styles.table} ${DATA_TABLE_STYLES.tableBody}`}>
+      {colgroup}
+      <SrOnlyTableHead columns={columns} />
       <tbody>
         {sortedRows.length === 0 ? (
           <tr>
@@ -322,6 +334,8 @@ const DashboardTable = ({ columns, rows, emptyMessage }) => {
       </tbody>
     </table>
   );
+
+  return <DashboardTableFrame head={headTable} body={bodyTable} />;
 };
 
 export default DashboardTable;

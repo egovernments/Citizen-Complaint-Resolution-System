@@ -11,8 +11,8 @@ import useDashboardT from "../i18n/useDashboardT";
 
 const FunnelIcon = () => (
   <svg
-    width="16"
-    height="16"
+    width="12"
+    height="12"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -23,6 +23,24 @@ const FunnelIcon = () => (
     aria-hidden
   >
     <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+  </svg>
+);
+
+const FilterChevron = () => (
+  <svg
+    className="dashboard-filter-inline-chevron"
+    xmlns="http://www.w3.org/2000/svg"
+    width="10"
+    height="10"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <polyline points="6 9 12 15 18 9" />
   </svg>
 );
 
@@ -161,6 +179,7 @@ const DashboardFilters = ({
               ))
             )}
           </select>
+          <FilterChevron />
         </div>
 
         {complaintTypeTree ? (
