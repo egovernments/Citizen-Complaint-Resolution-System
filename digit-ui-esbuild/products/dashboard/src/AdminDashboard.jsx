@@ -588,6 +588,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         dragSwapTargetRef.current = null;
         dragOriginLayoutRef.current = null;
         lastHoverTargetRef.current = null;
+        postDropWidgetRef.current = null;
         setIsGridDragging(false);
         return;
       }

@@ -234,46 +234,10 @@
   text-overflow: unset;
   white-space: normal;
   overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.dashboard-widget-group-by-wrap{
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  height: 1.625rem;
-  margin: -3px 0 0;
-}
-
-.dashboard-widget-group-by-select {
-  height: 1.625rem !important;
-  min-height: 1.625rem !important;
-  max-height: 1.625rem !important;
-  min-width: 5.5rem !important;
-  max-width: 7rem !important;
-  width: 100%;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-  padding-left: 0.375rem;
-  padding-right: 1.25rem;
-  font-size: 11px !important;
-  line-height: 1.25 !important;
 }
 
 .dashboard-filter-inline-select-wrap.dashboard-widget-group-by-wrap::after {
   content: none !important;
-}
-
-.dashboard-widget-group-by-chevron {
-  position: absolute;
-  right: 0.375rem;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  width: 10px;
-  height: 10px;
-  color: var(--dashboard-muted-foreground, #6b6860);
 }
 
 @media (max-width: 1023px) {
@@ -1152,9 +1116,10 @@
 }
 
 /* ── Shared popover/menu primitive (chip anchor + portaled panel) ───── */
+
 /* Named "trigger" NOT "chip": the host theme (vendor/overrides.css, outside
-   this build) has a [class*="chip"] catch-all that pills ANY class containing
-   that substring — never rename these classes back to *chip*. */
+     this build) has a [class*="chip"] catch-all that pills ANY class containing
+     that substring — never rename these classes back to *chip*. */
 
 /* Anchor chip: a strict visual PEER of .dashboard-filter-inline-select —
      same h-7 / min-w-[7.5rem] / rounded-sm / border-border / bg-surface /
@@ -1529,7 +1494,7 @@
 }
 
 /* Stacked (mobile) filter bar: the chip stretches full-width, exactly
-     like .dashboard-filter-inline-select in the 639px block below. */
+     like .dashboard-filter-inline-select in the 639px block above. */
 
 @media (max-width: 639px) {
   .dashboard-popover-trigger {
@@ -2936,8 +2901,7 @@
 }
 
 .dashboard-map-filter-badge {
-  -webkit-backdrop-filter: blur(4px);
-          backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
 
 .dashboard-map-filter-clear{
@@ -3246,6 +3210,10 @@
   z-index: 1100;
 }
 
+.tw-z-\[1\]{
+  z-index: 1;
+}
+
 .tw-z-\[2\]{
   z-index: 2;
 }
@@ -3260,14 +3228,6 @@
 
 .tw-mb-4{
   margin-bottom: 1rem;
-}
-
-.tw-ml-2{
-  margin-left: 0.5rem;
-}
-
-.tw-mr-6{
-  margin-right: 1.5rem;
 }
 
 .tw-mt-1{
@@ -3324,6 +3284,10 @@
 
 .tw-min-h-0{
   min-height: 0px;
+}
+
+.tw-min-h-\[12rem\]{
+  min-height: 12rem;
 }
 
 .tw-min-h-\[220px\]{
@@ -4150,6 +4114,22 @@
   min-height: 2rem !important;
   max-height: 2rem !important;
   box-sizing: border-box !important;
+}
+
+/* The host app's vendor/overrides.css forces height:44px !important on all
+   text inputs/selects via a high-specificity :not() chain. The dashboard uses
+   compact 1.75rem controls (owner preference). Stacked-class specificity +
+   !important re-asserts the compact size; both !important -> specificity wins.
+   Scoped to the wards select only (calendars keep the host size by owner choice). */
+
+.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select {
+  height: 1.75rem !important;
+  min-height: 1.75rem !important;
+  max-height: 1.75rem !important;
+  font-size: 12px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 1 !important;
 }
 
 .hover\:tw-bg-\[color-mix\(in_srgb\2c var\(--chrome-foreground\)_12\%\2c transparent\)\]:hover{

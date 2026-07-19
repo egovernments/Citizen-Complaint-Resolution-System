@@ -379,7 +379,6 @@ export function useCatalogLayout(kpis, packLayout) {
         ? geom.compactVertically(rglLayout, newItem.i)
         : rglLayout;
       if (newItem) {
-        const resized = next.find((item) => item.i === newItem.i) ?? newItem;
         const pinIds = [
           ...new Set([newItem.i, ...geom.getPinnedKpiIds(next)]),
         ];
