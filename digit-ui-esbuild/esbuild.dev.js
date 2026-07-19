@@ -5,12 +5,11 @@ const http = require("http");
 const { spawn, spawnSync } = require("child_process");
 
 const PORT = parseInt(process.env.PORT || "18080", 10);
-// Default 18280 = SSH tunnel to Bomet Kong (ssh -L 18280:127.0.0.1:18000 bomet).
-// Do NOT use 18000 (host nginx) without PROXY_HOST — wrong Host → 404/301.
-const PROXY_PORT = parseInt(process.env.PROXY_PORT || "18280", 10);
-const PROXY_HOST =
-  process.env.PROXY_HOST ||
-  (PROXY_PORT === 18000 ? "bometfeedbackhub.digit.org" : undefined);
+// Local Compose Kong defaults to 18000. For an SSH tunnel to a remote host
+// (e.g. Bomet), override: PROXY_PORT=18280 PROXY_HOST=bometfeedbackhub.digit.org
+//   ssh -N -L 18280:127.0.0.1:18000 <host>
+const PROXY_PORT = parseInt(process.env.PROXY_PORT || "18000", 10);
+const PROXY_HOST = process.env.PROXY_HOST || undefined;
 const PROXY_KC_PORT = parseInt(process.env.PROXY_KC_PORT || "18200", 10);
 const GLOBAL_CONFIGS = process.env.GLOBAL_CONFIGS || ""; // path to server-specific globalConfigs.js
 const PUBLIC_PATH = "/digit-ui/";

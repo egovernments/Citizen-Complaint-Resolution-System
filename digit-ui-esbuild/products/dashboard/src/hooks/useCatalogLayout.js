@@ -368,18 +368,6 @@ export function useCatalogLayout(kpis, packLayout) {
           { packKpis: false, colStart, colEnd }
         );
       }
-      const finalItem = filled.find((item) => item.i === newItem.i);
-      const officerSla = filled.find((item) => item.i === "cl_chart_officer_sla");
-      const openByStage = filled.find((item) => item.i === "cl_chart_open_by_type_stage");
-      const topKpis = filled
-        .filter((item) => isCatalogCard(item.i, kpis) && geom.vacatedTopBandSlot(item))
-        .map((item) => ({ i: item.i, x: item.x, y: item.y, w: item.w }))
-        .sort((a, b) => a.x - b.x);
-      const topRowGap = topKpis.some((item, idx) => {
-        if (idx === 0) return item.x > 0;
-        const prev = topKpis[idx - 1];
-        return item.x > prev.x + prev.w;
-      });
       commitLayoutAfterInteraction(filled);
     },
     [commitLayoutAfterInteraction, geom, kpis]

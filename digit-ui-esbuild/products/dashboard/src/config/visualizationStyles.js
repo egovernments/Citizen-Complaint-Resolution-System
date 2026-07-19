@@ -227,10 +227,6 @@ export function getWidgetBodyClassName(vizType, { isTable = false } = {}) {
   return styles?.body ?? SHARED_CHROME.defaultBody;
 }
 
-export function getWidgetScrollClassName() {
-  return DATA_TABLE_STYLES.scroll;
-}
-
 export function isChartOverflowVisibleType(vizType) {
   return VIZ_GRID_BEHAVIOR[vizType]?.chartOverflowVisible === true;
 }

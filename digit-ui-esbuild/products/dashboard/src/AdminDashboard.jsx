@@ -42,6 +42,7 @@ import {
   effectiveHierLevel,
   buildGroupByOptions,
 } from "./utils/hierLevelGrouping";
+import { createPickerDragLifecycle } from "./utils/pickerDragLifecycle";
 
 // Map the catalog's viz.kind onto the reference dashboard's VIZ_TYPE so each widget
 // gets its type-specific header/body chrome (padding, insets, legend tuning) instead
@@ -121,11 +122,12 @@ const GRID_MARGIN = [16, 16];
 
 function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, kpiId, kpis) {
   const { w, h } = defaultSizeForKpi(kpiId, kpis);
-  const colWidth = (containerWidth - GRID_MARGIN[0] * (GRID_COLS + 1)) / GRID_COLS;
+  // containerPadding={[0,0]} → only (cols − 1) gutters between columns.
+  const colWidth = (containerWidth - GRID_MARGIN[0] * (GRID_COLS - 1)) / GRID_COLS;
   const left = clientX - gridRect.left;
   const top = clientY - gridRect.top;
-  let x = Math.round((left - GRID_MARGIN[0]) / (colWidth + GRID_MARGIN[0]));
-  let y = Math.round((top - GRID_MARGIN[1]) / (KPI_ROW_HEIGHT + GRID_MARGIN[1]));
+  let x = Math.round(left / (colWidth + GRID_MARGIN[0]));
+  let y = Math.round(top / (KPI_ROW_HEIGHT + GRID_MARGIN[1]));
   x = Math.max(0, Math.min(GRID_COLS - w, x));
   y = Math.max(0, y);
   return { x, y };
@@ -381,17 +383,36 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   const dragSwapTargetRef = useRef(null);
   const dragOriginLayoutRef = useRef(null);
   const lastHoverTargetRef = useRef(null);
+  const dragLifecycleRef = useRef(null);
+  if (!dragLifecycleRef.current) dragLifecycleRef.current = createPickerDragLifecycle();
   const [isGridDragging, setIsGridDragging] = useState(false);
 
   const handleDragWidgetStart = useCallback((widgetId) => {
+    dragLifecycleRef.current.start();
     draggingWidgetIdRef.current = widgetId;
     setDraggingWidgetId(widgetId);
   }, []);
 
+  // RGL 1.3.4 has no cancel path for external drags (#1287 / #1311 review).
+  // If the picker drag engaged the grid then ended without a grid drop (ESC /
+  // drop outside), dispatch a synthetic drop so RGL clears activeDrag.
   const handleDragWidgetEnd = useCallback(() => {
     draggingWidgetIdRef.current = null;
+    const { needsSyntheticCleanup } = dragLifecycleRef.current.end();
+    if (needsSyntheticCleanup) {
+      const gridEl = gridWrapRef.current?.querySelector(".react-grid-layout");
+      if (gridEl && typeof DragEvent === "function") {
+        try {
+          gridEl.dispatchEvent(
+            new DragEvent("drop", { bubbles: true, cancelable: true })
+          );
+        } catch {
+          /* jsdom / older engines */
+        }
+      }
+    }
     setDraggingWidgetId(null);
-  }, [layout.length]);
+  }, []);
 
   const isExternalDrag = Boolean(draggingWidgetId);
 
@@ -457,17 +478,27 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
   );
 
   const handleGridDrop = useCallback(
-    (gridLayout, item, event) => {
-      const widgetId = event.dataTransfer.getData("text/plain");
-      const position = item ? { x: item.x, y: item.y } : null;
-      const clientX = event.nativeEvent?.clientX ?? event.clientX;
-      const clientY = event.nativeEvent?.clientY ?? event.clientY;
+    (_gridLayout, item, event) => {
+      dragLifecycleRef.current.gridDrop();
+      let widgetId = null;
+      try {
+        widgetId = event?.dataTransfer?.getData("text/plain") || null;
+      } catch {
+        /* some browsers throw on getData outside dragstart/drop */
+      }
+      if (!widgetId) widgetId = draggingWidgetIdRef.current;
+      // Synthetic cleanup drops (ESC / drop-outside) clear RGL only — no add.
+      if (!widgetId || !item) return;
+      const position = { x: item.x, y: item.y };
+      const clientX = event?.nativeEvent?.clientX ?? event?.clientX;
+      const clientY = event?.nativeEvent?.clientY ?? event?.clientY;
       completeExternalDrop(widgetId, position, clientX, clientY);
     },
     [completeExternalDrop]
   );
 
   const handleDropDragOver = useCallback(() => {
+    dragLifecycleRef.current.gridDragOver();
     const activeId = draggingWidgetIdRef.current;
     if (!activeId || !kpis[activeId]) return false;
     if (layout.some((entry) => entry.i === activeId)) return false;
@@ -766,24 +797,27 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         </div>
       )}
 
-      {showEmpty ? (
-        <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface tw-py-16 tw-text-center">
-          <p className="tw-text-[12px] tw-text-muted-foreground">
-            {t("DASHBOARD_COMMON_NO_TILES_FOR_ROLE", "No tiles in the catalog pack for this role.")}
-          </p>
-        </div>
-      ) : (
-        <div
-          ref={gridWrapRef}
-          className={`dashboard-grid-wrap${isExternalDrag ? " dashboard-external-drag" : ""}${
-            isGridDragging ? " dashboard-grid-dragging" : ""
-          }`}
-          onDragOver={handleWrapDragOver}
-          onDrop={handleWrapDrop}
-        >
+      {/* Grid stays mounted when empty: drop target + cancelled-drag recovery
+          (#1287). Empty copy overlays the grid (pointer-events-none) and hides
+          while a picker drag is live so the RGL placeholder stays visible. */}
+      <div
+        ref={gridWrapRef}
+        className={`dashboard-grid-wrap${isExternalDrag ? " dashboard-external-drag" : ""}${
+          isGridDragging ? " dashboard-grid-dragging" : ""
+        }${showEmpty ? " dashboard-grid-wrap--empty tw-relative tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface" : ""}`}
+        onDragOver={handleWrapDragOver}
+        onDrop={handleWrapDrop}
+      >
+        {showEmpty && !isExternalDrag ? (
+          <div className="tw-pointer-events-none tw-absolute tw-inset-0 tw-z-[1] tw-flex tw-min-h-[12rem] tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-text-center">
+            <p className="tw-text-[12px] tw-text-muted-foreground">
+              {t("DASHBOARD_COMMON_NO_TILES_FOR_ROLE", "No tiles in the catalog pack for this role.")}
+            </p>
+          </div>
+        ) : null}
         <GridLayoutWithWidth
           key={gridSyncKey}
-          className="dashboard-grid-layout layout"
+          className={`dashboard-grid-layout layout${showEmpty ? " dashboard-grid-layout--empty" : ""}`}
           layout={gridLayout}
           cols={GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}
@@ -793,7 +827,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           allowOverlap={false}
           isDraggable
           isResizable
-          isDroppable
+          isDroppable={isExternalDrag}
           droppingItem={droppingItem}
           onDrop={handleGridDrop}
           onDropDragOver={handleDropDragOver}
@@ -893,8 +927,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             );
           })}
         </GridLayoutWithWidth>
-        </div>
-      )}
+      </div>
     </DashboardLayout>
   );
 };

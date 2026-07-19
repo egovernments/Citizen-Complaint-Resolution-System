@@ -23,7 +23,8 @@ const AddKpiPreview = ({ item, anchorRect, panelLeft, kpiCardData }) => {
         width: ADD_KPI_PREVIEW_WIDTH_PX,
         zIndex: 10000,
       }}
-      aria-hidden="true"
+      aria-live="polite"
+      role="status"
     >
       <div className="dashboard-add-kpi-preview-card">
         <div className="dashboard-add-kpi-preview-title">{content.title}</div>
