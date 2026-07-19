@@ -175,7 +175,9 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
     : storeData?.tenants?.length
       ? storeData.tenants
       : hookCities;
-  const isLoading = isHookCitiesLoading || isStoreLoading;
+  // Only gate on the hooks while no city list has resolved yet — appTenants
+  // (or already-fetched store tenants) should render without a page loader.
+  const isLoading = !cities?.length && (isHookCitiesLoading || isStoreLoading);
   const [user, setUser] = useState(null);
   const [showToast, setShowToast] = useState(null);
   const [disable, setDisable] = useState(false);
@@ -329,7 +331,7 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
 
   const onForgotPassword = () => history.push(`/${window?.contextPath}/employee/user/forgot-password`);
 
-  if (isLoading || isStoreLoading) {
+  if (isLoading) {
     return <Loader page={true} variant="PageLoader" />;
   }
 

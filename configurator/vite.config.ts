@@ -34,6 +34,9 @@ export default defineConfig({
       '/filestore': apiProxy,
       '/novu-bridge': apiProxy,
       '/turbopass': apiProxy,
+      '/pgr-services': apiProxy,
+      '/access': apiProxy,
+      '/egov-idgen': apiProxy,
     },
   },
 })

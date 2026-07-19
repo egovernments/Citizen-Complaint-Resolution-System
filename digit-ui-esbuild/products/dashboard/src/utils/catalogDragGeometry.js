@@ -222,8 +222,11 @@ function findKpiColumnSwapTarget(layout, dropItem, activeId, originItem = null) 
   if (!isCard(activeId)) return null;
   const dropLeft = dropItem.x;
   const dropRight = dropItem.x + dropItem.w;
-  const rowCandidates = new Set([snapKpiRowY(dropItem.y)]);
-  if (originItem) {
+  const dropRowY = snapKpiRowY(dropItem.y);
+  const rowCandidates = new Set([dropRowY]);
+  // Origin-row fallbacks only apply to nearby drops; a far-below drop must not
+  // swap with a horizontally aligned KPI left behind on the origin row.
+  if (originItem && Math.abs(dropRowY - snapKpiRowY(originItem.y)) <= KPI_GRID_H) {
     rowCandidates.add(snapKpiRowY(originItem.y));
     rowCandidates.add(snapKpiRowY(originItem.y + KPI_GRID_H));
     rowCandidates.add(Math.max(0, snapKpiRowY(originItem.y) - KPI_GRID_H));
@@ -290,12 +293,17 @@ function snapGridX(x, w) {
 }
 
 function packKpiRowLeft(kpis) {
-  let cursor = 0;
+  let cursorX = 0;
+  let cursorY = 0;
   return [...kpis]
     .sort((a, b) => a.x - b.x)
     .map((kpi) => {
-      const item = { ...kpi, x: cursor, y: 0 };
-      cursor += kpi.w;
+      if (cursorX + kpi.w > GRID_COLS && cursorX > 0) {
+        cursorX = 0;
+        cursorY += KPI_GRID_H;
+      }
+      const item = { ...kpi, x: cursorX, y: cursorY };
+      cursorX += kpi.w;
       return item;
     });
 }
@@ -316,14 +324,25 @@ function insertKpiInRowAtY(otherKpis, pinned, rowY) {
   ];
 
   const placed = [];
-  for (const item of ordered) {
-    let x = item.i === pinned.i ? pinX : item.x;
+  const fitInRow = (startX, w, y) => {
+    let x = startX;
     for (const prev of placed) {
-      if (x < prev.x + prev.w && x + item.w > prev.x) {
+      if (prev.y === y && x < prev.x + prev.w && x + w > prev.x) {
         x = prev.x + prev.w;
       }
     }
-    placed.push({ ...item, x, y: rowY });
+    return x;
+  };
+  for (const item of ordered) {
+    let y = rowY;
+    let x = fitInRow(item.i === pinned.i ? pinX : item.x, item.w, y);
+    // Wrap onto the next KPI row instead of overflowing past the grid edge
+    // (normalizeItem would clamp x back and create a locked card overlap).
+    while (x + item.w > GRID_COLS) {
+      y += KPI_GRID_H;
+      x = fitInRow(0, item.w, y);
+    }
+    placed.push({ ...item, x, y });
   }
   return placed;
 }
@@ -669,18 +688,32 @@ function resolveRemainingOverlaps(layout, pinItemIds = []) {
       for (let j = i + 1; j < result.length; j += 1) {
         if (!rectsOverlap(result[i], result[j])) continue;
 
-        const iLocked = pinSet.has(result[i].i) || isCard(result[i].i);
-        const jLocked = pinSet.has(result[j].i) || isCard(result[j].i);
+        const iCard = isCard(result[i].i);
+        const jCard = isCard(result[j].i);
+        const iLocked = pinSet.has(result[i].i) || iCard;
+        const jLocked = pinSet.has(result[j].i) || jCard;
         let moveIdx = -1;
         if (!iLocked && jLocked) moveIdx = i;
         else if (iLocked && !jLocked) moveIdx = j;
         else if (!iLocked && !jLocked) moveIdx = j;
+        else if (iCard && jCard) {
+          // Card/card collisions need a deterministic repair path too:
+          // relocate a non-pinned card to the next open card slot.
+          if (!pinSet.has(result[j].i)) moveIdx = j;
+          else if (!pinSet.has(result[i].i)) moveIdx = i;
+        }
         if (moveIdx < 0) continue;
 
         const moving = result[moveIdx];
         const without = result.filter((_, idx) => idx !== moveIdx);
-        const floorY = getCompactFloorY(without);
-        const slot = findOpenPositionBelow(without, moving.w, moving.h, floorY);
+        const slot = isCard(moving.i)
+          ? computeNextCardPosition(without, moving.w, moving.h)
+          : findOpenPositionBelow(
+              without,
+              moving.w,
+              moving.h,
+              getCompactFloorY(without)
+            );
         const relocated = {
           ...moving,
           x: slot.x,

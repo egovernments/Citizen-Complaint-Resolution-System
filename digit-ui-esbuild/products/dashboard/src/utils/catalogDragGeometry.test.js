@@ -119,3 +119,84 @@ test("hasOverlaps: detects and clears after repair", () => {
   const fixed = geom.resolveRemainingOverlaps(overlapping, []);
   assert.equal(geom.hasOverlaps(fixed), false);
 });
+
+/* ------------------------------------------------------------------ */
+/* Origin-row swap fallback (findKpiColumnSwapTarget guard)            */
+/* ------------------------------------------------------------------ */
+
+test("findDragHoverTarget: far-below drop does not swap with an origin-row KPI", () => {
+  const origin = item("card_a", 0, 0, 2, 2);
+  const layout = [origin, item("card_b", 2, 0, 2, 2)];
+  // Dropped 4 KPI rows below the band, horizontally overlapping card_b.
+  const drop = item("card_a", 1, 8, 2, 2);
+  const target = geom.findDragHoverTarget(layout, drop, "card_a", origin);
+  assert.equal(target, null);
+});
+
+test("findDragHoverTarget: adjacent-row drop still swaps via origin-row fallback", () => {
+  const origin = item("card_a", 0, 0, 2, 2);
+  const layout = [origin, item("card_b", 2, 0, 2, 2)];
+  // One KPI row below the origin, horizontally overlapping card_b.
+  const drop = item("card_a", 1, 2, 2, 2);
+  const target = geom.findDragHoverTarget(layout, drop, "card_a", origin);
+  assert.equal(target?.i, "card_b");
+});
+
+/* ------------------------------------------------------------------ */
+/* KPI row packing must wrap before exceeding GRID_COLS (12)           */
+/* ------------------------------------------------------------------ */
+
+const SEVEN_CARD_KPIS = Object.fromEntries(
+  Array.from({ length: 7 }, (_, n) => [
+    `card_${n + 1}`,
+    { viz: { kind: "number-tile" } },
+  ])
+);
+const sevenGeom = createCatalogDragGeometry(SEVEN_CARD_KPIS);
+
+function assertInsideGrid(layout) {
+  for (const entry of layout) {
+    assert.ok(
+      entry.x >= 0 && entry.x + entry.w <= 12,
+      `${entry.i} exceeds the grid: x=${entry.x} w=${entry.w}`
+    );
+  }
+}
+
+test("reflowKpiBand: seven 2-wide cards wrap to a second row without overlaps", () => {
+  const layout = Array.from({ length: 7 }, (_, n) =>
+    item(`card_${n + 1}`, n, 0, 2, 2)
+  );
+  const packed = sevenGeom.reflowKpiBand(layout);
+  assertInsideGrid(packed);
+  assert.equal(sevenGeom.hasOverlaps(packed), false);
+  const wrapped = packed.filter((entry) => entry.y === 2);
+  assert.equal(wrapped.length, 1);
+  assert.equal(wrapped[0].x, 0);
+  assert.equal(packed.filter((entry) => entry.y === 0).length, 6);
+});
+
+test("applyExplicitDrop: inserting a seventh card into a full row wraps, no overlaps", () => {
+  const prev = Array.from({ length: 6 }, (_, n) =>
+    item(`card_${n + 1}`, n * 2, 0, 2, 2)
+  );
+  const result = sevenGeom.applyExplicitDrop(prev, item("card_7", 4, 0, 2, 2));
+  assert.equal(result.length, 7);
+  assertInsideGrid(result);
+  assert.equal(sevenGeom.hasOverlaps(result), false);
+  const wrapped = result.filter((entry) => entry.y >= 2);
+  assert.equal(wrapped.length, 1);
+});
+
+test("resolveRemainingOverlaps: repairs a card/card collision deterministically", () => {
+  const layout = [
+    item("card_a", 0, 0, 2, 2),
+    item("card_b", 0, 0, 2, 2),
+  ];
+  const fixed = geom.resolveRemainingOverlaps(layout, []);
+  assert.equal(geom.hasOverlaps(fixed), false);
+  const a = fixed.find((entry) => entry.i === "card_a");
+  const b = fixed.find((entry) => entry.i === "card_b");
+  assert.deepEqual({ x: a.x, y: a.y }, { x: 0, y: 0 });
+  assert.ok(b.x + b.w <= 12);
+});
