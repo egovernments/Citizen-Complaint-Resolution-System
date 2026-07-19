@@ -38,6 +38,12 @@ plugins:
     - X-API-Key
     - X-Requested-With
     - auth-token
+    # dashboard render-lag instrumentation (#1110): browser-originated trace
+    # correlation headers — belt-and-braces for deployments that point
+    # REACT_APP_ANALYTICS_BASE at an absolute (cross-origin) URL.
+    - traceparent
+    - tracestate
+    - x-trace-id
     exposed_headers:
     - X-Auth-Token
     credentials: true
@@ -107,6 +113,11 @@ plugins:
           ["/egov-url-shortening"]=true, ["/default-data-handler/tenant/new"]=true,
           ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
           ["/user/_search"]=true, ["/access/v1/actions/mdms/_get"]=true,
+          -- Browser OTLP telemetry ingest (#1110): anonymous JSON POSTs from the
+          -- dashboard (no RequestInfo/authToken). Whitelisted so every flush
+          -- neither pollutes the RBAC audit stream nor 401s when ENFORCE_UNAUTH
+          -- flips. POST-only, size- and rate-limited at the route (see below).
+          ["/otel/v1/metrics"]=true, ["/otel/v1/logs"]=true,
         }
         local uri = kong.request.get_path()
         local is_protected = not AUTH_OPTIONAL[uri]
@@ -606,6 +617,12 @@ services:
     paths:
     - /novu-bridge/novu-adapter/v1/providers/test-send
     strip_path: false
+  - name: novu-bridge-providers-twilio-templates-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/twilio-templates
+    strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083
   tags:
@@ -698,6 +715,57 @@ services:
     paths:
     - /tempo
     strip_path: true
+# Browser -> otel-collector OTLP/HTTP ingest for the dashboard render-lag
+# instrumentation (#1110). Same-origin (follows the /tempo and /grafana
+# observability precedent) so the SPA needs no CORS work and no new host port.
+# Security posture (R8): EXACT paths, POST only, /v1/traces deliberately NOT
+# exposed; per-route 1MB size cap + 60/min-per-IP rate limit; both paths are
+# whitelisted in the pre-function's AUTH_OPTIONAL above. No ingest token in v1
+# (a browser-held token is theater) — revisit if abuse is observed.
+# strip_path:true + the path-bearing service url means the collector receives
+# exactly /v1/metrics | /v1/logs.
+- name: otel-metrics-ingest
+  url: http://otel-collector:4318/v1/metrics
+  tags:
+  - observability
+  routes:
+  - name: otel-metrics-route
+    paths:
+    - /otel/v1/metrics
+    methods:
+    - POST
+    strip_path: true
+  plugins:
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 1
+      size_unit: megabytes
+  - name: rate-limiting
+    config:
+      minute: 60
+      policy: local
+      limit_by: ip
+- name: otel-logs-ingest
+  url: http://otel-collector:4318/v1/logs
+  tags:
+  - observability
+  routes:
+  - name: otel-logs-route
+    paths:
+    - /otel/v1/logs
+    methods:
+    - POST
+    strip_path: true
+  plugins:
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 1
+      size_unit: megabytes
+  - name: rate-limiting
+    config:
+      minute: 60
+      policy: local
+      limit_by: ip
 # Keycloak identity provider (login, registration, admin console)
 - name: keycloak-service
   url: http://keycloak:8180

@@ -3,6 +3,7 @@ package org.egov.novubridge.web.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.egov.novubridge.repository.DispatchLogRepository;
 import org.egov.novubridge.service.NovuClient;
+import org.egov.novubridge.service.TwilioTemplateSyncService;
 import org.egov.novubridge.service.provider.GenericProviderStrategy;
 import org.egov.novubridge.service.provider.NovuProviderStrategyFactory;
 import org.egov.novubridge.service.provider.TwilioProviderStrategy;
@@ -50,7 +51,8 @@ class ProviderControllerTest {
         TwilioProviderStrategy twilio = new TwilioProviderStrategy();
         NovuProviderStrategyFactory factory =
                 new NovuProviderStrategyFactory(List.of(twilio, generic), generic);
-        controller = new ProviderController(novuClient, factory, dispatchLogRepository);
+        TwilioTemplateSyncService twilioTemplateSyncService = mock(TwilioTemplateSyncService.class);
+        controller = new ProviderController(novuClient, factory, dispatchLogRepository, twilioTemplateSyncService);
     }
 
     private NovuClient.NovuResponse novuResp(int status, Map<String, Object> body) {

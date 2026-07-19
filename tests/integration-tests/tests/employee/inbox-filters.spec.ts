@@ -14,24 +14,41 @@
  *   • locality      — drill the boundary cascade to a leaf ward → every visible
  *                     row is in that locality.
  *
- * Deployment-portable: personas/codes come from env, the seed complaints are
- * created against the live deployment, and each test self-skips with a clear
- * reason when the deployment can't support the case (e.g. a single-complaint
- * -type or single-locality tenant).
+ * Deployment-portable: personas come from getPersona() (deployment-discovered,
+ * not hardcoded env usernames), complaints are always seeded as a CITIZEN via
+ * seed.ts (pgr-services' APPLY action is [CITIZEN, CSR] on every deployment —
+ * seeding with an employee token 400s "INVALID ROLE" the moment that employee
+ * isn't ALSO a citizen, which is only true by bootstrap accident on local),
+ * and each test self-skips with a clear reason when the deployment can't
+ * support the case (e.g. a single-complaint-type or single-locality tenant).
  *
- * Auth: EMP001 (GRO+EMPLOYEE) authenticates at the CITY tenant; the default
- * "Assigned to All" radio means it sees every complaint, not just its own.
+ * Auth: getPersona('inbox-viewer') logs into the inbox UI.
+ *
+ * KNOWN RED on a deployment that applies the inbox's assignee default (bomet):
+ * the status/REJECTED case cannot pass there, and not for want of seeding.
+ * inboxConfigPGR.js defaults the filter to assignee = ASSIGNED_TO_ME, which
+ * useInboxGeneral hands to pgr-services as `assignee=<self uuid>`; meanwhile
+ * egov-workflow-v2 refuses an assignee on REJECT ("INVALID_ASSIGNEE: cannot
+ * assign to the user") because the REJECTED state has no roles able to act on
+ * it. So every REJECTED complaint has no assignee, the inbox only ever asks
+ * for complaints WITH one, and the Rejected checkbox the UI offers can never
+ * return a row. Nor can the spec click its way out: bomet renders no
+ * "Assigned to all" radio at all. See docs/LOCAL-VS-BOMET-PARITY.md.
+ * It passes on mz.maputo only because that build never adds the param.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { getDigitToken } from '../utils/auth';
-import { pgrCreate, resolveServiceCode, resolveLocalityCode } from '../utils/launch-fixes/api';
+import { BASE_URL } from '../utils/env';
+import { getPersona, resolveSeedPlan, serviceCodesFor, type ResolvedPersona } from '../utils/personas';
+import { seedComplaintAsCitizen } from '../utils/seed';
 import {
-  BASE_URL, TENANT, ROOT_TENANT, EMPLOYEE_USER, EMPLOYEE_PASS,
-  GRO_USER, GRO_PASS, ADMIN_USER, ADMIN_PASS, SERVICE_CODE, LOCALITY_CODE, generateCitizenPhone,
-} from '../utils/env';
-import {
-  getPrincipal, loginEmployeeBrowser, readInboxRows, apiReject, apiServiceCode, type Principal,
+  loginEmployeeBrowser, readInboxRows, apiReject, apiServiceCode, type Principal,
 } from '../utils/employee-ui';
+
+/** Adapt a personas.ts ResolvedPersona to employee-ui.ts's Principal shape —
+ *  same token/userInfo/roles, just `tenant` renamed `authTenant`. */
+function toPrincipal(p: ResolvedPersona): Principal {
+  return { token: p.token, userInfo: p.userInfo, roles: p.roles, authTenant: p.tenant };
+}
 
 const INBOX_URL = `${BASE_URL}/digit-ui/employee/pgr/inbox-v2`;
 const SEARCH_RE = /pgr-services\/v2\/request\/_search/;
@@ -45,48 +62,50 @@ let serviceCodeA = '';
 let serviceCodeB = '';
 let secondTypeAvailable = true;
 
-/** Fetch the leaf serviceCodes from RAINMAKER-PGR.ComplaintHierarchy (the app's
- *  source of truth now that ServiceDefs is empty on CRS tenants). */
-async function fetchLeafServiceCodes(token: string): Promise<string[]> {
-  try {
-    const j: any = await fetch(`${BASE_URL}/mdms-v2/v2/_search`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ RequestInfo: { authToken: token }, MdmsCriteria: { tenantId: TENANT, schemaCode: 'RAINMAKER-PGR.ComplaintHierarchy', limit: 200 } }),
-    }).then((r) => r.json());
-    const rows = (j.mdms || []).map((m: any) => m.data).filter(Boolean);
-    const parents = new Set(rows.map((x: any) => x.parentCode).filter(Boolean));
-    return rows.filter((x: any) => !parents.has(x.code)).map((x: any) => x.code);
-  } catch { return []; }
-}
-
-async function seedOpen(filer: Principal, serviceCode: string, localityCode: string): Promise<string> {
-  const created = await pgrCreate({
-    baseUrl: BASE_URL, auth: { token: filer.token, userInfo: filer.userInfo }, tenantId: TENANT,
+async function seedOpen(serviceCode: string, localityCode: string): Promise<string> {
+  const { srid } = await seedComplaintAsCitizen({
     serviceCode, localityCode, description: `inbox-filter seed ${serviceCode} ${Date.now()}`,
-    citizenName: 'Inbox Filter Seed', citizenPhone: generateCitizenPhone(),
   });
-  return created.serviceRequestId;
+  return srid;
 }
 
 test.beforeAll(async () => {
-  admin = await getPrincipal(ADMIN_USER, ADMIN_PASS);
-  gro = await getPrincipal(GRO_USER, GRO_PASS);
-  if (!admin) { seedSkip = `ADMIN (${ADMIN_USER}) login failed — cannot create complaints`; return; }
-  if (!gro) { seedSkip = `GRO (${GRO_USER}) login failed — cannot reject`; return; }
+  // resolveSeedPlan() picks the one (serviceCode, actor) pairing this
+  // deployment can actually ASSIGN — see personas.ts's persona-triple
+  // comment. We don't need the assignee here (nothing in this file drives
+  // ASSIGN), just serviceCodeA + the GRO actor for REJECT and a locality
+  // proven to exist in the live boundary tree.
+  const plan = await resolveSeedPlan();
+  if ('error' in plan) { seedSkip = plan.error; return; }
   try {
-    serviceCodeA = await resolveServiceCode(BASE_URL, admin.token, TENANT, SERVICE_CODE);
-    const localityA = await resolveLocalityCode(BASE_URL, admin.token, TENANT, LOCALITY_CODE);
-    // A second, distinct complaint type (for the complaint-type narrowing test).
-    const leaves = await fetchLeafServiceCodes(admin.token);
-    serviceCodeB = leaves.find((c) => c !== serviceCodeA) || '';
+    const employee = await getPersona('inbox-viewer');
+    admin = toPrincipal(employee);
+    gro = toPrincipal(plan.actor);
+
+    // Seed a service the VIEWER's department owns — the inbox scopes by
+    // department as well as jurisdiction, so plan.serviceCode (picked for
+    // ASSIGN-ability, not visibility) can be invisible to them. On bomet the
+    // viewer is an ENV GRO while plan.serviceCode is RudeBehavior/WATER_ENV, so
+    // every seeded row was filtered out and the inbox looked "empty of ours".
+    const visible = serviceCodesFor(employee);
+    if (!visible.length) {
+      seedSkip = `inbox viewer ${employee.username} holds no department that owns a complaint type (departments: ${employee.departments.join('|') || 'none'})`;
+      return;
+    }
+    serviceCodeA = visible[0];
+    const localityA = plan.localityCode;
+
+    // A second, distinct complaint type (for the complaint-type narrowing test)
+    // — also department-visible, else the filter has nothing to narrow to.
+    serviceCodeB = visible.find((c) => c !== serviceCodeA) || '';
     secondTypeAvailable = !!serviceCodeB;
 
     // Guarantee ≥1 OPEN complaint of type A and (if available) type B.
-    await seedOpen(admin, serviceCodeA, localityA);
-    if (serviceCodeB) await seedOpen(admin, serviceCodeB, localityA);
+    await seedOpen(serviceCodeA, localityA);
+    if (serviceCodeB) await seedOpen(serviceCodeB, localityA);
 
     // A known REJECTED complaint (terminal) for the status filter.
-    rejectedSrid = await seedOpen(admin, serviceCodeA, localityA);
+    rejectedSrid = await seedOpen(serviceCodeA, localityA);
     const st = await apiReject(gro, rejectedSrid);
     if (st !== 'REJECTED') seedSkip = `seeded complaint did not reach REJECTED (got ${st})`;
   } catch (err: any) {
@@ -95,8 +114,9 @@ test.beforeAll(async () => {
 });
 
 async function openInbox(page: Page): Promise<void> {
-  const ok = await loginEmployeeBrowser(page, EMPLOYEE_USER, EMPLOYEE_PASS);
-  test.skip(!ok, `employee ${EMPLOYEE_USER} login failed on this deployment`);
+  const employee = await getPersona('inbox-viewer');
+  const ok = await loginEmployeeBrowser(page, employee.username, employee.password);
+  test.skip(!ok, `employee ${employee.username} login failed on this deployment`);
   await Promise.all([
     page.waitForResponse((r) => SEARCH_RE.test(r.url()) && r.request().method() === 'POST', { timeout: 30_000 }).catch(() => null),
     page.goto(INBOX_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }),
@@ -149,7 +169,7 @@ async function showAllRows(page: Page): Promise<void> {
 test.describe('employee inbox-v2 — filters narrow the result set', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('status filter → only rows in the chosen workflow state @p0', async ({ page }) => {
+  test('status filter → only rows in the chosen workflow state @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!seedSkip, seedSkip);
     await openInbox(page);
 
@@ -162,7 +182,16 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     expect(defaultRows.every((r) => r.status !== rejectedLabel), 'default view excludes REJECTED').toBeTruthy();
 
     // Apply REJECTED (value-based selector — localization-independent).
-    await page.locator('input[type="checkbox"][value="REJECTED"]').check({ force: true });
+    // The digit-ui CheckBox (digit-ui-components/atoms/CheckBox.js) renders the
+    // real <input> visually hidden (opacity:0) and the clickable square as a
+    // sibling `<label class="digit-custom-checkbox" htmlFor=...>`. Clicking the
+    // raw input does nothing; the label is what toggles it via native htmlFor.
+    const rejInput = page.locator('input[type="checkbox"][value="REJECTED"]');
+    if (!(await rejInput.isChecked())) {
+      const container = rejInput.locator('xpath=ancestor::*[contains(@class,"digit-checkbox-container")][1]');
+      await container.locator('label.digit-custom-checkbox').first().click();
+    }
+    await expect(rejInput, 'REJECTED filter checkbox toggled on').toBeChecked();
     const url = await applyFilter(page);
     expect(url).toContain('applicationStatus=REJECTED');
     expect(url).not.toContain('applicationStatus=PENDINGFORASSIGNMENT');
@@ -182,7 +211,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     expect(cleared.every((r) => r.status !== rejectedLabel), 'after clear, back to non-REJECTED default').toBeTruthy();
   });
 
-  test('complaint-type filter → only rows of the chosen serviceCode @p0', async ({ page }) => {
+  test('complaint-type filter → only rows of the chosen serviceCode @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!seedSkip, seedSkip);
     test.skip(!secondTypeAvailable, 'deployment has only one complaint type — nothing to narrow between');
     await openInbox(page);
@@ -225,7 +254,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     expect(matchedCode.length).toBeGreaterThan(0);
   });
 
-  test('locality filter → only rows in the chosen leaf boundary @p0', async ({ page }) => {
+  test('locality filter → only rows in the chosen leaf boundary @p0', { tag: ['@persona:employee'] }, async ({ page }) => {
     test.skip(!!seedSkip, seedSkip);
     await openInbox(page);
 
@@ -233,6 +262,14 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     // further child combobox appears (leaf reached). A single-level tenant
     // still narrows to that boundary.
     let levels = 0;
+    // Remember the TEXT of the deepest option actually picked. The rows render
+    // the localized boundary NAME ("Chesoen"), never the code
+    // ("BOMET_BOMET_CENTRAL_CHESOEN") that the request carries, so the code is
+    // not a legal thing to compare a row against. This spec used to do exactly
+    // that and passed here only by accident: mz.maputo has no boundary
+    // localization, so its rows render the raw code and the two happened to
+    // match. On a localized deployment the same assertion could never hold.
+    let leafLabel = '';
     for (let i = 0; i < 6; i++) {
       const combos = page.locator('button[role="combobox"]');
       const n = await combos.count();
@@ -242,6 +279,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
       await page.waitForTimeout(700);
       const opt = page.getByRole('option').first();
       if (await opt.count() === 0) break;
+      leafLabel = (await opt.innerText().catch(() => ''))?.trim() || leafLabel;
       await opt.click();
       await page.waitForTimeout(900);
       levels++;
@@ -259,7 +297,7 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
     if (rows.length === 0) {
       // Nothing at that leaf yet — seed one and re-apply the (still-set) filter.
       try {
-        await seedOpen(admin!, serviceCodeA, leaf);
+        await seedOpen(serviceCodeA, leaf);
         url = await applyFilter(page);
         rows = await readInboxRows(page);
       } catch (err: any) {
@@ -267,7 +305,13 @@ test.describe('employee inbox-v2 — filters narrow the result set', () => {
       }
     }
     expect(rows.length, `locality=${leaf} returns ≥1 row`).toBeGreaterThan(0);
-    expect(rows.every((r) => r.locality === leaf), `every visible row is in locality ${leaf}`).toBeTruthy();
+    // Accept the localized name we picked OR the raw code, so this reads the
+    // same on a localized deployment and on one still rendering raw keys.
+    const expected = [leafLabel, leaf].filter(Boolean);
+    expect(
+      rows.every((r) => expected.includes(r.locality)),
+      `every visible row is in the chosen locality (expected ${expected.join(' or ')}, saw ${[...new Set(rows.map((r) => r.locality))].join(' | ')})`,
+    ).toBeTruthy();
 
     await clearFilters(page);
     expect((await readInboxRows(page)).length).toBeGreaterThan(0);

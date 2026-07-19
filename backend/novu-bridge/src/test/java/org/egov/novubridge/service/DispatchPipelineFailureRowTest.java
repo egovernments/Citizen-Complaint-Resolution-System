@@ -100,7 +100,7 @@ class DispatchPipelineFailureRowTest {
 
     @Test
     void providerThrowsCustomException_persistsFailedWithPropagatedCode_thenRethrows() {
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
                 .thenThrow(new CustomException("NB_NOVU_RATE_LIMITED", "429 from Novu"));
 
         CustomException ex = assertThrows(CustomException.class, () -> service.process(smsEvent(), true, null));
@@ -114,7 +114,7 @@ class DispatchPipelineFailureRowTest {
 
     @Test
     void providerThrowsGenericException_persistsFailedWithDeliveryError_thenRethrows() {
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
                 .thenThrow(new RuntimeException("connection reset"));
 
         assertThrows(RuntimeException.class, () -> service.process(smsEvent(), true, null));
@@ -126,7 +126,7 @@ class DispatchPipelineFailureRowTest {
 
     @Test
     void novuNon2xxResponse_recordsFailed_noRethrow() {
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
                 .thenReturn(NovuClient.NovuResponse.builder().statusCode(500)
                         .response(Map.of("message", "internal error")).build());
 
@@ -141,7 +141,7 @@ class DispatchPipelineFailureRowTest {
 
     @Test
     void novuNullResponse_recordsFailed_noRethrow() {
-        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any()))
+        when(novuClient.identifyThenTrigger(anyString(), any(), anyString(), anyString(), any(), anyString(), any(), any(), any()))
                 .thenReturn(null);
 
         DispatchResult result = service.process(smsEvent(), true, null);

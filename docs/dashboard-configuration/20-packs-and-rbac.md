@@ -69,6 +69,40 @@ Boundary/jurisdiction scope (`boundary_path LIKE '<prefix>%'`) is wired end-to-e
 deliberately disabled in the resolver today (`boundaryPrefix = null` with the enabling block
 commented out in `PrincipalScopeResolver.java` — see the inline rationale).
 
+#### Tenant-configurable department scoping — `dss.DashboardConfig.departmentScoping` (#1280)
+
+The employee department axis above can be switched off per tenant via an OPTIONAL field on the
+`dss.DashboardConfig` MDMS master (the tenant-level dashboard config record introduced by #1258
+and extended by #1272 — this field composes additively with whatever else that record carries):
+
+| value | effect |
+|---|---|
+| `"enforced"` (or the field/record absent — the default) | today's behavior, exactly as the table above: HRMS department resolution, `department_code IN (...)`, fail-closed sentinel for unresolvable constrained employees |
+| `"disabled"` | the resolver skips HRMS department resolution ENTIRELY for employees: no department filter, no fail-closed sentinel. Tenant scoping (always applied) and citizen self-scope are untouched |
+
+**Fail-safe**: anything that is not an explicit `"disabled"` (case-insensitive) — missing
+module/record/field, a malformed value, an MDMS error — resolves to `"enforced"`. The lookup
+never widens scope on failure.
+
+The value is read at the tenant's **state root** (like the rest of the dss module) and cached
+in-memory for 5 minutes per state root, so a config flip takes effect within 5 minutes without
+a redeploy.
+
+**When to use it**: deployments whose complaint data carries no departments (#1280 —
+`ServiceDefs` entries without a `department`, so `department_code` is NULL on every fact row).
+Under `"enforced"`, every department-scoped officer there sees zero rows on every tile; under
+`"disabled"` they see the tenant's real numbers.
+
+**Warning — this widens data visibility**: with `"disabled"`, EVERY employee on the tenant sees
+the tenant-wide aggregates (equivalent to holding a `TENANT_WIDE_ROLES` role for Layer 1). Treat
+it as a temporary bridge until department enrichment lands in the complaint data, then flip back
+to `"enforced"`.
+
+Seed note: the `DashboardConfig` seed file (`ansible/nairobi-mdms/mdms/dss/DashboardConfig.json`)
+lives on the #1258/#1272 branches, not this one; add `"departmentScoping": "enforced"` to that
+record whichever merges first — the master's schema is additive/open, and absence already means
+enforced.
+
 Operator consequences:
 
 - A department-scoped supervisor's dashboard (all tiles, and the filter option lists) shows
@@ -144,11 +178,11 @@ emits `scope_incomplete`, which currently falls through to the raw-code default 
 | role R sees only its own department's numbers | give the user an HRMS assignment with that department; keep R out of `TENANT_WIDE_ROLES` | HRMS + (code constant, deploy) |
 | role R sees the whole tenant | grant one of the `TENANT_WIDE_ROLES` (e.g. `PGR_SUPERVISOR`) | HRMS/user roles |
 | anonymous/public page shows KPI X | add `"PUBLIC"` to X's `visibleTo` | `dss.KpiDefinition` (MDMS) |
-| role R can *open the dashboard view at all* (home card, deep-link route) | add R to `DASHBOARD_ROLES` (FE gate) **and** a `Dashboard` `tenant.citymodule` row (home card) — **a different system entirely** | `70-esbuild-embedding.md` §4, `30-view-access.md` |
+| role R can *open the dashboard view at all* (home card, deep-link route) | add R to `dss.DashboardConfig` `allowedRoles` (MDMS; the FE falls back to its built-in `DASHBOARD_ROLES` when the record is absent) **and** a `Dashboard` `tenant.citymodule` row (home card) — **a different system entirely** | `70-esbuild-embedding.md` §4, `30-view-access.md` |
 | role R gets a *sidebar* entry for the dashboard | ACCESSCONTROL actions/roleactions | `30-view-access.md` §2 (note the live bomet sidebar outage, `80-live-bomet-state.md` §5) |
 
 The last rows are the classic confusion: `visibleTo`/packs govern *what renders inside* the
-dashboard; whether the user can *navigate to* it is a different stack — the FE `DASHBOARD_ROLES`
-gate + home card + always-on deep-link route (`70-esbuild-embedding.md`), plus the optional
+dashboard; whether the user can *navigate to* it is a different stack — the FE gate resolved from
+`dss.DashboardConfig` + home card + always-on deep-link route (`70-esbuild-embedding.md`), plus the optional
 digit-ui sidebar access-control surface (`30-view-access.md`). Three independent gates; align all
 that apply.

@@ -167,9 +167,17 @@ function PasswordInput({ id, value, onChange, autoComplete, invalid }) {
   );
 }
 
-const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased }) => {
-  const { data: cities, isLoading } = Digit.Hooks.useTenants();
+const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }) => {
+  const { data: hookCities, isLoading: isHookCitiesLoading } = Digit.Hooks.useTenants();
   const { data: storeData, isLoading: isStoreLoading } = Digit.Hooks.useStore.getInitData();
+  const cities = appTenants?.length
+    ? appTenants
+    : storeData?.tenants?.length
+      ? storeData.tenants
+      : hookCities;
+  // Only gate on the hooks while no city list has resolved yet — appTenants
+  // (or already-fetched store tenants) should render without a page loader.
+  const isLoading = !cities?.length && (isHookCitiesLoading || isStoreLoading);
   const [user, setUser] = useState(null);
   const [showToast, setShowToast] = useState(null);
   const [disable, setDisable] = useState(false);
@@ -323,7 +331,7 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased }) => {
 
   const onForgotPassword = () => history.push(`/${window?.contextPath}/employee/user/forgot-password`);
 
-  if (isLoading || isStoreLoading) {
+  if (isLoading) {
     return <Loader page={true} variant="PageLoader" />;
   }
 

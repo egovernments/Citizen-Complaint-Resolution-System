@@ -602,6 +602,40 @@
         regexp: '^(\s+)DEFAULT_TENANT_ID: pg$'
         replace: '\1DEFAULT_TENANT_ID: {{ state_root }}'
 
+    # egov-user's OWN mobile-number-validation fallback (Spring env vars,
+    # baked into the image's application.properties as India's +91 /
+    # 10-digit regex). Distinct from the MDMS common-masters
+    # .MobileNumberValidation config that mcp-bootstrap seeds later from
+    # this same core_mobile_configs — that MDMS config only governs
+    # UI-driven, MDMS-aware validation. egov-user itself falls back to
+    # THIS env var whenever a request doesn't carry a country code (e.g.
+    # a direct /user/citizen/_create call that bypasses the UI), so
+    # without this rewrite every tenant silently validates against India's
+    # format regardless of its actual mobileNumberRegex/countryCode. No
+    # bootstrap-order dependency here (unlike STATE_LEVEL_TENANT_ID above),
+    # so this runs pre-boot alongside the other tenant-shaped literals.
+    # Same re.sub()-as-replacement-template hazard as the REGEX task below —
+    # double any backslashes in countryCode before it reaches `replace:`.
+    # A backslash in a country code is unlikely in practice, but the fix is
+    # free, so apply it here too for consistency.
+    - name: Set EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE (egov-user) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: ''\+91''$'
+        replace: '\1EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: ''{{ core_mobile_configs.countryCode | default(''+91'') | replace(''\\'', ''\\\\'') }}'''
+
+    # The `replace:` value below is fed straight into Python's re.sub() as
+    # the replacement string, which treats backslash specially (\1, \g<...>
+    # are backreferences; any other \<letter> — e.g. a tenant's regex using
+    # \d or \w shorthand instead of [0-9]/[A-Za-z0-9_] — raises "bad escape").
+    # Double every backslash in the tenant's mobileNumberRegex first so it
+    # survives re.sub() and lands in the compose file unchanged.
+    - name: Set EGOV_MOBILE_VALIDATION_DEFAULT_REGEX (egov-user) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: ''\^\[6-9\]\[0-9\]\{9\}\$''$'
+        replace: '\1EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: ''{{ core_mobile_configs.mobileNumberRegex | default(''^[6-9][0-9]{9}$'') | replace(''\\'', ''\\\\'') }}'''
+
     # ==================== Publish digit-mcp image ====================
     # digit-mcp ships from the same registry as every other DIGIT image
     # ({{ docker_registry }}/digit-mcp:latest). Compose `pull` picks it
@@ -1056,10 +1090,13 @@
         - digit_ui_mode == "static"
         - (digit_ui_bundle_image | default('')) | length > 0
 
-    - name: "digit-ui mode=static — install Node 20 if missing (esbuild.build.js needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Node 20 + npm for the on-host esbuild build. esbuild.build.js needs
+    # Node 20 + npm; see tasks/ensure-node20.yml for why apt's nodejs isn't
+    # enough on Ubuntu (Node 18, no npm) and how the version gate works.
+    - name: "digit-ui mode=static — ensure Node 20 + npm (NodeSource) for on-host build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "digit-ui static"
       when:
         - digit_ui_mode == "static"
         - ansible_system != "Darwin"
@@ -1073,15 +1110,27 @@
         # node_modules is stale and esbuild.build.js fails to resolve.
         # Re-run if package.json or package-lock.json is newer than the
         # node_modules root, or if node_modules doesn't exist at all.
+        #
+        # Fail LOUD: this block previously had no error handling, so a
+        # missing npm (Ubuntu apt nodejs ships no npm) or a failed install
+        # still echoed "installed" and reported success — the real error
+        # only surfaced one task later as a confusing "Cannot find module
+        # esbuild". Detect a broken environment here, at the right task.
+        # -e so a failed `cd` aborts instead of running the npm checks (and
+        # echoing a false "skipped"/"installed") in the wrong directory.
+        set -euo pipefail
         cd /opt/digit-ui-esbuild
+        command -v npm >/dev/null || { echo "ERROR: npm not on PATH (apt nodejs ships no npm on Ubuntu; NodeSource task above should have fixed this)"; exit 1; }
         if [ ! -d node_modules ] \
            || [ package.json -nt node_modules ] \
            || [ package-lock.json -nt node_modules ]; then
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps || { echo "ERROR: npm install failed"; exit 1; }
           echo installed
         else
           echo skipped
         fi
+      args:
+        executable: /bin/bash
       register: npm_install
       changed_when: npm_install.stdout == "installed"
       when:
@@ -1195,10 +1244,11 @@
         force: true
       when: enable_digit_ui_v2 | default(false)
 
-    - name: "digit-ui-v2 — install Node 20 if missing (Vite build needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Node 20 + npm for the Vite build (see tasks/ensure-node20.yml).
+    - name: "digit-ui-v2 — ensure Node 20 + npm (NodeSource) for Vite build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "digit-ui-v2"
       when:
         - enable_digit_ui_v2 | default(false)
         - ansible_system != "Darwin"
@@ -1589,6 +1639,11 @@
       # otherwise → the code default (public Overpass) applies.
       environment:
         VITE_OVERPASS_URL: "{{ '/overpass/api/interpreter' if (enable_overpass | default(false)) else '' }}"
+        # Root (state) tenant baked into the build so the standalone configurator
+        # (which has no digit-ui window.globalConfigs) can hint the login tenant
+        # placeholder + pre-login default from the real deployment tenant. A city
+        # code collapses to its root segment at runtime.
+        VITE_STATE_TENANT_ID: "{{ state_tenant_id | default('') }}"
       register: configurator_build_run
       changed_when: true
       when:
@@ -1751,10 +1806,11 @@
     # nginx_preserve_vhost (e.g. Bomet) the template is NOT rendered, so wire
     # the blocks from tests/integration-tests/deploy/nginx-integration-tests.conf
     # by hand there.
-    - name: "integration-tests — install Node 20 if missing (Vite build needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Node 20 + npm for the Vite build (see tasks/ensure-node20.yml).
+    - name: "integration-tests — ensure Node 20 + npm (NodeSource) for Vite build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "integration-tests"
       when:
         - enable_integration_tests | default(false)
         - ansible_system != "Darwin"

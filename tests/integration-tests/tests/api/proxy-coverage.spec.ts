@@ -11,7 +11,7 @@
  * 3. No API calls are blocked or dropped by the proxy
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, TENANT, ROOT_TENANT, KC_REALM, KC_CLIENT_ID, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { BASE_URL, TENANT, ROOT_TENANT, KC_BASE, KC_REALM, KC_CLIENT_ID, ADMIN_USER, ADMIN_PASS } from '../utils/env';
 import { getDigitToken, loginViaApi } from '../utils/auth';
 
 /**
@@ -19,10 +19,18 @@ import { getDigitToken, loginViaApi } from '../utils/auth';
  * KC is an optional SSO overlay; when it isn't deployed the realm discovery
  * endpoint 404s/503s. The KC-specific tests below self-skip in that case
  * (deployment gap, not a product bug) rather than fail red.
+ *
+ * Must use KC_BASE (= `${BASE_URL}/auth`), NOT BASE_URL: Keycloak is served
+ * exclusively under the /auth prefix (nginx has `location /auth/` and no
+ * `location /realms/`; KC_HOSTNAME is set to https://<domain>/auth). Probing
+ * `${BASE_URL}/realms/...` always 404s even when KC is healthy, so these tests
+ * self-skipped with a FALSE "KC overlay not deployed here" — while
+ * tests/keycloak/kc-api.spec.ts happily passed against `${BASE_URL}/auth/realms/<realm>`.
+ * That stale probe hid the KC proxy coverage entirely.
  */
 async function kcReachable(): Promise<boolean> {
   try {
-    const r = await fetch(`${BASE_URL}/realms/${KC_REALM}/.well-known/openid-configuration`);
+    const r = await fetch(`${KC_BASE}/realms/${KC_REALM}/.well-known/openid-configuration`);
     return r.status === 200;
   } catch {
     return false;
@@ -274,8 +282,8 @@ test.describe('API Proxy Coverage', () => {
 
     // These endpoints go directly to Keycloak (not through proxy)
     const kcEndpoints = [
-      `${BASE_URL}/realms/${KC_REALM}/.well-known/openid-configuration`,
-      `${BASE_URL}/realms/${KC_REALM}/protocol/openid-connect/certs`,
+      `${KC_BASE}/realms/${KC_REALM}/.well-known/openid-configuration`,
+      `${KC_BASE}/realms/${KC_REALM}/protocol/openid-connect/certs`,
     ];
 
     for (const url of kcEndpoints) {
@@ -323,20 +331,20 @@ test.describe('API Proxy Coverage', () => {
 
 test.describe('Domain Configuration', () => {
   test('KC client has deployment domain in redirect URIs', {
-    tag: ['@area:keycloak', '@layer:api'],
+    tag: ['@area:keycloak', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
     test.skip(!(await kcReachable()), `Keycloak realm ${KC_REALM} discovery not reachable — KC overlay not deployed here.`);
     const deploymentDomain = new URL(BASE_URL).origin;
 
     // Check OIDC discovery to get the client registration info
     const discovery = await page.evaluate(
-      async ({ baseUrl, kcRealm }) => {
+      async ({ kcBase, kcRealm }) => {
         const resp = await fetch(
-          `${baseUrl}/realms/${kcRealm}/.well-known/openid-configuration`,
+          `${kcBase}/realms/${kcRealm}/.well-known/openid-configuration`,
         );
         return resp.json();
       },
-      { baseUrl: BASE_URL, kcRealm: KC_REALM },
+      { kcBase: KC_BASE, kcRealm: KC_REALM },
     );
 
     expect(discovery.issuer).toBeTruthy();
@@ -364,7 +372,7 @@ test.describe('Domain Configuration', () => {
   });
 
   test('KC CORS allows deployment domain', {
-    tag: ['@area:keycloak', '@layer:api'],
+    tag: ['@area:keycloak', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
     test.skip(!(await kcReachable()), `Keycloak realm ${KC_REALM} discovery not reachable — KC overlay not deployed here.`);
     await page.goto(`${BASE_URL}/digit-ui/citizen`, {
@@ -374,10 +382,10 @@ test.describe('Domain Configuration', () => {
 
     // Test that KC OIDC endpoint allows CORS from our domain
     const corsResult = await page.evaluate(
-      async ({ baseUrl, kcRealm }) => {
+      async ({ kcBase, kcRealm }) => {
         try {
           const resp = await fetch(
-            `${baseUrl}/realms/${kcRealm}/.well-known/openid-configuration`,
+            `${kcBase}/realms/${kcRealm}/.well-known/openid-configuration`,
             { mode: 'cors' },
           );
           return { ok: resp.ok, status: resp.status, corsBlocked: false };
@@ -385,7 +393,7 @@ test.describe('Domain Configuration', () => {
           return { ok: false, status: 0, corsBlocked: true };
         }
       },
-      { baseUrl: BASE_URL, kcRealm: KC_REALM },
+      { kcBase: KC_BASE, kcRealm: KC_REALM },
     );
 
     expect(

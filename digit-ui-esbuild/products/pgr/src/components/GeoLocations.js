@@ -164,7 +164,13 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     // the raw code rather than blank, and the label re-localizes on language
     // switch (i18n.language is in the dep list).
     const label = (code && trans(code)) || feature?.properties?.name || code;
-    if (label) layer.bindTooltip(label, { sticky: true, direction: "top", className: "ward-tooltip" });
+    // CCSD-1993: Leaflet bindTooltip renders HTML; label is tenant-controlled
+    // (boundary code / localization / GeoJSON name) — escape before binding.
+    if (label) {
+      const safeLabel = String(label).replace(/[&<>"']/g, (ch) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+      layer.bindTooltip(safeLabel, { sticky: true, direction: "top", className: "ward-tooltip" });
+    }
     layer.on({
       mouseover: () => { if (selectedWard !== code) setHoveredWard(code); },
       mouseout:  () => setHoveredWard((c) => (c === code ? null : c)),
@@ -388,14 +394,6 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const closeToast = () => {
     setShowToast(null);
   };
-
-  // Auto-dismiss the toast after a few seconds so location/geolocation messages
-  // (e.g. denied permission) don't linger indefinitely. See issue #883.
-  useEffect(() => {
-    if (!showToast) return;
-    const timer = setTimeout(() => setShowToast(null), 5000);
-    return () => clearTimeout(timer);
-  }, [showToast]);
 
   const clearSearch = () => {
     setSearchQuery("");
@@ -743,6 +741,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           label={showToast.label}
           onClose={closeToast}
           isDleteBtn={true}
+          autoDismiss={true}
         />
       )}
     </div>

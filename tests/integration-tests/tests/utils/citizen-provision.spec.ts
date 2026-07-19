@@ -10,7 +10,7 @@ import { provisionFreshCitizen } from './citizen-provision';
 import { getMobileValidationRule } from './mdms-mobile';
 import { TENANT } from './env';
 
-test('provisionFreshCitizen returns identity matching MDMS rule + working token', async () => {
+test('provisionFreshCitizen returns identity matching MDMS rule + working token', { tag: ['@persona:citizen'] }, async () => {
   const citizen = await provisionFreshCitizen();
 
   // Shape: every consumer needs these fields

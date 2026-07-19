@@ -87,6 +87,13 @@ footer_bw_logo_url: ""
 login_tenant_allowlist: []
 employee_module_denylist: []
 
+# Client-side dashboard render-lag instrumentation (#1110): the supervisor
+# dashboard POSTs OTLP metrics/logs to the same-origin /otel Kong route.
+# ON by default (the emitter self-mutes when the route is absent). This is
+# the deployed-box KILL SWITCH: set false in host_vars and re-render
+# globalConfigs.js (ansible/nightly) — no rebuild needed.
+dashboard_metrics_enabled: true
+
 # ──────────────────────────────────────────────────────────────────────
 # nginx vhost — feature flags + upstream ports
 # ──────────────────────────────────────────────────────────────────────
@@ -147,3 +154,15 @@ mcp_ref: main
 # at a fork.
 digit_ui_esbuild_repo: https://github.com/theflywheel/digit-ui-esbuild.git
 digit_ui_esbuild_branch: main
+
+# Prebuilt digit-ui bundle (static mode) — the ROBUST alternative to building
+# the SPA on-host. When set, the playbook pulls this image and extracts its
+# baked /var/web/digit-ui into build/, skipping the on-host node/npm/esbuild
+# build entirely (no Node-version / missing-npm fragility). The image below is
+# public and pulls off-VPC.
+#
+# Left commented so existing tenants keep their current on-host build. To make
+# the bundle the default for ALL tenants, uncomment this line; to opt in for a
+# single tenant, set digit_ui_bundle_image in that host_vars file (as pg.test
+# does). Set to "" in host_vars to force an on-host build even if this is on.
+# digit_ui_bundle_image: "ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop"

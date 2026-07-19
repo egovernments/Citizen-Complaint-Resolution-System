@@ -15,7 +15,7 @@
  * UI.
  */
 import { getDigitToken } from './auth';
-import { BASE_URL } from './env';
+import { BASE_URL, ROOT_TENANT } from './env';
 
 export interface MobileRule {
   prefix?: string;
@@ -33,9 +33,21 @@ const FALLBACK: MobileRule = {
   errorMessage: 'Please enter a valid 10-digit mobile number',
 };
 
-const ROOT = process.env.ROOT_TENANT || 'ke';
 const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
 const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'eGov@123';
+
+/**
+ * Root tenant, read at the USE SITE rather than module scope.
+ *
+ * Two reasons it can't be a module-scope `const ROOT = ROOT_TENANT`:
+ * profile.ts imports this module, so at import time env.ts's bindings are still
+ * in the CJS temporal dead zone and would capture `undefined`; and the previous
+ * `process.env.ROOT_TENANT || 'ke'` bypassed env.ts's profile fallback entirely,
+ * so an unpinned Mozambique run authenticated against `ke` and 400'd.
+ */
+function rootTenant(): string {
+  return ROOT_TENANT;
+}
 
 /**
  * Derive min/max digit counts from a mobile-number regex.
@@ -43,7 +55,7 @@ const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'eGov@123';
  * lengths produce a match. Falls back to {min:10, max:10} if the regex
  * is invalid or no length matches.
  */
-function deriveMobileLengths(regex: string): { min: number; max: number } {
+export function deriveMobileLengths(regex: string): { min: number; max: number } {
   let re: RegExp | null = null;
   try { re = new RegExp(regex); } catch { return { min: 10, max: 10 }; }
   let min = 16, max = 0;
@@ -64,7 +76,7 @@ function deriveMobileLengths(regex: string): { min: number; max: number } {
  * If the rule's regex starts with a character class like `^[17]` or
  * `^[6-9]`, extract the allowed starting digits from it.
  */
-function derivedStartingDigits(pattern: string): string[] | null {
+export function derivedStartingDigits(pattern: string): string[] | null {
   const m = pattern.match(/^\^?\[([0-9\-]+)\]/);
   if (!m) return null;
   const body = m[1];
@@ -94,7 +106,7 @@ function derivedStartingDigits(pattern: string): string[] | null {
  */
 export async function getMobileValidationRule(tenant: string): Promise<MobileRule> {
   try {
-    const token = await getDigitToken({ tenant: ROOT, username: ADMIN_USER, password: ADMIN_PASS });
+    const token = await getDigitToken({ tenant: rootTenant(), username: ADMIN_USER, password: ADMIN_PASS });
     const ri = {
       apiId: 'Rainmaker', ver: '1.0', ts: Date.now(),
       msgId: `${Date.now()}|en_IN`, authToken: token.access_token,
