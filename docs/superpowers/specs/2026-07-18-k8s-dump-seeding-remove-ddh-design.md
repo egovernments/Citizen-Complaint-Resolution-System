@@ -66,6 +66,11 @@ In Helm, migrations run in each service's separate `dbMigration` initContainer (
 
 Implementation task: enumerate every service with `dbMigration.enabled: true`, list its `schemaTable`, and cross-check against the Flyway history table names the dump carries. Align them so each initContainer sees migrations as applied and no-ops — by adjusting how the dump is generated and/or the per-service `schemaTable`. Known divergent case to verify first: `egov-url-shortening` (`schemaTable: egov-url-shortening_schema`).
 
+> **CRITICAL — the dump and the `*-db` images must be a matched set (validated live 2026-07-19).**
+> `schemaTable` alignment only makes Flyway no-op if the dump's recorded history has the **same checksums** as the migration files in the deploy's `*-db` Flyway images. A live k3s deploy proved that the checked-in `full-dump.sql` was generated from a **different build** than the `deploy-as-code` `*-db` images: same migration version numbers, different checksums (e.g. `V20180731215512` = `1357995898` in the dump vs `1212019426` in the k3s `egov-user-db` image), and each side ships migrations the other lacks (incl. seed-data migrations). Flyway's pre-migrate `validate` then fails (`checksum mismatch` / `applied migration not resolved locally`), or with validate off it tries to *apply* the image's extra seed migrations and hits data conflicts. Compose's fast-path works with this same dump **only because it runs the migration images that produced the dump.**
+>
+> **Therefore `schemaTable` alignment (this task) is necessary but not sufficient. `full-dump.sql` MUST be regenerated from the `deploy-as-code` `*-db` images** (see the new "Dump generation" task) — or those images pinned to the dump's origin build — so the checksums match. Only then does per-service Flyway validate cleanly and no-op, exactly like compose. (Disabling per-service Flyway entirely is a fallback — approach B — not the chosen fix.)
+
 ### 4. Retire DDH (staged)
 
 - In `charts/urban/urban-helmfile.yaml`, set the `default-data-handler` release to `installed: false`.
@@ -85,8 +90,27 @@ Implementation task: enumerate every service with `dbMigration.enabled: true`, l
 - Full deletion of the DDH chart/files (deferred to a later staged step).
 - Migrating the external managed DB to the in-cluster `postgresql` chart.
 
+## Hard requirement (approach A) — regenerate the dump from the deploy-as-code images
+
+**`full-dump.sql` must be a matched set with the `deploy-as-code` `*-db` Flyway images** (see the CRITICAL note under §3). This is no longer optional. Procedure to produce the golden dump:
+
+1. Stand up a scratch DB seeded **by the `deploy-as-code` images themselves**: deploy with per-service Flyway **enabled** (no dump) so each `*-db` image runs its own migrations (main + seed) → the Flyway history now carries *these images'* checksums.
+2. Seed tenant/MDMS/localization/DataSecurity for the target tenant **once** (via DDH or MCP — the mechanism being retired; this is its final job: producing the golden dump). Use a clean, PII-free reference tenant.
+3. `pg_dump` the result → new `local-setup/db/full-dump.sql`.
+4. Re-run whenever any service's schema/seed migrations change (the dump and images are version-locked from here on). Ideally automate in CI alongside the `*-db` image builds so they can never drift.
+
+After this, per-service Flyway (with the §3 `schemaTable` alignment) validates cleanly and no-ops — exactly like compose.
+
+## Config that must be aligned to the dump (learned from the live deploy)
+
+The dump is cryptographically/tenant bound to its origin. A deploy consuming it must match — compose's fast-path pins these; `deploy-as-code`'s generic defaults do not:
+
+- **enc-service master secret** must equal the values the dump's `eg_enc_*_keys` were generated with (fast-path dump: `MASTER_PASSWORD=asd@#$@$!132123`, `MASTER_SALT=qweasdzx`, `MASTER_INITIALVECTOR=qweasdzxqwea`). Default `demo` → `AEADBadTagException` → all auth/decryption dead.
+- **State tenant** (`egov-config` `state-level-tenant-id`, `host-map`) must match the dump's tenant (fast-path dump: `pg`, with `pg.citest`).
+- **Chart memory limits** (512Mi default) OOM the JVM services on K8S; raise to ~1Gi (host RAM was not the constraint).
+
 ## Open items for the plan
 
 - Exact sentinel table/query for the empty-DB probe (rationale settled — see "Why an explicit sentinel is needed here"; still need to pin the precise query and its handling of the half-provisioned edge case).
-- Whether the `db-dump` image builds in the same CI pipeline/workflow as the service db images.
+- Whether the `db-dump` image builds in the same CI pipeline/workflow as the service db images (and, per above, whether dump *regeneration* is wired into that same pipeline so dump⇄image checksums can't drift).
 - Full per-service `schemaTable` ↔ dump-history-table cross-check list.
