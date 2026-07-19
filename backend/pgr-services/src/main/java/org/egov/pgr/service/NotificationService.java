@@ -909,6 +909,27 @@ public class NotificationService {
                             audience, request.getService().getServiceRequestId());
                     continue;
                 }
+                // WHATSAPP: business-initiated messages must reference an APPROVED provider template
+                // (Twilio Content SID) — free-form WhatsApp is rejected by Twilio (63016). Resolve it
+                // once per (audience, channel) match. If none/unapproved we still EMIT the event with a
+                // null templateId: the bridge persists an auditable SKIPPED/NB_TEMPLATE_NOT_APPROVED row
+                // and never falls back to a free-form WhatsApp send. Dropping the event here (an earlier
+                // `continue`) made the skip invisible — no nb_dispatch_log row. SMS/EMAIL are unaffected.
+                String providerTemplateId = null;
+                Map<String, Object> contentVariables = null;
+                if ("WHATSAPP".equalsIgnoreCase(channel)) {
+                    Map<String, Object> pt = resolveProviderTemplate(tenantId, "twilio",
+                            audience, action, toState, locale);
+                    if (pt == null) {
+                        log.info("No approved WhatsApp provider-template for {}.{}.{}.{} on complaint {}; "
+                                + "emitting for an auditable bridge-side SKIP (NB_TEMPLATE_NOT_APPROVED)",
+                                audience, action, toState, locale,
+                                request.getService().getServiceRequestId());
+                    } else {
+                        providerTemplateId = String.valueOf(pt.get("templateId"));
+                        contentVariables = buildContentVariables(pt.get("variables"), values);
+                    }
+                }
                 String body = null;
                 String subject = null;
                 boolean rendered = false;
@@ -944,7 +965,8 @@ public class NotificationService {
                             rendered = true;
                         }
                         if (body == null) break; // template missing for this (audience,channel): skip whole row
-                        publishRenderedEvent(request, recipient, channel, eventName, action, toState, body, subject);
+                        publishRenderedEvent(request, recipient, channel, eventName, action, toState, body, subject,
+                                providerTemplateId, contentVariables);
                         emitted.add(dedupeKey);   // only a successful publish consumes the key
                     } catch (Exception ex) {
                         log.error("Failed to render/publish {} for audience {} on complaint {}",
@@ -1122,27 +1144,42 @@ public class NotificationService {
         org.egov.pgr.web.models.Service service = request.getService();
         String tenantId = service.getTenantId();
         RequestInfo ri = request.getRequestInfo();
+        // Base placeholders that need NO localization: set these FIRST and independently, so a
+        // localization-service outage cannot blank them. (Previously getLocalizationMessages was the
+        // first call inside this try; when it threw — e.g. a downstream mis-instrumented JDBC driver
+        // 400 — id/date/complaint_type were all left unset, and the WhatsApp Content-SID send then
+        // shipped empty contentVariables → Twilio 21656.)
         try {
-            String loc = notificationUtil.getLocalizationMessages(tenantId, ri, PGR_MODULE);
             put(v, "id", service.getServiceRequestId());
-            if (StringUtils.hasText(service.getServiceCode())) {
-                String ct = notificationUtil.getCustomizedMsgForPlaceholder(loc,
-                        "pgr.complaint.category." + service.getServiceCode());
-                // Fall back to the raw service code so a missing localization key never ships a
-                // literal {complaint_type} to the recipient.
-                put(v, "complaint_type", StringUtils.hasText(ct) ? ct : service.getServiceCode());
-            }
-            if (StringUtils.hasText(service.getApplicationStatus())) {
-                String st = notificationUtil.getCustomizedMsgForPlaceholder(loc,
-                        "CS_COMMON_" + service.getApplicationStatus());
-                put(v, "status", StringUtils.hasText(st) ? st : service.getApplicationStatus());
-            }
             put(v, "date", formatCreatedDate(service));
+            // complaint_type falls back to the raw service code; localized label enriched below.
+            if (StringUtils.hasText(service.getServiceCode()))
+                put(v, "complaint_type", service.getServiceCode());
+            if (StringUtils.hasText(service.getApplicationStatus()))
+                put(v, "status", service.getApplicationStatus());
             if (request.getWorkflow() != null) put(v, "additional_comments", request.getWorkflow().getComments());
             if (service.getRating() != null) put(v, "rating", service.getRating().toString());
             if (service.getCitizen() != null) put(v, "citizen_name", service.getCitizen().getName());
         } catch (Exception e) {
             log.warn("Failed building base placeholders for {}", service.getServiceRequestId(), e);
+        }
+        // Localized enrichment (nicer complaint_type / status labels). Isolated: a localization
+        // outage must NOT abort the base placeholders above.
+        try {
+            String loc = notificationUtil.getLocalizationMessages(tenantId, ri, PGR_MODULE);
+            if (StringUtils.hasText(service.getServiceCode())) {
+                String ct = notificationUtil.getCustomizedMsgForPlaceholder(loc,
+                        "pgr.complaint.category." + service.getServiceCode());
+                if (StringUtils.hasText(ct)) put(v, "complaint_type", ct);
+            }
+            if (StringUtils.hasText(service.getApplicationStatus())) {
+                String st = notificationUtil.getCustomizedMsgForPlaceholder(loc,
+                        "CS_COMMON_" + service.getApplicationStatus());
+                if (StringUtils.hasText(st)) put(v, "status", st);
+            }
+        } catch (Exception e) {
+            log.warn("Localized placeholder enrichment unavailable for {}: {}",
+                    service.getServiceRequestId(), e.getMessage());
         }
         // {download_link} is isolated in its own try: it makes an HTTP call to the url-shortening
         // service, and an outage there (e.g. a mis-instrumented JDBC driver returning 400) must NOT
@@ -1201,7 +1238,8 @@ public class NotificationService {
     }
 
     private void publishRenderedEvent(ServiceRequest request, ResolvedRecipient r, String channel,
-                                      String eventName, String action, String toState, String body, String subject) {
+                                      String eventName, String action, String toState, String body, String subject,
+                                      String providerTemplateId, Map<String, Object> contentVariables) {
         org.egov.pgr.web.models.Service service = request.getService();
         String tenantId = service.getTenantId();
         String subKey = r.subscriberKey();
@@ -1244,10 +1282,67 @@ public class NotificationService {
         event.put("subject", subject);   // EMAIL subject (rendered); null for SMS/WHATSAPP
         event.put("transactionId", transactionId);
         event.put("data", data);
+        // Provider-template (Twilio WhatsApp Content SID) delivery: carried only for WHATSAPP with an
+        // approved template. When present, novu-bridge sends the ContentSid + positional variables via
+        // a Twilio provider override instead of the free-form renderedBody.
+        if (StringUtils.hasText(providerTemplateId)) {
+            event.put("templateId", providerTemplateId);
+            if (contentVariables != null && !contentVariables.isEmpty()) {
+                event.put("contentVariables", contentVariables);
+            }
+        }
 
         producer.push(tenantId, config.getComplaintsDomainEventsTopic(), event);
-        log.info("Published config-driven {} notification: complaint={} subscriber={} txn={}",
-                channel, service.getServiceRequestId(), maskPii(subscriberId), maskPii(transactionId));
+        log.info("Published config-driven {} notification: complaint={} subscriber={} txn={} template={}",
+                channel, service.getServiceRequestId(), maskPii(subscriberId), maskPii(transactionId),
+                StringUtils.hasText(providerTemplateId) ? providerTemplateId : "free-form");
+    }
+
+    /**
+     * Resolve the approved {@code NotificationProviderTemplate} row (Twilio WhatsApp Content SID)
+     * for a routing key, or null if none is approved+active. Keyed by
+     * (provider, WHATSAPP, audience, action, toState, locale). Matching is case-insensitive.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> resolveProviderTemplate(String tenantId, String provider, String audience,
+                                                        String action, String toState, String locale) {
+        List<Object> rows = mdmsUtils.getNotificationProviderTemplates(tenantId);
+        if (CollectionUtils.isEmpty(rows)) return null;
+        for (Object o : rows) {
+            if (!(o instanceof Map)) continue;
+            Map<String, Object> r = (Map<String, Object>) o;
+            Object active = r.getOrDefault("active", Boolean.TRUE);
+            if (active instanceof Boolean && !((Boolean) active)) continue;
+            if (!"approved".equalsIgnoreCase(String.valueOf(r.get("approvalStatus")))) continue;
+            if (!provider.equalsIgnoreCase(String.valueOf(r.get("provider")))) continue;
+            if (!"WHATSAPP".equalsIgnoreCase(String.valueOf(r.get("channel")))) continue;
+            if (!audience.equalsIgnoreCase(String.valueOf(r.get("audience")))) continue;
+            if (!action.equalsIgnoreCase(String.valueOf(r.get("action")))) continue;
+            if (!toState.equalsIgnoreCase(String.valueOf(r.get("toState")))) continue;
+            if (!locale.equalsIgnoreCase(String.valueOf(r.get("locale")))) continue;
+            Object templateId = r.get("templateId");
+            if (templateId == null || !StringUtils.hasText(templateId.toString())) continue;
+            return r;
+        }
+        return null;
+    }
+
+    /**
+     * Build Twilio positional {@code contentVariables} ({@code {"1":.., "2":..}}) from the provider
+     * template's ORDERED {@code variables} (our placeholder names) resolved against the rendered
+     * placeholder {@code values} map. A missing placeholder becomes an empty string (never null).
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildContentVariables(Object variablesObj, Map<String, String> values) {
+        if (!(variablesObj instanceof List)) return null;
+        List<Object> variables = (List<Object>) variablesObj;
+        Map<String, Object> cv = new LinkedHashMap<>();
+        for (int i = 0; i < variables.size(); i++) {
+            Object name = variables.get(i);
+            String val = name == null ? null : values.get(String.valueOf(name));
+            cv.put(String.valueOf(i + 1), val == null ? "" : val);
+        }
+        return cv;
     }
 
     /**

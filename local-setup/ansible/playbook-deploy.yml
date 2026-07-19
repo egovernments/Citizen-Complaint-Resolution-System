@@ -1582,6 +1582,11 @@
       # otherwise → the code default (public Overpass) applies.
       environment:
         VITE_OVERPASS_URL: "{{ '/overpass/api/interpreter' if (enable_overpass | default(false)) else '' }}"
+        # Root (state) tenant baked into the build so the standalone configurator
+        # (which has no digit-ui window.globalConfigs) can hint the login tenant
+        # placeholder + pre-login default from the real deployment tenant. A city
+        # code collapses to its root segment at runtime.
+        VITE_STATE_TENANT_ID: "{{ state_tenant_id | default('') }}"
       register: configurator_build_run
       changed_when: true
       when:

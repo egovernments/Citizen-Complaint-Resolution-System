@@ -10,6 +10,7 @@ import CardUpdatedStamp from "./components/CardUpdatedStamp";
 import ResizeGrip from "./components/ResizeGrip";
 import GroupByLevelSelect, { levelDisplayLabel } from "./components/GroupByLevelSelect";
 import SubtleScroll from "./components/SubtleScroll";
+import TypeFilterIgnoredNote, { typeFilterIgnored } from "./components/TypeFilterIgnoredNote";
 import {
   VIZ_TYPE,
   SHARED_CHROME,
@@ -20,6 +21,8 @@ import DashboardLogin, {
   hasDashboardSession,
   clearDashboardSession,
 } from "./components/DashboardLogin";
+import { useDashboardConfig } from "../useDashboardConfig";
+import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberFormat";
 
 import useDashboardT from "./i18n/useDashboardT";
 import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
@@ -29,6 +32,7 @@ import { useCatalog } from "./hooks/useCatalog";
 import { useCatalogLayout, getDroppingItemForKpi, defaultSizeForKpi } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
+import * as dashboardMetrics from "./services/dashboardMetrics";
 import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM, DROPPING_ITEM_ID } from "./constants/layoutConfig";
 import {
   isCardKind,
@@ -143,6 +147,13 @@ const AdminDashboard = ({ embedded = false }) => {
   // session and owns sign-out, so the standalone login gate is skipped.
   const [authed] = useState(() => embedded || hasDashboardSession());
 
+  // Per-LOCALE number-format mask (dss.DashboardConfig.numberFormat, #1213 /
+  // #1272). Primed synchronously so the first painted frame is already masked.
+  const { language } = useDashboardT();
+  const { config: dashboardConfig, loading: dashboardConfigLoading } =
+    useDashboardConfig();
+  setNumberFormatMask(resolveNumberFormatMask(dashboardConfig?.numberFormat, language));
+
   const handleLogin = useCallback(() => {
     window.location.reload();
   }, []);
@@ -153,6 +164,9 @@ const AdminDashboard = ({ embedded = false }) => {
   }, []);
 
   if (!authed) return <DashboardLogin onLogin={handleLogin} />;
+  if (dashboardConfigLoading) {
+    return <div className="kpi-tile kpi-tile--loading"><div className="kpi-tile__skeleton" /></div>;
+  }
   return <AdminDashboardInner embedded={embedded} onSignOut={embedded ? undefined : handleSignOut} />;
 };
 
@@ -173,6 +187,19 @@ const AdminDashboard = ({ embedded = false }) => {
  * store so it can never be mistaken for (or grow into) one.
  */
 const HIER_OVERRIDES_STORAGE_KEY = "ccrs.dashboard.hier-level-overrides.v1";
+
+/**
+ * Errored-widget count for dashboard.error_widgets.count (#1110): companion
+ * refs (__prior/__series/__pins) collapse to their base kpiId so a tile whose
+ * base AND companion queries failed still counts as ONE broken widget; a
+ * whole-batch failure (`__batch`) counts every laid-out tile.
+ */
+function countErrorWidgets(errors, tileCount) {
+  const keys = Object.keys(errors || {});
+  if (!keys.length) return 0;
+  if (keys.includes("__batch")) return tileCount;
+  return new Set(keys.map((k) => k.replace(/__(prior|series|pins)$/, ""))).size;
+}
 
 function readHierOverrides() {
   try {
@@ -311,6 +338,12 @@ function seriesToPoints(rows, viz, valueKey, columns) {
 /* -------------------------------------------------------------------------- */
 
 const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
+  // Render-lag instrumentation (#1110): begin the load SYNCHRONOUSLY at mount.
+  useState(() => {
+    dashboardMetrics.beginLoad();
+    return null;
+  });
+  useEffect(() => () => dashboardMetrics.flush("unmount"), []);
   const { t, language, i18nTick } = useDashboardT();
   const { filters, setFilter, clearFilters, applyFilterOptions } =
     useDashboardFilters();
@@ -639,6 +672,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     }
     const refs = buildRefs(tiles, kpis, filters, hierOverrides);
     const reqId = ++reqIdRef.current;
+    dashboardMetrics.markBatchStart(reqId);
     setBatch((prev) => ({ ...prev, loading: true }));
 
     runKpiBatch(refs, tenantId)
@@ -650,6 +684,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           errors: res?.errors || null,
           partial: Boolean(res?.partial),
         });
+        dashboardMetrics.markAllWidgetsReady(
+          countErrorWidgets(res?.errors, tiles.length),
+          reqId
+        );
       })
       .catch((err) => {
         if (reqId !== reqIdRef.current) return;
@@ -659,6 +697,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           errors: { __batch: err?.message || t("DASHBOARD_COMMON_BATCH_FAILED", "Batch query failed") },
           partial: true,
         });
+        dashboardMetrics.markAllWidgetsReady(tiles.length, reqId);
       });
     // refsKey captures both the tile set and the resolved params.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -760,6 +799,21 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
 
   const showEmpty = !catalogLoading && pack && layout.length === 0;
 
+  const handleFilterChange = useCallback(
+    (...args) => {
+      dashboardMetrics.markInteraction("filter");
+      return setFilter(...args);
+    },
+    [setFilter]
+  );
+  const handleClearFilters = useCallback(
+    (...args) => {
+      dashboardMetrics.markInteraction("filter");
+      return clearFilters(...args);
+    },
+    [clearFilters]
+  );
+
   return (
     <DashboardLayout
       embedded={embedded}
@@ -773,8 +827,8 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       onSearchQueryChange={setSearchQuery}
       onExport={handleExport}
       filters={filters}
-      onFilterChange={setFilter}
-      onClearFilters={clearFilters}
+      onFilterChange={handleFilterChange}
+      onClearFilters={handleClearFilters}
       filterOptions={filterOptions}
       filterOptionsLoading={filterOptionsLoading}
       kpiCardData={{}}
@@ -842,6 +896,9 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
             const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
+            const ignoredNote = typeFilterIgnored(batch.results?.[item.i]) ? (
+              <TypeFilterIgnoredNote />
+            ) : null;
             const removeBtn = (
               <WidgetRemoveButton
                 label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${resolveTitle(kpis[item.i]) || item.i}`}
@@ -860,6 +917,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                 >
                   {removeBtn}
                   {renderTile(item.i)}
+                  {ignoredNote}
                   <CardUpdatedStamp label={lastUpdatedLabel} />
                 </div>
               );
@@ -921,6 +979,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                 >
                   {renderTile(item.i, groupBy.info)}
                 </div>
+                {ignoredNote}
                 <CardUpdatedStamp label={lastUpdatedLabel} />
                 <ResizeGrip />
               </section>

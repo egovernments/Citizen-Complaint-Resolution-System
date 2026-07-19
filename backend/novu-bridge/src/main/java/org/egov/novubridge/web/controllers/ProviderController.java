@@ -62,13 +62,29 @@ public class ProviderController {
     private final NovuClient novuClient;
     private final NovuProviderStrategyFactory strategyFactory;
     private final DispatchLogRepository dispatchLogRepository;
+    private final org.egov.novubridge.service.TwilioTemplateSyncService twilioTemplateSyncService;
 
     public ProviderController(NovuClient novuClient,
                               NovuProviderStrategyFactory strategyFactory,
-                              DispatchLogRepository dispatchLogRepository) {
+                              DispatchLogRepository dispatchLogRepository,
+                              org.egov.novubridge.service.TwilioTemplateSyncService twilioTemplateSyncService) {
         this.novuClient = novuClient;
         this.strategyFactory = strategyFactory;
         this.dispatchLogRepository = dispatchLogRepository;
+        this.twilioTemplateSyncService = twilioTemplateSyncService;
+    }
+
+    // ---- GET /providers/twilio-templates ---------------------------------
+
+    /**
+     * §4 sync: pull the linked Twilio account's approved WhatsApp Content templates
+     * and auto-match them to PGR routing keys. Returns {@code {matched:[…proposed
+     * NotificationProviderTemplate rows…], unmatched:[…diagnostics…], total}} — the
+     * configurator persists the matched rows to MDMS. Never returns credentials.
+     */
+    @GetMapping("/providers/twilio-templates")
+    public ResponseEntity<Map<String, Object>> twilioTemplates() {
+        return ResponseEntity.ok(twilioTemplateSyncService.syncWhatsappTemplates());
     }
 
     // ---- POST /providers -------------------------------------------------

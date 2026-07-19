@@ -297,7 +297,19 @@ The registry is read-only — push operations return `405 Method Not Allowed`.
 
 ### What the Ansible playbook deploys
 
-The playbook uses `docker-compose.registry.yml` which includes:
+The playbook deploys `docker-compose.egov-digit.yaml` plus overlays — **not**
+`docker-compose.registry.yml`, which it never references. The exact stack is built in
+`ansible/playbook-deploy.yml` ("Compute compose -f flags"):
+
+```
+-f docker-compose.egov-digit.yaml
+[-f docker-compose.fast-path.yml]          # when db_fast_path is set
+-f docker-compose.migrations.yml
+-f docker-compose.migrations.ansible.yml
+[-f docker-compose.<tenant>.yml]           # when a per-tenant overlay exists
+```
+
+Between them these include:
 
 | Category | Services |
 |----------|----------|
@@ -316,7 +328,10 @@ local-setup/
 ├── ansible/
 │   ├── playbook-deploy.yml         # Main deployment playbook
 │   └── inventory.ini.example       # Template inventory
-├── docker-compose.registry.yml     # Compose with public registry images
+├── docker-compose.egov-digit.yaml  # What the playbook actually deploys
+├── docker-compose.fast-path.yml    # Overlay: db_fast_path
+├── docker-compose.migrations.yml   # Overlay: schema migrations
+├── docker-compose.migrations.ansible.yml # Overlay: ansible-specific migrators
 ├── kong/
 │   └── kong.yml                    # API gateway routes + auth enrichment + RBAC (pre-function)
 ├── nginx/
@@ -334,8 +349,8 @@ local-setup/
 │   └── user-seed.sh                # Creates ADMIN + GRO users via API
 ├── data/
 │   └── Bomet county...xlsx         # Sample county data for E2E tests
-├── configs/persister/              # Kafka consumer configs (9 YAML files)
-├── db/                             # SQL seeds + workflow JSON
+├── configs/egov-persister/         # Kafka consumer configs (9 YAML files)
+├── db/                             # Full DB dump + flyway history map
 ├── gatus/                          # Health monitoring config
 ├── jupyter/                        # DataLoader library + notebook
 ├── scripts/                        # CI dataloader scripts
@@ -536,8 +551,8 @@ The last 3 lines are the values to pass to Newman.
 | IDGEN | 18088 | 256 MB | `/egov-idgen/health` |
 | ENC | 11234 | 300 MB | `/egov-enc-service/actuator/health` |
 | Persister | 18091 | 256 MB | `/common-persist/actuator/health` |
-| Filestore | - | 384 MB | `/filestore/health` |
-| HRMS | - | 256 MB | `/egov-hrms/health` |
+| Filestore | 18084 | 384 MB | `/filestore/health` |
+| HRMS | 18092 | 256 MB | `/egov-hrms/health` |
 
 ### Application
 
@@ -659,8 +674,9 @@ docker compose up -d                       # Fresh start
 
 ```
 local-setup/
-├── docker-compose.yml              # Main service definitions (~3.8GB RAM, local builds)
-├── docker-compose.registry.yml     # All images from public registry (for Ansible deploy)
+├── docker-compose.yml              # Main service definitions (~3.8GB RAM, registry images)
+├── docker-compose.registry.yml     # All images from public registry (NOT the Ansible
+│                                   # deploy — that uses docker-compose.egov-digit.yaml)
 ├── docker-compose.deploy.yaml      # Deploy variant (no resource limits)
 ├── docker-compose.db-migrations.yml # DB migrations variant
 ├── docker-compose.tilt.yml         # Overlay: points pgr-services/digit-ui at Tilt's locally built images
@@ -687,13 +703,13 @@ local-setup/
 ├── data/
 │   └── Bomet county...xlsx         # Sample county data (47 types, 25 wards)
 ├── db/
-│   ├── full-dump.sql               # Database seed (tenants, MDMS, users)
-│   ├── seed.sql                    # Core MDMS + access control data
-│   ├── tenant-seed.sql             # Root + city tenant records
-│   ├── localization-seed.sql       # UI label translations
-│   └── pgr-workflow-config.json    # PGR 11-state workflow definition
+│   ├── full-dump.sql               # Database seed (tenants, MDMS, users, localization)
+│   ├── keycloak-init.sql           # Keycloak schema bootstrap
+│   ├── flyway-history-map.yml      # Maps dump state -> flyway baseline
+│   ├── normalize/                  # Flyway history normalisation job
+│   └── notif-mdms-seed/            # Notification MDMS seed data
 ├── configs/
-│   └── persister/                  # Persister YAML configs (9 files)
+│   └── egov-persister/             # Persister YAML configs (9 files)
 ├── jupyter/
 │   ├── Dockerfile                  # Jupyter container build
 │   └── dataloader/

@@ -15,34 +15,35 @@ name: Gatus coverage
 # GitHub Actions does not expand YAML anchors, so an anchor here would silently
 # drop the push filter rather than share the list -- worse than the duplication.
 #
-# They must cover every file check-gatus-coverage.py reads (all five compose files
-# in its COMPOSE_FILES, plus both gatus configs) AND the script and this workflow,
+# They must cover every file check-gatus-coverage.py reads (every compose file in
+# its COMPOSE_FILES, plus both gatus configs) AND the script and this workflow,
 # so that a change breaking a detector re-runs the script's own --self-test.
 # A push filter narrower than the pull_request one lets a direct push to develop
 # touching only an unwatched file skip the guard -- exactly the silent gap this
 # workflow exists to close.
+#
+# `local-setup/**` rather than a list of compose globs, on purpose. Any narrower
+# filter has to predict which filenames matter, and when it guesses wrong the failure
+# is SILENT: the workflow never triggers, so the guard cannot report what it was never
+# run to see. The narrower version missed `compose.yaml` -- docker compose's default,
+# highest-precedence filename, which would shadow docker-compose.yml for the bare
+# `docker compose up -d` local-setup-ci runs -- and anything in a subdirectory.
+#
+# The script reads compose files (rglob, any depth), k8s/**, and gatus/config.yaml, all
+# under local-setup/. Watching the whole tree costs a 12-second run on changes that turn
+# out not to matter; getting it wrong costs a coverage gap nobody sees. Not a close call.
+# (The script separately fails if COMPOSE_FILES misses a file on disk -- same gap, one
+# layer down.)
 on:
   pull_request:
     paths:
-      - 'local-setup/docker-compose.yml'
-      - 'local-setup/docker-compose.egov-digit.yaml'
-      - 'local-setup/docker-compose.migrations.yml'
-      - 'local-setup/docker-compose.migrations.ansible.yml'
-      - 'local-setup/docker-compose.fast-path.yml'
-      - 'local-setup/gatus/config.yaml'
-      - 'local-setup/k8s/**'
+      - 'local-setup/**'
       - '.github/scripts/check-gatus-coverage.py'
       - '.github/workflows/gatus-coverage.yml'
   push:
     branches: [develop]
     paths:
-      - 'local-setup/docker-compose.yml'
-      - 'local-setup/docker-compose.egov-digit.yaml'
-      - 'local-setup/docker-compose.migrations.yml'
-      - 'local-setup/docker-compose.migrations.ansible.yml'
-      - 'local-setup/docker-compose.fast-path.yml'
-      - 'local-setup/gatus/config.yaml'
-      - 'local-setup/k8s/**'
+      - 'local-setup/**'
       - '.github/scripts/check-gatus-coverage.py'
       - '.github/workflows/gatus-coverage.yml'
 

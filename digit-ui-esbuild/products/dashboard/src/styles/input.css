@@ -464,6 +464,27 @@
     @apply tw-pointer-events-none tw-invisible;
   }
 
+  /* While a picker item is dragged over the grid, the tiles must not become
+     dragenter/dragleave targets: react-grid-layout balances a dragEnterCounter
+     across those events, and a hovered child node that gets replaced mid-drag
+     (chart redraws) leaks an enter with no matching leave — the counter never
+     returns to 0, the drop placeholder survives the drag, and RGL is left in
+     a stuck activeDrag state that silently swallows every later add (#1287).
+     Routing all drag events to the grid container keeps the counter balanced
+     AND makes layerX/layerY (which RGL reads relative to the event target)
+     grid-relative, so the placeholder tracks the cursor instead of jumping. */
+  .dashboard-grid-layout--dropping .react-grid-item {
+    @apply tw-pointer-events-none;
+  }
+
+  /* Zero-tile layout: RGL sets an inline height of 0 when it holds no items,
+     which would collapse the drop surface (and the empty-state overlay
+     anchored to it). min-height beats the inline height, keeping a drop-onto
+     area alive for the Add-KPI picker on a first-load/reset dashboard. */
+  .dashboard-grid-layout--empty {
+    min-height: 160px;
+  }
+
   .dashboard-add-kpi-header {
     @apply tw-shrink-0 tw-border-b tw-border-border tw-px-4 tw-py-2.5 tw-text-[10px] tw-font-normal tw-uppercase tw-tracking-wider;
     color: var(--muted-foreground, #6b6860);
@@ -692,6 +713,229 @@
     opacity: 0.4;
     cursor: default;
     pointer-events: none;
+  }
+
+  /* Per-tile note when the backend reports the subtree filter could not be
+     honoured on a grain (paramsIgnored: complaintPath — daily-grain KPIs). */
+  .dashboard-type-filter-ignored {
+    @apply tw-pointer-events-none tw-absolute tw-bottom-1 tw-left-5 tw-z-[2] tw-rounded tw-bg-surface tw-px-1 tw-text-[10px] tw-italic tw-leading-tight tw-text-muted-foreground;
+  }
+
+  /* ── Shared popover/menu primitive (chip anchor + portaled panel) ───── */
+  /* Named "trigger" NOT "chip": the host theme (vendor/overrides.css, outside
+     this build) has a [class*="chip"] catch-all that pills ANY class containing
+     that substring — never rename these classes back to *chip*. */
+
+  /* Anchor chip: a strict visual PEER of .dashboard-filter-inline-select —
+     same h-7 / min-w-[7.5rem] / rounded-sm / border-border / bg-surface /
+     12px metrics, no resting hover treatment (the select has none), the
+     select's focus treatment (border-foreground + 15% ring); the only
+     divergence is aria-expanded reusing the focus border while open. */
+  .dashboard-popover-trigger {
+    @apply tw-box-border tw-m-0 tw-inline-flex tw-h-7 tw-min-w-[7.5rem] tw-max-w-full tw-shrink tw-cursor-pointer tw-select-none tw-items-center tw-gap-1.5 tw-self-center tw-whitespace-nowrap tw-rounded-sm tw-border tw-border-border tw-bg-surface tw-py-0 tw-px-2 tw-text-[12px] tw-leading-none tw-text-foreground;
+    font-family: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .dashboard-popover-trigger:focus {
+    @apply tw-border-foreground tw-outline-none;
+  }
+
+  .dashboard-popover-trigger:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
+  }
+
+  .dashboard-popover-trigger[aria-expanded="true"] {
+    @apply tw-border-foreground;
+  }
+
+  .dashboard-popover-trigger:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* Icon-only anchor for widget-header placement (per-widget settings
+     gear): the .dashboard-widget-remove-btn idiom — 1.5rem square, muted,
+     transparent resting, bg-muted on hover/open — minus the absolute
+     positioning (this one sits in the title-row flex flow). */
+  .dashboard-popover-iconbtn {
+    @apply tw-box-border tw-m-0 tw-inline-flex tw-h-6 tw-w-6 tw-shrink-0 tw-cursor-pointer tw-items-center tw-justify-center tw-rounded-sm tw-border-0 tw-bg-transparent tw-p-0 tw-text-muted-foreground;
+    font: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .dashboard-popover-iconbtn:hover:not(:disabled),
+  .dashboard-popover-iconbtn[aria-expanded="true"] {
+    @apply tw-bg-muted tw-text-foreground;
+  }
+
+  .dashboard-popover-iconbtn:focus {
+    @apply tw-outline-none;
+  }
+
+  .dashboard-popover-iconbtn:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
+  }
+
+  .dashboard-popover-trigger-value {
+    @apply tw-inline-flex tw-min-w-0 tw-items-center tw-overflow-hidden tw-font-normal;
+  }
+
+  /* ml-auto pins the caret to the chip's right edge (px-2, like the
+     select-wrap's ::after caret at right: 0.5rem) when the label is
+     shorter than the shared 7.5rem min width. */
+  .dashboard-popover-trigger-caret {
+    @apply tw-ml-auto tw-shrink-0 tw-text-muted-foreground;
+  }
+
+  /* Chip content for hierarchical selections: "… › Parent › Node" — each
+     segment ellipsizes on its own so deep leaves stay chip-sized. */
+  .dashboard-popover-trigger-trail {
+    @apply tw-inline-flex tw-min-w-0 tw-items-center tw-gap-1;
+  }
+
+  .dashboard-popover-trigger-seg {
+    @apply tw-min-w-0 tw-max-w-[9rem] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap;
+  }
+
+  .dashboard-popover-trigger-seg--muted {
+    @apply tw-font-normal tw-text-muted-foreground;
+  }
+
+  .dashboard-popover-trigger-sep {
+    @apply tw-shrink-0 tw-select-none tw-text-muted-foreground;
+  }
+
+  /* Panel: mirrors .dashboard-add-kpi-panel's surface language. */
+  .dashboard-popover-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border, #e5e2db);
+    border-radius: 6px;
+    background-color: var(--popover, #ffffff);
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.08),
+      0 2px 4px -2px rgb(0 0 0 / 0.06);
+    color: var(--foreground, #1a1917);
+    isolation: isolate;
+  }
+
+  /* Tree-traversal panel body (ComplaintTypeTreePanel). */
+  .dashboard-popover-tree {
+    @apply tw-flex tw-min-h-0 tw-flex-col tw-overflow-hidden;
+  }
+
+  /* Ancestor trail across the top of the tree panel. */
+  .dashboard-popover-trail {
+    @apply tw-flex tw-shrink-0 tw-flex-wrap tw-items-center tw-gap-1 tw-border-b tw-border-border tw-px-3 tw-py-2 tw-text-[11px] tw-leading-none tw-text-muted-foreground;
+  }
+
+  .dashboard-popover-trail-crumb {
+    @apply tw-m-0 tw-min-w-0 tw-max-w-[7rem] tw-cursor-pointer tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-rounded-sm tw-border-0 tw-bg-transparent tw-p-0 tw-text-[11px] tw-leading-none tw-text-muted-foreground hover:tw-text-foreground hover:tw-underline;
+    font-family: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .dashboard-popover-trail-crumb:focus {
+    @apply tw-outline-none;
+  }
+
+  .dashboard-popover-trail-crumb:focus-visible {
+    @apply tw-text-foreground tw-underline;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 35%, transparent);
+  }
+
+  .dashboard-popover-trail-sep,
+  .dashboard-popover-trail-ellipsis {
+    @apply tw-shrink-0 tw-select-none;
+  }
+
+  .dashboard-popover-trail-current {
+    @apply tw-min-w-0 tw-max-w-[10rem] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-font-medium tw-text-foreground;
+  }
+
+  /* Scrollable item region (deep trees) and pinned footer (reset row). */
+  .dashboard-popover-list {
+    -webkit-overflow-scrolling: touch;
+    @apply tw-m-0 tw-min-h-0 tw-flex-1 tw-overflow-y-auto tw-overscroll-contain tw-p-1;
+  }
+
+  .dashboard-popover-footer {
+    @apply tw-shrink-0 tw-border-t tw-border-border tw-p-1;
+  }
+
+  .dashboard-menu-item {
+    @apply tw-box-border tw-m-0 tw-flex tw-w-full tw-cursor-pointer tw-items-center tw-gap-2 tw-rounded-sm tw-border-0 tw-bg-transparent tw-px-2 tw-py-1.5 tw-text-left tw-text-[12px] tw-leading-snug tw-text-foreground;
+    font-family: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .dashboard-menu-item:hover {
+    background-color: var(--muted, #f5f4f1);
+  }
+
+  .dashboard-menu-item:focus {
+    @apply tw-outline-none;
+  }
+
+  .dashboard-menu-item:focus-visible {
+    background-color: var(--muted, #f5f4f1);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ring) 35%, transparent);
+  }
+
+  .dashboard-menu-item[data-selected="true"] {
+    @apply tw-font-medium;
+  }
+
+  .dashboard-menu-item--muted {
+    color: var(--muted-foreground, #6b6860);
+  }
+
+  .dashboard-menu-item--muted:hover,
+  .dashboard-menu-item--muted:focus-visible {
+    color: var(--foreground, #1a1917);
+  }
+
+  .dashboard-menu-item-label {
+    @apply tw-min-w-0 tw-flex-1 tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap;
+  }
+
+  .dashboard-menu-item-trailing {
+    @apply tw-inline-flex tw-shrink-0 tw-items-center tw-text-muted-foreground;
+  }
+
+  /* currentColor, not --primary: selection reads as weight + check in the
+     row's own neutral foreground — the filter bar has no brand accent and
+     the menus don't introduce one. */
+  .dashboard-menu-item-check {
+    color: currentColor;
+  }
+
+  /* Non-interactive section label between runs of related items (the flat
+     complaint-type degrade path's category groups). */
+  .dashboard-menu-group-label {
+    @apply tw-px-2 tw-pb-1 tw-pt-2 tw-text-[10px] tw-font-normal tw-uppercase tw-tracking-wider tw-text-muted-foreground;
+  }
+
+  /* Widget-header wrapper for the per-widget settings gear: right-aligned
+     in the title row (same slot on every header that has options; absent
+     otherwise); mr-6 clears the absolute remove button. */
+  .dashboard-widget-settings-wrap {
+    @apply tw-ml-2 tw-mr-6 tw-inline-flex tw-shrink-0 tw-items-center tw-self-center;
+  }
+
+  /* Stacked (mobile) filter bar: the chip stretches full-width, exactly
+     like .dashboard-filter-inline-select in the 639px block above. */
+  @media (max-width: 639px) {
+    .dashboard-popover-trigger {
+      width: 100%;
+      min-width: 0;
+    }
   }
 
   /* ── Responsive layout ─────────────────────────────────────────────── */
@@ -1532,7 +1776,6 @@
     overflow: visible !important;
   }
 
-
   .dashboard-horizontal-bar .apexcharts-yaxis-texts-g .apexcharts-yaxis-label,
   .dashboard-stacked-bar--horizontal .apexcharts-yaxis-texts-g .apexcharts-yaxis-label {
     text-anchor: start;
@@ -1789,7 +2032,7 @@
     pointer-events: auto;
   }
 
-  .dashboard-map-filter-chip {
+  .dashboard-map-filter-badge {
     z-index: 1000;
   }
 
@@ -1848,7 +2091,7 @@
     @apply tw-px-2.5;
   }
 
-  .dashboard-map-filter-chip {
+  .dashboard-map-filter-badge {
     backdrop-filter: blur(4px);
   }
 
@@ -2436,4 +2679,19 @@
   min-height: 2rem !important;
   max-height: 2rem !important;
   box-sizing: border-box !important;
+}
+
+/* The host app's vendor/overrides.css forces height:44px !important on all
+   text inputs/selects via a high-specificity :not() chain. The dashboard uses
+   compact 1.75rem controls (owner preference). Stacked-class specificity +
+   !important re-asserts the compact size; both !important -> specificity wins.
+   Scoped to the wards select only (calendars keep the host size by owner choice). */
+.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select {
+  height: 1.75rem !important;
+  min-height: 1.75rem !important;
+  max-height: 1.75rem !important;
+  font-size: 12px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 1 !important;
 }

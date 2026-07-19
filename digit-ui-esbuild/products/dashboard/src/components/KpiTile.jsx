@@ -11,6 +11,7 @@ import ComplaintsAtRiskTable from './ComplaintsAtRiskTable';
 import OpenComplaintsByGeographyWidget from './OpenComplaintsByGeographyWidget';
 import { evaluateCompose } from '../utils/composeKpi';
 import { applyGroupByToColumns } from '../utils/hierLevelGrouping';
+import { formatNumber } from '../utils/numberFormat';
 import { getNumberTileDeltaClass, formatOfficerLabel, dimensionKindForName } from '../config/kpiDisplay';
 import {
   resolveSlaRiskPresentation,
@@ -23,6 +24,7 @@ import useDashboardT from '../i18n/useDashboardT';
 import { dimensionLabel } from '../i18n/dimensionLabel';
 import { translate as t } from '../i18n/localeRuntime';
 import { resolveTitle, resolveSubtitle, seriesEntryLabel, resolveSeriesLabel } from '../i18n/textResolver';
+import { markFirstWidgetVisible } from '../services/dashboardMetrics';
 
 /**
  * Generic viz-kind-driven tile renderer (the dashboard RENDERING ENGINE).
@@ -70,6 +72,15 @@ export function KpiTile({ def, result, results, error, vizOverride, loading = fa
   const { language } = useDashboardT();
   const viz = def?.viz || {};
   const title = resolveTitle(def);
+
+  // first_widget_visible (#1110): one-shot per load, fired by whichever tile
+  // first renders NON-skeleton content — including the error and "No data"
+  // paths (R9/F8) so failed loads still measure. The metrics module dedupes
+  // and stamps post-paint, so repeat calls are cheap no-ops.
+  const isSkeleton = !result && !error && loading;
+  React.useEffect(() => {
+    if (!isSkeleton) markFirstWidgetVisible();
+  }, [isSkeleton]);
 
   if (error) {
     return (
@@ -262,6 +273,9 @@ function computeDelta(current, prior, format, mode) {
   return ((current - prior) / Math.abs(prior)) * 100; // relative %
 }
 
+// Delta numbers route their NUMERIC part through the tenant mask
+// (formatNumber, null when unconfigured -> the pre-#1213 expression); the
+// arrow and pp/%/day/hr unit suffixes stay here.
 function formatDeltaDisplay(delta, format, mode) {
   if (delta == null || !Number.isFinite(delta)) return null;
   const arrow = delta >= 0 ? '▲' : '▼';
@@ -269,11 +283,13 @@ function formatDeltaDisplay(delta, format, mode) {
   const eff = mode || (isPercentFormat(format) ? 'percentPoint' : 'percent');
   if (eff === 'duration') {
     return abs >= 86400000
-      ? `${arrow} ${(abs / 86400000).toFixed(1)} ${t("DASHBOARD_UNIT_DAYS", "days")}`
-      : `${arrow} ${(abs / 3600000).toFixed(1)} ${t("DASHBOARD_UNIT_HRS", "hrs")}`;
+      ? `${arrow} ${formatNumber(abs / 86400000, { decimals: 1 }) ?? (abs / 86400000).toFixed(1)} ${t("DASHBOARD_UNIT_DAYS", "days")}`
+      : `${arrow} ${formatNumber(abs / 3600000, { decimals: 1 }) ?? (abs / 3600000).toFixed(1)} ${t("DASHBOARD_UNIT_HRS", "hrs")}`;
   }
   const rounded = Math.round(abs * 10) / 10;
-  const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  const formatted =
+    formatNumber(rounded, { decimals: 1, trim: true }) ??
+    (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
   if (eff === 'days') return `${arrow} ${formatted} ${rounded === 1 ? t("DASHBOARD_UNIT_DAY", "day") : t("DASHBOARD_UNIT_DAYS", "days")}`;
   if (eff === 'rating') return `${arrow} ${formatted}`;
   const unit = eff === 'percentPoint' ? 'pp' : '%';
@@ -980,34 +996,42 @@ function DowDisplay({ rows, format }) {
 const MS_PER_DAY = 86400000;
 const MS_PER_HOUR = 3600000;
 
+// Every case routes its NUMERIC part through the tenant mask via formatNumber
+// (utils/numberFormat.js): null when no dss.DashboardConfig.numberFormat is
+// configured, so each `??` fallback keeps the pre-#1213 expression untouched.
+// Unit suffixes (%, /5, h, hr/hrs/day/days, ordinal) stay here — the mask
+// contributes separators only, decimal counts stay per-format (R3); durations
+// take the mask decimal separator too (R7).
 function applyFormat(val, format, locale) {
   if (val == null || !Number.isFinite(Number(val))) return '—';
   const n = Number(val);
   switch (format) {
-    case 'integer':           return Math.round(n).toLocaleString(locale);
+    case 'integer':           return formatNumber(n, 'integer') ?? Math.round(n).toLocaleString(locale);
     case 'percentInteger':
-    case 'percentNoDecimal':  return `${Math.round(normalizePct(n))}%`;
+    case 'percentNoDecimal':  return `${formatNumber(normalizePct(n), 'percentInteger') ?? Math.round(normalizePct(n))}%`;
     case 'percentOneDecimal':
-    case 'percent':           return `${normalizePct(n).toFixed(1)}%`;
-    case 'decimalOne':        return n.toFixed(1);
-    case 'decimalTwo':        return n.toFixed(2);
-    case 'ratingOutOfFive':   return `${n.toFixed(1)}/5`;
+    case 'percent':           return `${formatNumber(normalizePct(n), 'percent') ?? normalizePct(n).toFixed(1)}%`;
+    case 'decimalOne':        return formatNumber(n, 'decimalOne') ?? n.toFixed(1);
+    case 'decimalTwo':        return formatNumber(n, 'decimalTwo') ?? n.toFixed(2);
+    case 'ratingOutOfFive':   return `${formatNumber(n, 'ratingOutOfFive') ?? n.toFixed(1)}/5`;
     case 'hoursDays': {
       const hours = n / MS_PER_HOUR;
       if (hours < 48) {
         const r = Math.round(hours * 10) / 10;
-        return `${Number.isInteger(r) ? r : r.toFixed(1)} ${r === 1 ? t("DASHBOARD_UNIT_HR", "hr") : t("DASHBOARD_UNIT_HRS", "hrs")}`;
+        const num = formatNumber(r, { decimals: 1, trim: true }) ?? (Number.isInteger(r) ? r : r.toFixed(1));
+        return `${num} ${r === 1 ? t("DASHBOARD_UNIT_HR", "hr") : t("DASHBOARD_UNIT_HRS", "hrs")}`;
       }
       const days = n / MS_PER_DAY;
       const r = Math.round(days * 10) / 10;
-      return `${Number.isInteger(r) ? r : r.toFixed(1)} ${r === 1 ? t("DASHBOARD_UNIT_DAY", "day") : t("DASHBOARD_UNIT_DAYS", "days")}`;
+      const num = formatNumber(r, { decimals: 1, trim: true }) ?? (Number.isInteger(r) ? r : r.toFixed(1));
+      return `${num} ${r === 1 ? t("DASHBOARD_UNIT_DAY", "day") : t("DASHBOARD_UNIT_DAYS", "days")}`;
     }
-    case 'hoursDecimal':      return `${(n / MS_PER_HOUR).toFixed(1)}h`;
-    case 'signedInteger':     return `${n >= 0 ? '+' : ''}${Math.round(n).toLocaleString(locale)}`;
+    case 'hoursDecimal':      return `${formatNumber(n / MS_PER_HOUR, 'hoursDecimal') ?? (n / MS_PER_HOUR).toFixed(1)}h`;
+    case 'signedInteger':     return `${n >= 0 ? '+' : ''}${formatNumber(n, 'signedInteger') ?? Math.round(n).toLocaleString(locale)}`;
     case 'ordinal': {
       const v = Math.round(n) % 100;
       const s = ['th', 'st', 'nd', 'rd'];
-      return Math.round(n) + (s[(v - 20) % 10] || s[v] || s[0]);
+      return (formatNumber(n, 'integer') ?? Math.round(n)) + (s[(v - 20) % 10] || s[v] || s[0]);
     }
     default: return String(val);
   }

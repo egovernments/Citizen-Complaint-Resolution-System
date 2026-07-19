@@ -33,9 +33,9 @@ export const stateInfoDescriptor: SchemaDescriptor = {
   ],
   fields: [
     { path: 'code', widget: 'text', required: true,
-      help: 'State code (uppercase, e.g. KE).' },
+      help: 'State code (uppercase root tenant code, e.g. the part before the first dot in the city tenant).' },
     { path: 'name', widget: 'text', required: true,
-      help: 'Display name of the state / country (e.g. Kenya).' },
+      help: 'Display name of the state / country.' },
     { path: 'languages', widget: 'locale-list', label: 'Languages',
       help: 'Each row appears in the digit-ui language switcher and in the configurator\'s locale dropdowns.' },
     { path: 'hasLocalisation', widget: 'boolean',

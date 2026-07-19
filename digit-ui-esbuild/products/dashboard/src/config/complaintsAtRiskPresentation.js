@@ -1,5 +1,6 @@
 import { translate as t } from "../i18n/localeRuntime";
 import { dimensionLabel } from "../i18n/dimensionLabel";
+import { formatNumber } from "../utils/numberFormat";
 
 const MS_PER_HOUR = 3600000;
 const MS_PER_DAY = 86400000;
@@ -10,18 +11,25 @@ const MS_PER_DAY = 86400000;
 const OPEN_STATUS_KEYS = new Set(["PENDINGFORASSIGNMENT", "OPEN"]);
 const ASSIGNED_STATUS_KEYS = new Set(["PENDINGATLME", "ASSIGNED"]);
 
+// The numeric part goes through the tenant mask (formatNumber, null when
+// unconfigured -> the pre-#1213 expression); "+" and hr/hrs/d units stay
+// here. R7: durations take the mask decimal separator — they are numbers.
 export function formatBreachDurationCompact(ms) {
   const n = Number(ms);
   if (!Number.isFinite(n) || n <= 0) return null;
   const hours = n / MS_PER_HOUR;
   if (hours < 48) {
     const rounded = Math.round(hours * 10) / 10;
-    const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    const formatted =
+      formatNumber(rounded, { decimals: 1, trim: true }) ??
+      (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
     return `+${formatted}${rounded === 1 ? t("DASHBOARD_UNIT_HR", "hr") : t("DASHBOARD_UNIT_HRS", "hrs")}`;
   }
   const days = n / MS_PER_DAY;
   const rounded = Math.round(days * 10) / 10;
-  const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  const formatted =
+    formatNumber(rounded, { decimals: 1, trim: true }) ??
+    (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
   return `+${formatted}${t("DASHBOARD_UNIT_D", "d")}`;
 }
 

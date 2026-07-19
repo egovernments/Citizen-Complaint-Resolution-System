@@ -9,6 +9,7 @@ import {
 } from "../config/pieChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE, SHARED_CHROME } from "../config/visualizationStyles";
 import useDashboardT from "../i18n/useDashboardT";
+import { formatNumber } from "../utils/numberFormat";
 
 const PieChart = ({ data = [] }) => {
   const { t } = useDashboardT();
@@ -99,7 +100,8 @@ const PieChart = ({ data = [] }) => {
               className={SHARED_CHROME.chartTooltipRow}
               style={{ color: active.color }}
             >
-              {t("DASHBOARD_COMMON_COUNT", "Count")} : {active.count} ({active.pct}%)
+              {/* pct is an integer 0–100 — no separator can ever appear, so it skips the mask */}
+              {t("DASHBOARD_COMMON_COUNT", "Count")} : {formatNumber(active.count, { decimals: 0 }) ?? active.count} ({active.pct}%)
             </div>
           </div>
         ) : null}

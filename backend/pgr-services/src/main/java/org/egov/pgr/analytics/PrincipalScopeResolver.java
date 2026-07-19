@@ -38,6 +38,12 @@ import java.util.Set;
  * closes the prior fail-OPEN hole where an officer with a failed/missing HRMS lookup silently saw
  * every department. Under correct config (officers carry an HRMS department) this is a no-op for
  * them — they resolve to their real department. Pure citizens keep their existing self-scope.
+ *
+ * Tenant-configurable (#1280): {@code dss.DashboardConfig.departmentScoping = "disabled"} turns
+ * the whole department axis OFF for a tenant (deployments whose complaint data carries no
+ * departments). Tenant scoping and citizen self-scope are unaffected. Anything other than an
+ * explicit "disabled" — missing record/field, malformed value, MDMS error — means "enforced",
+ * i.e. exactly the behavior described above (fail-safe).
  */
 @Component
 @Slf4j
@@ -68,12 +74,15 @@ public class PrincipalScopeResolver {
     private final PGRConfiguration config;
     private final RestTemplate restTemplate;
     private final ObjectMapper mapper;
+    private final KpiCatalogService catalog;
 
     @Autowired
-    public PrincipalScopeResolver(PGRConfiguration config, RestTemplate restTemplate, ObjectMapper mapper) {
+    public PrincipalScopeResolver(PGRConfiguration config, RestTemplate restTemplate, ObjectMapper mapper,
+                                  KpiCatalogService catalog) {
         this.config = config;
         this.restTemplate = restTemplate;
         this.mapper = mapper;
+        this.catalog = catalog;
     }
 
     /**
@@ -143,6 +152,18 @@ public class PrincipalScopeResolver {
      * tenant-wide (admin/supervisor) roles — see {@link #unresolvedScope}.
      */
     private AnalyticsScope resolveEmployeeScope(RequestInfo requestInfo, User u, String tenantId, boolean stateLevel) {
+        // #1280: tenant-configurable department scoping. When dss.DashboardConfig.departmentScoping
+        // is "disabled" for this tenant, skip HRMS department resolution entirely — the employee is
+        // scoped by tenant only (no department IN filter, no fail-closed sentinel). Citizen
+        // self-scope is untouched (that path returns before this method); tenant scoping is
+        // untouched (carried by the AnalyticsScope tenant fields as always). The catalog lookup is
+        // fail-safe and never throws: missing record/field, malformed value, or an MDMS error all
+        // resolve to "enforced" — exactly today's behavior below.
+        if (catalog.isDepartmentScopingDisabled(tenantId)) {
+            log.info("department scoping disabled by DashboardConfig for tenant {} — unrestricted employee scope for '{}'",
+                    tenantId, u.getUserName());
+            return new AnalyticsScope(tenantId, stateLevel, null, null, null);
+        }
         try {
             String userName = u.getUserName();
             if (userName == null || userName.isEmpty())
