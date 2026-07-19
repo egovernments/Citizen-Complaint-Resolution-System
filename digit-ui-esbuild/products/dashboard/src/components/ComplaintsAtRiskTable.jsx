@@ -11,7 +11,7 @@ import { complaintDetailHref } from "../config/complaintsAtRiskPresentation";
 import useDashboardT from "../i18n/useDashboardT";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
-import DashboardTableFrame from "./DashboardTableFrame";
+import DashboardTableFrame, { SrOnlyTableHead } from "./DashboardTableFrame";
 
 // Built at render (never a module constant) so headers track the language.
 const buildColumns = (t) => [
@@ -64,6 +64,7 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
   const bodyTable = (
     <table className={`${tableClass} ${DATA_TABLE_STYLES.tableBody}`}>
       {colgroup}
+      <SrOnlyTableHead columns={COLUMNS} />
       <tbody>
         {sortedRows.length === 0 ? (
           <tr>

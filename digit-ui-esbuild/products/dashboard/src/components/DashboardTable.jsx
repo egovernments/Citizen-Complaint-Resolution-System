@@ -12,7 +12,7 @@ import { translate as t } from "../i18n/localeRuntime";
 import { seriesEntryLabel } from "../i18n/textResolver";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
-import DashboardTableFrame from "./DashboardTableFrame";
+import DashboardTableFrame, { SrOnlyTableHead } from "./DashboardTableFrame";
 import { formatNumber } from "../utils/numberFormat";
 
 // Cell formatters route their NUMERIC part through the tenant mask
@@ -252,6 +252,7 @@ const DashboardTable = ({ columns, rows, emptyMessage }) => {
   const bodyTable = (
     <table className={`${styles.table} ${DATA_TABLE_STYLES.tableBody}`}>
       {colgroup}
+      <SrOnlyTableHead columns={columns} />
       <tbody>
         {sortedRows.length === 0 ? (
           <tr>
