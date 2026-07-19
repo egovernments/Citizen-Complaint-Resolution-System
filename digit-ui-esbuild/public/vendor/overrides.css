@@ -1338,6 +1338,16 @@ button[class*="submit-bar"] *,
   fill: #ffffff !important;
   color: #ffffff !important;
 }
+/* ...but paths explicitly marked fill="none" (e.g. the (x) close button and
+ * viewbox-padding shapes) must STAY transparent — otherwise the white fill
+ * above turns them into solid white boxes (#883/#923). */
+.toast-success svg path[fill="none"],
+.digit-toast-success svg path[fill="none"],
+[class*="toast-error"] svg path[fill="none"],
+[class*="toast-warning"] svg path[fill="none"],
+[class*="toast-info"] svg path[fill="none"] {
+  fill: none !important;
+}
 /* Inner chips / boxes inside the toast (the source of the
  * outline mismatch) — make them transparent. */
 .toast-success > div,
@@ -2943,6 +2953,49 @@ button[class*="toast-close"] svg,
 .v2-pgr-inbox .digit-results-table-wrapper > .digit-table-card {
   flex: 1 1 auto;
   min-height: 100%;
+}
+
+/* My/All visibility tabs (Visibility V1, PR #1052). Rendered inside the
+ * composer's results column (`resultsHeader` slot) so the strip sits
+ * directly above the complaint list per the PRD. `sticky; left: 0` keeps
+ * it in place when wide tables give the wrapper `overflow-x: auto`.
+ * Colours come from the brand palette vars (same pattern as the table
+ * header rules below) so tenant theming applies. */
+.v2-pgr-inbox .pgr-inbox-tabs {
+  display: flex;
+  gap: 2rem;
+  border-bottom: 1px solid var(--color-border, #d6d5d4);
+  margin-bottom: 8px;
+  position: sticky;
+  left: 0;
+  flex-shrink: 0;
+}
+.v2-pgr-inbox .pgr-inbox-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-text-secondary, #505a5f);
+}
+.v2-pgr-inbox .pgr-inbox-tab.active {
+  color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+  border-bottom-color: var(--color-primary-1, var(--color-primary-main, #c84c0e));
+  font-weight: 700;
+}
+.v2-pgr-inbox .pgr-inbox-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-error, #d4351c);
+  display: inline-block;
 }
 
 /* react-data-table-component header colour — vendor renders header
@@ -5957,4 +6010,67 @@ header.digit-header .digit-dropdown-master {
 .navbar select:focus,
 .navbar .digit-dropdown-employee-select-wrap:focus-within {
   border-color: revert !important;
+}
+
+/* ============================================================================
+   Moz QA CSS batch (CCSD-1982 / 1983 / 1984)
+   ========================================================================= */
+
+/* CCSD-1982 — text inputs clickable across the full field.
+   The wrapper was made flex but its child container never told to fill it,
+   so the <input> spanned ~60% of the bordered box and the right side didn't
+   place the caret. Stretch the container (and thus the input) to full width. */
+.digit-text-input-field > .input-container {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* CCSD-1983 — header/brand logo must not stretch.
+   The navbar logo had object-fit:fill + min-width:78px, distorting non-square
+   logos. Use contain and drop the min-width. Profile avatars keep cover. */
+.navbar img {
+  object-fit: contain !important;
+  min-width: 0 !important;
+  width: auto !important;
+}
+.profile-section img {
+  object-fit: cover !important;
+  object-position: center !important;
+}
+
+/* CCSD-1984 — employee inbox Date Range: align the box + float the calendar.
+   (a) normalize to the 44px rounded v2 chrome and vertically center contents;
+   (b) render the calendar as an absolute popover so it overlays instead of
+       pushing the page down and leaving empty space. */
+.v2-pgr-inbox .digit-employee-select-wrap .digit-select {
+  height: 44px !important;
+  border: 1px solid var(--color-border, #d6d5d4) !important;
+  border-radius: 6px !important;
+  background: var(--v2-surface-color, var(--color-surface, #fff)) !important;
+  display: flex !important;
+  align-items: center !important;
+}
+.v2-pgr-inbox .digit-employee-select-wrap .digit-select input[type="text"] {
+  position: static !important;
+  height: 100% !important;
+  width: calc(100% - 32px) !important;
+  border: 0 !important;
+}
+.v2-pgr-inbox .digit-employee-select-wrap .digit-select svg {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  margin: 0 !important;
+  transform: translateY(-50%);
+}
+.v2-pgr-inbox .digit-employee-select-wrap .options-card {
+  position: absolute !important;
+  z-index: 20;
+  margin-top: 4px;
+  width: max-content;
+  max-width: none;
+  background: #fff;
+  box-shadow: 0 8px 10px 1px rgba(0,0,0,.14), 0 3px 14px 2px rgba(0,0,0,.12), 0 5px 5px -3px rgba(0,0,0,.2);
 }

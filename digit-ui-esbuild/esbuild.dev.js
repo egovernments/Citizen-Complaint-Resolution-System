@@ -248,6 +248,12 @@ async function start() {
       "process.env.NODE_ENV": '"development"',
       "process.env.REACT_APP_STATE_LEVEL_TENANT_ID": '""',
       "process.env.REACT_APP_MAP_TENANT": JSON.stringify(process.env.REACT_APP_MAP_TENANT || ""),
+      "process.env.REACT_APP_ANALYTICS_BASE": JSON.stringify(process.env.REACT_APP_ANALYTICS_BASE || "/pgr-services/v2/analytics"),
+      // Dashboard render-lag instrumentation (#1110): "" defers to the runtime
+      // DASHBOARD_METRICS_ENABLED globalConfigs gate; "true"/"false" force it.
+      "process.env.REACT_APP_DASHBOARD_METRICS": JSON.stringify(process.env.REACT_APP_DASHBOARD_METRICS || ""),
+      // Same-origin base of the Kong OTLP ingest routes (/otel/v1/metrics|logs).
+      "process.env.REACT_APP_OTEL_BASE": JSON.stringify(process.env.REACT_APP_OTEL_BASE || "/otel"),
       global: "window",
     },
     plugins: [cdnGlobalsPlugin, svgPlugin, liveReloadPlugin],

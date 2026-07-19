@@ -57,6 +57,14 @@ state_tenant_id: ke.mycity
 boot_tenant: ke.mycity
 tenant_id: ke.mycity
 
+# Tenant the admin/citizen SPA lands on. Rendered into globalConfigs as
+# STATE_LEVEL_TENANT_ID (see templates/globalConfigs.js.j2). The configurator
+# login screen also derives its tenant-code placeholder from this, and the
+# app's pre-login default tenant collapses it to its root segment — so set it
+# to your city tenant to keep the UI deployment-agnostic (no hardcoded code).
+# Defaults to `pg` (the dump's always-seeded tenant) when unset.
+ui_state_tenant_id: ke.mycity
+
 # Default map centre — UI map starts here when no GPS / no complaint
 # location. Pick something inside your service area.
 map_center:
@@ -85,6 +93,14 @@ employee_module_denylist:
 pgr_boundary_highest_level: "County"
 pgr_boundary_lowest_level: "Ward"
 boundary_type: "Ward"          # what the smallest selectable boundary is called
+
+# Boundary hierarchy name. Rendered into globalConfigs as HIERARCHY_TYPE; the
+# citizen/PGR UI (and the configurator's OSM onboarding path) resolve boundaries
+# against it. MUST match the hierarchy actually created for this tenant —
+# city_setup_from_xlsx auto-creates "<CITY>_ADMIN" (e.g. mycity → MYCITY_ADMIN),
+# so leaving the default 'ADMIN' makes the complaint form's boundary picker 400
+# (HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR). Defaults to 'ADMIN' when unset.
+hierarchy_type: "ADMIN"
 
 # Mobile-number validation rules used by the citizen-side UI on signup.
 # Kenya: +254 prefix, 9-10 digits starting with 7 (Safaricom) or 1 (Airtel/Telkom).
@@ -280,6 +296,17 @@ enable_overpass: false
 # Novu still comes up, operator can configure it via the UI later.
 enable_novu: false
 
+# Build a subpath-rebased Novu dashboard image locally so the SPA serves cleanly
+# under /novu (backend/novu-dashboard/Dockerfile, tagged novu-dashboard:local).
+# Strongly recommended — REQUIRED when Keycloak shares this domain (enable_keycloak),
+# because the stock dashboard's nginx workaround hijacks the whole /auth/ prefix.
+# When false, the stock image is pulled and the legacy root-path nginx workaround
+# is rendered instead. See nginx-site.conf.j2 (enable_novu branch).
+build_novu_dashboard: false
+# novu_dashboard_version: "2.3.0"   # upstream tag to rebase FROM
+# novu_base_path: "/novu"           # subpath to bake into the rebased dist
+# novu_dashboard_image: ""          # override to pin a prebuilt image instead of building
+
 # Pasted from the Novu dashboard after first sign-up.
 # https://docs.novu.co/sdks/api-keys for where to find it.
 novu_api_key: ""
@@ -291,6 +318,50 @@ novu_api_key: ""
 twilio_account_sid: ""
 twilio_auth_token: ""
 twilio_whatsapp_from: "whatsapp:+14155238886"   # Twilio Sandbox default
+
+# ────────── Config-driven notifications (PGR + novu-bridge pass-through) ──────────
+# The new path (design D1/D4/D6/D7): PGR reads two MDMS masters
+# (PGR.NotificationRouting + PGR.NotificationTemplate), renders + localizes per
+# recipient, and publishes ONE pre-rendered event per (recipient × channel) to
+# complaints.domain.events. novu-bridge becomes a thin pass-through that
+# identifies the Novu subscriber and delivers renderedBody. Requires
+# enable_novu: true + the seeded MDMS masters + the pass-through
+# novu_bridge_image (below).
+
+# Flip PGR onto the config-driven path for THIS tenant. Default false keeps the
+# legacy hardcoded notification path. Cut over one tenant at a time after the
+# golden-output test + MDMS seed land. (docker-compose.<tenant>.yml may also
+# hard-set PGR_NOTIFICATION_CONFIG_DRIVEN — see docker-compose.bomet.yml.)
+pgr_notification_config_driven: false
+
+# Custom image pins (built+pushed to the VPC registry 10.0.0.4:5000 by CI).
+# Leave unset to keep the published preview / local-build defaults.
+# pgr_services_image:  "10.0.0.4:5000/egovio/pgr-services:notif-config-<sha>"
+# novu_bridge_image:   "10.0.0.4:5000/egovio/novu-bridge:passthrough-<sha>"
+
+# Build the pass-through novu-bridge from backend/novu-bridge on the box.
+build_novu_bridge: false
+# Build pgr-services from backend/pgr-services on the box (config-driven build).
+build_pgr_services: false
+
+# Channels the bridge actually delivers (comma-separated). WHATSAPP is
+# intentionally omitted until a legitimate provider is onboarded as a Novu
+# integration; then add it here. Default SMS,EMAIL.
+# novu_bridge_channels_enabled: "SMS,EMAIL"
+
+# novu-bridge dispatch channel (sms | whatsapp | email). SMS-first per the
+# Bomet phasing (§3): cut SMS over, then add WhatsApp/EMAIL as config-only
+# routing edits. Default sms.
+novu_bridge_channel: "sms"
+
+# Per-channel Novu workflow ids the bridge triggers (rendered body travels in
+# payload.body — the workflow is just the delivery shell). Defaults match the
+# CI bootstrap-created workflows.
+# novu_bridge_workflow_id_sms:      "complaints-sms"
+# novu_bridge_workflow_id_whatsapp: "complaints-whatsapp"
+# novu_bridge_workflow_id_email:    "complaints-email"
+# Subscriber-identify TTL cache (ms) — skip redundant POST /v1/subscribers.
+# novu_bridge_identify_cache_ttl_ms: 300000
 
 # ────────── Keycloak SSO (opt-in) ──────────
 # Adds 2 containers (keycloak + token-exchange-svc) plus the host

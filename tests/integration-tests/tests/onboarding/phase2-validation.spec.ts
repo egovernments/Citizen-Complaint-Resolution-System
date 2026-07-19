@@ -9,110 +9,48 @@
  *      isn't in the dataset — verify step lands but the row appears in
  *      the Errors tab with "Parent ... not found".
  *
+ * The create-hierarchy form is reached via the Excel path — "Upload from
+ * Excel" on the "Choose Your Data Source" landing → Option 1 — so each
+ * test goes through `enterPhase2ExcelLanding` first.
+ *
  * Each test creates its own disposable child tenant via Phase 1 to avoid
  * MDMS phantom-200 collisions on the second test re-creating the same
  * code. Per CLAUDE.md the body is UI-only. Teardown deactivates each
  * tenant via API (carve-out: no UI delete affordance for tenants — #21).
  */
-import { test, expect, type Page } from '@playwright/test';
-import path from 'node:path';
-import os from 'node:os';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import ExcelJS from 'exceljs';
-import { getDigitToken } from '../utils/auth';
+import {
+  freshOnboardingIds,
+  tmpXlsx,
+  writeTenantFixture,
+  deactivateTenantViaApi,
+  loginOnboarding,
+  completePhase1,
+  enterPhase2ExcelLanding,
+  createHierarchyOption1,
+  type OnboardingIds,
+} from '../utils/onboarding';
 
 test.use({ storageState: { cookies: [], origins: [] } });
-
-const ROOT = process.env.ROOT_TENANT || 'ke';
-const ADMIN_USER = process.env.ADMIN_USER || 'ADMIN';
-const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'eGov@123';
-const BASE_URL = process.env.BASE_URL || 'https://naipepea.digit.org';
 
 const createdTenants: string[] = [];
 const tempFiles: string[] = [];
 
-function freshIds() {
-  const SUFFIX = `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-  return {
-    SUFFIX,
-    TENANT_CODE: `${ROOT}.pwt${SUFFIX}`,
-    TENANT_NAME: `Playwright Test ${SUFFIX}`,
-    HIERARCHY_TYPE: `PWHIER${SUFFIX}`,
-    BOUNDARY_GOOD: `PWB1_${SUFFIX}`,
-    BOUNDARY_ORPHAN: `PWB2_${SUFFIX}`,
-    PARENT_GHOST: `PWGHOST_${SUFFIX}`,
-  };
-}
-
-async function writeTenantFixture(file: string, code: string, name: string): Promise<void> {
-  const wb = new ExcelJS.Workbook();
-  const sheet = wb.addWorksheet('Tenant Info');
-  sheet.columns = [
-    { header: 'tenantCode', key: 'tenantCode' }, { header: 'tenantName', key: 'tenantName' },
-    { header: 'displayName', key: 'displayName' }, { header: 'tenantType', key: 'tenantType' },
-    { header: 'cityName', key: 'cityName' }, { header: 'districtName', key: 'districtName' },
-  ];
-  sheet.addRow({
-    tenantCode: code, tenantName: name, displayName: name,
-    tenantType: 'City', cityName: name, districtName: 'Test District',
-  });
-  await wb.xlsx.writeFile(file);
-}
-
-async function writeBoundaryBadParentFixture(file: string, good: string, orphan: string, ghost: string, suffix: string): Promise<void> {
+/** A boundary workbook whose child row points at a parentCode not in the set. */
+async function writeBoundaryBadParentFixture(file: string, ids: OnboardingIds, ghost: string): Promise<void> {
   const wb = new ExcelJS.Workbook();
   const sheet = wb.addWorksheet('Boundary');
   sheet.columns = [
     { header: 'code', key: 'code' }, { header: 'name', key: 'name' },
     { header: 'boundaryType', key: 'boundaryType' }, { header: 'parentCode', key: 'parentCode' },
   ];
-  sheet.addRow({ code: good, name: `Test Country ${suffix}`, boundaryType: 'Country', parentCode: '' });
+  sheet.addRow({ code: ids.BOUNDARY_ROOT, name: `Test Country ${ids.SUFFIX}`, boundaryType: 'Country', parentCode: '' });
   // parentCode references a code that does NOT exist anywhere in the
   // dataset — validateBoundaries should flag this row as invalid.
-  sheet.addRow({ code: orphan, name: `Orphan ${suffix}`, boundaryType: 'City', parentCode: ghost });
+  sheet.addRow({ code: ids.BOUNDARY_CHILD, name: `Orphan ${ids.SUFFIX}`, boundaryType: 'City', parentCode: ghost });
   await wb.xlsx.writeFile(file);
-}
-
-async function deactivateTenantViaApi(code: string): Promise<void> {
-  // NOTE: API teardown — no UI delete affordance for tenants today (#21).
-  const token = await getDigitToken({ tenant: ROOT, username: ADMIN_USER, password: ADMIN_PASS });
-  const ri = { apiId: 'Rainmaker', ver: '1.0', ts: Date.now(), msgId: `${Date.now()}|en_IN`, authToken: token.access_token };
-  const searchResp = await fetch(`${BASE_URL}/mdms-v2/v2/_search`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ RequestInfo: ri, MdmsCriteria: { tenantId: ROOT, schemaCode: 'tenant.tenants', uniqueIdentifiers: [code] } }),
-  });
-  if (!searchResp.ok) return;
-  const record = ((await searchResp.json()) as { mdms?: Array<Record<string, unknown>> }).mdms?.[0];
-  if (!record) return;
-  await fetch(`${BASE_URL}/mdms-v2/v2/_update/tenant.tenants`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ RequestInfo: ri, Mdms: { ...record, isActive: false } }),
-  });
-}
-
-async function loginAndCompletePhase1(page: Page, tenantFixture: string, tenantCode: string): Promise<void> {
-  await page.goto('/configurator/login');
-  await expect(page.locator('#username')).toBeVisible();
-  await page.locator('#username').fill(ADMIN_USER);
-  await page.locator('#password').fill(ADMIN_PASS);
-  await page.locator('#tenantCode').click();
-  await page.locator('#tenantCode').fill(ROOT);
-  await page.getByRole('button', { name: /^Onboarding$/ }).click();
-  await Promise.all([
-    page.waitForURL(/\/configurator\/phase\/1/, { timeout: 30_000 }),
-    page.getByRole('button', { name: /Sign In/i }).click(),
-  ]);
-  await page.getByRole('button', { name: /Start Setup/i }).click();
-  await page.locator('input[type="file"]').first().setInputFiles(tenantFixture);
-  await expect(page.getByRole('cell', { name: tenantCode })).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: /Upload to DIGIT/i }).click();
-  await expect(page.getByText('Step 1.2: Branding assets')).toBeVisible({ timeout: 60_000 });
-  await page.getByRole('button', { name: /^Continue$/ }).click();
-  await expect(page.getByText('Phase 1 Complete!')).toBeVisible({ timeout: 30_000 });
-  await Promise.all([
-    page.waitForURL(/\/configurator\/phase\/2/, { timeout: 30_000 }),
-    page.getByRole('button', { name: /Continue to Phase 2/i }).click(),
-  ]);
 }
 
 test.describe('Onboarding — Phase 2 validation', () => {
@@ -123,14 +61,16 @@ test.describe('Onboarding — Phase 2 validation', () => {
 
   test('empty hierarchyType blocks "Create Hierarchy"', { tag: ['@area:onboarding', '@kind:validation', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     test.setTimeout(180_000);
-    const ids = freshIds();
-    const tenantFixture = path.join(os.tmpdir(), `tenant-p2v-${ids.SUFFIX}.xlsx`);
-    await writeTenantFixture(tenantFixture, ids.TENANT_CODE, ids.TENANT_NAME);
+    const ids = freshOnboardingIds();
+    const tenantFixture = tmpXlsx('tenant-p2v', ids.SUFFIX);
+    await writeTenantFixture(tenantFixture, ids);
     tempFiles.push(tenantFixture);
     createdTenants.push(ids.TENANT_CODE);
 
-    await loginAndCompletePhase1(page, tenantFixture, ids.TENANT_CODE);
+    await loginOnboarding(page);
+    await completePhase1(page, ids, tenantFixture);
 
+    await enterPhase2ExcelLanding(page);
     await page.getByRole('button', { name: /Option 1: Create New Hierarchy/i }).click();
     await expect(page.locator('#hierarchyType')).toBeVisible({ timeout: 15_000 });
     // The form's React state initialises hierarchyType to 'ADMIN' (not
@@ -148,22 +88,20 @@ test.describe('Onboarding — Phase 2 validation', () => {
 
   test('boundary xlsx with a missing parentCode lands the row in the Errors tab', { tag: ['@area:onboarding', '@kind:validation', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     test.setTimeout(180_000);
-    const ids = freshIds();
-    const tenantFixture = path.join(os.tmpdir(), `tenant-p2v-${ids.SUFFIX}.xlsx`);
-    const boundaryFixture = path.join(os.tmpdir(), `boundary-bad-parent-${ids.SUFFIX}.xlsx`);
-    await writeTenantFixture(tenantFixture, ids.TENANT_CODE, ids.TENANT_NAME);
-    await writeBoundaryBadParentFixture(boundaryFixture, ids.BOUNDARY_GOOD, ids.BOUNDARY_ORPHAN, ids.PARENT_GHOST, ids.SUFFIX);
+    const ids = freshOnboardingIds();
+    const ghost = `PWGHOST_${ids.SUFFIX}`;
+    const tenantFixture = tmpXlsx('tenant-p2v', ids.SUFFIX);
+    const boundaryFixture = tmpXlsx('boundary-bad-parent-p2v', ids.SUFFIX);
+    await writeTenantFixture(tenantFixture, ids);
+    await writeBoundaryBadParentFixture(boundaryFixture, ids, ghost);
     tempFiles.push(tenantFixture, boundaryFixture);
     createdTenants.push(ids.TENANT_CODE);
 
-    await loginAndCompletePhase1(page, tenantFixture, ids.TENANT_CODE);
+    await loginOnboarding(page);
+    await completePhase1(page, ids, tenantFixture);
 
-    await page.getByRole('button', { name: /Option 1: Create New Hierarchy/i }).click();
-    await expect(page.locator('#hierarchyType')).toBeVisible({ timeout: 15_000 });
-    await page.locator('#hierarchyType').fill(ids.HIERARCHY_TYPE);
-    await page.getByRole('button', { name: /Create Hierarchy/i }).click();
-
-    await expect(page.getByText('Boundary Data Upload')).toBeVisible({ timeout: 60_000 });
+    await enterPhase2ExcelLanding(page);
+    await createHierarchyOption1(page, ids);
     await page.locator('input[type="file"]').first().setInputFiles(boundaryFixture);
 
     // Verify step lands. Tab counts: All=2, Valid=1, Errors=1.
@@ -174,6 +112,6 @@ test.describe('Onboarding — Phase 2 validation', () => {
     // Click into the Errors tab and assert the row's parent-not-found
     // message renders with the ghost code.
     await page.getByRole('tab', { name: /Errors\s*\(1\)/ }).click();
-    await expect(page.getByText(`Parent "${ids.PARENT_GHOST}" not found`).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(`Parent "${ghost}" not found`).first()).toBeVisible({ timeout: 10_000 });
   });
 });

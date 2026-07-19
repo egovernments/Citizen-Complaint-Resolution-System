@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../App';
+import { useApp, SESSION_EXPIRED_KEY } from '../App';
 import { Eye, EyeOff, Loader2, Database, AlertCircle, HelpCircle, Rocket, Settings } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { DigitCard, DigitCardHeader, DigitCardSubHeader } from '@/components/digit/DigitCard';
 import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
 import { SubmitBar } from '@/components/digit/SubmitBar';
-import { apiClient, getApiBaseUrl, ApiClientError } from '@/api';
+import { apiClient, getApiBaseUrl, getConfiguredRootTenant, ApiClientError } from '@/api';
 
 type AppMode = 'onboarding' | 'management';
 
@@ -15,15 +15,39 @@ export default function LoginPage() {
   const { login } = useApp();
   const navigate = useNavigate();
 
+  // Root (state-level) tenant this deployment authenticates against, derived
+  // from the build-time VITE_STATE_TENANT_ID (rendered by the ansible deploy
+  // from host_vars `state_tenant_id`) — never a hardcoded country code.
+  //
+  // Used as the form's actual initial VALUE (not just a placeholder): a
+  // placeholder-only "prefill" is never registered in form state, so submitting
+  // with it untouched silently sends an empty tenantId and no
+  // /user/oauth/token call succeeds. Empty when the build wasn't given one
+  // (dev/standalone) — then the neutral placeholder guides the operator and the
+  // required field forces an explicit entry. Keep in sync with App.tsx's
+  // getConfiguredTenantDefault().
+  const configuredTenantCode = getConfiguredRootTenant();
+  const tenantPlaceholder = configuredTenantCode || 'tenant code';
+
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    tenantCode: '',
+    tenantCode: configuredTenantCode,
   });
   const [mode, setMode] = useState<AppMode>('onboarding');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Explain the bounce when an expired session sent the operator back here.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+        setError('Your session expired. Please log in again to continue.');
+        sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+      }
+    } catch { /* sessionStorage unavailable — skip the banner */ }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,7 +228,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   className="text-muted-foreground hover:text-primary"
-                  title="Root (state-level) tenant code — e.g. 'ke' for Kenya, 'pg' for Punjab."
+                  title="Root (state-level) tenant code for your deployment (the top-level state/country tenant, e.g. the part before the first dot in a city tenant code)."
                 >
                   <HelpCircle className="w-3.5 h-3.5" />
                 </button>
@@ -215,7 +239,7 @@ export default function LoginPage() {
                   type="text"
                   value={formData.tenantCode}
                   onChange={(e) => setFormData({ ...formData, tenantCode: e.target.value })}
-                  placeholder="ke"
+                  placeholder={tenantPlaceholder}
                   className="border-input-border focus:border-primary focus:ring-primary"
                   autoComplete="off"
                   required

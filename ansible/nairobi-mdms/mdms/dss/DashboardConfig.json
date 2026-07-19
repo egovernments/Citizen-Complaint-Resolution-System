@@ -1,0 +1,23 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "default",
+      "allowedRoles": [
+        "SUPERVISOR",
+        "PGR_SUPERVISOR",
+        "GRO",
+        "DGRO",
+        "PGR_LME",
+        "PGR_ADMIN",
+        "SUPERUSER"
+      ],
+      "numberFormat": {
+        "en_IN": "#,##0.00",
+        "pt_PT": "#.##0,00",
+        "fr_FR": "# ##0,00",
+        "default": "#,##0.00"
+      }
+    }
+  }
+]

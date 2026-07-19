@@ -21,7 +21,7 @@
         "valueKey": "total",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
         "compose": null,
         "pii": false,
         "title": "New complaints created",
@@ -75,7 +75,7 @@
         "valueKey": "total",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
         "compose": null,
         "pii": false,
         "title": "Complaints created today",
@@ -136,7 +136,7 @@
         "valueKey": "pct",
         "accent": "green",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
         "compose": null,
         "pii": false,
         "threshold": {
@@ -208,7 +208,7 @@
         "valueKey": "pct",
         "accent": "amber",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
         "compose": null,
         "pii": false,
         "threshold": {
@@ -223,7 +223,8 @@
         },
         "deltaLabel": "vs prior period",
         "title": "Reopen rate",
-        "subtitle": "Reopened ÷ resolved"
+        "subtitle": "Reopened ÷ resolved",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT_SUBTITLE"
       },
       "params": [
         {
@@ -272,11 +273,12 @@
         "valueKey": "avg",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CSAT_AVG",
         "compose": null,
         "pii": false,
         "title": "Citizen satisfaction",
         "subtitle": "Avg. rating on resolved complaints",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CSAT_AVG_SUBTITLE",
         "threshold": {
           "kind": "rating",
           "higherIsBetter": true,
@@ -345,11 +347,12 @@
         "valueKey": "pct",
         "accent": "green",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
         "compose": null,
         "pii": false,
         "title": "First-assignment rate",
         "subtitle": "Never reassigned ÷ assigned",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": true,
@@ -412,11 +415,12 @@
         "valueKey": "pct",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
         "compose": null,
         "pii": false,
         "title": "SLA compliance rate",
         "subtitle": "Resolved within SLA ÷ all filed",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": true,
@@ -481,7 +485,7 @@
         "valueKey": "pct",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
         "compose": null,
         "pii": false,
         "title": "Resolved on time rate",
@@ -542,7 +546,7 @@
         "valueKey": "total",
         "accent": "amber",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
         "compose": null,
         "pii": false,
         "title": "Open complaints",
@@ -599,7 +603,7 @@
         "valueKey": "total",
         "accent": "green",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
         "compose": null,
         "pii": false,
         "threshold": {
@@ -664,11 +668,12 @@
         "valueKey": "max_age_ms",
         "accent": "amber",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
         "compose": null,
         "pii": false,
         "title": "Oldest complaint",
         "subtitle": "Earliest open complaint",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE_SUBTITLE",
         "threshold": {
           "kind": "count",
           "higherIsBetter": false,
@@ -725,11 +730,12 @@
         "valueKey": "avg_ms",
         "accent": "green",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
         "compose": null,
         "pii": false,
         "title": "Average resolution time",
         "subtitle": "Avg. time to resolve",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME_SUBTITLE",
         "delta": {
           "mode": "duration",
           "compare": "prior"
@@ -758,7 +764,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_chart_complaints_by_type",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -790,7 +796,7 @@
         "valueKey": "total",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
         "dimensionKey": "service_code",
         "measureKeys": [
           "total"
@@ -801,8 +807,10 @@
         "orientation": "horizontal",
         "measureKey": "total",
         "seriesLabel": "Filed",
+        "seriesLabelKey": "DASHBOARD_SERIES_FILED",
         "limit": 8,
         "subtitle": "Complaints filed, by type",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
         "labelFormat": "dimension"
       },
       "params": [
@@ -816,6 +824,22 @@
             "wtd",
             "mtd"
           ]
+        },
+        {
+          "name": "hierLevel",
+          "default": "1",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "rbac": {
@@ -855,7 +879,7 @@
         "valueKey": "total",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENTS_BY_TYPE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENTS_BY_TYPE",
         "dimensionKey": "department_code",
         "measureKeys": [
           "total"
@@ -923,7 +947,7 @@
         "valueKey": "rate",
         "accent": "green",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
         "dimensionKey": "department_code",
         "measureKeys": [
           "rate"
@@ -933,7 +957,8 @@
         "compose": null,
         "pii": false,
         "title": "Department-wise resolution rate",
-        "subtitle": "Resolved ÷ filed per department"
+        "subtitle": "Resolved ÷ filed per department",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE_SUBTITLE"
       },
       "params": [
         {
@@ -986,7 +1011,7 @@
         "valueKey": "total",
         "accent": "amber",
         "group": "employee-performance",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
         "dimensionKey": "current_assignee_uuid",
         "measureKey": "total",
         "measureKeys": [
@@ -997,16 +1022,19 @@
           {
             "key": "within",
             "label": "On track",
+            "labelKey": "DASHBOARD_SLA_WITHIN",
             "color": "var(--chart-1)"
           },
           {
             "key": "approaching",
             "label": "Nearing breach",
+            "labelKey": "DASHBOARD_SLA_APPROACHING",
             "color": "var(--chart-2)"
           },
           {
             "key": "breached",
             "label": "Breached",
+            "labelKey": "DASHBOARD_SLA_BREACHED",
             "color": "var(--status-breach)"
           }
         ],
@@ -1018,7 +1046,8 @@
           "dimension": "current_assignee_uuid"
         },
         "title": "Employees with most open complaints",
-        "subtitle": "Open complaints by SLA state per officer"
+        "subtitle": "Open complaints by SLA state per officer",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OFFICER_SLA_SUBTITLE"
       },
       "params": [
         {
@@ -1047,7 +1076,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_chart_open_by_type_stage",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -1073,7 +1102,7 @@
         "valueKey": "total",
         "accent": "amber",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE",
         "dimensionKey": "service_code",
         "measureKeys": [
           "total"
@@ -1088,26 +1117,31 @@
           {
             "key": "PENDINGFORASSIGNMENT",
             "label": "Pending assignment",
+            "labelKey": "DASHBOARD_WF_STAGE_PENDINGFORASSIGNMENT",
             "color": "var(--chart-1)"
           },
           {
             "key": "PENDINGATLME",
             "label": "Assigned",
+            "labelKey": "DASHBOARD_WF_STAGE_PENDINGATLME",
             "color": "var(--chart-2)"
           },
           {
             "key": "PENDINGFORREASSIGNMENT",
             "label": "Pending reassignment",
+            "labelKey": "DASHBOARD_WF_STAGE_PENDINGFORREASSIGNMENT",
             "color": "var(--chart-3)"
           },
           {
             "key": "PENDINGATSUPERVISOR",
             "label": "Pending at supervisor",
+            "labelKey": "DASHBOARD_WF_STAGE_PENDINGATSUPERVISOR",
             "color": "var(--chart-4)"
           }
         ],
         "limit": 8,
         "subtitle": "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in.",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
         "labelFormat": "dimension"
       },
       "params": [
@@ -1121,6 +1155,22 @@
             "wtd",
             "mtd"
           ]
+        },
+        {
+          "name": "hierLevel",
+          "default": "1",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "rbac": {
@@ -1163,7 +1213,7 @@
         "valueKey": "total",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL",
         "dimensionKey": "source",
         "measureKeys": [
           "total"
@@ -1173,10 +1223,12 @@
         "title": "Complaints by channel",
         "measureKey": "total",
         "subtitle": "Open complaints by intake channel",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL_SUBTITLE",
         "channelMap": [
           {
             "id": "web",
             "label": "Web",
+            "labelKey": "DASHBOARD_CHANNEL_WEB",
             "sources": [
               "web",
               "online",
@@ -1187,6 +1239,7 @@
           {
             "id": "mobile",
             "label": "Mobile",
+            "labelKey": "DASHBOARD_CHANNEL_MOBILE",
             "sources": [
               "app",
               "mobile",
@@ -1198,6 +1251,7 @@
           {
             "id": "ivr",
             "label": "IVR",
+            "labelKey": "DASHBOARD_CHANNEL_IVR",
             "sources": [
               "phone",
               "ivr"
@@ -1207,6 +1261,7 @@
           {
             "id": "walk_in",
             "label": "Walk-in",
+            "labelKey": "DASHBOARD_CHANNEL_WALK_IN",
             "sources": [
               "walk_in",
               "walk-in",
@@ -1219,6 +1274,7 @@
           {
             "id": "sms",
             "label": "SMS",
+            "labelKey": "DASHBOARD_CHANNEL_SMS",
             "sources": [
               "sms"
             ],
@@ -1227,6 +1283,7 @@
           {
             "id": "email",
             "label": "Email",
+            "labelKey": "DASHBOARD_CHANNEL_EMAIL",
             "sources": [
               "email"
             ],
@@ -1235,6 +1292,7 @@
           {
             "id": "whatsapp",
             "label": "WhatsApp",
+            "labelKey": "DASHBOARD_CHANNEL_WHATSAPP",
             "sources": [
               "whatsapp"
             ],
@@ -1243,6 +1301,7 @@
           {
             "id": "other",
             "label": "Other",
+            "labelKey": "DASHBOARD_CHANNEL_OTHER",
             "sources": [],
             "color": "var(--muted-foreground)"
           }
@@ -1295,7 +1354,7 @@
         "valueKey": "total",
         "accent": "amber",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE",
         "dimensionKey": "aging_bucket",
         "measureKeys": [
           "total"
@@ -1309,7 +1368,8 @@
           "3-7d",
           ">7d"
         ],
-        "subtitle": "Open complaints by age bucket"
+        "subtitle": "Open complaints by age bucket",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE_SUBTITLE"
       },
       "params": [
         {
@@ -1370,7 +1430,7 @@
         "valueKey": "filed",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
         "dimensionKey": "ward_code",
         "measureKeys": [
           "filed",
@@ -1405,14 +1465,10 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_table_complaint_type_details",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "status": "published",
       "query": {
         "grain": "facts",
-        "window": {
-          "name": "wtd",
-          "timeRole": "filed_at"
-        },
         "dimensions": [
           "service_code",
           "service_group"
@@ -1488,7 +1544,7 @@
             "dir": "desc"
           }
         ],
-        "limit": 30
+        "limit": 100
       },
       "supportsSeries": false,
       "viz": {
@@ -1497,7 +1553,7 @@
         "valueKey": "avg_resolution_ms",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
         "dimensionKey": "service_code",
         "measureKeys": [
           "avg_resolution_ms",
@@ -1514,30 +1570,35 @@
           {
             "id": "service_code",
             "label": "Subtype",
+            "labelKey": "DASHBOARD_COL_SUBTYPE",
             "align": "left",
             "type": "dimension"
           },
           {
             "id": "service_group",
             "label": "Type",
+            "labelKey": "DASHBOARD_COL_TYPE",
             "align": "left",
             "type": "dimension"
           },
           {
             "id": "avg_resolution_ms",
             "label": "Avg resolution time",
+            "labelKey": "DASHBOARD_COL_AVG_RESOLUTION_TIME",
             "align": "left",
             "type": "hoursDays"
           },
           {
             "id": "ideal_sla_ms",
             "label": "SLA",
+            "labelKey": "DASHBOARD_COL_SLA",
             "align": "left",
             "type": "hoursDays"
           },
           {
             "id": "reopen_rate",
             "label": "Reopen rate",
+            "labelKey": "DASHBOARD_COL_REOPEN_RATE",
             "align": "left",
             "type": "percent",
             "threshold": {
@@ -1549,6 +1610,7 @@
           {
             "id": "oldest_open_ms",
             "label": "Oldest complaint",
+            "labelKey": "DASHBOARD_COL_OLDEST_COMPLAINT",
             "align": "left",
             "type": "hoursDays",
             "threshold": {
@@ -1560,6 +1622,7 @@
           {
             "id": "ontime_rate",
             "label": "Resolved on-time rate",
+            "labelKey": "DASHBOARD_COL_RESOLVED_ON_TIME_RATE",
             "align": "left",
             "type": "percent",
             "threshold": {
@@ -1571,6 +1634,7 @@
           {
             "id": "avg_csat",
             "label": "CSAT",
+            "labelKey": "DASHBOARD_COL_CSAT",
             "align": "left",
             "type": "rating",
             "threshold": {
@@ -1580,19 +1644,37 @@
             }
           }
         ],
-        "subtitle": "Resolution, SLA and reopen metrics per complaint type"
+        "subtitle": "Resolution, SLA and reopen metrics per complaint type - all complaints, narrowed by the date filter",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS_SUBTITLE"
       },
       "params": [
         {
           "name": "window",
-          "default": "last_7d",
           "allowed": [
             "last_1d",
             "last_7d",
             "last_30d",
             "wtd",
-            "mtd"
+            "mtd",
+            "all"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "hierLevel",
+          "default": "leaf",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
           ]
+        },
+        {
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "rbac": {
@@ -1647,7 +1729,7 @@
         "valueKey": "open_age_ms",
         "accent": "red",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK",
         "dimensionKey": "service_request_id",
         "measureKeys": [
           "open_age_ms",
@@ -1656,7 +1738,8 @@
         "compose": null,
         "pii": false,
         "title": "Complaints at risk",
-        "subtitle": "Open complaints nearing or past SLA"
+        "subtitle": "Open complaints nearing or past SLA",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK_SUBTITLE"
       },
       "params": [
         {
@@ -1685,7 +1768,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_chart_over_time_created_daily",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -1729,9 +1812,10 @@
       "viz": {
         "kind": "line",
         "format": "integer",
+        "valueKey": "created",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_CREATED_DAILY",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_CREATED_DAILY",
         "dimensionKey": "created_date",
         "labelFormat": "date-dow",
         "measureKeys": [
@@ -1742,18 +1826,21 @@
         "seriesDefs": [
           {
             "name": "Created",
+            "labelKey": "DASHBOARD_SERIES_CREATED",
             "measureKey": "created",
             "color": "var(--chart-1)",
             "yAxisGroup": "count"
           },
           {
             "name": "Resolved",
+            "labelKey": "DASHBOARD_SERIES_RESOLVED",
             "measureKey": "resolved",
             "color": "var(--chart-2)",
             "yAxisGroup": "count"
           },
           {
             "name": "Resolution rate",
+            "labelKey": "DASHBOARD_SERIES_RESOLUTION_RATE",
             "numeratorKey": "resolved",
             "denominatorKey": "created",
             "color": "var(--chart-3)",
@@ -1762,6 +1849,7 @@
           },
           {
             "name": "SLA compliance rate",
+            "labelKey": "DASHBOARD_SERIES_SLA_COMPLIANCE_RATE",
             "numeratorKey": "on_time",
             "denominatorKey": "created",
             "color": "var(--chart-4)",
@@ -1885,7 +1973,7 @@
         "valueKey": "open",
         "accent": "amber",
         "group": "employee-performance",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE",
         "dimensionKey": "current_assignee_uuid",
         "measureKeys": [
           "assigned",
@@ -1904,30 +1992,35 @@
           {
             "id": "current_assignee_uuid",
             "label": "Name",
+            "labelKey": "DASHBOARD_COL_NAME",
             "align": "left",
             "type": "officer"
           },
           {
             "id": "role",
             "label": "Role",
+            "labelKey": "DASHBOARD_COL_ROLE",
             "align": "left",
             "type": "text"
           },
           {
             "id": "department_code",
             "label": "Dept",
+            "labelKey": "DASHBOARD_COL_DEPT",
             "align": "left",
             "type": "department"
           },
           {
             "id": "assigned",
             "label": "Assigned",
+            "labelKey": "DASHBOARD_COL_ASSIGNED",
             "align": "left",
             "type": "integer"
           },
           {
             "id": "open",
             "label": "Open",
+            "labelKey": "DASHBOARD_COL_OPEN",
             "align": "left",
             "type": "integer",
             "threshold": {
@@ -1939,12 +2032,14 @@
           {
             "id": "resolved",
             "label": "Resolved",
+            "labelKey": "DASHBOARD_COL_RESOLVED",
             "align": "left",
             "type": "integer"
           },
           {
             "id": "reopen_rate",
             "label": "Reopen rate",
+            "labelKey": "DASHBOARD_COL_REOPEN_RATE",
             "align": "left",
             "type": "percent",
             "threshold": {
@@ -1956,6 +2051,7 @@
           {
             "id": "avg_csat",
             "label": "CSAT",
+            "labelKey": "DASHBOARD_COL_CSAT",
             "align": "left",
             "type": "rating",
             "threshold": {
@@ -1967,6 +2063,7 @@
           {
             "id": "escalation_rate",
             "label": "Escalation rate",
+            "labelKey": "DASHBOARD_COL_ESCALATION_RATE",
             "align": "left",
             "type": "percent",
             "threshold": {
@@ -1977,7 +2074,8 @@
           }
         ],
         "labelFormat": "officer",
-        "subtitle": "Workload and quality metrics per officer"
+        "subtitle": "Workload and quality metrics per officer",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE_SUBTITLE"
       },
       "params": [
         {
@@ -2028,7 +2126,7 @@
         "valueKey": "total",
         "accent": "red",
         "group": "resolution-sla",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_BREACH_TOTAL",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_RS_BREACH_TOTAL",
         "compose": null,
         "pii": false,
         "threshold": {
@@ -2103,7 +2201,7 @@
         "valueKey": "total",
         "accent": "slate",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_COMPLAINT_PINS",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_MAP_COMPLAINT_PINS",
         "dimensionKey": "service_request_id",
         "measureKeys": [
           "total"
@@ -2168,6 +2266,7 @@
         "valueKey": "resolved",
         "accent": "green",
         "group": "complaint-landscape",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO",
         "dimensionKey": "department_code",
         "measureKeys": [
           "filed",
@@ -2179,6 +2278,7 @@
         "pii": false,
         "title": "Flow ratio by department",
         "subtitle": "Resolved ÷ created",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO_SUBTITLE",
         "numeratorKey": "resolved",
         "denominatorKey": "filed",
         "breakEven": 1
@@ -2238,6 +2338,7 @@
         "pii": false,
         "title": "SLA non-compliance rate",
         "subtitle": "Breached SLA ÷ all complaints",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": false,
@@ -2249,7 +2350,7 @@
           "compare": "prior"
         },
         "deltaLabel": "vs prior period",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT"
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT"
       },
       "params": [
         {
@@ -2267,6 +2368,1078 @@
       "rbac": {
         "visibleTo": []
       }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_total_complaints_count",
+      "viz": {
+        "pii": false,
+        "kind": "scalar",
+        "delta": {
+          "mode": "percent",
+          "compare": "prior"
+        },
+        "group": "complaint-landscape",
+        "title": "Total complaints",
+        "accent": "teal",
+        "format": "integer",
+        "compose": null,
+        "dateKey": "created_date",
+        "subtitle": "Complaints filed in period",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT",
+        "valueKey": "total",
+        "deltaLabel": "vs prior period",
+        "sparklineMeasureKey": "total"
+      },
+      "rbac": {
+        "visibleTo": [
+          "SUPERVISOR",
+          "PGR_SUPERVISOR",
+          "GRO",
+          "DGRO",
+          "PGR_LME",
+          "PGR_ADMIN",
+          "SUPERUSER",
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      },
+      "query": {
+        "grain": "facts",
+        "measures": [
+          {
+            "agg": "count",
+            "name": "total"
+          }
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ],
+          "default": "last_7d"
+        }
+      ],
+      "status": "published",
+      "version": "1.0.0",
+      "supportsSeries": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_flow_ratio_count",
+      "viz": {
+        "pii": false,
+        "kind": "scalar",
+        "delta": {
+          "mode": "rating",
+          "compare": "prior"
+        },
+        "group": "complaint-landscape",
+        "title": "Flow ratio",
+        "accent": "teal",
+        "format": "decimalTwo",
+        "compose": null,
+        "subtitle": "Resolved in period ÷ created in period",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
+        "valueKey": "ratio",
+        "deltaLabel": "vs prior period"
+      },
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      },
+      "query": {
+        "grain": "facts",
+        "measures": [
+          {
+            "agg": "ratio",
+            "name": "ratio",
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              },
+              "window": {
+                "timeRole": "resolved_at"
+              }
+            },
+            "denominator": {
+              "agg": "count"
+            }
+          }
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ],
+          "default": "last_7d"
+        }
+      ],
+      "status": "published",
+      "version": "1.0.0",
+      "supportsSeries": false
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_complaints_over_time",
+      "viz": {
+        "pii": false,
+        "kind": "line",
+        "group": "complaint-landscape",
+        "title": "Complaints over time",
+        "accent": "teal",
+        "format": "integer",
+        "compose": null,
+        "subtitle": "Created, resolved and open per day",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME",
+        "valueKey": "created",
+        "seriesDefs": [
+          {
+            "name": "Created",
+            "labelKey": "DASHBOARD_SERIES_CREATED",
+            "color": "var(--chart-1)",
+            "chartType": "column",
+            "measureKey": "created",
+            "yAxisGroup": "count"
+          },
+          {
+            "name": "Resolved",
+            "labelKey": "DASHBOARD_SERIES_RESOLVED",
+            "color": "var(--chart-2)",
+            "chartType": "column",
+            "measureKey": "resolved",
+            "yAxisGroup": "count"
+          },
+          {
+            "name": "Open",
+            "labelKey": "DASHBOARD_SERIES_OPEN",
+            "color": "var(--chart-3)",
+            "chartType": "column",
+            "measureKey": "open",
+            "yAxisGroup": "count"
+          },
+          {
+            "name": "On-time %",
+            "color": "var(--chart-4)",
+            "chartType": "line",
+            "yAxisGroup": "percent",
+            "numeratorKey": "on_time",
+            "denominatorKey": "resolved"
+          }
+        ],
+        "labelFormat": "date-dow",
+        "measureKeys": [
+          "created",
+          "resolved",
+          "open",
+          "on_time"
+        ],
+        "dimensionKey": "created_date"
+      },
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      },
+      "query": {
+        "sort": [
+          {
+            "by": "created_date",
+            "dir": "asc"
+          }
+        ],
+        "grain": "facts",
+        "limit": 366,
+        "measures": [
+          {
+            "agg": "count",
+            "name": "created"
+          }
+        ],
+        "dimensions": [
+          "created_date"
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ],
+          "default": "last_7d"
+        }
+      ],
+      "status": "published",
+      "version": "1.0.0",
+      "supportsSeries": false
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_over_time_open_daily",
+      "viz": {
+        "pii": false,
+        "kind": "line",
+        "group": "complaint-landscape",
+        "title": "Open complaints over time (daily)",
+        "accent": "teal",
+        "format": "integer",
+        "compose": null,
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
+        "valueKey": "open",
+        "dimensionKey": "snapshot_date"
+      },
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER"
+        ]
+      },
+      "query": {
+        "sort": [
+          {
+            "by": "snapshot_date",
+            "dir": "asc"
+          }
+        ],
+        "grain": "daily",
+        "limit": 366,
+        "filters": {
+          "is_open": true
+        },
+        "measures": [
+          {
+            "agg": "count",
+            "name": "open"
+          }
+        ],
+        "dimensions": [
+          "snapshot_date"
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ],
+          "default": "last_7d"
+        }
+      ],
+      "status": "published",
+      "version": "1.0.0",
+      "supportsSeries": false
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_wards_by_sla",
+      "viz": {
+        "pii": false,
+        "kind": "bar",
+        "group": "complaint-landscape",
+        "limit": 12,
+        "title": "Complaints by Wards",
+        "accent": "teal",
+        "format": "integer",
+        "compose": null,
+        "stackKey": "sla_status_bucket",
+        "subtitle": "All complaints by SLA state — per ward",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA",
+        "valueKey": "total",
+        "measureKey": "total",
+        "labelFormat": "dimension",
+        "measureKeys": [
+          "total"
+        ],
+        "orientation": "horizontal",
+        "stackSeries": [
+          {
+            "key": "resolved",
+            "color": "var(--status-resolved-bg)",
+            "label": "Resolved",
+            "labelKey": "DASHBOARD_SERIES_RESOLVED"
+          },
+          {
+            "key": "within",
+            "color": "var(--chart-1)",
+            "label": "On track",
+            "labelKey": "DASHBOARD_SLA_WITHIN"
+          },
+          {
+            "key": "approaching",
+            "color": "var(--chart-2)",
+            "label": "Nearing breach",
+            "labelKey": "DASHBOARD_SLA_APPROACHING"
+          },
+          {
+            "key": "breached",
+            "color": "var(--status-breach)",
+            "label": "Breached",
+            "labelKey": "DASHBOARD_SLA_BREACHED"
+          }
+        ],
+        "dimensionKey": "ward_code",
+        "sortBySegment": "breached"
+      },
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      },
+      "query": {
+        "grain": "daily",
+        "limit": 120,
+        "measures": [
+          {
+            "agg": "count",
+            "name": "total"
+          }
+        ],
+        "dimensions": [
+          "ward_code",
+          "sla_status_bucket"
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ],
+          "default": "last_7d"
+        }
+      ],
+      "status": "published",
+      "version": "1.0.0",
+      "supportsSeries": false
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_chart_department_breach_scatter",
+      "viz": {
+        "pii": false,
+        "kind": "line",
+        "group": "complaint-landscape",
+        "title": "Breach rate vs caseload by department",
+        "accent": "teal",
+        "format": "percentOneDecimal",
+        "compose": null,
+        "subtitle": "Open caseload vs breach rate at period end",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER",
+        "valueKey": "open",
+        "xAxisLabel": "Caseload (open)",
+        "yAxisLabel": "Breach rate (%)",
+        "labelFormat": "department",
+        "measureKeys": [
+          "open",
+          "breached",
+          "sla_elapsed"
+        ],
+        "xMeasureKey": "open",
+        "dimensionKey": "department_code",
+        "numeratorKey": "breached",
+        "denominatorKey": "sla_elapsed",
+        "scatterProfile": "departmentBreachCaseload"
+      },
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      },
+      "query": {
+        "sort": [
+          {
+            "by": "open",
+            "dir": "desc"
+          }
+        ],
+        "grain": "daily",
+        "limit": 50,
+        "filters": {
+          "is_open": true
+        },
+        "measures": [
+          {
+            "agg": "count",
+            "name": "open"
+          },
+          {
+            "agg": "count",
+            "name": "breached",
+            "filter": {
+              "sla_status_bucket": "breached"
+            }
+          },
+          {
+            "agg": "count",
+            "name": "sla_elapsed",
+            "filter": {
+              "sla_status_bucket": {
+                "in": [
+                  "within",
+                  "approaching",
+                  "breached"
+                ]
+              }
+            }
+          }
+        ],
+        "dimensions": [
+          "department_code"
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ],
+          "default": "last_7d"
+        }
+      ],
+      "status": "published",
+      "version": "1.0.0",
+      "supportsSeries": false
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_ward_performance",
+      "viz": {
+        "pii": false,
+        "kind": "rankedList",
+        "group": "complaint-landscape",
+        "title": "Ward performance",
+        "accent": "teal",
+        "format": "integer",
+        "columns": [
+          {
+            "id": "wardLabel",
+            "type": "text",
+            "align": "left",
+            "label": "Ward",
+            "width": "24%"
+          },
+          {
+            "id": "created",
+            "type": "integer",
+            "align": "left",
+            "label": "Created",
+            "width": "14%"
+          },
+          {
+            "id": "open",
+            "type": "integer",
+            "align": "left",
+            "label": "Open",
+            "width": "14%"
+          },
+          {
+            "id": "reopenRate",
+            "type": "percent",
+            "align": "left",
+            "label": "Reopen %",
+            "width": "16%"
+          },
+          {
+            "id": "ontimeRate",
+            "type": "percent",
+            "align": "left",
+            "label": "On-time %",
+            "width": "16%"
+          },
+          {
+            "id": "avgCsat",
+            "type": "rating",
+            "align": "left",
+            "label": "CSAT",
+            "width": "16%"
+          }
+        ],
+        "compose": null,
+        "subtitle": "Created, open, reopen, on-time and CSAT by ward",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE",
+        "valueKey": "created",
+        "measureKeys": [
+          "created",
+          "open",
+          "reopen_rate",
+          "ontime_rate",
+          "avg_csat"
+        ],
+        "dimensionKey": "ward_code",
+        "tableProfile": "wardPerformance"
+      },
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      },
+      "query": {
+        "sort": [
+          {
+            "by": "created",
+            "dir": "desc"
+          }
+        ],
+        "grain": "facts",
+        "limit": 200,
+        "measures": [
+          {
+            "agg": "count",
+            "name": "created"
+          },
+          {
+            "agg": "ratio",
+            "name": "reopen_rate",
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_reopened": true,
+                "is_resolved": true
+              },
+              "window": {
+                "timeRole": "resolved_at"
+              }
+            },
+            "denominator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              },
+              "window": {
+                "timeRole": "resolved_at"
+              }
+            }
+          },
+          {
+            "agg": "ratio",
+            "name": "ontime_rate",
+            "numerator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true,
+                "sla_breached": false
+              },
+              "window": {
+                "timeRole": "resolved_at"
+              }
+            },
+            "denominator": {
+              "agg": "count",
+              "filter": {
+                "is_resolved": true
+              },
+              "window": {
+                "timeRole": "resolved_at"
+              }
+            }
+          },
+          {
+            "agg": "avg",
+            "name": "avg_csat",
+            "column": "rating",
+            "filter": {
+              "has_rating": true,
+              "is_resolved": true
+            },
+            "window": {
+              "timeRole": "resolved_at"
+            }
+          }
+        ],
+        "dimensions": [
+          "ward_code"
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ],
+          "default": "last_7d"
+        }
+      ],
+      "status": "published",
+      "version": "1.0.0",
+      "supportsSeries": false
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_ward_open_daily",
+      "viz": {
+        "pii": false,
+        "kind": "line",
+        "group": "complaint-landscape",
+        "title": "Open complaints by ward (daily)",
+        "accent": "teal",
+        "format": "integer",
+        "compose": null,
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
+        "valueKey": "open",
+        "dimensionKey": "ward_code"
+      },
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER"
+        ]
+      },
+      "query": {
+        "sort": [
+          {
+            "by": "open",
+            "dir": "desc"
+          }
+        ],
+        "grain": "daily",
+        "limit": 200,
+        "filters": {
+          "is_open": true
+        },
+        "measures": [
+          {
+            "agg": "count",
+            "name": "open"
+          }
+        ],
+        "dimensions": [
+          "ward_code"
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ],
+          "default": "last_7d"
+        }
+      ],
+      "status": "published",
+      "version": "1.0.0",
+      "supportsSeries": false
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_service_quality_by_channel",
+      "viz": {
+        "pii": false,
+        "kind": "rankedList",
+        "group": "complaint-landscape",
+        "title": "Service quality by channel",
+        "accent": "teal",
+        "format": "integer",
+        "columns": [
+          {
+            "id": "channelLabel",
+            "type": "text",
+            "align": "left",
+            "label": "Channel",
+            "width": "28%"
+          },
+          {
+            "id": "volume",
+            "type": "integer",
+            "align": "left",
+            "label": "Volume",
+            "width": "20%"
+          },
+          {
+            "id": "resolutionRate",
+            "type": "percent",
+            "align": "left",
+            "label": "Resolution",
+            "width": "26%"
+          },
+          {
+            "id": "avgCsat",
+            "type": "rating",
+            "align": "left",
+            "label": "CSAT",
+            "width": "26%"
+          }
+        ],
+        "compose": null,
+        "subtitle": "Volume, resolution rate and CSAT by intake channel",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL",
+        "valueKey": "volume",
+        "measureKeys": [
+          "volume",
+          "resolved",
+          "avg_csat"
+        ],
+        "dimensionKey": "source",
+        "tableProfile": "serviceQualityByChannel"
+      },
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      },
+      "query": {
+        "sort": [
+          {
+            "by": "volume",
+            "dir": "desc"
+          }
+        ],
+        "grain": "facts",
+        "limit": 100,
+        "measures": [
+          {
+            "agg": "count",
+            "name": "volume"
+          },
+          {
+            "agg": "count",
+            "name": "resolved",
+            "filter": {
+              "is_resolved": true
+            },
+            "window": {
+              "timeRole": "resolved_at"
+            }
+          },
+          {
+            "agg": "avg",
+            "name": "avg_csat",
+            "column": "rating",
+            "filter": {
+              "has_rating": true,
+              "is_resolved": true
+            },
+            "window": {
+              "timeRole": "resolved_at"
+            }
+          }
+        ],
+        "dimensions": [
+          "source"
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ],
+          "default": "last_7d"
+        }
+      ],
+      "status": "published",
+      "version": "1.0.0",
+      "supportsSeries": false
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_subtype_performance",
+      "viz": {
+        "pii": false,
+        "kind": "rankedList",
+        "group": "complaint-landscape",
+        "title": "Complaint sub-type performance",
+        "accent": "teal",
+        "format": "hoursDays",
+        "columns": [
+          {
+            "id": "subtypeLabel",
+            "type": "text",
+            "align": "left",
+            "label": "Subtype",
+            "width": "30%"
+          },
+          {
+            "id": "share_pct",
+            "type": "percent",
+            "align": "left",
+            "label": "% of complaints",
+            "width": "18%"
+          },
+          {
+            "id": "avgResolutionMs",
+            "type": "hoursDays",
+            "align": "left",
+            "label": "Avg resolution",
+            "width": "22%"
+          },
+          {
+            "id": "idealSlaMs",
+            "type": "hoursDays",
+            "align": "left",
+            "label": "SLA",
+            "width": "18%"
+          }
+        ],
+        "compose": null,
+        "subtitle": "Share, resolution time and SLA by subtype",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE",
+        "valueKey": "avg_resolution_ms",
+        "measureKeys": [
+          "total",
+          "avg_resolution_ms",
+          "ideal_sla_ms"
+        ],
+        "dimensionKey": "service_code",
+        "tableProfile": "subtypePerformance"
+      },
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      },
+      "query": {
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
+        "grain": "facts",
+        "limit": 30,
+        "measures": [
+          {
+            "agg": "count",
+            "name": "total"
+          },
+          {
+            "agg": "avg",
+            "name": "avg_resolution_ms",
+            "column": "resolution_ms",
+            "filter": {
+              "is_resolved": true
+            }
+          },
+          {
+            "agg": "avg",
+            "name": "ideal_sla_ms",
+            "column": "sla_target_ms"
+          }
+        ],
+        "dimensions": [
+          "service_code"
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ],
+          "default": "last_7d"
+        },
+        {
+          "name": "hierLevel",
+          "default": "leaf",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
+        }
+      ],
+      "status": "published",
+      "version": "1.2.0",
+      "supportsSeries": false
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "id": "cl_table_recurring_ward_subtype",
+      "viz": {
+        "pii": false,
+        "kind": "rankedList",
+        "group": "complaint-landscape",
+        "title": "Recurring complaints by ward & sub-type",
+        "accent": "teal",
+        "format": "integer",
+        "columns": [
+          {
+            "id": "wardLabel",
+            "type": "text",
+            "align": "left",
+            "label": "Ward",
+            "width": "28%"
+          },
+          {
+            "id": "subtypeLabel",
+            "type": "text",
+            "align": "left",
+            "label": "Sub-type",
+            "width": "32%"
+          },
+          {
+            "id": "total",
+            "type": "integer",
+            "align": "left",
+            "label": "Total",
+            "width": "18%"
+          },
+          {
+            "id": "trendPct",
+            "type": "trend",
+            "align": "left",
+            "label": "Trend",
+            "width": "22%"
+          }
+        ],
+        "compose": null,
+        "minCount": 3,
+        "subtitle": "Ward × subtype pairs with ≥ 3 complaints in period",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
+        "valueKey": "total",
+        "needsPrior": true,
+        "measureKeys": [
+          "total"
+        ],
+        "dimensionKey": "ward_code",
+        "tableProfile": "wardSubtypeRecurring"
+      },
+      "rbac": {
+        "visibleTo": [
+          "TICKET_REPORT_VIEWER",
+          "PGR_VIEWER"
+        ]
+      },
+      "query": {
+        "sort": [
+          {
+            "by": "total",
+            "dir": "desc"
+          }
+        ],
+        "grain": "facts",
+        "limit": 200,
+        "measures": [
+          {
+            "agg": "count",
+            "name": "total"
+          }
+        ],
+        "dimensions": [
+          "ward_code",
+          "service_code"
+        ]
+      },
+      "params": [
+        {
+          "name": "window",
+          "allowed": [
+            "last_1d",
+            "last_7d",
+            "last_30d",
+            "wtd",
+            "mtd"
+          ],
+          "default": "last_7d"
+        },
+        {
+          "name": "hierLevel",
+          "default": "leaf",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
+        }
+      ],
+      "status": "published",
+      "version": "1.2.0",
+      "supportsSeries": false
     }
   }
 ]

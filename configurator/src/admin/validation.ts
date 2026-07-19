@@ -35,17 +35,6 @@ export const phone = raRegex(
 );
 
 /**
- * Kenya citizen mobile: 9 digits starting with 7 or 1, optionally
- * prefixed with 0. Matches MDMS `common-masters.MobileNumberValidation`
- * at tenant `ke`. NOT clamped to the HRMS 10-digit floor — citizens have
- * no HRMS-side @Pattern constraint.
- */
-export const phoneKE = raRegex(
-  /^0?[17][0-9]{8}$/,
-  'Enter a valid Kenyan mobile starting with 7 or 1 (e.g. 712345678)',
-);
-
-/**
  * Postal code validator — country-configurable.
  *
  * Per @vinothrallapalli-eGov review on PR #690: don't hardcode the
@@ -53,15 +42,17 @@ export const phoneKE = raRegex(
  * own postal-code rule. The canonical source is the
  * `common-masters.MobileNumberValidation` MDMS master — same master used for
  * mobile validation — for postal code, use a separate MDMS entry or
- * globalConfigs.CORE_POSTAL_CODE_CONFIGS.
+ * globalConfigs.CORE_POSTAL_CONFIGS.
  *
  * Read order (matches `useMobileValidation`):
  *   1. `window.__DIGIT_USER_VALIDATION.postalCode` — populated by the
  *      `useMobileValidation` hook from the MDMS master.
- *   2. `globalConfigs.CORE_POSTAL_CODE_CONFIGS` — build-time fallback
- *      rendered by the playbook.
- *   3. Sensible default — `^[0-9]{5}$` (Kenya rule). Tenants with a
- *      different rule MUST set the globalConfigs key.
+ *   2. `globalConfigs.CORE_POSTAL_CONFIGS` — build-time fallback rendered
+ *      by the ansible playbook from host_vars `core_postal_configs`
+ *      (legacy `CORE_POSTAL_CODE_CONFIGS` key also honoured).
+ *   3. Last-resort default only when no config is present. This is NOT a
+ *      country pin — any deployment MUST set `core_postal_configs` in its
+ *      host_vars so the served globalConfigs supplies the real rule.
  *
  * `postalCode` is a function-valued validator so the resolution runs
  * at validation time (every keystroke), not at module-import time.
@@ -80,11 +71,15 @@ function resolvePostalRule(): { pattern: RegExp; message: string } {
       ? (window as unknown as Record<string, unknown>).__DIGIT_USER_VALIDATION
       : undefined;
   const mdmsRule = (userValidation as Record<string, Record<string, unknown>> | undefined)?.postalCode;
-  const globalRule =
+  const getConfig =
     typeof window !== 'undefined'
       ? (window as unknown as Record<string, { getConfig?: (key: string) => Record<string, unknown> }>)
-          .globalConfigs?.getConfig?.('CORE_POSTAL_CODE_CONFIGS')
+          .globalConfigs?.getConfig
       : undefined;
+  // Ansible templates this as CORE_POSTAL_CONFIGS (from host_vars
+  // `core_postal_configs`); fall back to the legacy CORE_POSTAL_CODE_CONFIGS key.
+  const globalRule =
+    getConfig?.('CORE_POSTAL_CONFIGS') ?? getConfig?.('CORE_POSTAL_CODE_CONFIGS');
 
   const patternStr =
     (mdmsRule?.pattern as string | undefined) ||
@@ -148,9 +143,6 @@ export const mobileRequired = composeValidators(required, phone);
 
 /** Mobile number: optional, but if filled must be valid */
 export const mobile = phone;
-
-/** Kenya citizen mobile: required, 9-or-10-digit Kenyan format */
-export const mobileKERequired = composeValidators(required, phoneKE);
 
 /** Email: optional, but if filled must be valid */
 export const emailOptional = email;
@@ -231,7 +223,6 @@ const flagRequired = (fn: ReturnType<typeof composeValidators>) => {
 
 flagRequired(name);
 flagRequired(mobileRequired);
-flagRequired(mobileKERequired);
 flagRequired(emailRequired);
 flagRequired(codeRequired);
 flagRequired(positiveInt);

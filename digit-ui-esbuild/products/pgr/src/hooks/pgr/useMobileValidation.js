@@ -5,6 +5,7 @@ import {
   DEFAULT_MOBILE_PATTERN,
   DEFAULT_MOBILE_PREFIX,
 } from "@egovernments/digit-ui-libraries";
+import { useTranslation } from "react-i18next";
 
 /**
  * Custom hook that returns the mobile-number validation config for the
@@ -34,6 +35,7 @@ import {
  * @returns {object} - Returns validation rules and loading state
  */
 const useMobileValidation = (tenantId, validationName = "defaultMobileValidation") => {
+  const { t } = useTranslation();
   const reqCriteria = {
     url: `/${window?.globalConfigs?.getConfig?.("MDMS_V1_CONTEXT_PATH") || "mdms-v2"}/v1/_search`,
     params: {
@@ -107,7 +109,10 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
     minLength: resolvedMin,
     maxLength: resolvedMax > 0 ? resolvedMax : 15,
 
-    errorMessage: buildMobileErrorMessage(resolvedPattern),
+    // `t` from react-i18next resolves ERR_INVALID_MOBILE_NUMBER / MOBILE_VALIDATION_*
+    // against the active locale (module: rainmaker-common) — without it this
+    // message is hardcoded English regardless of the selected language.
+    errorMessage: buildMobileErrorMessage(resolvedPattern, t),
 
     isActive: mdmsConfig?.isActive !== undefined ? mdmsConfig.isActive : true,
   };
@@ -120,6 +125,16 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
   if (typeof window !== "undefined" && !isLoading && mdmsConfig) {
     window.__DIGIT_USER_VALIDATION = window.__DIGIT_USER_VALIDATION || {};
     window.__DIGIT_USER_VALIDATION.mobile = validationRules;
+    // CCSD-1990/1989: name + email ride the same master (optional fields) and
+    // the same canonical channel. Synchronous consumers (config getters) fall
+    // back to their built-in patterns when these are absent — an unseeded or
+    // partially-seeded master can never break a form.
+    if (mdmsConfig.nameRegex) {
+      window.__DIGIT_USER_VALIDATION.name = { pattern: mdmsConfig.nameRegex };
+    }
+    if (mdmsConfig.emailRegex) {
+      window.__DIGIT_USER_VALIDATION.email = { pattern: mdmsConfig.emailRegex };
+    }
   }
 
   const getMinMaxValues = () => {

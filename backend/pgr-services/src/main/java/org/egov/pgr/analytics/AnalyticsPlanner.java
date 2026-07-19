@@ -55,6 +55,17 @@ public class AnalyticsPlanner {
 
         // ---- dimensions ----
         if (q.has("dimensions")) for (JsonNode d : q.get("dimensions")) {
+            if (d.isObject()) {
+                // #1111/R1: the ONLY object dimension the grammar accepts is the composer-emitted
+                // hierarchy-level marker (nonce-gated; unreachable from request/MDMS JSON). It is
+                // aliased AS service_code so viz/sort/columns keep working unchanged, and grouped
+                // by ordinal below, so an expression dimension is safe.
+                String expr = hierLevelDimExpr(d, grainName);
+                selectExprs.add(expr + " AS service_code");
+                groupExprs.add(expr);
+                columns.add("service_code");
+                continue;
+            }
             String col = d.asText();
             if (!g.groupable.contains(col)) throw new IllegalArgumentException("unknown_column: dimension '" + col + "' not groupable on " + grainName);
             selectExprs.add(col + " AS " + col);
@@ -116,6 +127,31 @@ public class AnalyticsPlanner {
         return new Planned(sb.toString(), params, columns, grainName);
     }
 
+    // ---------- #1111: hierarchy-level derived dimension (composer-internal) ----------
+
+    /**
+     * Validate a composer-emitted hierarchy-level dimension marker and return the fixed SQL
+     * expression from {@link AnalyticsCatalog#hierLevelExpr}. Rejects any object dimension whose
+     * {@code __token} is not this JVM's {@link AnalyticsCatalog#HIER_DIM_TOKEN} — external JSON
+     * (inline queries, MDMS defs) can never carry the nonce, so object dimensions remain outside
+     * the public grammar. The level must strictly parse to an int in 1..{@code MAX_HIER_LEVEL};
+     * it is interpolated by the catalog as a bare int, never string-concatenated raw input.
+     */
+    private String hierLevelDimExpr(JsonNode d, String grainName){
+        String token = d.path(AnalyticsCatalog.HIER_DIM_TOKEN_FIELD).asText(null);
+        if (!AnalyticsCatalog.HIER_DIM_TOKEN.equals(token))
+            throw new IllegalArgumentException("unknown_column: object dimensions are not part of the query grammar");
+        JsonNode lvl = d.get(AnalyticsCatalog.HIER_DIM_LEVEL_FIELD);
+        int level;
+        try {
+            level = Integer.parseInt(lvl == null ? "" : lvl.asText());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    "invalid_param: hierLevel must be an integer in 1.." + AnalyticsCatalog.MAX_HIER_LEVEL);
+        }
+        return catalog.hierLevelExpr(grainName, level);
+    }
+
     // ---------- measures ----------
     private String measureExpr(JsonNode m, Grain g, List<Object> selectParams){
         String agg = m.path("agg").asText("count");
@@ -172,14 +208,46 @@ public class AnalyticsPlanner {
 
     // ---------- predicates (filterable whitelist + bound params) ----------
     private String predicate(Grain g, String colKey, JsonNode spec, List<Object> params){
-        if (!g.filterable.contains(colKey))
+        // #1079: a column may be plain-filterable, prefix-filterable (starts_with only), or both.
+        boolean plainFilterable  = g.filterable.contains(colKey);
+        boolean prefixFilterable = g.prefixFilterable.contains(colKey);
+        if (!plainFilterable && !prefixFilterable)
             throw new IllegalArgumentException("op_not_allowed: column '" + colKey + "' is not filterable on " + g.name);
-        if (!spec.isObject()) { params.add(value(spec)); return colKey + " = ?"; }      // shorthand: eq
+        if (!spec.isObject()) {
+            if (!plainFilterable) throw new IllegalArgumentException(
+                    "op_not_allowed: column '" + colKey + "' on " + g.name + " only supports the 'starts_with' filter op");
+            params.add(value(spec)); return colKey + " = ?";      // shorthand: eq
+        }
         List<String> parts = new ArrayList<>();
         Iterator<Map.Entry<String,JsonNode>> it = spec.fields();
         while (it.hasNext()) {
             Map.Entry<String,JsonNode> e = it.next();
             String op = e.getKey(); JsonNode v = e.getValue();
+            // #1079: starts_with is ONLY valid on the per-column prefix allowlist (materialized
+            // paths); every other op needs plain filterability. Both rejections are explicit.
+            if ("starts_with".equals(op)) {
+                if (!prefixFilterable) throw new IllegalArgumentException(
+                        "op_not_allowed: 'starts_with' is only permitted on prefix-filterable path columns, not '" + colKey + "' on " + g.name);
+                params.add(escapeLike(v.asText()));
+                parts.add(colKey + " LIKE ? || '%'");
+                continue;
+            }
+            // subtree: delimiter-guarded subtree membership on a materialized dot-path column —
+            // the node itself OR any dot-descendant. Unlike a bare starts_with, the '.' guard
+            // prevents sibling-prefix collisions ('PGR' must not match 'PGRX.…'), and the eq arm
+            // keeps mixed interior+serviceable nodes (a complaint filed AT the node) in the
+            // subtree. Same allowlist as starts_with (prefix-filterable path columns only), same
+            // bound-param + LIKE-escape mechanics.
+            if ("subtree".equals(op)) {
+                if (!prefixFilterable) throw new IllegalArgumentException(
+                        "op_not_allowed: 'subtree' is only permitted on prefix-filterable path columns, not '" + colKey + "' on " + g.name);
+                params.add(v.asText());
+                params.add(escapeLike(v.asText()));
+                parts.add("(" + colKey + " = ? OR " + colKey + " LIKE ? || '.%')");
+                continue;
+            }
+            if (!plainFilterable) throw new IllegalArgumentException(
+                    "op_not_allowed: column '" + colKey + "' on " + g.name + " only supports the 'starts_with' filter op");
             switch (op) {
                 case "eq":  params.add(value(v)); parts.add(colKey + " = ?"); break;
                 case "ne":  params.add(value(v)); parts.add(colKey + " <> ?"); break;
@@ -199,6 +267,11 @@ public class AnalyticsPlanner {
             }
         }
         return parts.size()==1 ? parts.get(0) : "(" + String.join(" AND ", parts) + ")";
+    }
+
+    /** Escape LIKE metacharacters (backslash default escape) so a starts_with value is a literal prefix. */
+    private String escapeLike(String s){
+        return s.replace("\\","\\\\").replace("%","\\%").replace("_","\\_");
     }
 
     private Object value(JsonNode v){

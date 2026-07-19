@@ -1,0 +1,3832 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+*, ::before, ::after{
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style:  ;
+}
+
+::backdrop{
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style:  ;
+}
+
+.dashboard-root {
+  /* ============================================================
+     * Canonical color palette — single source of truth.
+     * Every dashboard color (Tailwind tokens, raw CSS, chart series)
+     * resolves to one of these variables. Update colors here only.
+     * ============================================================ */
+  /* Surfaces & text */
+  --background: lab(98.2586% -0.2231 -0.716782);
+  --foreground: lab(5.23127% -1.15929 -6.2068);
+  --surface: lab(100% 0 0);
+  --surface-2: lab(97.097% -0.443935 -1.43216);
+  --surface-3: lab(94.7753% -0.662118 -2.14608);
+  --card: lab(100% 0 0);
+  --card-foreground: lab(5.23127% -1.15929 -6.2068);
+  --popover: lab(100% 0 0);
+  --popover-foreground: lab(5.23127% -1.15929 -6.2068);
+  /* Brand / interactive */
+  --primary: lab(35.8817% -24.1734 -2.46631);
+  --primary-foreground: lab(98.84% 0.0000298023 -0.0000119209);
+  --secondary: lab(94.2798% -2.53278 -1.0635);
+  --secondary-foreground: lab(9.71627% -6.29769 -2.60819);
+  --muted: lab(94.8109% -1.28037 -1.23321);
+  --muted-foreground: lab(39.77% -3.78458 -3.66642);
+  --accent: lab(93.2569% -6.07967 -0.65273);
+  --accent-foreground: lab(7.50164% -8.19696 -3.84778);
+  --destructive: lab(45.6933% 66.2056 47.555);
+  --destructive-foreground: lab(98.84% 0.0000298023 -0.0000119209);
+  /* Lines & focus */
+  --border: lab(88.4492% -2.04447 -1.97053);
+  --input: lab(88.4492% -2.04447 -1.97053);
+  --ring: lab(35.8817% -24.1734 -2.46631);
+  /* Chrome (top bar / nav) */
+  --chrome: lab(12.1586% -9.80562 -2.97114);
+  --chrome-foreground: lab(96.5699% -1.58328 -0.665271);
+  --chrome-muted: lab(56.1186% -6.32274 -2.64311);
+  /* Status (foreground + tinted background pairs) */
+  --status-open: lab(36.6287% -20.0702 -21.1027);
+  --status-open-bg: lab(94.3508% -6.32584 -6.12073);
+  --status-assigned: lab(35.8108% -25.0002 -10.2503);
+  --status-assigned-bg: lab(94.4979% -9.48459 -3.96528);
+  --status-progress: lab(41.816% 17.1944 63.4163);
+  --status-progress-bg: lab(95.4544% 2.6814 15.3591);
+  --status-nearing: var(--status-progress);
+  --status-nearing-bg: var(--status-progress-bg);
+  --status-resolved: lab(36.3321% -35.6256 3.05576);
+  --status-resolved-bg: lab(94.7185% -13.6163 1.20147);
+  --status-rejected: lab(36.1728% -1.98329 -7.04196);
+  --status-rejected-bg: lab(93.0362% -0.553161 -1.78919);
+  --status-overdue: lab(45.8049% 62.9533 44.1);
+  --status-overdue-bg: lab(95.0932% 9.04813 5.32234);
+  --status-breach: lab(37.1998% 71.0423 26.7454);
+  --status-breach-bg: lab(93.7677% 13.0259 4.10725);
+  /* Chart series */
+  --chart-1: lab(36.1215% -31.3433 -3.14357);
+  --chart-2: lab(48.7634% -31.2502 -12.8129);
+  --chart-3: lab(60.588% -31.0205 5.71432);
+  --chart-4: lab(46.0249% 56.4689 37.9874);
+  --chart-5: lab(42.1906% -16.731 -27.7727);
+  /* ------------------------------------------------------------
+     * Legacy aliases — kept so existing var(--dashboard-*) and
+     * var(--brand-*) references map onto the canonical palette.
+     * ------------------------------------------------------------ */
+  --dashboard-background: var(--background);
+  --dashboard-foreground: var(--foreground);
+  --dashboard-surface: var(--surface);
+  --dashboard-border: var(--border);
+  --dashboard-muted: var(--muted);
+  --dashboard-muted-foreground: var(--muted-foreground);
+  --dashboard-status-resolved: var(--status-resolved);
+  --dashboard-status-breach: var(--status-breach);
+  --brand-teal: var(--primary);
+  --brand-dark: var(--chrome);
+  --brand-slate: var(--chrome-muted);
+  --dashboard-font-family: Inter, Roboto, ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--dashboard-font-family);
+  font-feature-settings: "tnum" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+.dashboard-drag-handle{
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom-width: 1px;
+  border-color: var(--border);
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
+
+@media (max-width: 1023px) {
+  .dashboard-kpi-list-item .dashboard-drag-handle-title,
+    .dashboard-kpi-card .dashboard-drag-handle-title {
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
+.dashboard-drag-handle-title{
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+@media (max-width: 1023px) {
+  .dashboard-kpi-list-item .dashboard-drag-handle-subtitle,
+    .dashboard-kpi-card .dashboard-drag-handle-subtitle {
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
+.dashboard-drag-handle-subtitle{
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--muted-foreground);
+}
+
+.dashboard-external-drag .react-grid-item {
+  pointer-events: none;
+}
+
+.dashboard-external-drag .dashboard-grid-layout .react-grid-placeholder,
+  .dashboard-grid-dragging .dashboard-grid-layout .react-grid-placeholder {
+  opacity: 1 !important;
+  z-index: 1 !important;
+  border-radius: 4px;
+  border: 1px dashed color-mix(in srgb, var(--chart-1, #2563eb) 35%, transparent) !important;
+  background: color-mix(in srgb, var(--chart-1, #2563eb) 5%, transparent) !important;
+}
+
+.dashboard-grid-dragging .react-grid-item.react-draggable-dragging,
+  .dashboard-external-drag .react-grid-item.react-draggable-dragging {
+  z-index: 10 !important;
+}
+
+.dashboard-widget-remove-btn{
+  position: absolute;
+  right: 0.25rem;
+  top: 0.25rem;
+  z-index: 10;
+  margin: 0px;
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 1.5rem;
+  width: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
+  color: var(--muted-foreground);
+  font: inherit;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-widget-remove-btn:hover{
+  background-color: var(--muted);
+  color: var(--status-breach);
+}
+
+.dashboard-widget-remove-btn:focus{
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
+}
+
+/* ---------------------------------------------------------------
+   * Viz type: number-tile-delta (metric KPI cards — value + delta + context)
+   * Class names are referenced from config/visualizationStyles.js
+   * --------------------------------------------------------------- */
+
+.dashboard-kpi-card{
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  border-radius: 0.25rem;
+  border-width: 1px;
+  border-color: var(--border);
+  background-color: var(--surface);
+  padding: 1rem;
+  min-height: 0;
+  font-family: inherit;
+}
+
+.dashboard-kpi-card--metric{
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 26px minmax(0, 1fr);
+  gap: 0.25rem;
+}
+
+.dashboard-kpi-title{
+  width: 100%;
+  min-width: 0px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.dashboard-kpi-card--metric .dashboard-kpi-title{
+  align-self: flex-start;
+  overflow: hidden;
+  padding-right: 1.25rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dashboard-kpi-value{
+  flex-shrink: 0;
+  font-weight: 600;
+  --tw-numeric-spacing: tabular-nums;
+  font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.dashboard-kpi-card--metric .dashboard-kpi-value{
+  align-self: center;
+}
+
+.dashboard-kpi-context{
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.dashboard-kpi-card--metric .dashboard-kpi-context{
+  align-self: flex-start;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dashboard-kpi-card--delta{
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(26px, auto) 26px minmax(0, 1fr);
+  gap: 0.25rem;
+}
+
+.dashboard-kpi-card--delta .dashboard-kpi-title{
+  align-self: flex-start;
+  overflow: hidden;
+  padding-right: 1.25rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dashboard-kpi-card--delta .dashboard-kpi-value{
+  flex-shrink: 0;
+  align-self: auto;
+}
+
+.dashboard-kpi-card--delta .dashboard-kpi-context{
+  align-self: flex-start;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Viz type: number-tile-sparkline (delta + trend line) */
+
+.dashboard-kpi-card--sparkline{
+  height: 100%;
+  display: grid;
+  /* Title band matches default metric tile offset; only the sparkline row grows on resize. */
+  grid-template-rows: minmax(26px, auto) 26px minmax(10px, 1fr);
+  gap: 0.25rem;
+  min-height: 0;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-kpi-card--sparkline .dashboard-kpi-title{
+  align-self: flex-start;
+  overflow: hidden;
+  padding-right: 1.25rem;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dashboard-kpi-sparkline-value-row{
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 0.375rem;
+  min-width: 0;
+  align-self: center;
+  padding-top: 0;
+}
+
+.dashboard-kpi-card--sparkline .dashboard-kpi-value{
+  flex-shrink: 0;
+  align-self: auto;
+}
+
+.dashboard-kpi-sparkline-delta{
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  --tw-numeric-spacing: tabular-nums;
+  font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
+  line-height: 1;
+  padding-bottom: 0.2em;
+}
+
+.dashboard-kpi-sparkline-delta--positive {
+  color: var(--status-resolved);
+}
+
+.dashboard-kpi-sparkline-delta--negative {
+  color: var(--status-breach);
+}
+
+.dashboard-kpi-sparkline-delta--neutral{
+  color: var(--foreground);
+}
+
+.dashboard-kpi-sparkline-delta--muted{
+  color: var(--muted-foreground);
+}
+
+.dashboard-kpi-sparkline-chart{
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  min-height: 22px;
+}
+
+.dashboard-kpi-sparkline-chart .apexcharts-canvas,
+  .dashboard-kpi-sparkline-chart svg {
+  overflow: visible !important;
+}
+
+.dashboard-header-controls{
+  display: flex;
+  min-width: 0px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dashboard-header-search{
+  position: relative;
+  margin: 0px;
+  display: inline-flex;
+  height: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.dashboard-header-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--dashboard-muted-foreground, #6b6860);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.dashboard-header-search-input{
+  margin: 0px;
+  box-sizing: border-box;
+  display: block;
+  height: 2rem;
+  width: 14rem;
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  border-radius: 4px;
+  border-width: 1px;
+  border-color: var(--border);
+  background-color: var(--surface);
+  padding-top: 0px;
+  padding-bottom: 0px;
+  padding-left: 2rem;
+  padding-right: 0.75rem;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--foreground);
+}
+
+.dashboard-header-search-input::-moz-placeholder{
+  color: var(--muted-foreground);
+}
+
+.dashboard-header-search-input::placeholder{
+  color: var(--muted-foreground);
+}
+
+.dashboard-header-search-input:focus{
+  border-color: var(--foreground);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.dashboard-header-search-input {
+  -webkit-appearance: none;
+}
+
+/* A global digit-ui input[type=...]:not(.a):not(.b)… rule is !important and its
+     long :not(.class) chain outranks this class, forcing the left padding to
+     ~12px so text slides under the search icon. A no-op :not(#…) lifts this into
+     the ID-specificity column and, with !important, wins. */
+
+.dashboard-header-search-input:not(#dashboard-search-noop) {
+  padding-left: 2rem !important;
+}
+
+.dashboard-header-search-input::-webkit-search-decoration,
+  .dashboard-header-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.dashboard-header-search-input:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
+}
+
+.dashboard-header-controls .dashboard-header-btn{
+  margin: 0px;
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 2rem;
+  max-height: 2rem;
+  min-height: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: 4px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--border);
+  background-color: var(--surface);
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
+  padding-top: 0px;
+  padding-bottom: 0px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--foreground);
+  font-family: inherit;
+  vertical-align: middle;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-header-controls .dashboard-header-btn:hover{
+  background-color: var(--muted);
+}
+
+.dashboard-header-controls .dashboard-add-kpi-trigger{
+  gap: 0.375rem;
+  border-style: dashed;
+  border-color: var(--border);
+}
+
+.dashboard-header-controls .dashboard-add-kpi-trigger:hover{
+  border-color: var(--foreground);
+  color: var(--foreground);
+  background-color: color-mix(in srgb, var(--muted) 50%, transparent);
+}
+
+.dashboard-header-kpi-anchor{
+  position: relative;
+  display: flex;
+  height: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  align-self: center;
+}
+
+.dashboard-add-kpi-panel {
+  border: 1px solid var(--border, #e5e2db);
+  border-radius: 6px;
+  background-color: #ffffff;
+  box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.08),
+      0 2px 4px -2px rgb(0 0 0 / 0.06);
+  color: var(--foreground, #1a1917);
+  opacity: 1;
+  isolation: isolate;
+}
+
+.dashboard-add-kpi-panel--dragging{
+  pointer-events: none;
+  visibility: hidden;
+}
+
+/* While a picker item is dragged over the grid, the tiles must not become
+     dragenter/dragleave targets: react-grid-layout balances a dragEnterCounter
+     across those events, and a hovered child node that gets replaced mid-drag
+     (chart redraws) leaks an enter with no matching leave — the counter never
+     returns to 0, the drop placeholder survives the drag, and RGL is left in
+     a stuck activeDrag state that silently swallows every later add (#1287).
+     Routing all drag events to the grid container keeps the counter balanced
+     AND makes layerX/layerY (which RGL reads relative to the event target)
+     grid-relative, so the placeholder tracks the cursor instead of jumping. */
+
+.dashboard-grid-layout--dropping .react-grid-item{
+  pointer-events: none;
+}
+
+/* Zero-tile layout: RGL sets an inline height of 0 when it holds no items,
+     which would collapse the drop surface (and the empty-state overlay
+     anchored to it). min-height beats the inline height, keeping a drop-onto
+     area alive for the Add-KPI picker on a first-load/reset dashboard. */
+
+.dashboard-grid-layout--empty {
+  min-height: 160px;
+}
+
+.dashboard-add-kpi-header{
+  flex-shrink: 0;
+  border-bottom-width: 1px;
+  border-color: var(--border);
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground, #6b6860);
+  background-color: #ffffff;
+}
+
+.dashboard-add-kpi-list {
+  -webkit-overflow-scrolling: touch;
+  background-color: #ffffff;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.dashboard-add-kpi-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.625rem 1rem;
+  cursor: grab;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+  font-weight: 400;
+  background-color: #ffffff;
+}
+
+.dashboard-add-kpi-item:active {
+  cursor: grabbing;
+}
+
+.dashboard-add-kpi-item-main {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.dashboard-add-kpi-item-aside {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-left: 0.75rem;
+}
+
+.dashboard-add-kpi-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.375;
+  font-weight: 400;
+  color: var(--foreground, #1a1917);
+}
+
+.dashboard-add-kpi-type{
+  flex-shrink: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  text-align: right;
+  font-weight: 400;
+  color: var(--muted-foreground, #6b6860);
+}
+
+.dashboard-add-kpi-add-btn{
+  margin: 0px;
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 1.25rem;
+  width: 1.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
+  font-size: 15px;
+  line-height: 1;
+  font-family: inherit;
+  font-weight: 400;
+  color: var(--muted-foreground, #6b6860);
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-add-kpi-add-btn:hover {
+  color: var(--foreground, #1a1917);
+}
+
+.dashboard-add-kpi-item:hover,
+  .dashboard-add-kpi-item--hover {
+  background-color: var(--muted, #f5f4f1);
+}
+
+.dashboard-add-kpi-preview {
+  border: 1px solid var(--border, #e5e2db);
+  border-radius: 8px;
+  background-color: #ffffff;
+  box-shadow:
+      0 10px 24px -8px rgb(0 0 0 / 0.12),
+      0 4px 8px -4px rgb(0 0 0 / 0.08);
+  padding: 0.75rem;
+  pointer-events: none;
+}
+
+.dashboard-add-kpi-preview-card {
+  border: 1px solid var(--border, #e5e2db);
+  border-radius: 6px;
+  background-color: #ffffff;
+  padding: 0.625rem 0.75rem;
+}
+
+.dashboard-add-kpi-preview-title{
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground, #6b6860);
+  line-height: 1.3;
+}
+
+.dashboard-add-kpi-preview-value{
+  margin-top: 0.25rem;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--foreground, #1a1917);
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-add-kpi-preview-target{
+  margin-top: 0.125rem;
+  font-size: 11px;
+  line-height: 1.375;
+  color: var(--muted-foreground, #6b6860);
+}
+
+.dashboard-add-kpi-preview-desc{
+  margin-bottom: 0px;
+  margin-top: 0.625rem;
+  font-size: 11px;
+  line-height: 1.375;
+  color: var(--muted-foreground, #6b6860);
+}
+
+.dashboard-header-top {
+  min-width: 0;
+}
+
+.dashboard-filters-bar {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dashboard-filters-card{
+  display: flex;
+  align-items: center;
+  border-radius: 0.25rem;
+  border-width: 1px;
+  border-color: var(--border);
+  background-color: var(--surface);
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dashboard-filters-row{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  -moz-column-gap: 0.75rem;
+       column-gap: 0.75rem;
+  row-gap: 0.5rem;
+}
+
+.dashboard-filters-heading{
+  display: flex;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  align-self: center;
+  padding-right: 0.25rem;
+}
+
+.dashboard-filters-title{
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--muted-foreground);
+}
+
+.dashboard-filters-date-range{
+  display: flex;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  align-self: center;
+}
+
+.dashboard-filters-date-arrow{
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted-foreground);
+}
+
+.dashboard-filter-inline-date-wrap{
+  position: relative;
+  display: inline-flex;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  overflow: hidden;
+}
+
+.dashboard-filter-inline-date{
+  margin: 0px;
+  box-sizing: border-box;
+  display: block;
+  height: 1.75rem;
+  max-height: 1.75rem;
+  min-height: 1.75rem;
+  width: 7.25rem;
+  border-radius: 4px;
+  border-width: 1px;
+  border-color: var(--border);
+  background-color: var(--surface);
+  padding-top: 0px;
+  padding-bottom: 0px;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--foreground);
+}
+
+.dashboard-filter-inline-date:focus{
+  border-color: var(--foreground);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.dashboard-filter-inline-date {
+  color-scheme: light;
+  font-family: inherit;
+}
+
+.dashboard-filter-inline-date:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
+}
+
+.dashboard-filter-inline-date-wrap .dashboard-filter-inline-date::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.dashboard-filter-inline-select-wrap{
+  position: relative;
+  display: inline-flex;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  align-self: center;
+}
+
+.dashboard-filter-inline-select{
+  margin: 0px;
+  box-sizing: border-box;
+  height: 1.75rem;
+  max-height: 1.75rem;
+  min-height: 1.75rem;
+  min-width: 7.5rem;
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  border-radius: 4px;
+  border-width: 1px;
+  border-color: var(--border);
+  background-color: var(--surface);
+  padding-top: 0px;
+  padding-bottom: 0px;
+  padding-left: 0.5rem;
+  padding-right: 1.75rem;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--foreground);
+}
+
+.dashboard-filter-inline-select:focus{
+  border-color: var(--foreground);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.dashboard-filter-inline-select {
+  font-family: inherit;
+}
+
+.dashboard-filter-inline-select:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
+}
+
+.dashboard-filter-inline-select-wrap::after {
+  content: "⌄";
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--dashboard-muted-foreground, #6b6860);
+}
+
+.dashboard-filters-clear-inline{
+  margin: 0px;
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  align-self: center;
+  border-radius: 4px;
+  border-width: 0px;
+  background-color: transparent;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  padding-bottom: 0px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--muted-foreground);
+}
+
+.dashboard-filters-clear-inline:hover{
+  color: var(--foreground);
+}
+
+.dashboard-filters-clear-inline:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Per-tile note when the backend reports the subtree filter could not be
+     honoured on a grain (paramsIgnored: complaintPath — daily-grain KPIs). */
+
+.dashboard-type-filter-ignored{
+  pointer-events: none;
+  position: absolute;
+  bottom: 0.25rem;
+  left: 1.25rem;
+  z-index: 2;
+  border-radius: 0.25rem;
+  background-color: var(--surface);
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+  font-size: 10px;
+  font-style: italic;
+  line-height: 1.25;
+  color: var(--muted-foreground);
+}
+
+/* ── Shared popover/menu primitive (chip anchor + portaled panel) ───── */
+/* Named "trigger" NOT "chip": the host theme (vendor/overrides.css, outside
+   this build) has a [class*="chip"] catch-all that pills ANY class containing
+   that substring — never rename these classes back to *chip*. */
+
+/* Anchor chip: a strict visual PEER of .dashboard-filter-inline-select —
+     same h-7 / min-w-[7.5rem] / rounded-sm / border-border / bg-surface /
+     12px metrics, no resting hover treatment (the select has none), the
+     select's focus treatment (border-foreground + 15% ring); the only
+     divergence is aria-expanded reusing the focus border while open. */
+
+.dashboard-popover-trigger{
+  margin: 0px;
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 1.75rem;
+  min-width: 7.5rem;
+  max-width: 100%;
+  flex-shrink: 1;
+  cursor: pointer;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+  align-items: center;
+  gap: 0.375rem;
+  align-self: center;
+  white-space: nowrap;
+  border-radius: 4px;
+  border-width: 1px;
+  border-color: var(--border);
+  background-color: var(--surface);
+  padding-top: 0px;
+  padding-bottom: 0px;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--foreground);
+  font-family: inherit;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-popover-trigger:focus{
+  border-color: var(--foreground);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.dashboard-popover-trigger:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
+}
+
+.dashboard-popover-trigger[aria-expanded="true"]{
+  border-color: var(--foreground);
+}
+
+.dashboard-popover-trigger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Icon-only anchor for widget-header placement (per-widget settings
+     gear): the .dashboard-widget-remove-btn idiom — 1.5rem square, muted,
+     transparent resting, bg-muted on hover/open — minus the absolute
+     positioning (this one sits in the title-row flex flow). */
+
+.dashboard-popover-iconbtn{
+  margin: 0px;
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 1.5rem;
+  width: 1.5rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
+  color: var(--muted-foreground);
+  font: inherit;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-popover-iconbtn:hover:not(:disabled),
+  .dashboard-popover-iconbtn[aria-expanded="true"]{
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+.dashboard-popover-iconbtn:focus{
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.dashboard-popover-iconbtn:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
+}
+
+.dashboard-popover-trigger-value{
+  display: inline-flex;
+  min-width: 0px;
+  align-items: center;
+  overflow: hidden;
+  font-weight: 400;
+}
+
+/* ml-auto pins the caret to the chip's right edge (px-2, like the
+     select-wrap's ::after caret at right: 0.5rem) when the label is
+     shorter than the shared 7.5rem min width. */
+
+.dashboard-popover-trigger-caret{
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+/* Chip content for hierarchical selections: "… › Parent › Node" — each
+     segment ellipsizes on its own so deep leaves stay chip-sized. */
+
+.dashboard-popover-trigger-trail{
+  display: inline-flex;
+  min-width: 0px;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.dashboard-popover-trigger-seg{
+  min-width: 0px;
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-popover-trigger-seg--muted{
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+
+.dashboard-popover-trigger-sep{
+  flex-shrink: 0;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+  color: var(--muted-foreground);
+}
+
+/* Panel: mirrors .dashboard-add-kpi-panel's surface language. */
+
+.dashboard-popover-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border, #e5e2db);
+  border-radius: 6px;
+  background-color: var(--popover, #ffffff);
+  box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.08),
+      0 2px 4px -2px rgb(0 0 0 / 0.06);
+  color: var(--foreground, #1a1917);
+  isolation: isolate;
+}
+
+/* Tree-traversal panel body (ComplaintTypeTreePanel). */
+
+.dashboard-popover-tree{
+  display: flex;
+  min-height: 0px;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Ancestor trail across the top of the tree panel. */
+
+.dashboard-popover-trail{
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  border-bottom-width: 1px;
+  border-color: var(--border);
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted-foreground);
+}
+
+.dashboard-popover-trail-crumb{
+  margin: 0px;
+  min-width: 0px;
+  max-width: 7rem;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 4px;
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted-foreground);
+}
+
+.dashboard-popover-trail-crumb:hover{
+  color: var(--foreground);
+  text-decoration-line: underline;
+}
+
+.dashboard-popover-trail-crumb {
+  font-family: inherit;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-popover-trail-crumb:focus{
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.dashboard-popover-trail-crumb:focus-visible{
+  color: var(--foreground);
+  text-decoration-line: underline;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 35%, transparent);
+}
+
+.dashboard-popover-trail-sep,
+  .dashboard-popover-trail-ellipsis{
+  flex-shrink: 0;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+
+.dashboard-popover-trail-current{
+  min-width: 0px;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+/* Scrollable item region (deep trees) and pinned footer (reset row). */
+
+.dashboard-popover-list {
+  -webkit-overflow-scrolling: touch;
+  margin: 0px;
+  min-height: 0px;
+  flex: 1 1 0%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem;
+}
+
+.dashboard-popover-footer{
+  flex-shrink: 0;
+  border-top-width: 1px;
+  border-color: var(--border);
+  padding: 0.25rem;
+}
+
+.dashboard-menu-item{
+  margin: 0px;
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 4px;
+  border-width: 0px;
+  background-color: transparent;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.375;
+  color: var(--foreground);
+  font-family: inherit;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+}
+
+.dashboard-menu-item:hover {
+  background-color: var(--muted, #f5f4f1);
+}
+
+.dashboard-menu-item:focus{
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.dashboard-menu-item:focus-visible {
+  background-color: var(--muted, #f5f4f1);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ring) 35%, transparent);
+}
+
+.dashboard-menu-item[data-selected="true"]{
+  font-weight: 500;
+}
+
+.dashboard-menu-item--muted {
+  color: var(--muted-foreground, #6b6860);
+}
+
+.dashboard-menu-item--muted:hover,
+  .dashboard-menu-item--muted:focus-visible {
+  color: var(--foreground, #1a1917);
+}
+
+.dashboard-menu-item-label{
+  min-width: 0px;
+  flex: 1 1 0%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-menu-item-trailing{
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  color: var(--muted-foreground);
+}
+
+/* currentColor, not --primary: selection reads as weight + check in the
+     row's own neutral foreground — the filter bar has no brand accent and
+     the menus don't introduce one. */
+
+.dashboard-menu-item-check {
+  color: currentColor;
+}
+
+/* Non-interactive section label between runs of related items (the flat
+     complaint-type degrade path's category groups). */
+
+.dashboard-menu-group-label{
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-bottom: 0.25rem;
+  padding-top: 0.5rem;
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+}
+
+/* Widget-header wrapper for the per-widget settings gear: right-aligned
+     in the title row (same slot on every header that has options; absent
+     otherwise); mr-6 clears the absolute remove button. */
+
+.dashboard-widget-settings-wrap{
+  margin-left: 0.5rem;
+  margin-right: 1.5rem;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  align-self: center;
+}
+
+/* Stacked (mobile) filter bar: the chip stretches full-width, exactly
+     like .dashboard-filter-inline-select in the 639px block below. */
+
+@media (max-width: 639px) {
+  .dashboard-popover-trigger {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* ── Responsive layout ─────────────────────────────────────────────── */
+
+.dashboard-grid-wrap .react-grid-layout {
+  width: 100% !important;
+  min-width: 0;
+}
+
+@media (max-width: 1023px) {
+  .dashboard-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 50;
+    height: 100dvh;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: none;
+  }
+
+  .dashboard-sidebar--open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgb(0 0 0 / 0.15);
+  }
+
+  .dashboard-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: rgb(0 0 0 / 0.4);
+    cursor: pointer;
+  }
+
+  .dashboard-grid-layout .react-grid-item > .react-resizable-handle,
+    .dashboard-resize-grip {
+    display: none !important;
+  }
+
+  .dashboard-grid-layout .react-grid-item {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dashboard-kpi-value {
+    font-size: clamp(18px, 4.5vw, 26px);
+  }
+
+  .dashboard-kpi-sparkline-value-row {
+    flex-wrap: wrap;
+    row-gap: 0.125rem;
+  }
+
+  .dashboard-drag-handle-title,
+    .dashboard-drag-handle-subtitle {
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .dashboard-kpi-card--metric .dashboard-kpi-title,
+    .dashboard-kpi-card--delta .dashboard-kpi-title,
+    .dashboard-kpi-card--sparkline .dashboard-kpi-title,
+    .dashboard-kpi-card--metric .dashboard-kpi-context,
+    .dashboard-kpi-card--delta .dashboard-kpi-context {
+    -webkit-line-clamp: unset;
+    display: block;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .dashboard-kpi-list-item .tw-truncate,
+    .dashboard-kpi-card .tw-truncate {
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .dashboard-card-updated {
+    position: static;
+    display: block;
+    margin-top: 0.25rem;
+    margin-right: 0;
+    text-align: right;
+    padding-right: 0.25rem;
+  }
+
+  .dashboard-widget-surface {
+    min-height: 100%;
+    height: auto;
+  }
+
+  .dashboard-kpi-widget {
+    min-height: 100%;
+    height: auto;
+  }
+}
+
+@media (max-width: 639px) {
+  .dashboard-header-top {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .dashboard-header-controls {
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .dashboard-header-subtitle {
+    width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .dashboard-header-controls .dashboard-header-export span {
+    display: none;
+  }
+
+  .dashboard-header-controls .dashboard-header-btn{
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .dashboard-header-mobile-search {
+    display: block;
+    border-bottom: 1px solid var(--border);
+    background-color: var(--surface);
+    padding: 0.5rem 0.75rem;
+  }
+
+  .dashboard-header-search--mobile {
+    display: flex !important;
+    width: 100%;
+  }
+
+  .dashboard-header-search--mobile .dashboard-header-search-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-filters-card {
+    align-items: stretch;
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+  }
+
+  .dashboard-filters-row {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .dashboard-filters-date-range {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .dashboard-filter-inline-date-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .dashboard-filter-inline-date {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-filter-inline-select-wrap {
+    width: 100%;
+  }
+
+  .dashboard-filter-inline-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-filters-clear-inline {
+    align-self: flex-start;
+  }
+
+  .dashboard-add-kpi-panel {
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  .dashboard-kpi-card {
+    padding: 0.75rem;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .dashboard-header-search-input{
+    width: 11rem;
+    max-width: 100%;
+  }
+
+  .dashboard-filters-row {
+    row-gap: 0.5rem;
+  }
+
+  .dashboard-header-subtitle {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
+.dashboard-widget-surface {
+  cursor: grab;
+}
+
+.dashboard-widget-surface:active,
+  .react-grid-item.react-draggable-dragging .dashboard-widget-surface {
+  cursor: grabbing;
+}
+
+.dashboard-widget-surface .dashboard-widget-remove-btn,
+  .dashboard-widget-surface .dashboard-view-toggle,
+  .dashboard-widget-surface .dashboard-gauge-target-marker,
+  .dashboard-widget-surface .dashboard-table-scroll,
+  .dashboard-widget-surface .dashboard-kpi-list-body,
+  .dashboard-widget-surface a,
+  .dashboard-widget-surface button,
+  .dashboard-widget-surface input,
+  .dashboard-widget-surface select,
+  .dashboard-widget-surface textarea {
+  cursor: default;
+}
+
+.dashboard-widget-surface .dashboard-bar-chart-body,
+  .dashboard-widget-surface .dashboard-horizontal-bar-body,
+  .dashboard-widget-surface .dashboard-stacked-bar-body,
+  .dashboard-widget-surface .dashboard-line-chart-body,
+  .dashboard-widget-surface .dashboard-pie-chart-body,
+  .dashboard-widget-surface .dashboard-gauge-body,
+  .dashboard-widget-surface .dashboard-sla-toggle-body,
+  .dashboard-widget-surface .apexcharts-canvas,
+  .dashboard-widget-surface .apexcharts-svg {
+  cursor: grab;
+}
+
+.react-grid-item.react-draggable-dragging .dashboard-widget-surface .apexcharts-canvas,
+  .react-grid-item.react-draggable-dragging .dashboard-widget-surface .apexcharts-svg {
+  cursor: grabbing;
+}
+
+.dashboard-kpi-widget {
+  height: 100%;
+  min-height: 0;
+}
+
+.dashboard-kpi-widget .dashboard-widget{
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+.dashboard-kpi-list-body {
+  min-height: 17.5rem;
+}
+
+.dashboard-kpi-list-item {
+  min-height: 1.75rem;
+}
+
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-kpi {
+  overflow: hidden;
+}
+
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-chart-visible {
+  overflow: visible;
+}
+
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-chart-clipped {
+  overflow: hidden;
+}
+
+.dashboard-resize-grip{
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+  right: 3px;
+  bottom: 3px;
+  width: 14px;
+  height: 14px;
+  line-height: 0;
+}
+
+.dashboard-resize-grip-line {
+  stroke: var(--dashboard-muted-foreground, #6b6860);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.65;
+  transition: stroke 150ms ease, opacity 150ms ease;
+}
+
+.tw-group:hover .dashboard-resize-grip-line {
+  stroke: var(--chart-1);
+  opacity: 0.9;
+}
+
+.dashboard-kpi-widget:hover .dashboard-kpi-card {
+  border-color: color-mix(in srgb, var(--foreground) 18%, transparent);
+  background-color: var(--surface);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+
+/* Viz type: data-table — ranked / breakdown tables */
+
+.dashboard-data-table-shell{
+  display: flex;
+  height: 100%;
+  min-height: 0px;
+  width: 100%;
+  min-width: 0px;
+  flex-direction: column;
+}
+
+.dashboard-data-table-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.25rem;
+}
+
+.dashboard-data-table-header-bar{
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom-width: 0px;
+  padding-left: 1rem;
+  padding-bottom: 0px;
+  padding-top: 0.5rem;
+  padding-right: 2rem;
+}
+
+.dashboard-data-table-header .dashboard-drag-handle-title,
+  .dashboard-data-table-header-bar .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-data-table-header .dashboard-drag-handle-subtitle,
+  .dashboard-data-table-header-bar .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+.dashboard-data-table-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow: hidden;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-top: 0px;
+  margin-top: -2px;
+  padding-bottom: 1.125rem;
+}
+
+/* SLA table/bar toggle — reserve space for absolute Updated stamp (same as other cards) */
+
+.dashboard-sla-toggle-body {
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-table-scroll{
+  min-height: 0px;
+  width: 100%;
+  max-width: 100%;
+  flex: 1 1 0%;
+  overflow: auto;
+  max-height: 100%;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+/* Override global digit-ui-components bare `table/th/td` rules from index.html */
+
+.dashboard-root table.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.25;
+  background: transparent;
+  overflow: visible;
+}
+
+.dashboard-root table.dashboard-table.dashboard-table--equal-cols {
+  table-layout: fixed;
+}
+
+.dashboard-root table.dashboard-table.dashboard-table--equal-cols th.dashboard-table-th,
+  .dashboard-root table.dashboard-table.dashboard-table--equal-cols td.dashboard-table-td {
+  width: 1% !important;
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dashboard-root table.dashboard-table thead tr {
+  text-align: left;
+  color: var(--dashboard-muted-foreground, #6b6860);
+}
+
+.dashboard-root table.dashboard-table th.dashboard-table-th,
+  .dashboard-root table.dashboard-table td.dashboard-table-td {
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: none;
+  padding: 0.375rem 0.625rem !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  font-family: var(--dashboard-font-family) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  font-style: normal !important;
+  line-height: 1.25 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow: visible;
+  word-wrap: break-word;
+  vertical-align: top;
+  text-align: left;
+  color: var(--dashboard-foreground, #1b1b1b);
+}
+
+.dashboard-root table.dashboard-table th.dashboard-table-th {
+  font-weight: 500 !important;
+  color: var(--dashboard-muted-foreground, #6b6860) !important;
+  vertical-align: bottom;
+  padding-top: 0.125rem !important;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--dashboard-surface, #fff) !important;
+}
+
+.dashboard-table-sort-btn{
+  display: inline-flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: inherit;
+}
+
+.dashboard-table-sort-label {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dashboard-table-sort-btn:hover .dashboard-table-sort-indicator {
+  color: var(--foreground);
+}
+
+.dashboard-table-sort-indicator{
+  flex-shrink: 0;
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 0.625rem;
+  width: 0.625rem;
+  color: var(--dashboard-muted-foreground, #6b6860);
+  line-height: 1;
+  font-weight: 400;
+}
+
+.dashboard-root table.dashboard-table tbody td.dashboard-table-td {
+  padding-top: 0.375rem !important;
+  padding-bottom: 0.375rem !important;
+  border-top: 1px solid var(--dashboard-border, #e8e6e1) !important;
+}
+
+.dashboard-root table.dashboard-table td.dashboard-table-td {
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-root table.dashboard-table td.dashboard-table-td > span,
+  .dashboard-root table.dashboard-table td.dashboard-table-td > a {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dashboard-root table.dashboard-table tbody tr.dashboard-table-row-highlight td.dashboard-table-td {
+  background-color: color-mix(
+      in srgb,
+      var(--status-breach) calc(var(--row-sla-severity, 1) * 14%),
+      transparent
+    ) !important;
+}
+
+.dashboard-table-sla-overrun {
+  font-weight: 600;
+  color: color-mix(
+      in srgb,
+      var(--status-breach) calc(var(--sla-overrun-severity, 1) * 100%),
+      var(--foreground)
+    );
+}
+
+.dashboard-root table.dashboard-table col.dashboard-table-col-fixed {
+  width: auto;
+}
+
+.dashboard-table-primary{
+  display: flex;
+  min-width: 0px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  -moz-column-gap: 0.25rem;
+       column-gap: 0.25rem;
+  row-gap: 0.125rem;
+}
+
+.dashboard-table-label{
+  min-width: 0px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dashboard-table-badge{
+  flex-shrink: 0;
+  flex-basis: 100%;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  color: var(--status-breach);
+}
+
+.dashboard-table-threshold-cell{
+  font-weight: 600;
+  color: var(--status-breach);
+}
+
+.dashboard-table-threshold-watch{
+  font-weight: 600;
+  color: var(--status-nearing);
+}
+
+.dashboard-table-threshold-good{
+  font-weight: 600;
+  color: var(--status-resolved);
+}
+
+.dashboard-table-cell-tone--breach {
+  background-color: color-mix(in srgb, var(--status-breach) 14%, transparent);
+}
+
+.dashboard-table-cell-tone--watch {
+  background-color: color-mix(in srgb, var(--status-nearing) 14%, transparent);
+}
+
+.dashboard-table-cell-tone--good {
+  background-color: color-mix(in srgb, var(--status-resolved) 10%, transparent);
+}
+
+.dashboard-table-status-tag {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.3;
+  padding: 2px 8px;
+  text-transform: uppercase;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dashboard-table-status-tag--breach {
+  background-color: color-mix(in srgb, var(--status-breach) 16%, transparent);
+  color: var(--status-breach);
+}
+
+.dashboard-table-status-tag--watch {
+  background-color: color-mix(in srgb, var(--status-nearing) 16%, transparent);
+  color: var(--status-nearing);
+}
+
+.dashboard-table-status-tag--good {
+  background-color: color-mix(in srgb, var(--status-resolved) 14%, transparent);
+  color: var(--status-resolved);
+}
+
+.dashboard-table-row-highlight {
+  background-color: color-mix(in srgb, var(--status-breach) 6%, transparent);
+}
+
+.dashboard-table-trend-up{
+  font-weight: 600;
+  color: var(--status-resolved);
+}
+
+.dashboard-table-trend-down{
+  font-weight: 600;
+  color: var(--status-breach);
+}
+
+.dashboard-table-muted{
+  color: var(--muted-foreground);
+}
+
+.dashboard-table-empty{
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.dashboard-data-table-legend-swatch{
+  height: 0.5rem;
+  width: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+}
+
+.dashboard-data-table-legend-label{
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dashboard-data-table-value-emphasis{
+  font-weight: 600;
+}
+
+.dashboard-data-table-owner-name{
+  font-weight: 500;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dashboard-data-table-sla-cell{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* Viz type: bar-chart — vertical bars (all normal bar chart widgets) */
+
+.dashboard-bar-chart .apexcharts-canvas,
+  .dashboard-bar-chart .apexcharts-svg {
+  overflow: visible !important;
+}
+
+.dashboard-bar-chart-body{
+  display: flex;
+  min-height: 0px;
+  width: 100%;
+  min-width: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  margin-top: -18px;
+  padding-bottom: 0.125rem;
+}
+
+.dashboard-bar-chart-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.125rem;
+}
+
+.dashboard-bar-chart-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-bar-chart-header .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+.dashboard-chart-scroll-viewport{
+  height: 100%;
+  min-height: 0px;
+  width: 100%;
+  min-width: 0px;
+  flex: 1 1 0%;
+  overflow: hidden;
+}
+
+.dashboard-chart-scroll-viewport--active {
+  overflow: auto !important;
+}
+
+.dashboard-chart-scroll-viewport--vertical.dashboard-chart-scroll-viewport--active {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+.dashboard-chart-scroll-viewport--horizontal.dashboard-chart-scroll-viewport--active {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+
+.dashboard-chart-scroll-canvas {
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Viz type: gauge — progress bar vs target */
+
+.dashboard-gauge-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.25rem;
+}
+
+.dashboard-gauge-header .dashboard-drag-handle-title{
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.dashboard-gauge-body{
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-top: 0px;
+  padding-bottom: 0.125rem;
+}
+
+.dashboard-gauge-value{
+  margin-bottom: 0.375rem;
+  font-weight: 600;
+  --tw-numeric-spacing: tabular-nums;
+  font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
+  color: var(--foreground);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.dashboard-gauge-track{
+  position: relative;
+  margin-top: 0px;
+  margin-bottom: 0px;
+  height: 0.75rem;
+  width: 100%;
+  overflow: visible;
+  border-radius: 9999px;
+  background-color: var(--muted);
+}
+
+.dashboard-gauge-fill{
+  height: 100%;
+  border-radius: 9999px;
+  background-color: var(--chart-1);
+}
+
+.dashboard-gauge-target-marker{
+  position: absolute;
+  top: 0px;
+  bottom: 0px;
+  display: flex;
+  width: 0.75rem;
+  cursor: default;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-50%);
+}
+
+.dashboard-gauge-target-line{
+  pointer-events: none;
+  display: block;
+  height: calc(100% + 6px);
+  width: 0px;
+  border-left: 2px dotted var(--foreground);
+  opacity: 0.55;
+}
+
+.dashboard-gauge-target-tooltip{
+  pointer-events: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  z-index: 10;
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  border-radius: 0.25rem;
+  background-color: var(--foreground);
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--surface);
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.dashboard-gauge-target-marker:hover .dashboard-gauge-target-tooltip,
+  .dashboard-gauge-target-marker:focus-visible .dashboard-gauge-target-tooltip {
+  opacity: 1;
+}
+
+.dashboard-gauge-status{
+  margin-top: 0.125rem;
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--muted-foreground);
+}
+
+.dashboard-bar-chart .apexcharts-canvas,
+  .dashboard-bar-chart .apexcharts-svg {
+  overflow: visible !important;
+}
+
+.dashboard-bar-chart .apexcharts-gridlines-horizontal line,
+  .dashboard-bar-chart .apexcharts-gridlines-vertical line {
+  display: none;
+}
+
+.dashboard-widget-surface .apexcharts-xaxis-texts-g,
+  .dashboard-widget-surface .apexcharts-yaxis-texts-g,
+  .dashboard-widget-surface .apexcharts-xaxis-inversed-texts-g {
+  overflow: visible;
+}
+
+.dashboard-widget-surface .apexcharts-xaxis-label,
+  .dashboard-widget-surface .apexcharts-yaxis-label {
+  overflow: visible;
+}
+
+.dashboard-widget-surface .apexcharts-xaxis-label tspan:not(:first-child),
+  .dashboard-widget-surface .apexcharts-yaxis-label tspan:not(:first-child) {
+  dy: 9px;
+}
+
+/* Viz type: horizontal-bar — ranked / ratio bars */
+
+.dashboard-horizontal-bar {
+  min-height: 0;
+}
+
+.dashboard-horizontal-bar-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+  padding-top: 0px;
+  margin-top: -6px;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-horizontal-bar-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.375rem;
+}
+
+.dashboard-horizontal-bar-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-horizontal-bar-header .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+.dashboard-horizontal-bar .apexcharts-canvas,
+  .dashboard-horizontal-bar .apexcharts-svg {
+  overflow: visible !important;
+}
+
+.dashboard-horizontal-bar .apexcharts-yaxis-texts-g .apexcharts-yaxis-label,
+  .dashboard-stacked-bar--horizontal .apexcharts-yaxis-texts-g .apexcharts-yaxis-label {
+  text-anchor: start;
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+
+.dashboard-horizontal-bar .apexcharts-legend,
+  .dashboard-stacked-bar--horizontal .apexcharts-legend {
+  justify-content: center !important;
+  padding-bottom: 0 !important;
+  margin-bottom: -6px !important;
+}
+
+.dashboard-stacked-bar--horizontal .apexcharts-legend {
+  margin-bottom: -14px !important;
+}
+
+/* Viz type: stacked-bar — vertical + horizontal stacked bars */
+
+.dashboard-stacked-bar {
+  min-height: 0;
+}
+
+.dashboard-stacked-bar-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  margin-top: -6px;
+  padding-bottom: 0.125rem;
+}
+
+.dashboard-stacked-bar-body:has(.dashboard-stacked-bar--horizontal){
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-stacked-bar-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0.25rem;
+  padding-top: 0.375rem;
+}
+
+.dashboard-stacked-bar-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-stacked-bar-header .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+.dashboard-stacked-bar .apexcharts-canvas,
+  .dashboard-stacked-bar .apexcharts-svg {
+  overflow: visible !important;
+}
+
+.dashboard-stacked-bar .apexcharts-gridlines-horizontal line,
+  .dashboard-stacked-bar .apexcharts-gridlines-vertical line {
+  display: none;
+}
+
+.dashboard-stacked-bar .apexcharts-legend {
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Apex column labels sit low in the segment rect; keep glyphs inside the fill. */
+
+.dashboard-stacked-bar:not(.dashboard-stacked-bar--horizontal)
+    .apexcharts-bar-series
+    .apexcharts-datalabels
+    text {
+  dominant-baseline: central;
+}
+
+.dashboard-stacked-bar--horizontal .apexcharts-legend {
+  margin-bottom: -14px !important;
+}
+
+.dashboard-line-chart {
+  overflow: visible;
+  min-height: 0;
+}
+
+.dashboard-line-chart-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  margin-top: -6px;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-line-chart-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.375rem;
+}
+
+.dashboard-line-chart-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-line-chart-header .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+.dashboard-line-chart .apexcharts-canvas,
+  .dashboard-line-chart .apexcharts-svg {
+  overflow: hidden;
+}
+
+.dashboard-line-chart .apexcharts-gridlines-vertical line {
+  display: none;
+}
+
+.dashboard-line-chart-animating .apexcharts-series-markers-wrap,
+  .dashboard-line-chart-animating .apexcharts-series-markers {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.dashboard-line-chart:not(.dashboard-line-chart-animating)
+    .apexcharts-series-markers
+    .apexcharts-marker:not(.dashboard-line-chart-marker-active) {
+  fill: var(--line-chart-marker-fill, var(--surface));
+}
+
+/* Shared chart hover tooltip — opaque surface box for all viz types */
+
+.dashboard-chart-tooltip {
+  padding: 6px 10px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e8e6e1);
+  border-radius: 2px;
+  color: var(--foreground, #1b1b1b);
+  box-shadow: none;
+}
+
+.dashboard-chart-tooltip--fixed {
+  position: fixed;
+  z-index: 10000;
+  max-width: 320px;
+  pointer-events: none;
+}
+
+.dashboard-chart-tooltip--anchored {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.dashboard-chart-tooltip-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--foreground, #1b1b1b);
+  margin-bottom: 4px;
+}
+
+.dashboard-chart-tooltip-row {
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+/* Apex wraps custom tooltips — hide default chrome so only our box shows */
+
+.dashboard-widget-surface .apexcharts-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.dashboard-line-chart-header-bar{
+  flex-shrink: 0;
+  border-bottom-width: 0px;
+}
+
+.dashboard-line-chart-widget-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  margin-top: -6px;
+  padding-bottom: 1.125rem;
+}
+
+/* Viz type: pie-chart — donut with in-slice values */
+
+.dashboard-pie-chart {
+  overflow: visible;
+  min-height: 0;
+}
+
+.dashboard-pie-chart-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: visible;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0px;
+  margin-top: -10px;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-pie-chart-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.375rem;
+}
+
+.dashboard-pie-chart-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-pie-chart-header .dashboard-drag-handle-subtitle{
+  margin-top: 0px;
+  line-height: 1;
+}
+
+/* Viz type: map — geographic distribution */
+
+.dashboard-map {
+  min-height: 0;
+}
+
+.dashboard-map-body{
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0px;
+  padding-bottom: 1.125rem;
+}
+
+.dashboard-map-header{
+  border-bottom-width: 0px;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  padding-bottom: 0px;
+  padding-top: 0.375rem;
+}
+
+.dashboard-map-header .dashboard-drag-handle-title{
+  line-height: 1.25;
+}
+
+.dashboard-map-header-bar{
+  border-bottom-width: 0px;
+}
+
+.dashboard-map-frame{
+  position: relative;
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dashboard-map-toolbar-row{
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom-width: 1px;
+  border-color: var(--border);
+  background-color: var(--surface);
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.dashboard-map-shell{
+  position: relative;
+  display: flex;
+  min-height: 0px;
+  flex: 1 1 0%;
+  flex-direction: column;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.dashboard-map-canvas{
+  position: relative;
+  z-index: 1;
+  border-radius: 0px;
+}
+
+.dashboard-map-canvas .leaflet-container {
+  height: 100%;
+  width: 100%;
+  font-family: inherit;
+}
+
+.dashboard-map-legend {
+  width: 196px;
+  border: 1px solid var(--border);
+  border-radius: 0.125rem;
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+.dashboard-map-filter-badge {
+  z-index: 1000;
+}
+
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle {
+  z-index: 1200;
+  pointer-events: auto;
+}
+
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-map:hover > .react-resizable-handle {
+  opacity: 1;
+}
+
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-s {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 12px;
+  cursor: s-resize;
+}
+
+.dashboard-grid-layout .react-grid-item.dashboard-grid-item-map > .react-resizable-handle.react-resizable-handle-e {
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 100%;
+  margin-top: 0;
+  cursor: e-resize;
+}
+
+.dashboard-map-breadcrumb{
+  display: flex;
+  min-width: 0px;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.dashboard-map-zoom-badge {
+  backdrop-filter: blur(4px);
+}
+
+.dashboard-map-controls{
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 4px;
+  border-width: 1px;
+  border-color: var(--border);
+  background-color: var(--surface);
+  --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+
+.dashboard-map-control-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  border-width: 0px;
+  background-color: transparent;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.dashboard-map-control-btn:hover{
+  background-color: var(--muted);
+}
+
+.dashboard-map-control-btn + .dashboard-map-control-btn{
+  border-left-width: 1px;
+  border-color: var(--border);
+}
+
+.dashboard-map-control-btn--text{
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
+}
+
+.dashboard-map-filter-badge {
+  -webkit-backdrop-filter: blur(4px);
+          backdrop-filter: blur(4px);
+}
+
+.dashboard-map-filter-clear{
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--chart-1);
+  cursor: pointer;
+}
+
+.dashboard-map-filter-clear:hover {
+  text-decoration: underline;
+}
+
+.dashboard-map-legend-toggle{
+  height: 1.25rem;
+  width: 1.25rem;
+  border-width: 0px;
+  background-color: transparent;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  line-height: 1;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.dashboard-map-legend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-map-legend-swatch{
+  display: inline-block;
+  height: 0.75rem;
+  width: 0.75rem;
+  flex-shrink: 0;
+  border-radius: 4px;
+  border-width: 1px;
+}
+
+.leaflet-tooltip.dashboard-map-hover-tooltip {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin-top: -8px;
+  z-index: 800;
+}
+
+.dashboard-map-hover-card {
+  min-width: 168px;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  padding: 0.625rem 0.75rem;
+}
+
+.dashboard-map-hover-title{
+  margin-bottom: 0.375rem;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.dashboard-map-hover-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 10px;
+  line-height: 1.375;
+  color: var(--muted-foreground);
+}
+
+.dashboard-map-hover-row strong{
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.leaflet-popup.dashboard-map-pin-popup-wrapper .dashboard-map-hover-card {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.leaflet-popup.dashboard-map-pin-popup-wrapper .leaflet-popup-content-wrapper {
+  border-radius: 0.375rem;
+}
+
+.dashboard-map-hover-note{
+  margin-top: 0.375rem;
+  font-size: 9px;
+  line-height: 1.375;
+  color: var(--muted-foreground);
+}
+
+.dashboard-pie-slice {
+  cursor: default;
+}
+
+.dashboard-grid-layout .react-grid-item > .react-resizable-handle::after {
+  content: none;
+  border: 0;
+}
+
+.dashboard-grid-layout .react-grid-item > .react-resizable-handle {
+  background: transparent;
+  opacity: 0;
+}
+
+.dashboard-grid-layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-se,
+  .dashboard-grid-layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-e,
+  .dashboard-grid-layout .react-grid-item:hover > .react-resizable-handle.react-resizable-handle-s {
+  opacity: 1;
+}
+
+.dashboard-grid-layout .react-grid-item > .react-resizable-handle.react-resizable-handle-se {
+  bottom: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  cursor: se-resize;
+  z-index: 3;
+}
+
+.dashboard-grid-layout .react-grid-item > .react-resizable-handle.react-resizable-handle-e {
+  top: 50%;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: -9px;
+  cursor: e-resize;
+  z-index: 3;
+}
+
+.dashboard-grid-layout .react-grid-item > .react-resizable-handle.react-resizable-handle-s {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 12px;
+  cursor: s-resize;
+  z-index: 3;
+}
+
+.dashboard-grid-layout .react-grid-placeholder {
+  background: transparent !important;
+  opacity: 0 !important;
+  border: 0 !important;
+}
+
+.dashboard-view-toggle button {
+  cursor: default;
+}
+
+.dashboard-sla-link {
+  color: var(--chart-1);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: default;
+}
+
+.dashboard-sla-link:hover {
+  text-decoration: underline;
+}
+
+.dashboard-sla-link--button{
+  border-width: 0px;
+  background-color: transparent;
+  padding: 0px;
+}
+
+.dashboard-sla-breach-pill {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  padding: 2px 6px;
+  text-transform: uppercase;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dashboard-sla-breach-pill--breached {
+  background-color: color-mix(in srgb, var(--status-breach) 14%, transparent);
+  color: var(--status-breach);
+}
+
+.dashboard-sla-breach-pill--nearing {
+  background-color: color-mix(in srgb, var(--status-progress) 16%, transparent);
+  color: var(--status-progress);
+}
+
+.dashboard-sla-status-pill {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  padding: 3px 10px;
+  text-transform: uppercase;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dashboard-sla-status-pill--reopened {
+  background-color: color-mix(in srgb, var(--chart-4) 14%, transparent);
+  color: var(--chart-4);
+}
+
+.dashboard-sla-status-pill--assigned {
+  background-color: color-mix(in srgb, var(--chart-1) 14%, transparent);
+  color: var(--chart-1);
+}
+
+.dashboard-sla-status-pill--open {
+  background-color: color-mix(in srgb, var(--chart-2) 16%, transparent);
+  color: var(--chart-2);
+}
+
+.dashboard-sla-status-pill--in-progress {
+  background-color: color-mix(in srgb, var(--status-progress) 14%, transparent);
+  color: var(--status-progress);
+}
+
+.dashboard-sla-overdue {
+  color: var(--status-breach);
+  font-weight: 500;
+}
+
+.dashboard-search-dimmed {
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+.tw-pointer-events-none{
+  pointer-events: none;
+}
+
+.tw-pointer-events-auto{
+  pointer-events: auto;
+}
+
+.tw-absolute{
+  position: absolute;
+}
+
+.tw-relative{
+  position: relative;
+}
+
+.tw-inset-0{
+  inset: 0px;
+}
+
+.tw-bottom-1{
+  bottom: 0.25rem;
+}
+
+.tw-bottom-3{
+  bottom: 0.75rem;
+}
+
+.tw-left-3{
+  left: 0.75rem;
+}
+
+.tw-right-3{
+  right: 0.75rem;
+}
+
+.tw-right-5{
+  right: 1.25rem;
+}
+
+.tw-top-12{
+  top: 3rem;
+}
+
+.tw-top-20{
+  top: 5rem;
+}
+
+.tw-top-3{
+  top: 0.75rem;
+}
+
+.tw-z-\[1000\]{
+  z-index: 1000;
+}
+
+.tw-z-\[1100\]{
+  z-index: 1100;
+}
+
+.tw-z-\[2\]{
+  z-index: 2;
+}
+
+.tw-z-\[500\]{
+  z-index: 500;
+}
+
+.tw-m-0{
+  margin: 0px;
+}
+
+.tw-mb-4{
+  margin-bottom: 1rem;
+}
+
+.tw-ml-2{
+  margin-left: 0.5rem;
+}
+
+.tw-mr-6{
+  margin-right: 1.5rem;
+}
+
+.tw-mt-1{
+  margin-top: 0.25rem;
+}
+
+.tw-mt-2{
+  margin-top: 0.5rem;
+}
+
+.tw-block{
+  display: block;
+}
+
+.tw-flex{
+  display: flex;
+}
+
+.tw-inline-flex{
+  display: inline-flex;
+}
+
+.tw-hidden{
+  display: none;
+}
+
+.tw-h-1\.5{
+  height: 0.375rem;
+}
+
+.tw-h-12{
+  height: 3rem;
+}
+
+.tw-h-3\.5{
+  height: 0.875rem;
+}
+
+.tw-h-4{
+  height: 1rem;
+}
+
+.tw-h-full{
+  height: 100%;
+}
+
+.tw-h-screen{
+  height: 100vh;
+}
+
+.tw-max-h-\[min\(24rem\,70vh\)\]{
+  max-height: min(24rem, 70vh);
+}
+
+.tw-min-h-0{
+  min-height: 0px;
+}
+
+.tw-min-h-\[220px\]{
+  min-height: 220px;
+}
+
+.tw-w-1\.5{
+  width: 0.375rem;
+}
+
+.tw-w-3\.5{
+  width: 0.875rem;
+}
+
+.tw-w-4{
+  width: 1rem;
+}
+
+.tw-w-60{
+  width: 15rem;
+}
+
+.tw-w-80{
+  width: 20rem;
+}
+
+.tw-w-full{
+  width: 100%;
+}
+
+.tw-min-w-0{
+  min-width: 0px;
+}
+
+.tw-max-w-\[220px\]{
+  max-width: 220px;
+}
+
+.tw-flex-1{
+  flex: 1 1 0%;
+}
+
+.tw-flex-shrink-0{
+  flex-shrink: 0;
+}
+
+.tw-shrink-0{
+  flex-shrink: 0;
+}
+
+@keyframes tw-pulse{
+  50%{
+    opacity: .5;
+  }
+}
+
+.tw-animate-pulse{
+  animation: tw-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.tw-list-none{
+  list-style-type: none;
+}
+
+.tw-flex-col{
+  flex-direction: column;
+}
+
+.tw-flex-wrap{
+  flex-wrap: wrap;
+}
+
+.tw-items-center{
+  align-items: center;
+}
+
+.tw-items-baseline{
+  align-items: baseline;
+}
+
+.tw-justify-center{
+  justify-content: center;
+}
+
+.tw-justify-between{
+  justify-content: space-between;
+}
+
+.tw-gap-1{
+  gap: 0.25rem;
+}
+
+.tw-gap-1\.5{
+  gap: 0.375rem;
+}
+
+.tw-gap-2{
+  gap: 0.5rem;
+}
+
+.tw-gap-3{
+  gap: 0.75rem;
+}
+
+.tw-gap-4{
+  gap: 1rem;
+}
+
+.tw-gap-x-3{
+  -moz-column-gap: 0.75rem;
+       column-gap: 0.75rem;
+}
+
+.tw-gap-y-0\.5{
+  row-gap: 0.125rem;
+}
+
+.tw-space-y-1 > :not([hidden]) ~ :not([hidden]){
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
+}
+
+.tw-space-y-1\.5 > :not([hidden]) ~ :not([hidden]){
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.375rem * var(--tw-space-y-reverse));
+}
+
+.tw-overflow-auto{
+  overflow: auto;
+}
+
+.tw-overflow-hidden{
+  overflow: hidden;
+}
+
+.tw-overflow-visible{
+  overflow: visible;
+}
+
+.tw-overflow-y-auto{
+  overflow-y: auto;
+}
+
+.tw-overscroll-contain{
+  overscroll-behavior: contain;
+}
+
+.tw-truncate{
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tw-rounded{
+  border-radius: 0.25rem;
+}
+
+.tw-rounded-full{
+  border-radius: 9999px;
+}
+
+.tw-rounded-md{
+  border-radius: 0.375rem;
+}
+
+.tw-rounded-sm{
+  border-radius: 4px;
+}
+
+.tw-border{
+  border-width: 1px;
+}
+
+.tw-border-0{
+  border-width: 0px;
+}
+
+.tw-border-b{
+  border-bottom-width: 1px;
+}
+
+.tw-border-t{
+  border-top-width: 1px;
+}
+
+.tw-border-dashed{
+  border-style: dashed;
+}
+
+.tw-border-\[color-mix\(in_srgb\,var\(--chrome-foreground\)_15\%\,transparent\)\]{
+  border-color: color-mix(in srgb,var(--chrome-foreground) 15%,transparent);
+}
+
+.tw-border-\[color-mix\(in_srgb\,var\(--destructive\)_30\%\,transparent\)\]{
+  border-color: color-mix(in srgb,var(--destructive) 30%,transparent);
+}
+
+.tw-border-border{
+  border-color: var(--border);
+}
+
+.tw-bg-amber-50\/95{
+  background-color: rgb(255 251 235 / 0.95);
+}
+
+.tw-bg-background{
+  background-color: var(--background);
+}
+
+.tw-bg-chart-1{
+  background-color: var(--chart-1);
+}
+
+.tw-bg-chrome{
+  background-color: var(--chrome);
+}
+
+.tw-bg-muted{
+  background-color: var(--muted);
+}
+
+.tw-bg-primary{
+  background-color: var(--primary);
+}
+
+.tw-bg-status-assigned{
+  background-color: var(--status-assigned);
+}
+
+.tw-bg-status-assigned-bg{
+  background-color: var(--status-assigned-bg);
+}
+
+.tw-bg-status-breach-bg{
+  background-color: var(--status-breach-bg);
+}
+
+.tw-bg-status-resolved-bg{
+  background-color: var(--status-resolved-bg);
+}
+
+.tw-bg-surface{
+  background-color: var(--surface);
+}
+
+.tw-bg-surface-2{
+  background-color: var(--surface-2);
+}
+
+.tw-p-0{
+  padding: 0px;
+}
+
+.tw-p-3{
+  padding: 0.75rem;
+}
+
+.tw-p-4{
+  padding: 1rem;
+}
+
+.tw-px-1{
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.tw-px-2{
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+.tw-px-2\.5{
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
+}
+
+.tw-px-3{
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.tw-px-4{
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.tw-px-5{
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+.tw-py-0\.5{
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+}
+
+.tw-py-1{
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.tw-py-1\.5{
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+
+.tw-py-2{
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.tw-py-3{
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.tw-py-5{
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.tw-py-6{
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+
+.tw-pb-0{
+  padding-bottom: 0px;
+}
+
+.tw-pb-2{
+  padding-bottom: 0.5rem;
+}
+
+.tw-pr-8{
+  padding-right: 2rem;
+}
+
+.tw-pt-2{
+  padding-top: 0.5rem;
+}
+
+.tw-pt-2\.5{
+  padding-top: 0.625rem;
+}
+
+.tw-text-center{
+  text-align: center;
+}
+
+.tw-font-sans{
+  font-family: Inter, Roboto, ui-sans-serif, system-ui, sans-serif;
+}
+
+.tw-text-\[10px\]{
+  font-size: 10px;
+}
+
+.tw-text-\[11px\]{
+  font-size: 11px;
+}
+
+.tw-text-\[12px\]{
+  font-size: 12px;
+}
+
+.tw-text-\[15px\]{
+  font-size: 15px;
+}
+
+.tw-text-\[9px\]{
+  font-size: 9px;
+}
+
+.tw-text-lg{
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+
+.tw-text-sm{
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.tw-text-xs{
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.tw-font-bold{
+  font-weight: 700;
+}
+
+.tw-font-medium{
+  font-weight: 500;
+}
+
+.tw-font-normal{
+  font-weight: 400;
+}
+
+.tw-font-semibold{
+  font-weight: 600;
+}
+
+.tw-uppercase{
+  text-transform: uppercase;
+}
+
+.tw-tabular-nums{
+  --tw-numeric-spacing: tabular-nums;
+  font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
+}
+
+.tw-leading-snug{
+  line-height: 1.375;
+}
+
+.tw-leading-tight{
+  line-height: 1.25;
+}
+
+.tw-tracking-wide{
+  letter-spacing: 0.025em;
+}
+
+.tw-tracking-wider{
+  letter-spacing: 0.05em;
+}
+
+.tw-text-amber-900{
+  --tw-text-opacity: 1;
+  color: rgb(120 53 15 / var(--tw-text-opacity, 1));
+}
+
+.tw-text-chrome-foreground{
+  color: var(--chrome-foreground);
+}
+
+.tw-text-chrome-muted{
+  color: var(--chrome-muted);
+}
+
+.tw-text-destructive{
+  color: var(--destructive);
+}
+
+.tw-text-foreground{
+  color: var(--foreground);
+}
+
+.tw-text-muted-foreground{
+  color: var(--muted-foreground);
+}
+
+.tw-text-primary-foreground{
+  color: var(--primary-foreground);
+}
+
+.tw-text-status-assigned{
+  color: var(--status-assigned);
+}
+
+.tw-text-status-breach{
+  color: var(--status-breach);
+}
+
+.tw-text-status-resolved{
+  color: var(--status-resolved);
+}
+
+.tw-text-white{
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+
+.tw-shadow-sm{
+  --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+}
+
+/* Scrollbars hidden globally except on chart/table scroll regions. */
+
+.dashboard-root,
+.dashboard-root * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.dashboard-root *:not(.dashboard-subtle-scroll)::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.dashboard-root .dashboard-subtle-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.dashboard-root .dashboard-subtle-scroll.dashboard-subtle-scroll--active {
+  scrollbar-color: color-mix(in srgb, var(--foreground) 22%, transparent) transparent;
+}
+
+.dashboard-root .dashboard-subtle-scroll::-webkit-scrollbar {
+  display: block;
+  width: 5px;
+  height: 5px;
+}
+
+.dashboard-root .dashboard-subtle-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dashboard-root .dashboard-subtle-scroll::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  -webkit-transition: background-color 0.3s ease;
+  transition: background-color 0.3s ease;
+}
+
+.dashboard-root .dashboard-subtle-scroll.dashboard-subtle-scroll--active::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+}
+
+.dashboard-root .dashboard-subtle-scroll.dashboard-subtle-scroll--active::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--foreground) 32%, transparent);
+}
+
+/* Beat global digit-ui Roboto rules on bare form/table elements */
+
+.dashboard-root :is(
+  button,
+  input,
+  select,
+  textarea,
+  optgroup,
+  option,
+  label,
+  table,
+  caption,
+  thead,
+  tbody,
+  tfoot,
+  tr,
+  th,
+  td,
+  p,
+  span,
+  div,
+  a,
+  li,
+  ul,
+  ol,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  header,
+  footer,
+  main,
+  section,
+  nav,
+  aside,
+  small,
+  strong,
+  em
+) {
+  font-family: var(--dashboard-font-family) !important;
+}
+
+/* ── Embedded-in-DigitUI overrides ─────────────────────────────────────
+   Applied when the dashboard is mounted inside the DigitUI employee
+   chrome (products/dashboard/Module.js renders <AdminDashboard embedded />,
+   which adds .dashboard-embedded next to .dashboard-root). The host chrome
+   owns the viewport and scrolling, so the standalone full-viewport shell
+   (h-screen root, internal overflow scrollers) is neutralized; the internal
+   dark Sidebar is simply not rendered in embedded mode. Plain CSS outside
+   the tailwind layers, so regeneration passes it through verbatim. */
+
+.dashboard-root.dashboard-embedded {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+
+.dashboard-root.dashboard-embedded > div {
+  overflow: visible;
+}
+
+.dashboard-root.dashboard-embedded > div > main {
+  overflow: visible;
+}
+
+.hover\:tw-bg-\[color-mix\(in_srgb\2c var\(--chrome-foreground\)_12\%\2c transparent\)\]:hover{
+  background-color: color-mix(in srgb,var(--chrome-foreground) 12%,transparent);
+}
+
+.hover\:tw-bg-\[color-mix\(in_srgb\2c var\(--chrome-foreground\)_22\%\2c transparent\)\]:hover{
+  background-color: color-mix(in srgb,var(--chrome-foreground) 22%,transparent);
+}
+
+.hover\:tw-text-foreground:hover{
+  color: var(--foreground);
+}
+
+@media (min-width: 640px){
+  .sm\:tw-inline-flex{
+    display: inline-flex;
+  }
+}
+
+@media (min-width: 1024px){
+  .lg\:tw-p-6{
+    padding: 1.5rem;
+  }
+
+  .lg\:tw-px-6{
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+/* ── Embedded-in-DigitUI overrides ─────────────────────────────────────
+   Applied when the dashboard is mounted inside the DigitUI employee
+   chrome (products/dashboard/Module.js renders <AdminDashboard embedded />,
+   which adds .dashboard-embedded next to .dashboard-root). The host chrome
+   owns the viewport and scrolling, so the standalone full-viewport shell
+   (h-screen root, internal overflow scrollers) is neutralized; the internal
+   dark Sidebar is simply not rendered in embedded mode. Mirrored in
+   input.css so `npm run build:dashboard-css` regeneration keeps it. */
+.dashboard-root.dashboard-embedded {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+.dashboard-root.dashboard-embedded > div {
+  overflow: visible;
+}
+.dashboard-root.dashboard-embedded > div > main {
+  overflow: visible;
+}
+
+/* The host app's vendor/overrides.css forces height:44px !important on all
+   text inputs/selects via a high-specificity :not() chain. The dashboard uses
+   compact 1.75rem controls (owner preference). Stacked-class specificity +
+   !important re-asserts the compact size; both !important -> specificity wins.
+   Scoped to the wards select only (calendars keep the host size by owner choice). */
+.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select.dashboard-filter-inline-select {
+  height: 1.75rem !important;
+  min-height: 1.75rem !important;
+  max-height: 1.75rem !important;
+  font-size: 12px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 1 !important;
+}

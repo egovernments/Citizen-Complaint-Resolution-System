@@ -35,10 +35,28 @@ export interface LifecycleFixtures {
     non_terminal: string;
     /** Complaint walked through ASSIGN → RESOLVE → RATE → CLOSEDAFTERRESOLUTION. */
     terminal_rated: string;
+    /**
+     * Complaint driven to PENDINGATLME and left there — assigned but not yet
+     * resolved. Optional: added after non_terminal/terminal_rated, so an
+     * older fixture file (or one pointed at via LIFECYCLE_FIXTURES_FILE from
+     * a prior run) may not carry it; readers must not assume its presence.
+     */
+    assigned_to_employee?: string;
   };
   citizen?: {
     phone: string;
     name: string;
+  };
+  /**
+   * The employee `assigned_to_employee` (and `terminal_rated`, before it was
+   * resolved) landed on — the seed plan's assignee: the one HRMS employee at
+   * this tenant whose department matches the seeded service AND who holds a
+   * role able to act on PENDINGATLME. Persisted so a spec can identify whose
+   * inbox a complaint should show up in without re-deriving the seed plan.
+   */
+  assignee?: {
+    uuid: string;
+    code: string;
   };
 }
 

@@ -1,0 +1,267 @@
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import Chart from "react-apexcharts";
+import { DASHBOARD_FONT_FAMILY } from "../config/dashboardConfig";
+import {
+  applyLineChartMarkerHoverState,
+  buildLineChartAnimations,
+  buildLineChartGrid,
+  buildLineChartMarkers,
+  buildLineChartSeriesData,
+  buildLineChartStroke,
+  buildLineChartTooltip,
+  buildLineChartXAxis,
+  buildLineChartYAxis,
+  buildCompoundLineChartYAxis,
+  getLineChartMarkerSurfaceColor,
+  LINE_CHART_LEGEND,
+  LINE_CHART_PERIOD_OPTIONS,
+  normalizeLineChartSeries,
+  resolveLineChartColors,
+  resolveLineChartXAxisLabelHeight,
+  setLineChartMarkersVisible,
+} from "../config/lineChartPresentation";
+import { VISUALIZATION_STYLES, VIZ_TYPE, SHARED_CHROME } from "../config/visualizationStyles";
+import { translate } from "../i18n/localeRuntime";
+import { useChartContainerSize } from "../hooks/useChartContainerSize";
+import { getNumberFormatStamp } from "../utils/numberFormat";
+import ViewToggle from "./demo/ViewToggle";
+
+function resolveActiveDataset({ categories, series, periods, period }) {
+  if (periods?.[period]) {
+    return periods[period];
+  }
+  return { categories: categories ?? [], series: series ?? [] };
+}
+
+const LineChart = ({
+  categories: categoriesProp,
+  series: seriesProp,
+  periods,
+  defaultPeriod = "daily",
+  headerTitle,
+  yAxis,
+}) => {
+  const [period, setPeriod] = useState(defaultPeriod);
+  const [isAnimating, setIsAnimating] = useState(true);
+  const hoveredIndexRef = useRef(-1);
+  const isAnimatingRef = useRef(true);
+  const colorsRef = useRef([]);
+  const surfaceColorRef = useRef("#ffffff");
+
+  const { containerRef, containerSize } = useChartContainerSize();
+  const { width: containerWidth, height: containerHeight } = containerSize;
+  const numberFormatStamp = getNumberFormatStamp();
+
+  const handlePeriodChange = useCallback((nextPeriod) => {
+    hoveredIndexRef.current = -1;
+    isAnimatingRef.current = true;
+    setIsAnimating(true);
+    setPeriod(nextPeriod);
+  }, []);
+
+  const activeDataset = useMemo(
+    () =>
+      resolveActiveDataset({
+        categories: categoriesProp,
+        series: seriesProp,
+        periods,
+        period,
+      }),
+    [categoriesProp, period, periods, seriesProp]
+  );
+
+  const { categories, series } = activeDataset;
+  const activeYAxis = activeDataset.yAxis ?? yAxis;
+
+  const normalizedSeries = useMemo(
+    () => normalizeLineChartSeries(series),
+    [series]
+  );
+
+  const chartSeries = useMemo(
+    () => buildLineChartSeriesData(normalizedSeries, categories.length),
+    [categories.length, normalizedSeries]
+  );
+
+  const colors = useMemo(
+    () => resolveLineChartColors(normalizedSeries),
+    [normalizedSeries]
+  );
+  colorsRef.current = colors;
+  surfaceColorRef.current = getLineChartMarkerSurfaceColor();
+  isAnimatingRef.current = isAnimating;
+
+  const yAxisConfig = useMemo(
+    () => buildCompoundLineChartYAxis(normalizedSeries, activeYAxis ?? yAxis),
+    [activeYAxis, normalizedSeries, yAxis]
+  );
+
+  const xAxisLabelHeight = useMemo(
+    () => resolveLineChartXAxisLabelHeight(categories, containerWidth),
+    [categories, containerWidth]
+  );
+
+  const revealMarkers = useCallback((chartContext) => {
+    setLineChartMarkersVisible(chartContext, true);
+    applyLineChartMarkerHoverState(
+      chartContext,
+      hoveredIndexRef.current,
+      colorsRef.current,
+      surfaceColorRef.current
+    );
+  }, []);
+
+  const chartEvents = useMemo(
+    () => ({
+      animationEnd: (chartContext) => {
+        isAnimatingRef.current = false;
+        setIsAnimating(false);
+        revealMarkers(chartContext);
+        // Apex may paint markers after animationEnd; re-apply on next frame.
+        requestAnimationFrame(() => revealMarkers(chartContext));
+      },
+      mouseMove: (_event, chartContext, config) => {
+        if (isAnimatingRef.current) return;
+
+        const idx = config?.dataPointIndex ?? -1;
+        hoveredIndexRef.current = idx;
+
+        const apply = () =>
+          applyLineChartMarkerHoverState(
+            chartContext,
+            idx,
+            colorsRef.current,
+            surfaceColorRef.current
+          );
+
+        apply();
+        window.requestAnimationFrame(() => {
+          apply();
+          window.requestAnimationFrame(apply);
+        });
+      },
+      mouseLeave: (_event, chartContext) => {
+        hoveredIndexRef.current = -1;
+        applyLineChartMarkerHoverState(
+          chartContext,
+          -1,
+          colorsRef.current,
+          surfaceColorRef.current
+        );
+      },
+      updated: (chartContext) => {
+        hoveredIndexRef.current = -1;
+        if (isAnimatingRef.current) {
+          setLineChartMarkersVisible(chartContext, false);
+        }
+      },
+    }),
+    [revealMarkers]
+  );
+
+  const options = useMemo(
+    () => ({
+      chart: {
+        type: "line",
+        toolbar: { show: false },
+        fontFamily: DASHBOARD_FONT_FAMILY,
+        zoom: { enabled: false },
+        parentHeightOffset: 0,
+        animations: buildLineChartAnimations(),
+        events: chartEvents,
+      },
+      stroke: buildLineChartStroke(normalizedSeries),
+      markers: buildLineChartMarkers(colors),
+      xaxis: buildLineChartXAxis(categories, containerWidth),
+      yaxis: yAxisConfig,
+      colors,
+      legend: LINE_CHART_LEGEND,
+      grid: buildLineChartGrid({ bottomPadding: xAxisLabelHeight }),
+      tooltip: buildLineChartTooltip(categories, normalizedSeries),
+      states: {
+        hover: { filter: { type: "none" } },
+        active: { filter: { type: "none" } },
+      },
+      // Not an Apex option — a stringifiable stamp of the per-locale
+      // numberFormat mask (#1272). react-apexcharts compares
+      // JSON.stringify(options), which drops the y-axis/tooltip formatter
+      // closures, so without this a language switch that only changes the
+      // mask would never redraw the baked tick/tooltip numbers. The parent
+      // KpiTile subscribes to the locale runtime, so this component
+      // re-renders (and re-reads the stamp) after AdminDashboard re-primes
+      // the mask store.
+      _numberFormatStamp: numberFormatStamp,
+    }),
+    [
+      categories,
+      chartEvents,
+      colors,
+      containerWidth,
+      normalizedSeries,
+      xAxisLabelHeight,
+      yAxisConfig,
+      numberFormatStamp,
+    ]
+  );
+
+  const markerStyleVars = useMemo(
+    () => ({
+      "--line-chart-marker-fill": getLineChartMarkerSurfaceColor(),
+    }),
+    [colors]
+  );
+
+  const hasChartStructure = categories.length > 0 && normalizedSeries.length > 0;
+
+  const lineStyles = VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART];
+  const showHeader = Boolean(headerTitle && periods);
+
+  const chart = !hasChartStructure ? null : (
+    <div
+      ref={containerRef}
+      className={`${lineStyles.container} tw-h-full tw-min-h-0 tw-w-full tw-flex-1 tw-overflow-visible${
+        isAnimating ? ` ${lineStyles.animating}` : ""
+      }`}
+      style={markerStyleVars}
+    >
+      {containerHeight > 0 && containerWidth > 0 ? (
+        <Chart
+          key={`${containerHeight}-${containerWidth}`}
+          options={options}
+          series={chartSeries}
+          type="line"
+          height={containerHeight}
+          width="100%"
+        />
+      ) : null}
+    </div>
+  );
+
+  if (!hasChartStructure) return null;
+
+  if (!showHeader) {
+    return chart;
+  }
+
+  return (
+    <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col">
+      <header
+        className={`${lineStyles.headerBar} ${SHARED_CHROME.dragHandle} tw-flex tw-shrink-0 tw-items-center tw-justify-between tw-gap-3 tw-px-4 tw-pb-0 tw-pt-2.5 tw-pr-8`}
+      >
+        <h2 className={SHARED_CHROME.dragHandleTitle}>{headerTitle}</h2>
+        <ViewToggle
+          value={period}
+          onChange={handlePeriodChange}
+          variant="primary"
+          options={LINE_CHART_PERIOD_OPTIONS.map((opt) => ({
+            ...opt,
+            label: translate(opt.labelKey, opt.label),
+          }))}
+        />
+      </header>
+      <div className={lineStyles.widgetBody}>{chart}</div>
+    </div>
+  );
+};
+
+export default LineChart;

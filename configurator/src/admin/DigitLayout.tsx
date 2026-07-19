@@ -14,6 +14,7 @@ import {
   Users,
   LayoutDashboard,
   BarChart3,
+  Network,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -26,6 +27,14 @@ import {
   History,
   FileCode,
   Workflow,
+  Bell,
+  Mail,
+  ScrollText,
+  Plug,
+  SlidersHorizontal,
+  MessageCircle,
+  UserCog,
+  Map,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,12 +47,25 @@ import { THEMES } from '@/themes';
 /** Sidebar navigation groups — names are i18n keys resolved at render time */
 const navGroups = [
   {
+    labelKey: 'app.nav.notifications',
+    items: [
+      { id: 'notification-configure', nameKey: 'app.nav.notification_configure', path: '/manage/notification-configure', icon: SlidersHorizontal },
+      { id: 'notification-routing', nameKey: 'app.nav.notification_routing', path: '/manage/notification-routing', icon: Bell },
+      { id: 'notification-template', nameKey: 'app.nav.notification_templates', path: '/manage/notification-template', icon: Mail },
+      { id: 'notification-provider-template', nameKey: 'app.nav.notification_provider_templates', path: '/manage/notification-provider-template', icon: MessageCircle },
+      { id: 'notification-log', nameKey: 'app.nav.notification_logs', path: '/manage/notification-log', icon: ScrollText },
+      { id: 'notification-provider', nameKey: 'app.nav.notification_providers', path: '/manage/notification-provider', icon: Plug },
+      { id: 'notification-preference', nameKey: 'app.nav.notification_preferences', path: '/manage/notification-preference', icon: UserCog },
+    ],
+  },
+  {
     labelKey: 'app.nav.tenant_management',
     items: [
       { id: 'tenants', nameKey: 'app.nav.tenants', path: '/manage/tenants', icon: Building2 },
       { id: 'departments', nameKey: 'app.nav.departments', path: '/manage/departments', icon: Briefcase },
       { id: 'designations', nameKey: 'app.nav.designations', path: '/manage/designations', icon: Award },
       { id: 'boundary-hierarchies', nameKey: 'app.nav.hierarchies', path: '/manage/boundary-hierarchies', icon: GitBranch },
+      { id: 'map-config', nameKey: 'app.nav.map_config', path: '/manage/map-config', icon: Map },
     ],
   },
   {
@@ -59,6 +81,7 @@ const navGroups = [
     labelKey: 'app.nav.people',
     items: [
       { id: 'employees', nameKey: 'app.nav.employees', path: '/manage/employees', icon: Users },
+      { id: 'org-chart', nameKey: 'app.nav.org_chart', path: '/manage/org-chart', icon: Network },
       { id: 'users', nameKey: 'app.nav.users', path: '/manage/users', icon: User },
     ],
   },
@@ -127,12 +150,12 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
           : 'custom';
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen overflow-hidden bg-background flex">
       {/* Sidebar */}
       <aside
         className={`${
           sidebarCollapsed ? 'w-16' : 'w-64'
-        } bg-card border-r border-border flex flex-col transition-all duration-200`}
+        } bg-card border-r border-border flex flex-col transition-all duration-200 h-full`}
       >
         {/* Sidebar Header — DIGIT Admin Console branding */}
         <div className="h-16 border-b border-border flex items-center px-4 gap-2">
@@ -228,9 +251,13 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
                           `}
                           title={sidebarCollapsed ? translate(item.nameKey) : undefined}
                         >
-                          <Icon className="w-4.5 h-4.5 flex-shrink-0" />
+                          {/* w-4.5 is not a Tailwind v3 utility (no CSS emitted) — the
+                              icon rendered at its intrinsic 24px and shrank the label box.
+                              text-left keeps a wrapped label on the shared left edge
+                              (buttons default to text-align:center). */}
+                          <Icon className="w-4 h-4 flex-shrink-0" />
                           {!sidebarCollapsed && (
-                            <span className="text-sm font-medium">{translate(item.nameKey)}</span>
+                            <span className="text-sm font-medium flex-1 min-w-0 text-left">{translate(item.nameKey)}</span>
                           )}
                         </button>
                       );
@@ -384,7 +411,7 @@ export function DigitLayout({ children }: { children?: ReactNode }) {
         </header>
 
         {/* Main content */}
-        <main id="main-content" className="flex-1 p-6 overflow-auto">
+        <main id="main-content" className="flex-1 p-6 overflow-auto min-h-0">
           {children}
         </main>
       </div>

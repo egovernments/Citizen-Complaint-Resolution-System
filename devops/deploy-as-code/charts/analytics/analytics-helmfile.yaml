@@ -17,12 +17,15 @@ templates:
       - {{ .Values | toYaml | nindent 8 }}
 
 releases:
+  # DSS (dashboard-analytics/ingest): not used by CCRS — the digit-ui app enables only
+  # ["Utilities","PGR"] (no DSS module), so nothing calls /dashboard-analytics/*. Disabled
+  # to cut footprint + attack surface. Re-enable if a DSS dashboard is ever surfaced.
   - name: dashboard-analytics
-    installed: true
+    installed: false
     <<: *default
 
   - name: dashboard-ingest
-    installed: true
+    installed: false
     <<: *default
 
   - name: inbox

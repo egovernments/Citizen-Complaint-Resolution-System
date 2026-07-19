@@ -761,7 +761,7 @@ services:
       OTEL_TRACES_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     volumes:
-    - ./configs/persister:/persister-config:ro
+    - ./configs/egov-persister:/persister-config:ro
     ports:
     - 18091:8091
     healthcheck:
@@ -1109,7 +1109,7 @@ services:
       - egov-network
     restart: "no"
 
-    db-seed:
+  db-seed:
     image: postgres:16
     container_name: db-seed-container
     depends_on:
@@ -1338,6 +1338,16 @@ services:
       - "18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
+      # These services are ungated in this file, so the toggles are fixed:
+      # "true" where the service always starts, "false" where it is absent.
+      GATUS_PROFILE_OTP: "true"
+      GATUS_PROFILE_SEARCH: "false"
+      GATUS_PROFILE_MCP: "false"
+      GATUS_PROFILE_KEYCLOAK: "false"
+      GATUS_PROFILE_NOTIFICATIONS: "false"
+      GATUS_AUDIT: "false"
+      GATUS_PROXIES: "false"
+      GATUS_SMS_PORT: "8080"
     deploy:
       resources:
         limits:

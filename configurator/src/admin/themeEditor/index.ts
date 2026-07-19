@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { ThemeConfigEditor } from './ThemeConfigEditor';
 import { StateInfoEditor } from './StateInfoEditor';
+import { MapConfigEditor } from './MapConfigEditor';
 
 /**
  * Registry of custom editors keyed by the `customEditor` field on
@@ -20,6 +21,9 @@ export const customEditors: Record<string, ComponentType> = {
   // resource (filed separately). The custom editor calls mdmsUpdate
   // directly so save is reliable.
   'state-info': StateInfoEditor,
+  // Grouped sections + a live map preview + a basemap dropdown; the generic
+  // form rendered 12 stacked full-width inputs with paragraph help.
+  'map-config': MapConfigEditor,
 };
 
-export { ThemeConfigEditor, StateInfoEditor };
+export { ThemeConfigEditor, StateInfoEditor, MapConfigEditor };

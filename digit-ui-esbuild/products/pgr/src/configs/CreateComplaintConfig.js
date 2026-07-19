@@ -54,10 +54,30 @@ export const CreateComplaintConfig = {
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
                 validation: {
                   required: true,
+                  // Read order (canonical UserValidation pattern, same as the
+                  // mobile field above):
+                  //   1. `window.__DIGIT_USER_VALIDATION.name` — populated by
+                  //      `useMobileValidation` from the validation MDMS master
+                  //      (nameRegex, optional field).
+                  //   2. Built-in fallback below — always valid, so an
+                  //      unseeded or malformed master value can't break the form.
+                  // Getter re-evaluates on every read, so the MDMS value wins
+                  // as soon as the hook resolves.
                   // CCRS#437: Allow 4-character names (e.g. "John"). The
                   // quantifier counts characters AFTER the leading letter,
-                  // so {3,29} = total length 4–30, not 5–30.
-                  pattern: /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{3,29}$)^.*$/,
+                  // CCSD-1990: min length 1 (was 4). {0,29} = total 1–30.
+                  // Letter-first / no leading-trailing-doubled separator kept.
+                  get pattern() {
+                    const raw = window?.__DIGIT_USER_VALIDATION?.name?.pattern;
+                    if (raw) {
+                      try {
+                        return raw instanceof RegExp ? raw : new RegExp(raw);
+                      } catch (e) {
+                        console.error("Invalid nameRegex in validation master:", e);
+                      }
+                    }
+                    return /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{0,29}$)^.*$/;
+                  },
                 }
               },
             },
@@ -258,7 +278,10 @@ export const CreateComplaintConfig = {
                 maxLength: 1000,
                 validation: {
                   required: true,
-                  pattern: /^(?!\s*$).+/,
+                  // CCSD-1980: reject numbers-only / whitespace-only descriptions
+                  // (e.g. "000000000000") — require at least 3 letters (any
+                  // language). Non-empty is implied.
+                  pattern: /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u,
                 },
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },

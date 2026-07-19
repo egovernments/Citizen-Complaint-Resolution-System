@@ -91,7 +91,10 @@ function DigitCreateContent({
 
       <DigitCard className="max-w-none">
         <MutationErrorBanner info={errorInfo} onDismiss={onDismissError} />
-        <Form>
+        {/* mode="onChange": ra-core's <Form> defaults to react-hook-form's
+            "onSubmit" mode, which leaves fieldState.invalid unset (and thus
+            no red/error styling) until the first submit attempt. */}
+        <Form mode="onChange">
           <div className="space-y-4">
             {children}
           </div>

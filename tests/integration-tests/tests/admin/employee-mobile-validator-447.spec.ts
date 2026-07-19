@@ -26,13 +26,14 @@ const MOBILE_INPUT = 'input[name="user.mobileNumber"]';
 let mobileRule: MobileRule;
 let helpTextRe: RegExp;
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 test.beforeAll(async () => {
   mobileRule = await getMobileValidationRule(TENANT);
-  helpTextRe = new RegExp(escapeRegex(mobileRule.errorMessage), 'i');
+  // The form renders its error via the app's `useMobileValidator`, whose copy
+  // is "Please enter a valid mobile number (<len> digits, starting with <d>)"
+  // on every tenant — not the synthetic `mobileRule.errorMessage` the MDMS
+  // helper builds ("…valid <len>-digit mobile number"). Assert on the stable
+  // app substring so the check is tenant-agnostic and matches what renders.
+  helpTextRe = /valid mobile number/i;
 });
 
 test.describe('admin employee create — mobile validator (MDMS rule) #447 #674', () => {
@@ -42,7 +43,7 @@ test.describe('admin employee create — mobile validator (MDMS rule) #447 #674'
     await page.waitForSelector(MOBILE_INPUT, { timeout: 20_000 });
   });
 
-  test('valid mobile clears aria-invalid', async ({ page }) => {
+  test('valid mobile clears aria-invalid', { tag: ['@persona:admin'] }, async ({ page }) => {
     const validMobile = generateValidMobile(mobileRule);
     await page.waitForTimeout(2_000);
     const mobile = page.locator(MOBILE_INPUT);
@@ -58,7 +59,7 @@ test.describe('admin employee create — mobile validator (MDMS rule) #447 #674'
     ).toHaveCount(0);
   });
 
-  test('invalid mobile surfaces help text and aria-invalid', async ({ page }) => {
+  test('invalid mobile surfaces help text and aria-invalid', { tag: ['@persona:admin'] }, async ({ page }) => {
     const invalidMobile = generateInvalidMobile(mobileRule, 'short');
     await page.waitForTimeout(2_000);
     const mobile = page.locator(MOBILE_INPUT);
@@ -74,7 +75,7 @@ test.describe('admin employee create — mobile validator (MDMS rule) #447 #674'
     expect(await mobile.getAttribute('aria-invalid')).toBe('true');
   });
 
-  test('second valid mobile candidate clears aria-invalid — #674 fallback', async ({ page }) => {
+  test('second valid mobile candidate clears aria-invalid — #674 fallback', { tag: ['@persona:admin'] }, async ({ page }) => {
     // Catches a regression of PR #674 fallback handling. We generate a fresh
     // valid candidate from the rule — on tenants whose rule allows a leading
     // "0" trunk this naturally exercises the same path.
