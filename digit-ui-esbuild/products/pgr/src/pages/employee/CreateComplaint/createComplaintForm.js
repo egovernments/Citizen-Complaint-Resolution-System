@@ -290,6 +290,12 @@ const CreateComplaintForm = ({
       key: "isConfidential",
       type: "checkbox",
       isMandatory: false,
+      // withoutLabel drops the empty left label column and gives the field
+      // width:100% (FormComposerV2), so the checkbox + its own title sit at the
+      // LEFT edge instead of being indented into the right-hand control column.
+      // The checkbox renders its own label via populators.title, so no field
+      // label column is needed.
+      withoutLabel: true,
       populators: { name: "isConfidential", title: "PGR_EXT_IS_CONFIDENTIAL_LABEL" },
     });
     return cfgs;
@@ -373,13 +379,16 @@ const CreateComplaintForm = ({
       populators: { name: "SelectedDocuments", tenantId, maxWidth: "600px" },
     };
 
-    // Append the per-category dynamic fields (when present) AND the attachment
-    // uploader (always) to the "Additional details" section holding the
-    // description. extFieldConfigs is empty for non-mapped tenants — the
-    // uploader still shows.
+    // Append the per-category dynamic fields (when present) + the attachment
+    // uploader to the "Additional details" section. The uploader goes BEFORE
+    // the isConfidential checkbox (last element of extFieldConfigs) so the
+    // checkbox stays at the very bottom of the section.
+    const confIdx = extFieldConfigs.findIndex((c) => c.key === "isConfidential");
+    const extBeforeConf = confIdx >= 0 ? extFieldConfigs.slice(0, confIdx) : extFieldConfigs;
+    const extConfField = confIdx >= 0 ? extFieldConfigs.slice(confIdx) : [];
     const withExt = (updatedForm || []).map((section) =>
       section?.head === "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS"
-        ? { ...section, body: [...section.body, ...extFieldConfigs, uploadFieldConfig] }
+        ? { ...section, body: [...section.body, ...extBeforeConf, uploadFieldConfig, ...extConfField] }
         : section
     );
 
