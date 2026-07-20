@@ -17,6 +17,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useHistory } from "react-router-dom";
 import { formPayloadToCreateComplaint } from "../../../utils";
+import { isPostalCodeValid, getPostalCodeErrorMessage } from "../../../utils/postalCode";
 
 const CreateComplaintForm = ({
   createComplaintConfig,      // Form configuration for Create Complaint screen
@@ -419,24 +420,18 @@ const CreateComplaintForm = ({
       });
       return;
     }
-    // Postal pattern check — Kenya is 5 digits. Optional field; only
-    // enforce format when filled. The config-level `validation.pattern`
-    // on a `type:"number"` field doesn't reliably fire, so do it
-    // explicitly here. Closes egovernments/CCRS#478 — postal validation
-    // message, CSR path.
+    // Postal pattern check. Optional field; only enforce format when filled.
+    // The config-level `validation.pattern` on a `type:"number"` field
+    // doesn't reliably fire, so do it explicitly here. Closes
+    // egovernments/CCRS#478 — postal validation message, CSR path.
+    // Pattern + message are both config-driven per tenant (CCRS#722) — see
+    // utils/postalCode.js.
     if (_data?.postalCode != null && String(_data.postalCode).trim().length > 0) {
       const pc = String(_data.postalCode).trim();
-      // Postal-code shape is per-country. Read from globalConfigs
-      // `CORE_POSTAL_CONFIGS` so each tenant can pin their own pattern
-      // (Kenya 5 digits, India 6, UK alnum, US 5/5+4, …). Falls back to
-      // the legacy hard default when the host hasn't configured it.
-      const postalCfg = window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS") || {};
-      const postalPattern = postalCfg.postalCodePattern || "^[0-9]{5}$";
-      const postalErrorKey = postalCfg.postalCodeErrorMessage || "CS_COMPLAINT_POSTALCODE_INVALID_ERROR";
-      if (!new RegExp(postalPattern).test(pc)) {
+      if (!isPostalCodeValid(pc)) {
         setToast({
           show: true,
-          label: t(postalErrorKey),
+          label: getPostalCodeErrorMessage(t),
           type: "error",
         });
         return;

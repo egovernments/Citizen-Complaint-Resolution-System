@@ -225,7 +225,15 @@ export const CreateComplaintConfig = {
                     window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS")?.postalCodePattern || "^[0-9]{5}$"
                   ),
                 },
-                error: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR",
+                // This static config can't interpolate the configured digit
+                // count into the message (FormComposerV2 calls `t(error)`
+                // with no options — see utils/postalCode.js for the dynamic,
+                // length-aware version used by the real submit-time check in
+                // createComplaintForm.js). Point at the generic, still-
+                // localized key rather than the old fixed "…5 digit…" one,
+                // which lied about the length on any non-5-digit tenant
+                // (CCRS#722).
+                error: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC",
               },
             },
 

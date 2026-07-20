@@ -21,6 +21,7 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../../../utils/complaintLabel";
+import { isPostalCodeValid, getPostalCodeErrorMessage } from "../../../utils/postalCode";
 import { useDispatch } from "react-redux";
 import { useHistory } from "react-router-dom";
 import { useQueryClient } from "react-query";
@@ -53,51 +54,6 @@ function tr(t: (k: string) => string, key: string, fallback: string): string {
 }
 
 declare const Digit: any;
-
-// Postal-code validation is config-driven so the UI honours the same length the
-// backend does, per tenant (CCRS#722). The employee create form and the legacy
-// FormExplorer already read `CORE_POSTAL_CONFIGS.postalCodePattern`; this citizen
-// v2 flow previously had no postal validation at all, so a wrong (e.g. 6-digit
-// Nominatim) pincode auto-filled from the map could be submitted. Optional field
-// — only the format is enforced, and only when a value is present.
-function getPostalConfig(): { pattern: string; errorMessage?: string } {
-  const cfg = (window as any)?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS") || {};
-  return {
-    pattern: cfg.postalCodePattern || "^[0-9]{5}$",
-    errorMessage: cfg.postalCodeErrorMessage, // optional explicit tenant override
-  };
-}
-
-function isPostalCodeValid(v: unknown): boolean {
-  const s = String(v ?? "").trim();
-  if (s.length === 0) return true; // optional — validate format only when filled
-  try {
-    return new RegExp(getPostalConfig().pattern).test(s);
-  } catch {
-    return true; // a malformed configured pattern must never hard-block the form
-  }
-}
-
-// Build an error message that reflects the CONFIGURED length, not a hard-coded
-// count: the stock CS_COMPLAINT_POSTALCODE_INVALID_ERROR string is localized to
-// "…5 digit…", which is wrong for a 4-digit tenant (CCRS#722). A tenant may pin
-// its own message via CORE_POSTAL_CONFIGS.postalCodeErrorMessage; otherwise we
-// derive the digit count from the pattern and use a length-parameterized key
-// (falling back to a correct English string until that key is localized).
-function postalErrorText(t: (k: string, opts?: any) => string): string {
-  const { pattern, errorMessage } = getPostalConfig();
-  if (errorMessage) return t(errorMessage);
-  const m = String(pattern).match(/\{\s*(\d+)/); // ^[0-9]{4}$ -> "4"
-  const len = m ? m[1] : null;
-  if (len) {
-    const key = "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN";
-    const out = t(key, { length: len });
-    return out === key ? `Please enter a valid ${len}-digit postal code` : out;
-  }
-  const gkey = "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC";
-  const gout = t(gkey);
-  return gout === gkey ? "Please enter a valid postal code" : gout;
-}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -711,7 +667,7 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
         <Field
           label={t("CS_COMPLAINT_POSTALCODE__DETAILS")}
           htmlFor="postal-code"
-          error={showPostalError ? postalErrorText(t) : undefined}
+          error={showPostalError ? getPostalCodeErrorMessage(t) : undefined}
         >
           <Input
             id="postal-code"

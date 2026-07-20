@@ -64,6 +64,13 @@ var globalConfigs = (function () {
   var employeeModuleDenylist = {{ employee_module_denylist | to_json }};
   var loginTenantAllowlist = {{ login_tenant_allowlist | to_json }};
   var coreMobileConfigs = {{ core_mobile_configs | to_json }};
+  // `postalCodePattern` is the ONLY postal-code knob (CCRS#722): a regex
+  // already expresses length, starting-digit constraints, and alnum shapes
+  // in one place, so there's no separate length field that can drift out
+  // of sync with it. The UI derives both the accepted format AND the
+  // localized "valid N-digit postal code" error wording from this single
+  // pattern — see getPostalCodeErrorMessage() in
+  // digit-ui-esbuild/products/pgr/src/utils/postalCode.js.
   var corePostalConfigs = {{ core_postal_configs | default({}) | to_json }};
   // Client-side dashboard render-lag instrumentation (#1110). ON by default;
   // kill switch = `dashboard_metrics_enabled: false` in the inventory + a
