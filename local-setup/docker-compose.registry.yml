@@ -1319,23 +1319,6 @@ services:
       - egov-network
     restart: "no"
 
-  # PAUSED: Using default-data-handler instead
-  mdms-bndry-mgmnt-seed:
-    image: registry.preview.egov.theflywheel.in/postgres:16
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      mdms-backend:
-        condition: service_healthy
-      mdms-tenant-seed:
-        condition: service_completed_successfully
-    # volumes:
-    #   - ./db/mdms-bndry-mgmnt-seed.sql:/bndry-mgmnt-seed.sql:ro
-    entrypoint: ["bash", "-c", "echo 'PAUSED: Using default-data-handler for boundary mgmt seeding'"]
-    networks:
-      - egov-network
-    restart: "no"
-
   # RE-ENABLED: Required for localization
   localization-seed:
     image: registry.preview.egov.theflywheel.in/postgres:16
@@ -1352,22 +1335,6 @@ services:
         psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -f /localization-seed.sql
         echo 'Localization seed complete'
       "
-    networks:
-      - egov-network
-    restart: "no"
-
-  # PAUSED: Using default-data-handler instead
-  # Seed PGR workflow business service via API
-  pgr-workflow-seed:
-    image: registry.preview.egov.theflywheel.in/curlimages/curl:latest
-    depends_on:
-      egov-workflow-v2:
-        condition: service_healthy
-      mdms-workflow-seed:
-        condition: service_completed_successfully
-    # volumes:
-    #   - ./db/pgr-workflow-config.json:/pgr-workflow-config.json:ro
-    entrypoint: ["sh", "-c", "echo 'PAUSED: Using default-data-handler for PGR workflow seeding'"]
     networks:
       - egov-network
     restart: "no"

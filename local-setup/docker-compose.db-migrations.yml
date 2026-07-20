@@ -1039,21 +1039,6 @@ services:
       - egov-network
     restart: "no"
 
-  # PAUSED: Using default-data-handler instead
-  mdms-bndry-mgmnt-seed:
-    image: postgres:16
-    depends_on:
-      pgbouncer:
-        condition: service_healthy
-      mdms-backend:
-        condition: service_healthy
-      mdms-tenant-seed:
-        condition: service_completed_successfully
-    entrypoint: ["bash", "-c", "echo 'PAUSED: Using default-data-handler for boundary mgmt seeding'"]
-    networks:
-      - egov-network
-    restart: "no"
-
   localization-seed:
     image: postgres:16
     depends_on:
@@ -1069,19 +1054,6 @@ services:
         psql postgresql://egov:${POSTGRES_PASSWORD:-egov123}@postgres:5432/egov -v tenant_id='${ROOT_TENANT:-pg}' -f /localization-seed.sql
         echo 'Localization seed complete'
       "
-    networks:
-      - egov-network
-    restart: "no"
-
-  # PAUSED: Using default-data-handler instead
-  pgr-workflow-seed:
-    image: curlimages/curl:latest
-    depends_on:
-      egov-workflow-v2:
-        condition: service_healthy
-      mdms-workflow-seed:
-        condition: service_completed_successfully
-    entrypoint: ["sh", "-c", "echo 'PAUSED: Using default-data-handler for PGR workflow seeding'"]
     networks:
       - egov-network
     restart: "no"
