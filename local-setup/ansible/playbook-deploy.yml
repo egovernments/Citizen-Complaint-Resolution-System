@@ -274,18 +274,66 @@
             enabled: yes
 
         # ==================== Docker Configuration ====================
-        # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
-        # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
-        # over plain HTTP. Without this entry Docker refuses to pull with
-        # `http: server gave HTTP response to HTTPS client`. Restart the
-        # daemon when the file changes so the new config takes effect.
-        - name: Configure Docker insecure-registries for VPC registry
+        # Log rotation. Docker's json-file driver keeps growing a container's
+        # log forever unless max-size/max-file are set, and a chatty JVM
+        # service can fill a disk over a long-running deploy.
+        #
+        # The per-container ceiling is max-size * max-file, so the two settings
+        # cannot be chosen independently. docker_log_total_size is the
+        # invariant (1g) and docker_log_max_size is the knob; the file count is
+        # derived so raising or lowering the slice size cannot breach the cap.
+        # Set docker_log_max_file explicitly only to override that derivation.
+        - name: "Docker logging — reject a max-size larger than the total cap"
+          vars:
+            _u: {k: 1024, m: 1048576, g: 1073741824}
+            _sz: "{{ (docker_log_max_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_max_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+            _tt: "{{ (docker_log_total_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_total_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+          ansible.builtin.fail:
+            msg: >-
+              docker_log_max_size ({{ docker_log_max_size }}) exceeds
+              docker_log_total_size ({{ docker_log_total_size }}). Docker keeps
+              at least one log file per container, so this would allow
+              {{ docker_log_max_size }} per container — above the cap.
+          when:
+            - docker_log_max_file is not defined
+            - (_sz | float) > (_tt | float)
+
+        - name: "Docker logging — derive max-file from the total cap"
+          vars:
+            _u: {k: 1024, m: 1048576, g: 1073741824}
+            _sz: "{{ (docker_log_max_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_max_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+            _tt: "{{ (docker_log_total_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_total_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+          ansible.builtin.set_fact:
+            docker_log_max_file_effective: >-
+              {{ docker_log_max_file | default([1, ((_tt | float) / (_sz | float)) | int] | max) }}
+
+        # daemon.json is written unconditionally now. It used to be gated on
+        # insecure_registries being non-empty, which meant hosts on a TLS
+        # registry never got a daemon.json at all — and would therefore never
+        # get log rotation either. insecure-registries is now merged in only
+        # when the list is non-empty, so TLS hosts still get a clean file.
+        #
+        # NOTE: daemon-level log-opts apply to containers CREATED after the
+        # daemon restart. Containers already running keep the settings they
+        # were created with until they are recreated.
+        - name: Configure Docker daemon (log rotation + insecure registries)
           copy:
             dest: /etc/docker/daemon.json
-            content: "{{ {'insecure-registries': insecure_registries | default([])} | to_nice_json }}\n"
+            content: >-
+              {{ ({'log-driver': 'json-file',
+                   'log-opts': {'max-size': docker_log_max_size,
+                                'max-file': docker_log_max_file_effective | string}}
+                  | combine(
+                      {'insecure-registries': insecure_registries}
+                      if (insecure_registries | default([]) | length > 0) else {}
+                    )) | to_nice_json }}
+
             mode: '0644'
           register: daemon_json
-          when: insecure_registries | default([]) | length > 0
 
         - name: Restart docker if daemon.json changed
           service:
