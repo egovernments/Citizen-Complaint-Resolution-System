@@ -832,13 +832,22 @@ async function phaseBanner() {
   }
 
   // 3) PGR bannerImage: opt-in via --banner-url, and ONLY filled when empty —
-  //    an existing value is never overwritten (differences are reported).
+  //    an existing value is never overwritten (differences are reported)
+  //    UNLESS --update-masters is passed, which makes the flag value win.
   const pgr = byCode.get('PGR');
   const current = pgr && pgr.data ? pgr.data.bannerImage : undefined;
+  const wantOverwrite = !!(CFG.bannerUrl && current && current !== CFG.bannerUrl && CFG.updateMasters);
   if (!CFG.bannerUrl) {
     info(`PGR bannerImage: ${current ? truncate(current, 70) : '(not set)'} — pass --banner-url to fill when empty`);
+  } else if (wantOverwrite && CFG.dryRun) {
+    info(`dry-run: would UPDATE PGR bannerImage → ${CFG.bannerUrl} (--update-masters)`);
+  } else if (wantOverwrite) {
+    pgr.data.bannerImage = CFG.bannerUrl;
+    const r = await mdmsUpdate(SCHEMA, pgr);
+    if (!r.ok) failures.push(`bannerImage update: HTTP ${r.code} ${truncate(r.body, 80)}`);
+    else ok(`PGR bannerImage UPDATED = ${CFG.bannerUrl} (--update-masters)`);
   } else if (current) {
-    info(`PGR bannerImage already set — untouched${current === CFG.bannerUrl ? '' : ' (DIFFERS from --banner-url)'}`);
+    info(`PGR bannerImage already set — untouched${current === CFG.bannerUrl ? '' : ' (DIFFERS from --banner-url; pass --update-masters to overwrite)'}`);
   } else if (schemaDrift) {
     warn('cannot set bannerImage while the schema lacks the property');
   } else if (!pgr) {
