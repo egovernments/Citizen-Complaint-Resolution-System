@@ -2194,11 +2194,12 @@
     # tenant BEFORE MCP bootstrap creates the ADMIN user. egov-enc-service
     # discovers tenants via MDMS search under STATE_LEVEL_TENANT_ID — at this
     # point that's still `pg.citya`, so `mz` (a different root) is unknown and
-    # user encrypt/decrypt for `mz` throws "Tenant Id not found". The custom
-    # `:generatekey-endpoint` image exposes POST /crypto/v1/_generatekey which
-    # inserts the key row directly, bypassing MDMS discovery — solving the
-    # chicken-and-egg between bootstrap needing encryption and enc-service not
-    # yet knowing the new tenant. Idempotent (created: false when key exists).
+    # user encrypt/decrypt for `mz` throws "Tenant Id not found". egov-enc-service
+    # 2.12-87e13fe (formerly the custom `:generatekey-endpoint` preview build)
+    # exposes POST /crypto/v1/_generatekey which inserts the key row directly,
+    # bypassing MDMS discovery — solving the chicken-and-egg between bootstrap
+    # needing encryption and enc-service not yet knowing the new tenant.
+    # Idempotent (created: false when key exists).
     - name: "pre-bootstrap — generate enc-service key for state root ({{ state_root }})"
       ansible.builtin.uri:
         url: "http://127.0.0.1:11234/egov-enc-service/crypto/v1/_generatekey"
