@@ -425,11 +425,24 @@ requires_nairobi_mdms: false
 # volume — the overlay also corrects the named-volume mount path,
 # which forces container recreation and wipes the existing data.
 db_fast_path: true
+# scripts/preflight.py refuses db_fast_path without this explicit ack —
+# it encodes the data-wipe trap above. Set it only after confirming the
+# target box has no anonymous-volume postgres data worth keeping.
+db_fast_path_ack_data_wipe: true
 
 # Run the post-deploy CI suite (XLSX dataloader + Playwright). Requires
 # a sibling `digit-ui-fix/` clone next to this repo on the controller.
 # Off by default — production deploys skip CI tests.
 run_ci_tests: false
+
+# Tear down the running stack before re-deploying. Stops + removes all
+# containers and orphaned networks, then re-deploys from scratch.
+# Volumes (Postgres data, Minio objects) are preserved — only containers
+# and compose-managed networks are removed.
+#
+# Use on CI boxes or when you deliberately want a clean redeploy.
+# NEVER enable on a tenant with live data you cannot afford to interrupt.
+force_clean: false
 
 # Install Claude Code CLI + sync controller's ~/.claude config to the
 # target. Hard-codes /root/.claude paths; only safe when the controller

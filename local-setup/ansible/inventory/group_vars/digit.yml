@@ -11,6 +11,12 @@
 # registry creds) DO NOT belong in this file. They live in OpenBao and
 # are referenced via `secrets_path:` in host_vars.
 
+# Tear down the running stack before re-deploying (containers + orphaned
+# networks, but NOT volumes). Off by default — prod tenants must never
+# lose a running stack unintentionally. Flip true on CI/dev boxes or
+# when you explicitly want a clean redeploy from scratch.
+force_clean: false
+
 # ──────────────────────────────────────────────────────────────────────
 # digit-ui SPA — values read at boot via Digit.Utils.getConfig(KEY)
 # ──────────────────────────────────────────────────────────────────────
