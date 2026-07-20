@@ -362,11 +362,33 @@ const CreateComplaintForm = ({
       };
     });
 
-    // Append the per-category dynamic fields to the "Additional details" section
-    // (the one holding the description). No-op when extFieldConfigs is empty.
+    // Attachment uploader — reuses the SAME component the assign/action modals
+    // use (PGRActionUploadComponent → PgrFileUpload: drag-drop, previews,
+    // 5MB/file), emitting already-shaped {documentType, fileStoreId} docs under
+    // `SelectedDocuments`. tenantId is the create tenant so files land on the
+    // right (tenant-scoped) filestore. Optional — never gates submit.
+    const uploadFieldConfig = {
+      // inline:true → same label-left / control-right row as the fields above,
+      // so the uploader's width:100% fills the capped control column instead of
+      // spanning the full card (was overflowing to the right).
+      inline: true,
+      type: "component",
+      component: "PGRActionUploadComponent",
+      key: "SelectedDocuments",
+      label: "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
+      isMandatory: false,
+      // maxWidth caps the drop zone to the same width as the text-input control
+      // column (600px) so its right edge lines up with the fields above.
+      populators: { name: "SelectedDocuments", tenantId, maxWidth: "600px" },
+    };
+
+    // Append the per-category dynamic fields (when present) AND the attachment
+    // uploader (always) to the "Additional details" section holding the
+    // description. extFieldConfigs is empty for non-mapped tenants — the
+    // uploader still shows.
     const withExt = (updatedForm || []).map((section) =>
-      section?.head === "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS" && extFieldConfigs.length
-        ? { ...section, body: [...section.body, ...extFieldConfigs] }
+      section?.head === "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS"
+        ? { ...section, body: [...section.body, ...extFieldConfigs, uploadFieldConfig] }
         : section
     );
 
@@ -388,7 +410,7 @@ const CreateComplaintForm = ({
     }));
 
     return { ...baseConfig, form: withOptional };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, hasHierarchy, departmentGate, extFieldConfigs]);
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, hasHierarchy, departmentGate, extFieldConfigs, tenantId]);
 
 
 
