@@ -63,8 +63,11 @@ function parseArgs(argv) {
     const a = argv[i];
     if (!a.startsWith('--')) continue;
     const key = a.slice(2);
-    const flag = ['dry-run', 'cms', 'update-wf', 'gzip', 'no-color', 'help'].includes(key);
-    out[key] = flag ? true : argv[++i];
+    const flag = ['dry-run', 'cms', 'update-wf', 'gzip', 'no-color', 'help', 'update-masters'].includes(key);
+    // Never let a value-taking arg swallow a following --flag (a missing
+    // allowlist entry once made `--update-masters --dry-run` eat the dry-run).
+    const next = argv[i + 1];
+    out[key] = flag || next === undefined || String(next).startsWith('--') ? true : argv[++i];
   }
   return out;
 }
@@ -97,6 +100,11 @@ const CFG = {
   gzip: !!ARGS.gzip || truthy(process.env.GZIP),
   nginxConf: ARGS['nginx-conf'] || process.env.NGINX_CONF || '',
 };
+// --tenant accepts a comma-separated list (e.g. mz,mz.ige,mz.igsae): the
+// state-level phases run ONCE against the shared state root; only the
+// city-scoped cms phase repeats for each additional tenant in the list.
+CFG.tenants = String(CFG.tenant).split(',').map((s) => s.trim()).filter(Boolean);
+CFG.tenant = CFG.tenants[0] || '';
 CFG.state = CFG.tenant.includes('.') ? CFG.tenant.split('.')[0] : CFG.tenant;
 // OAUTH_BASIC: legacy scripts disagreed (plaintext vs base64) — accept both.
 CFG.basic = /^[A-Za-z0-9+/]+=*$/.test(CFG.basicRaw) && !CFG.basicRaw.includes(':')
@@ -105,6 +113,10 @@ CFG.basic = /^[A-Za-z0-9+/]+=*$/.test(CFG.basicRaw) && !CFG.basicRaw.includes(':
 
 if (!CFG.base || !CFG.tenant) {
   console.error('Usage: node ccrs-migrate.cjs --host <BASE_URL> --tenant <TENANT> [options]   (--help for all options)');
+  process.exit(2);
+}
+if (CFG.tenants.some((t) => (t.includes('.') ? t.split('.')[0] : t) !== CFG.state)) {
+  console.error(`All --tenant entries must share one state root (got: ${CFG.tenants.join(', ')})`);
   process.exit(2);
 }
 
@@ -624,7 +636,7 @@ async function phasePgrMasters() {
     return record('pgr-masters', failed ? OUTCOME.FAILED : OUTCOME.PARTIAL, detail,
       empty.length ? 'MASTER_EMPTY_AFTER_SEED' : 'ROW_CREATE_FAILED', failures.slice(0, 6).join(' | ') || `Empty after seed: ${empty.join(', ')}`);
   }
-  return record('pgr-masters', created ? OUTCOME.OK : OUTCOME.SKIPPED, detail);
+  return record('pgr-masters', (created || updated) ? OUTCOME.OK : OUTCOME.SKIPPED, detail);
 }
 
 /* ═══════════════════════════ PHASE: landing ═══════════════════════════ */
@@ -713,11 +725,20 @@ async function cmsSearchAll(schemaCode, tenantId = CFG.state) {
 }
 const cmsUserInfo = () => ({ id: 1, uuid: 'cms-migration', userName: CFG.user, type: 'EMPLOYEE', tenantId: CFG.state, roles: [{ code: 'SUPERUSER', name: 'Super User', tenantId: CFG.state }] });
 
+// One summary row per tenant when a tenant LIST was passed.
+const CMS_PH = () => (CFG.tenants.length > 1 ? `cms@${CFG.tenant}` : 'cms');
+
 async function phaseCms() {
-  if (!CFG.cms) return record('cms', OUTCOME.SKIPPED, 'opt-in phase — pass --cms to run');
+  if (!CFG.cms) return record(CMS_PH(), OUTCOME.SKIPPED, 'opt-in phase — pass --cms to run');
   const city = CFG.tenant.includes('.') ? CFG.tenant : null;
-  if (!city) return record('cms', OUTCOME.FAILED, 'CMS workflow needs a city tenant (e.g. mz.igsae), got a state root', 'CMS_TENANT_REQUIRED',
-    'Re-run with --tenant <state.city> --phases cms --cms');
+  if (!city) {
+    // A state-root entry in a tenant list legitimately has no cms run of its
+    // own — the city entries that follow carry it. Only a SINGLE state-root
+    // tenant is an operator error.
+    if (CFG.tenants.length > 1) return record(CMS_PH(), OUTCOME.SKIPPED, 'state root — cms runs at the city tenants in the list');
+    return record('cms', OUTCOME.FAILED, 'CMS workflow needs a city tenant (e.g. mz.igsae), got a state root', 'CMS_TENANT_REQUIRED',
+      'Re-run with --tenant <state.city> --phases cms --cms');
+  }
   const failures = [];
   try {
     // 1: roles — at the STATE root and the CITY tenant. MDMS v1 role lookups
@@ -769,11 +790,11 @@ async function phaseCms() {
       info('workflow BusinessService already present — in-place diff/patch requires the legacy UPDATE_WF path; differences (if any) are not fatal');
     }
   } catch (e) {
-    return record('cms', OUTCOME.FAILED, `unexpected: ${e.message}`, 'CMS_UNEXPECTED', e.stack ? truncate(e.stack, 300) : null);
+    return record(CMS_PH(), OUTCOME.FAILED, `unexpected: ${e.message}`, 'CMS_UNEXPECTED', e.stack ? truncate(e.stack, 300) : null);
   }
-  if (CFG.dryRun) return record('cms', OUTCOME.SKIPPED, 'dry-run: plan printed above');
-  if (failures.length) return record('cms', OUTCOME.PARTIAL, `${failures.length} step(s) failed`, 'CMS_STEP_FAILED', failures.slice(0, 6).join(' | '));
-  return record('cms', OUTCOME.OK, 'roles, actions, grants, workflow ensured');
+  if (CFG.dryRun) return record(CMS_PH(), OUTCOME.SKIPPED, 'dry-run: plan printed above');
+  if (failures.length) return record(CMS_PH(), OUTCOME.PARTIAL, `${failures.length} step(s) failed`, 'CMS_STEP_FAILED', failures.slice(0, 6).join(' | '));
+  return record(CMS_PH(), OUTCOME.OK, 'roles, actions, grants, workflow ensured');
 }
 
 /* ═══════════════════════════ PHASE: banner ════════════════════════════ */
@@ -980,7 +1001,7 @@ async function phaseVerify() {
 (async () => {
   const started = Date.now();
   console.log(C.b(`\nCCRS unified migration${CFG.dryRun ? '  [DRY-RUN — no writes]' : ''}`));
-  console.log(C.d(`host=${CFG.base}  tenant=${CFG.tenant} (state=${CFG.state})  phases=${CFG.phases.join(',')}\n${'═'.repeat(64)}`));
+  console.log(C.d(`host=${CFG.base}  tenant=${CFG.tenants.join(',')} (state=${CFG.state})  phases=${CFG.phases.join(',')}\n${'═'.repeat(64)}`));
 
   const PIPELINE = [
     ['auth', async () => {
@@ -1002,13 +1023,28 @@ async function phaseVerify() {
 
   let n = 0;
   const enabled = PIPELINE.filter(([id]) => CFG.phases.includes(id));
+  // Tenant list: state-level phases run once (against tenants[0] / the state
+  // root); only the city-scoped cms phase repeats for the additional tenants.
+  const extraCmsTenants = CFG.tenants.length > 1 && CFG.phases.includes('cms') ? CFG.tenants.slice(1) : [];
+  const total = enabled.length + extraCmsTenants.length;
   for (const [id, fn] of enabled) {
-    section(++n, enabled.length, id);
+    section(++n, total, id);
     if (id !== 'auth' && !RI) { record(id, OUTCOME.SKIPPED, 'skipped: no authentication', 'NO_AUTH'); warn('skipped (auth failed)'); continue; }
     try {
       await fn();
     } catch (e) {
       record(id, OUTCOME.FAILED, `unexpected error: ${e.message}`, 'UNEXPECTED', e.stack ? truncate(e.stack, 400) : null);
+      bad(`unexpected: ${e.message}`);
+    }
+  }
+  for (const t of extraCmsTenants) {
+    CFG.tenant = t;
+    section(++n, total, `cms (${t})`);
+    if (!RI) { record(`cms@${t}`, OUTCOME.SKIPPED, 'skipped: no authentication', 'NO_AUTH'); warn('skipped (auth failed)'); continue; }
+    try {
+      await phaseCms();
+    } catch (e) {
+      record(`cms@${t}`, OUTCOME.FAILED, `unexpected error: ${e.message}`, 'UNEXPECTED', e.stack ? truncate(e.stack, 400) : null);
       bad(`unexpected: ${e.message}`);
     }
   }
