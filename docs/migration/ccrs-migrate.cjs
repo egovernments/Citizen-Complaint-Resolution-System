@@ -64,10 +64,20 @@ function parseArgs(argv) {
     if (!a.startsWith('--')) continue;
     const key = a.slice(2);
     const flag = ['dry-run', 'cms', 'update-wf', 'gzip', 'no-color', 'help', 'update-masters'].includes(key);
-    // Never let a value-taking arg swallow a following --flag (a missing
-    // allowlist entry once made `--update-masters --dry-run` eat the dry-run).
     const next = argv[i + 1];
-    out[key] = flag || next === undefined || String(next).startsWith('--') ? true : argv[++i];
+    if (flag) {
+      out[key] = true;
+    } else if (next === undefined || String(next).startsWith('--')) {
+      // Value-taking arg with no value (trailing typo, or followed by another
+      // --flag): leave it undefined so required-arg guards fail fast with the
+      // Usage message — never a boolean `true` leaking into CFG (e.g.
+      // CFG.tenant === 'true'), and never consuming the following --flag
+      // (a missing allowlist entry once made `--update-masters --dry-run`
+      // eat the dry-run). Boolean flags belong in the allowlist above.
+      out[key] = undefined;
+    } else {
+      out[key] = argv[++i];
+    }
   }
   return out;
 }
@@ -1026,6 +1036,9 @@ async function phaseVerify() {
   // Tenant list: state-level phases run once (against tenants[0] / the state
   // root); only the city-scoped cms phase repeats for the additional tenants.
   const extraCmsTenants = CFG.tenants.length > 1 && CFG.phases.includes('cms') ? CFG.tenants.slice(1) : [];
+  // The loop below mutates CFG.tenant per city — snapshot the full list now so
+  // the --report JSON reflects the run's real scope, not the last loop value.
+  const tenantList = CFG.tenants.join(',');
   const total = enabled.length + extraCmsTenants.length;
   for (const [id, fn] of enabled) {
     section(++n, total, id);
@@ -1063,7 +1076,7 @@ async function phaseVerify() {
   console.log(`${failedCount ? C.y(`${failedCount} phase(s) need attention`) : C.g('All phases clean')} · ${((Date.now() - started) / 1000).toFixed(1)}s · safe to re-run any time (completed work is skipped)`);
 
   if (CFG.report) {
-    fs.writeFileSync(CFG.report, JSON.stringify({ host: CFG.base, tenant: CFG.tenant, dryRun: CFG.dryRun, startedAt: new Date(started).toISOString(), results }, null, 2));
+    fs.writeFileSync(CFG.report, JSON.stringify({ host: CFG.base, tenant: tenantList, dryRun: CFG.dryRun, startedAt: new Date(started).toISOString(), results }, null, 2));
     console.log(C.d(`report written: ${CFG.report}`));
   }
   process.exit(Math.min(failedCount, 125));
