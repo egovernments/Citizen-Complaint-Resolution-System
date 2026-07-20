@@ -86,6 +86,9 @@ const CFG = {
     .split(',').map((s) => s.trim()).filter(Boolean),
   dryRun: !!ARGS['dry-run'] || truthy(process.env.DRY_RUN),
   cms: !!ARGS.cms || truthy(process.env.CMS),
+  // Opt-in: pgr-masters also UPDATES existing rows whose content differs from
+  // the seed (default stays strictly add-if-missing / never-overwrites).
+  updateMasters: !!ARGS['update-masters'] || truthy(process.env.UPDATE_MASTERS),
   updateWf: !!ARGS['update-wf'] || truthy(process.env.UPDATE_WF),
   locale: ARGS.locale || process.env.LOCALE || 'en_IN',
   hierarchy: ARGS.hierarchy || process.env.HIERARCHY || 'PGR',
@@ -238,6 +241,12 @@ async function mdmsCreate(tenantId, schemaCode, uniqueIdentifier, data) {
   const okResp = r.code >= 200 && r.code < 300;
   return { ok: okResp, exists: !okResp && (r.code === 409 || DUP_RE.test(r.body)), code: r.code, body: r.body };
 }
+// Key-order-independent serialization so cosmetic reordering never reads as drift.
+const stableStringify = (v) => JSON.stringify(v, (k, val) =>
+  val && typeof val === 'object' && !Array.isArray(val)
+    ? Object.keys(val).sort().reduce((a, kk) => ((a[kk] = val[kk]), a), {})
+    : val);
+
 async function mdmsUpdate(schemaCode, row) {
   // row = the full object returned by _search (id/uniqueIdentifier/data/...)
   const r = await postJson(`/mdms-v2/v2/_update/${schemaCode}`, { RequestInfo: ri(), Mdms: row });
@@ -549,7 +558,7 @@ const NOT_READY_RE = /schema/i;
 const NOT_READY_RE2 = /(not found|does not exist|no schema|invalid)/i;
 
 async function phasePgrMasters() {
-  let created = 0, present = 0, failed = 0;
+  let created = 0, updated = 0, present = 0, failed = 0;
   const failures = [];
   for (const m of MASTERS) {
     let rows;
@@ -558,10 +567,20 @@ async function phasePgrMasters() {
 
     // skip-if-present: does the master already have rows at state (v2)?
     const have = await mdmsSearch(CFG.state, m.code, { limit: 100 });
-    const haveUids = new Set((have.raw || []).filter((x) => x.isActive).map((x) => x.uniqueIdentifier));
-    const todo = rows.filter((row) => !haveUids.has(String(row[m.uid])));
-    if (!todo.length) { present += rows.length; ok(`${m.short}: all ${rows.length} rows present`); continue; }
-    if (CFG.dryRun) { info(`dry-run: would create ${todo.length}/${rows.length} rows of ${m.short}`); continue; }
+    const haveRows = new Map((have.raw || []).filter((x) => x.isActive).map((x) => [String(x.uniqueIdentifier), x]));
+    const todo = rows.filter((row) => !haveRows.has(String(row[m.uid])));
+    // Existing rows whose content no longer matches the seed (schema definitions
+    // evolve — e.g. ComplaintExtendedAttributeSchema gaining x-no-mask). Only
+    // written when --update-masters is passed; the default remains add-if-missing.
+    const drift = rows.filter((row) => {
+      const ex = haveRows.get(String(row[m.uid]));
+      return ex && stableStringify(ex.data) !== stableStringify(row);
+    });
+    if (drift.length && !CFG.updateMasters && !CFG.dryRun)
+      warn(`${m.short}: ${drift.length} existing row(s) differ from the seed — pass --update-masters to sync them`);
+    const syncs = CFG.updateMasters ? drift : [];
+    if (!todo.length && !syncs.length) { present += rows.length; ok(`${m.short}: all ${rows.length} rows present${drift.length ? ` (${drift.length} drifted — seed newer)` : ''}`); continue; }
+    if (CFG.dryRun) { info(`dry-run: would create ${todo.length}/${rows.length}${drift.length ? ` and (with --update-masters) update ${drift.length}` : ''} rows of ${m.short}`); continue; }
 
     for (const row of todo) {
       const uid = row[m.uid] != null ? String(row[m.uid]) : undefined;
@@ -583,6 +602,16 @@ async function phasePgrMasters() {
         }
       }
     }
+    for (const row of syncs) {
+      const uid = String(row[m.uid]);
+      const r = await mdmsUpdate(m.code, { ...haveRows.get(uid), data: row });
+      if (r.ok) { updated++; ok(`${m.short}/${uid}: updated to match seed`); }
+      else {
+        failed++;
+        failures.push(`${m.short}/${uid}: update HTTP ${r.code} ${truncate(r.body, 120)}`);
+        bad(`${m.short}/${uid}: update HTTP ${r.code} ${truncate(r.body)}`);
+      }
+    }
     ok(`${m.short}: seeded (see summary)`);
   }
   if (CFG.dryRun) return record('pgr-masters', OUTCOME.SKIPPED, 'dry-run: plan printed above');
@@ -590,7 +619,7 @@ async function phasePgrMasters() {
   // verify via the v1 read path the runtime uses
   const res = await v1Search(CFG.state, MASTERS.map((m) => m.short));
   const empty = MASTERS.filter((m) => !((res[m.short] || []).length)).map((m) => m.short);
-  const detail = `${created} created, ${present} present, ${failed} failed; v1-visible: ${MASTERS.map((m) => `${m.short}=${(res[m.short] || []).length}`).join(', ')}`;
+  const detail = `${created} created, ${updated} updated, ${present} present, ${failed} failed; v1-visible: ${MASTERS.map((m) => `${m.short}=${(res[m.short] || []).length}`).join(', ')}`;
   if (failed || empty.length) {
     return record('pgr-masters', failed ? OUTCOME.FAILED : OUTCOME.PARTIAL, detail,
       empty.length ? 'MASTER_EMPTY_AFTER_SEED' : 'ROW_CREATE_FAILED', failures.slice(0, 6).join(' | ') || `Empty after seed: ${empty.join(', ')}`);
