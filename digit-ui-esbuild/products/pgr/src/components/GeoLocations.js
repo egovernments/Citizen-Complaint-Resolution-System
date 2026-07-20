@@ -145,6 +145,12 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const mapRef = useRef(null);
   const searchInputRef = useRef(null);
   const hasInitialized = useRef(false);
+  // Coordinate we've already attempted a reverse-geocode for. Guards the
+  // formData-driven effect below: a FAILED reverse call re-writes formData
+  // (lat/lng, no address), which re-fires the effect; without this guard it
+  // would re-fetch → fail → re-write → loop forever (thousands of nominatim
+  // hits, self-inflicted rate-limiting). One attempt per unique coordinate.
+  const geocodeAttemptRef = useRef(null);
 
   // Leaflet writes the stroke as an SVG DOM attribute, which doesn't resolve
   // CSS `var()`. Read the runtime accent at mount so the user-drawn polygon
@@ -218,13 +224,23 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           setAddress(savedAddress);
           setSearchQuery(savedAddress);
         } else if (!address) {
-          fetchAddress(lat, lng);
+          // Only reverse-geocode a coordinate once. A failed lookup re-writes
+          // formData with no address, which re-enters this effect — without the
+          // guard that becomes an infinite fetch loop.
+          const key = `${lat},${lng}`;
+          if (geocodeAttemptRef.current !== key) {
+            geocodeAttemptRef.current = key;
+            fetchAddress(lat, lng);
+          }
         }
       }
     }
   }, [formData, config.key]);
 
   const fetchAddress = async (lat, lng) => {
+    // Record the attempt so the formData-driven effect won't re-fire this for
+    // the same coordinate after a failure (loop guard).
+    geocodeAttemptRef.current = `${lat},${lng}`;
     // QA #12: resolveWard ran OUTSIDE the try below — a bad point (turf throws
     // on non-finite coordinates) aborted fetchAddress before any onSelect, so
     // the click errored in the console and the location was never captured.
