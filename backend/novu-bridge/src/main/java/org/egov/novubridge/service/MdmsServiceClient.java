@@ -35,8 +35,8 @@ public class MdmsServiceClient {
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
 
-    /** Cache: tenantId → country-code prefix (e.g. "+91") */
-    private final Map<String, String> prefixCache = new ConcurrentHashMap<>();
+    /** Cache: tenantId → resolved mobile-number validation config. */
+    private final Map<String, MobileValidationConfig> configCache = new ConcurrentHashMap<>();
 
     public MdmsServiceClient(RestTemplate restTemplate, NovuBridgeConfiguration config) {
         this.restTemplate = restTemplate;
@@ -60,15 +60,19 @@ public class MdmsServiceClient {
             String tenantId,
             RequestInfo requestInfo) {
 
+        return configCache.computeIfAbsent(tenantId, t -> resolveMobileValidationConfig(t, requestInfo));
+    }
+
+    private MobileValidationConfig resolveMobileValidationConfig(String tenantId, RequestInfo requestInfo) {
         Map<String, Object> record = fetchDefaultRecord(tenantId, requestInfo);
 
         Map<String, Object> data = (Map<String, Object>) record.get("data");
 
-        MobileValidationConfig config = new MobileValidationConfig();
-        config.setCountryCode((String) data.get("countryCode"));
-        config.setMobileNumberRegex((String) data.get("mobileNumberRegex"));
+        MobileValidationConfig resolved = new MobileValidationConfig();
+        resolved.setCountryCode((String) data.get("countryCode"));
+        resolved.setMobileNumberRegex((String) data.get("mobileNumberRegex"));
 
-        return config;
+        return resolved;
     }
 
     // -------------------------------------------------------------------------
