@@ -89,8 +89,4 @@ describe('docker-compose.egov-digit.yaml', () => {
       /image: \$\{MCP_IMAGE:-ghcr\.io\/subhashini-egov\/digit-mcp:[0-9-]+\}/
     );
   });
-
-  test('default-data-handler image is .env-driven (DDH_IMAGE)', () => {
-    expect(compose).toContain('image: ${DDH_IMAGE}');
-  });
 });

@@ -982,29 +982,6 @@ services:
     networks:
     - egov-network
 
-  # Default Data Handler - seeds schemas and master data for new tenants
-  default-data-handler:
-    image: registry.preview.egov.theflywheel.in/egovio/default-data-handler:crs_dataseeder-084b7cc
-    container_name: default-data-handler
-    depends_on:
-      mdms-backend:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    environment:
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
-      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
-      EGOV_MDMS_HOST: http://mdms-backend:8094/
-      EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
-      EGOV_USER_HOST: http://egov-user-proxy:8107/
-      EGOV_HRMS_HOST: http://egov-hrms:8092/
-      EGOV_WORKFLOW_HOST: http://egov-workflow-proxy:8109/
-      EGOV_BOUNDARY_HOST: http://boundary-service:8081/
-      STATE_LEVEL_TENANT_ID: pg
-      JAVA_OPTS: -Xms128m -Xmx256m
-    networks:
-      - egov-network
-
   egov-persister:
     image: registry.preview.egov.theflywheel.in/egovio/egov-persister:v2.9.2-4a60f20
     container_name: egov-persister
