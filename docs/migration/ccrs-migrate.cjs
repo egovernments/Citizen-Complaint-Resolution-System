@@ -129,6 +129,13 @@ if (CFG.tenants.some((t) => (t.includes('.') ? t.split('.')[0] : t) !== CFG.stat
   console.error(`All --tenant entries must share one state root (got: ${CFG.tenants.join(', ')})`);
   process.exit(2);
 }
+// Fallback banner: with no --banner-url, an EMPTY bannerImage is filled with
+// the standard hero image. Overwriting an existing, different image still
+// requires an EXPLICIT --banner-url plus --update-masters — a defaulted URL
+// must never clobber an operator-chosen banner.
+const DEFAULT_BANNER_URL = 'https://egov-dev-assets.s3.ap-south-1.amazonaws.com/mozambique-landscape.jpg';
+CFG.bannerUrlExplicit = !!CFG.bannerUrl;
+if (!CFG.bannerUrl) CFG.bannerUrl = DEFAULT_BANNER_URL;
 
 const REPO = path.join(__dirname, '..', '..');
 const SEED = {
@@ -835,6 +842,37 @@ async function phaseBanner() {
   } else {
     schemaDrift = true;
     warn('schema present WITHOUT bannerImage — MDMS has no schema-update API (SQL-only fix)');
+    // Auto-remediate: fix-citymodule.sh ships next to this runner and performs
+    // the SQL patch + MDMS restart. It only works ON the serving box (needs
+    // sudo docker access to postgres) — anywhere else it fails fast and the
+    // PARTIAL + manual remediation messaging below still applies.
+    const fixer = path.join(__dirname, 'fix-citymodule.sh');
+    if (CFG.dryRun) {
+      info('dry-run: would attempt the on-box auto-fix (bash fix-citymodule.sh) and re-check');
+    } else if (fs.existsSync(fixer)) {
+      info('attempting on-box auto-fix via fix-citymodule.sh…');
+      try {
+        const out = require('child_process').execSync(`bash '${fixer}' '${CFG.state}'`, {
+          stdio: 'pipe', timeout: 300000,
+          env: { ...process.env, HOST: CFG.base, ADMIN_USER: CFG.user, ADMIN_PASS: CFG.pass },
+        }).toString();
+        info(truncate(out.split('\n').filter(Boolean).slice(-2).join(' | '), 160));
+        // The fixer restarts MDMS when it changed something — poll patiently.
+        for (let t = 0; t < 12 && schemaDrift; t++) {
+          await sleep(5000);
+          try {
+            const re = await schemaGet(CFG.state, SCHEMA);
+            if (re && re.definition && re.definition.properties && re.definition.properties.bannerImage) {
+              schemaDrift = false;
+              ok('schema auto-fixed — bannerImage property now present');
+            }
+          } catch { /* MDMS restarting — keep polling */ }
+        }
+        if (schemaDrift) warn('auto-fix ran but the schema still lacks bannerImage — check fix-citymodule.sh output above, then re-run --phases banner');
+      } catch (e) {
+        warn(`auto-fix not applied here (${truncate(String(e.message).split('\n')[0], 90)}) — run ON the serving box: bash docs/migration/fix-citymodule.sh ${CFG.state}`);
+      }
+    }
   }
 
   // 2) rows: create MISSING only (Workbench / PGR / HRMS) — existing rows are
@@ -867,10 +905,11 @@ async function phaseBanner() {
   //    UNLESS --update-masters is passed, which makes the flag value win.
   const pgr = byCode.get('PGR');
   const current = pgr && pgr.data ? pgr.data.bannerImage : undefined;
-  const wantOverwrite = !!(CFG.bannerUrl && current && current !== CFG.bannerUrl && CFG.updateMasters);
-  if (!CFG.bannerUrl) {
-    info(`PGR bannerImage: ${current ? truncate(current, 70) : '(not set)'} — pass --banner-url to fill when empty`);
-  } else if (wantOverwrite && CFG.dryRun) {
+  // Overwrite only with an EXPLICIT url — the built-in default must never
+  // replace an operator-chosen banner, it only fills empties.
+  const wantOverwrite = !!(CFG.bannerUrlExplicit && current && current !== CFG.bannerUrl && CFG.updateMasters);
+  const urlNote = CFG.bannerUrlExplicit ? '' : ' (default fallback)';
+  if (wantOverwrite && CFG.dryRun) {
     info(`dry-run: would UPDATE PGR bannerImage → ${CFG.bannerUrl} (--update-masters)`);
   } else if (wantOverwrite) {
     pgr.data.bannerImage = CFG.bannerUrl;
@@ -878,25 +917,25 @@ async function phaseBanner() {
     if (!r.ok) failures.push(`bannerImage update: HTTP ${r.code} ${truncate(r.body, 80)}`);
     else ok(`PGR bannerImage UPDATED = ${CFG.bannerUrl} (--update-masters)`);
   } else if (current) {
-    info(`PGR bannerImage already set — untouched${current === CFG.bannerUrl ? '' : ' (DIFFERS from --banner-url; pass --update-masters to overwrite)'}`);
+    info(`PGR bannerImage already set — untouched${current === CFG.bannerUrl || !CFG.bannerUrlExplicit ? '' : ' (DIFFERS from --banner-url; pass --update-masters to overwrite)'}`);
   } else if (schemaDrift) {
     warn('cannot set bannerImage while the schema lacks the property');
   } else if (!pgr) {
     if (!CFG.dryRun) warn('PGR row not readable back yet (async persister) — re-run --phases banner to set bannerImage');
   } else if (CFG.dryRun) {
-    info(`dry-run: would set PGR bannerImage = ${CFG.bannerUrl}`);
+    info(`dry-run: would set PGR bannerImage = ${CFG.bannerUrl}${urlNote}`);
   } else {
     pgr.data.bannerImage = CFG.bannerUrl;
     const r = await mdmsUpdate(SCHEMA, pgr);
     if (!r.ok) failures.push(`bannerImage update: HTTP ${r.code} ${truncate(r.body, 80)}`);
-    else ok(`PGR bannerImage set = ${CFG.bannerUrl}`);
+    else ok(`PGR bannerImage set = ${CFG.bannerUrl}${urlNote}`);
   }
 
   if (CFG.dryRun) return record('banner', OUTCOME.SKIPPED, 'dry-run: plan printed above');
   if (schemaDrift) return record('banner', OUTCOME.PARTIAL, 'schema lacks bannerImage (rows ensured)', 'CITYMODULE_SCHEMA_DRIFT',
     'No schema-update API exists — run docs/migration/fix-citymodule.sh ON the box (PR #1210), restart egov-mdms-service, then re-run --phases banner.');
   if (failures.length) return record('banner', OUTCOME.PARTIAL, `${failures.length} step(s) failed`, 'BANNER_STEP_FAILED', failures.slice(0, 4).join(' | '));
-  const bannerNote = !CFG.bannerUrl ? '' : current ? ' · bannerImage already set' : (pgr ? ' · bannerImage set' : ' · bannerImage PENDING (re-run)');
+  const bannerNote = current ? ' · bannerImage already set' : (pgr ? ` · bannerImage set${urlNote}` : ' · bannerImage PENDING (re-run)');
   return record('banner', OUTCOME.OK, 'citymodule schema/rows ensured' + bannerNote);
 }
 
