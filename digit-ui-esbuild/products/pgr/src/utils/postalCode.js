@@ -19,7 +19,8 @@
 // count.
 
 function getPostalCodePattern() {
-  const cfg = (typeof window !== "undefined" && window.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS")) || {};
+  const getConfig = typeof window !== "undefined" ? window.globalConfigs?.getConfig : undefined;
+  const cfg = getConfig?.("CORE_POSTAL_CONFIGS") || getConfig?.("CORE_POSTAL_CODE_CONFIGS") || {};
   return cfg.postalCodePattern || "^[0-9]{5}$";
 }
 
