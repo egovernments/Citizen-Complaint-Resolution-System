@@ -11,6 +11,7 @@
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { TENANT, BASE_URL } from '../env';
 
 export interface AuthInfo {
   token: string;
@@ -61,11 +62,17 @@ export function loadAuth(authFile: string = DEFAULT_AUTH_FILE): AuthInfo {
     return {
       token: parsed.authToken,
       user: parsed.user || null,
-      tenant: parsed.tenant || (process.env.TENANT_CODE || 'ke'),
-      baseUrl:
-        parsed.environment ||
-        process.env.BASE_URL ||
-        'https://naipepea.digit.org',
+      // This used to be its own `process.env.TENANT_CODE || 'ke'` chain,
+      // bypassing env.ts's deployment-profile-aware TENANT entirely — the
+      // moment env pins were removed it silently authenticated the manage
+      // suite against 'ke' on a non-Kenya stack. TENANT already resolves
+      // env var -> discovered profile -> legacy default; route through it
+      // instead of re-deriving.
+      tenant: parsed.tenant || TENANT,
+      // Same shadow-copy bug: 'https://naipepea.digit.org' is a dead demo
+      // host. BASE_URL is env.ts's own env-var-or-localhost chain — reuse
+      // it rather than re-reading process.env.BASE_URL with a stale floor.
+      baseUrl: parsed.environment || BASE_URL,
     };
   }
 

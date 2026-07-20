@@ -389,15 +389,10 @@ services:
     - egov-network
 
   egov-enc-service:
-    # `:generatekey-endpoint` stacks the POST /crypto/v1/_generatekey
-    # endpoint (Digit-Core #1354) on top of :v2.9.2-4a60f20. Without
-    # _generatekey, the first encrypt for a brand-new state root (created
-    # by MCP tenant_bootstrap or similar) throws "Tenant Id not found" —
-    # enc-service only discovers tenants via MDMS search under
-    # STATE_LEVEL_TENANT_ID, and a brand-new root isn't under any
-    # existing root's tenant.tenants list. Bump can be replaced with a
-    # versioned tag once Digit-Core #1354 lands and a release ships.
-    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:generatekey-endpoint
+    # Bumped to the 2.12 core-services merge (87e13fe), which includes
+    # the Digit-Core #1354 _generatekey fix previously carried via the
+    # :generatekey-endpoint preview pin.
+    image: egovio/egov-enc-service:2.12-87e13fe
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
@@ -631,23 +626,11 @@ services:
     restart: "no"
 
   egov-user:
-    # Custom image stacks (a) the tenant-aware encryption fix from
-    # egovernments/Digit-Core#1044 — cherry-pick of c6f5438 + call-site
-    # migration 884c5e6 — on (b) the ccc0e13 NPE fix base in
-    # _updatenovalidate / profile/_update. Built off the pre-d69ce29
-    # commit lineage, so it also sidesteps the SafeHtmlValidator
-    # BeanCreationException regression that blocks citizen registration on
-    # the stock maven-jdk21-* images (CCRS#771).
-    #
-    # When Digit-Core#1044 merges upstream and an official
-    # `egovio/egov-user:<post-1044>` tag exists, replace this pin with
-    # the canonical image.
-    #
-    # `registry.preview.egov.theflywheel.in` is a read-only HTTPS proxy
-    # in front of the egov-ci VPC registry — public cert, no
-    # insecure-registries trust required, pullable from anywhere.
-    #
-    image: registry.preview.egov.theflywheel.in/egovio/egov-user:mobilevalidation-jdk8-4984479
+    # Bumped to the 2.12 core-services merge (87e13fe), which now
+    # includes the Digit-Core#1044 fixes (tenant-aware encryption,
+    # SafeHtmlValidator/CCRS#771, NPE fix) previously carried via the
+    # :mobilevalidation-jdk8 preview pin.
+    image: egovio/egov-user:2.12-87e13fe
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -730,7 +713,7 @@ services:
     - egov-network
 
   egov-workflow-v2:
-    image: egovio/egov-workflow-v2:maven-jdk21-983e8b2
+    image: egovio/egov-workflow-v2:2.12-87e13fe
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -817,7 +800,7 @@ services:
     - egov-network
 
   egov-localization:
-    image: egovio/egov-localization:maven-jdk21-9f83afb
+    image: egovio/egov-localization:2.12-87e13fe
     container_name: egov-localization
     depends_on:
       pgbouncer:
@@ -865,6 +848,12 @@ services:
     - egov-network
 
   boundary-service:
+    # NOT bumped to 2.12-87e13fe — that build changes the
+    # /boundary-relationships/_search contract from query-param-bound
+    # criteria (@ModelAttribute) to a body-only BoundaryRelationshipSearchRequest,
+    # which breaks the currently-deployed UI's locality/address search
+    # (NullPointerException on boundaryRelationshipSearchCriteria). Holding
+    # this pin until that's resolved.
     image: egovio/boundary-service:maven-jdk21-9f83afb
     container_name: boundary-service
     depends_on:
@@ -1150,24 +1139,17 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    # 800-preview: adds the user-enrichment tenant fix (DIGIT-Common#70 /
-    # CCRS#800) on top of digit-common-boundary-uuidlink. With the prior
-    # image, /egov-hrms/employees/_search returned `"user": null` for
-    # every employee on multi-tenant deploys — HRMS was sending the
-    # state-stripped tenant (`ke`) to egov-user while EMPLOYEE rows
-    # actually live at the city tenant (`ke.bomet`), so the SQL WHERE
-    # missed every row. Drop this back to a canonical
-    # `digit-common-boundary-uuidlink-<post-fix>` tag once DIGIT-Common#70
-    # merges and a follow-up build is published.
-    #
-    # Previous lineage notes (still in this image):
-    # - CCRS#482: custom password on employee create
-    # - CCRS#484: null tenantId on User object breaking MDMS mobile
-    #   validation
+    # hrms-boundary-dd641a6: a released egovio/egov-hrms tag (repinned from the
+    # preview-only 800-preview build). Its lineage relative to the previously
+    # tracked fixes (DIGIT-Common#70/CCRS#800 tenant-scoped employee search,
+    # CCRS#482 custom password on employee create, CCRS#484 null tenantId
+    # breaking MDMS mobile validation) has not been re-verified — check for
+    # regressions in those specific behaviors before relying on this tag in
+    # a multi-tenant deploy.
     # EGOV_HRMS_DEV_MODE=true must be set so enrichUser() respects the
     # password supplied in the request instead of overwriting with the
     # default/auto-generated one.
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:800-preview
+    image: egovio/egov-hrms:hrms-boundary-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1436,7 +1418,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-3d1b7d4}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-70916ea}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -2114,7 +2096,7 @@ services:
   # The Ansible playbook flips this on when `enable_novu: true` in
   # host_vars.
   digit-config-service:
-    image: registry.preview.egov.theflywheel.in/egovio/digit-config-service:latest
+    image: egovio/digit-config-service:develop-70916ea
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2172,7 +2154,7 @@ services:
       - egov-network
 
   digit-user-preferences-service:
-    image: registry.preview.egov.theflywheel.in/egovio/digit-user-preferences-service:latest
+    image: egovio/digit-user-preferences-service:develop-70916ea
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2202,7 +2184,7 @@ services:
     # + localizes; the bridge only identifies the Novu subscriber and
     # delivers renderedBody — design D4/D6). CI builds+pushes to the VPC
     # registry; default keeps the prior preview tag.
-    image: ${NOVU_BRIDGE_IMAGE:-registry.preview.egov.theflywheel.in/egovio/novu-bridge:latest}
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:develop-70916ea}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2276,6 +2258,10 @@ services:
       # Channels actually delivered. WHATSAPP stays OFF until a legitimate
       # provider is onboarded as a Novu integration (then just add it here).
       NOVU_BRIDGE_CHANNELS_ENABLED: ${NOVU_BRIDGE_CHANNELS_ENABLED:-SMS,EMAIL}
+      # Roles allowed through the /novu-adapter proxy (ProxyAuthFilter). Must be
+      # plumbed from .env — the installer sets it; include MDMS_ADMIN so the
+      # configurator's own provider/template screens are not 403'd.
+      NOVU_BRIDGE_PROXY_ALLOWED_ROLES: ${NOVU_BRIDGE_PROXY_ALLOWED_ROLES:-EMPLOYEE,SUPERUSER,GRO,PGR_LME}
       NOVU_BRIDGE_USER_HOST: http://egov-user:8107
       NOVU_BRIDGE_USER_SEARCH_PATH: /user/_search
       # MDMS_HOST MUST be set. The bridge's application.properties default

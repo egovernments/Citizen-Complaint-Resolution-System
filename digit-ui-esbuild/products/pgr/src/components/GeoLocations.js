@@ -414,14 +414,6 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setShowToast(null);
   };
 
-  // Auto-dismiss the toast after a few seconds so location/geolocation messages
-  // (e.g. denied permission) don't linger indefinitely. See issue #883.
-  useEffect(() => {
-    if (!showToast) return;
-    const timer = setTimeout(() => setShowToast(null), 5000);
-    return () => clearTimeout(timer);
-  }, [showToast]);
-
   const clearSearch = () => {
     setSearchQuery("");
     setAddress("");
@@ -767,6 +759,8 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           type={showToast.key === "error" ? "error" : "success"}
           label={showToast.label}
           onClose={closeToast}
+          isDleteBtn={true}
+          autoDismiss={true}
         />
       )}
     </div>

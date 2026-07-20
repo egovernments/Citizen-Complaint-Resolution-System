@@ -37,6 +37,8 @@ import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_MASTER;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_MASTER;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_ROUTING_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_TEMPLATE_JSONPATH;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_PROVIDER_TEMPLATE_MASTER;
+import static org.egov.pgr.util.PGRConstants.MDMS_NOTIFICATION_PROVIDER_TEMPLATE_JSONPATH;
 import static org.egov.pgr.util.PGRConstants.MDMS_ALL_DEPARTMENTS_JSONPATH;
 
 @Slf4j
@@ -82,6 +84,7 @@ public class MDMSUtils {
     }
     private final Map<String, TimedRows> notificationRoutingCache = new ConcurrentHashMap<>();
     private final Map<String, TimedRows> notificationTemplateCache = new ConcurrentHashMap<>();
+    private final Map<String, TimedRows> notificationProviderTemplateCache = new ConcurrentHashMap<>();
 
     /**
      * serviceCode -> SLA in millis, derived from MDMS RAINMAKER-PGR.ComplaintHierarchy leaf rows'
@@ -205,6 +208,26 @@ public class MDMSUtils {
         // Empty fetch = transient MDMS miss OR genuinely unseeded tenant. Never cache empties
         // (retry next event); serve a stale non-empty entry if we have one rather than dropping
         // notifications during an MDMS blip.
+        return cached != null ? cached.rows : fetched;
+    }
+
+    /**
+     * Provider→template mapping rows (RAINMAKER-PGR.NotificationProviderTemplate) for the tenant —
+     * Twilio WhatsApp Content SIDs + ordered variables, keyed by (provider, channel, audience,
+     * action, toState, locale). Same cache/staleness semantics as the routing/template masters.
+     * Empty is fine (a tenant with no approved provider templates simply won't send WHATSAPP).
+     */
+    public List<Object> getNotificationProviderTemplates(String tenantId) {
+        String stateTenant = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+        long ttl = config.getNotificationMdmsCacheTtlMs();
+        TimedRows cached = notificationProviderTemplateCache.get(stateTenant);
+        if (cached != null && cached.fresh(ttl)) return cached.rows;
+        List<Object> fetched = fetchNotificationMaster(stateTenant,
+                MDMS_NOTIFICATION_PROVIDER_TEMPLATE_MASTER, MDMS_NOTIFICATION_PROVIDER_TEMPLATE_JSONPATH);
+        if (!fetched.isEmpty()) {
+            notificationProviderTemplateCache.put(stateTenant, new TimedRows(fetched));
+            return fetched;
+        }
         return cached != null ? cached.rows : fetched;
     }
 

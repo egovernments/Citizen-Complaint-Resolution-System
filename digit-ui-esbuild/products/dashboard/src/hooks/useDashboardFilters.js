@@ -6,6 +6,7 @@ import {
   reconcileFiltersWithOptions,
   resolveSubMetricId as resolveSubMetricIdForMetric,
 } from "../config/dashboardFilters";
+import { normalizeComplaintTypeValue } from "../utils/complaintTypeTree";
 
 export function useDashboardFilters() {
   const [filters, setFilters] = useState(loadDashboardFilters);
@@ -29,7 +30,23 @@ export function useDashboardFilters() {
   const setFilter = useCallback(
     (groupId, value) => {
       setFilters((prev) => {
-        const next = { ...prev, [groupId]: value };
+        let next;
+        if (groupId === "complaintType") {
+          // Tree-traversal type filter: the widget sends the { code, path,
+          // leaf } node selection (APPLY-ON-SELECT); the flat fallback select
+          // still sends a bare leaf-code string. Persist the trio atomically
+          // so leaf → serviceCode / interior → complaintPath resolves without
+          // waiting for the MDMS tree.
+          const selection = normalizeComplaintTypeValue(value);
+          next = {
+            ...prev,
+            complaintType: selection.code,
+            complaintTypePath: selection.path,
+            complaintTypeLeaf: selection.leaf,
+          };
+        } else {
+          next = { ...prev, [groupId]: value };
+        }
         if (groupId === "dateFrom" || groupId === "dateTo") {
           next.dateRangeActive = true;
         }

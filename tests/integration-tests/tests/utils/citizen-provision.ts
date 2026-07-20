@@ -3,12 +3,14 @@
  *
  * Registers ONE fresh citizen per `npx playwright test` invocation against
  * the configured deployment, using a mobile number that satisfies the
- * deployment's MDMS ValidationConfigs.mobileNumberValidation rule (so the
- * suite stays tenant-agnostic — same code provisions an Ethiopia citizen
- * and a Kenya citizen, just by changing BASE_URL/DIGIT_TENANT).
+ * deployment's mobile-validation rule (so the suite stays tenant-agnostic —
+ * same code provisions an Ethiopia citizen and a Kenya citizen, just by
+ * changing BASE_URL/DIGIT_TENANT).
  *
  * Flow (per user direction — "explicit OTP validation step needed"):
- *   1. MDMS lookup → mobile rule (prefix, pattern, allowedStartingDigits)
+ *   1. resolveMobileRule → mobile rule (prefix, pattern, allowedStartingDigits),
+ *      preferring the discovered deployment profile over an MDMS re-lookup
+ *      (see resolveMobileRule below)
  *   2. generateValidMobile(rule) → a fresh phone that satisfies the regex
  *   3. /user-otp/v1/_send (type=register) → triggers OTP delivery
  *   4. /user/citizen/_create with the registration payload + otpReference
@@ -24,8 +26,9 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { BASE_URL, FIXED_OTP, ROOT_TENANT, TENANT, DEFAULT_PASSWORD, generateCitizenPhone } from './env';
-import { getMobileValidationRule, generateValidMobile, type MobileRule } from './mdms-mobile';
+import { getMobileValidationRule, generateValidMobile, derivedStartingDigits, type MobileRule } from './mdms-mobile';
 import { getPgrIdPrefix } from './pgr-idgen';
+import { tryGetProfile } from './profile';
 
 export interface ProvisionedCitizen {
   mobile: string;
@@ -60,14 +63,31 @@ export function readProvisionedCitizen(): ProvisionedCitizen | null {
 export const CITIZEN_FIXTURE_PATH = CITIZEN_FIXTURE_FILE;
 
 /**
- * Resolve the mobile-validation rule for this deployment. Tries the
- * passed tenant first, then ROOT_TENANT (where most deployments store
- * the default — Bomet ships the rule on `ke`, not `ke.etoebeta`). Falls
- * back to the FALLBACK rule built into getMobileValidationRule; the
- * register call below will refine that further by parsing the server's
- * INVALID_MOBILE_FORMAT response.
+ * Resolve the mobile-validation rule for this deployment.
+ *
+ * Profile-first: `profile.mobile` is read straight off the SPA's own boot
+ * config (globalConfigs.js — see profile.ts), which is the same rule the
+ * citizen wizard's phone field validates against and doesn't depend on a
+ * tenant having populated the MDMS schema at all. Falls back to the old
+ * MDMS lookup (tries the passed tenant first, then ROOT_TENANT — Bomet
+ * ships the rule on `ke`, not `ke.etoebeta`) only when no profile was
+ * discovered, e.g. a `--no-deps` single-spec run without PROFILE_INLINE=1.
+ * Either way, `attemptCreate`'s server-error-probe below stays the actual
+ * last resort: a wrong/stale rule from either source still gets corrected
+ * by parsing the server's own INVALID_MOBILE_FORMAT response.
  */
 async function resolveMobileRule(tenant: string): Promise<MobileRule> {
+  const profileMobile = tryGetProfile()?.mobile;
+  if (profileMobile?.pattern) {
+    return {
+      prefix: profileMobile.countryCode ?? undefined,
+      pattern: profileMobile.pattern,
+      minLength: profileMobile.length?.min ?? 10,
+      maxLength: profileMobile.length?.max ?? 10,
+      errorMessage: `Please enter a valid mobile number matching ${profileMobile.pattern}`,
+      allowedStartingDigits: derivedStartingDigits(profileMobile.pattern) ?? undefined,
+    };
+  }
   const direct = await getMobileValidationRule(tenant);
   if (direct.pattern !== '^\\d{10}$' || tenant === ROOT_TENANT) return direct;
   // Generic 10-digit fallback returned for the city tenant — try the root.

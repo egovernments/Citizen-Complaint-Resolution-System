@@ -11,6 +11,12 @@
 # registry creds) DO NOT belong in this file. They live in OpenBao and
 # are referenced via `secrets_path:` in host_vars.
 
+# Tear down the running stack before re-deploying (containers + orphaned
+# networks, but NOT volumes). Off by default — prod tenants must never
+# lose a running stack unintentionally. Flip true on CI/dev boxes or
+# when you explicitly want a clean redeploy from scratch.
+force_clean: false
+
 # ──────────────────────────────────────────────────────────────────────
 # digit-ui SPA — values read at boot via Digit.Utils.getConfig(KEY)
 # ──────────────────────────────────────────────────────────────────────
@@ -80,6 +86,13 @@ footer_bw_logo_url: ""
 # when they want to surface only their own city or hide modules.
 login_tenant_allowlist: []
 employee_module_denylist: []
+
+# Client-side dashboard render-lag instrumentation (#1110): the supervisor
+# dashboard POSTs OTLP metrics/logs to the same-origin /otel Kong route.
+# ON by default (the emitter self-mutes when the route is absent). This is
+# the deployed-box KILL SWITCH: set false in host_vars and re-render
+# globalConfigs.js (ansible/nightly) — no rebuild needed.
+dashboard_metrics_enabled: true
 
 # ──────────────────────────────────────────────────────────────────────
 # nginx vhost — feature flags + upstream ports

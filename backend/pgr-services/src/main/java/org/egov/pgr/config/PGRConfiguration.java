@@ -226,6 +226,22 @@ public class PGRConfiguration {
     @Value("${state.level.tenantid.length}")
     private Integer stateLevelTenantIdLength;
 
+    // ---- analytics config caches ----
+
+    /**
+     * Fallback for {@code pgr.analytics.config-cache-ttl-ms} when the bean is built
+     * outside Spring (hand-constructed/mocked in tests) and the field is null. 5 minutes.
+     */
+    public static final long DEFAULT_ANALYTICS_CONFIG_CACHE_TTL_MS = 5 * 60_000L;
+
+    /**
+     * The ONE TTL for every analytics in-memory config cache — recordCount in
+     * AnalyticsService and departmentScoping in KpiCatalogService both read THIS
+     * property; per-file hardcoded TTLs are not allowed (#1282 review).
+     */
+    @Value("${pgr.analytics.config-cache-ttl-ms:300000}")
+    private Long analyticsConfigCacheTtlMs;
+
     @Value("${is.environment.central.instance}")
     private Boolean isEnvironmentCentralInstance;
 

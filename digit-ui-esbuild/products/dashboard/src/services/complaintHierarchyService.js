@@ -1,5 +1,6 @@
 import { getTenantId, hasAuth } from "./analyticsService";
 import { selectHierarchyDefinition, orderedLevels } from "../utils/hierLevelGrouping";
+import { withTraceHeaders } from "./dashboardMetrics";
 
 /**
  * MDMS context path from globalConfigs (deployments serve MDMS under
@@ -103,20 +104,22 @@ export function buildComplaintTypeIndex(records) {
 }
 
 /**
- * Fetch the PGR complaint hierarchy master (state-root tenant, same-origin
- * MDMS v1 — same auth/tenant conventions as boundaryService) and return the
- * code → { label, rootCode, rootLabel } index.
+ * Fetch the raw PGR complaint hierarchy records (state-root tenant,
+ * same-origin MDMS v1 — same auth/tenant conventions as boundaryService).
+ * ONE fetch feeds both derived shapes the dashboard needs: the flat
+ * code → label/root index (buildComplaintTypeIndex) and the traversal tree
+ * (utils/complaintTypeTree.js buildComplaintTree).
  *
  * Resolves null on any failure (never rejects) so callers can fall back to
  * humanized flat labels without blocking the dashboard.
  */
-export async function fetchComplaintTypeIndex() {
+export async function fetchComplaintHierarchyRecords() {
   if (!hasAuth()) return null;
 
   try {
     const response = await fetch(getMdmsSearchUrl(), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withTraceHeaders({ "Content-Type": "application/json" }),
       credentials: "omit",
       body: JSON.stringify({
         RequestInfo: buildRequestInfo(),
@@ -139,14 +142,22 @@ export async function fetchComplaintTypeIndex() {
 
     const payload = await response.json();
     const records = payload?.MdmsRes?.["RAINMAKER-PGR"]?.ComplaintHierarchy;
-    if (!Array.isArray(records) || !records.length) return null;
-
-    const indexed = buildComplaintTypeIndex(records);
-    return indexed.size ? indexed : null;
+    return Array.isArray(records) && records.length ? records : null;
   } catch (error) {
     console.warn("egov-mdms-service ComplaintHierarchy _search error", error);
     return null;
   }
+}
+
+/**
+ * Fetch + index in one step (code → { label, rootCode, rootLabel }).
+ * Resolves null on any failure (never rejects).
+ */
+export async function fetchComplaintTypeIndex() {
+  const records = await fetchComplaintHierarchyRecords();
+  if (!records) return null;
+  const indexed = buildComplaintTypeIndex(records);
+  return indexed.size ? indexed : null;
 }
 
 /**
@@ -182,7 +193,7 @@ export async function fetchComplaintHierarchyLevels() {
   try {
     const response = await fetch(getMdmsSearchUrl(), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withTraceHeaders({ "Content-Type": "application/json" }),
       credentials: "omit",
       body: JSON.stringify({
         RequestInfo: buildRequestInfo(),

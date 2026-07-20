@@ -13,6 +13,7 @@ import ComplaintPhotos from "../../components/ComplaintPhotos";
 import { buildExtendedAttributeRows } from "../../components/PgrExtendedAttributesView";
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
+import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -125,6 +126,10 @@ const PGRDetails = () => {
     },
     { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
   );
+
+  // Same REOPENSLA window the citizen timeline gates on, so employee and citizen can never
+  // disagree about the deadline. undefined => defer to pgr-services (see useReopenWindow).
+  const reopenWindowMs = useReopenWindow(tenantId);
 
   // Complaint classification hierarchy (configurable N levels). Absent on
   // un-migrated tenants -> buildComplaintPath returns null and the flat
@@ -709,18 +714,17 @@ const PGRDetails = () => {
               key="action-button"
               label={t("ES_COMMON_TAKE_ACTION")}
               onOptionSelect={(selected) => {
-                // The modal's form values persist in the GLOBAL "COMPLAINT_UPDATE"
-                // session key — without scoping, values from a previous modal
-                // (a canceled attempt, a DIFFERENT action, or even a different
-                // complaint) silently restore into this one: stale attachments/
-                // comments would submit with the new action. Stamp the session
-                // with complaint+action and start clean on any mismatch; the
-                // restore convenience is kept for reopening the SAME action on
-                // the SAME complaint.
-                const sessionFor = `${id}:${selected?.action}`;
-                if (sessionFormData?.__for !== sessionFor) {
-                  clearSessionFormData();
-                  setSessionFormData({ __for: sessionFor });
+                console.log("*** Log ===> selected", selected);
+                if (selected.action === "REOPEN") {
+                  const lastModifiedTime = pgrData?.ServiceWrappers?.[0]?.service?.auditDetails?.lastModifiedTime;
+                  if (reopenWindowMs && lastModifiedTime && Date.now() - lastModifiedTime > reopenWindowMs) {
+                    setToast({
+                      show: true,
+                      type: "error",
+                      label: t("CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE"),
+                    });
+                    return;
+                  }
                 }
                 setSelectedAction(selected);
                 setOpenModal(true);

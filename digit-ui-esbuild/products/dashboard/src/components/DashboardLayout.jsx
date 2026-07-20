@@ -70,7 +70,13 @@ const DashboardLayout = ({
           visibleKpiCount={visibleKpiCount}
           scope={scope}
         />
-        <main className="tw-flex-1 tw-overflow-auto tw-bg-background tw-p-4 lg:tw-p-6">
+        <main
+          className={
+            embedded
+              ? "dashboard-main tw-flex-1 tw-min-w-0 tw-max-w-full tw-overflow-x-clip tw-overflow-y-auto tw-bg-background"
+              : "dashboard-main tw-flex-1 tw-overflow-auto tw-bg-background tw-p-4 lg:tw-p-6"
+          }
+        >
           <DashboardFilters
             filters={filters}
             onFilterChange={onFilterChange}

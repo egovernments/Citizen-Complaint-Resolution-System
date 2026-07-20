@@ -13,6 +13,11 @@ export const PIE_CHART_OUTER_R = 72;
 export const PIE_CHART_INNER_R = 42;
 export const PIE_CHART_LABEL_R = 94;
 export const PIE_CHART_MIN_SWEEP_FOR_VALUE = 20;
+/** Outside-ring labels — keep short channel names on one line. */
+export const PIE_CHART_LABEL_MAX_WIDTH_PX = 78;
+export const PIE_CHART_LABEL_FONT_SIZE = 9;
+export const PIE_CHART_LABEL_CHAR_WIDTH_PX = 5.4;
+export const PIE_CHART_VALUE_FONT_SIZE = 9;
 
 export function pieChartValueRadius() {
   return (PIE_CHART_OUTER_R + PIE_CHART_INNER_R) / 2;
@@ -80,12 +85,14 @@ export function pieLabelOffset(midDeg) {
   return 0;
 }
 
-export function resolvePieLabelLines(label, sweepDeg) {
-  const arcWidthPx = Math.max(
-    28,
-    ((sweepDeg / 180) * Math.PI * PIE_CHART_LABEL_R) * 0.88
-  );
-  return wrapChartLabelToLines(label, arcWidthPx, { maxLines: 3 });
+export function resolvePieLabelLines(label) {
+  // Labels sit outside the donut. Sizing them to the slice arc made small
+  // segments mid-word wrap ("Mobi"/"le", "Walk"/"-in"). Use a fixed budget
+  // so typical channel names stay on one line.
+  return wrapChartLabelToLines(label, PIE_CHART_LABEL_MAX_WIDTH_PX, {
+    charWidthPx: PIE_CHART_LABEL_CHAR_WIDTH_PX,
+    maxLines: 2,
+  });
 }
 
 export function normalizePieChartData(data = []) {
@@ -131,7 +138,7 @@ export function normalizePieChartData(data = []) {
       hoverX: hoverPoint.x,
       hoverY: hoverPoint.y,
       showValue: sweep >= PIE_CHART_MIN_SWEEP_FOR_VALUE,
-      labelLines: resolvePieLabelLines(item.label, sweep),
+      labelLines: resolvePieLabelLines(item.label),
     };
   });
 }

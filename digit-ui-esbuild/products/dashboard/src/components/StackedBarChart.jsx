@@ -17,6 +17,7 @@ import {
 } from "../config/stackedBarPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import { useScrollableChartSize } from "../hooks/useScrollableChartSize";
+import { getNumberFormatStamp } from "../utils/numberFormat";
 import ChartScrollViewport from "./ChartScrollViewport";
 
 const StackedBarChart = ({
@@ -28,6 +29,13 @@ const StackedBarChart = ({
   scrollKey,
   valueFormat,
 }) => {
+  // Per-locale numberFormat mask stamp (#1272). The options memo bakes it in
+  // (and deps on it) because react-apexcharts compares JSON.stringify(options)
+  // — which drops the formatter closures — so a language switch that only
+  // changes the mask would otherwise never reach Apex. KpiTile (the parent)
+  // subscribes to the locale runtime, so this component re-renders — and
+  // re-reads the stamp — after AdminDashboard re-primes the store.
+  const numberFormatStamp = getNumberFormatStamp();
   const {
     viewportRef,
     chartSize,
@@ -85,6 +93,10 @@ const StackedBarChart = ({
       states: {
         hover: { filter: { type: "darken", value: 0.9 } },
       },
+      // Not an Apex option — a stringifiable stamp of the per-locale mask so
+      // react-apexcharts' JSON.stringify comparison sees the change and
+      // redraws the baked data-label/axis/tooltip formatters.
+      _numberFormatStamp: numberFormatStamp,
     }),
     [
       categories,
@@ -95,6 +107,7 @@ const StackedBarChart = ({
       resolvedColors,
       verticalXAxisLabelHeight,
       valueFormat,
+      numberFormatStamp,
     ]
   );
 

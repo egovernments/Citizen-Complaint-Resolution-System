@@ -185,7 +185,15 @@ const AddKpiDropdown = ({
       <ul className="dashboard-add-kpi-list tw-min-h-0 tw-flex-1 tw-overflow-y-auto tw-overscroll-contain">
         {availableItems.length === 0 ? (
           <li className="tw-px-4 tw-py-6 tw-text-center tw-text-[12px] tw-font-normal tw-text-muted-foreground">
-            {t("DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD", "All KPIs are on the dashboard")}
+            {(catalogItems || []).length === 0
+              ? // Role-filtered catalog is empty — nothing this user could ever add.
+                t("DASHBOARD_HEADER_NO_KPIS_FOR_ROLE", "No KPIs available for your role")
+              : // Catalog has tiles but every one is already placed — not a bug,
+                // but indistinguishable from one without saying so.
+                t(
+                  "DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD",
+                  "All available KPIs are already on your dashboard"
+                )}
           </li>
         ) : (
           availableItems.map((item) => (

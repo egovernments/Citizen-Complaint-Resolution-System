@@ -147,6 +147,53 @@ public class AnalyticsCatalog {
     public static final Set<String> AGG_FNS =
         setOf("count","count_distinct","sum","avg","min","max","percentile","ratio");
 
+    // ---- #1111: complaint-hierarchy level rollup (query-time derived dimension) ----
+
+    /** Max hierarchy level, matching the grain migrations' chwalk recursion guard (depth < 12). */
+    public static final int MAX_HIER_LEVEL = 12;
+
+    /**
+     * #1111/R1: composer-internal derived-dimension marker. The planner accepts an OBJECT
+     * dimension {@code {"__hierLevel": <n>, "__token": <jvm-nonce>}} ONLY when {@code __token}
+     * equals this per-JVM nonce — which only {@link KpiQueryComposer} (in-process, never
+     * serialized) can supply. Request bodies and MDMS defs arrive as parsed JSON and cannot
+     * know the nonce, so the object-dimension form is unreachable from any external input:
+     * there is NO generic expression injection surface, and the inline-query grammar is
+     * unchanged (textual dimensions only).
+     */
+    static final String HIER_DIM_LEVEL_FIELD = "__hierLevel";
+    static final String HIER_DIM_TOKEN_FIELD = "__token";
+    static final String HIER_DIM_TOKEN = UUID.randomUUID().toString();
+
+    /**
+     * #1111: fixed registry of grains carrying {@code complaint_node_path}/{@code complaint_depth}
+     * — the only grains that can serve the hierarchy-level derived dimension (facts + events;
+     * daily has no path column, so a {@code hierLevel} param no-ops there exactly like ward).
+     */
+    private static final Set<String> HIER_LEVEL_GRAINS = setOf("facts","events");
+
+    public boolean supportsHierLevel(String grainName){ return HIER_LEVEL_GRAINS.contains(grainName); }
+
+    /**
+     * The hierarchy-level rollup expression for path segment {@code level} (1-based):
+     * the Nth '.'-segment of {@code complaint_node_path}, clamped to the row's own depth
+     * (a depth-2 complaint asked for level-3 buckets stays under its leaf instead of a NULL
+     * bucket), with the leaf {@code service_code} as fallback for rows with a NULL/empty path
+     * (flat/legacy tenants keep today's leaf buckets — the AC's leaf-only fallback for free).
+     *
+     * <p>The template is FIXED Java — neither MDMS defs nor request JSON can supply an
+     * expression. The only variable is {@code level}, validated here (defense in depth, the
+     * composer/planner validate first) and interpolated as a bare int, never raw input.
+     */
+    public String hierLevelExpr(String grainName, int level){
+        if (!supportsHierLevel(grainName))
+            throw new IllegalArgumentException("invalid_param: hierLevel is not supported on grain " + grainName);
+        if (level < 1 || level > MAX_HIER_LEVEL)
+            throw new IllegalArgumentException("invalid_param: hierLevel must be an integer in 1.." + MAX_HIER_LEVEL);
+        return "coalesce(nullif(split_part(complaint_node_path,'.',least(" + level
+                + ",complaint_depth)),''), service_code)";
+    }
+
     // ---- helpers ----
     @SafeVarargs private static <T> Set<T> setOf(T... a){ return new LinkedHashSet<>(Arrays.asList(a)); }
     private static Map<String,String> mapOf(String... kv){
