@@ -32,6 +32,21 @@ describe('compose invocation discipline', () => {
     /docker compose -f \{\{ digit_dir \}\}\/docker-compose\.egov-digit\.yaml ps/,
   ];
 
+  // Mutating raw-`f` invocations that legitimately cannot use {{ compose_files }}.
+  // The bomet 2026-06-09 incident this contract encodes was an `up` regression
+  // that silently dropped an overlay image pin; `down` has no image-pin surface.
+  // Anything added here MUST be justified individually.
+  const ALLOWED_MUTATING_RAW_F = [
+    // Pre-stack force-clean teardown (playbook-deploy.yml `force-clean — tear
+    // down existing DIGIT stack`). Runs in pre_tasks BEFORE compose_files is
+    // set_fact'd; the *previous* run's overlay set is not reconstructible here
+    // (tenant may have switched between runs). `down --remove-orphans` on the
+    // base file still tears down overlay-only containers under the compose
+    // project name, and `down` cannot create anything so the image-pin risk
+    // that motivates the {{ compose_files }} rule doesn't apply.
+    /^docker compose -f docker-compose\.egov-digit\.yaml down --remove-orphans --timeout \d+$/,
+  ];
+
   const invocations = PLAYBOOK.split('\n')
     .map((line, i) => ({ line: line.trim(), n: i + 1 }))
     .filter(({ line }) => line.includes('docker compose') && !line.startsWith('#'));
@@ -41,6 +56,7 @@ describe('compose invocation discipline', () => {
       if (!MUTATING.test(line)) return false;            // read-only — next test
       if (line.includes('{{ compose_files }}')) return false; // canonical stack
       if (!line.includes(' -f ')) return false;          // no file args (e.g. `docker compose version`)
+      if (ALLOWED_MUTATING_RAW_F.some((rx) => rx.test(line))) return false; // justified carve-out
       return !ALLOWED_RAW_F.some((rx) => rx.test(line));
     });
     expect(
@@ -48,17 +64,19 @@ describe('compose invocation discipline', () => {
     ).toEqual([]);
   });
 
-  test('raw -f invocations stay read-only and on the allowlist', () => {
+  test('raw -f invocations are on an allowlist (read-only or justified mutating)', () => {
     const rawF = invocations.filter(
       ({ line }) => line.includes(' -f ') && !line.includes('{{ compose_files }}'),
     );
     for (const { n, line } of rawF) {
-      const allowed = ALLOWED_RAW_F.some((rx) => rx.test(line));
+      const readOnlyAllowed = ALLOWED_RAW_F.some((rx) => rx.test(line));
+      const mutatingAllowed = ALLOWED_MUTATING_RAW_F.some((rx) => rx.test(line));
       const mutating = MUTATING.test(line);
+      const ok = mutatingAllowed || (readOnlyAllowed && !mutating);
       expect({
         where: `playbook-deploy.yml:${n}`,
         line,
-        verdict: allowed && !mutating ? 'ok' : 'NEW RAW -f INVOCATION — route it through {{ compose_files }} or justify it in ALLOWED_RAW_F',
+        verdict: ok ? 'ok' : 'NEW RAW -f INVOCATION — route it through {{ compose_files }} or justify it in ALLOWED_RAW_F / ALLOWED_MUTATING_RAW_F',
       }).toEqual(expect.objectContaining({ verdict: 'ok' }));
     }
   });
@@ -78,33 +96,45 @@ describe('image pin immutability', () => {
    * known set, so a removal also fails the test until the list is updated:
    * that's intentional — the list IS the changelog of this debt.)
    */
-  const FROZEN_LATEST_DEBT = [
-    'edoburu/pgbouncer:latest',
-    'tilt-demo-db-migrations:latest',
-    'curlimages/curl:latest', // appears twice (two gate containers)
-    'pgr-services-dev:latest', // env-overridable fallback — pin when #774-class work lands
-    'twinproduction/gatus:latest',
-    'tilt-demo-jupyter:latest',
-    'openbao/openbao:latest',
-    'egovio/novu-bridge-endpoint:latest',
-    'egovio/digit-config-service:latest',
-    'egovio/digit-user-preferences-service:latest',
-    'egovio/novu-bridge:latest',
-  ];
+  // Exact multiset of :latest pins allowed in the base compose. Each pin
+  // is normalized to `<owner>/<image>:tag` (registry host and any
+  // `${VAR:-...}` env wrapper stripped). Every entry MUST appear exactly
+  // this many times, no more, no less — extras, duplicates, AND removals
+  // all fail the test until this list is updated to match. The list IS
+  // the changelog of this debt; it may shrink, never grow.
+  const FROZEN_LATEST_DEBT: Record<string, number> = {
+    'edoburu/pgbouncer:latest': 1,
+    'tilt-demo-db-migrations:latest': 1,
+    'curlimages/curl:latest': 2, // two gate containers
+    'twinproduction/gatus:latest': 1,
+    'tilt-demo-jupyter:latest': 1,
+    'openbao/openbao:latest': 1,
+    'egovio/novu-bridge-endpoint:latest': 1,
+    'egovio/digit-config-service:latest': 1,
+    'egovio/digit-user-preferences-service:latest': 1,
+    'egovio/novu-bridge:latest': 1,
+  };
+
+  // Strip a `${VAR:-<default>}` wrapper (use the default) and any leading
+  // registry-host segment (segment before the first `/` that contains a
+  // `.` or `:` — Docker's own registry-host convention).
+  const normalizeImage = (img: string): string => {
+    const env = img.match(/^\$\{[A-Za-z0-9_]+:-([^}]+)\}$/);
+    const raw = env ? env[1] : img;
+    const parts = raw.split('/');
+    return parts.length > 1 && /[.:]/.test(parts[0]) ? parts.slice(1).join('/') : raw;
+  };
 
   test('no :latest image pins beyond the frozen debt list', () => {
     const pins = [...BASE_COMPOSE.matchAll(/^\s*image:\s*(.+)$/gm)]
       .map((m) => m[1].trim())
-      .filter((img) => /:latest\b|:latest\}/.test(img));
+      .filter((img) => /:latest\b|:latest\}/.test(img))
+      .map(normalizeImage);
 
-    const unaccounted = pins.filter(
-      (img) => !FROZEN_LATEST_DEBT.some((debt) => img.includes(debt)),
-    );
-    expect(unaccounted).toEqual([]);
+    const counts: Record<string, number> = {};
+    for (const p of pins) counts[p] = (counts[p] || 0) + 1;
 
-    // Debt may shrink, never grow. 12 = the count at freeze time
-    // (curl appears twice). Update downward as pins get fixed.
-    expect(pins.length).toBeLessThanOrEqual(12);
+    expect(counts).toEqual(FROZEN_LATEST_DEBT);
   });
 });
 

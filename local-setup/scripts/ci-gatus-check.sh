@@ -34,6 +34,17 @@ if [ -z "$response" ]; then
   exit 1
 fi
 
+# Reject invalid JSON, non-array shapes, and empty arrays up front. Without
+# this, `jq -c '.[]'` in the loop below silently yields zero rows on any of
+# these cases (process-substitution exit codes don't propagate through the
+# `while` loop, so `set -o pipefail` won't catch it), and the script exits
+# 0 with a nonsensical "0/0 endpoints healthy" summary.
+if ! echo "$response" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
+  echo "FAIL: Gatus API returned invalid, non-array, or empty response"
+  echo "  Response: $(echo "$response" | head -c 300)"
+  exit 1
+fi
+
 total=0
 passed=0
 failures=()
