@@ -88,7 +88,17 @@ spec:
               # previous run) already populated this database. Exit 0 rather
               # than 1: a seeded DB is success, not failure, and a non-zero
               # exit here would abort the whole helm install.
-              existing=$(psql -tAc "SELECT to_regclass('${GUARD_TABLE}');")
+              # GUARD_TABLE goes through psql's own variable interpolation
+              # (:'guard') rather than being pasted into the SQL string, so a
+              # value containing quotes or SQL metacharacters is escaped as a
+              # literal instead of altering the query.
+              #
+              # The SQL is piped in rather than passed with -c: psql only runs
+              # its variable lexer on input read from stdin or a file. With -c
+              # the string goes to the server verbatim and the server rejects
+              # `:'guard'` with a syntax error.
+              existing=$(printf "SELECT to_regclass(:'guard');\n" \
+                | psql -v guard="$GUARD_TABLE" -tA)
               if [ -n "$existing" ]; then
                 echo "db-seed: ${GUARD_TABLE} already present — nothing to do"
                 exit 0
@@ -110,7 +120,18 @@ spec:
               # ON_ERROR_STOP makes psql fail the Job on the first bad
               # statement instead of plowing through and leaving the DB
               # half-seeded, which is far harder to diagnose.
-              psql -v ON_ERROR_STOP=1 --quiet -f /tmp/full-dump.sql
+              #
+              # --single-transaction is what makes the guard above trustworthy.
+              # pg_dump plain output carries no BEGIN/COMMIT, so without it
+              # every statement autocommits: a failure partway through would
+              # leave the early CREATE TABLEs (eg_user is created ~line 758 of
+              # ~15k) committed. The Job's backoffLimit retry would then find
+              # the guard table present, report "nothing to do", exit 0, and
+              # Helm would delete the pod as a success — leaving a silently
+              # half-seeded database. Wrapping the load in one transaction
+              # means a mid-dump failure rolls back the guard table too, so
+              # the retry sees an empty DB and reloads from scratch.
+              psql -v ON_ERROR_STOP=1 --single-transaction --quiet -f /tmp/full-dump.sql
 
               echo "db-seed: done"
 {{- end }}
