@@ -29,12 +29,12 @@ This guide is for an operator with a live v2.11 tenant (data, users, complaints 
 
 ### 3.2 Mobile validation: UserValidation → MobileNumberValidation
 
-> **Action required:** `common-masters.UserValidation` is gone. Create a `common-masters.MobileNumberValidation` record for your tenant's country before upgrading `egov-user`.
+> **Action required:** `common-masters.UserValidation` is gone. Create/adjust a `common-masters.MobileNumberValidation` record for your tenant's country before upgrading `egov-user`, **and** explicitly set `default: true` on exactly one record — regardless of country.
 
 - New shape: `{ countryCode, mobileNumberRegex, default, emailRegex?, nameRegex? }`, unique on `countryCode`, plus the generic MDMS-v2 `isActive` flag. Note the Configurator admin UI's edit form only exposes `countryCode`, `mobileNumberRegex`, `default`, and `isActive` — set `emailRegex`/`nameRegex` via the raw MDMS API if you need them.
-- The only record shipped by default is for **Kenya** (`+254`, `^0?[17][0-9]{8}$`). If your tenant is not Kenya, create your own record (e.g. India: `countryCode:"+91"`, a 10-digit regex) — otherwise mobile validation silently applies the wrong country's rule.
-- Bump `egov-user` to `egovio/egov-user:master-e22c7c5` (or later) and set `MOBILE_NUMBER_VALIDATION_WORKAROUND_ENABLED=false` to activate MDMS-based validation.
-- Double-check `novu-bridge`'s `MdmsServiceClient` and the PGR frontend `useMobileValidation` hook both resolve the same record (they look for `default:true`) once you enable WhatsApp/SMS notifications.
+- Only one record ships by default, pinned to a single calling code and national-number regex (`+254`, `^0?[17][0-9]{8}$`) — and it ships with **`default: false`**. If your tenant's numbering format differs, create your own record with the right `countryCode` and `mobileNumberRegex`.
+- **Set `default: true` on exactly one record.** The real consumers are `egov-user` (backend validation) and the PGR frontend `useMobileValidation` hook — the latter falls back silently (to the first active record, or a hardcoded `+91`/10-digit pattern) if nothing is flagged default, so an unconfigured tenant on a different numbering format risks quietly validating against the wrong pattern. (`novu-bridge` has a similar-looking MDMS lookup with no fallback, but it's only reachable from a pass-through test/debug endpoint, not the real WhatsApp delivery path — see the companion changelog §1.4 for detail. Real WhatsApp delivery relies on the complaint's own `service.citizen.countryCode`, not this master.)
+- **Bump `egov-user` too** — the old image has India's mobile-number rule hardcoded in Java; without an upgrade it never reads the `mobileNumberRegex` you just set above. Use `registry.preview.egov.theflywheel.in/egovio/egov-user:mobilevalidation-jdk8-4984479` (matches `local-setup/docker-compose.egov-digit.yaml`) or `...:1044-preview` (the Ansible default, `EGOV_USER_IMAGE` in `digit.env.j2`) — don't pick a tag yourself. Both also happen to include a tenant-aware encryption fix (Digit-Core#1044) and a `SafeHtmlValidator` regression fix that otherwise blocks citizen registration (CCRS#771). **Avoid the plain `egovio/egov-user:master-e22c7c5` Docker Hub tag** — it lacks all three and is only meant as a preview-registry-unreachable fallback.
 
 ### 3.3 novu-bridge behaviour changes (if you already run it)
 
@@ -51,16 +51,24 @@ This guide is for an operator with a live v2.11 tenant (data, users, complaints 
 
 > **Action required:** default-data-handler seeding is create-only — an already-live tenant will not automatically pick up the new `CMS_SCREENING_OFFICER` role/role-actions or the expanded `DataSecurity.SecurityPolicy` PII-visibility grants. Re-run the relevant seed step manually, or apply the equivalent MDMS records by hand, and review the new PII-visibility defaults before applying them to a tenant with its own custom security policy.
 
+### 3.6 Dashboard analytics now fail-closed on missing HRMS department
+
+> **Check your HRMS data:** dashboard/analytics rows are now scoped by jurisdiction (`boundary_path` prefix) and by the viewing employee's department, both resolved from HRMS — and the resolver fails closed. **Any HRMS employee with no department set will see structurally empty dashboards after upgrade**, even if they previously saw data. Audit department assignments for employees who use the dashboard before or immediately after upgrading (`dss.DashboardConfig.departmentScoping` can disable the department axis tenant-wide if needed).
+
 ## 4. New mandatory infrastructure (always-on after upgrade)
 
-These are not feature flags — every v2.12-beta deployment gets them, whether or not you use the features they support:
+These have no off-switch — every v2.12-beta deployment gets them, whether or not you use the features they support:
 
 - **OpenTelemetry agent** — every Java service now mounts `./otel/opentelemetry-javaagent.jar` and sets `JAVA_TOOL_OPTIONS=-javaagent:...`. Run `local-setup/otel/download-agent.sh` (pinned version 2.11.0) **before** `docker compose up`, or every Java container fails to start on a missing mount source.
 - **Full observability stack** — otel-collector, Tempo (tracing), Promtail+Loki (logs), Grafana+Prometheus (dashboards/metrics) start unconditionally. Budget the extra RAM/CPU/disk, and be aware of the new loopback ports (Loki 13100, Prometheus 19090, Tempo 13200, OTel-collector 14317/14318/13133, OpenBao 18200).
+- **Client-side dashboard render-lag instrumentation** — ships two new **public-facing** Kong ingest routes, `/otel/v1/metrics` and `/otel/v1/logs`, so the browser can report metrics directly. Set `dashboard_metrics_enabled: false` (ansible) / `DASHBOARD_METRICS_ENABLED=false` (globalConfigs) to turn it off if you don't want the extra public routes. See `docs/observability/dashboard-metrics.md` and `docs/observability/dashboard-metrics-server.md` for what it measures and how to read it.
 - **OpenBao** — see the backup note in §2. Initializes and auto-unseals on every deploy run.
 - **audit-service, db-migrations, hrms-prereq-gate, user-seed** — new always-on compose services with no profile gate.
 - **egov-enc-service dependency** — pgr-services now calls this service for PII encryption on every request path that touches it; it must be deployed and reachable or those calls fail.
-- **PGR escalation scheduler and dashboard MV refresh** — both default ON (`pgr.escalation.enabled`, `pgr.dashboard.refresh.enabled`). The escalation scheduler needs the `pgr-escalation-events` Kafka topic to exist.
+
+Two related items are **not** in the same category — they are ordinary Spring Boot flags, default-enabled rather than unconditional, and can be turned off:
+
+- **PGR escalation scheduler and dashboard MV refresh** — both default enabled (`pgr.escalation.enabled=true`, `pgr.dashboard.refresh.enabled=true`) but genuinely toggleable; setting either to `false` disables that scheduler. The escalation scheduler needs the `pgr-escalation-events` Kafka topic to exist while enabled.
 
 ## 5. Required database migrations
 
@@ -89,7 +97,8 @@ None of these are required to upgrade — enable only what you need:
 
 | Feature | Flag(s) | Notes |
 |---|---|---|
-| Config-driven PGR notifications (SMS/WhatsApp/Email) | `pgr.notification.config.driven=true` + `local-setup/db/notif-mdms-seed/seed.sh` + Twilio creds | See §3.3 for channel defaults to review first |
+| Config-driven PGR notifications (SMS/WhatsApp/Email) | `pgr.notification.config.driven=true` + your own approved WhatsApp Content templates persisted into `RAINMAKER-PGR.NotificationProviderTemplate` (via Configurator's **Sync WhatsApp templates** UI or `local-setup/scripts/persist-provider-templates.py`) | Do **not** rely on `local-setup/db/notif-mdms-seed/seed.sh` — it seeds `TemplateBinding`/`ProviderDetail`, which the config-driven WhatsApp path no longer reads. The seeded reference Content SIDs are Twilio-account- and Meta-approval-bound; you must author and get your own approved on your own Twilio account. See §3.3 for channel defaults to review first |
+| Supervisor dashboard | Seed `dss.DashboardConfig` (+ `dss.KpiDefinition` / `dss.DashboardPack`), setting `allowedRoles` to gate access | MV refresh is already default-enabled (§4); this only controls route/card visibility |
 | PGR Visibility V1 (My/All inbox tabs, reportee-scoped inbox) | `pgr.visibility.enabled=true` / `PGR_VISIBILITY_ENABLED` + `RAINMAKER-PGR.InboxVisibilityConfig` record | Needs the new `eg_pgr_hrms_projection` table (migration #8) and HRMS Kafka topics |
 | Keycloak SSO | `enable_keycloak` + `auth_provider: keycloak` | Two-step cutover by design — enabling the service does not switch auth until `auth_provider` is flipped |
 | digit-ui-v2 citizen SPA | `enable_digit_ui_v2` | Serves alongside the existing citizen UI at `/citizen/` |
@@ -115,9 +124,9 @@ None of these are required to upgrade — enable only what you need:
 - [ ] Complaint create/assign/resolve/escalate flow works end-to-end for at least one complaint type per (migrated) hierarchy branch.
 - [ ] Employee inbox loads and paginates; if Visibility V1 is enabled, the My/All tabs return the expected scoped results.
 - [ ] Mobile-number entry accepts your tenant's real number format on both citizen and employee create-complaint forms.
-- [ ] Dashboard loads without errors and KPI tiles show non-null values (confirms the new materialized views populated correctly).
-- [ ] If notifications are enabled: `drive-test-complaint.py` (local-setup/scripts) completes and a real SMS/WhatsApp message is received.
-- [ ] Grafana/Prometheus/Loki/Tempo are reachable on their new ports and receiving data from at least one Java service.
+- [ ] Dashboard loads without errors and KPI tiles show non-null values (confirms the new materialized views populated correctly). If tiles are unexpectedly empty for a given employee, check their HRMS department is set (§1.3 of the companion changelog — the new scoping fails closed).
+- [ ] If notifications are enabled: `drive-test-complaint.py` (local-setup/scripts) completes and a real SMS/WhatsApp message is received using your **own** approved Content templates, not the seeded reference SIDs.
+- [ ] Grafana/Prometheus/Loki/Tempo are reachable on their new ports and receiving data from at least one Java service; if dashboard render-lag metrics are enabled, see `docs/observability/dashboard-metrics.md` / `dashboard-metrics-server.md` for how to read them.
 - [ ] The backed-up OpenBao `init.json` matches what is currently on disk at `/opt/digit/.openbao/init.json`.
 
 ---

@@ -25,16 +25,15 @@ All MDMS-v2 master data lives under `utilities/default-data-handler` (auto-seede
 - **`RAINMAKER-PGR.MapConfig`** (NEW schema, no default data) — per-tenant map tiles/center/zoom/geocode-bbox config. Opt-in; UI falls back to globalConfigs/built-in defaults if no record exists.
 - **`RAINMAKER-PGR.InboxVisibilityConfig`** (NEW schema, no default data) — feature flag + config for the employee inbox "My/All" tabs (Visibility V1). Missing record = legacy inbox behaviour; safe by default.
 
-### 1.2 Notifications (RAINMAKER-PGR + novu-bridge)
+### 1.2 Notifications (RAINMAKER-PGR)
 
-Two parallel, independent notification-config systems were introduced:
+- **`RAINMAKER-PGR.NotificationRouting` / `.NotificationTemplate` / `.NotificationProviderTemplate`** (all NEW, auto-seeded via default-data-handler) — MDMS-driven replacement for the old hardcoded `PGR_<ROLE>_<ACTION>_<STATUS>_SMS_MESSAGE` localization-key messaging. Routing declares which audience is notified on which workflow transition over which channel (SMS/WhatsApp/Email); templates carry the `{placeholder}` message body rendered by pgr-services itself (`NotificationService.resolveProviderTemplate(...)`); provider-templates map a rendered WhatsApp message to a Twilio Content SID via `MDMSUtils.getNotificationProviderTemplates(tenantId)`. Old localization keys are left in place, so nothing breaks — but the new routing table takes precedence once `pgr.notification.config.driven=true` is set (see §2.3).
 
-- **`RAINMAKER-PGR.NotificationRouting` / `.NotificationTemplate` / `.NotificationProviderTemplate`** (all NEW, auto-seeded via default-data-handler) — MDMS-driven replacement for the old hardcoded `PGR_<ROLE>_<ACTION>_<STATUS>_SMS_MESSAGE` localization-key messaging. Routing declares which audience is notified on which workflow transition over which channel (SMS/WhatsApp/Email); templates carry the `{placeholder}` message body; provider-templates map a rendered message to an external provider template (e.g. a Twilio Content SID). Old localization keys are left in place, so nothing breaks — but the new routing table takes precedence once `pgr.notification.config.driven=true` is set (see §2.3).
-- **`TemplateBinding` / `ProviderDetail`** (NEW MDMS-v2 schemas, under `local-setup/db/notif-mdms-seed/`) — used by the Java `novu-bridge` service. Actual data lives in `digit-config-service`'s own Postgres table, not MDMS-v2 data; seeded via `local-setup/db/notif-mdms-seed/seed.sh`.
+> **PRODUCTION FOOTGUN — Content SIDs are Twilio-account- and Meta-approval-bound.** The seeded `NotificationProviderTemplate` Content SIDs (`HX…`) belong to the reference/demo Twilio account and are dead on any other account. Any adopting tenant must **author and get Meta approval for their own WhatsApp Content templates** on their own Twilio account, then persist **their** SIDs into `RAINMAKER-PGR.NotificationProviderTemplate` — via the Configurator's **Sync WhatsApp templates** UI (`configurator/src/resources/notification-providers/SyncTwilioTemplatesDialog.tsx`) or `local-setup/scripts/persist-provider-templates.py`. This is the single most common reason WhatsApp delivery silently no-ops after an upgrade — it deserves more attention than "supply Twilio creds."
 
-> **MANUAL STEP —** existing tenants adopting WhatsApp/Twilio notifications must run `seed.sh` once per tenant with `TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM` supplied. It is idempotent/upsert-capable. Tenant-scoping matters: seed at the exact tenant `pgr-services` puts on the Kafka event, or notifications fail silently with `CONFIG_NOT_RESOLVED`.
+- **`TemplateBinding` / `ProviderDetail`** (MDMS-v2 schemas under `local-setup/db/notif-mdms-seed/`, with a `seed.sh` seeding script) — **legacy/vestigial as of v2.12-beta.** `novu-bridge` no longer resolves notifications through `digit-config-service`/these masters (that `ConfigServiceClient`/`triggerWithProviderConfig` resolution path was removed alongside #1059); the only remaining reference is a code comment in `DispatchPipelineService.testTrigger()`: *"contentSid/contentVariables are accepted for backward-compatible request shape but no longer used (PGR owns rendering)."* Do not use `seed.sh` to configure production WhatsApp delivery — it seeds masters the delivery path doesn't read. See the callout above for the actual mechanism.
 
-- **`dss.DashboardConfig` / `dss.DashboardPack` / `dss.KpiDefinition`** (NEW schemas, same `notif-mdms-seed` area) — back the new dashboard/KPI-metrics feature. No default data shipped; populated via the dashboard feature's own tooling.
+- **`dss.DashboardConfig` / `dss.DashboardPack` / `dss.KpiDefinition`** (NEW schemas, same `notif-mdms-seed` area — unrelated to notifications, just co-located) — back the new dashboard/KPI-metrics feature. See §1.3 for the access-control/scoping behaviour these gate, and §2.5 for the v2 analytics API surface they configure.
 
 ### 1.3 Access Control / RBAC
 
@@ -43,15 +42,20 @@ Two parallel, independent notification-config systems were introduced:
 
 > **ACTION NEEDED —** default-data-handler loads are typically create-only; an already-live tenant will not automatically receive the new role/roleactions/security-policy rows — re-seed or apply manually.
 
+- **Dashboard analytics are now jurisdiction- and department-scoped, fail-closed** (`PrincipalScopeResolver`, live behind the `dss.*` schemas in §1.2). Analytics rows are filtered by `boundary_path` prefix plus the employee's department, both resolved from HRMS. `dss.DashboardConfig.departmentScoping` can disable the department axis tenant-wide; certain roles are exempted via a `TENANT_WIDE_ROLES` list.
+
+> **BREAKING —** because the resolver fails closed (unresolvable department → a deny-all sentinel, not "show everything"), **any HRMS employee record with no department set will see structurally empty dashboards** after upgrade, even if that employee previously saw dashboard data. Audit HRMS department assignments before/soon after upgrading if the dashboard is in active use.
+
 ### 1.4 Mobile & Postal Validation
 
 > **BREAKING —** `common-masters.UserValidation` is removed, replaced by `common-masters.MobileNumberValidation` — a different shape, not just a rename:
 
 - Old: `{ fieldType, rules: {pattern, minLength, maxLength, allowedStartingCharacters, errorMessage}, attributes: {prefix} }`, unique on `fieldType`.
 - New: `{ countryCode, mobileNumberRegex, default, emailRegex?, nameRegex? }`, unique on `countryCode` (per the MDMS-v2 schema definition); each record also carries the generic MDMS-v2 `isActive` flag. The Configurator admin UI's edit form (`configurator/src/admin/schemaDescriptors/mobile-validation.ts`) only surfaces `countryCode`, `mobileNumberRegex`, `default`, and `isActive` — `emailRegex`/`nameRegex` are schema-valid but must be set via the raw MDMS API or a seed script if you need them.
-- Tied to an `egov-user` image bump (`egovio/egov-user:master-e22c7c5`) that now reads country-specific mobile regex from MDMS instead of a hardcoded India `+91`/10-digit pattern — requires `MOBILE_NUMBER_VALIDATION_WORKAROUND_ENABLED=false` to activate.
-- The shipped default record is for **Kenya** (`+254`, `^0?[17][0-9]{8}$`) — not India. Any other-locale tenant must create its own `MobileNumberValidation` record post-upgrade, or mobile validation applies the wrong country's pattern.
-- Consumers: `egov-user` (backend validation), `novu-bridge`'s `MdmsServiceClient` (SMS/WhatsApp country-code prefixing — looks for the `default:true` record), and the PGR frontend `useMobileValidation` hook (hardcoded `+91` fallback only if MDMS *and* globalConfigs are both absent).
+- **Requires an `egov-user` image bump**: the old image had India's mobile-number rule hardcoded in Java; it needs to be on a build that reads `mobileNumberRegex` from this MDMS master instead, or the new per-tenant regex is simply ignored. This repo's own deploy configs pin `registry.preview.egov.theflywheel.in/egovio/egov-user:mobilevalidation-jdk8-4984479` in Compose (`local-setup/docker-compose.egov-digit.yaml`) and default to `...:1044-preview` in Ansible (`local-setup/ansible/templates/digit.env.j2`, `EGOV_USER_IMAGE`) — use one of those two rather than picking a tag yourself. Both also happen to carry two unrelated fixes worth having anyway: a tenant-aware encryption cherry-pick (Digit-Core#1044) and a fix for a `SafeHtmlValidator` regression that blocks citizen registration (CCRS#771). **Avoid the plain `egovio/egov-user:master-e22c7c5` Docker Hub tag** (only referenced as a preview-registry-unreachable fallback in `digit.env.j2`) — it lacks all three.
+- Only one record ships by default, pinned to a single calling code and national-number regex (`+254`, `^0?[17][0-9]{8}$`) — and, notably, it ships with **`default: false`**. No record has `default: true` out of the box, for any tenant.
+- Real consumers: `egov-user` (backend validation) and the PGR frontend `useMobileValidation` hook, which genuinely falls back silently (to the first active record, or a hardcoded `+91`/10-digit pattern if MDMS and globalConfigs are both absent) — so an unconfigured tenant on a different numbering format risks silently validating against the wrong pattern rather than failing loudly.
+- `novu-bridge` is **not** a real-path consumer of this master despite an MDMS-lookup method (`MdmsServiceClient`, filtering for `default: true` with an `.orElseThrow(MDMS_MOBILE_VALIDATION_NOT_FOUND)` and no fallback to the first record) existing in its codebase — that lookup is only reachable from `DispatchPipelineService.testTrigger()` (a pass-through test/debug endpoint, called with `tenantId=null`), not from the real complaint-notification `dispatch()` path. On real WhatsApp delivery, `novu-bridge` never queries this master — it just prepends `whatsapp:+` to whatever number pgr-services already produced from the complaint's `service.citizen.countryCode` (see `NotificationService.buildMobileWithCountryCode()`). The `MDMS_MOBILE_VALIDATION_NOT_FOUND` failure mode is real but confined to that test endpoint.
 - Postal-code validation follows the equivalent pattern via `core_postal_configs.postalCodePattern` in globalConfigs (see §3.1) — not an MDMS master.
 
 ### 1.5 Workflow
@@ -66,7 +70,7 @@ Two parallel, independent notification-config systems were introduced:
 
 ### 1.7 Reference data snapshots (not live seed paths)
 
-- `ansible/nairobi-mdms/` (NEW directory) — a real tenant (`ke.nairobi`) MDMS export used as a worked example/migration runbook (`v2.11-user-service-upgrade.md`), not a second live-seeding mechanism. Its `ServiceDefs.json` is still in the *old* pre-hierarchy shape — following it verbatim still requires the ComplaintHierarchy migration above.
+- `ansible/nairobi-mdms/` (NEW directory) — a real tenant's MDMS export used as a worked example/migration runbook (`v2.11-user-service-upgrade.md`), not a second live-seeding mechanism. Its `ServiceDefs.json` is still in the *old* pre-hierarchy shape — following it verbatim still requires the ComplaintHierarchy migration above.
 - `configurator/src/resources/mdms-schemas/` (NEW) — admin-console UI for browsing MDMS-v2 schemas; a tooling addition, not new master data.
 
 ---
@@ -124,8 +128,9 @@ The pgr-services migrations depend on each other's shape (several `DROP MATERIAL
 
 ### 2.5 New REST endpoints (pgr-services)
 
-- `POST /request/inbox/_search` and `POST /request/inbox/_count` — visibility-scoped inbox search, gated by `pgr.visibility.enabled`.
+- `POST /v2/request/inbox/_search` and `POST /v2/request/inbox/_count` — visibility-scoped inbox search, gated by `pgr.visibility.enabled`. (`RequestsApiController` is class-annotated `@RequestMapping("/v2")`; both handler methods only add the `/request/inbox/...` suffix.)
 - `GET /v2/dashboard` — restored/new dashboard endpoint backed by the new materialized views.
+- `AnalyticsController` (class-annotated `@RequestMapping("/v2/analytics")`) exposes the v2 KPI API surface, all token-required and subject to the jurisdiction/department scoping in §1.3: `POST /v2/analytics/_query` (single + batch), `POST /v2/analytics/_schema`, `POST /v2/analytics/packs` (best-match `DashboardPack`), `POST /v2/analytics/catalog/_search`. Operators wiring Kong routes/whitelists need all of these, not just `/v2/dashboard`.
 
 ---
 
@@ -136,10 +141,11 @@ The pgr-services migrations depend on each other's shape (several `DROP MATERIAL
 ### 3.1 Ansible host_vars & globalConfigs (new files)
 
 - **Tenant taxonomy** (was a single flat tenant before): `state_root`, `state_tenant_id`, `boot_tenant`, `tenant_id`, `ui_state_tenant_id`.
-- **Country-specific validation** (no longer hardcoded to India): `core_mobile_configs` (countryCode + regex), `core_postal_configs` (postalCodePattern) — surfaced to the frontend as globalConfigs keys `CORE_MOBILE_CONFIGS` / `CORE_POSTAL_CONFIGS`. Absent → legacy Kenya 5-digit postal default.
+- **Country-specific validation** (no longer hardcoded to a single fixed country/format): `core_mobile_configs` (countryCode + regex), `core_postal_configs` (postalCodePattern) — surfaced to the frontend as globalConfigs keys `CORE_MOBILE_CONFIGS` / `CORE_POSTAL_CONFIGS`. Absent → legacy 5-digit postal default.
 - `pgr_pincode_allowlist` — optional postal-code serviceability allowlist; unset accepts any code (must not be set to `[]`).
 - `login_tenant_allowlist`, `employee_module_denylist` — new access-control lists (globalConfigs `LOGIN_TENANT_ALLOWLIST` / `EMPLOYEE_MODULE_DENYLIST`).
 - `pgr_boundary_highest_level` / `pgr_boundary_lowest_level` / `boundary_type` / `hierarchy_type` — country-specific boundary taxonomy.
+- `dashboard_metrics_enabled` (ansible var, default `true`) → globalConfigs `DASHBOARD_METRICS_ENABLED` — off-switch for the client-side dashboard render-lag instrumentation (#1268/#1110). See §3.3 for the Kong ingest routes this feature depends on.
 
 ### 3.2 Opt-in feature flags (default off)
 
@@ -157,6 +163,8 @@ The pgr-services migrations depend on each other's shape (several `DROP MATERIAL
 ### 3.3 Docker Compose — new services by profile
 
 > **ALWAYS-ON, no profile gate —** `otel-collector`, `tempo`, `grafana`, `prometheus`, `loki`, `promtail` (full observability stack), plus `openbao`, `audit-service`, `db-migrations`, `hrms-prereq-gate`, `user-seed`, `default-data-handler`. Every deploy on the new compose base gets these unconditionally, consuming extra RAM/CPU/disk and ports (Loki 13100, Prometheus 19090, Tempo 13200, OTel-collector 14317/14318/13133, OpenBao 18200) regardless of whether any opt-in feature is used.
+>
+> Also new (unless `dashboard_metrics_enabled` is set to `false`): two **public-facing** Kong ingest routes, `/otel/v1/metrics` and `/otel/v1/logs` (`local-setup/kong/kong.yml`), whitelisted as auth-optional so the browser can ship client-side render-lag metrics directly to `otel-collector`. These are in scope for the `gateway-whitelist-parity.yml` CI gate (§3.5).
 
 | Profile | Services |
 |---|---|

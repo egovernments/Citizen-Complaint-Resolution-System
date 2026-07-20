@@ -10,7 +10,6 @@
 **Complaint Hierarchy (N-Level)**
 - Configurable N-level complaint classification hierarchy, replacing the prior fixed 2-level ServiceDefs model. Complaints can now be organized across any number of sub-categories and departments via the new `ComplaintHierarchy` MDMS schema.
 - Complaint details pages now display the full hierarchy path (category → sub-category → type).
-- One-click migration tool in the Configurator for upgrading existing 2-level complaint trees to N-level without manual data changes.
 
 **Dashboard & Analytics**
 - New supervisor dashboard with live analytics: KPI cards, drag-and-drop widget inventory, and configurable layouts.
@@ -27,7 +26,7 @@
 **Configurator**
 - Phase 2 supports dual path: one-click OSM boundary fetch alongside the existing Excel upload.
 - Boundary maps added to the Management view.
-- N-level hierarchy management UI; `COMPLAINT_HIERARCHY` localization seeding introduced.
+- N-level complaint hierarchy management UI; `COMPLAINT_HIERARCHY` localization seeding introduced.
 - "Use existing tenant" path added on Phase 1; polygon picker moved to the verify step.
 - Server-side pagination implemented for MDMS list views.
 - Self-hosted Overpass server for boundary fetching; configurable boundary search limit.
@@ -49,7 +48,7 @@
 - `common-masters.MobileNumberValidation` is now the single authoritative source across all surfaces (frontend, Configurator, MCP, employee profile, complaint forms).
 - Mobile validation lengths derived entirely from the configured regex.
 - Real-time mobile validation added to the create-complaint page with i18n error messages.
-- Country-specific defaults supported (Kenya +254, Ethiopia, India).
+- Country-specific defaults supported across multiple regions.
 
 **Keycloak / Authentication**
 - Full Keycloak integration added behind `enable_keycloak` flag: OAuth2 Authorization Code flow with PKCE, KC-aware logout, and per-surface auth provider selection.
@@ -78,7 +77,6 @@
 - Full observability stack added: JVM metrics, logs, and distributed traces via OpenTelemetry + Promtail. Grafana root URL exposed per tenant.
 
 **Deployment / Infrastructure**
-- Nightly-build pipeline introduced for all high-churn container images (Configurator, digit-ui-v2, MCP, digit-ui-esbuild).
 - macOS deployment path added with Darwin-specific OpenBao re-unseal.
 - `digit-configurator`, `digit-mcp`, and `digit-ui-esbuild` vendored into the CCRS monorepo.
 - Per-service Flyway init containers close the DB-migration parity gap between Compose and K8s, extended to every schema-owning service (#1142, #1273); audit-service kept on k8s and added to compose (#1157).
@@ -163,7 +161,7 @@
 - Phase 2 boundaries written at the city tenant, not the state root.
 - Boundary multi-hierarchy fetch retrieves all hierarchy types, not just ADMIN.
 - Employee mobile rule now sourced from MDMS, dropping the erroneous 10-digit HRMS clamp.
-- Kenyan mobile numbers with optional trunk-zero accepted in the fallback validator.
+- Mobile numbers with an optional trunk-zero prefix accepted in the fallback validator.
 - Dept/designation localizations written to `rainmaker-common` instead of incorrect module.
 - Phase-1 branding card overflow fixed; Phase-4 default jurisdiction hierarchy defaults to ADMIN.
 - Re-login prompt on an expired session during boundary create now clears correctly (#984).
@@ -177,8 +175,8 @@
 - Toast auto-dismiss and close button unified into one env-configurable timer (#993).
 - Ward names localized on the citizen OSM map (#1002).
 - Uploaded profile photo now shows in the employee topbar and citizen desktop sidebar (#1006).
-- Hardcoded Nairobi ward sidecar removed from the complaint map.
-- Deployment-agnostic fixes surfaced by running the full suite against a non-Kenya deployment: tenant de-hardcoding, onboarding logoId, boundary-leaf handling, citizen pages, data-provider (#1143).
+- Hardcoded city-specific ward sidecar data removed from the complaint map.
+- Deployment-agnostic fixes surfaced by running the full suite against a different-locale deployment: tenant de-hardcoding, onboarding logoId, boundary-leaf handling, citizen pages, data-provider (#1143).
 
 **Dashboard**
 - Bar chart x-axis labels hidden when cramped; yellow in-progress SLA pill hidden.
@@ -201,7 +199,7 @@
 **Deploy / Infrastructure**
 - `token-exchange-svc` port changed to 18300 to avoid collision with OpenBao.
 - HRMS post-bootstrap restart removed to eliminate HRMS bootstrap race condition.
-- India pincode allowlist no longer seeded on new (non-India) tenants.
+- A hardcoded regional pincode allowlist is no longer seeded onto new tenants outside that region.
 - Dataloader correctly creates city-level PGR workflow when only the parent tenant exists.
 - `INTERNAL_USER` seeded on state root so HRMS survives non-pg tenants.
 - Tilt onboarding path repaired; `digit-ui` build no longer floats to a stale image (#1288).
@@ -223,7 +221,7 @@
 ### Removed
 
 - **`RAINMAKER-PGR.ServiceDefs`** (MDMS master) — replaced by the new `ComplaintHierarchyDefinition` + `ComplaintHierarchy` masters. See [migration-guide-v2.11-to-v2.12-beta.md](migration-guide-v2.11-to-v2.12-beta.md) §3.1 for the required manual migration for existing tenants.
-- **`common-masters.UserValidation`** (MDMS master) — replaced by `common-masters.MobileNumberValidation`, a differently-shaped record keyed by `countryCode` rather than `fieldType`. See [migration-guide-v2.11-to-v2.12-beta.md](migration-guide-v2.11-to-v2.12-beta.md) §3.2 — existing non-Kenya tenants must create their own record.
+- **`common-masters.UserValidation`** (MDMS master) — replaced by `common-masters.MobileNumberValidation`, a differently-shaped record keyed by `countryCode` rather than `fieldType`. The shipped default record ships with `default: false`, so **every** tenant must set `default: true` on one record before enabling notifications. See [migration-guide-v2.11-to-v2.12-beta.md](migration-guide-v2.11-to-v2.12-beta.md) §3.2.
 - Static `mobileNumberLength` field removed — validation length is now derived entirely from the configured `mobileNumberRegex`.
 - `novu-bridge`: removed properties `novu.bridge.max.retries` and the `novu.bridge.config.host`/`.resolve.path`/`.search.path` trio (routing moved to MDMS-driven config in pgr-services); removed classes `UserServiceClient`, `ResolvedProviderResponse`, `ResolvedTemplateResponse`.
 - Dead `/egov-rainmaker` nginx passthrough and its feature flag removed (#958).
