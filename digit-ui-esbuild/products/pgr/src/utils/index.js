@@ -217,6 +217,15 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, extOpts) 
     }
   }
 
+  // Attachments (parity with the citizen create flow + the action-modal
+  // uploader): SelectedDocuments is already an array of
+  // {documentType, fileStoreId, ...} shaped by ActionUploadComponent, so
+  // forward it verbatim as workflow.verificationDocuments. Additive — absent
+  // when no file was attached, so existing behaviour is unchanged.
+  if (Array.isArray(formData?.SelectedDocuments) && formData.SelectedDocuments.length > 0) {
+    complaint.workflow.verificationDocuments = formData.SelectedDocuments;
+  }
+
   // Additive: attach a FLAT top-level service.extendedAttributes when the
   // employee's tenant mapped to a category (extOpts.caseRelatedTo). Backward
   // compatible — existing 3-arg callers and non-mapped tenants are unchanged.

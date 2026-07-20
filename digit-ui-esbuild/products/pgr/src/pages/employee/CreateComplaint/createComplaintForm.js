@@ -362,11 +362,28 @@ const CreateComplaintForm = ({
       };
     });
 
-    // Append the per-category dynamic fields to the "Additional details" section
-    // (the one holding the description). No-op when extFieldConfigs is empty.
+    // Attachment uploader — reuses the SAME component the assign/action modals
+    // use (PGRActionUploadComponent → PgrFileUpload: drag-drop, previews,
+    // 5MB/file), emitting already-shaped {documentType, fileStoreId} docs under
+    // `SelectedDocuments`. tenantId is the create tenant so files land on the
+    // right (tenant-scoped) filestore. Optional — never gates submit.
+    const uploadFieldConfig = {
+      inline: false,
+      type: "component",
+      component: "PGRActionUploadComponent",
+      key: "SelectedDocuments",
+      label: "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
+      isMandatory: false,
+      populators: { name: "SelectedDocuments", tenantId },
+    };
+
+    // Append the per-category dynamic fields (when present) AND the attachment
+    // uploader (always) to the "Additional details" section holding the
+    // description. extFieldConfigs is empty for non-mapped tenants — the
+    // uploader still shows.
     const withExt = (updatedForm || []).map((section) =>
-      section?.head === "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS" && extFieldConfigs.length
-        ? { ...section, body: [...section.body, ...extFieldConfigs] }
+      section?.head === "CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS"
+        ? { ...section, body: [...section.body, ...extFieldConfigs, uploadFieldConfig] }
         : section
     );
 
@@ -388,7 +405,7 @@ const CreateComplaintForm = ({
     }));
 
     return { ...baseConfig, form: withOptional };
-  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, hasHierarchy, departmentGate, extFieldConfigs]);
+  }, [createComplaintConfig, serviceDefs, t, disabledFields, subType, loggedInUserDepartments, hasHierarchy, departmentGate, extFieldConfigs, tenantId]);
 
 
 
