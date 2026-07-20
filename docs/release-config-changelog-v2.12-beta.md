@@ -48,7 +48,7 @@ Two parallel, independent notification-config systems were introduced:
 > **BREAKING —** `common-masters.UserValidation` is removed, replaced by `common-masters.MobileNumberValidation` — a different shape, not just a rename:
 
 - Old: `{ fieldType, rules: {pattern, minLength, maxLength, allowedStartingCharacters, errorMessage}, attributes: {prefix} }`, unique on `fieldType`.
-- New: `{ countryCode, mobileNumberRegex, default, emailRegex?, nameRegex? }`, unique on `countryCode`.
+- New: `{ countryCode, mobileNumberRegex, default, emailRegex?, nameRegex? }`, unique on `countryCode` (per the MDMS-v2 schema definition); each record also carries the generic MDMS-v2 `isActive` flag. The Configurator admin UI's edit form (`configurator/src/admin/schemaDescriptors/mobile-validation.ts`) only surfaces `countryCode`, `mobileNumberRegex`, `default`, and `isActive` — `emailRegex`/`nameRegex` are schema-valid but must be set via the raw MDMS API or a seed script if you need them.
 - Tied to an `egov-user` image bump (`egovio/egov-user:master-e22c7c5`) that now reads country-specific mobile regex from MDMS instead of a hardcoded India `+91`/10-digit pattern — requires `MOBILE_NUMBER_VALIDATION_WORKAROUND_ENABLED=false` to activate.
 - The shipped default record is for **Kenya** (`+254`, `^0?[17][0-9]{8}$`) — not India. Any other-locale tenant must create its own `MobileNumberValidation` record post-upgrade, or mobile validation applies the wrong country's pattern.
 - Consumers: `egov-user` (backend validation), `novu-bridge`'s `MdmsServiceClient` (SMS/WhatsApp country-code prefixing — looks for the `default:true` record), and the PGR frontend `useMobileValidation` hook (hardcoded `+91` fallback only if MDMS *and* globalConfigs are both absent).
@@ -62,7 +62,7 @@ Two parallel, independent notification-config systems were introduced:
 
 - New keys in `rainmaker-pgr` (en_IN + default): `CS_COMPLAINT_DETAILS_PIN_LOCATION`, `PGR_INBOX_TAB_MY`, `PGR_INBOX_TAB_ALL`.
 - New keys in `rainmaker-common` (en_IN + hi_IN): `MOBILE_VALIDATION_DIGITS`, `MOBILE_VALIDATION_AT_LEAST`, `MOBILE_VALIDATION_STARTING_WITH`, `MOBILE_VALIDATION_OR`.
-- No new locale packs (e.g. no `pt_PT`) were found in this repo's localization data as of this scope — locale-pack additions referenced elsewhere are tracked separately and not yet landed here.
+- **New `pt_PT` locale pack for the dashboard** — `digit-mcp/src/tools/dashboard-l10n-seed.ts` defines `DASHBOARD_L10N_MESSAGES_PT_PT` (hundreds of entries) and registers it in `DASHBOARD_L10N_PACKS` alongside `en_IN`. This is scoped to the dashboard's own MCP-driven seed pipeline, distinct from the `utilities/default-data-handler` / `rainmaker-*` localization modules covered above — no `pt_PT` pack exists in that separate MDMS-localization path as of this scope.
 
 ### 1.7 Reference data snapshots (not live seed paths)
 
@@ -204,8 +204,8 @@ Pre-existing at v2.11 — not new. Only 13 files changed (91 insertions / 30 del
 | Observability stack (OTel/Tempo/Loki/Prometheus/Grafana/Promtail) | Always-on | none |
 | OpenBao secrets backend | Always-on | none |
 | audit-service, db-migrations, hrms-prereq-gate, user-seed | Always-on | none |
-| PGR escalation scheduler | Always-on | `pgr.escalation.enabled` (default true) |
-| PGR dashboard MV refresh | Always-on | `pgr.dashboard.refresh.enabled` (default true) |
+| PGR escalation scheduler | Default enabled (flag-controlled) | `pgr.escalation.enabled` (default true) |
+| PGR dashboard MV refresh | Default enabled (flag-controlled) | `pgr.dashboard.refresh.enabled` (default true) |
 | egov-enc-service dependency | Always-on, mandatory | none — hard dependency |
 | Elasticsearch / indexer / inbox-v2 | Opt-in | `enable_search_stack` |
 | Real OTP stack | Opt-in | `enable_otp_services` |

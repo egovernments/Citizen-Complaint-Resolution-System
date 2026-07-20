@@ -31,7 +31,7 @@ This guide is for an operator with a live v2.11 tenant (data, users, complaints 
 
 > **Action required:** `common-masters.UserValidation` is gone. Create a `common-masters.MobileNumberValidation` record for your tenant's country before upgrading `egov-user`.
 
-- New shape: `{ countryCode, mobileNumberRegex, default, emailRegex?, nameRegex? }`, unique on `countryCode`.
+- New shape: `{ countryCode, mobileNumberRegex, default, emailRegex?, nameRegex? }`, unique on `countryCode`, plus the generic MDMS-v2 `isActive` flag. Note the Configurator admin UI's edit form only exposes `countryCode`, `mobileNumberRegex`, `default`, and `isActive` — set `emailRegex`/`nameRegex` via the raw MDMS API if you need them.
 - The only record shipped by default is for **Kenya** (`+254`, `^0?[17][0-9]{8}$`). If your tenant is not Kenya, create your own record (e.g. India: `countryCode:"+91"`, a 10-digit regex) — otherwise mobile validation silently applies the wrong country's rule.
 - Bump `egov-user` to `egovio/egov-user:master-e22c7c5` (or later) and set `MOBILE_NUMBER_VALIDATION_WORKAROUND_ENABLED=false` to activate MDMS-based validation.
 - Double-check `novu-bridge`'s `MdmsServiceClient` and the PGR frontend `useMobileValidation` hook both resolve the same record (they look for `default:true`) once you enable WhatsApp/SMS notifications.
@@ -89,7 +89,7 @@ None of these are required to upgrade — enable only what you need:
 
 | Feature | Flag(s) | Notes |
 |---|---|---|
-| Config-driven PGR notifications (SMS/WhatsApp/Email) | `pgr.notification.config.driven=true` + `notif-mdms-seed/seed.sh` + Twilio creds | See §3.3 for channel defaults to review first |
+| Config-driven PGR notifications (SMS/WhatsApp/Email) | `pgr.notification.config.driven=true` + `local-setup/db/notif-mdms-seed/seed.sh` + Twilio creds | See §3.3 for channel defaults to review first |
 | PGR Visibility V1 (My/All inbox tabs, reportee-scoped inbox) | `pgr.visibility.enabled=true` / `PGR_VISIBILITY_ENABLED` + `RAINMAKER-PGR.InboxVisibilityConfig` record | Needs the new `eg_pgr_hrms_projection` table (migration #8) and HRMS Kafka topics |
 | Keycloak SSO | `enable_keycloak` + `auth_provider: keycloak` | Two-step cutover by design — enabling the service does not switch auth until `auth_provider` is flipped |
 | digit-ui-v2 citizen SPA | `enable_digit_ui_v2` | Serves alongside the existing citizen UI at `/citizen/` |
