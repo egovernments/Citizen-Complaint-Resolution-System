@@ -54,7 +54,7 @@ const OpenComplaintsByGeographyWidget = ({ layers, loading = false }) => {
   return (
     <div className="tw-flex tw-h-full tw-min-h-0 tw-flex-col">
       <header
-        className={`${buildWidgetHeaderClassName(VIZ_TYPE.MAP)} dashboard-map-header-bar ${SHARED_CHROME.dragHandle} tw-flex tw-shrink-0 tw-items-center tw-px-3 tw-pb-2 tw-pt-2 tw-pr-8`}
+        className={`${buildWidgetHeaderClassName(VIZ_TYPE.MAP)} dashboard-map-header-bar ${SHARED_CHROME.dragHandle} tw-flex tw-shrink-0 tw-items-center tw-px-3 tw-pb-2 tw-pt-4 tw-pr-8`}
       >
         <h2 className={SHARED_CHROME.dragHandleTitle}>
           {t("DASHBOARD_MAP_TITLE", "Complaint map")} · {cityLabel}

@@ -25,6 +25,10 @@ const transform = (data: Record<string, unknown>) => {
 };
 
 export function UserCreate() {
+  // Citizen mobile rule is deployment-specific — read it from the tenant's
+  // MDMS `MobileNumberValidation` master (with globalConfigs CORE_MOBILE_CONFIGS
+  // fallback), the same source EmployeeCreate/EmployeeEdit/ComplaintCreate use.
+  // No hardcoded per-country regex here.
   const { validator: mobileValidate, rules: mobileRules } = useMobileValidator();
   const translate = useTranslate();
   const loginUsernameHelp = translate('app.fields.mobile_login_username_help', {

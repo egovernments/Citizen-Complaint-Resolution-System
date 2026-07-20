@@ -3,7 +3,7 @@
 //
 // Strangler-fig replacement for the legacy ComplaintDetails.js. Same
 // data hooks (`useComplaintDetails`, `useWorkflowDetails`,
-// `useCustomMDMS` for closing-time) and same subcomponents
+// `useReopenWindow` for the reopen window) and same subcomponents
 // (TimeLine, ComplaintPhotos, ComplaintLocationMap). Only the visual
 // chrome — page header, summary cards, key-value rows, status pill —
 // is replaced with the v2 Card / typography / theme tokens used by

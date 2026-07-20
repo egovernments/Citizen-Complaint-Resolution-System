@@ -167,6 +167,10 @@ public class PGRConstants {
     public static final String MDMS_NOTIFICATION_TEMPLATE_MASTER = "NotificationTemplate";
     public static final String MDMS_NOTIFICATION_ROUTING_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationRouting";
     public static final String MDMS_NOTIFICATION_TEMPLATE_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationTemplate";
+    // Provider→template mapping (Twilio WhatsApp Content SIDs + ordered variables). Resolved for
+    // the WHATSAPP channel only; business-initiated WhatsApp must reference an approved template.
+    public static final String MDMS_NOTIFICATION_PROVIDER_TEMPLATE_MASTER = "NotificationProviderTemplate";
+    public static final String MDMS_NOTIFICATION_PROVIDER_TEMPLATE_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationProviderTemplate";
 
     // Channels — must match the MDMS schema enum.
     public static final String CHANNEL_SMS = "SMS";

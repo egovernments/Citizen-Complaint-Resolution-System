@@ -774,6 +774,12 @@
         "locale": "default"
     },
     {
+        "code": "CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE",
+        "message": "The window for reopening this complaint has closed",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
         "code": "CS_COMMON_ACCUMULATION_LITTER",
         "message": "Accumulation of Litter",
         "module": "rainmaker-pgr",

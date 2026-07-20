@@ -105,4 +105,27 @@ public class TemplateRendererTest {
         String out = renderer.render(TENANT, "CITIZEN", "ASSIGN", "PENDINGATLME", "SMS", "en_IN", v);
         assertTrue(out.contains("{emp_name}"));
     }
+
+    @Test
+    void emailBodyHtmlEscapesUserValuesButKeepsTemplateHtml() {
+        // The EMAIL body is delivered as raw HTML (Novu editorType=html,
+        // disableOutputSanitization=true), so user-controlled values must be escaped
+        // to prevent HTML/link injection, while the admin-authored template markup
+        // (here, the <b> wrapper) is preserved verbatim.
+        seed(tmpl("CITIZEN", "ASSIGN", "PENDINGATLME", "EMAIL", "en_IN", "Hello <b>{citizen_name}</b>"));
+        Map<String, String> v = new HashMap<>();
+        v.put("citizen_name", "Jane<a href=\"http://evil.example/phish\">Doe</a>");
+        String out = renderer.render(TENANT, "CITIZEN", "ASSIGN", "PENDINGATLME", "EMAIL", "en_IN", v);
+        assertEquals("Hello <b>Jane&lt;a href=&quot;http://evil.example/phish&quot;&gt;Doe&lt;/a&gt;</b>", out);
+    }
+
+    @Test
+    void smsBodyDoesNotEscapeUserValues() {
+        // Non-EMAIL channels are plain text, so escaping would leak visible entities.
+        seed(tmpl("CITIZEN", "ASSIGN", "PENDINGATLME", "SMS", "en_IN", "Hello {citizen_name}"));
+        Map<String, String> v = new HashMap<>();
+        v.put("citizen_name", "Tom & Jerry");
+        String out = renderer.render(TENANT, "CITIZEN", "ASSIGN", "PENDINGATLME", "SMS", "en_IN", v);
+        assertEquals("Hello Tom & Jerry", out);
+    }
 }

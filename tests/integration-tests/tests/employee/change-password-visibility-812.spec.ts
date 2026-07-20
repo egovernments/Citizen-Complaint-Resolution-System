@@ -7,7 +7,7 @@ const PROFILE_URL = '/digit-ui/employee/user/profile';
 test.describe('employee profile — change password button visibility #812', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('Change Password button styling check', async ({ page }) => {
+  test('Change Password button styling check', { tag: ['@persona:employee'] }, async ({ page }) => {
     page.on('request', (req) => {
       console.log(`[REQUEST] ${req.method()} ${req.url()}`);
     });

@@ -8,29 +8,32 @@ import DashboardLayout from "./components/DashboardLayout";
 import KpiTile from "./components/KpiTile";
 import CardUpdatedStamp from "./components/CardUpdatedStamp";
 import ResizeGrip from "./components/ResizeGrip";
-import SubtleScroll from "./components/SubtleScroll";
 import GroupByLevelSelect, { levelDisplayLabel } from "./components/GroupByLevelSelect";
+import SubtleScroll from "./components/SubtleScroll";
+import TypeFilterIgnoredNote, { typeFilterIgnored } from "./components/TypeFilterIgnoredNote";
 import {
   VIZ_TYPE,
   SHARED_CHROME,
   buildWidgetHeaderClassName,
   getWidgetBodyClassName,
-  getWidgetScrollClassName,
 } from "./config/visualizationStyles";
 import DashboardLogin, {
   hasDashboardSession,
   clearDashboardSession,
 } from "./components/DashboardLogin";
+import { useDashboardConfig } from "../useDashboardConfig";
+import { resolveNumberFormatMask, setNumberFormatMask } from "./utils/numberFormat";
 
 import useDashboardT from "./i18n/useDashboardT";
 import { resolveTitle, resolveSubtitle } from "./i18n/textResolver";
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 import { useFilterOptions } from "./hooks/useFilterOptions";
 import { useCatalog } from "./hooks/useCatalog";
-import { useCatalogLayout } from "./hooks/useCatalogLayout";
+import { useCatalogLayout, getDroppingItemForKpi, defaultSizeForKpi } from "./hooks/useCatalogLayout";
 import { runKpiBatch, getTenantId } from "./services/analyticsService";
 import { fetchComplaintHierarchyLevels } from "./services/complaintHierarchyService";
-import { GRID_COLS, KPI_ROW_HEIGHT } from "./constants/layoutConfig";
+import * as dashboardMetrics from "./services/dashboardMetrics";
+import { GRID_COLS, KPI_ROW_HEIGHT, DROPPING_ITEM, DROPPING_ITEM_ID } from "./constants/layoutConfig";
 import {
   isCardKind,
   isSparklineKind,
@@ -43,6 +46,7 @@ import {
   effectiveHierLevel,
   buildGroupByOptions,
 } from "./utils/hierLevelGrouping";
+import { createPickerDragLifecycle } from "./utils/pickerDragLifecycle";
 
 // Map the catalog's viz.kind onto the reference dashboard's VIZ_TYPE so each widget
 // gets its type-specific header/body chrome (padding, insets, legend tuning) instead
@@ -120,6 +124,20 @@ const WidgetRemoveButton = ({ label, onClick }) => {
 const GridLayoutWithWidth = WidthProvider(GridLayout);
 const GRID_MARGIN = [16, 16];
 
+function pixelToGridPosition(containerWidth, clientX, clientY, gridRect, kpiId, kpis) {
+  const { w, h } = defaultSizeForKpi(kpiId, kpis);
+  // containerPadding={[0,0]} → only (cols − 1) gutters between columns.
+  const colWidth = (containerWidth - GRID_MARGIN[0] * (GRID_COLS - 1)) / GRID_COLS;
+  const left = clientX - gridRect.left;
+  const top = clientY - gridRect.top;
+  let x = Math.round(left / (colWidth + GRID_MARGIN[0]));
+  let y = Math.round(top / (KPI_ROW_HEIGHT + GRID_MARGIN[1]));
+  x = Math.max(0, Math.min(GRID_COLS - w, x));
+  y = Math.max(0, y);
+  return { x, y };
+}
+
+
 /* -------------------------------------------------------------------------- */
 /* Auth gate (mirrors AdminDashboard)                                          */
 /* -------------------------------------------------------------------------- */
@@ -128,6 +146,13 @@ const AdminDashboard = ({ embedded = false }) => {
   // Embedded (inside the DigitUI employee chrome) the host guarantees the
   // session and owns sign-out, so the standalone login gate is skipped.
   const [authed] = useState(() => embedded || hasDashboardSession());
+
+  // Per-LOCALE number-format mask (dss.DashboardConfig.numberFormat, #1213 /
+  // #1272). Primed synchronously so the first painted frame is already masked.
+  const { language } = useDashboardT();
+  const { config: dashboardConfig, loading: dashboardConfigLoading } =
+    useDashboardConfig();
+  setNumberFormatMask(resolveNumberFormatMask(dashboardConfig?.numberFormat, language));
 
   const handleLogin = useCallback(() => {
     window.location.reload();
@@ -139,6 +164,9 @@ const AdminDashboard = ({ embedded = false }) => {
   }, []);
 
   if (!authed) return <DashboardLogin onLogin={handleLogin} />;
+  if (dashboardConfigLoading) {
+    return <div className="kpi-tile kpi-tile--loading"><div className="kpi-tile__skeleton" /></div>;
+  }
   return <AdminDashboardInner embedded={embedded} onSignOut={embedded ? undefined : handleSignOut} />;
 };
 
@@ -159,6 +187,19 @@ const AdminDashboard = ({ embedded = false }) => {
  * store so it can never be mistaken for (or grow into) one.
  */
 const HIER_OVERRIDES_STORAGE_KEY = "ccrs.dashboard.hier-level-overrides.v1";
+
+/**
+ * Errored-widget count for dashboard.error_widgets.count (#1110): companion
+ * refs (__prior/__series/__pins) collapse to their base kpiId so a tile whose
+ * base AND companion queries failed still counts as ONE broken widget; a
+ * whole-batch failure (`__batch`) counts every laid-out tile.
+ */
+function countErrorWidgets(errors, tileCount) {
+  const keys = Object.keys(errors || {});
+  if (!keys.length) return 0;
+  if (keys.includes("__batch")) return tileCount;
+  return new Set(keys.map((k) => k.replace(/__(prior|series|pins)$/, ""))).size;
+}
 
 function readHierOverrides() {
   try {
@@ -297,6 +338,12 @@ function seriesToPoints(rows, viz, valueKey, columns) {
 /* -------------------------------------------------------------------------- */
 
 const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
+  // Render-lag instrumentation (#1110): begin the load SYNCHRONOUSLY at mount.
+  useState(() => {
+    dashboardMetrics.beginLoad();
+    return null;
+  });
+  useEffect(() => () => dashboardMetrics.flush("unmount"), []);
   const { t, language, i18nTick } = useDashboardT();
   const { filters, setFilter, clearFilters, applyFilterOptions } =
     useDashboardFilters();
@@ -347,14 +394,229 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
 
   const {
     layout,
+    gridSyncKey,
     onLayoutChange,
+    onDragStop,
+    onResizeStop,
     resetLayout,
     removeWidgetFromLayout,
     addKpiToLayout,
     visibleLayoutIds,
+    findDragHoverTarget,
   } = useCatalogLayout(kpis, pack?.layout);
 
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [draggingWidgetId, setDraggingWidgetId] = useState(null);
+  const draggingWidgetIdRef = useRef(null);
+  const gridWrapRef = useRef(null);
+  const externalDropLockRef = useRef(false);
+  const postDropWidgetRef = useRef(null);
+  const userDragWidgetRef = useRef(null);
+  const dragSwapTargetRef = useRef(null);
+  const dragOriginLayoutRef = useRef(null);
+  const lastHoverTargetRef = useRef(null);
+  const dragLifecycleRef = useRef(null);
+  if (!dragLifecycleRef.current) dragLifecycleRef.current = createPickerDragLifecycle();
+  const [isGridDragging, setIsGridDragging] = useState(false);
+
+  const handleDragWidgetStart = useCallback((widgetId) => {
+    dragLifecycleRef.current.start();
+    draggingWidgetIdRef.current = widgetId;
+    setDraggingWidgetId(widgetId);
+  }, []);
+
+  // RGL 1.3.4 has no cancel path for external drags (#1287 / #1311 review).
+  // If the picker drag engaged the grid then ended without a grid drop (ESC /
+  // drop outside), dispatch a synthetic drop so RGL clears activeDrag.
+  const handleDragWidgetEnd = useCallback(() => {
+    draggingWidgetIdRef.current = null;
+    const { needsSyntheticCleanup } = dragLifecycleRef.current.end();
+    if (needsSyntheticCleanup) {
+      const gridEl = gridWrapRef.current?.querySelector(".react-grid-layout");
+      if (gridEl && typeof DragEvent === "function") {
+        try {
+          gridEl.dispatchEvent(
+            new DragEvent("drop", { bubbles: true, cancelable: true })
+          );
+        } catch {
+          /* jsdom / older engines */
+        }
+      }
+    }
+    setDraggingWidgetId(null);
+  }, []);
+
+  const isExternalDrag = Boolean(draggingWidgetId);
+
+  const droppingItem = useMemo(() => {
+    if (draggingWidgetId && kpis[draggingWidgetId]) {
+      return getDroppingItemForKpi(draggingWidgetId, kpis);
+    }
+    return DROPPING_ITEM;
+  }, [draggingWidgetId, kpis]);
+
+  const completeExternalDrop = useCallback(
+    (widgetId, position, clientX, clientY) => {
+      if (externalDropLockRef.current) return;
+      const activeId = widgetId || draggingWidgetIdRef.current;
+      if (!activeId || !kpis[activeId]) return;
+      if (layout.some((entry) => entry.i === activeId)) return;
+
+      let dropPosition = position;
+      if (!dropPosition && clientX != null && clientY != null && gridWrapRef.current) {
+        const gridEl = gridWrapRef.current.querySelector(".react-grid-layout");
+        if (gridEl) {
+          const rect = gridEl.getBoundingClientRect();
+          dropPosition = pixelToGridPosition(
+            rect.width,
+            clientX,
+            clientY,
+            rect,
+            activeId,
+            kpis
+          );
+        }
+      }
+      if (!dropPosition) return;
+
+      externalDropLockRef.current = true;
+      postDropWidgetRef.current = activeId;
+      requestAnimationFrame(() => {
+        addKpiToLayout(activeId, dropPosition);
+        handleDragWidgetEnd();
+        externalDropLockRef.current = false;
+      });
+    },
+    [addKpiToLayout, handleDragWidgetEnd, kpis, layout]
+  );
+
+  const handleWrapDragOver = useCallback(
+    (event) => {
+      if (!draggingWidgetIdRef.current) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    },
+    []
+  );
+
+  const handleWrapDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const widgetId = event.dataTransfer?.getData("text/plain");
+      completeExternalDrop(widgetId, null, event.clientX, event.clientY);
+    },
+    [completeExternalDrop]
+  );
+
+  const handleGridDrop = useCallback(
+    (_gridLayout, item, event) => {
+      dragLifecycleRef.current.gridDrop();
+      let widgetId = null;
+      try {
+        widgetId = event?.dataTransfer?.getData("text/plain") || null;
+      } catch {
+        /* some browsers throw on getData outside dragstart/drop */
+      }
+      if (!widgetId) widgetId = draggingWidgetIdRef.current;
+      // Synthetic cleanup drops (ESC / drop-outside) clear RGL only — no add.
+      if (!widgetId || !item) return;
+      const position = { x: item.x, y: item.y };
+      const clientX = event?.nativeEvent?.clientX ?? event?.clientX;
+      const clientY = event?.nativeEvent?.clientY ?? event?.clientY;
+      completeExternalDrop(widgetId, position, clientX, clientY);
+    },
+    [completeExternalDrop]
+  );
+
+  const handleDropDragOver = useCallback(() => {
+    dragLifecycleRef.current.gridDragOver();
+    const activeId = draggingWidgetIdRef.current;
+    if (!activeId || !kpis[activeId]) return false;
+    if (layout.some((entry) => entry.i === activeId)) return false;
+    return defaultSizeForKpi(activeId, kpis);
+  }, [kpis, layout]);
+
+  const handleLayoutChange = useCallback(
+    (next) => {
+      if (draggingWidgetIdRef.current) return;
+      const withoutPlaceholder = next.filter((item) => item.i !== DROPPING_ITEM_ID);
+      onLayoutChange(withoutPlaceholder);
+    },
+    [onLayoutChange]
+  );
+
+  const handleInternalDragStart = useCallback((_, __, newItem) => {
+    const widgetId = newItem?.i;
+    setIsGridDragging(true);
+    dragOriginLayoutRef.current = layout.map(({ i, x, y, w, h }) => ({ i, x, y, w, h }));
+    lastHoverTargetRef.current = null;
+    dragSwapTargetRef.current = null;
+    if (widgetId && postDropWidgetRef.current === widgetId) {
+      return;
+    }
+    if (postDropWidgetRef.current && widgetId && postDropWidgetRef.current !== widgetId) {
+      postDropWidgetRef.current = null;
+    }
+    userDragWidgetRef.current = widgetId ?? null;
+  }, [layout]);
+
+  const handleInternalDrag = useCallback(
+    (currentLayout, _oldItem, newItem) => {
+      if (!newItem?.i || !findDragHoverTarget) return;
+      const staticLayout = dragOriginLayoutRef.current ?? currentLayout;
+      const originItem = staticLayout.find((item) => item.i === newItem.i) ?? null;
+      const target = findDragHoverTarget(staticLayout, newItem, newItem.i, originItem);
+      if (target) {
+        lastHoverTargetRef.current = target.i;
+        dragSwapTargetRef.current = target.i;
+      } else {
+        lastHoverTargetRef.current = null;
+        dragSwapTargetRef.current = null;
+      }
+    },
+    [findDragHoverTarget]
+  );
+
+  const handleDragStop = useCallback(
+    (nextLayout, oldItem, newItem) => {
+      if (draggingWidgetIdRef.current) return;
+      const widgetId = newItem?.i;
+      if (widgetId && postDropWidgetRef.current === widgetId) {
+        userDragWidgetRef.current = null;
+        dragSwapTargetRef.current = null;
+        dragOriginLayoutRef.current = null;
+        lastHoverTargetRef.current = null;
+        postDropWidgetRef.current = null;
+        setIsGridDragging(false);
+        return;
+      }
+      if (userDragWidgetRef.current === widgetId) {
+        postDropWidgetRef.current = null;
+      }
+      userDragWidgetRef.current = null;
+      setIsGridDragging(false);
+      const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
+      const hoverTargetId = lastHoverTargetRef.current ?? dragSwapTargetRef.current;
+      const originLayout = dragOriginLayoutRef.current;
+      dragSwapTargetRef.current = null;
+      dragOriginLayoutRef.current = null;
+      lastHoverTargetRef.current = null;
+      onDragStop(withoutPlaceholder, oldItem, newItem, hoverTargetId, originLayout);
+    },
+    [onDragStop]
+  );
+
+  const handleResizeStop = useCallback(
+    (nextLayout, oldItem, newItem) => {
+      if (draggingWidgetIdRef.current) return;
+      const withoutPlaceholder = nextLayout.filter((item) => item.i !== DROPPING_ITEM_ID);
+      onResizeStop(withoutPlaceholder, oldItem, newItem);
+    },
+    [onResizeStop]
+  );
+
 
   const tiles = useMemo(
     () => layout.map((item) => ({ kpiId: item.i })),
@@ -411,6 +673,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
     }
     const refs = buildRefs(tiles, kpis, filters, hierOverrides);
     const reqId = ++reqIdRef.current;
+    dashboardMetrics.markBatchStart(reqId);
     setBatch((prev) => ({ ...prev, loading: true }));
 
     runKpiBatch(refs, tenantId)
@@ -422,6 +685,10 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           errors: res?.errors || null,
           partial: Boolean(res?.partial),
         });
+        dashboardMetrics.markAllWidgetsReady(
+          countErrorWidgets(res?.errors, tiles.length),
+          reqId
+        );
       })
       .catch((err) => {
         if (reqId !== reqIdRef.current) return;
@@ -431,6 +698,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
           errors: { __batch: err?.message || t("DASHBOARD_COMMON_BATCH_FAILED", "Batch query failed") },
           partial: true,
         });
+        dashboardMetrics.markAllWidgetsReady(tiles.length, reqId);
       });
     // refsKey captures both the tile set and the resolved params.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -532,6 +800,21 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
 
   const showEmpty = !catalogLoading && pack && layout.length === 0;
 
+  const handleFilterChange = useCallback(
+    (...args) => {
+      dashboardMetrics.markInteraction("filter");
+      return setFilter(...args);
+    },
+    [setFilter]
+  );
+  const handleClearFilters = useCallback(
+    (...args) => {
+      dashboardMetrics.markInteraction("filter");
+      return clearFilters(...args);
+    },
+    [clearFilters]
+  );
+
   return (
     <DashboardLayout
       embedded={embedded}
@@ -539,14 +822,14 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
       catalogItems={catalogItems}
       onAddWidget={addKpiToLayout}
       onResetLayout={resetLayout}
-      onDragWidgetStart={() => {}}
-      onDragWidgetEnd={() => {}}
+      onDragWidgetStart={handleDragWidgetStart}
+      onDragWidgetEnd={handleDragWidgetEnd}
       searchQuery={searchQuery}
       onSearchQueryChange={setSearchQuery}
       onExport={handleExport}
       filters={filters}
-      onFilterChange={setFilter}
-      onClearFilters={clearFilters}
+      onFilterChange={handleFilterChange}
+      onClearFilters={handleClearFilters}
       filterOptions={filterOptions}
       filterOptionsLoading={filterOptionsLoading}
       kpiCardData={{}}
@@ -569,30 +852,54 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         </div>
       )}
 
-      {showEmpty ? (
-        <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface tw-py-16 tw-text-center">
-          <p className="tw-text-[12px] tw-text-muted-foreground">
-            {t("DASHBOARD_COMMON_NO_TILES_FOR_ROLE", "No tiles in the catalog pack for this role.")}
-          </p>
-        </div>
-      ) : (
+      {/* Grid stays mounted when empty: drop target + cancelled-drag recovery
+          (#1287). Empty copy overlays the grid (pointer-events-none) and hides
+          while a picker drag is live so the RGL placeholder stays visible. */}
+      <div
+        ref={gridWrapRef}
+        className={`dashboard-grid-wrap${isExternalDrag ? " dashboard-external-drag" : ""}${
+          isGridDragging ? " dashboard-grid-dragging" : ""
+        }${showEmpty ? " dashboard-grid-wrap--empty tw-relative tw-rounded tw-border tw-border-dashed tw-border-border tw-bg-surface" : ""}`}
+        onDragOver={handleWrapDragOver}
+        onDrop={handleWrapDrop}
+      >
+        {showEmpty && !isExternalDrag ? (
+          <div className="tw-pointer-events-none tw-absolute tw-inset-0 tw-z-[1] tw-flex tw-min-h-[12rem] tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-text-center">
+            <p className="tw-text-[12px] tw-text-muted-foreground">
+              {t("DASHBOARD_COMMON_NO_TILES_FOR_ROLE", "No tiles in the catalog pack for this role.")}
+            </p>
+          </div>
+        ) : null}
         <GridLayoutWithWidth
-          className="dashboard-grid-layout layout"
+          key={gridSyncKey}
+          className={`dashboard-grid-layout layout${showEmpty ? " dashboard-grid-layout--empty" : ""}`}
           layout={gridLayout}
           cols={GRID_COLS}
           rowHeight={KPI_ROW_HEIGHT}
           margin={GRID_MARGIN}
           containerPadding={[0, 0]}
-          compactType="vertical"
+          compactType={null}
+          allowOverlap={false}
           isDraggable
           isResizable
+          isDroppable={isExternalDrag}
+          droppingItem={droppingItem}
+          onDrop={handleGridDrop}
+          onDropDragOver={handleDropDragOver}
           draggableHandle=".dashboard-widget-surface"
-          draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .leaflet-container, a, button, input, select, textarea"
-          onLayoutChange={onLayoutChange}
+          draggableCancel=".dashboard-widget-remove-btn, .dashboard-view-toggle, .dashboard-table-scroll, .dashboard-chart-scroll-viewport, .dashboard-kpi-list-body, .dashboard-widget-header-subtitle, .leaflet-container, a, button, input, select, textarea"
+          onLayoutChange={handleLayoutChange}
+          onDragStart={handleInternalDragStart}
+          onDrag={handleInternalDrag}
+          onDragStop={handleDragStop}
+          onResizeStop={handleResizeStop}
         >
           {layout.map((item) => {
             const isKpi = isCardKind(kpis[item.i]?.viz?.kind);
             const dimClass = matchesSearch(item.i) ? "" : " dashboard-search-dimmed";
+            const ignoredNote = typeFilterIgnored(batch.results?.[item.i]) ? (
+              <TypeFilterIgnoredNote />
+            ) : null;
             const removeBtn = (
               <WidgetRemoveButton
                 label={`${t("DASHBOARD_COMMON_REMOVE", "Remove")} ${resolveTitle(kpis[item.i]) || item.i}`}
@@ -611,6 +918,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                 >
                   {removeBtn}
                   {renderTile(item.i)}
+                  {ignoredNote}
                   <CardUpdatedStamp label={lastUpdatedLabel} />
                 </div>
               );
@@ -634,6 +942,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
             // so one placement covers charts AND tables; card tiles never
             // declare hierLevel and KpiTile carries no header of its own (R7b).
             const groupBy = groupByStateFor(item.i);
+            const hasGroupBy = Boolean(groupBy.options && !selfHeaders);
             return (
               <section
                 key={item.i}
@@ -641,22 +950,24 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
               >
                 {removeBtn}
                 {!selfHeaders && (
-                  <header className={`${buildWidgetHeaderClassName(vizType)} tw-min-w-0`}>
-                    <div className="tw-min-w-0 tw-flex-1">
-                      <h2 className={`${SHARED_CHROME.dragHandleTitle} tw-truncate`}>
+                  <header className={`${buildWidgetHeaderClassName(vizType)} dashboard-widget-header tw-min-w-0`}>
+                    <div className="dashboard-widget-header-title-row tw-flex tw-min-w-0 tw-items-start tw-gap-2">
+                      <h2 className={`${SHARED_CHROME.dragHandleTitle} tw-min-w-0 tw-flex-1 tw-truncate`}>
                         {headerTitle}
                       </h2>
-                      {headerSubtitle && (
-                        <p className={SHARED_CHROME.dragHandleSubtitle}>{headerSubtitle}</p>
+                      {hasGroupBy && (
+                        <GroupByLevelSelect
+                          value={groupBy.value}
+                          options={groupBy.options}
+                          hierarchyType={hierarchy?.hierarchyType}
+                          onChange={(value) => setHierLevelOverride(item.i, value)}
+                        />
                       )}
                     </div>
-                    {groupBy.options && (
-                      <GroupByLevelSelect
-                        value={groupBy.value}
-                        options={groupBy.options}
-                        hierarchyType={hierarchy?.hierarchyType}
-                        onChange={(value) => setHierLevelOverride(item.i, value)}
-                      />
+                    {headerSubtitle && (
+                      <SubtleScroll className="dashboard-widget-header-subtitle">
+                        <p className={SHARED_CHROME.dragHandleSubtitle}>{headerSubtitle}</p>
+                      </SubtleScroll>
                     )}
                   </header>
                 )}
@@ -667,21 +978,16 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
                       : getWidgetBodyClassName(vizType, { isTable })
                   }
                 >
-                  {isTable ? (
-                    <SubtleScroll className={getWidgetScrollClassName()}>
-                      {renderTile(item.i, groupBy.info)}
-                    </SubtleScroll>
-                  ) : (
-                    renderTile(item.i, groupBy.info)
-                  )}
+                  {renderTile(item.i, groupBy.info)}
                 </div>
+                {ignoredNote}
                 <CardUpdatedStamp label={lastUpdatedLabel} />
                 <ResizeGrip />
               </section>
             );
           })}
         </GridLayoutWithWidth>
-      )}
+      </div>
     </DashboardLayout>
   );
 };

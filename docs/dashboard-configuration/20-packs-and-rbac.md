@@ -69,6 +69,40 @@ Boundary/jurisdiction scope (`boundary_path LIKE '<prefix>%'`) is wired end-to-e
 deliberately disabled in the resolver today (`boundaryPrefix = null` with the enabling block
 commented out in `PrincipalScopeResolver.java` — see the inline rationale).
 
+#### Tenant-configurable department scoping — `dss.DashboardConfig.departmentScoping` (#1280)
+
+The employee department axis above can be switched off per tenant via an OPTIONAL field on the
+`dss.DashboardConfig` MDMS master (the tenant-level dashboard config record introduced by #1258
+and extended by #1272 — this field composes additively with whatever else that record carries):
+
+| value | effect |
+|---|---|
+| `"enforced"` (or the field/record absent — the default) | today's behavior, exactly as the table above: HRMS department resolution, `department_code IN (...)`, fail-closed sentinel for unresolvable constrained employees |
+| `"disabled"` | the resolver skips HRMS department resolution ENTIRELY for employees: no department filter, no fail-closed sentinel. Tenant scoping (always applied) and citizen self-scope are untouched |
+
+**Fail-safe**: anything that is not an explicit `"disabled"` (case-insensitive) — missing
+module/record/field, a malformed value, an MDMS error — resolves to `"enforced"`. The lookup
+never widens scope on failure.
+
+The value is read at the tenant's **state root** (like the rest of the dss module) and cached
+in-memory for 5 minutes per state root, so a config flip takes effect within 5 minutes without
+a redeploy.
+
+**When to use it**: deployments whose complaint data carries no departments (#1280 —
+`ServiceDefs` entries without a `department`, so `department_code` is NULL on every fact row).
+Under `"enforced"`, every department-scoped officer there sees zero rows on every tile; under
+`"disabled"` they see the tenant's real numbers.
+
+**Warning — this widens data visibility**: with `"disabled"`, EVERY employee on the tenant sees
+the tenant-wide aggregates (equivalent to holding a `TENANT_WIDE_ROLES` role for Layer 1). Treat
+it as a temporary bridge until department enrichment lands in the complaint data, then flip back
+to `"enforced"`.
+
+Seed note: the `DashboardConfig` seed file (`ansible/nairobi-mdms/mdms/dss/DashboardConfig.json`)
+lives on the #1258/#1272 branches, not this one; add `"departmentScoping": "enforced"` to that
+record whichever merges first — the master's schema is additive/open, and absence already means
+enforced.
+
 Operator consequences:
 
 - A department-scoped supervisor's dashboard (all tiles, and the filter option lists) shows

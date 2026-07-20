@@ -3,6 +3,7 @@
  */
 
 import { SHARED_CHROME } from "./visualizationStyles";
+import { formatNumber } from "../utils/numberFormat";
 
 const DEFAULT_TOOLTIP_OFFSET = 10;
 
@@ -88,7 +89,9 @@ export function buildApexChartTooltipOptions({
 export function buildApexSeriesHoverTooltip({
   categories = [],
   getCategoryLabel,
-  formatValue = (value) => Math.round(Number(value)),
+  // Default integer tooltip: masked -> grouped string; unmasked keeps
+  // returning a number (Apex number-returning formatter contract).
+  formatValue = (value) => formatNumber(value, { decimals: 0 }) ?? Math.round(Number(value)),
   includeZero = true,
   followCursor = false,
   offsetX = DEFAULT_TOOLTIP_OFFSET,

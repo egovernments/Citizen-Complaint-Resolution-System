@@ -1,0 +1,29 @@
+{
+  "name": "bomet-ke",
+  "_comment": [
+    "What this deployment SHOULD have. The profile discovers what it DOES have; this file",
+    "decides whether a gap is a bug (required -> FAIL) or legitimately N/A (absent -> SKIP).",
+    "Measured read-only against bomet on 2026-07-16. Bomet is a FLAT single tenant `ke`",
+    "(state_root = state_tenant_id = tenant_id = ke), hierarchy ADMIN, County/SubCounty/Ward.",
+    "`ke.bomet` also exists in the DB but is legacy from the original two-level bring-up that",
+    "was later collapsed; the suite targets `ke`, which is self-sufficient."
+  ],
+  "expectations": {
+    "workflow.pgr.actions.ESCALATE": "required",
+    "mdms.rejectionReasons": "required",
+    "pgr.citizenCreate": "required",
+    "ui.citizen.attachmentDetailRender": "required",
+    "personas.gro-with-department": "required",
+    "personas.ward-scoped-csr": "required",
+    "locales.multi": "optional",
+    "tenant.citySubTenant": "absent"
+  },
+  "_rationale": {
+    "workflow.pgr.actions.ESCALATE": "ke's PGR businessService DOES define ESCALATE (2 transition rows), so #521 must actually run here — it is the deployment the feature was built for.",
+    "mdms.rejectionReasons": "Deliberate red. Confirmed absent: no schema definition and no data on any tenant. The repo carries a seed at local-setup/ansible/nairobi-mdms/mdms/data/ke/RAINMAKER-PGR/RejectionReasons.json that has never been loaded.",
+    "personas.gro-with-department": "Required, and currently the largest gap: bomet.env sets no GRO_USER so it defaults to ADMIN, which has NO HRMS employee record at ke -> DEPARTMENT_NOT_FOUND -> the lifecycle seed fails and cascades. NOTE: BOMET_ADMIN is NOT a valid answer — its HRMS record lives at ke.bomet, and HRMS does not fall back to a parent tenant. Viable actors at ke include HS_GRO (dept DEPT_1). Departments holding BOTH employees and complaint types at ke: MEDICAL_SVC, WATER_ENV, ADMIN_PUBLIC_SVC, DEPT_1, LANDS_HOUSING, DEPT_2, ENV.",
+    "personas.ward-scoped-csr": "BOMET_CSR_CHESOEN_* exists here, so the boundary-jurisdiction #496 regression is meaningful and must not silently skip.",
+    "locales.multi": "hi_IN, en_IN, fr_FR and pt_PT all carry substantial message counts, but the suite's completeness assertions are only calibrated for en_IN — optional until they are.",
+    "tenant.citySubTenant": "Flat `ke` deployment: there is no city sub-tenant, so the configurator city-search test is genuinely N/A."
+  }
+}

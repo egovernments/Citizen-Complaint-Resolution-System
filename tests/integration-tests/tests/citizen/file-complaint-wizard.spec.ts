@@ -17,8 +17,9 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { BASE_URL, PGR_CREATE_UNSUPPORTED, PGR_ID_PREFIX } from '../utils/env';
+import { BASE_URL, PGR_ID_PREFIX } from '../utils/env';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
+import { requires } from '../utils/capabilities';
 
 test.describe('Citizen file-complaint wizard', () => {
   // ── Raw-key localization scan ─────────────────────────────────────────────
@@ -35,12 +36,83 @@ test.describe('Citizen file-complaint wizard', () => {
   const rawKeysIn = (text: string) =>
     [...new Set(text.match(RAW_KEY_RE) || [])];
 
+  type TextChunk = { text: string; where: string };
+
+  /**
+   * Collect the page's rendered text one DOM text node at a time, each tagged
+   * with a short description of the element that owns it.
+   *
+   * Why not `body.textContent()` (what this used to do): textContent welds every
+   * text node together with no separator, so two adjacent field labels
+   * ("AUTHORITY_TYPE" and "MAIN_CATEGORY") arrive as the single string
+   * "AUTHORITY_TYPEMAIN_CATEGORY" — and the regex then reports that weld as one
+   * bogus key that exists nowhere in the product, hiding both real keys and
+   * sending whoever reads the failure hunting for a key that was never looked up.
+   *
+   * Scanning node-by-node keeps exactly the same coverage (every text node
+   * textContent would have seen) while making each reported key a string a
+   * citizen actually reads, plus where on the page it sits. Splitting can only
+   * remove weld artefacts, never a real key: a rendered key is always one node.
+   *
+   * <script>/<style>/<noscript> are skipped — their contents are code, never
+   * shown to a citizen, and inline JS is full of CONSTANT_CASE identifiers that
+   * textContent used to feed to the regex as pure false positives.
+   */
+  const collectTextChunks = (page: Page): Promise<TextChunk[]> =>
+    page.evaluate(() => {
+      const describe = (el: Element | null): string => {
+        if (!el) return '<unknown>';
+        const parts: string[] = [];
+        let node: Element | null = el;
+        for (let depth = 0; node && depth < 3; node = node.parentElement, depth++) {
+          let s = node.tagName.toLowerCase();
+          if (node.id) {
+            s += `#${node.id}`;
+          } else {
+            const cls = (node.getAttribute('class') || '').trim().split(/\s+/).filter(Boolean)[0];
+            if (cls) s += `.${cls}`;
+          }
+          parts.unshift(s);
+          if (node.tagName === 'BODY') break;
+        }
+        return parts.join(' > ');
+      };
+
+      const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT']);
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+        acceptNode: (node) =>
+          node.parentElement && SKIP.has(node.parentElement.tagName)
+            ? NodeFilter.FILTER_REJECT
+            : NodeFilter.FILTER_ACCEPT,
+      });
+
+      const out: { text: string; where: string }[] = [];
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const text = (n.textContent || '').trim();
+        if (text) out.push({ text, where: describe(n.parentElement) });
+      }
+      return out;
+    });
+
   const assertNoRawKeys = async (page: Page, stepLabel: string) => {
-    const text = await page.locator('body').textContent() ?? '';
-    const keys = rawKeysIn(text);
+    const chunks = await collectTextChunks(page);
+    // key -> first chunk that showed it (dedup: one key repeated down a listbox
+    // shouldn't drown the report).
+    const hits = new Map<string, TextChunk>();
+    for (const chunk of chunks) {
+      for (const key of rawKeysIn(chunk.text)) {
+        if (!hits.has(key)) hits.set(key, chunk);
+      }
+    }
+    const report = [...hits.entries()]
+      .map(
+        ([key, c]) =>
+          `  • ${key}\n      in:            ${c.where}\n      rendered text: ${JSON.stringify(c.text)}`,
+      )
+      .join('\n');
     expect(
-      keys,
-      `Step "${stepLabel}" shows raw localization keys: ${keys.slice(0, 10).join(', ')}`,
+      [...hits.keys()],
+      `Step "${stepLabel}" shows ${hits.size} raw localization key(s) to the citizen:\n${report}`,
     ).toHaveLength(0);
   };
 
@@ -280,15 +352,15 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
     await walkWizard(page, { assertPincodeToast: true });
 
     // ── Confirmation page contract ─────────────────────────────────
-    // Escape hatch for deployments whose PGR backend rejects complaint-create
-    // (e.g. the bomet ke HTTP 400 / JsonMappingException). Defaults false via
-    // env so mz.maputo — where the boundary cascade now reaches the selectable
-    // Bairro leaf — asserts a real successful submission. Wizard navigation
-    // (Steps 1-6) is still validated by the "no raw localization keys" test.
-    if (PGR_CREATE_UNSUPPORTED) {
-      test.skip(true, 'PGR_CREATE_UNSUPPORTED set — this deployment\'s PGR backend rejects complaint creation; wizard navigation is verified by the raw-keys test');
-      return;
-    }
+    // Gated on the declared capability, not a stray env hatch: whether a
+    // deployment's PGR backend actually accepts a citizen-filed complaint (e.g.
+    // the bomet ke HTTP 400 / JsonMappingException history) is exactly what
+    // capabilities.ts's pgr.citizenCreate encodes (APPLY role includes CITIZEN).
+    // Both maputo-local and bomet declare it 'required', so this must run for
+    // real on both — a true regression now fails loudly instead of hiding
+    // behind PGR_CREATE_UNSUPPORTED. Wizard navigation (Steps 1-6) above always
+    // runs regardless, and is independently verified by the raw-keys test.
+    requires(test, 'pgr.citizenCreate', 'wizard navigation is verified by the raw-keys test');
     await expect(page).toHaveURL(/\/citizen\/pgr\/response/);
     const body = page.locator('body');
     await expect(body).toContainText('Complaint Submitted');
@@ -306,9 +378,21 @@ Test timeout is 180s — six steps plus DOM settles plus the final POST regularl
   test('no raw localization keys visible at any wizard step', {
     annotation: {
       type: 'description',
-      description: `Walks the citizen file-complaint wizard step-by-step and after each step scans the page body text for raw localization keys (e.g. SERVICEDEFS.DRAINS, BOUNDARY.OROMIA, CS_COMMON_*). Fails immediately with the offending key(s) if any are visible to the citizen at that step.
+      description: `Walks the citizen file-complaint wizard step-by-step and after each step scans every rendered text node for raw localization keys (e.g. SERVICEDEFS.DRAINS, BOUNDARY.OROMIA, CS_COMMON_*). Fails immediately, listing each offending key with the element that renders it and the exact text the citizen sees.
 
-The regex /\\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\\b/g is preserved verbatim from the legacy complaint-submit.spec.ts regression.`,
+The regex /\\b[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+\\b/g is preserved verbatim from the legacy complaint-submit.spec.ts regression.
+
+KNOWN RED on bomet (ke) — this is a real content defect, not a test bug. The wizard's level labels come from
+CreatePGRFlowV2.tsx labelFor():  t((hierarchyType + "_" + levelCode).toUpperCase())  falling back to the MDMS
+level's own \`label\`. On ke, RAINMAKER-PGR.ComplaintHierarchyDefinition[0] is hierarchyType "PGR_TEST" — a
+7-row sample tree ("Sample AUTHORITY_TYPE", "Example Sub-type 1") whose levels are authored with
+label === levelCode ("AUTHORITY_TYPE", "MAIN_CATEGORY", ...). No PGR_TEST_* rows exist in rainmaker-pgr
+localization, so t() returns the key, the fallback is the equally raw label, and the citizen reads
+"AUTHORITY_TYPE". It wins over the real 829-row "PGR" tree only because the picker takes the FIRST definition
+that has any rows and PGR_TEST is listed first. Local (mz.maputo) ships one definition, "PGR", whose labels are
+"Category"/"Sub-Type" — human-readable, so the same missing-localization fallback is invisible and this passes.
+Fix on ke = drop/deactivate the PGR_TEST definition (also restores the real complaint tree to citizens); merely
+loading PGR_TEST_* localization rows would only hide that citizens are being served a sample hierarchy.`,
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'],
   }, async ({ page }) => {

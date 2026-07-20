@@ -1,4 +1,5 @@
 import { appliedHierLevel } from "./hierLevelGrouping";
+import { complaintTypeParams } from "./complaintTypeTree";
 
 /**
  * Query-plan helpers for the catalog dashboard (extracted from
@@ -40,18 +41,26 @@ export function isMapKind(kind) {
  * Mirrors config/kpiQueries.js buildGlobalApiFilters: an active date range maps
  * to dateFrom/dateTo (yyyy-MM-dd, which the composer turns into a gte/lt on the
  * grain's time column and which drops the def's base window); a non-"all"
- * geography/complaintType narrows via ward/serviceCode. No global `window` is
- * emitted, so each def keeps its own baked window when no range is active —
- * exactly the reference path's behaviour.
+ * geography narrows via ward. The complaint-type node selection narrows via
+ * serviceCode (leaf — unchanged wire shape) or complaintPath (interior node —
+ * subtree prefix on complaint_node_path, #1282; pre-#1282 backends ignore the
+ * unknown param, so the dashboard degrades to leaf-only filtering, never an
+ * error). No global `window` is emitted, so each def keeps its own baked
+ * window when no range is active — exactly the reference path's behaviour.
  */
 export function globalParams(filters) {
   const params = {};
   if (filters?.geography && filters.geography !== "all") {
     params.ward = filters.geography;
   }
-  if (filters?.complaintType && filters.complaintType !== "all") {
-    params.serviceCode = filters.complaintType;
-  }
+  Object.assign(
+    params,
+    complaintTypeParams({
+      code: filters?.complaintType,
+      path: filters?.complaintTypePath,
+      leaf: filters?.complaintTypeLeaf,
+    })
+  );
   if (filters?.dateRangeActive && filters?.dateFrom && filters?.dateTo) {
     params.dateFrom = filters.dateFrom; // yyyy-MM-dd
     params.dateTo = filters.dateTo; // yyyy-MM-dd

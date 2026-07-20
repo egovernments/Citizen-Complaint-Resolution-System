@@ -52,7 +52,7 @@ import HelpModal from './components/ui/HelpModal';
 // without unique-key collisions).
 // import UndoToast from './components/ui/UndoToast';
 import { Toaster } from './components/ui/toaster';
-import { apiClient, getApiBaseUrl } from './api';
+import { apiClient, getApiBaseUrl, getConfiguredRootTenant } from './api';
 import { identifyUser, clearUser, trackEvent } from './lib/telemetry';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
@@ -247,6 +247,17 @@ function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppSta
   return null;
 }
 
+// Root (state-level) tenant the deployment is configured for, read from the
+// build-time VITE_STATE_TENANT_ID (rendered by the ansible deploy from
+// host_vars `state_tenant_id`). Used only as the pre-login default; once the
+// operator logs in, `state.tenant` becomes the tenant they authenticated
+// against. Kept config-driven so no country code is baked into the build.
+// City tenants like "mz.maputo" collapse to their root segment; empty string
+// when the build wasn't given one.
+function getConfiguredTenantDefault(): string {
+  return getConfiguredRootTenant();
+}
+
 function App() {
   // Initialize state from localStorage if available
   const [state, setState] = useState<AppState>(() => {
@@ -258,12 +269,13 @@ function App() {
         showHelp: false,
       };
     }
+    const defaultTenant = getConfiguredTenantDefault();
     return {
       isAuthenticated: false,
       user: null,
       environment: getApiBaseUrl(),
-      tenant: 'ke',
-      targetTenant: 'ke',
+      tenant: defaultTenant,
+      targetTenant: defaultTenant,
       mode: 'onboarding',
       currentPhase: 1,
       completedPhases: [],

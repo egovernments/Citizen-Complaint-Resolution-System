@@ -16,25 +16,25 @@ initContainers:
     schemaTable: "egov_user_schema"
     image:
       repository: "egov-user-db"
-      tag: master-d69ce29
+      tag: "2.12-87e13fe"
 
 # Container Configs
 # PARITY / IMAGE NOTE — why this is NOT the stock egov-user tag:
-#   The stock image (`egov-user:master-d69ce29`) HARDCODES the mobile-number
-#   validation regex (a Kenya/India format). Maputo's rule (MDMS
-#   common-masters.MobileNumberValidation) is +258 / numbers starting with 8, so
-#   the stock image REJECTS every valid Maputo number → citizen register/create/
-#   provisioning fails. The `mobilevalidation-jdk8-4984479` build reads the
-#   per-tenant MDMS rule at runtime instead of hardcoding, so it works for any tenant.
-#   PARITY: Compose already pins this EXACT image (local-setup/docker-compose.egov-digit.yaml)
-#   — reverting to the stock tag would make k8s diverge from Compose (mobile validation
-#   would fail on k8s only). Keep them on the same tag.
-#   PENDING (product decision): get the MDMS-driven mobile-validation fix into a
-#   PUBLISHED egovio/egov-user image, then repin BOTH stacks to that tag. Also fix the
-#   twin frontend bug: digit-ui UserCreate.tsx hardcodes a Kenyan regex (v.mobileKERequired).
+#   The stock image previously HARDCODED the mobile-number validation regex
+#   (a Kenya/India format). Maputo's rule (MDMS common-masters.MobileNumberValidation)
+#   is +258 / numbers starting with 8, so a hardcoded-regex build REJECTS every
+#   valid Maputo number → citizen register/create/provisioning fails.
+#   2.12-87e13fe carries the Digit-Core#1044 fixes (MDMS-driven per-tenant mobile
+#   validation, tenant-aware encryption, SafeHtmlValidator/CCRS#771) that were
+#   previously only in the `mobilevalidation-jdk8-4984479` preview build.
+#   PARITY: Compose pins this EXACT image (local-setup/docker-compose.egov-digit.yaml)
+#   — diverging here would make k8s mobile validation behave differently than
+#   Compose. Keep them on the same tag.
+#   Still fix the twin frontend bug: digit-ui UserCreate.tsx hardcodes a Kenyan
+#   regex (v.mobileKERequired).
 image:
-  repository: "registry.preview.egov.theflywheel.in/egovio/egov-user"
-  tag: "mobilevalidation-jdk8-4984479"
+  repository: "egovio/egov-user"
+  tag: "2.12-87e13fe"
   pullPolicy: "IfNotPresent"
 replicas: "1"
 healthChecks:
