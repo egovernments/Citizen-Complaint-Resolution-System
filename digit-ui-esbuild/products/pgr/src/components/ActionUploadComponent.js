@@ -29,7 +29,11 @@ const ActionUploadComponent = ({ config, onSelect, formData }) => {
   const existing = formData?.[config?.key];
   const value = Array.isArray(existing) ? existing.map((d) => d?.fileStoreId).filter(Boolean) : [];
 
-  return (
+  // Optional width cap (populators.maxWidth) so the drop zone lines up with the
+  // capped input column when embedded in a full-page FormComposerV2 form.
+  // Absent in the action modal → unchanged there.
+  const maxWidth = config?.populators?.maxWidth;
+  const uploader = (
     <PgrFileUpload
       t={t}
       tenantId={tenantId}
@@ -39,6 +43,7 @@ const ActionUploadComponent = ({ config, onSelect, formData }) => {
       onSelect={(key, ids) => onSelect(key, ids.map(toDocument))}
     />
   );
+  return maxWidth ? <div style={{ maxWidth, width: "100%" }}>{uploader}</div> : uploader;
 };
 
 export default ActionUploadComponent;

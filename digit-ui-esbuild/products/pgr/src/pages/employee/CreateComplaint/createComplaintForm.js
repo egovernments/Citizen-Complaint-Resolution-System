@@ -359,13 +359,18 @@ const CreateComplaintForm = ({
     // `SelectedDocuments`. tenantId is the create tenant so files land on the
     // right (tenant-scoped) filestore. Optional — never gates submit.
     const uploadFieldConfig = {
-      inline: false,
+      // inline:true → same label-left / control-right row as the fields above,
+      // so the uploader's width:100% fills the capped control column instead of
+      // spanning the full card (was overflowing to the right).
+      inline: true,
       type: "component",
       component: "PGRActionUploadComponent",
       key: "SelectedDocuments",
       label: "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
       isMandatory: false,
-      populators: { name: "SelectedDocuments", tenantId },
+      // maxWidth caps the drop zone to the same width as the text-input control
+      // column (600px) so its right edge lines up with the fields above.
+      populators: { name: "SelectedDocuments", tenantId, maxWidth: "600px" },
     };
 
     // Append the per-category dynamic fields (when present) AND the attachment
