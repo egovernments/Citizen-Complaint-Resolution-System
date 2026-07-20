@@ -20,10 +20,17 @@ ADMIN_PASS="${ADMIN_PASS:-eGov@123}"
 CHANGED=0
 
 # ── locate postgres ──────────────────────────────────────────────────────
-PG=$(sudo docker ps --format '{{.Names}}' | grep -m1 -i postgres)
-[ -n "$PG" ] || { echo "✗ no postgres container found"; exit 1; }
-DBU=$(sudo docker exec "$PG" printenv POSTGRES_USER 2>/dev/null || echo egov)
-DBN=$(sudo docker exec "$PG" printenv POSTGRES_DB 2>/dev/null || echo egov)
+# Boxes can run several postgres containers (mcp, keycloak, the DIGIT one) —
+# pick the one that actually holds the MDMS schema table, not just the first
+# name match.
+PG=""
+for CAND in $(sudo docker ps --format '{{.Names}}' | grep -i postgres); do
+  U=$(sudo docker exec "$CAND" printenv POSTGRES_USER 2>/dev/null || echo egov)
+  N=$(sudo docker exec "$CAND" printenv POSTGRES_DB 2>/dev/null || echo egov)
+  HAS=$(sudo docker exec "$CAND" psql -U "$U" -d "$N" -Atc "select 1 from information_schema.tables where table_name='eg_mdms_schema_definition' limit 1;" 2>/dev/null)
+  if [ "$HAS" = "1" ]; then PG="$CAND"; DBU="$U"; DBN="$N"; break; fi
+done
+[ -n "$PG" ] || { echo "✗ no postgres container with eg_mdms_schema_definition found (candidates: $(sudo docker ps --format '{{.Names}}' | grep -i postgres | tr '\n' ' '))"; exit 1; }
 SQL() { sudo docker exec "$PG" psql -U "$DBU" -d "$DBN" -Atc "$1"; }
 echo "── postgres: $PG (db=$DBN user=$DBU) · tenant=$TENANT · host=$HOST"
 
