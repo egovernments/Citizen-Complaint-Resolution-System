@@ -1136,24 +1136,17 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    # 800-preview: adds the user-enrichment tenant fix (DIGIT-Common#70 /
-    # CCRS#800) on top of digit-common-boundary-uuidlink. With the prior
-    # image, /egov-hrms/employees/_search returned `"user": null` for
-    # every employee on multi-tenant deploys — HRMS was sending the
-    # state-stripped tenant (`ke`) to egov-user while EMPLOYEE rows
-    # actually live at the city tenant (`ke.bomet`), so the SQL WHERE
-    # missed every row. Drop this back to a canonical
-    # `digit-common-boundary-uuidlink-<post-fix>` tag once DIGIT-Common#70
-    # merges and a follow-up build is published.
-    #
-    # Previous lineage notes (still in this image):
-    # - CCRS#482: custom password on employee create
-    # - CCRS#484: null tenantId on User object breaking MDMS mobile
-    #   validation
+    # hrms-boundary-dd641a6: a released egovio/egov-hrms tag (repinned from the
+    # preview-only 800-preview build). Its lineage relative to the previously
+    # tracked fixes (DIGIT-Common#70/CCRS#800 tenant-scoped employee search,
+    # CCRS#482 custom password on employee create, CCRS#484 null tenantId
+    # breaking MDMS mobile validation) has not been re-verified — check for
+    # regressions in those specific behaviors before relying on this tag in
+    # a multi-tenant deploy.
     # EGOV_HRMS_DEV_MODE=true must be set so enrichUser() respects the
     # password supplied in the request instead of overwriting with the
     # default/auto-generated one.
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:800-preview
+    image: egovio/egov-hrms:hrms-boundary-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1422,7 +1415,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-3d1b7d4}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-70916ea}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -2100,7 +2093,7 @@ services:
   # The Ansible playbook flips this on when `enable_novu: true` in
   # host_vars.
   digit-config-service:
-    image: registry.preview.egov.theflywheel.in/egovio/digit-config-service:latest
+    image: egovio/digit-config-service:develop-70916ea
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2158,7 +2151,7 @@ services:
       - egov-network
 
   digit-user-preferences-service:
-    image: registry.preview.egov.theflywheel.in/egovio/digit-user-preferences-service:latest
+    image: egovio/digit-user-preferences-service:develop-70916ea
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2188,7 +2181,7 @@ services:
     # + localizes; the bridge only identifies the Novu subscriber and
     # delivers renderedBody — design D4/D6). CI builds+pushes to the VPC
     # registry; default keeps the prior preview tag.
-    image: ${NOVU_BRIDGE_IMAGE:-registry.preview.egov.theflywheel.in/egovio/novu-bridge:latest}
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:develop-70916ea}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]

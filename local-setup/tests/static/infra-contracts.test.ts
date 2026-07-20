@@ -110,9 +110,6 @@ describe('image pin immutability', () => {
     'tilt-demo-jupyter:latest': 1,
     'openbao/openbao:latest': 1,
     'egovio/novu-bridge-endpoint:latest': 1,
-    'egovio/digit-config-service:latest': 1,
-    'egovio/digit-user-preferences-service:latest': 1,
-    'egovio/novu-bridge:latest': 1,
   };
 
   // Strip a `${VAR:-<default>}` wrapper (use the default) and any leading
