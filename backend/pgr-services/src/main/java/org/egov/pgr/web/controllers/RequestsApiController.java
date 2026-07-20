@@ -4,11 +4,15 @@ package org.egov.pgr.web.controllers;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.egov.common.contract.response.ResponseInfo;
+import org.egov.pgr.service.DashboardService;
 import org.egov.pgr.service.PGRService;
+import org.egov.pgr.service.VisibilityService;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.egov.pgr.util.PGRConstants;
 import org.egov.pgr.util.ResponseInfoFactory;
 import org.egov.pgr.web.models.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -16,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import javax.validation.Valid;
 
@@ -32,12 +37,32 @@ public class RequestsApiController{
 
     private ResponseInfoFactory responseInfoFactory;
 
+    private DashboardService dashboardService;
+
+    private VisibilityService visibilityService;
 
     @Autowired
-    public RequestsApiController(ObjectMapper objectMapper, PGRService pgrService, ResponseInfoFactory responseInfoFactory) {
+    public RequestsApiController(ObjectMapper objectMapper, PGRService pgrService,
+                                 ResponseInfoFactory responseInfoFactory, DashboardService dashboardService,
+                                 VisibilityService visibilityService) {
         this.objectMapper = objectMapper;
         this.pgrService = pgrService;
         this.responseInfoFactory = responseInfoFactory;
+        this.dashboardService = dashboardService;
+        this.visibilityService = visibilityService;
+    }
+
+    /**
+     * RequestSearchCriteria's internal fields (visibility predicate, workflow
+     * pre-resolution, plain-search flag) are populated server-side only.
+     * `@JsonIgnore` does not stop `@ModelAttribute` query-param binding, so
+     * disallow them explicitly — a client-supplied `visibilityIds` would
+     * otherwise ride into the visibility OR-predicate.
+     */
+    @InitBinder
+    public void disallowInternalCriteriaFields(org.springframework.web.bind.WebDataBinder binder) {
+        binder.setDisallowedFields("visibilityIds*", "visibilityUnassignedStates*",
+                "serviceRequestIds*", "userIds*", "isPlainSearch*");
     }
 
 
@@ -96,6 +121,43 @@ public class RequestsApiController{
         CountResponse response = CountResponse.builder().responseInfo(responseInfo).count(count).build();
         return new ResponseEntity<>(response, HttpStatus.OK);
 
+    }
+
+    /**
+     * Visibility-aware inbox search (Visibility V1 Step-2, design §4.1): same
+     * criteria surface as /request/_search plus a `scope` filter param
+     * (MINE = assignee-me, TEAM = reportee subtree + unassigned queues, with
+     * tenant-wide fallback) resolved server-side before the search. The values
+     * are machine enums, not display strings — the UI localizes its own labels.
+     */
+    @RequestMapping(value="/request/inbox/_search", method = RequestMethod.POST)
+    public ResponseEntity<ServiceResponse> inboxSearchPost(@Valid @RequestBody RequestInfoWrapper requestInfoWrapper,
+                                                           @Valid @ModelAttribute RequestSearchCriteria criteria,
+                                                           @RequestParam(value = "scope", defaultValue = "MINE") String scope) {
+        visibilityService.resolve(requestInfoWrapper.getRequestInfo(), criteria, scope);
+        return requestsSearchPost(requestInfoWrapper, criteria);
+    }
+
+    @RequestMapping(value="/request/inbox/_count", method = RequestMethod.POST)
+    public ResponseEntity<CountResponse> inboxCountPost(@Valid @RequestBody RequestInfoWrapper requestInfoWrapper,
+                                                        @Valid @ModelAttribute RequestSearchCriteria criteria,
+                                                        @RequestParam(value = "scope", defaultValue = "MINE") String scope) {
+        visibilityService.resolve(requestInfoWrapper.getRequestInfo(), criteria, scope);
+        return requestsCountPost(requestInfoWrapper, criteria);
+    }
+
+    @GetMapping("/dashboard")
+    public ResponseEntity<DashboardResponse> dashboard(
+            @RequestParam String tenantId,
+            @RequestParam(required = false) Long fromDate,
+            @RequestParam(required = false) Long toDate) {
+        DashboardResponse response = dashboardService.getDashboardData(tenantId, fromDate, toDate);
+        CacheControl cacheControl = CacheControl
+                .maxAge(fromDate != null ? 30 : 60, TimeUnit.SECONDS)
+                .cachePublic();
+        return ResponseEntity.ok()
+                .cacheControl(cacheControl)
+                .body(response);
     }
 
 }

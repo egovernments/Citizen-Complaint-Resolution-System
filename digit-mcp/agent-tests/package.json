@@ -1,0 +1,20 @@
+{
+  "name": "digit-mcp-agent-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsx run.ts",
+    "test:smoke": "tsx run.ts --flow smoke",
+    "test:pgr": "tsx run.ts --flow pgr-lifecycle",
+    "test:employee": "tsx run.ts --flow employee-mgmt",
+    "test:guided": "tsx run.ts --flow guided-setup"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.5.0"
+  }
+}

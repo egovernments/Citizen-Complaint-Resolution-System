@@ -14,6 +14,7 @@
 import { api, createRequestInfo } from '../utils/api';
 import { db } from '../utils/db';
 import { config } from '../utils/config';
+import { fixedMobile } from '../utils/mobile';
 import { LoginResponseSchema } from '../schemas/user';
 import { SearchServiceResponseSchema } from '../schemas/pgr';
 
@@ -37,7 +38,7 @@ describe('PGR End-to-End Workflow', () => {
       User: {
         userName,
         name: 'PGR Test Employee',
-        mobileNumber: '9999900002',
+        mobileNumber: fixedMobile(999900002),
         gender: 'MALE',
         active: true,
         type: 'EMPLOYEE',
@@ -47,6 +48,7 @@ describe('PGR End-to-End Workflow', () => {
           { code: 'EMPLOYEE', name: 'Employee', tenantId: tenant.city },
           { code: 'GRO', name: 'Grievance Routing Officer', tenantId: tenant.city },
           { code: 'DGRO', name: 'Department GRO', tenantId: tenant.city },
+          { code: 'CSR', name: 'Customer Service Representative', tenantId: tenant.city },
         ],
       },
     });
@@ -109,7 +111,7 @@ describe('PGR End-to-End Workflow', () => {
           moduleDetails: [
             {
               moduleName: 'RAINMAKER-PGR',
-              masterDetails: [{ name: 'ServiceDefs' }],
+              masterDetails: [{ name: 'ComplaintHierarchy' }],
             },
           ],
         },
@@ -118,7 +120,7 @@ describe('PGR End-to-End Workflow', () => {
       expect(response.ok).toBe(true);
 
       const data = response.data as {
-        MdmsRes?: { 'RAINMAKER-PGR'?: { ServiceDefs?: unknown[] } };
+        MdmsRes?: { 'RAINMAKER-PGR'?: { ComplaintHierarchy?: unknown[] } };
       };
 
       // Service definitions should exist (may be in different MDMS format)
@@ -143,6 +145,7 @@ describe('PGR End-to-End Workflow', () => {
                 { code: 'EMPLOYEE', name: 'Employee', tenantId: tenant.city },
                 { code: 'GRO', name: 'Grievance Routing Officer', tenantId: tenant.city },
                 { code: 'DGRO', name: 'Department GRO', tenantId: tenant.city },
+                { code: 'CSR', name: 'Customer Service Representative', tenantId: tenant.city },
               ],
             },
           },
@@ -164,7 +167,7 @@ describe('PGR End-to-End Workflow', () => {
             },
             citizen: {
               name: 'Test Citizen',
-              mobileNumber: '9888888888',
+              mobileNumber: fixedMobile(888888888),
               tenantId: tenant.city,
             },
           },
@@ -191,14 +194,19 @@ describe('PGR End-to-End Workflow', () => {
     test('should verify complaint in database', async () => {
       expect(serviceRequestId).toBeDefined();
 
-      const dbRecord = await db.queryOne<{
-        servicerequestid: string;
-        tenantid: string;
-        servicecode: string;
-      }>(
-        'SELECT servicerequestid, tenantid, servicecode FROM eg_pgr_service_v2 WHERE servicerequestid = $1',
-        [serviceRequestId]
-      );
+      // Persister writes asynchronously via Kafka — poll until the record appears
+      let dbRecord = null;
+      for (let attempt = 0; attempt < 30 && !dbRecord; attempt++) {
+        dbRecord = await db.queryOne<{
+          servicerequestid: string;
+          tenantid: string;
+          servicecode: string;
+        }>(
+          'SELECT servicerequestid, tenantid, servicecode FROM eg_pgr_service_v2 WHERE servicerequestid = $1',
+          [serviceRequestId]
+        );
+        if (!dbRecord) await new Promise(r => setTimeout(r, 1000));
+      }
 
       expect(dbRecord).not.toBeNull();
       expect(dbRecord?.servicerequestid).toBe(serviceRequestId);

@@ -1,0 +1,99 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "KE",
+      "name": "Kenya",
+      "logoUrl": "https://storage.googleapis.com/stateless-printlion-co-ke2/2024/03/f061daec-government-vector-icons_bomet-county-logo_bomet-county-logo.jpg",
+      "bannerUrl": "https://s3.ap-south-1.amazonaws.com/pb-egov-assets/pb.testing/Punjab-bg-QA.jpg",
+      "languages": [
+        {
+          "label": "ENGLISH",
+          "value": "en_IN"
+        },
+        {
+          "label": "ಕನ್ನಡ",
+          "value": "ka_IN"
+        }
+      ],
+      "qrCodeURL": "https://lh3.googleusercontent.com/-311gz2-xcHw/X6KRNSQTkWI/AAAAAAAAAKU/JmHSj-6rKPMVFbo6oL5x4JhYTTg8-UHmwCK8BGAsYHg/s0/2020-11-04.png",
+      "statelogo": "https://storage.googleapis.com/stateless-printlion-co-ke2/2024/03/f061daec-government-vector-icons_bomet-county-logo_bomet-county-logo.jpg",
+      "defaultUrl": {
+        "citizen": "/user/register",
+        "employee": "/user/login"
+      },
+      "logoUrlWhite": "https://storage.googleapis.com/stateless-printlion-co-ke2/2024/03/f061daec-government-vector-icons_bomet-county-logo_bomet-county-logo.jpg",
+      "hasLocalisation": true,
+      "localizationModules": [
+        {
+          "label": "rainmaker-abg",
+          "value": "rainmaker-abg"
+        },
+        {
+          "label": "rainmaker-common",
+          "value": "rainmaker-common"
+        },
+        {
+          "label": "rainmaker-noc",
+          "value": "rainmaker-noc"
+        },
+        {
+          "label": "rainmaker-pt",
+          "value": "rainmaker-pt"
+        },
+        {
+          "label": "rainmaker-uc",
+          "value": "rainmaker-uc"
+        },
+        {
+          "label": "rainmaker-pgr",
+          "value": "rainmaker-pgr"
+        },
+        {
+          "label": "rainmaker-tl",
+          "value": "rainmaker-tl"
+        },
+        {
+          "label": "rainmaker-hr",
+          "value": "rainmaker-hr"
+        },
+        {
+          "label": "rainmaker-test",
+          "value": "rainmaker-test"
+        },
+        {
+          "label": "finance-erp",
+          "value": "finance-erp"
+        },
+        {
+          "label": "rainmaker-receipt",
+          "value": "rainmaker-receipt"
+        },
+        {
+          "label": "rainmaker-dss",
+          "value": "rainmaker-dss"
+        },
+        {
+          "label": "rainmaker-fsm",
+          "value": "rainmaker-fsm"
+        },
+        {
+          "label": "rainmaker-workbench",
+          "value": "rainmaker-workbench"
+        },
+        {
+          "label": "rainmaker-schema",
+          "value": "rainmaker-schema"
+        },
+        {
+          "label": "rainmaker-mdms",
+          "value": "rainmaker-mdms"
+        },
+        {
+          "label": "rainmaker-im",
+          "value": "rainmaker-im"
+        }
+      ]
+    }
+  }
+]

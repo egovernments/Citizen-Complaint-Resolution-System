@@ -1,5 +1,5 @@
 var globalConfigs = (function () {
-  var stateTenantId = "pg";
+  var stateTenantId = "ke";
   var contextPath = "digit-ui";
   var gmaps_api_key = "";
   var finEnv = "dev";
@@ -14,6 +14,25 @@ var globalConfigs = (function () {
   var mdmsContext = "mdms-v2";
   var hrmsContext = "egov-hrms";
   var invalidEmployeeRoles = ["SYSTEM"];
+  var authProvider = "digit";
+  var pgrBoundaryHighestLevel = "County";
+  var pgrBoundaryLowestLevel = "Ward";
+  var mapCenter = { lat: -1.0, lng: 37.0 };
+  var useInboxV1 = true;
+  // Client-side dashboard render-lag instrumentation (#1110). ON unless
+  // explicitly false — the emitter self-mutes when the /otel ingest route is
+  // absent. Kill switch: flip to false here (no rebuild needed).
+  var dashboardMetricsEnabled = true;
+  // Source of truth for mobile validation is common-masters.MobileNumberValidation in MDMS
+  // (seeded during tenant onboarding). These values are a build-time fallback used only
+  // when MDMS has not been seeded yet or cannot be reached. Changing these values alone
+  // will NOT take effect in a running deployment — update the MDMS master data as well.
+  // All derived constraints (min/max length, allowed starting digits, error message) are
+  // computed at runtime from mobileNumberRegex — do NOT add separate fields for them here.
+  var coreMobileConfigs = {
+    countryCode: "+254",
+    mobileNumberRegex: "^0?[17][0-9]{8}$",
+  };
 
   // Runtime locale fallback for local setup: force default language unless user explicitly changes it.
   try {
@@ -80,8 +99,22 @@ var globalConfigs = (function () {
       return mdmsContext;
     } else if (key === "HRMS_CONTEXT_PATH") {
       return hrmsContext;
+    } else if (key === "AUTH_PROVIDER") {
+      return authProvider;
     } else if (key === "INVALIDROLES") {
       return invalidEmployeeRoles;
+    } else if (key === "PGR_BOUNDARY_HIGHEST_LEVEL") {
+      return pgrBoundaryHighestLevel;
+    } else if (key === "PGR_BOUNDARY_LOWEST_LEVEL") {
+      return pgrBoundaryLowestLevel;
+    } else if (key === "MAP_CENTER") {
+      return mapCenter;
+    } else if (key === "USE_INBOX_V1") {
+      return useInboxV1;
+    } else if (key === "CORE_MOBILE_CONFIGS") {
+      return coreMobileConfigs;
+    } else if (key === "DASHBOARD_METRICS_ENABLED") {
+      return dashboardMetricsEnabled;
     }
   };
 

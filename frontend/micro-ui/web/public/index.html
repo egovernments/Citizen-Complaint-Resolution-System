@@ -14,8 +14,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#00bcd1" />
   <title>DIGIT</title>
+  <script>
+    // Workaround for @egovernments/digit-ui-components Dropdown bug.
+    // The Dropdown component runs a mount-time useEffect that calls
+    // `scrollIntoView({behavior:"smooth",block:"center",inline:"center"})` on
+    // itself whenever its bounding rect sits outside the viewport. On tall
+    // forms the dropdowns below the fold each scroll the page downward on
+    // first paint — the last one wins. We monkey-patch
+    // Element.prototype.scrollIntoView to no-op only when (a) the target
+    // element is a Dropdown root (identified by class) AND (b) the current
+    // page is one of the known-affected PGR pages. Every other page and
+    // every other scrollIntoView call passes through unchanged.
+    (function () {
+      var orig = Element.prototype.scrollIntoView;
+      var DROPDOWN_CLASS = /(^|\s)(digit-dropdown-employee-select-wrap|digit-dropdown-select-wrap)(\s|$)/;
+      function isAffectedPage() {
+        var p = location.pathname;
+        return /\/employee\/pgr\/complaint\/create(\/|$)/.test(p)
+            || /\/employee\/pgr\/inbox(\/|$)/.test(p);
+      }
+      Element.prototype.scrollIntoView = function () {
+        var cls = this && typeof this.className === "string" ? this.className : "";
+        if (DROPDOWN_CLASS.test(cls) && isAffectedPage()) return;
+        return orig.apply(this, arguments);
+      };
+    })();
+  </script>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
-  <!-- <script src="https://egov-dev-assets.s3.ap-south-1.amazonaws.com/globalConfigsWorkbenchDev.js"></script> -->
+  <script src="%PUBLIC_URL%/globalConfigs.js"></script>
   <script>
     // DOM Override for Profile Page
     (function () {
@@ -161,13 +187,14 @@
       gap: .25rem;
     }
 
-     .checkbox-wrap .input-emp {
+    .checkbox-wrap .input-emp {
       width: 24px;
       height: 24px;
     }
+
     .checkbox-wrap .custom-checkbox,
     .checkbox-wrap .custom-checkbox-emp {
-       width: 24px;
+      width: 24px;
       height: 24px;
       position: absolute;
       top: 0;
@@ -181,6 +208,13 @@
     /* Hide back button in citizen all services page but keep the space */
     .citizen-all-services-wrapper .digit-back-link {
       visibility: hidden !important;
+    }
+
+    /* Bugfix: Override external CSS forcing Inbox sidebar icon to white */
+    @media (min-width: 780px) {
+      .employeeCard.filter.inboxLinks .complaint-links-container .header .logo svg path {
+        fill: #ffffff !important;
+      }
     }
   </style>
 </head>

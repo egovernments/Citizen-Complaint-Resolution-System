@@ -1,0 +1,800 @@
+{
+  "code": "CG",
+  "name": "Congo-Brazzaville",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "CG-11",
+      "parent_code": "CG",
+      "name": "Bouenza Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-921657745",
+          "parent_code": "CG-11",
+          "name": "Nkayi",
+          "type": "city",
+          "population": "71620",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-922244999",
+          "parent_code": "CG-11",
+          "name": "Loutété",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-922246104",
+          "parent_code": "CG-11",
+          "name": "Loudima Gare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-922247857",
+          "parent_code": "CG-11",
+          "name": "Mouyondzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-922247912",
+          "parent_code": "CG-11",
+          "name": "Madingou",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2468868676",
+          "parent_code": "CG-11",
+          "name": "Boko-Songho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2468868680",
+          "parent_code": "CG-11",
+          "name": "Mfouati",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300964479",
+          "parent_code": "CG-11",
+          "name": "Bouansa",
+          "type": "city",
+          "population": "20000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300966525",
+          "parent_code": "CG-11",
+          "name": "Loudima",
+          "type": "city",
+          "population": "19884",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7101383485",
+          "parent_code": "CG-11",
+          "name": "Kingoue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CG-8",
+      "parent_code": "CG",
+      "name": "Cuvette Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-921563456",
+          "parent_code": "CG-8",
+          "name": "Owando",
+          "type": "city",
+          "population": "34808",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-922268826",
+          "parent_code": "CG-8",
+          "name": "Boundji",
+          "type": "city",
+          "population": "9970",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-922278097",
+          "parent_code": "CG-8",
+          "name": "Okoyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-922284291",
+          "parent_code": "CG-8",
+          "name": "Oyo",
+          "type": "city",
+          "population": "7413",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-922285577",
+          "parent_code": "CG-8",
+          "name": "Lékéti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-922727657",
+          "parent_code": "CG-8",
+          "name": "Mossaka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-923915821",
+          "parent_code": "CG-8",
+          "name": "Makoua",
+          "type": "city",
+          "population": "20038",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1726826683",
+          "parent_code": "CG-8",
+          "name": "Loukoléla",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9616194391",
+          "parent_code": "CG-8",
+          "name": "Bokoma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CG-15",
+      "parent_code": "CG",
+      "name": "Cuvette-Ouest Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-921494997",
+          "parent_code": "CG-15",
+          "name": "Etoumbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-921507120",
+          "parent_code": "CG-15",
+          "name": "Kellé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2466784359",
+          "parent_code": "CG-15",
+          "name": "Mbomo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300965105",
+          "parent_code": "CG-15",
+          "name": "Ewo",
+          "type": "city",
+          "population": "11457",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CG-5",
+      "parent_code": "CG",
+      "name": "Kouilou Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2467887443",
+          "parent_code": "CG-5",
+          "name": "Kakamoeka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467887447",
+          "parent_code": "CG-5",
+          "name": "Madingo-Kayes",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300965122",
+          "parent_code": "CG-5",
+          "name": "Hinda",
+          "type": "city",
+          "population": "2000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300966505",
+          "parent_code": "CG-5",
+          "name": "Loango",
+          "type": "city",
+          "population": "21016",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300967805",
+          "parent_code": "CG-5",
+          "name": "Mvouti",
+          "type": "city",
+          "population": "1500",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CG-7",
+      "parent_code": "CG",
+      "name": "Likouala",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-620400551",
+          "parent_code": "CG-7",
+          "name": "Dongou",
+          "type": "city",
+          "population": "9935",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-620439732",
+          "parent_code": "CG-7",
+          "name": "Impfondo",
+          "type": "city",
+          "population": "47719",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-922635540",
+          "parent_code": "CG-7",
+          "name": "Epéna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-922912903",
+          "parent_code": "CG-7",
+          "name": "Boyellé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1080414876",
+          "parent_code": "CG-7",
+          "name": "Enyellé",
+          "type": "city",
+          "population": "8481",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1080425407",
+          "parent_code": "CG-7",
+          "name": "Mimbelli",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1080430926",
+          "parent_code": "CG-7",
+          "name": "Moumpoutou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300964514",
+          "parent_code": "CG-7",
+          "name": "Bétou",
+          "type": "city",
+          "population": "15000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5650165756",
+          "parent_code": "CG-7",
+          "name": "Liranga",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6056158304",
+          "parent_code": "CG-7",
+          "name": "Moualé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9346207851",
+          "parent_code": "CG-7",
+          "name": "Sombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9616203669",
+          "parent_code": "CG-7",
+          "name": "Bouaniela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CG-2",
+      "parent_code": "CG",
+      "name": "Lékoumou Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-928167493",
+          "parent_code": "CG-2",
+          "name": "Sibiti",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2468813555",
+          "parent_code": "CG-2",
+          "name": "Bambama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2468813558",
+          "parent_code": "CG-2",
+          "name": "Komono",
+          "type": "city",
+          "population": "8941",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2468813562",
+          "parent_code": "CG-2",
+          "name": "Zanaga",
+          "type": "city",
+          "population": "4117",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CG-9",
+      "parent_code": "CG",
+      "name": "Niari Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-619897914",
+          "parent_code": "CG-9",
+          "name": "Dolisie",
+          "type": "city",
+          "population": "117920",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-3300964559",
+          "parent_code": "CG-9",
+          "name": "Divénié",
+          "type": "city",
+          "population": "3977",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300965585",
+          "parent_code": "CG-9",
+          "name": "Kibangou",
+          "type": "city",
+          "population": "2127",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300965644",
+          "parent_code": "CG-9",
+          "name": "Kimongo",
+          "type": "city",
+          "population": "3000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300966551",
+          "parent_code": "CG-9",
+          "name": "Louvakou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300967282",
+          "parent_code": "CG-9",
+          "name": "Mayoko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300967701",
+          "parent_code": "CG-9",
+          "name": "Mossendjo",
+          "type": "city",
+          "population": "18628",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300967758",
+          "parent_code": "CG-9",
+          "name": "Moutamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7868886199",
+          "parent_code": "CG-9",
+          "name": "Nyanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11258180898",
+          "parent_code": "CG-9",
+          "name": "Moungoundou",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CG-14",
+      "parent_code": "CG",
+      "name": "Plateaux Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-614006050",
+          "parent_code": "CG-14",
+          "name": "Mongolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-614006082",
+          "parent_code": "CG-14",
+          "name": "Mpouya",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-921455438",
+          "parent_code": "CG-14",
+          "name": "Gamboma",
+          "type": "city",
+          "population": "26053",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-928169782",
+          "parent_code": "CG-14",
+          "name": "Djambala",
+          "type": "city",
+          "population": "14989",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467636564",
+          "parent_code": "CG-14",
+          "name": "Abala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467636565",
+          "parent_code": "CG-14",
+          "name": "Lékana",
+          "type": "city",
+          "population": "4039",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3043397052",
+          "parent_code": "CG-14",
+          "name": "Ongogni",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3043445710",
+          "parent_code": "CG-14",
+          "name": "Ngo",
+          "type": "city",
+          "population": "14258",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9616213021",
+          "parent_code": "CG-14",
+          "name": "Makotipoko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CG-12",
+      "parent_code": "CG",
+      "name": "Pool Department",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-614006822",
+          "parent_code": "CG-12",
+          "name": "Ngabé",
+          "type": "city",
+          "population": "2000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-614007139",
+          "parent_code": "CG-12",
+          "name": "Mbé",
+          "type": "city",
+          "population": "3000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-922914193",
+          "parent_code": "CG-12",
+          "name": "Kitadi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-928170481",
+          "parent_code": "CG-12",
+          "name": "Kinkala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-928182920",
+          "parent_code": "CG-12",
+          "name": "Odziba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-928186368",
+          "parent_code": "CG-12",
+          "name": "Mayama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-928215992",
+          "parent_code": "CG-12",
+          "name": "Vinza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2052089666",
+          "parent_code": "CG-12",
+          "name": "Boko",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3043397710",
+          "parent_code": "CG-12",
+          "name": "Mbanza-Ndounga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300964471",
+          "parent_code": "CG-12",
+          "name": "Boko",
+          "type": "city",
+          "population": "1500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300966164",
+          "parent_code": "CG-12",
+          "name": "Kindamba",
+          "type": "city",
+          "population": "8415",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300966218",
+          "parent_code": "CG-12",
+          "name": "Kintélé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300967672",
+          "parent_code": "CG-12",
+          "name": "Mindouli",
+          "type": "city",
+          "population": "20462",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300967838",
+          "parent_code": "CG-12",
+          "name": "Ngoma-Tsétsé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CG-13",
+      "parent_code": "CG",
+      "name": "Sangha",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-250884373",
+          "parent_code": "CG-13",
+          "name": "Ouésso",
+          "type": "city",
+          "population": "39653",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-921273084",
+          "parent_code": "CG-13",
+          "name": "Pokola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-923932383",
+          "parent_code": "CG-13",
+          "name": "Sembé",
+          "type": "city",
+          "population": "4957",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-923935666",
+          "parent_code": "CG-13",
+          "name": "Souanké",
+          "type": "city",
+          "population": "5000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3300967690",
+          "parent_code": "CG-13",
+          "name": "Mokéko",
+          "type": "city",
+          "population": "5000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9616208372",
+          "parent_code": "CG-13",
+          "name": "Pikounda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CG-BZV",
+      "parent_code": "CG",
+      "name": "Brazzaville (department)",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-435903633",
+          "parent_code": "CG-BZV",
+          "name": "Brazzaville",
+          "type": "city",
+          "population": "1932610",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-11215468159",
+          "parent_code": "CG-BZV",
+          "name": "Lissanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "CG-16",
+      "parent_code": "CG",
+      "name": "Pointe-Noire (département)",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2448258134",
+          "parent_code": "CG-16",
+          "name": "Pointe-Noire",
+          "type": "city",
+          "population": "1006611",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-11161391869",
+          "parent_code": "CG-16",
+          "name": "Tchiamba-Nzassi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

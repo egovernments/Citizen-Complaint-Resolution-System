@@ -5,6 +5,11 @@ set -euo pipefail
 # 1) Environment (project-like scope)
 # 2) Twilio SMS integration (usable for WhatsApp by sending phone as whatsapp:+<number>)
 # 3) Minimal workflow with a single SMS step
+# 4) novu-bridge pass-through channel workflows: complaints-sms (one `sms`
+#    step) and complaints-email (one `email` step) — the fixed workflows the
+#    bridge triggers with the fully rendered message in payload.body /
+#    payload.subject. Without these a fresh install logs
+#    FAILED/NB_NOVU_TRIGGER_FAILED for every SMS/EMAIL notification.
 #
 # Required env vars:
 #   NOVU_API_KEY
@@ -17,12 +22,14 @@ set -euo pipefail
 #   NOVU_ENV_FILE          (default: <script-dir>/.env.novu)
 #   NOVU_ENV_NAME          (default: digit-dev)
 #   NOVU_ENV_COLOR         (default: #4F46E5)
-#   NOVU_WORKFLOW_ID       (default: complaints-whatsapp-v1)
+#   NOVU_WORKFLOW_ID       (default: complaints-whatsapp — MUST match novu.bridge.workflow.id.whatsapp, i.e. what the bridge triggers)
 #   NOVU_WORKFLOW_NAME     (default: Complaints WhatsApp Workflow)
 #   NOVU_INTEGRATION_NAME  (default: twilio-whatsapp)
 #   NOVU_INTEGRATION_ID    (default: twilio-whatsapp)
 #   NOVU_SMS_BODY          (default: Complaint {{payload.complaintNo}} status is {{payload.status}})
 #   NOVU_EVENT_WORKFLOWS   (default: COMPLAINTS.WORKFLOW.APPLY,COMPLAINTS.WORKFLOW.ASSIGN)
+#   NOVU_SMS_WORKFLOW_ID   (default: complaints-sms   — must match novu.bridge.workflow.id.sms)
+#   NOVU_EMAIL_WORKFLOW_ID (default: complaints-email — must match novu.bridge.workflow.id.email)
 
 require_var() {
   local name="$1"
@@ -46,9 +53,23 @@ require_cmd jq
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NOVU_ENV_FILE="${NOVU_ENV_FILE:-${SCRIPT_DIR}/.env.novu}"
 if [[ -f "$NOVU_ENV_FILE" ]]; then
+  # EXPLICIT ENV WINS. The tracked .env.novu holds DUMMY values, so it must only
+  # FILL variables the caller did NOT already provide — never override them.
+  # Snapshot the vars we care about (name + whether set), source the file, then
+  # restore any that were already set so the dummy values can't clobber them.
+  _PRESET_VARS=(NOVU_BASE_URL NOVU_API_KEY TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN \
+    TWILIO_WHATSAPP_FROM NOVU_ENV_NAME NOVU_ENV_COLOR NOVU_INTEGRATION_NAME \
+    NOVU_INTEGRATION_ID NOVU_WORKFLOW_ID NOVU_WORKFLOW_NAME NOVU_SMS_BODY \
+    NOVU_EVENT_WORKFLOWS NOVU_SMS_WORKFLOW_ID NOVU_EMAIL_WORKFLOW_ID)
+  declare -A _PRESET_SNAP=()
+  for _v in "${_PRESET_VARS[@]}"; do
+    [[ -n "${!_v+x}" ]] && _PRESET_SNAP[$_v]="${!_v}"
+  done
   # shellcheck disable=SC1090
   set -a && source "$NOVU_ENV_FILE" && set +a
-  echo "Loaded environment from: $NOVU_ENV_FILE"
+  for _v in "${!_PRESET_SNAP[@]}"; do printf -v "$_v" '%s' "${_PRESET_SNAP[$_v]}"; export "$_v"; done
+  unset _PRESET_VARS _PRESET_SNAP _v
+  echo "Loaded environment from: $NOVU_ENV_FILE (explicit env preserved)"
 fi
 
 require_var NOVU_API_KEY
@@ -59,12 +80,14 @@ require_var TWILIO_WHATSAPP_FROM
 NOVU_BASE_URL="${NOVU_BASE_URL:-http://localhost:1336}"
 NOVU_ENV_NAME="${NOVU_ENV_NAME:-digit-dev}"
 NOVU_ENV_COLOR="${NOVU_ENV_COLOR:-#4F46E5}"
-NOVU_WORKFLOW_ID="${NOVU_WORKFLOW_ID:-complaints-whatsapp-v1}"
+NOVU_WORKFLOW_ID="${NOVU_WORKFLOW_ID:-complaints-whatsapp}"
 NOVU_WORKFLOW_NAME="${NOVU_WORKFLOW_NAME:-Complaints WhatsApp Workflow}"
 NOVU_INTEGRATION_NAME="${NOVU_INTEGRATION_NAME:-twilio-whatsapp}"
 NOVU_INTEGRATION_ID="${NOVU_INTEGRATION_ID:-twilio-whatsapp}"
 NOVU_SMS_BODY="${NOVU_SMS_BODY:-Complaint {{payload.complaintNo}} status is {{payload.status}}}"
 NOVU_EVENT_WORKFLOWS="${NOVU_EVENT_WORKFLOWS:-COMPLAINTS.WORKFLOW.APPLY,COMPLAINTS.WORKFLOW.ASSIGN}"
+NOVU_SMS_WORKFLOW_ID="${NOVU_SMS_WORKFLOW_ID:-complaints-sms}"
+NOVU_EMAIL_WORKFLOW_ID="${NOVU_EMAIL_WORKFLOW_ID:-complaints-email}"
 
 AUTH_HEADER="Authorization: ApiKey ${NOVU_API_KEY}"
 JSON_HEADER="Content-Type: application/json"
@@ -257,53 +280,97 @@ else
   echo "    Found integration id: $INTEGRATION_ID"
 fi
 
-echo "==> Checking/creating workflow: ${NOVU_WORKFLOW_ID}"
-WORKFLOWS_JSON="$(api_get "/v2/workflows?limit=100&page=0")"
-WORKFLOW_EXISTS="$(echo "$WORKFLOWS_JSON" | jq -r --arg wid "$NOVU_WORKFLOW_ID" '
-  [
-    (.. | arrays | .[]? | select(type=="object") | select((.workflowId // "") == $wid))
-  ] | length
-')"
+# Idempotent create of a Novu v2 workflow: skip when the workflowId already
+# exists in WORKFLOWS_JSON, otherwise POST /v2/workflows with the given steps.
+# Args: <workflowId> <workflowName> <steps-json-array>
+ensure_channel_workflow() {
+  local wf_id="$1"
+  local wf_name="$2"
+  local steps_json="$3"
 
-if [[ "$WORKFLOW_EXISTS" == "0" ]]; then
-  # Minimal v2 workflow payload with one SMS step.
-  # WhatsApp delivery is achieved at trigger-time by sending `to.phone=whatsapp:+<number>`.
-  CREATE_WORKFLOW_PAYLOAD="$(jq -cn \
-    --arg wfId "$NOVU_WORKFLOW_ID" \
-    --arg name "$NOVU_WORKFLOW_NAME" \
-    --arg body "$NOVU_SMS_BODY" \
+  local wf_exists
+  wf_exists="$(echo "$WORKFLOWS_JSON" | jq -r --arg wid "$wf_id" '
+    [
+      (.. | arrays | .[]? | select(type=="object") | select((.workflowId // "") == $wid))
+    ] | length
+  ')"
+
+  if [[ "$wf_exists" != "0" ]]; then
+    echo "    Workflow already exists: $wf_id"
+    return 0
+  fi
+
+  local payload
+  payload="$(jq -cn \
+    --arg wfId "$wf_id" \
+    --arg name "$wf_name" \
+    --argjson steps "$steps_json" \
     '{
       workflowId:$wfId,
       name:$name,
       active:true,
       validatePayload:false,
       isTranslationEnabled:false,
-      steps:[
-        {
-          name:"Send WhatsApp via Twilio",
-          type:"sms",
-          controlValues:{
-            body:$body
-          }
-        }
-      ]
+      steps:$steps
     }')"
 
-  CREATED_WORKFLOW="$(api_post "/v2/workflows" "$CREATE_WORKFLOW_PAYLOAD")" || {
-    echo "Workflow creation failed. Response follows." >&2
-    echo "$CREATE_WORKFLOW_PAYLOAD" | jq . >&2
+  local created
+  created="$(api_post "/v2/workflows" "$payload")" || {
+    echo "Workflow creation failed for ${wf_id}. Payload follows." >&2
+    echo "$payload" | jq . >&2
     exit 1
   }
-  CREATED_WORKFLOW_ID="$(echo "$CREATED_WORKFLOW" | jq -r '.workflowId // .data.workflowId // empty')"
-  if [[ -z "${CREATED_WORKFLOW_ID}" ]]; then
-    echo "Workflow create response did not include workflowId:" >&2
-    echo "$CREATED_WORKFLOW" | jq . >&2
+  local created_id
+  created_id="$(echo "$created" | jq -r '.workflowId // .data.workflowId // empty')"
+  if [[ -z "${created_id}" ]]; then
+    echo "Workflow create response did not include workflowId for ${wf_id}:" >&2
+    echo "$created" | jq . >&2
     exit 1
   fi
-  echo "    Created workflow: $CREATED_WORKFLOW_ID"
-else
-  echo "    Workflow already exists"
-fi
+  echo "    Created workflow: $created_id"
+}
+
+WORKFLOWS_JSON="$(api_get "/v2/workflows?limit=100&page=0")"
+
+echo "==> Checking/creating workflow: ${NOVU_WORKFLOW_ID}"
+# Minimal v2 workflow with one SMS step.
+# WhatsApp delivery is achieved at trigger-time by sending `to.phone=whatsapp:+<number>`.
+WHATSAPP_STEPS="$(jq -cn --arg body "$NOVU_SMS_BODY" '[
+  {
+    name:"Send WhatsApp via Twilio",
+    type:"sms",
+    controlValues:{ body:$body }
+  }
+]')"
+ensure_channel_workflow "$NOVU_WORKFLOW_ID" "$NOVU_WORKFLOW_NAME" "$WHATSAPP_STEPS"
+
+echo "==> Checking/creating novu-bridge channel workflows: ${NOVU_SMS_WORKFLOW_ID}, ${NOVU_EMAIL_WORKFLOW_ID}"
+# novu-bridge triggers these fixed per-channel workflows (see
+# novu.bridge.workflow.id.sms / .email in application.properties) with the
+# fully rendered message in the trigger payload — the steps are pure
+# pass-throughs of payload.body / payload.subject. Shapes match the live
+# definitions on the reference install.
+SMS_STEPS='[
+  {
+    "name":"sms-step",
+    "type":"sms",
+    "controlValues":{ "body":"{{ payload.body }}" }
+  }
+]'
+EMAIL_STEPS='[
+  {
+    "name":"email-step",
+    "type":"email",
+    "controlValues":{
+      "subject":"{{ payload.subject }}",
+      "body":"{{ payload.body }}",
+      "editorType":"html",
+      "disableOutputSanitization":true
+    }
+  }
+]'
+ensure_channel_workflow "$NOVU_SMS_WORKFLOW_ID" "$NOVU_SMS_WORKFLOW_ID" "$SMS_STEPS"
+ensure_channel_workflow "$NOVU_EMAIL_WORKFLOW_ID" "$NOVU_EMAIL_WORKFLOW_ID" "$EMAIL_STEPS"
 
 echo "==> Checking/creating event-convention workflows: ${NOVU_EVENT_WORKFLOWS}"
 IFS=',' read -r -a EVENT_WF_IDS <<< "$NOVU_EVENT_WORKFLOWS"
@@ -400,6 +467,7 @@ echo "Bootstrap complete."
 echo "Environment: $NOVU_ENV_NAME ($ENV_ID)"
 echo "Integration: $NOVU_INTEGRATION_ID ($INTEGRATION_ID)"
 echo "Workflow: $NOVU_WORKFLOW_ID"
+echo "Bridge Channel Workflows: $NOVU_SMS_WORKFLOW_ID, $NOVU_EMAIL_WORKFLOW_ID"
 echo "Event Workflows: $NOVU_EVENT_WORKFLOWS"
 echo
 echo "Trigger example (WhatsApp):"
@@ -408,7 +476,7 @@ curl -X POST "$NOVU_BASE_URL/v1/events/trigger" \
   -H "Authorization: ApiKey $NOVU_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "name":"complaints-whatsapp-v1",
+    "name":"complaints-whatsapp",
     "to":{
       "subscriberId":"pb.amritsar:4fef6612-07a8-4751-97e9-0e0ac0687ebe",
       "phone":"whatsapp:+14155550123"

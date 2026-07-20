@@ -1,0 +1,14 @@
+# Data directories
+overpass_data/
+overpass_db/
+
+# Logs
+*.log
+*.pid
+
+# Node
+node_modules/
+dist/
+
+# Env
+.env

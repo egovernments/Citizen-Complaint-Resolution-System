@@ -1,0 +1,4 @@
+# Directories created by Docker containers running as root — act can't copy them
+local-setup/jupyter/.Trash-0
+local-setup/jupyter/__pycache__
+local-setup/jupyter/.ipynb_checkpoints

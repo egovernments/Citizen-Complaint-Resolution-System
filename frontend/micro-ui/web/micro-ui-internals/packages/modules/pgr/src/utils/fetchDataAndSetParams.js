@@ -153,15 +153,34 @@ export const convertEpochFormateToDate = (dateEpoch) => {
 };
 
 
-export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
+export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchyLevels = []) => {
   const userInfo = formData?.complaintUser?.code === "ANOTHER_USER" ? {
     "name": formData?.ComplainantName?.trim()?.length > 0 ? formData?.ComplainantName?.trim() : null,
     "mobileNumber": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
     "userName": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
+    "countryCode": formData?.countryCode || "+91",
     "type": "EMPLOYEE",
     "tenantId": tenantId,
-  } : user;
-  const additionalDetail = { supervisorName : formData?.SupervisorName?.trim()?.length > 0 ? formData?.SupervisorName?.trim() : null, supervisorContactNumber : formData?.SupervisorContactNumber?.trim()?.length > 0 ? formData?.SupervisorContactNumber?.trim() : null };
+  } : { ...user, countryCode: formData?.countryCode || user?.countryCode || "+91" };
+  const boundaryHierarchy = (() => {
+    const bc = Array.isArray(formData?.boundaryComponent) ? formData.boundaryComponent : [];
+    // hierarchyLevels is an ordered array of level names matching bc indices
+    if (Array.isArray(hierarchyLevels) && hierarchyLevels.length > 0) {
+      const obj = {};
+      hierarchyLevels.forEach((levelName, i) => {
+        if (levelName && bc[i]) obj[levelName] = bc[i];
+      });
+      return obj;
+    }
+    return bc; // flat array fallback
+  })();
+
+  const additionalDetail = {
+    supervisorName: formData?.SupervisorName?.trim()?.length > 0 ? formData?.SupervisorName?.trim() : null,
+    supervisorContactNumber: formData?.SupervisorContactNumber?.trim()?.length > 0 ? formData?.SupervisorContactNumber?.trim() : null,
+    boundaryHierarchy: boundaryHierarchy,
+  };
+
   const timestamp = Date.now();
   let complaint = {
     "service": {
@@ -184,19 +203,16 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
         },
         "geoLocation": {}
       },
-      "additionalDetail": JSON.stringify(additionalDetail),
+      "additionalDetail": additionalDetail,
       "auditDetails": {
         "createdBy": user?.uuid,
         "createdTime": timestamp,
         "lastModifiedBy": user?.uuid,
         "lastModifiedTime": timestamp
-      }
+      },
     },
     "workflow": {
       "action": "APPLY",
-      "assignes": [],
-      "hrmsAssignes": [],
-      "comments": ""
     }
   }
 

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useHistory, useParams } from "react-router-dom/cjs/react-router-dom.min";
 import { HeaderComponent, Button, Card, Footer, ActionBar, SummaryCard, Tag, Timeline, Toast, NoResultsFound } from "@egovernments/digit-ui-components";
 import { Loader, DisplayPhotos, ImageViewer } from "@egovernments/digit-ui-react-components";
-import { convertEpochFormateToDate } from "../../utils";
+import { convertEpochFormateToDate, adaptComplaintHierarchyToServiceDefs } from "../../utils";
 import TimelineWrapper from "../../components/TimeLineWrapper";
 import PGRWorkflowModal from "../../components/PGRWorkflowModal";
 import ComplaintLocationMap from "../../components/ComplaintLocationMap";
@@ -44,6 +44,14 @@ const ACTION_CONFIGS = [
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
+            },
           ],
         },
       ],
@@ -80,6 +88,14 @@ const ACTION_CONFIGS = [
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
+            },
           ],
         },
       ],
@@ -108,6 +124,14 @@ const ACTION_CONFIGS = [
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
+            },
           ],
         },
       ],
@@ -135,6 +159,14 @@ const ACTION_CONFIGS = [
                 validation: { required: true },
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
+            },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
             },
           ],
         },
@@ -172,6 +204,14 @@ const ACTION_CONFIGS = [
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },
             },
+            {
+              type: "component",
+              isMandatory: false,
+              component: "PGRActionUploadComponent",
+              key: "SelectedDocuments",
+              label: "CS_COMMON_ATTACHMENTS",
+              populators: { name: "SelectedDocuments" },
+            },
           ],
         },
       ],
@@ -194,23 +234,27 @@ const PGRDetails = () => {
   const UpdateComplaintSession = Digit.Hooks.useSessionStorage("COMPLAINT_UPDATE", {});
   const [sessionFormData, setSessionFormData, clearSessionFormData] = UpdateComplaintSession;
 
-  // Load master data from MDMS
+  // Load master data from MDMS. Complaint types now live as leaf rows in the single
+  // RAINMAKER-PGR.ComplaintHierarchy adjacency list; we adapt them to the legacy
+  // ServiceDefs shape so the serviceCode->name / serviceCode->category lookups below
+  // keep working unchanged.
   const { isLoading: isMDMSLoading, data: serviceDefs } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
-    [{ name: "ServiceDefs" }],
+    [{ name: "ComplaintHierarchy" }],
     {
       cacheTime: Infinity,
-      select: (data) => data?.["RAINMAKER-PGR"]?.ServiceDefs,
+      select: (data) => adaptComplaintHierarchyToServiceDefs(data?.["RAINMAKER-PGR"]?.ComplaintHierarchy),
     },
-    { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
+    { schemaCode: "COMPLAINT_HIERARCHY_MASTER_DATA" }
   );
 
   function getServiceCategoryByCode(serviceCode, services) {
     if (!serviceCode || !Array.isArray(services)) return null;
     const match = services.find(item => item.serviceCode === serviceCode);
-    // Return category if available, fallback to menuPath for backward compatibility
-    return match?.category || match?.menuPath || null;
+    // Prefer the parent node's display name (menuPathName); fall back to legacy
+    // category/menuPath for backward compatibility.
+    return match?.category || match?.menuPathName || match?.menuPath || null;
   }
 
   function getServiceNameByCode(serviceCode, services) {
@@ -290,6 +334,15 @@ const PGRDetails = () => {
       });
       return;
     }
+    const verificationDocuments = Array.isArray(_data?.SelectedDocuments)
+      ? _data.SelectedDocuments.map((fileStoreId) => ({
+          documentType: "PHOTO",
+          fileStoreId,
+          documentUid: "",
+          additionalDetails: {},
+        }))
+      : [];
+
     const updateRequest = {
       service: { ...pgrData?.ServiceWrappers[0].service },
       workflow: {
@@ -297,6 +350,7 @@ const PGRDetails = () => {
         assignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
         hrmsAssignes: _data?.SelectedAssignee?.uuid ? [_data?.SelectedAssignee?.uuid] : null,
         comments: _data?.SelectedComments || "",
+        verificationDocuments,
       },
     };
     handleResponseForUpdateComplaint(updateRequest);
@@ -381,6 +435,15 @@ const PGRDetails = () => {
     };
   };
 
+  // Roles that are purely citizen-facing — never show these as action options on the employee UI
+  const CITIZEN_ONLY_ROLES = ["CITIZEN"];
+
+  // Shared helper: returns true if ALL roles on an action are citizen-only (e.g. RATE, REOPEN, COMMENT)
+  const isCitizenOnlyAction = (action) =>
+    Array.isArray(action.roles) &&
+    action.roles.length > 0 &&
+    action.roles.every((role) => CITIZEN_ONLY_ROLES.includes(role));
+
   // Get list of valid actions for current user and state
   const getNextActionOptions = (workflowData, businessServiceResponse) => {
     const currentState = workflowData?.ProcessInstances?.[0]?.state;
@@ -388,14 +451,15 @@ const PGRDetails = () => {
     if (!matchingState) return [];
     const userRoles = userInfo?.info?.roles?.map((role) => role.code) || [];
 
-    // SUPERUSER gets all available actions without role filtering
+    // SUPERUSER gets all available actions without role filtering,
+    // but citizen-only actions (e.g. RATE with roles:["CITIZEN"]) are always excluded on the employee UI
     const hasSuperUserRole = userRoles.includes("SUPERUSER");
 
     if (!matchingState.actions) return [];
 
-    // Filter actions based on user roles, or return all if SUPERUSER
+    // Filter actions based on user roles, or return all employee-relevant ones if SUPERUSER
     const filteredActions = hasSuperUserRole
-      ? matchingState.actions
+      ? matchingState.actions.filter((action) => !isCitizenOnlyAction(action))
       : matchingState.actions.filter((action) => action.roles.some((role) => userRoles.includes(role)));
 
     return filteredActions.map((action) => ({
@@ -420,12 +484,14 @@ const PGRDetails = () => {
     // Check if user has SUPERUSER role - SUPERUSER bypasses ALL checks
     const hasSuperUserRole = userRoles.includes("SUPERUSER");
 
-    // SUPERUSER always sees action buttons if any actions exist
     if (hasSuperUserRole) {
-      return true;
+      // SUPERUSER sees the button only if there is at least one employee-relevant (non-citizen-only) action.
+      // e.g. on REJECTED/RESOLVED states where every action is CITIZEN-only, hide the button entirely.
+      return currentState.actions.some((action) => !isCitizenOnlyAction(action));
     }
 
-    // Get all roles from current state actions
+    // Get all roles from current state actions (employee path — citizen-only actions are naturally
+    // excluded because the employee won't have the CITIZEN role)
     const allActionRoles = [];
     currentState.actions.forEach(action => {
       if (action.roles) {
@@ -492,11 +558,33 @@ const PGRDetails = () => {
                     label: t("CS_COMPLAINT_FILED_DATE"),
                     value: convertEpochFormateToDate(pgrData?.ServiceWrappers[0].service?.auditDetails?.createdTime) || t("NA"),
                   },
-                  {
-                    inline: true,
-                    label: t("CS_COMPLAINT_DETAILS_AREA"),
-                    value: t(pgrData?.ServiceWrappers[0].service?.address?.locality?.code || "NA"),
-                  },
+                  ...((() => {
+                    const _rawHierarchy = pgrData?.ServiceWrappers[0]?.service?.additionalDetail?.boundaryHierarchy;
+                    const hierarchy = (() => { try { return typeof _rawHierarchy === "string" ? JSON.parse(_rawHierarchy) : _rawHierarchy; } catch (e) { return _rawHierarchy; } })();
+
+                    // Object format: { Zone: "CODE", Locality: "CODE" } — show one row per level
+                    if (hierarchy && typeof hierarchy === "object" && !Array.isArray(hierarchy) && Object.keys(hierarchy).length > 0) {
+                      return Object.entries(hierarchy).map(([level, code]) => ({
+                        inline: true,
+                        label: t(`EGOV_LOCATION_BOUNDARYTYPE_${level.toUpperCase()}`),
+                        value: t(code),
+                      }));
+                    }
+                    // Flat array fallback: show as joined breadcrumb
+                    if (Array.isArray(hierarchy) && hierarchy.length > 0) {
+                      return [{
+                        inline: true,
+                        label: t("CS_COMPLAINT_DETAILS_BOUNDARY_HIERARCHY"),
+                        value: hierarchy.map(code => t(code)).join(" > "),
+                      }];
+                    }
+                    // No hierarchy — fall back to plain area field
+                    return [{
+                      inline: true,
+                      label: t("CS_COMPLAINT_DETAILS_AREA"),
+                      value: t(pgrData?.ServiceWrappers[0].service?.address?.locality?.code || "NA"),
+                    }];
+                  })()),
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_CURRENT_STATUS"),
@@ -504,8 +592,23 @@ const PGRDetails = () => {
                   },
                   {
                     inline: true,
-                    label: t("CS_COMPLAINT_LANDMARK__DETAILS"),
-                    value: pgrData?.ServiceWrappers[0].service?.address?.landmark || "NA",
+                    label: t("ES_CREATECOMPLAINT_ADDRESS"),
+                    value: (() => {
+                      const address = pgrData?.ServiceWrappers[0]?.service?.address;
+                      const tenantId = pgrData?.ServiceWrappers[0]?.service?.tenantId;
+                      const isMultiRoot = Digit.Utils.getMultiRootTenant();
+                      const localityKey = isMultiRoot
+                        ? address?.locality?.code
+                        : address?.locality?.name || address?.locality?.code;
+                      const parts = [
+                        address?.landmark,
+                        localityKey ? t(localityKey) : null,
+                        tenantId ? t(`TENANT_TENANTS_${tenantId?.toUpperCase?.()?.replace(".", "_")}`) : null,
+                        address?.pincode,
+                      ].filter(Boolean);
+                      if (parts.length === 0) return "NA";
+                      return parts.join(", ");
+                    })(),
                   },
                   {
                     inline: true,
@@ -514,21 +617,23 @@ const PGRDetails = () => {
                   },
                 ],
               },
-              ...(pgrData?.ServiceWrappers[0]?.workflow?.verificationDocuments?.length > 0
-                ? [{
-                  cardType: "primary",
-                  fieldPairs: [
-                    {
-                      inline: false,
-                      type: "custom",
-                      renderCustomContent: () => (
-                        <ComplaintPhotos t={t} serviceWrapper={pgrData?.ServiceWrappers[0]} />
-                      ),
-                    },
-                  ],
-                  header: t("CS_COMMON_ATTACHMENTS"),
-                }]
-                : []
+              ...(
+                (pgrData?.ServiceWrappers[0]?.service?.documents?.length > 0 ||
+                  pgrData?.ServiceWrappers[0]?.workflow?.verificationDocuments?.length > 0)
+                  ? [{
+                    cardType: "primary",
+                    fieldPairs: [
+                      {
+                        inline: false,
+                        type: "custom",
+                        renderCustomContent: () => (
+                          <ComplaintPhotos t={t} serviceWrapper={pgrData?.ServiceWrappers[0]} />
+                        ),
+                      },
+                    ],
+                    header: t("CS_COMMON_ATTACHMENTS"),
+                  }]
+                  : []
               ),
               // Conditionally include location section only if coordinates exist
               ...(pgrData?.ServiceWrappers[0]?.service?.address?.geoLocation?.latitude &&
@@ -575,7 +680,13 @@ const PGRDetails = () => {
                     inline: false,
                     type: "custom",
                     renderCustomContent: () => (
-                      <TimelineWrapper isWorkFlowLoading={isWorkflowLoading} workflowData={workflowData} businessId={id} labelPrefix="WF_PGR_" />
+                      <TimelineWrapper
+                        isWorkFlowLoading={isWorkflowLoading}
+                        workflowData={workflowData}
+                        businessId={id}
+                        labelPrefix="WF_PGR_"
+                        rating={pgrData?.ServiceWrappers?.[0]?.service?.rating}
+                      />
                     ),
                   },
                 ],
@@ -598,7 +709,7 @@ const PGRDetails = () => {
               isSearchable
               onClick={function noRefCheck() { }}
               menuStyles={{
-                bottom: "40px",
+                bottom: "56px",
               }}
               isDisabled={getNextActionOptions(workflowData, businessServiceData?.BusinessServices?.[0]).length === 0}
               key="action-button"

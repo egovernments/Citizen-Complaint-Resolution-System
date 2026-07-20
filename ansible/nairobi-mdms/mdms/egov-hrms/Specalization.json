@@ -1,0 +1,44 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "ARTS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "SCIENCE",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "SCIENCE",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "code": "ARTS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "ARTS",
+      "active": true
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "code": "SCIENCE",
+      "active": true
+    }
+  }
+]

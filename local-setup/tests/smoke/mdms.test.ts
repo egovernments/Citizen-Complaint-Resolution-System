@@ -43,6 +43,7 @@ describe('MDMS Service', () => {
         MdmsCriteria: {
           tenantId: tenant.state,
           schemaCode: 'tenant.tenants',
+          limit: 200,
         },
       });
 

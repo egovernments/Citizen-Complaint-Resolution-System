@@ -19,24 +19,31 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Client for the eGov MDMS v2 service.
  *
- * Fetches the default mobile-number country-code prefix from the
- * {@code common-masters.UserValidation} master data schema.
+ * Fetches the default mobile-number validation config from the
+ * {@code common-masters.MobileNumberValidation} master data schema.
  *
- * The resolved prefix is cached per tenantId to avoid repeated HTTP calls
+ * The resolved config is cached per tenantId to avoid repeated HTTP calls
  * during the lifecycle of the application.
  */
 @Service
 @Slf4j
 public class MdmsServiceClient {
 
-    /** Schema that carries the default country-code prefix. */
-    private static final String SCHEMA_CODE = "common-masters.UserValidation";
+    /** Schema that carries the mobile number validation config. */
+    private static final String SCHEMA_CODE = "common-masters.MobileNumberValidation";
 
     private final RestTemplate restTemplate;
     private final NovuBridgeConfiguration config;
 
-    /** Cache: tenantId → country-code prefix (e.g. "+91") */
-    private final Map<String, String> prefixCache = new ConcurrentHashMap<>();
+    /**
+     * Safety cap on the tenant→config cache. The key space is the set of provisioned
+     * tenants (a small, bounded set), but this guards against unbounded growth if a
+     * caller ever supplies arbitrary tenantIds.
+     */
+    private static final int MAX_CACHE_ENTRIES = 1000;
+
+    /** Cache: tenantId → resolved mobile-number validation config. */
+    private final Map<String, MobileValidationConfig> configCache = new ConcurrentHashMap<>();
 
     public MdmsServiceClient(RestTemplate restTemplate, NovuBridgeConfiguration config) {
         this.restTemplate = restTemplate;
@@ -44,42 +51,48 @@ public class MdmsServiceClient {
     }
 
     /**
-     * Returns the default phone-number country-code prefix for the given tenant.
+     * Returns the mobile number validation config for the given tenant.
      *
      * <p>
-     * The value is read from {@code data.attributes.prefix} of the first active
-     * record in {@code common-masters.UserValidation} whose {@code default} flag is
+     * The value is read from the first active record in
+     * {@code common-masters.MobileNumberValidation} whose {@code default} flag is
      * {@code true}. The result is cached for the lifetime of the JVM.
      *
      * @param tenantId    eGov tenant identifier (e.g. {@code "etpmo"})
      * @param requestInfo the RequestInfo map from the incoming API request (used
      *                    as-is in the MDMS call)
-     * @return prefix string like {@code "+91"}, never {@code null}
+     * @return {@link MobileValidationConfig} with countryCode and mobileNumberRegex, never {@code null}
      */
     public MobileValidationConfig getMobileValidationConfig(
             String tenantId,
             RequestInfo requestInfo) {
 
+        // Resolve the cache miss OUTSIDE the map so the blocking MDMS call never runs
+        // inside a ConcurrentHashMap bin lock (which would serialize unrelated keys).
+        MobileValidationConfig cached = configCache.get(tenantId);
+        if (cached != null) {
+            return cached;
+        }
+        MobileValidationConfig resolved = resolveMobileValidationConfig(tenantId, requestInfo);
+        if (configCache.size() < MAX_CACHE_ENTRIES) {
+            MobileValidationConfig existing = configCache.putIfAbsent(tenantId, resolved);
+            if (existing != null) {
+                return existing;
+            }
+        }
+        return resolved;
+    }
+
+    private MobileValidationConfig resolveMobileValidationConfig(String tenantId, RequestInfo requestInfo) {
         Map<String, Object> record = fetchDefaultRecord(tenantId, requestInfo);
 
-        Map<String, Object> data =
-                (Map<String, Object>) record.get("data");
+        Map<String, Object> data = (Map<String, Object>) record.get("data");
 
-        Map<String, Object> attributes =
-                (Map<String, Object>) data.get("attributes");
+        MobileValidationConfig resolved = new MobileValidationConfig();
+        resolved.setCountryCode((String) data.get("countryCode"));
+        resolved.setMobileNumberRegex((String) data.get("mobileNumberRegex"));
 
-        Map<String, Object> rules =
-                (Map<String, Object>) data.get("rules");
-
-        MobileValidationConfig config =
-                new MobileValidationConfig();
-
-        config.setPrefix((String) attributes.get("prefix"));
-        config.setPattern((String) rules.get("pattern"));
-        config.setMinLength((Integer) rules.get("minLength"));
-        config.setMaxLength((Integer) rules.get("maxLength"));
-
-        return config;
+        return resolved;
     }
 
     // -------------------------------------------------------------------------
@@ -108,13 +121,13 @@ public class MdmsServiceClient {
                     url, HttpMethod.POST, new HttpEntity<>(body), (Class<Map<String, Object>>) (Class<?>) Map.class);
 
             if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
-                throw new CustomException("NB_MDMS_PHONE_PREFIX_UNAVAILABLE",
-                        "MDMS returned non-2xx or empty body while resolving phone prefix for tenantId=" + tenantId);
+                throw new CustomException("MDMS_MOBILE_VALIDATION_UNAVAILABLE",
+                        "MDMS returned non-2xx or empty body while resolving mobile validation config for tenantId=" + tenantId);
             }
 
             List<Map<String, Object>> mdmsList = (List<Map<String, Object>>) response.getBody().get("mdms");
             if (mdmsList == null || mdmsList.isEmpty()) {
-                throw new CustomException("NB_MDMS_PHONE_PREFIX_UNAVAILABLE",
+                throw new CustomException("MDMS_MOBILE_VALIDATION_UNAVAILABLE",
                         "MDMS returned no records for schemaCode=" + SCHEMA_CODE + " tenantId=" + tenantId);
             }
 
@@ -126,8 +139,8 @@ public class MdmsServiceClient {
                     })
                     .findFirst()
                     .orElseThrow(() -> new CustomException(
-                            "NB_MDMS_PHONE_PREFIX_NOT_FOUND",
-                            "No tenant-specific or default mobile validation config found in MDMS"
+                            "MDMS_MOBILE_VALIDATION_NOT_FOUND",
+                            "No default mobile validation config found in MDMS for tenantId=" + tenantId
                     ));
 
             return record;
@@ -135,8 +148,8 @@ public class MdmsServiceClient {
         } catch (CustomException e) {
             throw e;
         } catch (Exception e) {
-            throw new CustomException("NB_MDMS_PHONE_PREFIX_UNAVAILABLE",
-                    "Failed to fetch phone prefix from MDMS for tenantId=" + tenantId + ": " + e.getMessage());
+            throw new CustomException("MDMS_MOBILE_VALIDATION_UNAVAILABLE",
+                    "Failed to fetch mobile validation config from MDMS for tenantId=" + tenantId + ": " + e.getMessage());
         }
     }
 

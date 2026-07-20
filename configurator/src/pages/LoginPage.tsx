@@ -1,0 +1,271 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useApp, SESSION_EXPIRED_KEY } from '../App';
+import { Eye, EyeOff, Loader2, Database, AlertCircle, HelpCircle, Rocket, Settings } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { DigitCard, DigitCardHeader, DigitCardSubHeader } from '@/components/digit/DigitCard';
+import { LabelFieldPair, CardLabel, Field } from '@/components/digit/LabelFieldPair';
+import { SubmitBar } from '@/components/digit/SubmitBar';
+import { apiClient, getApiBaseUrl, getConfiguredRootTenant, ApiClientError } from '@/api';
+
+type AppMode = 'onboarding' | 'management';
+
+export default function LoginPage() {
+  const { login } = useApp();
+  const navigate = useNavigate();
+
+  // Root (state-level) tenant this deployment authenticates against, derived
+  // from the build-time VITE_STATE_TENANT_ID (rendered by the ansible deploy
+  // from host_vars `state_tenant_id`) — never a hardcoded country code.
+  //
+  // Used as the form's actual initial VALUE (not just a placeholder): a
+  // placeholder-only "prefill" is never registered in form state, so submitting
+  // with it untouched silently sends an empty tenantId and no
+  // /user/oauth/token call succeeds. Empty when the build wasn't given one
+  // (dev/standalone) — then the neutral placeholder guides the operator and the
+  // required field forces an explicit entry. Keep in sync with App.tsx's
+  // getConfiguredTenantDefault().
+  const configuredTenantCode = getConfiguredRootTenant();
+  const tenantPlaceholder = configuredTenantCode || 'tenant code';
+
+  const [formData, setFormData] = useState({
+    username: '',
+    password: '',
+    tenantCode: configuredTenantCode,
+  });
+  const [mode, setMode] = useState<AppMode>('onboarding');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Explain the bounce when an expired session sent the operator back here.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+        setError('Your session expired. Please log in again to continue.');
+        sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+      }
+    } catch { /* sessionStorage unavailable — skip the banner */ }
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      // Auto-detect environment from current origin
+      const environment = getApiBaseUrl();
+      apiClient.setEnvironment(environment);
+
+      // Attempt real login
+      const response = await apiClient.login({
+        username: formData.username,
+        password: formData.password,
+        tenantId: formData.tenantCode,
+        userType: 'EMPLOYEE',
+      });
+
+      // Extract roles from response
+      const roles = response.UserRequest.roles?.map(r => r.code) || [];
+
+      // Check for required roles
+      const hasRequiredRole = roles.some(r =>
+        ['MDMS_ADMIN', 'SUPERUSER', 'LOC_ADMIN', 'EMPLOYEE'].includes(r)
+      );
+
+      if (!hasRequiredRole) {
+        setError('User does not have required roles (MDMS_ADMIN, SUPERUSER, or LOC_ADMIN)');
+        setLoading(false);
+        return;
+      }
+
+      // Update app state — persist full user identity for session restore
+      login(
+        {
+          name: response.UserRequest.name,
+          email: response.UserRequest.emailId || `${response.UserRequest.userName}@digit.org`,
+          roles: roles,
+          id: response.UserRequest.id,
+          uuid: response.UserRequest.uuid,
+          mobileNumber: response.UserRequest.mobileNumber,
+        },
+        environment,
+        formData.tenantCode,
+        mode
+      );
+
+      // Navigate based on mode
+      navigate(mode === 'onboarding' ? '/phase/1' : '/manage');
+    } catch (err) {
+      console.error('Login error:', err);
+
+      if (err instanceof ApiClientError) {
+        setError(err.firstError);
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Login failed. Please check your credentials.');
+      }
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-lg">
+        {/* Logo - DIGIT style */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center mb-4">
+            <div className="w-1 h-12 bg-primary mr-3" />
+            <Database className="w-10 h-10 text-primary" />
+          </div>
+          <h1 className="text-2xl font-condensed font-bold text-foreground">DIGIT Complaints Management</h1>
+          <p className="text-muted-foreground mt-1">Admin Console</p>
+        </div>
+
+        {/* Login form - DIGIT Card */}
+        <DigitCard>
+          <DigitCardHeader>Sign In</DigitCardHeader>
+          <DigitCardSubHeader>Enter your credentials to continue</DigitCardSubHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-6 mt-6" autoComplete="off">
+            {/* Mode Toggle */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Mode</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMode('onboarding')}
+                  className={`
+                    flex items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all
+                    ${mode === 'onboarding'
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                    }
+                  `}
+                >
+                  <Rocket className="w-5 h-5" />
+                  <span className="font-medium text-sm">Onboarding</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('management')}
+                  className={`
+                    flex items-center justify-center gap-2 p-4 rounded-lg border-2 transition-all
+                    ${mode === 'management'
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                    }
+                  `}
+                >
+                  <Settings className="w-5 h-5" />
+                  <span className="font-medium text-sm">Management</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Error message */}
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>
+                  {error}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Username */}
+            <LabelFieldPair>
+              <CardLabel required>Username</CardLabel>
+              <Field>
+                <Input
+                  id="username"
+                  type="text"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  placeholder="Enter username"
+                  className="border-input-border focus:border-primary focus:ring-primary"
+                  autoComplete="off"
+                  required
+                />
+              </Field>
+            </LabelFieldPair>
+
+            {/* Password */}
+            <LabelFieldPair>
+              <CardLabel required>Password</CardLabel>
+              <Field>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="pr-10 border-input-border focus:border-primary focus:ring-primary"
+                    placeholder="Enter password"
+                    autoComplete="new-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </Field>
+            </LabelFieldPair>
+
+            {/* Tenant Code */}
+            <LabelFieldPair>
+              <CardLabel className="flex items-center gap-1" required>
+                Tenant Code
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-primary"
+                  title="Root (state-level) tenant code for your deployment (the top-level state/country tenant, e.g. the part before the first dot in a city tenant code)."
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                </button>
+              </CardLabel>
+              <Field>
+                <Input
+                  id="tenantCode"
+                  type="text"
+                  value={formData.tenantCode}
+                  onChange={(e) => setFormData({ ...formData, tenantCode: e.target.value })}
+                  placeholder={tenantPlaceholder}
+                  className="border-input-border focus:border-primary focus:ring-primary"
+                  autoComplete="off"
+                  required
+                />
+                <p className="text-xs text-muted-foreground mt-1">Root tenant for authentication</p>
+              </Field>
+            </LabelFieldPair>
+
+            {/* Submit button - DIGIT SubmitBar */}
+            <div className="flex justify-center pt-4">
+              <SubmitBar
+                label={loading ? 'Signing In...' : 'Sign In'}
+                onSubmit={() => {}}
+                disabled={loading}
+                type="submit"
+                icon={loading ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+              />
+            </div>
+          </form>
+        </DigitCard>
+
+        {/* Help text */}
+        <p className="text-center text-sm text-muted-foreground mt-6">
+          Requires MDMS_ADMIN or SUPERUSER role
+        </p>
+      </div>
+    </div>
+  );
+}

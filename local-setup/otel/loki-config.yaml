@@ -1,0 +1,42 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  # Single-node ring (inmemory kvstore) doesn't need real inter-node gossip,
+  # but the memberlist-kv module still initializes and tries to auto-detect
+  # an advertise address via `eth0`/`en0` — which fails fast in some
+  # container-networking setups before the interface is visible. Pinning
+  # instance_addr skips that auto-detection entirely.
+  instance_addr: 127.0.0.1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: "2024-01-01"
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: 72h
+  max_query_length: 721h
+
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  delete_request_store: filesystem

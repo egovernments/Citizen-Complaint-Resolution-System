@@ -16,6 +16,14 @@
 #       image-name: < Docker image name  >
 # -
 # -
+#
+# This file is the single source of truth for the nightly-develop image build:
+# every entry below is built nightly from develop and pushed to the registry
+# (canonical image-name + nightly-develop / develop-YYYYMMDD tags) so deploys
+# pull pre-built images instead of building on the box. Add a service here and it
+# is enrolled automatically. Governance & naming: build/NIGHTLY-BUILDS.md.
+# Driver: local-setup/ansible/files/nightly-build-push.sh.
+#
 config:
 # Local governance PGR Services
   - name: "builds/Citizen-Complaint-Resolution-System/backend/pgr-services"
@@ -45,6 +53,12 @@ config:
         image-name: "digit-user-preferences-service"
       - work-dir: "backend/digit-user-preferences-service/db"
         image-name: "digit-user-preferences-service-db"
+  - name: "builds/Citizen-Complaint-Resolution-System/backend/xstate-chatbot"
+    build:
+      - work-dir: "backend/xstate-chatbot/nodejs"
+        image-name: "xstate-chatbot"
+      - work-dir: "backend/xstate-chatbot/nodejs/db"
+        image-name: "xstate-chatbot-db"
   - name: "builds/Citizen-Complaint-Resolution-System/utilities/default-data-handler"
     build:
       - work-dir: "utilities/default-data-handler"
@@ -55,5 +69,35 @@ config:
       - work-dir: frontend/micro-ui/
         dockerfile: frontend/micro-ui/web/docker/Dockerfile
         image-name: digit-ui
-
+  # --- newer container-served services (runtime-configured, one image per service
+  # serves every tenant). digit-ui-v2 / configurator are intentionally absent:
+  # their bundles bake tenant build-env and need parameterized Dockerfiles first.
+  - name: "builds/Citizen-Complaint-Resolution-System/digit-mcp"
+    build:
+      - work-dir: "digit-mcp"
+        dockerfile: "digit-mcp/Dockerfile"
+        image-name: "digit-mcp"
+  - name: "builds/Citizen-Complaint-Resolution-System/utilities/otp-publisher"
+    build:
+      - work-dir: "utilities/otp-publisher"
+        dockerfile: "utilities/otp-publisher/Dockerfile"
+        image-name: "otp-publisher"
+  - name: "builds/Citizen-Complaint-Resolution-System/digit-ui-esbuild"
+    build:
+      - work-dir: "digit-ui-esbuild"
+        dockerfile: "digit-ui-esbuild/docker/Dockerfile"
+        image-name: "digit-ui-esbuild"
+  # Vite SPAs (build-arg-parameterized Dockerfiles). configurator is tenant-
+  # neutral (no VITE_* baked); digit-ui-v2 bakes a tenant env contract — the
+  # nightly builds the neutral-default reference image (see build/NIGHTLY-BUILDS.md).
+  - name: "builds/Citizen-Complaint-Resolution-System/configurator"
+    build:
+      - work-dir: "configurator"
+        dockerfile: "configurator/Dockerfile"
+        image-name: "configurator"
+  - name: "builds/Citizen-Complaint-Resolution-System/digit-ui-v2"
+    build:
+      - work-dir: "digit-ui-v2"
+        dockerfile: "digit-ui-v2/Dockerfile"
+        image-name: "digit-ui-v2"
 

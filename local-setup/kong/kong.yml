@@ -12,6 +12,12 @@ consumers:
   tags:
   - admin
 plugins:
+- name: opentelemetry
+  config:
+    endpoint: http://otel-collector:4318/v1/traces
+    resource_attributes:
+      service.name: kong-gateway
+    header_type: w3c
 - name: cors
   config:
     origins:
@@ -32,6 +38,12 @@ plugins:
     - X-API-Key
     - X-Requested-With
     - auth-token
+    # dashboard render-lag instrumentation (#1110): browser-originated trace
+    # correlation headers — belt-and-braces for deployments that point
+    # REACT_APP_ANALYTICS_BASE at an absolute (cross-origin) URL.
+    - traceparent
+    - tracestate
+    - x-trace-id
     exposed_headers:
     - X-Auth-Token
     credentials: true
@@ -40,6 +52,227 @@ plugins:
   config:
     allowed_payload_size: 10
     size_unit: megabytes
+- name: pre-function
+  config:
+    access:
+      - |
+        -- Auth enrichment: resolve authToken → userInfo (mirrors Spring Cloud Gateway AuthCheckFilterHelper)
+        -- Scoped cjson instance with array metatable on decode. Plain lua-cjson cannot tell an
+        -- empty array from an empty object (both are empty Lua tables) and re-encodes [] as {},
+        -- so the decode->encode round-trip below would silently corrupt every EMPTY array in the
+        -- body (e.g. MDMS schema "x-ref-schema": []). decode_array_with_array_mt(true) tags
+        -- decoded arrays (incl. empty ones) so cjson.encode re-emits them as []; genuinely-empty
+        -- objects carry no array mt and stay {}. .new() scopes this so it never leaks to the
+        -- shared cjson used by other pre-functions in the worker.
+        local cjson = require("cjson").new()
+        cjson.decode_array_with_array_mt(true)
+        local http = require("resty.http")
+
+        -- ===== Gateway RBAC, Phase 1 (#5): authn enforcement + path classification =====
+        -- Mirrors the K8s Spring gateway's open / mixed-mode / protected buckets. OPEN and MIXED
+        -- are auth-OPTIONAL (anonymous allowed and NOT action-RBAC'd); everything else is PROTECTED
+        -- (a valid token is required). Phase 1 does NOT call egov-accesscontrol yet — action-level
+        -- RBAC is Phase 2.
+        --
+        -- EXACT match (set membership), mirroring the Spring gateway's
+        -- openEndpointsWhitelist.contains(getPath().value()) — NOT prefix (a prefix would over-open,
+        -- e.g. anonymous /localization/messages/v1/_upsert). AUTH_OPTIONAL = open ∪ mixed, kept
+        -- VERBATIM-in-sync with env.yaml egov-open/-mixed-mode-endpoints-whitelist (+ the
+        -- boundary-service search paths CCRS migrated to in #1); a CI check enforces the two match
+        -- (Phase 3). See docs/parity-item5-gateway-rbac-design.md.
+        --
+        -- Ships in AUDIT mode: unauthenticated hits on protected paths are LOGGED, not rejected.
+        -- Flip ENFORCE_UNAUTH=true after an observation period (first confirm no RBAC-audit warning
+        -- is a legitimate anonymous call — if it is, add its EXACT path to AUTH_OPTIONAL AND env.yaml).
+        local ENFORCE_UNAUTH = false
+        -- Phase 2 (#5): action-level RBAC via egov-accesscontrol on protected paths. Also ships in
+        -- AUDIT mode (log-only); flip to true to enforce (403 on deny). Independent of ENFORCE_UNAUTH.
+        local ENFORCE_RBAC = false
+        local AUTH_OPTIONAL = {
+          ["/user/oauth/token"]=true, ["/user-otp/v1/_send"]=true, ["/otp/v1/_validate"]=true,
+          ["/user/citizen/_create"]=true, ["/user/password/nologin/_update"]=true,
+          ["/localization/messages"]=true, ["/localization/messages/v1/_search"]=true,
+          ["/tenant/v1/tenant/_search"]=true,
+          ["/egov-location/boundarys"]=true,
+          ["/egov-location/boundarys/boundariesByBndryTypeNameAndHierarchyTypeName"]=true,
+          ["/egov-location/boundarys/getLocationByLocationName"]=true,
+          ["/egov-location/boundarys/isshapefileexist"]=true,
+          ["/egov-location/boundarys/getshapefile"]=true,
+          ["/egov-location/location/v11/boundarys/_search"]=true,
+          ["/pgr/services/v1/_search"]=true,
+          ["/egov-mdms-service/v1/_search"]=true, ["/egov-mdms-service/v1/_get"]=true,
+          ["/egov-mdms-service/v1/_reload"]=true, ["/egov-mdms-service/v1/_reloadobj"]=true,
+          ["/egov-mdms-service-test/v1/_search"]=true,
+          ["/mdms-v2/v1/_search"]=true, ["/mdms-v2/v2/_search"]=true, ["/mdms-v2/schema/v1/_search"]=true,
+          ["/boundary-service/boundary-relationships/_search"]=true,
+          ["/boundary-service/boundary-hierarchy-definition/_search"]=true,
+          ["/boundary-service/boundary/_search"]=true,
+          ["/egov-indexer/index-operations/_index"]=true, ["/egov-indexer/index-operations/_reload"]=true,
+          ["/filestore/v1/file"]=true, ["/filestore/v1/files"]=true, ["/filestore/v1/files/url"]=true,
+          ["/filestore/v1/files/id"]=true, ["/filestore/v1/files/tag"]=true,
+          ["/egov-url-shortening"]=true, ["/default-data-handler/tenant/new"]=true,
+          ["/workflow/history/v1/_search"]=true, ["/egov-idgen/id/_generate"]=true,
+          ["/user/_search"]=true, ["/access/v1/actions/mdms/_get"]=true,
+          -- Browser OTLP telemetry ingest (#1110): anonymous JSON POSTs from the
+          -- dashboard (no RequestInfo/authToken). Whitelisted so every flush
+          -- neither pollutes the RBAC audit stream nor 401s when ENFORCE_UNAUTH
+          -- flips. POST-only, size- and rate-limited at the route (see below).
+          ["/otel/v1/metrics"]=true, ["/otel/v1/logs"]=true,
+        }
+        local uri = kong.request.get_path()
+        local is_protected = not AUTH_OPTIONAL[uri]
+        local function deny_unauth()
+          if ENFORCE_UNAUTH then
+            return kong.response.exit(401, cjson.encode({
+              ResponseInfo = cjson.null,
+              Errors = {{ code = "InvalidAccessTokenException", message = "InvalidAccessTokenException",
+                          description = "Authentication required for the request" }},
+            }), { ["Content-Type"] = "application/json" })
+          end
+          kong.log.warn("RBAC-audit(#5): unauthenticated request to protected path (would 401): ", uri)
+        end
+
+        if kong.request.get_method() ~= "POST" then return end
+        local raw_body = kong.request.get_raw_body()
+        if not raw_body or raw_body == "" then if is_protected then deny_unauth() end return end
+        local ok, body = pcall(cjson.decode, raw_body)
+        if not ok or type(body) ~= "table" then if is_protected then deny_unauth() end return end
+        local ri = body["RequestInfo"]
+        if not ri or type(ri) ~= "table" then if is_protected then deny_unauth() end return end
+        local token = ri["authToken"]
+        if not token or type(token) ~= "string" or token == "" then
+          -- no token: NEVER trust body userInfo (close the no-token spoof) — strip it.
+          if ri["userInfo"] ~= nil then ri["userInfo"] = nil; body["RequestInfo"] = ri; kong.service.request.set_raw_body(cjson.encode(body)) end
+          if is_protected then deny_unauth() end
+          return
+        end
+        -- Part A: never trust client-supplied userInfo; always resolve from the token.
+        local httpc = http.new()
+        httpc:set_timeout(5000)
+        local res, err = httpc:request_uri("http://egov-user-proxy:8107/user/_details?access_token=" .. token, {
+          method = "POST",
+          headers = { ["Content-Type"] = "application/json" },
+        })
+        local resolved = nil
+        local token_rejected = false   -- explicit auth rejection (401/403): invalid / expired token
+        local resolve_failed = false   -- transient: /user/_details unreachable, 5xx, or unparseable
+        if res and res.status == 200 then
+          local ok2, user = pcall(cjson.decode, res.body)
+          if ok2 and type(user) == "table" and (user["uuid"] or user["userName"]) then
+            resolved = user
+          else
+            resolve_failed = true      -- 200 but no resolvable user -> transient, not a token reject
+            kong.log.err("auth-enrichment: /user/_details 200 with no resolvable user")
+          end
+        elseif res and (res.status == 401 or res.status == 403
+                        or (res.body and res.body:find("InvalidAccessTokenException", 1, true))) then
+          -- egov-user signals an invalid/expired token via InvalidAccessTokenException (HTTP 400 on
+          -- this stack, 401/403 on others) — treat any of those as a genuine token rejection, and
+          -- everything else (5xx / other) as a transient failure below.
+          token_rejected = true
+        elseif res then
+          resolve_failed = true        -- other non-200 (5xx, etc.) -> transient, NOT a token reject
+          kong.log.err("auth-enrichment: /user/_details status ", res.status)
+        else
+          resolve_failed = true        -- unreachable (network / timeout)
+          kong.log.err("auth-enrichment: /user/_details unreachable: ", err or "")
+        end
+
+        local function strip_userinfo()
+          if ri["userInfo"] ~= nil then ri["userInfo"] = nil; body["RequestInfo"] = ri; kong.service.request.set_raw_body(cjson.encode(body)) end
+        end
+
+        if token_rejected then
+          -- Invalid / expired token. Reject ONLY on protected paths — the egov
+          -- InvalidAccessTokenException envelope makes digit-ui redirect to login (session-expiry, #4).
+          -- On auth-OPTIONAL endpoints the token is ignored and the request falls through anonymously
+          -- (matches the K8s gateway, which never validates tokens on open/mixed paths).
+          if is_protected then
+            return kong.response.exit(401, cjson.encode({
+              ResponseInfo = cjson.null,
+              Errors = {{
+                code = "InvalidAccessTokenException",
+                message = "InvalidAccessTokenException",
+                description = "Invalid access token or access token expired for the request",
+              }},
+            }), { ["Content-Type"] = "application/json" })
+          end
+          strip_userinfo()
+          return
+        end
+
+        if resolve_failed then
+          -- Transient failure resolving the token (auth service unreachable / erroring). Fail CLOSED
+          -- on protected paths when enforcing — never forward a protected request without a
+          -- server-vouched principal. Optional paths (and audit mode) fall through anonymously.
+          if is_protected and ENFORCE_UNAUTH then
+            return kong.response.exit(503, cjson.encode({
+              ResponseInfo = cjson.null,
+              Errors = {{
+                code = "AuthServiceUnavailable",
+                message = "AuthServiceUnavailable",
+                description = "Could not verify authentication for the request; please retry",
+              }},
+            }), { ["Content-Type"] = "application/json" })
+          end
+          if is_protected then
+            kong.log.warn("RBAC-audit(#5): would fail-closed 503 (auth unverifiable) on protected: ", uri)
+          end
+          strip_userinfo()
+          return
+        end
+
+        ri["userInfo"] = resolved
+        body["RequestInfo"] = ri
+        kong.service.request.set_raw_body(cjson.encode(body))
+
+        -- ===== Gateway RBAC, Phase 2 (#5): action-level authorization for protected paths =====
+        -- For a PROTECTED path with a resolved principal, ask egov-accesscontrol whether the
+        -- principal's roles may call this action (uri): 200 = allow, non-200 = deny. Mirrors the
+        -- Spring gateway's RBAC filter. Ships in AUDIT mode; when ENFORCE_RBAC it fails CLOSED (a
+        -- protected action is denied unless we get an explicit allow). See
+        -- docs/parity-item5-gateway-rbac-design.md. (Perf: one accesscontrol call per protected
+        -- request; response caching keyed by roles+uri+tenant is a documented follow-up.)
+        if is_protected and resolved then
+          -- Guard tenantIds: a principal without a tenantId (e.g. a freshly-created citizen
+          -- before city selection) must NOT serialize as tenantIds:[null], which accesscontrol
+          -- would reject as malformed — send an empty array instead.
+          local tid = resolved["tenantId"]
+          local az = http.new()
+          az:set_timeout(5000)
+          local ares = az:request_uri("http://egov-accesscontrol:8090/access/v1/actions/_authorize", {
+            method = "POST",
+            headers = { ["Content-Type"] = "application/json" },
+            body = cjson.encode({
+              RequestInfo = { apiId = "Rainmaker", authToken = token },
+              AuthorizationRequest = {
+                -- cjson.empty_array so empty roles/tenantIds serialize as JSON [] (not {}),
+                -- which egov-accesscontrol expects for these fields.
+                roles = resolved["roles"] or cjson.empty_array,
+                uri = uri,
+                tenantIds = tid and { tid } or cjson.empty_array,
+              },
+            }),
+          })
+          if not (ares and ares.status == 200) then
+            if ENFORCE_RBAC then
+              -- fail CLOSED: deny on an explicit non-200 AND on an unreachable accesscontrol.
+              return kong.response.exit(403, cjson.encode({
+                ResponseInfo = cjson.null,
+                Errors = {{ code = "AccessDeniedException", message = "AccessDeniedException",
+                            description = "You are not authorized to perform this action" }},
+              }), { ["Content-Type"] = "application/json" })
+            end
+            -- AUDIT: separate a legitimate DENY (accesscontrol answered non-200) from a transient
+            -- infra failure (accesscontrol UNREACHABLE) so operators know which alerts to act on.
+            if ares then
+              kong.log.warn("RBAC-audit(#5 p2): would 403 — accesscontrol DENY (status ", ares.status,
+                            ") uri=", uri, " roles=", cjson.encode(resolved["roles"] or {}))
+            else
+              kong.log.err("RBAC-audit(#5 p2): would 403 (fail-closed) — accesscontrol UNREACHABLE uri=", uri)
+            end
+          end
+        end
 services:
 - name: mdms-service
   url: http://egov-mdms-service:8094
@@ -50,8 +283,12 @@ services:
     paths:
     - /mdms-v2
     strip_path: false
+  - name: mdms-v1-compat-route
+    paths:
+    - /egov-mdms-service
+    strip_path: false
 - name: user-service
-  url: http://egov-user:8107
+  url: http://egov-user-proxy:8107
   tags:
   - core
   - auth
@@ -61,7 +298,7 @@ services:
     - /user
     strip_path: false
 - name: user-auth-public
-  url: http://egov-user:8107
+  url: http://egov-user-proxy:8107
   tags:
   - core
   - auth
@@ -73,6 +310,40 @@ services:
     strip_path: false
     methods:
     - POST
+- name: user-otp-mock
+  url: http://user-otp:8090
+  tags:
+  - core
+  - auth
+  routes:
+  - name: user-otp-route
+    paths:
+    - /user-otp
+    strip_path: false
+    # MOCK (default): request-termination short-circuits every /user-otp/*
+    # call with a canned success response, so login/register work using the
+    # fixed OTP (123456, see CITIZEN_LOGIN_PASSWORD_OTP_FIXED_VALUE in
+    # docker-compose.egov-digit.yaml) without the real egov-otp/user-otp/
+    # egov-notification-sms stack running or any SMS gateway integrated.
+    #
+    # TO ENABLE REAL OTP FOR PRODUCTION, before deploying:
+    #   1. Delete the `plugins:` block below (the request-termination mock).
+    #   2. Set enable_otp_services: true in the tenant's Ansible host_vars
+    #      (local-setup/ansible/inventory/host_vars/<tenant>.yml) so compose
+    #      starts the `otp` profile (egov-otp, user-otp, egov-notification-sms).
+    #   3. Configure a real SMS gateway: egov-notification-sms defaults to
+    #      SMS_PROVIDER_CLASS: Console (logs OTP SMS to container stdout only)
+    #      in docker-compose.egov-digit.yaml — point it at a real provider
+    #      class + credentials before relying on SMS delivery.
+    # Without all three, the first OTP request has nothing to answer it
+    # (real stack down or SMS not actually sent), and only the fixed
+    # 123456 fallback keeps working.
+    plugins:
+    - name: request-termination
+      config:
+        status_code: 200
+        content_type: application/json
+        body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":null,"ts":null,"resMsgId":"uief87324","msgId":null,"status":"successful"},"otp":{"identity":"","tenantId":"","type":"","otp":"","expiryTime":0}}'
 - name: enc-service
   url: http://egov-enc-service:1234
   tags:
@@ -93,7 +364,7 @@ services:
     - /egov-idgen
     strip_path: false
 - name: workflow-service
-  url: http://egov-workflow-v2:8109
+  url: http://egov-workflow-proxy:8109
   tags:
   - core
   routes:
@@ -111,7 +382,7 @@ services:
     - /localization
     strip_path: false
 - name: location-service
-  url: http://egov-location:8084
+  url: http://boundary-service:8081
   tags:
   - core
   routes:
@@ -119,6 +390,80 @@ services:
     paths:
     - /egov-location
     strip_path: false
+  plugins:
+  - name: pre-function
+    config:
+      access:
+        - |
+          -- Adapter: egov-location → boundary-service with response transform
+          local cjson = require("cjson")
+          local http = require("resty.http")
+          local uri = kong.request.get_path_with_query()
+          if not uri:find("/boundarys/_search") then return end
+          local tenant = kong.request.get_query_arg("tenantId")
+          local hier = kong.request.get_query_arg("hierarchyTypeCode") or "ADMIN"
+          if not tenant then
+            kong.response.exit(400, cjson.encode({error="tenantId required"}), {["Content-Type"]="application/json"})
+            return
+          end
+          local raw_body = kong.request.get_raw_body() or "{}"
+          local httpc = http.new()
+          httpc:set_timeout(10000)
+          local search_url = "http://boundary-service:8081/boundary-service/boundary-relationships/_search?tenantId=" .. tenant .. "&hierarchyType=" .. hier .. "&includeChildren=true"
+          local res, err = httpc:request_uri(search_url, {
+            method = "POST", body = raw_body,
+            headers = { ["Content-Type"] = "application/json" },
+          })
+          if not res then
+            kong.response.exit(502, cjson.encode({error="boundary-service unreachable: " .. (err or "")}), {["Content-Type"]="application/json"})
+            return
+          end
+          if res.status ~= 200 then
+            kong.response.exit(res.status, res.body, {["Content-Type"]="application/json"})
+            return
+          end
+          local ok, data = pcall(cjson.decode, res.body)
+          if not ok then
+            kong.response.exit(502, res.body, {["Content-Type"]="application/json"})
+            return
+          end
+          -- Transform TenantBoundary to old egov-location format
+          -- cjson encodes empty Lua tables as {} (object), not [] (array).
+          -- Use cjson.empty_array to preserve empty arrays for boundary/children.
+          local empty_arr = cjson.empty_array
+          local function is_empty_table(t)
+            return type(t) == "table" and next(t) == nil
+          end
+          local tbs = data["TenantBoundary"] or {}
+          for _, tb in ipairs(tbs) do
+            local ht = tb["hierarchyType"]
+            if type(ht) == "string" then
+              tb["hierarchyType"] = { code = ht, name = ht }
+            elseif ht == nil or ht == cjson.null then
+              tb["hierarchyType"] = { code = hier, name = hier }
+            end
+            -- Add name/label fields to boundaries recursively
+            local function enrich(nodes)
+              for _, n in ipairs(nodes) do
+                if not n["name"] then n["name"] = n["code"] end
+                if not n["localname"] then n["localname"] = n["code"] end
+                if not n["label"] then n["label"] = n["boundaryType"] or "" end
+                local ch = n["children"]
+                if is_empty_table(ch) or ch == nil or ch == cjson.null then
+                  n["children"] = empty_arr
+                else
+                  enrich(ch)
+                end
+              end
+            end
+            local bs = tb["boundary"]
+            if is_empty_table(bs) or bs == nil or bs == cjson.null then
+              tb["boundary"] = empty_arr
+            elseif type(bs) == "table" then
+              enrich(bs)
+            end
+          end
+          kong.response.exit(200, cjson.encode(data), {["Content-Type"]="application/json"})
 - name: boundary-service
   url: http://boundary-service:8081
   tags:
@@ -161,7 +506,7 @@ services:
       replace:
         uri: /mdms-v2/health
 - name: health-user
-  url: http://egov-user:8107
+  url: http://egov-user-proxy:8107
   routes:
   - name: health-user-route
     paths:
@@ -173,7 +518,7 @@ services:
       replace:
         uri: /user/health
 - name: health-workflow
-  url: http://egov-workflow-v2:8109
+  url: http://egov-workflow-proxy:8109
   routes:
   - name: health-workflow-route
     paths:
@@ -218,6 +563,66 @@ services:
     config:
       replace:
         uri: /pgr-services/health
+# novu-bridge configurator proxy. Seven endpoints are routed: the three
+# read-only GETs (logs / integrations / preferences) plus the provider
+# management set (POST providers, GET providers/templates, POST
+# providers/verify, POST providers/test-send). The /dispatch/* diagnostics
+# trio stays unrouted on purpose. Auth happens INSIDE novu-bridge
+# (ProxyAuthFilter validates the DIGIT bearer token against egov-user
+# /user/_details) — Kong is a dumb router here. novu-bridge listens on 8080
+# with servlet context /novu-bridge, so strip_path:false with the
+# context-prefixed path is correct.
+- name: novu-bridge-proxy
+  url: http://novu-bridge:8080
+  routes:
+  - name: novu-bridge-logs-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/logs
+    strip_path: false
+  - name: novu-bridge-integrations-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/integrations
+    strip_path: false
+  - name: novu-bridge-preferences-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/preferences
+    strip_path: false
+  - name: novu-bridge-providers-create-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers
+    strip_path: false
+  - name: novu-bridge-providers-templates-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/templates
+    strip_path: false
+  - name: novu-bridge-providers-verify-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/verify
+    strip_path: false
+  - name: novu-bridge-providers-test-send-route
+    methods:
+    - POST
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/test-send
+    strip_path: false
+  - name: novu-bridge-providers-twilio-templates-route
+    methods:
+    - GET
+    paths:
+    - /novu-bridge/novu-adapter/v1/providers/twilio-templates
+    strip_path: false
 - name: filestore-service
   url: http://egov-filestore:8083
   tags:
@@ -265,3 +670,167 @@ services:
     paths:
     - /jupyter
     strip_path: false
+- name: grafana-service
+  url: http://grafana:3000
+  tags:
+  - observability
+  host: grafana
+  port: 3000
+  routes:
+  - name: grafana-route
+    paths:
+    - /grafana
+    strip_path: false
+    preserve_host: true
+  plugins:
+  - name: request-transformer
+    config:
+      add:
+        headers:
+        - "X-Forwarded-Proto:https"
+- name: indexer-service
+  url: http://egov-indexer:8080
+  tags:
+  - core
+  routes:
+  - name: indexer-route
+    paths:
+    - /egov-indexer
+    strip_path: false
+- name: inbox-service
+  url: http://inbox:8080
+  tags:
+  - analytics
+  routes:
+  - name: inbox-route
+    paths:
+    - /inbox
+    strip_path: false
+- name: tempo-service
+  url: http://tempo:3200
+  tags:
+  - observability
+  routes:
+  - name: tempo-route
+    paths:
+    - /tempo
+    strip_path: true
+# Browser -> otel-collector OTLP/HTTP ingest for the dashboard render-lag
+# instrumentation (#1110). Same-origin (follows the /tempo and /grafana
+# observability precedent) so the SPA needs no CORS work and no new host port.
+# Security posture (R8): EXACT paths, POST only, /v1/traces deliberately NOT
+# exposed; per-route 1MB size cap + 60/min-per-IP rate limit; both paths are
+# whitelisted in the pre-function's AUTH_OPTIONAL above. No ingest token in v1
+# (a browser-held token is theater) — revisit if abuse is observed.
+# strip_path:true + the path-bearing service url means the collector receives
+# exactly /v1/metrics | /v1/logs.
+- name: otel-metrics-ingest
+  url: http://otel-collector:4318/v1/metrics
+  tags:
+  - observability
+  routes:
+  - name: otel-metrics-route
+    paths:
+    - /otel/v1/metrics
+    methods:
+    - POST
+    strip_path: true
+  plugins:
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 1
+      size_unit: megabytes
+  - name: rate-limiting
+    config:
+      minute: 60
+      policy: local
+      limit_by: ip
+- name: otel-logs-ingest
+  url: http://otel-collector:4318/v1/logs
+  tags:
+  - observability
+  routes:
+  - name: otel-logs-route
+    paths:
+    - /otel/v1/logs
+    methods:
+    - POST
+    strip_path: true
+  plugins:
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 1
+      size_unit: megabytes
+  - name: rate-limiting
+    config:
+      minute: 60
+      policy: local
+      limit_by: ip
+# Keycloak identity provider (login, registration, admin console)
+- name: keycloak-service
+  url: http://keycloak:8180
+  tags:
+  - identity
+  - keycloak
+  routes:
+  - name: keycloak-route
+    paths:
+    - /auth
+    strip_path: false
+# Token exchange — Keycloak JWT-protected DIGIT API access
+- name: token-exchange-service
+  url: http://token-exchange-svc:3000
+  tags:
+  - identity
+  - keycloak
+  routes:
+  - name: keycloak-api-route
+    paths:
+    - /kc
+    strip_path: true
+# OTP validate — real upstream (egov-otp:8089) fronted by a default request-termination MOCK.
+# Mirrors /user-otp: the mock rubber-stamps every OTP validation as successful, so citizen
+# login works with the fixed OTP (123456) without the `otp` profile running.
+#
+# TO ENABLE REAL OTP VALIDATION FOR PRODUCTION, before deploying:
+#   1. Delete the `plugins:` block below (the request-termination mock).
+#   2. Set enable_otp_services: true in the tenant's Ansible host_vars so compose
+#      starts the `otp` profile (egov-otp, user-otp, egov-notification-sms).
+#   3. Configure a real SMS gateway (see egov-notification-sms SMS_PROVIDER_CLASS).
+# With the mock removed and the otp profile running, /otp reaches egov-otp for real
+# validation (an incorrect OTP is rejected instead of rubber-stamped). The upstream was
+# previously a dead localhost:9999, so de-mocking alone returned HTTP 502 — now fixed.
+- name: otp-validate-mock
+  url: http://egov-otp:8089
+  tags:
+  - core
+  - auth
+  - mock
+  routes:
+  - name: otp-validate-route
+    paths:
+    - /otp
+    strip_path: false
+  plugins:
+  - name: request-termination
+    config:
+      status_code: 200
+      content_type: application/json
+      body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":".01","ts":"","resMsgId":"uief87324","msgId":"","status":"successful"},"otp":{"otp":"","UUID":"","isValidationSuccessful":true}}'
+# User event mock — returns empty events (service not deployed)
+- name: user-event-mock
+  url: http://localhost:9999
+  tags:
+  - core
+  - mock
+  routes:
+  - name: user-event-route
+    paths:
+    - /egov-user-event
+    strip_path: false
+  plugins:
+  - name: request-termination
+    config:
+      status_code: 200
+      content_type: application/json
+      body: '{"ResponseInfo":{"apiId":"Rainmaker","ver":".01","ts":"","resMsgId":"uief87324","msgId":"","status":"successful"},"totalCount":0,"unreadCount":0,"events":[]}'

@@ -17,6 +17,10 @@
 build/
 dist/
 
+# Playwright e2e run artifacts (outputDir in tests/e2e/playwright.config.ts)
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+
 # Dependencies
 node_modules/
 

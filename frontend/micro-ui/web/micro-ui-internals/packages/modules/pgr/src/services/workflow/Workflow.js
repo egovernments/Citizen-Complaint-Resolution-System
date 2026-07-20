@@ -64,15 +64,17 @@ export const WorkflowService = {
           method: "POST",
           params: { tenantId: stateCode, businessServices },
           auth: true,
+          userService: true,
         });
       },
       getByBusinessId: (stateCode, businessIds, params = {}, history = true) => {
         return Request({
-          url: Urls.WorkFlowProcessSearch,
+          url: Urls.workflow.processSearch,
           useCache: false,
           method: "POST",
           params: { tenantId: stateCode, businessIds: businessIds, ...params, history },
           auth: true,
+          userService: true,
         });
       },
     getDetailsById: async ({ tenantId, id, moduleCode, role, }) => {

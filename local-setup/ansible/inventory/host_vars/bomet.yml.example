@@ -1,0 +1,148 @@
+# ═══════════════════════════════════════════════════════════════════
+# bomet.yml.example — the EXACT host_vars that drove the validated
+# 2026-06-11 local Bomet bring-up (see runbooks/03-bomet-onboarding.md
+# and the Bomet replication kit docs).
+#
+# To use:
+#   cp inventory/host_vars/bomet.yml.example inventory/host_vars/bomet.yml
+#   # adjust domain/tls/secrets for non-local targets
+#   ./deploy.sh bomet
+#
+# Secrets below are LOCAL TEST VALUES on purpose — replace every one of
+# them for any reachable/real deployment (see kit GAPS-AND-DECISIONS).
+# ═══════════════════════════════════════════════════════════════════
+
+# Bomet replication — LOCAL adaptation of /home/user/Documents/CCRS/Bomet/host_vars/bomet.example.yml
+# (the "Bomet replication kit", snapshot 2026-06-09, CCRS develop @ 1e28bfb7).
+#
+# Deploy:  cd local-setup/ansible && ./deploy.sh bomet
+#
+# DEVIATIONS FROM THE KIT (all forced by running on this laptop instead of
+# the real bometfeedbackhub.digit.org box — see kit docs/GAPS-AND-DECISIONS.md):
+#   domain/tls            kit: bometfeedbackhub.digit.org + TLS; here: localhost, plain HTTP
+#   nginx_preserve_vhost  kit: true (hand-managed live vhost); here: false (no such vhost locally)
+#   enable_mcp/build_mcp  kit: false (real Bomet's restored DB already contains ke);
+#                         here: true — this box's DB has only pg+mz, so the MCP
+#                         /v1/tenant/bootstrap shim is REQUIRED to create ke/ke MDMS,
+#                         keys and ADMIN (exactly how mz was bootstrapped on this box)
+#   deploy_become         kit: false; here: true (apt/nginx need root locally)
+#   keycloak_google_*     kit: CHANGE_ME; here: blank → Google IdP wiring skipped
+#   secrets               kit: CHANGE_ME (OpenBao-backed prod values); here: local test values
+#
+# Previous tenancy on this box (mz/Maputo) is backed up at
+# inventory/host_vars/_maputo.yml.bak — postgres volume persists, so pg+mz
+# data remains in the DB underneath the new ke layer.
+
+# ── target box ──
+ansible_host: localhost
+ansible_connection: local
+deploy_become: true
+docker_default_platform: ''
+domain: localhost
+tls_enabled: false
+insecure_registries: []
+
+# ── identity / tenancy ──
+# Kit shape was bare `ke` everywhere, but the configurator wizard created the
+# city as `ke.bomet` and ALL wizard data lives there (BOMET-Hierarchy
+# boundaries, 82 ServiceDefs, employees). The SPA must therefore land on
+# ke.bomet — same split as the documented mz/mz.maputo pattern. JVM
+# STATE_LEVEL pins (state_root/state_tenant_id/tenant_id) stay `ke`.
+state_root: ke
+state_tenant_id: ke
+boot_tenant: ke.bomet
+tenant_id: ke
+ui_state_tenant_id: ke.bomet
+nginx_preserve_vhost: false        # kit: true — local box has no hand-managed vhost to preserve
+login_tenant_allowlist: []
+
+# ── geography / boundary model (Bomet County) ──
+map_center: { lat: -0.7817, lng: 35.3428 }
+pgr_boundary_highest_level: County
+pgr_boundary_lowest_level: Ward
+boundary_type: Ward
+# Must match the hierarchyType the boundaries were uploaded under (the
+# configurator wizard created "BOMET-Hierarchy" on ke.bomet). The template
+# defaults to 'ADMIN' when unset → employee UI boundary queries come back
+# empty because the data lives under a different hierarchy name.
+hierarchy_type: BOMET-Hierarchy
+
+# ── Kenya mobile validation (drives common-masters.MobileNumberValidation) ──
+# Length + allowed leading digits are derived from mobileNumberRegex (see
+# filter_plugins/mobile.py) — no separate length/starting-character fields.
+core_mobile_configs:
+  countryCode: '+254'
+  mobileNumberRegex: ^[17][0-9]{8}$
+
+# ── feature toggles (exact Bomet shape, except MCP — see header) ──
+asset_s3_bucket: pg-egov-assets
+digit_ui_mode: container
+enable_search_stack: false
+enable_mcp: true                   # kit: false — needed locally to bootstrap ke (no ke in this DB)
+build_mcp: true                    # kit: false — build digit-mcp:local like the mz bring-up did
+enable_novu: true                  # config-driven notifications target: Novu
+db_fast_path: true                 # REQUIRED — see kit NON-PERSISTED-STATE.md / DB section
+build_otp_publisher: true          # not in kit: real Bomet box already has otp-publisher:local;
+                                   # the notifications profile needs it, so build it here
+build_default_data_handler: true
+build_digit_ui: true
+build_configurator: true
+tolerate_bootstrap_failures: true  # bootstrap is partial-success tolerant (see kit GAPS)
+
+# ── Config-driven notifications (design D1/D4/D6/D7/D8) ──
+# Bomet is the FIRST tenant cut over. PGR reads PGR.NotificationRouting +
+# PGR.NotificationTemplate from MDMS, renders + localizes per recipient, and
+# emits one pre-rendered event per (recipient × channel); novu-bridge delivers.
+# docker-compose.bomet.yml ALSO hard-sets PGR_NOTIFICATION_CONFIG_DRIVEN=true.
+pgr_notification_config_driven: true
+novu_bridge_channel: "sms"         # SMS-first; add WHATSAPP/EMAIL as config-only routing edits
+
+# Custom image pins (built+pushed to the VPC registry by CI). Replace <sha>
+# with the actual CI tags once the Phase 1/2 images are built. Until then the
+# build_* flags above produce local images.
+# pgr_services_image:  "<vpc-registry>:5000/egovio/pgr-services:notif-config-<sha>"
+# novu_bridge_image:   "<vpc-registry>:5000/egovio/novu-bridge:passthrough-<sha>"
+
+# Novu bootstrap inputs — left empty: Novu stack comes up, operator signs up
+# at /novu/ and pastes the API key here for a second deploy (kit RUNBOOK flow).
+novu_api_key: ""
+twilio_account_sid: ""
+twilio_auth_token: ""
+twilio_whatsapp_from: "whatsapp:+14155238886"
+
+nginx_features:
+  brand_assets: false
+  configurator: true
+  configurator_caching: false
+  status: true
+  api_pgr: false
+  mcp: true                        # kit: false — paired with enable_mcp above
+  keycloak: true
+  digit_ui_v2: true
+
+# ── auth (Keycloak) ──
+enable_keycloak: false
+# Must stay '' while enable_keycloak is false — 'keycloak' flips the SPA's
+# auth adapter to OIDC and citizen/employee logins POST to /kc/realms/...,
+# which has no upstream when the keycloak profile is off (observed:
+# citizen OTP login failing on this box, 2026-06-11).
+auth_provider: ""
+keycloak_client_id: digit-ui
+enable_digit_ui_v2: true
+digit_ui_esbuild_branch: feat/keycloak-auth-adapter
+digit_ui_v2_branch: feat/digit-ui-v2-keycloak
+keycloak_google_client_id: ''      # kit: CHANGE_ME — blank skips Google IdP wiring
+
+# ── secrets (LOCAL TEST VALUES — kit redacts these as CHANGE_ME) ──
+secrets_path: kv/digit/bomet
+bootstrap_secrets:
+  postgres_password: egov123       # matches the role password already on this box's volume
+  mcp_db_password: egov123
+  minio_root_user: minioadmin
+  minio_root_password: minioadmin  # matches the existing minio volume
+  elasticsearch_master_password: "asd@#$@$!132123"  # MUST be this literal with db_fast_path
+  egov_hrms_default_password: "eGov@123"            # Bomet uses eGov@123 (kit note)
+  keycloak_admin_password: "eGov@123"
+  keycloak_db_password: "eGov@123"
+  keycloak_google_client_secret: ''
+  token_exchange_system_password: "eGov@123"        # Bomet uses eGov@123 (kit note)

@@ -1,0 +1,271 @@
+{
+  "code": "MU",
+  "name": "Mauritius",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "MU-BL",
+      "parent_code": "MU",
+      "name": "Black River",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-889907441",
+          "parent_code": "MU-BL",
+          "name": "Bambous",
+          "type": "city",
+          "population": "15300",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MU-FL",
+      "parent_code": "MU",
+      "name": "Flacq",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1845967777",
+          "parent_code": "MU-FL",
+          "name": "Central Flacq",
+          "type": "city",
+          "population": "16000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3106323323",
+          "parent_code": "MU-FL",
+          "name": "Bel Air Rivière Sèche",
+          "type": "city",
+          "population": "17600",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MU-GP",
+      "parent_code": "MU",
+      "name": "Grand Port",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-247166946",
+          "parent_code": "MU-GP",
+          "name": "Mahebourg",
+          "type": "city",
+          "population": "15500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2583955840",
+          "parent_code": "MU-GP",
+          "name": "Rose Belle",
+          "type": "city",
+          "population": "12000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MU-MO",
+      "parent_code": "MU",
+      "name": "Moka",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1835771720",
+          "parent_code": "MU-MO",
+          "name": "Saint Pierre",
+          "type": "city",
+          "population": "16000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2675719350",
+          "parent_code": "MU-MO",
+          "name": "Moka",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MU-PA",
+      "parent_code": "MU",
+      "name": "Pamplemousses",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1815113111",
+          "parent_code": "MU-PA",
+          "name": "Triolet",
+          "type": "city",
+          "population": "23386",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2135159597",
+          "parent_code": "MU-PA",
+          "name": "Pointe aux Piments",
+          "type": "city",
+          "population": "9000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2162701093",
+          "parent_code": "MU-PA",
+          "name": "Tombeau Bay",
+          "type": "city",
+          "population": "12011",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MU-PW",
+      "parent_code": "MU",
+      "name": "Plaines Wilhems",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-245557798",
+          "parent_code": "MU-PW",
+          "name": "Quatre Bornes",
+          "type": "city",
+          "population": "81773",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-365764030",
+          "parent_code": "MU-PW",
+          "name": "Vacoas-Phoenix",
+          "type": "city",
+          "population": "107678",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2166853543",
+          "parent_code": "MU-PW",
+          "name": "Beau Bassin-Rose Hill",
+          "type": "city",
+          "population": "96000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2642246014",
+          "parent_code": "MU-PW",
+          "name": "Curepipe",
+          "type": "city",
+          "population": "81600",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "MU-PL",
+      "parent_code": "MU",
+      "name": "Port Louis",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-243819778",
+          "parent_code": "MU-PL",
+          "name": "Port Louis",
+          "type": "city",
+          "population": "147688",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "MU-SA",
+      "parent_code": "MU",
+      "name": "Savanne",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-5938167146",
+          "parent_code": "MU-SA",
+          "name": "Souillac",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5938167147",
+          "parent_code": "MU-SA",
+          "name": "Surinam",
+          "type": "city",
+          "population": "10500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9280540369",
+          "parent_code": "MU-SA",
+          "name": "Chemin Grenier",
+          "type": "city",
+          "population": "12200",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MU-RO",
+      "parent_code": "MU",
+      "name": "Rodrigues",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-305259442",
+          "parent_code": "MU-RO",
+          "name": "Port Mathurin",
+          "type": "city",
+          "population": "6000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MU-AG",
+      "parent_code": "MU",
+      "name": "Agaléga",
+      "type": "state",
+      "children": []
+    },
+    {
+      "code": "MU-RR",
+      "parent_code": "MU",
+      "name": "Rivière du Rempart District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1133837566",
+          "parent_code": "MU-RR",
+          "name": "Rivière du Rempart",
+          "type": "city",
+          "population": "10800",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1663012341",
+          "parent_code": "MU-RR",
+          "name": "Grand Baie",
+          "type": "city",
+          "population": "11900",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2188729948",
+          "parent_code": "MU-RR",
+          "name": "Goodlands",
+          "type": "city",
+          "population": "20,712",
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

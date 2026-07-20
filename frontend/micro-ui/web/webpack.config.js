@@ -10,7 +10,20 @@ module.exports = {
   module: {
     rules: [
       {
-        test: /\.(js)$/,
+        test: /\.js$/,
+        include: /node_modules\/axios\//,
+        use: {
+          loader: "babel-loader",
+          options: {
+            presets: [["@babel/preset-env", { targets: { ie: 11 } }]]
+          }
+        }
+      },
+      {
+        // Match .jsx too: the src/dashboard/* feature is authored in .jsx,
+        // which this rule (preset-react) must transpile — a bare /\.js$/
+        // silently skips them and webpack fails on the JSX syntax.
+        test: /\.(jsx?)$/,
         exclude: /node_modules/,
         use: {
           loader: "babel-loader",
@@ -33,6 +46,12 @@ module.exports = {
         ],
       },
     ],
+  },
+  resolve: {
+    // Without this, extensionless imports like `./dashboard/AdminDashboard`
+    // only resolve .js — webpack's defaults don't include .jsx — so the
+    // .jsx dashboard modules fail to resolve.
+    extensions: [".js", ".jsx", ".json"],
   },
   output: {
     filename: "[name].bundle.js",

@@ -1,6 +1,12 @@
 #!/bin/bash
 # User Seed Script - Creates default admin users via egov-user API
-# This ensures passwords are properly encrypted via egov-enc-service
+# This ensures passwords are properly encrypted via egov-enc-service.
+#
+# Creates ADMIN/GRO on every city tenant in SEED_TENANTS so the Postman
+# tests can auth at any city tenant (pg.citya, pg.cityb) without
+# extra setup. The full-dump.sql only has users on `pg`, but the demo
+# tenants pg.citya and pg.cityb are real MDMS tenants — tests expect
+# auth to work there too.
 
 set -e
 
@@ -8,41 +14,42 @@ EGOV_USER_HOST="${EGOV_USER_HOST:-http://egov-user:8107}"
 MAX_RETRIES=30
 RETRY_INTERVAL=5
 
+# Tenants to seed ADMIN/GRO into. Override via env when adding new cities.
+# Each tenant gets its own ADMIN + GRO user (city-scoped). INTERNAL_USER is
+# state-level (pg only) — HRMS looks it up there.
+# `pg.cietee` is the throwaway tenant used by test_crs_loader_e2e.py —
+# the test logs in there with ADMIN, then creates + deletes its own
+# MDMS data. Cleanup nukes MDMS rows on this tenant but NOT eg_user, so
+# ADMIN survives across runs.
+# (Name has no digits because egov-user validates tenantId against
+# `^[a-zA-Z. ]*$` on create — letters and dots only.)
+SEED_TENANTS="${SEED_TENANTS:-pg pg.citya pg.cityb pg.cietee}"
+
 echo "=== DIGIT User Seed ==="
 echo "EGOV_USER_HOST: $EGOV_USER_HOST"
+echo "SEED_TENANTS:   $SEED_TENANTS"
 
 # Wait for egov-user to be healthy
 echo "Waiting for egov-user service..."
-HEALTHY=false
 for i in $(seq 1 $MAX_RETRIES); do
   if curl -sf "$EGOV_USER_HOST/user/health" >/dev/null 2>&1; then
     echo "egov-user is healthy!"
-    HEALTHY=true
     break
   fi
   echo "Attempt $i/$MAX_RETRIES - egov-user not ready, waiting ${RETRY_INTERVAL}s..."
   sleep $RETRY_INTERVAL
-  if [ "$i" -eq "$MAX_RETRIES" ]; then
-    echo "ERROR: egov-user did not become healthy after $MAX_RETRIES attempts"
-    exit 1
-  fi
 done
 
-if [ "$HEALTHY" != "true" ]; then
-  echo "ERROR: egov-user did not become healthy after $MAX_RETRIES attempts. Aborting."
-  exit 1
-fi
-
-# Function to create user
+# Function to create user on a specific tenant.
 create_user() {
   local USERNAME=$1
   local NAME=$2
   local MOBILE=$3
   local EMAIL=$4
-  local ROLES=$5
+  local TENANT=$5
+  local ROLES=$6
 
-  echo ""
-  echo "Creating user: $USERNAME"
+  echo "  Creating user: $USERNAME on '$TENANT'"
 
   RESPONSE=$(curl -s -X POST "$EGOV_USER_HOST/user/users/_createnovalidate" \
     -H 'Content-Type: application/json' \
@@ -56,44 +63,69 @@ create_user() {
         \"gender\": \"MALE\",
         \"active\": true,
         \"type\": \"EMPLOYEE\",
-        \"tenantId\": \"pg\",
+        \"tenantId\": \"$TENANT\",
         \"password\": \"eGov@123\",
         \"roles\": $ROLES
       }
     }")
 
-  # Check response
   if echo "$RESPONSE" | grep -q '"userName"'; then
-    echo "  SUCCESS: User $USERNAME created"
+    echo "    SUCCESS"
   elif echo "$RESPONSE" | grep -q 'DuplicateUserName'; then
-    echo "  SKIPPED: User $USERNAME already exists"
+    echo "    SKIPPED (already exists)"
   else
-    echo "  ERROR: Failed to create $USERNAME"
-    echo "  Response: $RESPONSE"
+    echo "    ERROR — Response: $RESPONSE"
   fi
 }
 
-# Create ADMIN user with all roles
-ADMIN_ROLES='[
-  {"code": "SUPERUSER", "name": "Super User", "tenantId": "pg"},
-  {"code": "EMPLOYEE", "name": "Employee", "tenantId": "pg"},
-  {"code": "GRO", "name": "Grievance Routing Officer", "tenantId": "pg"},
-  {"code": "DGRO", "name": "Department GRO", "tenantId": "pg"}
-]'
-create_user "ADMIN" "System Administrator" "9999999999" "admin@digit.org" "$ADMIN_ROLES"
+# Roles are tenant-scoped; build the JSON per-tenant.
+# ADMIN gets EVERY role the PGR workflow gates on, so a single ADMIN
+# user can drive a complaint through every state in the test suite:
+#   APPLY                 → CITIZEN, CSR
+#   ASSIGN, REJECT        → GRO, PGR_VIEWER
+#   REASSIGN, RESOLVE     → PGR_LME, PGR_VIEWER
+#   REOPEN                → CFC, CITIZEN, CSR, PGR_VIEWER
+#   RATE                  → CFC, CITIZEN
+#   RESOLVEBYSUPERVISOR   → SUPERVISOR
+#   FORWARD/AUTO          → AUTO_ESCALATE
+# Plus the generic ones (SUPERUSER, EMPLOYEE, DGRO) for completeness.
+roles_admin() {
+  local T=$1
+  echo "[
+    {\"code\": \"SUPERUSER\",    \"name\": \"Super User\",            \"tenantId\": \"$T\"},
+    {\"code\": \"EMPLOYEE\",     \"name\": \"Employee\",              \"tenantId\": \"$T\"},
+    {\"code\": \"CITIZEN\",      \"name\": \"Citizen\",               \"tenantId\": \"$T\"},
+    {\"code\": \"CSR\",          \"name\": \"Customer Service Rep\",  \"tenantId\": \"$T\"},
+    {\"code\": \"GRO\",          \"name\": \"Grievance Routing Officer\", \"tenantId\": \"$T\"},
+    {\"code\": \"DGRO\",         \"name\": \"Department GRO\",        \"tenantId\": \"$T\"},
+    {\"code\": \"PGR_VIEWER\",   \"name\": \"PGR Viewer\",            \"tenantId\": \"$T\"},
+    {\"code\": \"PGR_LME\",      \"name\": \"PGR Last-Mile Employee\", \"tenantId\": \"$T\"},
+    {\"code\": \"SUPERVISOR\",   \"name\": \"Supervisor\",            \"tenantId\": \"$T\"},
+    {\"code\": \"AUTO_ESCALATE\",\"name\": \"Auto Escalate\",         \"tenantId\": \"$T\"}
+  ]"
+}
 
-# Create GRO user
-GRO_ROLES='[
-  {"code": "EMPLOYEE", "name": "Employee", "tenantId": "pg"},
-  {"code": "GRO", "name": "Grievance Routing Officer", "tenantId": "pg"},
-  {"code": "DGRO", "name": "Department GRO", "tenantId": "pg"}
-]'
-create_user "GRO" "Grievance Officer" "9888888888" "gro@digit.org" "$GRO_ROLES"
+roles_gro() {
+  local T=$1
+  echo "[
+    {\"code\": \"EMPLOYEE\", \"name\": \"Employee\", \"tenantId\": \"$T\"},
+    {\"code\": \"GRO\", \"name\": \"Grievance Routing Officer\", \"tenantId\": \"$T\"},
+    {\"code\": \"DGRO\", \"name\": \"Department GRO\", \"tenantId\": \"$T\"}
+  ]"
+}
 
-# Create Internal Microservice user (required by egov-hrms for internal operations)
-# HRMS searches for this user by roleCodes=INTERNAL_MICROSERVICE_ROLE on startup
+# Seed ADMIN + GRO on every SEED_TENANT.
+for TENANT in $SEED_TENANTS; do
+  echo ""
+  echo "── Seeding tenant: $TENANT ──"
+  create_user "ADMIN" "System Administrator" "9999999999" "admin@digit.org" "$TENANT" "$(roles_admin "$TENANT")"
+  create_user "GRO"   "Grievance Officer"    "9888888888" "gro@digit.org"   "$TENANT" "$(roles_gro "$TENANT")"
+done
+
+# INTERNAL_USER is a state-level SYSTEM user (only on the root tenant).
+# HRMS searches for this user by roleCodes=INTERNAL_MICROSERVICE_ROLE on startup.
 echo ""
-echo "Creating SYSTEM user: INTERNAL_USER (for HRMS internal microservice)"
+echo "── Seeding state-level SYSTEM user: INTERNAL_USER (on pg) ──"
 INTERNAL_USER_RESPONSE=$(curl -s -X POST "$EGOV_USER_HOST/user/users/_createnovalidate" \
   -H 'Content-Type: application/json' \
   -d '{
@@ -116,12 +148,9 @@ if echo "$INTERNAL_USER_RESPONSE" | grep -q '"userName"'; then
 elif echo "$INTERNAL_USER_RESPONSE" | grep -q 'DuplicateUserName'; then
   echo "  SKIPPED: Internal Microservice user already exists"
 else
-  echo "  ERROR: Failed to create Internal Microservice user"
-  echo "  Response: $INTERNAL_USER_RESPONSE"
+  echo "  ERROR — Response: $INTERNAL_USER_RESPONSE"
 fi
 
 echo ""
 echo "=== User seed completed ==="
-echo "Default credentials: username/password"
-echo "  ADMIN / eGov@123"
-echo "  GRO / eGov@123"
+echo "Default credentials: ADMIN / eGov@123 (and GRO / eGov@123) on every tenant in SEED_TENANTS."

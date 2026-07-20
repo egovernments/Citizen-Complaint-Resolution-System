@@ -14,6 +14,7 @@ import { additionalDetails } from "./steps-config/additionalDetails";
 import { locationDetails } from "./steps-config/locationDetails";
 import { useQueryClient } from "react-query";
 import { useHistory, useRouteMatch, useParams } from "react-router-dom";
+import { adaptComplaintHierarchyToServiceDefs } from "../../../utils";
 
 const configs = [
   createComplaint,
@@ -80,15 +81,19 @@ const FormExplorer = () => {
     }
   }
 
+  // Complaint types now come from RAINMAKER-PGR.ComplaintHierarchy (single adjacency
+  // list). We keep only leaf rows and adapt them to the legacy ServiceDefs shape so
+  // the rest of this component (menuPath grouping, getEffectiveServiceCode, etc.) is
+  // unchanged.
   const { isLoading: isMDMSLoading, data: serviceDefs } = Digit.Hooks.useCustomMDMS(
     tenantId,
     "RAINMAKER-PGR",
-    [{ name: "ServiceDefs" }],
+    [{ name: "ComplaintHierarchy" }],
     {
       cacheTime: Infinity,
-      select: (data) => data?.["RAINMAKER-PGR"]?.ServiceDefs,
+      select: (data) => adaptComplaintHierarchyToServiceDefs(data?.["RAINMAKER-PGR"]?.ComplaintHierarchy),
     },
-    { schemaCode: "SERVICE_DEFS_MASTER_DATA" }
+    { schemaCode: "COMPLAINT_HIERARCHY_MASTER_DATA" }
   );
 
 
@@ -171,12 +176,36 @@ const FormExplorer = () => {
       }
       : user;
 
+    const boundaryHierarchy = (() => {
+      const bc = Array.isArray(formData?.boundaryComponent) ? formData.boundaryComponent : [];
+      // Ordered level names matching bc by index (highest → lowest)
+      const levelNames = [hierarchyData?.highestHierarchy, hierarchyData?.lowestHierarchy].filter(Boolean);
+      if (levelNames.length > 0) {
+        const obj = {};
+        levelNames.forEach((levelName, i) => {
+          if (levelName && bc[i]) obj[levelName] = bc[i];
+        });
+        return obj;
+      }
+      return bc;
+    })();
+
     const additionalDetail = {
       supervisorName: formData?.SupervisorName?.trim() || null,
       supervisorContactNumber: formData?.SupervisorContactNumber?.trim() || null,
+      boundaryHierarchy: boundaryHierarchy,
     };
 
     const geoLocation = formData?.GeoLocationsPoint || { lat: null, lng: null };
+
+    const documentsList = Array.isArray(formData?.ComplaintImagesPoint)
+      ? formData.ComplaintImagesPoint.map((image) => ({
+        documentType: "PHOTO",
+        fileStoreId: image,
+        documentUid: "",
+        additionalDetails: {},
+      }))
+      : [];
 
     return {
       service: {
@@ -202,24 +231,17 @@ const FormExplorer = () => {
             longitude: geoLocation.lng,
           }),
         },
-        additionalDetail: JSON.stringify(additionalDetail),
+        additionalDetail: additionalDetail,
         auditDetails: {
           createdBy: user?.uuid,
           createdTime: timestamp,
           lastModifiedBy: user?.uuid,
           lastModifiedTime: timestamp,
         },
+        documents: documentsList,
       },
       workflow: {
         action: "APPLY",
-        verificationDocuments: Array.isArray(formData?.ComplaintImagesPoint)
-          ? formData.ComplaintImagesPoint.map((image) => ({
-            documentType: "PHOTO",
-            fileStoreId: image,
-            documentUid: "",
-            additionalDetails: {},
-          }))
-          : [],
       },
     };
   };
@@ -404,6 +426,16 @@ const FormExplorer = () => {
 
   return (
     <Card type="secondary">
+      <style>{`
+        .previous-button.digit-button-secondary {
+          height: 2.5rem !important;
+          min-width: 15rem;
+        }
+        h2.boundary-selection-label::after {
+          content: " *";
+          color: #d4351c;
+        }
+      `}</style>
 
       <FormComposerV2
         config={[configs[currentStep]]}

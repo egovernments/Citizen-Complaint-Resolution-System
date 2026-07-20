@@ -1,0 +1,59 @@
+{
+  "name": "@chakshu-gautam/digit-mcp",
+  "version": "1.0.0",
+  "description": "DIGIT platform MCP server + CLI — 60 tools for tenant management, PGR, HRMS, and more",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "main": "dist/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChakshuGautam/DIGIT-MCP.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "dist/",
+    "docs/",
+    "data/engrams/",
+    "skills/",
+    "README.md"
+  ],
+  "bin": {
+    "digit-mcp": "./dist/index.js",
+    "digit": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "npm run build --workspace=packages/data-provider && tsc",
+    "start": "node dist/index.js",
+    "start:http": "MCP_TRANSPORT=http node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "cli": "tsx src/cli.ts",
+    "test": "tsx test-validator.ts",
+    "test:ci": "tsx test-integration.ts",
+    "test:full": "c8 --src src --include 'src/**/*.ts' --exclude 'src/index.ts' --exclude 'src/server.ts' --exclude 'src/data/**' --reporter text --reporter text-summary --reporter html tsx test-integration-full.ts",
+    "test:e2e": "tsx test-e2e-new-tenant.ts",
+    "test:cli": "tsx test-cli.ts",
+    "test:openapi": "tsx test-openapi-spec.ts",
+    "test:safety": "tsx test-agent-safety.ts",
+    "engram": "tsx engram-agent.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "latest",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "commander": "^14.0.3",
+    "exceljs": "^4.4.0",
+    "pg": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.16.0",
+    "ajv": "^8.18.0",
+    "c8": "^11.0.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.5.0"
+  }
+}

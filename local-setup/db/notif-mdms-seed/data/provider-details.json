@@ -1,0 +1,18 @@
+[
+  {
+    "schemaCode": "ProviderDetail",
+    "data": {
+      "tenantId": "{{TENANT}}",
+      "providerName": "twilio",
+      "_comment_channel": "Must match the bridge dispatch channel (NOVU_BRIDGE_CHANNEL, default whatsapp) and the lifecycle TemplateBinding channel. With channel=sms the bridge resolves providers for whatsapp and finds none (NB_PROVIDERS_NOT_FOUND).",
+      "channel": "whatsapp",
+      "credentials": {
+        "accountSid": "{{TWILIO_ACCOUNT_SID}}",
+        "authToken": "{{TWILIO_AUTH_TOKEN}}"
+      },
+      "senderNumber": "{{TWILIO_FROM}}",
+      "isActive": true,
+      "priority": 1
+    }
+  }
+]

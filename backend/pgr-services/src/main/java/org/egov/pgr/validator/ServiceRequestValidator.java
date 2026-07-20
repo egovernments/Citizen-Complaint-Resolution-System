@@ -33,14 +33,16 @@ public class ServiceRequestValidator {
 
     private ServiceRequestRepository serviceRequestRepository;
 
-    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
-    public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil) {
+    public ServiceRequestValidator(PGRConfiguration config, PGRRepository repository, HRMSUtil hrmsUtil,
+                                   ServiceRequestRepository serviceRequestRepository, ObjectMapper objectMapper) {
         this.config = config;
         this.repository = repository;
         this.hrmsUtil = hrmsUtil;
+        this.serviceRequestRepository = serviceRequestRepository;
+        this.objectMapper = objectMapper;
     }
 
 
@@ -53,8 +55,8 @@ public class ServiceRequestValidator {
         Map<String,String> errorMap = new HashMap<>();
         validateUserData(request,errorMap);
         validateSource(request.getService().getSource());
-//        validateBoundary(request);
-//        validateMDMS(request, mdmsData);
+        validateBoundary(request);
+        validateMDMS(request, mdmsData);
         if(config.getIsValidateDeptEnabled()) validateDepartment(request, mdmsData);
         if(!errorMap.isEmpty())
             throw new CustomException(errorMap);
@@ -71,7 +73,7 @@ public class ServiceRequestValidator {
         String id = request.getService().getId();
         String tenantId = request.getService().getTenantId();
         validateSource(request.getService().getSource());
-//        validateMDMS(request, mdmsData);
+        validateMDMS(request, mdmsData);
         validateDepartment(request, mdmsData);
         validateReOpen(request);
         RequestSearchCriteria criteria = RequestSearchCriteria.builder().ids(Collections.singleton(id)).tenantId(tenantId).build();
@@ -169,9 +171,20 @@ public class ServiceRequestValidator {
             throw new CustomException("JSONPATH_ERROR","Failed to parse mdms response for department");
         }
 
+        // Unmapped complaint type: the ComplaintHierarchy leaf carries no real
+        // department — either the `department` field is absent, or it is the "NA"
+        // placeholder the configurator writes when the onboarding sheet leaves it
+        // blank. Such a type has no department constraint, so a CMS Screening Officer
+        // can route it to ANY department: skip the assignee/department match instead
+        // of blocking with INVALID_ASSIGNMENT. serviceCode validity is already
+        // enforced by validateMDMS earlier in validateCreate/validateUpdate.
         if(CollectionUtils.isEmpty(res))
-            throw new CustomException("PARSING_ERROR","Failed to fetch department from mdms data for serviceCode: "+serviceCode);
-        else departmentFromMDMS = res.get(0);
+            return;
+
+        departmentFromMDMS = res.get(0);
+        if(departmentFromMDMS == null || departmentFromMDMS.trim().isEmpty()
+                || "NA".equalsIgnoreCase(departmentFromMDMS))
+            return;
 
         Map<String, String> errorMap = new HashMap<>();
 
@@ -318,6 +331,8 @@ public class ServiceRequestValidator {
             if (!found) {
                 throw new CustomException("INVALID_BOUNDARY_CODE", "Invalid locality code: " + localityCode);
             }
+        } catch (CustomException e) {
+            throw e;
         } catch (Exception e) {
             throw new CustomException("BOUNDARY_SERVICE_SEARCH_ERROR", "Error while fetching boundaries from Boundary Service : " + e.getMessage());
         }

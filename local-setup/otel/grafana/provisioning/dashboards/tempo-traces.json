@@ -1,0 +1,179 @@
+{
+  "title": "DIGIT — Traces (Tempo)",
+  "uid": "digit-tempo-traces",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["digit", "tempo", "traces", "otel"],
+  "timezone": "browser",
+  "time": { "from": "now-30m", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "traceID",
+        "label": "Trace ID",
+        "type": "textbox",
+        "query": "",
+        "current": { "text": "", "value": "" },
+        "description": "Paste a traceID from logs (look for `trace_id=...` in service logs or the Loki dashboard) to render its full span timeline below.",
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "How to use",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "**Paste a traceID** into the variable above to render its full call graph in the **Trace by ID** panel. Find traceIDs by:\n\n- Searching the **Recent Traces** table below (TraceQL `{}` returns most recent spans across all services).\n- Looking in service logs for `trace_id=...` (emitted by the OpenTelemetry javaagent's MDC integration). Try the [Loki Logs dashboard](/grafana/d/digit-loki) and grep for `trace_id`.\n- Following a Loki log line's **trace** link (datasource `tracesToLogsV2` is wired by `trace_id` field).\n\nDatasource: `Tempo` (`P214B5B846CF3925F`) at `http://tempo:3200`. Tempo retains traces per its compactor settings (default ~48h on-disk)."
+      },
+      "datasource": { "type": "datasource", "uid": "grafana" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Services with traces (last 30m)",
+      "description": "Count of distinct service.name values in Tempo's tag index. Confirms which Java services are exporting OTLP successfully.",
+      "datasource": { "type": "tempo", "uid": "P214B5B846CF3925F" },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "green", "value": 5 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "graphMode": "none",
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "P214B5B846CF3925F" },
+          "queryType": "traceqlSearch",
+          "query": "{} | count_over_time() by (resource.service.name)",
+          "tableType": "spans",
+          "limit": 1000
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "text",
+      "title": "Tempo health",
+      "gridPos": { "h": 4, "w": 16, "x": 8, "y": 4 },
+      "options": {
+        "mode": "markdown",
+        "content": "**Receiver flow**: Java services → `digit-otel-collector` (OTLP gRPC :4317) → `digit-tempo` (OTLP gRPC :4317, host :13200).\n\n**Quick checks** (from a host with shell access):\n\n```bash\n# Recent search via Tempo HTTP API\ncurl -sG http://localhost:13200/api/search?limit=5 | jq '.traces[] | {traceID, rootServiceName, durationMs}'\n\n# List services that have traces\ncurl -sG http://localhost:13200/api/search/tag/service.name/values | jq\n\n# Lookup a specific trace\ncurl -sG http://localhost:13200/api/traces/{TRACE_ID} | jq '.batches | length'\n```"
+      },
+      "datasource": { "type": "datasource", "uid": "grafana" }
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Recent traces (TraceQL: {} )",
+      "description": "Most recent spans across all services. Click a row to open the trace timeline.",
+      "datasource": { "type": "tempo", "uid": "P214B5B846CF3925F" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left", "filterable": true } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Trace ID" }, "properties": [{ "id": "custom.width", "value": 260 }] },
+          { "matcher": { "id": "byName", "options": "traceID" }, "properties": [{ "id": "custom.width", "value": 260 }] },
+          { "matcher": { "id": "byName", "options": "Duration" }, "properties": [{ "id": "unit", "value": "ms" }, { "id": "custom.width", "value": 100 }] }
+        ]
+      },
+      "options": { "showHeader": true, "footer": { "show": false } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "P214B5B846CF3925F" },
+          "queryType": "traceqlSearch",
+          "query": "{}",
+          "tableType": "traces",
+          "limit": 50,
+          "filters": []
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "traces",
+      "title": "Trace by ID — ${traceID}",
+      "description": "Renders the full span tree for the traceID above. Empty when no traceID is provided.",
+      "datasource": { "type": "tempo", "uid": "P214B5B846CF3925F" },
+      "gridPos": { "h": 18, "w": 24, "x": 0, "y": 20 },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "P214B5B846CF3925F" },
+          "queryType": "traceql",
+          "query": "${traceID}",
+          "limit": 1
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Slow traces — duration > 500ms (last range)",
+      "description": "Surfaces traces whose total duration exceeds 500ms across all services. Click a row to drill in.",
+      "datasource": { "type": "tempo", "uid": "P214B5B846CF3925F" },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 38 },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left", "filterable": true } },
+        "overrides": []
+      },
+      "options": { "showHeader": true, "footer": { "show": false } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "P214B5B846CF3925F" },
+          "queryType": "traceqlSearch",
+          "query": "{ duration > 500ms }",
+          "tableType": "traces",
+          "limit": 30,
+          "filters": []
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Error traces (status = error)",
+      "description": "Spans flagged as errors by the instrumentation (HTTP 5xx, exceptions, manual error status).",
+      "datasource": { "type": "tempo", "uid": "P214B5B846CF3925F" },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 38 },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left", "filterable": true } },
+        "overrides": []
+      },
+      "options": { "showHeader": true, "footer": { "show": false } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "P214B5B846CF3925F" },
+          "queryType": "traceqlSearch",
+          "query": "{ status = error }",
+          "tableType": "traces",
+          "limit": 30,
+          "filters": []
+        }
+      ]
+    }
+  ]
+}

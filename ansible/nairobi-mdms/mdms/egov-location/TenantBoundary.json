@@ -1,0 +1,358 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "boundary": {
+        "id": 62797,
+        "code": "ke.bomet",
+        "name": "Bomet County",
+        "label": "County",
+        "children": [
+          {
+            "id": 88861,
+            "code": "BOMET_BOMET_CENTRAL",
+            "name": "Central",
+            "label": "SubCounty",
+            "children": [
+              {
+                "id": 34298,
+                "code": "BOMET_BOMET_CENTRAL_CHESOEN",
+                "name": "Central Chesoen",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Central Chesoen",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 78711,
+                "code": "BOMET_BOMET_CENTRAL_MUTARAKWA",
+                "name": "Central Mutarakwa",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Central Mutarakwa",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 20003,
+                "code": "BOMET_BOMET_CENTRAL_NADARAWETA",
+                "name": "Central Nadaraweta",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Central Nadaraweta",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 60627,
+                "code": "BOMET_BOMET_CENTRAL_SILIBWET_TOWNSHIP",
+                "name": "Central Silibwet Township",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Central Silibwet Township",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 61964,
+                "code": "BOMET_BOMET_CENTRAL_SINGORWET",
+                "name": "Central Singorwet",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Central Singorwet",
+                "longitude": null,
+                "boundaryNum": 1
+              }
+            ],
+            "latitude": null,
+            "localname": "Central",
+            "longitude": null,
+            "boundaryNum": 1
+          },
+          {
+            "id": 11788,
+            "code": "BOMET_BOMET_EAST",
+            "name": "East",
+            "label": "SubCounty",
+            "children": [
+              {
+                "id": 36070,
+                "code": "BOMET_BOMET_EAST_CHEMANER",
+                "name": "East Chemaner",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "East Chemaner",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 24644,
+                "code": "BOMET_BOMET_EAST_KEMBU",
+                "name": "East Kembu",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "East Kembu",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 49276,
+                "code": "BOMET_BOMET_EAST_KIPRERES",
+                "name": "East Kipreres",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "East Kipreres",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 60948,
+                "code": "BOMET_BOMET_EAST_LONGISA",
+                "name": "East Longisa",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "East Longisa",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 56283,
+                "code": "BOMET_BOMET_EAST_MERIGI",
+                "name": "East Merigi",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "East Merigi",
+                "longitude": null,
+                "boundaryNum": 1
+              }
+            ],
+            "latitude": null,
+            "localname": "East",
+            "longitude": null,
+            "boundaryNum": 1
+          },
+          {
+            "id": 91906,
+            "code": "BOMET_CHEPALUNGU",
+            "name": "Chepalungu",
+            "label": "SubCounty",
+            "children": [
+              {
+                "id": 87108,
+                "code": "BOMET_CHEPALUNGU_CHEBUNYO",
+                "name": "Chepalungu Chebunyo",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Chepalungu Chebunyo",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 95652,
+                "code": "BOMET_CHEPALUNGU_KONG_ASIS",
+                "name": "Chepalungu Kong Asis",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Chepalungu Kong Asis",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 23680,
+                "code": "BOMET_CHEPALUNGU_NYANGORES",
+                "name": "Chepalungu Nyangores",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Chepalungu Nyangores",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 82812,
+                "code": "BOMET_CHEPALUNGU_SIGOR",
+                "name": "Chepalungu Sigor",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Chepalungu Sigor",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 35757,
+                "code": "BOMET_CHEPALUNGU_SIONGIROI",
+                "name": "Chepalungu Siongiroi",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Chepalungu Siongiroi",
+                "longitude": null,
+                "boundaryNum": 1
+              }
+            ],
+            "latitude": null,
+            "localname": "Chepalungu",
+            "longitude": null,
+            "boundaryNum": 1
+          },
+          {
+            "id": 78102,
+            "code": "BOMET_KONOIN",
+            "name": "Konoin",
+            "label": "SubCounty",
+            "children": [
+              {
+                "id": 17871,
+                "code": "BOMET_KONOIN_BOITO",
+                "name": "Konoin Boito",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Konoin Boito",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 92627,
+                "code": "BOMET_KONOIN_CHEPCHABAS",
+                "name": "Konoin Chepchabas",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Konoin Chepchabas",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 91732,
+                "code": "BOMET_KONOIN_EMBOMOS",
+                "name": "Konoin Embomos",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Konoin Embomos",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 65122,
+                "code": "BOMET_KONOIN_KIMULOT",
+                "name": "Konoin Kimulot",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Konoin Kimulot",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 46750,
+                "code": "BOMET_KONOIN_MOGOGOSIEK",
+                "name": "Konoin Mogogosiek",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Konoin Mogogosiek",
+                "longitude": null,
+                "boundaryNum": 1
+              }
+            ],
+            "latitude": null,
+            "localname": "Konoin",
+            "longitude": null,
+            "boundaryNum": 1
+          },
+          {
+            "id": 61090,
+            "code": "BOMET_SOTIK",
+            "name": "Sotik",
+            "label": "SubCounty",
+            "children": [
+              {
+                "id": 87040,
+                "code": "BOMET_SOTIK_APLETUNDO",
+                "name": "Sotik Apletundo",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Sotik Apletundo",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 70526,
+                "code": "BOMET_SOTIK_CHEMAGEL",
+                "name": "Sotik Chemagel",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Sotik Chemagel",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 80148,
+                "code": "BOMET_SOTIK_KIPSONOI",
+                "name": "Sotik Kipsonoi",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Sotik Kipsonoi",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 78672,
+                "code": "BOMET_SOTIK_NDANAI_ABOSI",
+                "name": "Sotik Ndanai Abosi",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Sotik Ndanai Abosi",
+                "longitude": null,
+                "boundaryNum": 1
+              },
+              {
+                "id": 76556,
+                "code": "BOMET_SOTIK_RONGENA_MANARET",
+                "name": "Sotik Rongena Manaret",
+                "label": "Ward",
+                "children": [],
+                "latitude": null,
+                "localname": "Sotik Rongena Manaret",
+                "longitude": null,
+                "boundaryNum": 1
+              }
+            ],
+            "latitude": null,
+            "localname": "Sotik",
+            "longitude": null,
+            "boundaryNum": 1
+          }
+        ],
+        "latitude": null,
+        "localname": "Bomet County",
+        "longitude": null,
+        "boundaryNum": 1
+      },
+      "hierarchyType": {
+        "code": "ADMIN",
+        "name": "ADMIN"
+      }
+    }
+  }
+]

@@ -1,0 +1,170 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "pattern": ".(?=.{4})",
+      "patternId": "001"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "pattern": "\\B[a-zA-Z0-9]",
+      "patternId": "002"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "pattern": ".(?=.{2})",
+      "patternId": "003"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "pattern": "(?<=.)[^@\\n](?=[^@\\n]*?@)|(?:(?<=@.)|(?!^)\\G(?=[^@\\n]*$)).(?!$)",
+      "patternId": "004"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "pattern": "[A-Za-zÀ-ȕ0-9(),-_., ]",
+      "patternId": "005"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "pattern": "\\w(?=(?:[ \\w]*\\w){2}$)",
+      "patternId": "006"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "pattern": "(?<=.).(?=.{3})",
+      "patternId": "007"
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "pattern": "(?<=.).(?=.{2})",
+      "patternId": "008"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "pattern": "\\B[a-zA-Z0-9]",
+      "patternId": "002"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "pattern": "[A-Za-zÀ-ȕ0-9(),-_., ]",
+      "patternId": "005"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "pattern": "\\w(?=(?:[ \\w]*\\w){2}$)",
+      "patternId": "006"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "pattern": ".(?=.{2})",
+      "patternId": "003"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "pattern": "(?<=.)[^@\\n](?=[^@\\n]*?@)|(?:(?<=@.)|(?!^)\\G(?=[^@\\n]*$)).(?!$)",
+      "patternId": "004"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "pattern": ".(?=.{4})",
+      "patternId": "001"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "pattern": "(?<=.).(?=.{3})",
+      "patternId": "007"
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "pattern": "(?<=.).(?=.{2})",
+      "patternId": "008"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "pattern": ".(?=.{4})",
+      "patternId": "001"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "pattern": "\\B[a-zA-Z0-9]",
+      "patternId": "002"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "pattern": ".(?=.{2})",
+      "patternId": "003"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "pattern": "(?<=.)[^@\\n](?=[^@\\n]*?@)|(?:(?<=@.)|(?!^)\\G(?=[^@\\n]*$)).(?!$)",
+      "patternId": "004"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "pattern": "[A-Za-zÀ-ȕ0-9(),-_., ]",
+      "patternId": "005"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "pattern": "\\w(?=(?:[ \\w]*\\w){2}$)",
+      "patternId": "006"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "pattern": "(?<=.).(?=.{3})",
+      "patternId": "007"
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "pattern": "(?<=.).(?=.{2})",
+      "patternId": "008"
+    }
+  }
+]

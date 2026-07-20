@@ -1,0 +1,168 @@
+# DIGIT-stack defaults — every tenant inherits these unless its host_vars
+# overrides a specific key.
+#
+# Only things that are GENUINELY cross-tenant / cross-country live here.
+# Anything country-specific (boundary taxonomy, mobile-number format),
+# instance-specific (S3 bucket, brand URLs), or operator-preference
+# (which nginx blocks to render) lives in host_vars — see
+# inventory/host_vars/_example.yml for the documented template.
+#
+# Per-tenant secrets (DB passwords, Keycloak admin, OAuth client secrets,
+# registry creds) DO NOT belong in this file. They live in OpenBao and
+# are referenced via `secrets_path:` in host_vars.
+
+# Tear down the running stack before re-deploying (containers + orphaned
+# networks, but NOT volumes). Off by default — prod tenants must never
+# lose a running stack unintentionally. Flip true on CI/dev boxes or
+# when you explicitly want a clean redeploy from scratch.
+force_clean: false
+
+# ──────────────────────────────────────────────────────────────────────
+# digit-ui SPA — values read at boot via Digit.Utils.getConfig(KEY)
+# ──────────────────────────────────────────────────────────────────────
+
+# Empty default — every tenant MUST set state_tenant_id in host_vars.
+# Examples: `ke` (Kenya root), `pb` (Punjab root), `ke.nairobi`
+# (Nairobi city, when the citizen UI should pin to a single city).
+state_tenant_id: ""
+
+# Top-level country/state tenant. Used for `STATE_LEVEL_TENANT_ID` env
+# vars on the DIGIT services (auth lookup encryption tenant, MDMS state
+# root, boundary hierarchy root). This is distinct from `state_tenant_id`
+# above, which is the city tenant the citizen SPA pins to. Examples:
+# `ke`, `pb`, `mz`. Required in host_vars; the playbook fails open with
+# the upstream `pg` if unset, which silently breaks login on any tenant
+# with encrypted usernames since the encrypt-for-lookup ends up using
+# `pg`'s key (177813) instead of e.g. `ke`'s (74493). See PR description.
+state_root: ""
+
+# digit-ui serving mode — `hmr` for live-reload dev (host-side esbuild
+# in tmux), `static` for the pre-built bundle served by host nginx.
+# Default is static; flip to hmr only on hosts where you actively want
+# live reload from /opt/digit-ui-esbuild. The playbook converges to
+# whichever the host requests, killing the off-mode runner first to
+# free port 18080.
+digit_ui_mode: static
+
+# Bring up Elasticsearch + egov-indexer + inbox-v2 (heavy; ~2 GB RAM).
+# Off by default; tenants that use the inbox opt in via host_vars.
+enable_search_stack: false
+
+# SPA configuration — stable cross-tenant defaults.
+context_path: digit-ui
+gmaps_api_key: ""
+fin_env: dev
+central_instance_enabled: false
+digit_home_url: "https://www.digit.org/"
+config_module_name: "commonMDMSConfig"
+locale_region: "IN"           # Drives locale formatting (en_IN). Override per country.
+locale_default: "en"
+mdms_context: "mdms-v2"
+hrms_context: "egov-hrms"
+invalid_employee_roles: ["SYSTEM"]
+auth_provider: "digit"
+
+# Empty defaults — tenants set actual values in host_vars/_example.yml.
+asset_s3_bucket: ""           # filestore S3 fallback bucket
+
+# Country-specific. Override per tenant:
+#   Kenya:  highest=County, lowest=Ward
+#   India:  highest=State,  lowest=Locality
+pgr_boundary_highest_level: ""
+pgr_boundary_lowest_level: ""
+boundary_type: ""
+
+# Country-specific mobile validation. Set per tenant:
+#   Kenya:  prefix=+254, pattern=^[17][0-9]{8}$, length=9
+#   India:  prefix=+91,  pattern=^[6-9][0-9]{9}$, length=10
+core_mobile_configs: {}
+
+# Footer logos. Empty by default; tenants ship branded URLs (typically
+# mirrored under /var/www/brand/ when nginx_features.brand_assets: true).
+footer_logo_url: ""
+footer_bw_logo_url: ""
+
+# Tenant-restriction lists. Empty = no filtering. Tenants override
+# when they want to surface only their own city or hide modules.
+login_tenant_allowlist: []
+employee_module_denylist: []
+
+# Client-side dashboard render-lag instrumentation (#1110): the supervisor
+# dashboard POSTs OTLP metrics/logs to the same-origin /otel Kong route.
+# ON by default (the emitter self-mutes when the route is absent). This is
+# the deployed-box KILL SWITCH: set false in host_vars and re-render
+# globalConfigs.js (ansible/nightly) — no rebuild needed.
+dashboard_metrics_enabled: true
+
+# ──────────────────────────────────────────────────────────────────────
+# nginx vhost — feature flags + upstream ports
+# ──────────────────────────────────────────────────────────────────────
+# Each toggle controls whether a `location` block is rendered. Defaults
+# are CONSERVATIVE — only render what's safe by default. Operators flip
+# features on per-tenant once the prerequisite assets/services exist.
+
+nginx_features:
+  brand_assets: false       # /brand/ alias — requires /var/www/brand on host
+  configurator: false       # /configurator + /configurator/assets
+  configurator_caching: false  # /configurator/assets/ long-cache headers
+  status: false             # /status/ Gatus board (sub_filter rewrites)
+  api_pgr: false            # /api/pgr/ proxied to MCP for the dashboard
+  mcp: false                # /mcp HTTP transport — see CLAUDE.md security note
+  # Note: `/` routing is derived from `digit_ui_mode`:
+  #   static → host nginx serves /digit-ui/* + Kong gets / for API calls
+  #   hmr    → esbuild dev server on :18080 gets / (serves both UI + API proxy)
+
+# Upstreams (host-side ports). Container ports are fixed in compose;
+# these are how the host nginx reaches them.
+upstream_kong_port: 18000
+upstream_grafana_port: 13000
+upstream_gatus_port: 18889
+upstream_mcp_port: 13101
+upstream_esbuild_port: 18080
+upstream_minio_port: 19000
+
+# ──────────────────────────────────────────────────────────────────────
+# Custom Docker registry (digit-mcp image, future custom builds)
+# ──────────────────────────────────────────────────────────────────────
+
+# Where pre-built custom DIGIT images live. The egov-ci box in the
+# Hetzner VPC runs an insecure registry at 10.0.0.4:5000. Operators
+# outside the VPC should override this in host_vars (e.g. to a public
+# registry like ghcr.io/<org>) or set it to an empty string + flip
+# enable_mcp: false if they don't need digit-mcp at all.
+docker_registry: 10.0.0.4:5000
+
+# Hosts to add to Docker daemon.json `insecure-registries`. Defaults to
+# the docker_registry above (matches the historical Hetzner-VPC behaviour
+# of writing 10.0.0.4:5000 as insecure). Override to `[]` when using a
+# public TLS registry like ghcr.io — Docker rejects a path-bearing or
+# TLS hostname in `insecure-registries` and refuses to start, taking the
+# whole stack down. Each entry must be `host` or `host:port`, never with
+# a path component.
+insecure_registries:
+  - "{{ docker_registry }}"
+
+# On-target directory for digit-mcp when build_mcp is true. Vendored deploys
+# rsync CCRS digit-mcp/ here; a git mcp_repo_url clones/updates here instead.
+mcp_repo: "{{ digit_dir }}/digit-mcp"
+# "-" = vendored (rsync from controller); set a git URL to clone on the target.
+mcp_repo_url: "-"
+mcp_ref: main
+
+# Where the digit-ui SPA source lives. Auto-cloned onto the target at
+# /opt/digit-ui-esbuild by the playbook. Override in host_vars to point
+# at a fork.
+digit_ui_esbuild_repo: https://github.com/theflywheel/digit-ui-esbuild.git
+digit_ui_esbuild_branch: main
+
+# Prebuilt digit-ui bundle (static mode) — the ROBUST alternative to building
+# the SPA on-host. When set, the playbook pulls this image and extracts its
+# baked /var/web/digit-ui into build/, skipping the on-host node/npm/esbuild
+# build entirely (no Node-version / missing-npm fragility). The image below is
+# public and pulls off-VPC.
+#
+# Left commented so existing tenants keep their current on-host build. To make
+# the bundle the default for ALL tenants, uncomment this line; to opt in for a
+# single tenant, set digit_ui_bundle_image in that host_vars file (as pg.test
+# does). Set to "" in host_vars to force an on-host build even if this is on.
+# digit_ui_bundle_image: "ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop"

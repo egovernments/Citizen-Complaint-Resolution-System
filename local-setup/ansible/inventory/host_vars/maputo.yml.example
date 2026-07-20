@@ -1,0 +1,124 @@
+# Maputo mz e2e — MCP-enabled path (multi-tenant demo model).
+#
+# state_root: pg  → compose STATE_LEVEL_TENANT_ID stays pg, so egov-enc-service
+#                   and the JVM tier boot clean against the dump's pre-seeded pg
+#                   DataSecurity. mz is layered on as an ADDITIONAL tenant.
+# state_tenant_id: mz       → MCP bootstrap ROOT target + the tenant the UI binds to
+# city_tenant: mz.maputo    → MCP bootstrap CITY target (decoupled from .citya)
+
+ansible_host: localhost
+ansible_connection: local
+# Playbook default for deploy_become is `true` — Linux needs root for
+# apt + nginx host tasks. Override to `false` only on Mac/Darwin (where
+# those tasks are gated off and sudo would just prompt unnecessarily).
+# deploy_become: false
+docker_default_platform: linux/amd64
+domain: localhost
+tls_enabled: false
+# When docker_registry below is a PUBLIC TLS registry (ghcr.io, docker.io)
+# this MUST be []. Docker rejects a path-bearing or TLS hostname in
+# insecure-registries and refuses to start, taking the whole stack down.
+# For Hetzner-VPC deploys (docker_registry: <vpc-registry>:5000) omit this line —
+# group_vars/digit.yml defaults to [docker_registry], the historical behaviour.
+insecure_registries: []
+
+# BOOT-PINS (compose env — services fetch THIS tenant's MDMS at boot, so it
+# must already exist in the dump → keep pg/pg.citya). workflow-v2 + enc-service
+# both read their STATE_LEVEL tenant's MDMS (Workflow, DataSecurity) at startup;
+# pointing them at not-yet-bootstrapped mz/mz.maputo crash-loops them.
+state_root: pg                 # state-tier STATE_LEVEL_TENANT_ID
+tenant_id: pg.citya            # city-tier STATE_LEVEL (workflow + enc-service)
+boot_tenant: pg                # citizen-current-tenant default (CI dataloader only)
+# ONBOARD TARGET + UI BINDING (layered on via MCP, served at request time)
+state_tenant_id: mz            # MCP root target (bootstrap seeds mz + mz.maputo)
+city_tenant: mz.maputo         # MCP city target (decoupled from .citya)
+# UI binds to the CITY tenant: the configurator stores boundaries at the city
+# (targetTenant) and reads them there, and citizen/employee/PGR must read the
+# same tenant. So point digit-ui's stateTenantId at mz.maputo (not the mz state
+# root) — everything (boundaries, citizen login, employee, PGR picker) lines up.
+ui_state_tenant_id: mz.maputo
+map_center: { lat: -25.9692, lng: 32.5732 }
+login_tenant_allowlist: [ mz, mz.maputo ]
+employee_module_denylist: [ IM ]
+
+# Keep locale_region "IN" → i18n locale stays en_IN, which the bootstrap always
+# seeds (generic English, nothing India-specific) → localization works with zero
+# extra seeding. The phone-input prefix is INDEPENDENT in the current digit-ui:
+# the citizen login reads CORE_MOBILE_CONFIGS.countryCode (below), not
+# LOCALE_REGION. So +258 comes from countryCode while text stays readable.
+# (Requires the from-source build — build_digit_ui: true; the old pinned image
+# lacked this decoupling and fell back to +91.)
+locale_region: "IN"
+
+pgr_boundary_highest_level: "Município"
+pgr_boundary_lowest_level: "Bairro"
+boundary_type: "Bairro"
+# Length + allowed leading digits are derived from mobileNumberRegex (see
+# filter_plugins/mobile.py) — no separate length/starting-character fields.
+core_mobile_configs:
+  countryCode: "+258"
+  mobileNumberRegex: "^8[0-9]{8}$"
+asset_s3_bucket: "maputo-egov-assets"
+footer_logo_url: ""
+footer_bw_logo_url: ""
+
+digit_ui_mode: container
+# Build digit-ui from source at deploy (files/digit-ui-build.sh: clone +
+# npm run build) and mount the bundle over the container web root, instead of
+# the pinned (stale) registry image. Mirrors build_configurator / build_mcp.
+build_digit_ui: true
+# digit_ui_esbuild_repo: https://github.com/theflywheel/digit-ui-esbuild.git
+# digit_ui_esbuild_branch: main
+# Configurator built FROM SOURCE by the deploy itself (files/configurator-build.sh):
+# clone ChakshuGautam/digit-configurator + vite build --base=/configurator/.
+# Fully self-contained — no pre-built dist dependency. The build task sets
+# `configurator_build` from the script output; the sync task serves it.
+build_configurator: true
+
+# MCP enabled — deploy builds the image from the VENDORED source in CCRS
+# (digit-mcp/, build-in-place via mcp-build.sh repo_url "-"), tags digit-mcp:local,
+# runs it. No clone, no fork/branch pin — the source is in-tree (monorepo).
+enable_mcp: true
+build_mcp: true
+enable_search_stack: false
+enable_novu: false
+requires_nairobi_mdms: false
+db_fast_path: true
+run_ci_tests: false
+install_claude_code: false
+
+# `docker_registry` is the tag prefix used for two specific fallbacks only:
+#   - MCP image pull       — when `build_mcp: false`
+#   - DDH pinned image     — when `build_default_data_handler: false`
+# Every other DIGIT image is referenced by FULL hardcoded path in the
+# compose file (`docker-compose.egov-digit.yaml`) — `docker_registry`
+# does NOT redirect those.
+#
+# Two known prefixes for CCRS:
+#   ghcr.io/chakshugautam                               — Chakshu's personal images
+#   registry.preview.egov.theflywheel.in/egovio         — Flywheel-hosted egovio mirror
+# Both serve TLS, so keep `insecure_registries: []` above.
+docker_registry: "registry.preview.egov.theflywheel.in/egovio"
+
+# Build DDH from in-tree source (`utilities/default-data-handler/`) instead
+# of pulling the pinned image from docker_registry. Slower first deploy,
+# but deterministic and gets the latest PR #598 idempotency guard. Bomet
+# runs with this on; recommended for fresh Linux deploys.
+build_default_data_handler: true
+
+nginx_features:
+  brand_assets: false
+  configurator: true           # dist built (task #40)
+  configurator_caching: false
+  status: true
+  api_pgr: false
+  mcp: true                    # /mcp + /v1/* — MCP HTTP transport + REST shim
+
+secrets_path: kv/digit/maputo
+bootstrap_secrets:
+  postgres_password: egov123
+  mcp_db_password: egov123
+  minio_root_user: minioadmin
+  minio_root_password: minioadmin
+  elasticsearch_master_password: "asd@#$@$!132123"
+  egov_hrms_default_password: "eGov@123"

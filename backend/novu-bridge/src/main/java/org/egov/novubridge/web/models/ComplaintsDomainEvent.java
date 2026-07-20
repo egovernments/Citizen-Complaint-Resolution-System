@@ -22,6 +22,27 @@ public class ComplaintsDomainEvent {
     private String entityType;
     private String entityId;
     private String tenantId;
+
+    // ---- Config-driven pre-rendered contract (PGR pre-renders one event
+    //      per recipient x channel; novu-bridge is pure pass-through) ----
+    private String channel;          // SMS | WHATSAPP | EMAIL
+    private String subscriberId;     // tenantId:userUuid (fallback tenantId:mobile)
+    private Contact contact;         // recipient profile (phone/email/name/locale)
+    private String renderedBody;     // final localized message body (already rendered by PGR)
+    private String subject;          // EMAIL only, else null
+    private String transactionId;    // serviceRequestId:action:toState:subscriberId:channel
+    private String templateKey;      // MDMS NotificationTemplate uid (audience.action.toState.channel.locale);
+                                     // NOT yet emitted by pgr-services (NotificationService.publishRenderedEvent
+                                     // must add it) — null until then, forward-compatible here.
+
+    // ---- Provider-template delivery (WHATSAPP only) ----
+    // Set by pgr-services when an approved NotificationProviderTemplate exists for this routing key.
+    // When present, novu-bridge sends the Twilio ContentSid + positional contentVariables via a
+    // provider override instead of the free-form renderedBody. Null for SMS/EMAIL / free-form.
+    private String templateId;                     // e.g. Twilio WhatsApp Content SID (HX…)
+    private Map<String, Object> contentVariables;  // positional 1-based ({"1":.., "2":..})
+
+    // ---- Legacy fields (retained for the old coarse-event / dry-run path) ----
     private Actor actor;
     private WorkflowInfo workflow;
     private List<Stakeholder> stakeholders;

@@ -774,6 +774,12 @@
         "locale": "default"
     },
     {
+        "code": "CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE",
+        "message": "The window for reopening this complaint has closed",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
         "code": "CS_COMMON_ACCUMULATION_LITTER",
         "message": "Accumulation of Litter",
         "module": "rainmaker-pgr",
@@ -7058,6 +7064,24 @@
     {
         "code": "pgr.sms.notification.submit.citizen",
         "message": "Dear Citizen, Your complaint for <complaint_type> has been submitted with ID <id> on <date>. You can track your complaint status on the web portal.",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "CS_COMPLAINT_DETAILS_PIN_LOCATION",
+        "message": "Pin Location",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_INBOX_TAB_MY",
+        "message": "My Complaints",
+        "module": "rainmaker-pgr",
+        "locale": "default"
+    },
+    {
+        "code": "PGR_INBOX_TAB_ALL",
+        "message": "All Complaints",
         "module": "rainmaker-pgr",
         "locale": "default"
     }

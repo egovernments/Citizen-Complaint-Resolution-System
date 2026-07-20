@@ -1,0 +1,1512 @@
+{
+  "code": "AO",
+  "name": "Angola",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "AO-CNN",
+      "parent_code": "AO",
+      "name": "Cunene Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-331391618",
+          "parent_code": "AO-CNN",
+          "name": "Cahama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331392461",
+          "parent_code": "AO-CNN",
+          "name": "Xangongo",
+          "type": "city",
+          "population": "5000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331392785",
+          "parent_code": "AO-CNN",
+          "name": "Ondjiva",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "AO-CAB",
+      "parent_code": "AO",
+      "name": "Cabinda Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-279009752",
+          "parent_code": "AO-CAB",
+          "name": "Cabinda",
+          "type": "city",
+          "population": "377931",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-287872025",
+          "parent_code": "AO-CAB",
+          "name": "Cacongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9686042429",
+          "parent_code": "AO-CAB",
+          "name": "Buco-Zau",
+          "type": "city",
+          "population": "20686",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "AO-ZAI",
+      "parent_code": "AO",
+      "name": "Zaire Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-331385742",
+          "parent_code": "AO-ZAI",
+          "name": "Nzeto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-668897842",
+          "parent_code": "AO-ZAI",
+          "name": "M'banza Congo",
+          "type": "city",
+          "population": "83400",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1737950971",
+          "parent_code": "AO-ZAI",
+          "name": "Buela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1737950972",
+          "parent_code": "AO-ZAI",
+          "name": "Cuimba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2051103707",
+          "parent_code": "AO-ZAI",
+          "name": "Soyo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2170616966",
+          "parent_code": "AO-ZAI",
+          "name": "Tomboco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2170811773",
+          "parent_code": "AO-ZAI",
+          "name": "Nóqui",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-UIG",
+      "parent_code": "AO",
+      "name": "Uíge Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-279010696",
+          "parent_code": "AO-UIG",
+          "name": "Uíge",
+          "type": "city",
+          "population": "616605",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-668899392",
+          "parent_code": "AO-UIG",
+          "name": "Maquela do Zombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-668900981",
+          "parent_code": "AO-UIG",
+          "name": "Negage",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-701552410",
+          "parent_code": "AO-UIG",
+          "name": "Quimbele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1737990975",
+          "parent_code": "AO-UIG",
+          "name": "Quibocolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1738385270",
+          "parent_code": "AO-UIG",
+          "name": "Damba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1738440071",
+          "parent_code": "AO-UIG",
+          "name": "Quinzala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1738821695",
+          "parent_code": "AO-UIG",
+          "name": "Cangola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1738821696",
+          "parent_code": "AO-UIG",
+          "name": "Sanza Pombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1739019303",
+          "parent_code": "AO-UIG",
+          "name": "Puri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2139799790",
+          "parent_code": "AO-UIG",
+          "name": "Uemita",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3320051361",
+          "parent_code": "AO-UIG",
+          "name": "Bungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4727830567",
+          "parent_code": "AO-UIG",
+          "name": "Quitexe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8067902150",
+          "parent_code": "AO-UIG",
+          "name": "Songo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8068248876",
+          "parent_code": "AO-UIG",
+          "name": "Nova Esperança",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9695471812",
+          "parent_code": "AO-UIG",
+          "name": "Quissaca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12022782365",
+          "parent_code": "AO-UIG",
+          "name": "Bembe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12741150357",
+          "parent_code": "AO-UIG",
+          "name": "Quituia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12744289333",
+          "parent_code": "AO-UIG",
+          "name": "Cangundo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12744289334",
+          "parent_code": "AO-UIG",
+          "name": "Culo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-MAL",
+      "parent_code": "AO",
+      "name": "Malanje Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-279010432",
+          "parent_code": "AO-MAL",
+          "name": "Malanje",
+          "type": "city",
+          "population": "220000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-929115276",
+          "parent_code": "AO-MAL",
+          "name": "Cangandala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2132264197",
+          "parent_code": "AO-MAL",
+          "name": "Cambundi Catembo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2181225440",
+          "parent_code": "AO-MAL",
+          "name": "Lombe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2204297745",
+          "parent_code": "AO-MAL",
+          "name": "Cacuso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2760116391",
+          "parent_code": "AO-MAL",
+          "name": "Caculama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3256703871",
+          "parent_code": "AO-MAL",
+          "name": "Quitapa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6591202799",
+          "parent_code": "AO-MAL",
+          "name": "Cunda-dia-Baze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7947648254",
+          "parent_code": "AO-MAL",
+          "name": "Calandula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8037906655",
+          "parent_code": "AO-MAL",
+          "name": "Sautar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8047014950",
+          "parent_code": "AO-MAL",
+          "name": "Mecumba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12149790730",
+          "parent_code": "AO-MAL",
+          "name": "Cáfu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-CCU",
+      "parent_code": "AO",
+      "name": "Cuando Cubango Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-668130569",
+          "parent_code": "AO-CCU",
+          "name": "Menongue",
+          "type": "city",
+          "population": "361446",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-669003924",
+          "parent_code": "AO-CCU",
+          "name": "Cuito Cuanavale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2097749610",
+          "parent_code": "AO-CCU",
+          "name": "Calai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2099521724",
+          "parent_code": "AO-CCU",
+          "name": "Dirico",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2355277688",
+          "parent_code": "AO-CCU",
+          "name": "Cuangar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2558289855",
+          "parent_code": "AO-CCU",
+          "name": "Jamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3649526278",
+          "parent_code": "AO-CCU",
+          "name": "Mavinga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9654465652",
+          "parent_code": "AO-CCU",
+          "name": "Cuchi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-BGO",
+      "parent_code": "AO",
+      "name": "Bengo Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1148111529",
+          "parent_code": "AO-BGO",
+          "name": "Sassalemba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2124653703",
+          "parent_code": "AO-BGO",
+          "name": "Ambriz",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5366016343",
+          "parent_code": "AO-BGO",
+          "name": "Quibaxe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5366016395",
+          "parent_code": "AO-BGO",
+          "name": "Muxaluando",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5534085769",
+          "parent_code": "AO-BGO",
+          "name": "Caxito",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-BGU",
+      "parent_code": "AO",
+      "name": "Benguela Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-279010461",
+          "parent_code": "AO-BGU",
+          "name": "Lobito",
+          "type": "city",
+          "population": "805000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331385969",
+          "parent_code": "AO-BGU",
+          "name": "Benguela",
+          "type": "city",
+          "population": "513000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1950305670",
+          "parent_code": "AO-BGU",
+          "name": "Chongoroi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2126489157",
+          "parent_code": "AO-BGU",
+          "name": "Cubal",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2126891325",
+          "parent_code": "AO-BGU",
+          "name": "Ganda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2142739938",
+          "parent_code": "AO-BGU",
+          "name": "Balombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2148656785",
+          "parent_code": "AO-BGU",
+          "name": "Bocoio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2814839728",
+          "parent_code": "AO-BGU",
+          "name": "Dombe Grande",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10977443177",
+          "parent_code": "AO-BGU",
+          "name": "Catumbela",
+          "type": "city",
+          "population": "170000",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-BIE",
+      "parent_code": "AO",
+      "name": "Bié Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-279010365",
+          "parent_code": "AO-BIE",
+          "name": "Cuito",
+          "type": "city",
+          "population": "114000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-668118730",
+          "parent_code": "AO-BIE",
+          "name": "Munhango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-668140647",
+          "parent_code": "AO-BIE",
+          "name": "Andulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1251148044",
+          "parent_code": "AO-BIE",
+          "name": "Camacupa",
+          "type": "city",
+          "population": "19150",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1251156940",
+          "parent_code": "AO-BIE",
+          "name": "Cunhinga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1251159048",
+          "parent_code": "AO-BIE",
+          "name": "Chinguar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1745855438",
+          "parent_code": "AO-BIE",
+          "name": "Luando",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1873689582",
+          "parent_code": "AO-BIE",
+          "name": "Catabola",
+          "type": "city",
+          "population": "18858",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2129811924",
+          "parent_code": "AO-BIE",
+          "name": "Cuemba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5515135279",
+          "parent_code": "AO-BIE",
+          "name": "Mumbué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8073054398",
+          "parent_code": "AO-BIE",
+          "name": "Cutato",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9661152045",
+          "parent_code": "AO-BIE",
+          "name": "Cambandua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9661377413",
+          "parent_code": "AO-BIE",
+          "name": "Calucinga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-CNO",
+      "parent_code": "AO",
+      "name": "Cuanza Norte Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-669059480",
+          "parent_code": "AO-CNO",
+          "name": "N'dalatando",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-669061690",
+          "parent_code": "AO-CNO",
+          "name": "Dondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2051146926",
+          "parent_code": "AO-CNO",
+          "name": "Camabatela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2178050430",
+          "parent_code": "AO-CNO",
+          "name": "Golungo Alto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2181225444",
+          "parent_code": "AO-CNO",
+          "name": "Lucala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2341799160",
+          "parent_code": "AO-CNO",
+          "name": "Alto Dondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-CUS",
+      "parent_code": "AO",
+      "name": "Cuanza Sul Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-331385964",
+          "parent_code": "AO-CUS",
+          "name": "Sumbe",
+          "type": "city",
+          "population": "26000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-352680227",
+          "parent_code": "AO-CUS",
+          "name": "Porto Amboim",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2130509848",
+          "parent_code": "AO-CUS",
+          "name": "Cela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2130851714",
+          "parent_code": "AO-CUS",
+          "name": "Quibala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2146289915",
+          "parent_code": "AO-CUS",
+          "name": "Cassongue",
+          "type": "city",
+          "population": "117000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2179064792",
+          "parent_code": "AO-CUS",
+          "name": "Mussende",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2188583532",
+          "parent_code": "AO-CUS",
+          "name": "Gabela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2188957585",
+          "parent_code": "AO-CUS",
+          "name": "Quilenda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3081534016",
+          "parent_code": "AO-CUS",
+          "name": "Calulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5366314817",
+          "parent_code": "AO-CUS",
+          "name": "Cachoeira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5366315471",
+          "parent_code": "AO-CUS",
+          "name": "Seles",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5366955220",
+          "parent_code": "AO-CUS",
+          "name": "Cadá",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6998103260",
+          "parent_code": "AO-CUS",
+          "name": "Zambia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-HUA",
+      "parent_code": "AO",
+      "name": "Huambo Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-279010032",
+          "parent_code": "AO-HUA",
+          "name": "Huambo",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-527844202",
+          "parent_code": "AO-HUA",
+          "name": "Longonjo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-881498986",
+          "parent_code": "AO-HUA",
+          "name": "Alto Hama",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1092272523",
+          "parent_code": "AO-HUA",
+          "name": "Caála",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1093782098",
+          "parent_code": "AO-HUA",
+          "name": "Ecunha",
+          "type": "city",
+          "population": "82000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2119951001",
+          "parent_code": "AO-HUA",
+          "name": "Cuima",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2130509845",
+          "parent_code": "AO-HUA",
+          "name": "Bailundo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2135001800",
+          "parent_code": "AO-HUA",
+          "name": "Ukuma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2189606248",
+          "parent_code": "AO-HUA",
+          "name": "Cachiungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9661476881",
+          "parent_code": "AO-HUA",
+          "name": "Mungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13189143368",
+          "parent_code": "AO-HUA",
+          "name": "Cululo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-HUI",
+      "parent_code": "AO",
+      "name": "Huíla Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-279010261",
+          "parent_code": "AO-HUI",
+          "name": "Lubango",
+          "type": "city",
+          "population": "775249",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331390998",
+          "parent_code": "AO-HUI",
+          "name": "Chibia",
+          "type": "city",
+          "population": "243136",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-881439559",
+          "parent_code": "AO-HUI",
+          "name": "Cacula",
+          "type": "city",
+          "population": "174693",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1088741202",
+          "parent_code": "AO-HUI",
+          "name": "Humpata",
+          "type": "city",
+          "population": "113700",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1947726366",
+          "parent_code": "AO-HUI",
+          "name": "Quipungo",
+          "type": "city",
+          "population": "221502",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1947750126",
+          "parent_code": "AO-HUI",
+          "name": "Hoque",
+          "type": "city",
+          "population": "64474",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1949376211",
+          "parent_code": "AO-HUI",
+          "name": "Quilengues",
+          "type": "city",
+          "population": "96078",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2100103465",
+          "parent_code": "AO-HUI",
+          "name": "Jamba",
+          "type": "city",
+          "population": "134035",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2116937544",
+          "parent_code": "AO-HUI",
+          "name": "Caconda",
+          "type": "city",
+          "population": "186098",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2119951000",
+          "parent_code": "AO-HUI",
+          "name": "Chipindo",
+          "type": "city",
+          "population": "82542",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2127341181",
+          "parent_code": "AO-HUI",
+          "name": "Caluquembe",
+          "type": "city",
+          "population": "229509",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2493524938",
+          "parent_code": "AO-HUI",
+          "name": "Condomínio Omatapalo",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        },
+        {
+          "code": "CTY-3193493387",
+          "parent_code": "AO-HUI",
+          "name": "Cuvango",
+          "type": "city",
+          "population": "100187",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3242245438",
+          "parent_code": "AO-HUI",
+          "name": "Gambos-Chiange",
+          "type": "city",
+          "population": "101308",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7212015471",
+          "parent_code": "AO-HUI",
+          "name": "Matala",
+          "type": "city",
+          "population": "335118",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7541784964",
+          "parent_code": "AO-HUI",
+          "name": "Huíla",
+          "type": "city",
+          "population": "55000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10776098552",
+          "parent_code": "AO-HUI",
+          "name": "Cusse",
+          "type": "city",
+          "population": "46725",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-LUA",
+      "parent_code": "AO",
+      "name": "Luanda Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27564941",
+          "parent_code": "AO-LUA",
+          "name": "Luanda",
+          "type": "city",
+          "population": "5172900",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-769948081",
+          "parent_code": "AO-LUA",
+          "name": "Cacuaco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1148112958",
+          "parent_code": "AO-LUA",
+          "name": "Panguila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1417840848",
+          "parent_code": "AO-LUA",
+          "name": "Catete",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1635348608",
+          "parent_code": "AO-LUA",
+          "name": "Cidade do Kilamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6199736535",
+          "parent_code": "AO-LUA",
+          "name": "Quarteirão Quedas de Kalandula- Bloco J",
+          "type": "city",
+          "population": null,
+          "place_type": "city_block"
+        }
+      ]
+    },
+    {
+      "code": "AO-LNO",
+      "parent_code": "AO",
+      "name": "Lunda Norte Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-668026961",
+          "parent_code": "AO-LNO",
+          "name": "Cafunfo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-668065028",
+          "parent_code": "AO-LNO",
+          "name": "Lucapa",
+          "type": "city",
+          "population": "125000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-668066114",
+          "parent_code": "AO-LNO",
+          "name": "Dundo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-701539851",
+          "parent_code": "AO-LNO",
+          "name": "Cuango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1709770267",
+          "parent_code": "AO-LNO",
+          "name": "Nzagi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1709791687",
+          "parent_code": "AO-LNO",
+          "name": "Canzar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1717934134",
+          "parent_code": "AO-LNO",
+          "name": "Calonda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1729009809",
+          "parent_code": "AO-LNO",
+          "name": "Xá-Muteba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1729387041",
+          "parent_code": "AO-LNO",
+          "name": "Cuilo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1729391041",
+          "parent_code": "AO-LNO",
+          "name": "Caluango",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3213312588",
+          "parent_code": "AO-LNO",
+          "name": "Lóvua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3214878557",
+          "parent_code": "AO-LNO",
+          "name": "Salucunda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3222559589",
+          "parent_code": "AO-LNO",
+          "name": "Xinge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5534057282",
+          "parent_code": "AO-LNO",
+          "name": "Calandala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7978776460",
+          "parent_code": "AO-LNO",
+          "name": "Camaxilo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8044962932",
+          "parent_code": "AO-LNO",
+          "name": "Iongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11950934617",
+          "parent_code": "AO-LNO",
+          "name": "Cautoto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12648337375",
+          "parent_code": "AO-LNO",
+          "name": "Luxilo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-12648469077",
+          "parent_code": "AO-LNO",
+          "name": "Lumua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-LSU",
+      "parent_code": "AO",
+      "name": "Lunda Sul Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-293386732",
+          "parent_code": "AO-LSU",
+          "name": "Saurimo",
+          "type": "city",
+          "population": "200000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1744843868",
+          "parent_code": "AO-LSU",
+          "name": "Cucumbi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1744843869",
+          "parent_code": "AO-LSU",
+          "name": "Xassengue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-MOX",
+      "parent_code": "AO",
+      "name": "Moxico Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-349039206",
+          "parent_code": "AO-MOX",
+          "name": "Luena",
+          "type": "city",
+          "population": "456000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-561106241",
+          "parent_code": "AO-MOX",
+          "name": "Cazombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-668074709",
+          "parent_code": "AO-MOX",
+          "name": "Luau",
+          "type": "city",
+          "population": "90000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1718720844",
+          "parent_code": "AO-MOX",
+          "name": "Luacano",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2051843167",
+          "parent_code": "AO-MOX",
+          "name": "Nana Candundo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2052638496",
+          "parent_code": "AO-MOX",
+          "name": "Cangamba",
+          "type": "city",
+          "population": "10000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2186536945",
+          "parent_code": "AO-MOX",
+          "name": "Camanongue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6046294266",
+          "parent_code": "AO-MOX",
+          "name": "Bundas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9633927998",
+          "parent_code": "AO-MOX",
+          "name": "Léua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9643538274",
+          "parent_code": "AO-MOX",
+          "name": "Tempué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "AO-NAM",
+      "parent_code": "AO",
+      "name": "Namibe Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-331386368",
+          "parent_code": "AO-NAM",
+          "name": "Moçâmedes",
+          "type": "city",
+          "population": "162000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-352755148",
+          "parent_code": "AO-NAM",
+          "name": "Tômbua",
+          "type": "city",
+          "population": "187573",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1088429635",
+          "parent_code": "AO-NAM",
+          "name": "Bibala",
+          "type": "city",
+          "population": "57000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2518935743",
+          "parent_code": "AO-NAM",
+          "name": "Virei",
+          "type": "city",
+          "population": "30000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7911300857",
+          "parent_code": "AO-NAM",
+          "name": "Lucira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

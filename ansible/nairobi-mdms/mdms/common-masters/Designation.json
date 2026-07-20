@@ -1,0 +1,263 @@
+[
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_01",
+      "name": "DIRECTOR",
+      "active": true,
+      "description": "DIRECTOR"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_02",
+      "name": "SEWERAGE OFFICER",
+      "active": true,
+      "description": "SEWERAGE OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_03",
+      "name": "SENIOR ENGINEER",
+      "active": true,
+      "description": "SENIOR ENGINEER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_04",
+      "name": "REVENUE ADMINISTRATION OFFICER",
+      "active": true,
+      "description": "REVENUE ADMINISTRATION OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_05",
+      "name": "PARKING OFFICER",
+      "active": true,
+      "description": "PARKING OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_06",
+      "name": "LAND RATES OFFICER",
+      "active": true,
+      "description": "LAND RATES OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_07",
+      "name": "CUSTOMER SERVICE OFFICER",
+      "active": true,
+      "description": "CUSTOMER SERVICE OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_08",
+      "name": "BOROUGH ADMINISTRATOR",
+      "active": true,
+      "description": "BOROUGH ADMINISTRATOR"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_09",
+      "name": "PERSONNEL OFFICER",
+      "active": true,
+      "description": "PERSONNEL OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_10",
+      "name": "URBAN PLANNER",
+      "active": true,
+      "description": "URBAN PLANNER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_11",
+      "name": "REGISTRY OFFICER",
+      "active": true,
+      "description": "REGISTRY OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_12",
+      "name": "ENVIRONMENT OFFICER",
+      "active": true,
+      "description": "ENVIRONMENT OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_13",
+      "name": "WATER AND FOOD OFFICER",
+      "active": true,
+      "description": "WATER AND FOOD OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_14",
+      "name": "LANDS OFFICER",
+      "active": true,
+      "description": "LANDS OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_15",
+      "name": "COMPLIANCE OFFICER",
+      "active": true,
+      "description": "COMPLIANCE OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_16",
+      "name": "SUB COUNTY ADMINISTRATOR",
+      "active": true,
+      "description": "SUB COUNTY ADMINISTRATOR"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_17",
+      "name": "MARKETS OFFICER",
+      "active": true,
+      "description": "MARKETS OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_18",
+      "name": "ECD TRAINER",
+      "active": true,
+      "description": "ECD TRAINER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_19",
+      "name": "VOCATIONAL TRAINER",
+      "active": true,
+      "description": "VOCATIONAL TRAINER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_20",
+      "name": "ICT OFFICER",
+      "active": true,
+      "description": "ICT OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_21",
+      "name": "YOUTH OFFICER",
+      "active": true,
+      "description": "YOUTH OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_22",
+      "name": "SPORTS OFFICER",
+      "active": true,
+      "description": "SPORTS OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_23",
+      "name": "COUNTY ATTORNEY",
+      "active": true,
+      "description": "COUNTY ATTORNEY"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_24",
+      "name": "DIGITAL ECONOMY OFFICER",
+      "active": true,
+      "description": "DIGITAL ECONOMY OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_25",
+      "name": "ICT INFRASTRUCTURE OFFICER",
+      "active": true,
+      "description": "ICT INFRASTRUCTURE OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_26",
+      "name": "MOBILITY OFFICER",
+      "active": true,
+      "description": "MOBILITY OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_27",
+      "name": "WORKS ENGINEER",
+      "active": true,
+      "description": "WORKS ENGINEER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_28",
+      "name": "DISASTER MANAGEMENT OFFICER",
+      "active": true,
+      "description": "DISASTER MANAGEMENT OFFICER"
+    }
+  },
+  {
+    "tenantId": "ke.nairobi",
+    "data": {
+      "code": "DESIG_29",
+      "name": "ADMINISTRATION OFFICER",
+      "active": true,
+      "description": "ADMINISTRATION OFFICER"
+    }
+  }
+]

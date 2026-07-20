@@ -1,0 +1,1685 @@
+[
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "redirectURL": "all-services",
+      "appBannerMobile": {
+        "code": "APP_BANNER_MOBILE",
+        "name": "App Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"
+      },
+      "appBannerDesktop": {
+        "code": "APP_BANNER_DESKTOP",
+        "name": "App Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"
+      },
+      "citizenServicesCard": {
+        "code": "HOME_CITIZEN_SERVICES_CARD",
+        "name": "Home Citizen services Card",
+        "props": [
+          {
+            "code": "ACTION_TEST_MCOLLECT",
+            "name": "Miscellaneous Collection",
+            "label": "ACTION_TEST_MCOLLECT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/mcollect-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_PT",
+            "name": "Property Tax",
+            "label": "MODULE_PT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/pt-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_TL",
+            "name": "Trade Licence",
+            "label": "MODULE_TL",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/tl-home"
+          },
+          {
+            "code": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "name": "Online Building Permit System",
+            "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/obps-home"
+          },
+          {
+            "code": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "name": "Water & Sewerage",
+            "label": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/ws-home"
+          },
+          {
+            "code": "ACTION_TEST_FIRE_NOC",
+            "name": "Fire No Objection Certificate",
+            "label": "ACTION_TEST_FIRE_NOC",
+            "enabled": true,
+            "navigationUrl": "/citizen/fire-noc/home"
+          },
+          {
+            "code": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "name": "Birth Certificate",
+            "label": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/birth-citizen/home"
+          },
+          {
+            "code": "ACTION_TEST_DEATH_CERTIFICATE",
+            "name": "Death Certificate",
+            "label": "ACTION_TEST_DEATH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/death-citizen/home"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/all-services"
+        },
+        "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"
+      },
+      "whatsNewSection-disabled": {
+        "code": "WHATSNEW",
+        "name": "What's New",
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/engagement/whats-new"
+        },
+        "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"
+      },
+      "informationAndUpdatesCard": {
+        "code": "HOME_CITIZEN_INFO_UPDATE_CARD",
+        "name": "Home Citizen Information and Updates card",
+        "props": [
+          {
+            "code": "CITIZEN_MY_CITY",
+            "name": "My City",
+            "label": "CS_HEADER_MYCITY",
+            "enabled": true,
+            "navigationUrl": ""
+          },
+          {
+            "code": "CITIZEN_EVENTS",
+            "name": "Events",
+            "label": "EVENTS_EVENTS_HEADER",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/events"
+          },
+          {
+            "code": "CITIZEN_DOCUMENTS",
+            "name": "Documents",
+            "label": "CS_COMMON_DOCUMENTS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/docs"
+          },
+          {
+            "code": "CITIZEN_SURVEYS",
+            "name": "Surveys",
+            "label": "CS_COMMON_SURVEYS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": ""
+        },
+        "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"
+      },
+      "whatsAppBannerMobile-disabled": {
+        "code": "WHATSAPP_BANNER_MOBILE",
+        "name": "WhatsApp Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      },
+      "whatsAppBannerDesktop-disabled": {
+        "code": "WHATSAPP_BANNER_DESKTOP",
+        "name": "WhatsApp Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      }
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "redirectURL": "all-services",
+      "appBannerMobile": {
+        "code": "APP_BANNER_MOBILE",
+        "name": "App Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"
+      },
+      "appBannerDesktop": {
+        "code": "APP_BANNER_DESKTOP",
+        "name": "App Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"
+      },
+      "citizenServicesCard": {
+        "code": "HOME_CITIZEN_SERVICES_CARD",
+        "name": "Home Citizen services Card",
+        "props": [
+          {
+            "code": "ACTION_TEST_MCOLLECT",
+            "name": "Miscellaneous Collection",
+            "label": "ACTION_TEST_MCOLLECT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/mcollect-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_PT",
+            "name": "Property Tax",
+            "label": "MODULE_PT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/pt-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_TL",
+            "name": "Trade Licence",
+            "label": "MODULE_TL",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/tl-home"
+          },
+          {
+            "code": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "name": "Online Building Permit System",
+            "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/obps-home"
+          },
+          {
+            "code": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "name": "Water & Sewerage",
+            "label": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/ws-home"
+          },
+          {
+            "code": "ACTION_TEST_FIRE_NOC",
+            "name": "Fire No Objection Certificate",
+            "label": "ACTION_TEST_FIRE_NOC",
+            "enabled": true,
+            "navigationUrl": "/citizen/fire-noc/home"
+          },
+          {
+            "code": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "name": "Birth Certificate",
+            "label": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/birth-citizen/home"
+          },
+          {
+            "code": "ACTION_TEST_DEATH_CERTIFICATE",
+            "name": "Death Certificate",
+            "label": "ACTION_TEST_DEATH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/death-citizen/home"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/all-services"
+        },
+        "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"
+      },
+      "whatsNewSection-disabled": {
+        "code": "WHATSNEW",
+        "name": "What's New",
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/engagement/whats-new"
+        },
+        "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"
+      },
+      "informationAndUpdatesCard": {
+        "code": "HOME_CITIZEN_INFO_UPDATE_CARD",
+        "name": "Home Citizen Information and Updates card",
+        "props": [
+          {
+            "code": "CITIZEN_MY_CITY",
+            "name": "My City",
+            "label": "CS_HEADER_MYCITY",
+            "enabled": true,
+            "navigationUrl": ""
+          },
+          {
+            "code": "CITIZEN_EVENTS",
+            "name": "Events",
+            "label": "EVENTS_EVENTS_HEADER",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/events"
+          },
+          {
+            "code": "CITIZEN_DOCUMENTS",
+            "name": "Documents",
+            "label": "CS_COMMON_DOCUMENTS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/docs"
+          },
+          {
+            "code": "CITIZEN_SURVEYS",
+            "name": "Surveys",
+            "label": "CS_COMMON_SURVEYS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": ""
+        },
+        "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"
+      },
+      "whatsAppBannerMobile-disabled": {
+        "code": "WHATSAPP_BANNER_MOBILE",
+        "name": "WhatsApp Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      },
+      "whatsAppBannerDesktop-disabled": {
+        "code": "WHATSAPP_BANNER_DESKTOP",
+        "name": "WhatsApp Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      }
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "redirectURL": "all-services",
+      "appBannerMobile": {
+        "code": "APP_BANNER_MOBILE",
+        "name": "App Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"
+      },
+      "appBannerDesktop": {
+        "code": "APP_BANNER_DESKTOP",
+        "name": "App Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"
+      },
+      "citizenServicesCard": {
+        "code": "HOME_CITIZEN_SERVICES_CARD",
+        "name": "Home Citizen services Card",
+        "props": [
+          {
+            "code": "ACTION_TEST_MCOLLECT",
+            "name": "Miscellaneous Collection",
+            "label": "ACTION_TEST_MCOLLECT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/mcollect-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_PT",
+            "name": "Property Tax",
+            "label": "MODULE_PT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/pt-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_TL",
+            "name": "Trade Licence",
+            "label": "MODULE_TL",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/tl-home"
+          },
+          {
+            "code": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "name": "Online Building Permit System",
+            "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/obps-home"
+          },
+          {
+            "code": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "name": "Water & Sewerage",
+            "label": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/ws-home"
+          },
+          {
+            "code": "ACTION_TEST_FIRE_NOC",
+            "name": "Fire No Objection Certificate",
+            "label": "ACTION_TEST_FIRE_NOC",
+            "enabled": true,
+            "navigationUrl": "/citizen/fire-noc/home"
+          },
+          {
+            "code": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "name": "Birth Certificate",
+            "label": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/birth-citizen/home"
+          },
+          {
+            "code": "ACTION_TEST_DEATH_CERTIFICATE",
+            "name": "Death Certificate",
+            "label": "ACTION_TEST_DEATH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/death-citizen/home"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/all-services"
+        },
+        "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"
+      },
+      "whatsNewSection-disabled": {
+        "code": "WHATSNEW",
+        "name": "What's New",
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/engagement/whats-new"
+        },
+        "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"
+      },
+      "informationAndUpdatesCard": {
+        "code": "HOME_CITIZEN_INFO_UPDATE_CARD",
+        "name": "Home Citizen Information and Updates card",
+        "props": [
+          {
+            "code": "CITIZEN_MY_CITY",
+            "name": "My City",
+            "label": "CS_HEADER_MYCITY",
+            "enabled": true,
+            "navigationUrl": ""
+          },
+          {
+            "code": "CITIZEN_EVENTS",
+            "name": "Events",
+            "label": "EVENTS_EVENTS_HEADER",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/events"
+          },
+          {
+            "code": "CITIZEN_DOCUMENTS",
+            "name": "Documents",
+            "label": "CS_COMMON_DOCUMENTS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/docs"
+          },
+          {
+            "code": "CITIZEN_SURVEYS",
+            "name": "Surveys",
+            "label": "CS_COMMON_SURVEYS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": ""
+        },
+        "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"
+      },
+      "whatsAppBannerMobile-disabled": {
+        "code": "WHATSAPP_BANNER_MOBILE",
+        "name": "WhatsApp Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      },
+      "whatsAppBannerDesktop-disabled": {
+        "code": "WHATSAPP_BANNER_DESKTOP",
+        "name": "WhatsApp Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      }
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "redirectURL": "all-services",
+      "appBannerMobile": {
+        "code": "APP_BANNER_MOBILE",
+        "name": "App Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"
+      },
+      "appBannerDesktop": {
+        "code": "APP_BANNER_DESKTOP",
+        "name": "App Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"
+      },
+      "citizenServicesCard": {
+        "code": "HOME_CITIZEN_SERVICES_CARD",
+        "name": "Home Citizen services Card",
+        "props": [
+          {
+            "code": "ACTION_TEST_MCOLLECT",
+            "name": "Miscellaneous Collection",
+            "label": "ACTION_TEST_MCOLLECT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/mcollect-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_PT",
+            "name": "Property Tax",
+            "label": "MODULE_PT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/pt-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_TL",
+            "name": "Trade Licence",
+            "label": "MODULE_TL",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/tl-home"
+          },
+          {
+            "code": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "name": "Online Building Permit System",
+            "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/obps-home"
+          },
+          {
+            "code": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "name": "Water & Sewerage",
+            "label": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/ws-home"
+          },
+          {
+            "code": "ACTION_TEST_FIRE_NOC",
+            "name": "Fire No Objection Certificate",
+            "label": "ACTION_TEST_FIRE_NOC",
+            "enabled": true,
+            "navigationUrl": "/citizen/fire-noc/home"
+          },
+          {
+            "code": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "name": "Birth Certificate",
+            "label": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/birth-citizen/home"
+          },
+          {
+            "code": "ACTION_TEST_DEATH_CERTIFICATE",
+            "name": "Death Certificate",
+            "label": "ACTION_TEST_DEATH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/death-citizen/home"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/all-services"
+        },
+        "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"
+      },
+      "whatsNewSection-disabled": {
+        "code": "WHATSNEW",
+        "name": "What's New",
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/engagement/whats-new"
+        },
+        "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"
+      },
+      "informationAndUpdatesCard": {
+        "code": "HOME_CITIZEN_INFO_UPDATE_CARD",
+        "name": "Home Citizen Information and Updates card",
+        "props": [
+          {
+            "code": "CITIZEN_MY_CITY",
+            "name": "My City",
+            "label": "CS_HEADER_MYCITY",
+            "enabled": true,
+            "navigationUrl": ""
+          },
+          {
+            "code": "CITIZEN_EVENTS",
+            "name": "Events",
+            "label": "EVENTS_EVENTS_HEADER",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/events"
+          },
+          {
+            "code": "CITIZEN_DOCUMENTS",
+            "name": "Documents",
+            "label": "CS_COMMON_DOCUMENTS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/docs"
+          },
+          {
+            "code": "CITIZEN_SURVEYS",
+            "name": "Surveys",
+            "label": "CS_COMMON_SURVEYS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": ""
+        },
+        "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"
+      },
+      "whatsAppBannerMobile-disabled": {
+        "code": "WHATSAPP_BANNER_MOBILE",
+        "name": "WhatsApp Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      },
+      "whatsAppBannerDesktop-disabled": {
+        "code": "WHATSAPP_BANNER_DESKTOP",
+        "name": "WhatsApp Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      }
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "redirectURL": "all-services",
+      "appBannerMobile": {
+        "code": "APP_BANNER_MOBILE",
+        "name": "App Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"
+      },
+      "appBannerDesktop": {
+        "code": "APP_BANNER_DESKTOP",
+        "name": "App Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"
+      },
+      "citizenServicesCard": {
+        "code": "HOME_CITIZEN_SERVICES_CARD",
+        "name": "Home Citizen services Card",
+        "props": [
+          {
+            "code": "ACTION_TEST_MCOLLECT",
+            "name": "Miscellaneous Collection",
+            "label": "ACTION_TEST_MCOLLECT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/mcollect-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_PT",
+            "name": "Property Tax",
+            "label": "MODULE_PT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/pt-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_TL",
+            "name": "Trade Licence",
+            "label": "MODULE_TL",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/tl-home"
+          },
+          {
+            "code": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "name": "Online Building Permit System",
+            "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/obps-home"
+          },
+          {
+            "code": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "name": "Water & Sewerage",
+            "label": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/ws-home"
+          },
+          {
+            "code": "ACTION_TEST_FIRE_NOC",
+            "name": "Fire No Objection Certificate",
+            "label": "ACTION_TEST_FIRE_NOC",
+            "enabled": true,
+            "navigationUrl": "/citizen/fire-noc/home"
+          },
+          {
+            "code": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "name": "Birth Certificate",
+            "label": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/birth-citizen/home"
+          },
+          {
+            "code": "ACTION_TEST_DEATH_CERTIFICATE",
+            "name": "Death Certificate",
+            "label": "ACTION_TEST_DEATH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/death-citizen/home"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/all-services"
+        },
+        "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"
+      },
+      "whatsNewSection-disabled": {
+        "code": "WHATSNEW",
+        "name": "What's New",
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/engagement/whats-new"
+        },
+        "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"
+      },
+      "informationAndUpdatesCard": {
+        "code": "HOME_CITIZEN_INFO_UPDATE_CARD",
+        "name": "Home Citizen Information and Updates card",
+        "props": [
+          {
+            "code": "CITIZEN_MY_CITY",
+            "name": "My City",
+            "label": "CS_HEADER_MYCITY",
+            "enabled": true,
+            "navigationUrl": ""
+          },
+          {
+            "code": "CITIZEN_EVENTS",
+            "name": "Events",
+            "label": "EVENTS_EVENTS_HEADER",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/events"
+          },
+          {
+            "code": "CITIZEN_DOCUMENTS",
+            "name": "Documents",
+            "label": "CS_COMMON_DOCUMENTS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/docs"
+          },
+          {
+            "code": "CITIZEN_SURVEYS",
+            "name": "Surveys",
+            "label": "CS_COMMON_SURVEYS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": ""
+        },
+        "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"
+      },
+      "whatsAppBannerMobile-disabled": {
+        "code": "WHATSAPP_BANNER_MOBILE",
+        "name": "WhatsApp Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      },
+      "whatsAppBannerDesktop-disabled": {
+        "code": "WHATSAPP_BANNER_DESKTOP",
+        "name": "WhatsApp Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      }
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "redirectURL": "all-services",
+      "appBannerMobile": {
+        "code": "APP_BANNER_MOBILE",
+        "name": "App Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"
+      },
+      "appBannerDesktop": {
+        "code": "APP_BANNER_DESKTOP",
+        "name": "App Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"
+      },
+      "citizenServicesCard": {
+        "code": "HOME_CITIZEN_SERVICES_CARD",
+        "name": "Home Citizen services Card",
+        "props": [
+          {
+            "code": "ACTION_TEST_MCOLLECT",
+            "name": "Miscellaneous Collection",
+            "label": "ACTION_TEST_MCOLLECT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/mcollect-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_PT",
+            "name": "Property Tax",
+            "label": "MODULE_PT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/pt-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_TL",
+            "name": "Trade Licence",
+            "label": "MODULE_TL",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/tl-home"
+          },
+          {
+            "code": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "name": "Online Building Permit System",
+            "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/obps-home"
+          },
+          {
+            "code": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "name": "Water & Sewerage",
+            "label": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/ws-home"
+          },
+          {
+            "code": "ACTION_TEST_FIRE_NOC",
+            "name": "Fire No Objection Certificate",
+            "label": "ACTION_TEST_FIRE_NOC",
+            "enabled": true,
+            "navigationUrl": "/citizen/fire-noc/home"
+          },
+          {
+            "code": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "name": "Birth Certificate",
+            "label": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/birth-citizen/home"
+          },
+          {
+            "code": "ACTION_TEST_DEATH_CERTIFICATE",
+            "name": "Death Certificate",
+            "label": "ACTION_TEST_DEATH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/death-citizen/home"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/all-services"
+        },
+        "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"
+      },
+      "whatsNewSection-disabled": {
+        "code": "WHATSNEW",
+        "name": "What's New",
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/engagement/whats-new"
+        },
+        "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"
+      },
+      "informationAndUpdatesCard": {
+        "code": "HOME_CITIZEN_INFO_UPDATE_CARD",
+        "name": "Home Citizen Information and Updates card",
+        "props": [
+          {
+            "code": "CITIZEN_MY_CITY",
+            "name": "My City",
+            "label": "CS_HEADER_MYCITY",
+            "enabled": true,
+            "navigationUrl": ""
+          },
+          {
+            "code": "CITIZEN_EVENTS",
+            "name": "Events",
+            "label": "EVENTS_EVENTS_HEADER",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/events"
+          },
+          {
+            "code": "CITIZEN_DOCUMENTS",
+            "name": "Documents",
+            "label": "CS_COMMON_DOCUMENTS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/docs"
+          },
+          {
+            "code": "CITIZEN_SURVEYS",
+            "name": "Surveys",
+            "label": "CS_COMMON_SURVEYS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": ""
+        },
+        "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"
+      },
+      "whatsAppBannerMobile-disabled": {
+        "code": "WHATSAPP_BANNER_MOBILE",
+        "name": "WhatsApp Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      },
+      "whatsAppBannerDesktop-disabled": {
+        "code": "WHATSAPP_BANNER_DESKTOP",
+        "name": "WhatsApp Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      }
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "redirectURL": "all-services",
+      "appBannerMobile": {
+        "code": "APP_BANNER_MOBILE",
+        "name": "App Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"
+      },
+      "appBannerDesktop": {
+        "code": "APP_BANNER_DESKTOP",
+        "name": "App Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"
+      },
+      "citizenServicesCard": {
+        "code": "HOME_CITIZEN_SERVICES_CARD",
+        "name": "Home Citizen services Card",
+        "props": [
+          {
+            "code": "ACTION_TEST_MCOLLECT",
+            "name": "Miscellaneous Collection",
+            "label": "ACTION_TEST_MCOLLECT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/mcollect-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_PT",
+            "name": "Property Tax",
+            "label": "MODULE_PT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/pt-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_TL",
+            "name": "Trade Licence",
+            "label": "MODULE_TL",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/tl-home"
+          },
+          {
+            "code": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "name": "Online Building Permit System",
+            "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/obps-home"
+          },
+          {
+            "code": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "name": "Water & Sewerage",
+            "label": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/ws-home"
+          },
+          {
+            "code": "ACTION_TEST_FIRE_NOC",
+            "name": "Fire No Objection Certificate",
+            "label": "ACTION_TEST_FIRE_NOC",
+            "enabled": true,
+            "navigationUrl": "/citizen/fire-noc/home"
+          },
+          {
+            "code": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "name": "Birth Certificate",
+            "label": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/birth-citizen/home"
+          },
+          {
+            "code": "ACTION_TEST_DEATH_CERTIFICATE",
+            "name": "Death Certificate",
+            "label": "ACTION_TEST_DEATH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/death-citizen/home"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/all-services"
+        },
+        "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"
+      },
+      "whatsNewSection-disabled": {
+        "code": "WHATSNEW",
+        "name": "What's New",
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/engagement/whats-new"
+        },
+        "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"
+      },
+      "informationAndUpdatesCard": {
+        "code": "HOME_CITIZEN_INFO_UPDATE_CARD",
+        "name": "Home Citizen Information and Updates card",
+        "props": [
+          {
+            "code": "CITIZEN_MY_CITY",
+            "name": "My City",
+            "label": "CS_HEADER_MYCITY",
+            "enabled": true,
+            "navigationUrl": ""
+          },
+          {
+            "code": "CITIZEN_EVENTS",
+            "name": "Events",
+            "label": "EVENTS_EVENTS_HEADER",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/events"
+          },
+          {
+            "code": "CITIZEN_DOCUMENTS",
+            "name": "Documents",
+            "label": "CS_COMMON_DOCUMENTS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/docs"
+          },
+          {
+            "code": "CITIZEN_SURVEYS",
+            "name": "Surveys",
+            "label": "CS_COMMON_SURVEYS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": ""
+        },
+        "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"
+      },
+      "whatsAppBannerMobile-disabled": {
+        "code": "WHATSAPP_BANNER_MOBILE",
+        "name": "WhatsApp Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      },
+      "whatsAppBannerDesktop-disabled": {
+        "code": "WHATSAPP_BANNER_DESKTOP",
+        "name": "WhatsApp Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      }
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "redirectURL": "all-services",
+      "appBannerMobile": {
+        "code": "APP_BANNER_MOBILE",
+        "name": "App Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"
+      },
+      "appBannerDesktop": {
+        "code": "APP_BANNER_DESKTOP",
+        "name": "App Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"
+      },
+      "citizenServicesCard": {
+        "code": "HOME_CITIZEN_SERVICES_CARD",
+        "name": "Home Citizen services Card",
+        "props": [
+          {
+            "code": "ACTION_TEST_MCOLLECT",
+            "name": "Miscellaneous Collection",
+            "label": "ACTION_TEST_MCOLLECT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/mcollect-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_PT",
+            "name": "Property Tax",
+            "label": "MODULE_PT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/pt-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_TL",
+            "name": "Trade Licence",
+            "label": "MODULE_TL",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/tl-home"
+          },
+          {
+            "code": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "name": "Online Building Permit System",
+            "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/obps-home"
+          },
+          {
+            "code": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "name": "Water & Sewerage",
+            "label": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/ws-home"
+          },
+          {
+            "code": "ACTION_TEST_FIRE_NOC",
+            "name": "Fire No Objection Certificate",
+            "label": "ACTION_TEST_FIRE_NOC",
+            "enabled": true,
+            "navigationUrl": "/citizen/fire-noc/home"
+          },
+          {
+            "code": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "name": "Birth Certificate",
+            "label": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/birth-citizen/home"
+          },
+          {
+            "code": "ACTION_TEST_DEATH_CERTIFICATE",
+            "name": "Death Certificate",
+            "label": "ACTION_TEST_DEATH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/death-citizen/home"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/all-services"
+        },
+        "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"
+      },
+      "whatsNewSection-disabled": {
+        "code": "WHATSNEW",
+        "name": "What's New",
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/engagement/whats-new"
+        },
+        "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"
+      },
+      "informationAndUpdatesCard": {
+        "code": "HOME_CITIZEN_INFO_UPDATE_CARD",
+        "name": "Home Citizen Information and Updates card",
+        "props": [
+          {
+            "code": "CITIZEN_MY_CITY",
+            "name": "My City",
+            "label": "CS_HEADER_MYCITY",
+            "enabled": true,
+            "navigationUrl": ""
+          },
+          {
+            "code": "CITIZEN_EVENTS",
+            "name": "Events",
+            "label": "EVENTS_EVENTS_HEADER",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/events"
+          },
+          {
+            "code": "CITIZEN_DOCUMENTS",
+            "name": "Documents",
+            "label": "CS_COMMON_DOCUMENTS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/docs"
+          },
+          {
+            "code": "CITIZEN_SURVEYS",
+            "name": "Surveys",
+            "label": "CS_COMMON_SURVEYS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": ""
+        },
+        "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"
+      },
+      "whatsAppBannerMobile-disabled": {
+        "code": "WHATSAPP_BANNER_MOBILE",
+        "name": "WhatsApp Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      },
+      "whatsAppBannerDesktop-disabled": {
+        "code": "WHATSAPP_BANNER_DESKTOP",
+        "name": "WhatsApp Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      }
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "redirectURL": "all-services",
+      "appBannerMobile": {
+        "code": "APP_BANNER_MOBILE",
+        "name": "App Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"
+      },
+      "appBannerDesktop": {
+        "code": "APP_BANNER_DESKTOP",
+        "name": "App Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"
+      },
+      "citizenServicesCard": {
+        "code": "HOME_CITIZEN_SERVICES_CARD",
+        "name": "Home Citizen services Card",
+        "props": [
+          {
+            "code": "ACTION_TEST_MCOLLECT",
+            "name": "Miscellaneous Collection",
+            "label": "ACTION_TEST_MCOLLECT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/mcollect-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_PT",
+            "name": "Property Tax",
+            "label": "MODULE_PT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/pt-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_TL",
+            "name": "Trade Licence",
+            "label": "MODULE_TL",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/tl-home"
+          },
+          {
+            "code": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "name": "Online Building Permit System",
+            "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/obps-home"
+          },
+          {
+            "code": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "name": "Water & Sewerage",
+            "label": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/ws-home"
+          },
+          {
+            "code": "ACTION_TEST_FIRE_NOC",
+            "name": "Fire No Objection Certificate",
+            "label": "ACTION_TEST_FIRE_NOC",
+            "enabled": true,
+            "navigationUrl": "/citizen/fire-noc/home"
+          },
+          {
+            "code": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "name": "Birth Certificate",
+            "label": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/birth-citizen/home"
+          },
+          {
+            "code": "ACTION_TEST_DEATH_CERTIFICATE",
+            "name": "Death Certificate",
+            "label": "ACTION_TEST_DEATH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/death-citizen/home"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/all-services"
+        },
+        "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"
+      },
+      "whatsNewSection-disabled": {
+        "code": "WHATSNEW",
+        "name": "What's New",
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/engagement/whats-new"
+        },
+        "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"
+      },
+      "informationAndUpdatesCard": {
+        "code": "HOME_CITIZEN_INFO_UPDATE_CARD",
+        "name": "Home Citizen Information and Updates card",
+        "props": [
+          {
+            "code": "CITIZEN_MY_CITY",
+            "name": "My City",
+            "label": "CS_HEADER_MYCITY",
+            "enabled": true,
+            "navigationUrl": ""
+          },
+          {
+            "code": "CITIZEN_EVENTS",
+            "name": "Events",
+            "label": "EVENTS_EVENTS_HEADER",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/events"
+          },
+          {
+            "code": "CITIZEN_DOCUMENTS",
+            "name": "Documents",
+            "label": "CS_COMMON_DOCUMENTS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/docs"
+          },
+          {
+            "code": "CITIZEN_SURVEYS",
+            "name": "Surveys",
+            "label": "CS_COMMON_SURVEYS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": ""
+        },
+        "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"
+      },
+      "whatsAppBannerMobile-disabled": {
+        "code": "WHATSAPP_BANNER_MOBILE",
+        "name": "WhatsApp Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      },
+      "whatsAppBannerDesktop-disabled": {
+        "code": "WHATSAPP_BANNER_DESKTOP",
+        "name": "WhatsApp Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      }
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "redirectURL": "all-services",
+      "appBannerMobile": {
+        "code": "APP_BANNER_MOBILE",
+        "name": "App Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"
+      },
+      "appBannerDesktop": {
+        "code": "APP_BANNER_DESKTOP",
+        "name": "App Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"
+      },
+      "citizenServicesCard": {
+        "code": "HOME_CITIZEN_SERVICES_CARD",
+        "name": "Home Citizen services Card",
+        "props": [
+          {
+            "code": "ACTION_TEST_MCOLLECT",
+            "name": "Miscellaneous Collection",
+            "label": "ACTION_TEST_MCOLLECT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/mcollect-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_PT",
+            "name": "Property Tax",
+            "label": "MODULE_PT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/pt-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_TL",
+            "name": "Trade Licence",
+            "label": "MODULE_TL",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/tl-home"
+          },
+          {
+            "code": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "name": "Online Building Permit System",
+            "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/obps-home"
+          },
+          {
+            "code": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "name": "Water & Sewerage",
+            "label": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/ws-home"
+          },
+          {
+            "code": "ACTION_TEST_FIRE_NOC",
+            "name": "Fire No Objection Certificate",
+            "label": "ACTION_TEST_FIRE_NOC",
+            "enabled": true,
+            "navigationUrl": "/citizen/fire-noc/home"
+          },
+          {
+            "code": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "name": "Birth Certificate",
+            "label": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/birth-citizen/home"
+          },
+          {
+            "code": "ACTION_TEST_DEATH_CERTIFICATE",
+            "name": "Death Certificate",
+            "label": "ACTION_TEST_DEATH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/death-citizen/home"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/all-services"
+        },
+        "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"
+      },
+      "whatsNewSection-disabled": {
+        "code": "WHATSNEW",
+        "name": "What's New",
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/engagement/whats-new"
+        },
+        "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"
+      },
+      "informationAndUpdatesCard": {
+        "code": "HOME_CITIZEN_INFO_UPDATE_CARD",
+        "name": "Home Citizen Information and Updates card",
+        "props": [
+          {
+            "code": "CITIZEN_MY_CITY",
+            "name": "My City",
+            "label": "CS_HEADER_MYCITY",
+            "enabled": true,
+            "navigationUrl": ""
+          },
+          {
+            "code": "CITIZEN_EVENTS",
+            "name": "Events",
+            "label": "EVENTS_EVENTS_HEADER",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/events"
+          },
+          {
+            "code": "CITIZEN_DOCUMENTS",
+            "name": "Documents",
+            "label": "CS_COMMON_DOCUMENTS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/docs"
+          },
+          {
+            "code": "CITIZEN_SURVEYS",
+            "name": "Surveys",
+            "label": "CS_COMMON_SURVEYS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": ""
+        },
+        "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"
+      },
+      "whatsAppBannerMobile-disabled": {
+        "code": "WHATSAPP_BANNER_MOBILE",
+        "name": "WhatsApp Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      },
+      "whatsAppBannerDesktop-disabled": {
+        "code": "WHATSAPP_BANNER_DESKTOP",
+        "name": "WhatsApp Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      }
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "redirectURL": "all-services",
+      "appBannerMobile": {
+        "code": "APP_BANNER_MOBILE",
+        "name": "App Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-mobile.jpg"
+      },
+      "appBannerDesktop": {
+        "code": "APP_BANNER_DESKTOP",
+        "name": "App Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/app-banner-web.jpg"
+      },
+      "citizenServicesCard": {
+        "code": "HOME_CITIZEN_SERVICES_CARD",
+        "name": "Home Citizen services Card",
+        "props": [
+          {
+            "code": "ACTION_TEST_MCOLLECT",
+            "name": "Miscellaneous Collection",
+            "label": "ACTION_TEST_MCOLLECT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/mcollect-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_PT",
+            "name": "Property Tax",
+            "label": "MODULE_PT",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/pt-home"
+          },
+          {
+            "code": "CITIZEN_SERVICE_TL",
+            "name": "Trade Licence",
+            "label": "MODULE_TL",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/tl-home"
+          },
+          {
+            "code": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "name": "Online Building Permit System",
+            "label": "ACTION_TEST_BPA_STAKEHOLDER_HOME",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/obps-home"
+          },
+          {
+            "code": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "name": "Water & Sewerage",
+            "label": "ACTION_TEST_WATER_AND_SEWERAGE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/ws-home"
+          },
+          {
+            "code": "ACTION_TEST_FIRE_NOC",
+            "name": "Fire No Objection Certificate",
+            "label": "ACTION_TEST_FIRE_NOC",
+            "enabled": true,
+            "navigationUrl": "/citizen/fire-noc/home"
+          },
+          {
+            "code": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "name": "Birth Certificate",
+            "label": "ACTION_TEST_BIRTH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/birth-citizen/home"
+          },
+          {
+            "code": "ACTION_TEST_DEATH_CERTIFICATE",
+            "name": "Death Certificate",
+            "label": "ACTION_TEST_DEATH_CERTIFICATE",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/death-citizen/home"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/all-services"
+        },
+        "headerLabel": "DASHBOARD_CITIZEN_SERVICES_LABEL"
+      },
+      "whatsNewSection-disabled": {
+        "code": "WHATSNEW",
+        "name": "What's New",
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": "/digit-ui/citizen/engagement/whats-new"
+        },
+        "headerLabel": "DASHBOARD_WHATS_NEW_LABEL"
+      },
+      "informationAndUpdatesCard": {
+        "code": "HOME_CITIZEN_INFO_UPDATE_CARD",
+        "name": "Home Citizen Information and Updates card",
+        "props": [
+          {
+            "code": "CITIZEN_MY_CITY",
+            "name": "My City",
+            "label": "CS_HEADER_MYCITY",
+            "enabled": true,
+            "navigationUrl": ""
+          },
+          {
+            "code": "CITIZEN_EVENTS",
+            "name": "Events",
+            "label": "EVENTS_EVENTS_HEADER",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/events"
+          },
+          {
+            "code": "CITIZEN_DOCUMENTS",
+            "name": "Documents",
+            "label": "CS_COMMON_DOCUMENTS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/docs"
+          },
+          {
+            "code": "CITIZEN_SURVEYS",
+            "name": "Surveys",
+            "label": "CS_COMMON_SURVEYS",
+            "enabled": true,
+            "navigationUrl": "/digit-ui/citizen/engagement/surveys/list"
+          }
+        ],
+        "enabled": true,
+        "sideOption": {
+          "name": "DASHBOARD_VIEW_ALL_LABEL",
+          "enabled": true,
+          "navigationUrl": ""
+        },
+        "headerLabel": "CS_COMMON_DASHBOARD_INFO_UPDATES"
+      },
+      "whatsAppBannerMobile-disabled": {
+        "code": "WHATSAPP_BANNER_MOBILE",
+        "name": "WhatsApp Banner Mobile View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-mobile.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      },
+      "whatsAppBannerDesktop-disabled": {
+        "code": "WHATSAPP_BANNER_DESKTOP",
+        "name": "WhatsApp Banner Desktop View",
+        "enabled": true,
+        "bannerUrl": "https://s3.ap-south-1.amazonaws.com/egov-qa-assets/whatsapp-web.jpg",
+        "navigationUrl": "https://api.whatsapp.com/send?phone=918744060444&text=mSeva"
+      }
+    }
+  }
+]

@@ -1,0 +1,27 @@
+# test-runner daemon — backs the RUN button on the integration-tests dashboard.
+# Rendered by the playbook when enable_integration_tests_runner: true.
+# Loopback-only; nginx (/tests/api/) is the auth front.
+[Unit]
+Description=DIGIT integration-tests runner (RUN button backend)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={{ integration_tests_dir }}
+ExecStart=/usr/bin/env node {{ integration_tests_dir }}/runner/server.mjs
+Environment=RUNNER_PORT={{ integration_tests_runner_port | default(8181) }}
+Environment=RUNNER_REPO_DIR={{ integration_tests_dir }}
+Environment=RUNNER_WEBROOT=/var/www/integration-tests
+Environment=RUNNER_RUN_LIMIT={{ integration_tests_runner_run_limit | default(5) }}
+Environment=RUNNER_BRANCH={{ integration_tests_runner_branch | default('deployed') }}
+{% if integration_tests_runner_tenant_env is defined %}
+Environment=RUNNER_TENANT_ENV={{ integration_tests_runner_tenant_env }}
+{% endif %}
+Restart=on-failure
+RestartSec=5
+# A run is CPU/RAM heavy and shares the box with the live DIGIT stack — keep it
+# below the platform in priority (run-cycle.sh also nice's the Playwright child).
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

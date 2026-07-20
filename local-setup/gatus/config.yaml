@@ -1,5 +1,12 @@
 # Gatus Configuration for DIGIT Core Services
 # https://github.com/TwiN/gatus
+#
+# Kept in sync with the k3s tier: local-setup/k8s/tools/gatus.yaml (gatus-config ConfigMap).
+# Both files define the SAME endpoint catalogue -- identical names, groups, URLs and
+# conditions, with no tier-only entries. Only runtime enablement differs: the
+# GATUS_PROFILE_* / GATUS_PROXIES toggles are set per deployment to match what that
+# deployment actually runs. Add an endpoint to one file, add it to the other.
+# CI enforces this (.github/workflows/gatus-coverage.yml).
 
 storage:
   type: memory
@@ -15,7 +22,17 @@ ui:
 
 endpoints:
   # ==================== Infrastructure ====================
+  # NOTE: `postgres` is a network alias for PgBouncer, not for Postgres itself.
+  # The database is reachable as `postgres-db`. Both are checked separately so a
+  # dead database cannot hide behind a healthy pooler.
   - name: PostgreSQL
+    group: Infrastructure
+    url: "tcp://postgres-db:5432"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: PgBouncer
     group: Infrastructure
     url: "tcp://postgres:5432"
     interval: 30s
@@ -36,10 +53,24 @@ endpoints:
     conditions:
       - "[CONNECTED] == true"
 
+  - name: MinIO
+    group: Infrastructure
+    url: "http://minio:9000/minio/health/live"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
   # ==================== Core Services ====================
   - name: MDMS Service
     group: Core Services
     url: "http://egov-mdms-service:8094/mdms-v2/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: MDMS Backend
+    group: Core Services
+    url: "http://mdms-backend:8094/mdms-v2/health"
     interval: 30s
     conditions:
       - "[STATUS] == 200"
@@ -86,6 +117,14 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
 
+  # No HTTP health endpoint exposed; its own container healthcheck is a TCP probe.
+  - name: Boundary Management Service
+    group: Core Services
+    url: "tcp://egov-bndry-mgmnt:8080"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
   - name: Access Control Service
     group: Core Services
     url: "http://egov-accesscontrol:8090/access/health"
@@ -96,6 +135,222 @@ endpoints:
   - name: Persister Service
     group: Core Services
     url: "http://egov-persister:8091/common-persist/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Filestore Service
+    group: Core Services
+    url: "http://egov-filestore:8083/filestore/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: HRMS Service
+    group: Core Services
+    url: "http://egov-hrms:8092/egov-hrms/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: URL Shortening Service
+    group: Core Services
+    url: "http://egov-url-shortening:8080/egov-url-shortening/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # audit-service exists only in docker-compose.egov-digit.yaml (the tenant path
+  # ansible deploys); docker-compose.yml and the k3s tier have none, so it carries
+  # a toggle rather than being dropped from their catalogues.
+  - name: Audit Service
+    group: Core Services
+    enabled: ${GATUS_AUDIT}
+    url: "http://audit-service:8080/audit-service/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # ==================== Optional stacks (profile-gated) ====================
+  # These services only exist when their compose profile is active (see
+  # docker-compose.egov-digit.yaml), so their checks are gated on a matching
+  # GATUS_PROFILE_* variable rather than always running. Gatus treats `enabled`
+  # as true when the variable is unset, so every compose file that mounts this
+  # config MUST pass each variable explicitly -- the `${VAR:-false}` defaults on
+  # the gatus service are what make an unset toggle mean "off" instead of "red".
+  #
+  # Profiles are declared only in docker-compose.egov-digit.yaml. In the other
+  # compose files these services are ungated and always start, so those files
+  # pass "true" directly. Keep the toggles beside COMPOSE_PROFILES in .env.
+
+  # -------------------- profile: otp --------------------
+  - name: OTP Service
+    group: OTP
+    enabled: ${GATUS_PROFILE_OTP}
+    url: "http://egov-otp:8089/otp/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: User OTP Service
+    group: OTP
+    enabled: ${GATUS_PROFILE_OTP}
+    url: "http://user-otp:8090/user-otp/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == UP"
+
+  # The port is a variable because this service listens on 8005 under
+  # docker-compose.egov-digit.yaml but on 8080 in every other compose file, and
+  # they all share this config. Both work -- SERVER_PORT is honoured either way
+  # and the context path is /notification-sms regardless.
+  - name: Notification SMS Service
+    group: OTP
+    enabled: ${GATUS_PROFILE_OTP}
+    url: "http://egov-notification-sms:${GATUS_SMS_PORT}/notification-sms/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].status == UP"
+
+  # -------------------- profile: search --------------------
+  - name: Elasticsearch
+    group: Search
+    enabled: ${GATUS_PROFILE_SEARCH}
+    url: "http://elasticsearch:9200/_cluster/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Indexer Service
+    group: Search
+    enabled: ${GATUS_PROFILE_SEARCH}
+    url: "http://egov-indexer:8080/egov-indexer/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Inbox Service
+    group: Search
+    enabled: ${GATUS_PROFILE_SEARCH}
+    url: "http://inbox:8080/inbox/actuator/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # -------------------- profile: mcp --------------------
+  - name: DIGIT MCP
+    group: MCP
+    enabled: ${GATUS_PROFILE_MCP}
+    url: "http://digit-mcp:3000/healthz"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: MCP Postgres
+    group: MCP
+    enabled: ${GATUS_PROFILE_MCP}
+    url: "tcp://mcp-postgres:5432"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  # -------------------- profile: keycloak --------------------
+  - name: Keycloak
+    group: Keycloak
+    enabled: ${GATUS_PROFILE_KEYCLOAK}
+    url: "http://keycloak:8180/realms/master"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Keycloak Postgres
+    group: Keycloak
+    enabled: ${GATUS_PROFILE_KEYCLOAK}
+    url: "tcp://keycloak-postgres:5432"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: Token Exchange Service
+    group: Keycloak
+    enabled: ${GATUS_PROFILE_KEYCLOAK}
+    url: "http://token-exchange-svc:3000/healthz"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # -------------------- profile: notifications --------------------
+  # novu-worker exposes no port and so cannot be probed; it is deliberately absent.
+  - name: Novu API
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://novu-api:3000/v1/health-check"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Novu WS
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "tcp://novu-ws:3002"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: Novu Dashboard
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "tcp://novu-dashboard:4000"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: Novu Mongo
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "tcp://novu-mongo:27017"
+    interval: 30s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: Novu Bridge
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://novu-bridge:8080/novu-bridge/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Novu Bridge Endpoint
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://novu-bridge-endpoint:3000/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Config Service
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://digit-config-service:8080/config-service/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: User Preferences Service
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://digit-user-preferences-service:8080/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: OTP Publisher
+    group: Notifications
+    enabled: ${GATUS_PROFILE_NOTIFICATIONS}
+    url: "http://otp-publisher:3030/healthz"
     interval: 30s
     conditions:
       - "[STATUS] == 200"
@@ -118,6 +373,25 @@ endpoints:
   - name: Kong Status
     group: API Gateway
     url: "http://kong:8100/status"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  # nginx proxies fronting egov-user / egov-workflow-v2. Not profile-gated, but
+  # absent from docker-compose.deploy.yaml and docker-compose.db-migrations.yml,
+  # so they carry a toggle for the same reason the profiled stacks do.
+  - name: User Service Proxy
+    group: API Gateway
+    enabled: ${GATUS_PROXIES}
+    url: "http://egov-user-proxy:8107/health"
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Workflow Service Proxy
+    group: API Gateway
+    enabled: ${GATUS_PROXIES}
+    url: "http://egov-workflow-proxy:8109/health"
     interval: 30s
     conditions:
       - "[STATUS] == 200"
@@ -173,16 +447,15 @@ endpoints:
       - "[STATUS] == 200"
       - "[BODY].responseInfo.status == SUCCESSFUL"
 
-  - name: Localization API - Search
+  - name: Localization API - Message Search
     group: API Tests
-    url: "http://egov-localization:8096/localization/messages/v1/_search"
+    url: "http://egov-localization:8096/localization/messages/v1/_search?tenantId=pg&locale=en_IN&module=rainmaker-common"
     method: POST
     headers:
       Content-Type: application/json
     body: |
       {
-        "RequestInfo": {"apiId": "digit", "ver": "1.0", "ts": 0},
-        "MsgCriteria": {"tenantId": "pg", "locale": "en_IN", "module": "rainmaker-common"}
+        "RequestInfo": {"apiId": "digit", "ver": "1.0"}
       }
     interval: 60s
     conditions:

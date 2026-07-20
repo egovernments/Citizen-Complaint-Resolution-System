@@ -1,0 +1,37 @@
+{
+  "name": "digit-integration-tests",
+  "version": "1.0.0",
+  "description": "End-to-end Playwright tests for DIGIT (PGR lifecycle + configurator manage surface).",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:list": "playwright test --list",
+    "test:citizen": "playwright test tests/citizen",
+    "test:employee": "playwright test tests/employee",
+    "test:admin": "playwright test tests/admin",
+    "test:lifecycle": "playwright test tests/lifecycle",
+    "test:smoke": "playwright test --project=smoke",
+    "test:api": "playwright test --project=api",
+    "test:smoke-api": "playwright test --project=smoke --project=api"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChakshuGautam/digit-integration-tests.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ChakshuGautam/digit-integration-tests/issues"
+  },
+  "homepage": "https://github.com/ChakshuGautam/digit-integration-tests#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^20.11.0",
+    "exceljs": "^4.4.0",
+    "ts-morph": "^28.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.4.0"
+  }
+}

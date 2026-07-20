@@ -1,0 +1,68 @@
+[
+  {
+    "tenantId": "ciboot",
+    "data": {
+      "REOPENSLA": 432000000
+    }
+  },
+  {
+    "tenantId": "cids14576",
+    "data": {
+      "REOPENSLA": 432000000
+    }
+  },
+  {
+    "tenantId": "cids30947",
+    "data": {
+      "REOPENSLA": 432000000
+    }
+  },
+  {
+    "tenantId": "ciregtest",
+    "data": {
+      "REOPENSLA": 432000000
+    }
+  },
+  {
+    "tenantId": "ciwf14536",
+    "data": {
+      "REOPENSLA": 432000000
+    }
+  },
+  {
+    "tenantId": "ciwf30832",
+    "data": {
+      "REOPENSLA": 432000000
+    }
+  },
+  {
+    "tenantId": "ciwfi14638",
+    "data": {
+      "REOPENSLA": 432000000
+    }
+  },
+  {
+    "tenantId": "ciwfi31083",
+    "data": {
+      "REOPENSLA": 432000000
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "REOPENSLA": 432000000
+    }
+  },
+  {
+    "tenantId": "pg",
+    "data": {
+      "REOPENSLA": 432000000
+    }
+  },
+  {
+    "tenantId": "statea",
+    "data": {
+      "REOPENSLA": 432000000
+    }
+  }
+]

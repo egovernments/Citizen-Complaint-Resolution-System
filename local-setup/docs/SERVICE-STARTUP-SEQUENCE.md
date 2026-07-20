@@ -337,8 +337,10 @@ Access Jupyter Lab at: **http://localhost:18888**
 
 | Notebook | Purpose |
 |----------|---------|
-| `LocalSetup.ipynb` | Configure PGR on your local DIGIT setup |
 | `DataLoader_v2.ipynb` | Full CRS DataLoader with all phases |
+| `LocalSetup.ipynb` | Configure PGR on your local DIGIT setup |
+
+Both notebooks now come from the single source directory `jupyter/dataloader/`.
 
 ### What Jupyter Can Do
 

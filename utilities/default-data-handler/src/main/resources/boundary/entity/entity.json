@@ -94,7 +94,7 @@
   },
   {
     "tenantId": "{tenantid}.citya",
-    "code": "B1_ADMIN_BLOCK",
+    "code": "Z2_ADMIN_ZONE",
     "geometry": {
       "type": "Polygon",
       "coordinates": [
@@ -125,7 +125,7 @@
   },
   {
     "tenantId": "{tenantid}.citya",
-    "code": "SUN01_ADMIN_LOCALITY",
+    "code": "W1_ADMIN_WARD",
     "geometry": {
       "type": "Polygon",
       "coordinates": [
@@ -156,7 +156,7 @@
   },
   {
     "tenantId": "{tenantid}.citya",
-    "code": "SUN02_ADMIN_LOCALITY",
+    "code": "W2_ADMIN_WARD",
     "geometry": {
       "type": "Polygon",
       "coordinates": [
@@ -187,7 +187,7 @@
   },
   {
     "tenantId": "{tenantid}.citya",
-    "code": "SUN03_ADMIN_LOCALITY",
+    "code": "W3_ADMIN_WARD",
     "geometry": {
       "type": "Polygon",
       "coordinates": [

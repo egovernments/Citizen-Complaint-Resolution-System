@@ -1,0 +1,416 @@
+{
+  "code": "BW",
+  "name": "Botswana",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "BW-SE",
+      "parent_code": "BW",
+      "name": "South-East District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2332098354",
+          "parent_code": "BW-SE",
+          "name": "Ramotswa",
+          "type": "city",
+          "population": "27760",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2467764423",
+          "parent_code": "BW-SE",
+          "name": "Tlokweng",
+          "type": "city",
+          "population": "35982",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-KL",
+      "parent_code": "BW",
+      "name": "Kgatleng District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1456560429",
+          "parent_code": "BW-KL",
+          "name": "Mochudi",
+          "type": "city",
+          "population": "44815",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2466717479",
+          "parent_code": "BW-KL",
+          "name": "Bokaa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-NE",
+      "parent_code": "BW",
+      "name": "North-East District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2466985709",
+          "parent_code": "BW-NE",
+          "name": "Masunga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-CE",
+      "parent_code": "BW",
+      "name": "Central District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-287641418",
+          "parent_code": "BW-CE",
+          "name": "Serowe",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1404063581",
+          "parent_code": "BW-CE",
+          "name": "Palapye",
+          "type": "city",
+          "population": "26000",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1447741012",
+          "parent_code": "BW-CE",
+          "name": "Tonota",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2051047885",
+          "parent_code": "BW-CE",
+          "name": "Tutume",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2319508320",
+          "parent_code": "BW-CE",
+          "name": "Orapa",
+          "type": "city",
+          "population": "9500",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2464801283",
+          "parent_code": "BW-CE",
+          "name": "Mahalapye",
+          "type": "city",
+          "population": "41316",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2468285909",
+          "parent_code": "BW-CE",
+          "name": "Mmadinare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2468362599",
+          "parent_code": "BW-CE",
+          "name": "Nata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-GH",
+      "parent_code": "BW",
+      "name": "Ghanzi District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-261638559",
+          "parent_code": "BW-GH",
+          "name": "Ghanzi",
+          "type": "city",
+          "population": "10700",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2464825782",
+          "parent_code": "BW-GH",
+          "name": "D'kar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-KW",
+      "parent_code": "BW",
+      "name": "Kweneng District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-452237526",
+          "parent_code": "BW-KW",
+          "name": "Molepolole",
+          "type": "city",
+          "population": "67598",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1227717513",
+          "parent_code": "BW-KW",
+          "name": "Mmopane",
+          "type": "city",
+          "population": "14655",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2330772531",
+          "parent_code": "BW-KW",
+          "name": "Thamaga",
+          "type": "city",
+          "population": "19547",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2332380823",
+          "parent_code": "BW-KW",
+          "name": "Gabane",
+          "type": "city",
+          "population": "14842",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2343349265",
+          "parent_code": "BW-KW",
+          "name": "Letlhakeng",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2466747362",
+          "parent_code": "BW-KW",
+          "name": "Kopong",
+          "type": "city",
+          "population": "9520",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2466749108",
+          "parent_code": "BW-KW",
+          "name": "Mogoditshane",
+          "type": "city",
+          "population": "57637",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-SO",
+      "parent_code": "BW",
+      "name": "Southern District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-287378072",
+          "parent_code": "BW-SO",
+          "name": "Kanye",
+          "type": "city",
+          "population": "45196",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331997319",
+          "parent_code": "BW-SO",
+          "name": "Moshupa",
+          "type": "city",
+          "population": "23858",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-KG",
+      "parent_code": "BW",
+      "name": "Kgalagadi District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2454873275",
+          "parent_code": "BW-KG",
+          "name": "Tsabong",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "BW-NW",
+      "parent_code": "BW",
+      "name": "North-West District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-261633728",
+          "parent_code": "BW-NW",
+          "name": "Maun",
+          "type": "city",
+          "population": "55784",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2467673154",
+          "parent_code": "BW-NW",
+          "name": "Shakawe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-CH",
+      "parent_code": "BW",
+      "name": "Chobe District",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1712387804",
+          "parent_code": "BW-CH",
+          "name": "Kasane",
+          "type": "city",
+          "population": "9008",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3347707061",
+          "parent_code": "BW-CH",
+          "name": "Pandamatenga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-GA",
+      "parent_code": "BW",
+      "name": "Gaborone",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-30670040",
+          "parent_code": "BW-GA",
+          "name": "Gaborone",
+          "type": "city",
+          "population": "231626",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "BW-LO",
+      "parent_code": "BW",
+      "name": "Lobatse",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-331996625",
+          "parent_code": "BW-LO",
+          "name": "Lobatse",
+          "type": "city",
+          "population": "29700",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-SP",
+      "parent_code": "BW",
+      "name": "Selebi Phikwe",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-1790006415",
+          "parent_code": "BW-SP",
+          "name": "Selebi Phikwe",
+          "type": "city",
+          "population": "49724",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-FR",
+      "parent_code": "BW",
+      "name": "Francistown",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-240504014",
+          "parent_code": "BW-FR",
+          "name": "Francistown",
+          "type": "city",
+          "population": "100079",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "BW-ST",
+      "parent_code": "BW",
+      "name": "Sowa Town",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2469009906",
+          "parent_code": "BW-ST",
+          "name": "Sowa Town",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "BW-JW",
+      "parent_code": "BW",
+      "name": "Jwaneng Town",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-2342951738",
+          "parent_code": "BW-JW",
+          "name": "Jwaneng",
+          "type": "city",
+          "population": "18063",
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

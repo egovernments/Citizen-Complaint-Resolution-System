@@ -233,7 +233,7 @@ services:
   # Elasticsearch Indexer - Reads Kafka topics, indexes into Elasticsearch
   # ===========================================================================
   egov-indexer:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-indexer:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-indexer:maven-jdk21-9f83afb
     container_name: egov-indexer
     depends_on:
       pgbouncer:
@@ -247,7 +247,7 @@ services:
       otel-collector:
         condition: service_started
     volumes:
-      - ./configs/indexer:/indexer-config:ro
+      - ./configs/egov-indexer:/indexer-config:ro
       - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
@@ -360,7 +360,7 @@ services:
     - egov-network
 
   egov-enc-service:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:2.12-87e13fe
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
@@ -413,7 +413,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: registry.preview.egov.theflywheel.in/egovio/mdms-v2:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/mdms-v2:maven-jdk21-9f83afb
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -479,7 +479,7 @@ services:
     - egov-network
 
   egov-idgen:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-idgen:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-idgen:maven-jdk21-9f83afb
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -543,7 +543,7 @@ services:
     restart: "no"
 
   egov-user:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-user:updatenovalidate-fix
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:2.12-87e13fe
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -583,7 +583,7 @@ services:
       MDMS_V2_HOST: http://egov-mdms-service:8094
       EGOV_MDMS_V2_HOST: http://egov-mdms-service:8094
       MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
-      EGOV_OTP_HOST: http://egov-user:8107
+      EGOV_OTP_HOST: http://egov-otp:8089
       EGOV_ENC_HOST: http://egov-enc-service:1234
       EGOV_IDGEN_HOST: http://egov-idgen:8088
       EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
@@ -607,6 +607,126 @@ services:
     networks:
     - egov-network
 
+  egov-otp:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-otp:v2.9.2-4a60f20
+    container_name: egov-otp
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      db-migrations:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/egov
+      SPRING_DATASOURCE_USERNAME: egov
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "2"
+      SPRING_FLYWAY_ENABLED: 'false'
+      SERVER_PORT: 8089
+      EGOV_OTP_LENGTH: 6
+      EGOV_OTP_TTL: 900
+      EGOV_OTP_ENCRYPT: 'true'
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: egov-otp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
+    ports:
+    - 18089:8089
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8089/otp/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+    - egov-network
+
+  user-otp:
+    image: registry.preview.egov.theflywheel.in/egovio/user-otp:master-e22c7c5
+    container_name: user-otp
+    depends_on:
+      egov-otp:
+        condition: service_healthy
+      egov-user:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      SERVER_PORT: 8090
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      OTP_HOST: http://egov-otp:8089
+      OTP_CREATE_URL: /otp/v1/_create
+      USER_HOST: http://egov-user:8107/
+      SEARCH_USER_URL: /user/_search
+      SMS_TOPIC: egov.core.notification.sms.otp
+      EMAIL_TOPIC: egov.core.notification.email
+      EXPIRY_TIME_FOR_OTP: 300
+      EGOV_LOCALISATION_HOST: http://egov-localization:8096
+      EGOV_LOCALISATION_SEARCH_ENDPOINT: /localization/messages/v1/_search
+      EGOV_LOCALISATION_TENANTID_STRIP_SUFFIX_COUNT: 1
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: user-otp
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
+      EGOV_MDMS_HOST: http://egov-mdms-service:8094
+      EGOV_MDMS_SEARCH_ENDPOINT: /mdms-v2/v1/_search
+    ports:
+    - 18095:8090
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8090/user-otp/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+    - egov-network
+
+  egov-notification-sms:
+    image: registry.preview.egov.theflywheel.in/egovio/egov-notification-sms:master-e22c7c5
+    container_name: egov-notification-sms
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    environment:
+      SERVER_PORT: 8080
+      KAFKA_CONFIG_BOOTSTRAP_SERVER_CONFIG: redpanda:9092
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      SMS_ENABLED: 'false'
+      KAFKA_TOPICS_NOTIFICATION_SMS_NAME: egov.core.notification.sms
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      OTEL_SERVICE_NAME: egov-notification-sms
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx128m
+    ports:
+    - 18093:8080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/notification-sms/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+    - egov-network
+
   # Nginx reverse proxy for egov-user — distributes requests across
   # scaled instances via Docker DNS round-robin.
   egov-user-proxy:
@@ -627,7 +747,7 @@ services:
     - egov-network
 
   egov-workflow-v2:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-workflow-v2:jdk21-cds
+    image: registry.preview.egov.theflywheel.in/egovio/egov-workflow-v2:2.12-87e13fe
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -709,7 +829,7 @@ services:
     - egov-network
 
   egov-localization:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-localization:jdk21-cds
+    image: registry.preview.egov.theflywheel.in/egovio/egov-localization:2.12-87e13fe
     container_name: egov-localization
     depends_on:
       pgbouncer:
@@ -757,7 +877,7 @@ services:
     - egov-network
 
   boundary-service:
-    image: registry.preview.egov.theflywheel.in/egovio/boundary-service:v2.9.2-delete
+    image: registry.preview.egov.theflywheel.in/egovio/boundary-service:maven-jdk21-9f83afb
     container_name: boundary-service
     depends_on:
       pgbouncer:
@@ -815,7 +935,7 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-accesscontrol:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-accesscontrol:maven-jdk21-9f83afb
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -886,7 +1006,7 @@ services:
       - egov-network
 
   egov-persister:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-persister:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-persister:maven-jdk21-9f83afb
     container_name: egov-persister
     depends_on:
       pgbouncer:
@@ -917,7 +1037,7 @@ services:
       # Kafka consumer concurrency — process more messages in parallel
       SPRING_KAFKA_LISTENER_CONCURRENCY: '3'
     volumes:
-    - ./configs/persister:/persister-config:ro
+    - ./configs/egov-persister:/persister-config:ro
     - ./otel/opentelemetry-javaagent.jar:/otel/opentelemetry-javaagent.jar:ro
     ports:
     - 18091:8091
@@ -934,7 +1054,7 @@ services:
   # Filestore Service - File upload/download
   # ===========================================================================
   egov-filestore:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-filestore:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-filestore:maven-jdk21-9f83afb
     container_name: egov-filestore
     depends_on:
       pgbouncer:
@@ -1028,7 +1148,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:default-pwd
+    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:hrms-boundary-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1340,7 +1460,7 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: registry.preview.egov.theflywheel.in/pgr-services-dev:latest
+    image: ${PGR_SERVICES_IMAGE:-registry.preview.egov.theflywheel.in/egovio/pgr-services:develop-70916ea}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1383,6 +1503,7 @@ services:
       EGOV_LOCALIZATION_HOST: http://egov-localization:8096/
       EGOV_USER_HOST: http://egov-user-proxy:8107/
       EGOV_LOCATION_HOST: http://boundary-service:8081/
+      EGOV_BOUNDARY_HOST: http://boundary-service:8081/
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
       EGOV_UI_APP_HOST: http://localhost:18080
@@ -1419,16 +1540,25 @@ services:
   # URL Shortening Service (required by PGR for notification links)
   # ===========================================================================
   egov-url-shortening:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-url-shortening:v2.9.2-4a60f20
+    image: registry.preview.egov.theflywheel.in/egovio/egov-url-shortening:maven-jdk21-983e8b2
     container_name: egov-url-shortening
     restart: unless-stopped
     depends_on:
+      # pgbouncer for the app datasource, postgres-db for Flyway's direct migration.
+      pgbouncer:
+        condition: service_healthy
       postgres-db:
         condition: service_healthy
     environment:
       SERVER_PORT: '8080'
       SERVER_CONTEXTPATH: /egov-url-shortening
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/egov
+      # The image pins spring.datasource.driver-class-name to OpenTelemetryDriver,
+      # which only accepts jdbc:otel: URLs -- a plain jdbc:postgresql:// one makes
+      # Hikari throw "claims to not accept jdbcUrl" and the DataSource never opens.
+      # App traffic goes through pgbouncer (the 'postgres' alias), as every other
+      # service does; Flyway below stays direct on postgres-db, because it takes a
+      # session-level advisory lock that transaction-mode pooling would break.
+      SPRING_DATASOURCE_URL: jdbc:otel:postgresql://postgres:5432/egov
       SPRING_DATASOURCE_USERNAME: egov
       SPRING_DATASOURCE_PASSWORD: egov123
       SPRING_FLYWAY_URL: jdbc:postgresql://postgres-db:5432/egov
@@ -1442,9 +1572,11 @@ services:
   # DIGIT UI (React Frontend)
   # Image built by Tilt from CCRS repo, or manually with:
   # docker build -t digit-ui-dev -f ../Citizen-Complaint-Resolution-System/frontend/micro-ui/web/docker/Dockerfile ../Citizen-Complaint-Resolution-System/frontend/micro-ui
+  # Defaults to the remote pgr-fixes tag; set DIGIT_UI_IMAGE=digit-ui-dev to use
+  # a local build instead.
   # ===========================================================================
   digit-ui:
-    image: registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes
+    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1520,6 +1652,16 @@ services:
       - "18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
+      # These services are ungated in this file, so the toggles are fixed:
+      # "true" where the service always starts, "false" where it is absent.
+      GATUS_PROFILE_OTP: "true"
+      GATUS_PROFILE_SEARCH: "true"
+      GATUS_PROFILE_MCP: "false"
+      GATUS_PROFILE_KEYCLOAK: "false"
+      GATUS_PROFILE_NOTIFICATIONS: "false"
+      GATUS_AUDIT: "false"
+      GATUS_PROXIES: "true"
+      GATUS_SMS_PORT: "8080"
     networks:
       - egov-network
 
@@ -1555,9 +1697,7 @@ services:
     ports:
       - "18888:8888"
     volumes:
-      - ./jupyter/dataloader/templates:/home/jovyan/work/templates
-      - ./jupyter:/home/jovyan/work/dataloader
-      - ./jupyter/DataLoader_v2.ipynb:/home/jovyan/work/DataLoader_v2.ipynb
+      - ./jupyter/dataloader:/home/jovyan/work
     networks:
       - egov-network
 

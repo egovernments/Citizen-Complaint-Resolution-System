@@ -1,0 +1,16 @@
+{
+  "name": "@digit/novu-bridge-endpoint",
+  "version": "0.1.0",
+  "description": "Novu Framework bridge — renders SMS/email/etc templates for self-hosted Novu in the DIGIT compose stack",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@novu/framework": "2.6.5",
+    "express": "4.21.0",
+    "zod": "3.23.8",
+    "zod-to-json-schema": "3.23.5"
+  }
+}

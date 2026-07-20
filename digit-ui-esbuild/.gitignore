@@ -1,0 +1,14 @@
+node_modules/
+build/
+.DS_Store
+*.log
+
+# Playwright outputs
+playwright-report/
+test-results/
+
+# Local agent scratch (project-level CLAUDE.md lives in the user home)
+CLAUDE.md
+
+# Vendor pipeline snapshots — regenerated from upstream on every build
+public/vendor/*.original.css

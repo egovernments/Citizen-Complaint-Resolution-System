@@ -1,0 +1,136 @@
+/**
+ * Employee PGR inbox-v2 — SEARCH (TEST-COVERAGE-GAPS #19; search was entirely
+ * untested). Drives the top search bar and asserts the row set responds:
+ *
+ *   • complaint-no  → searching a seeded SRID returns exactly that complaint.
+ *   • mobile-no     → searching the seeded citizen's mobile returns it.
+ *   • junk          → a well-formed but non-existent SRID returns zero rows.
+ *
+ * Deployment-portable: the complaint is always seeded as a CITIZEN via
+ * seed.ts (PGR's APPLY action is [CITIZEN, CSR] on every deployment — an
+ * ADMIN token only got away with filing here because local bootstrap grants
+ * ADMIN the CITIZEN role too; bomet's ADMIN has no such luck and 400s), and
+ * personas come from getPersona() rather than a hardcoded env username;
+ * self-skips when the employee login is unavailable.
+ */
+import { test, expect, type Page } from '@playwright/test';
+import { BASE_URL } from '../utils/env';
+import { getPersona, serviceCodesFor } from '../utils/personas';
+import { seedComplaintAsCitizen, driveToPendingAtLme } from '../utils/seed';
+import { readProvisionedCitizen } from '../utils/citizen-provision';
+import { loginEmployeeBrowser, readInboxRows } from '../utils/employee-ui';
+
+const INBOX_URL = `${BASE_URL}/digit-ui/employee/pgr/inbox-v2`;
+const SEARCH_RE = /pgr-services\/v2\/request\/_search/;
+
+let srid = '';
+let phone = '';
+let setupSkip = '';
+
+test.beforeAll(async () => {
+  // seedComplaintAsCitizen() always files as the ONE citizen provisioned for
+  // this run (tests/fixtures/citizen.setup.ts, read via
+  // readProvisionedCitizen() — the same fixture read internally by seed.ts's
+  // citizen() cache) and doesn't hand the mobile back on the result, so read
+  // it off the fixture directly rather than round-tripping a second _search
+  // just to recover it.
+  const fixture = readProvisionedCitizen();
+  if (!fixture) {
+    setupSkip = 'no citizen-fixture.json on disk — citizen.setup.ts did not run (needed to know which mobile filed the seed complaint)';
+    return;
+  }
+  phone = fixture.mobile;
+  try {
+    // Seed a service the inbox VIEWER's department owns. The inbox scopes by
+    // department as well as jurisdiction, so the profile's default seed service
+    // (chosen for ASSIGN-ability) can be one this viewer is structurally blind
+    // to — on bomet the viewer is an ENV GRO while the default is
+    // RudeBehavior/WATER_ENV, so searching the seeded SRID or the citizen's
+    // mobile returned nothing even though the complaint existed.
+    const employee = await getPersona('inbox-viewer');
+    const visible = serviceCodesFor(employee);
+    if (!visible.length) {
+      setupSkip = `inbox viewer ${employee.username} holds no department that owns a complaint type (departments: ${employee.departments.join('|') || 'none'})`;
+      return;
+    }
+    const created = await seedComplaintAsCitizen({
+      serviceCode: visible[0],
+      description: `inbox-search seed ${new Date().toISOString()}`,
+    });
+    srid = created.srid;
+
+    // ...and ASSIGN it to the viewer, because inbox-v2 defaults to
+    // "assigned to me" (inboxConfigPGR.js defaultValues.assignee =
+    // ASSIGNED_TO_ME) and hands that straight to pgr-services as
+    // `assignee=<self uuid>`. A freshly filed complaint sits at
+    // PENDINGFORASSIGNMENT with nobody on it, so it is invisible to its own
+    // viewer no matter which department or locality it carries — the search
+    // returned 0 rows on bomet for exactly this reason. Assigning also parks
+    // it at PENDINGATLME, which is in the inbox's status set.
+    //
+    // Not clicking "Assigned to all" instead: that radio is configured but
+    // does not render on every build (bomet shows no such control), so there
+    // is no UI escape from the default to rely on. Owning the assignment is
+    // the only thing true on both deployments.
+    await driveToPendingAtLme(srid, employee.uuid);
+  } catch (err: any) {
+    setupSkip = `seed failed: ${err?.message?.slice(0, 200)}`;
+  }
+});
+
+async function openInbox(page: Page): Promise<void> {
+  const employee = await getPersona('inbox-viewer');
+  const ok = await loginEmployeeBrowser(page, employee.username, employee.password);
+  test.skip(!ok, `employee ${employee.username} login failed`);
+  await Promise.all([
+    page.waitForResponse((r) => SEARCH_RE.test(r.url()) && r.request().method() === 'POST', { timeout: 30_000 }).catch(() => null),
+    page.goto(INBOX_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }),
+  ]);
+  await page.locator('[role="row"]').first().waitFor({ state: 'visible', timeout: 20_000 });
+  await page.waitForTimeout(1_500);
+}
+
+async function runSearch(page: Page): Promise<void> {
+  await Promise.all([
+    page.waitForResponse((r) => SEARCH_RE.test(r.url()) && r.request().method() === 'POST', { timeout: 20_000 }),
+    page.getByRole('button', { name: /^Search$/i }).first().click(),
+  ]);
+  await page.waitForTimeout(2_000);
+}
+
+test.describe('employee inbox-v2 — search', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('search by complaint number returns exactly that complaint @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
+    test.skip(!!setupSkip, setupSkip);
+    await openInbox(page);
+
+    await page.locator('input[name="complaintNumber"]').fill(srid);
+    await runSearch(page);
+    const rows = await readInboxRows(page);
+    expect(rows.length, 'exactly one row for a unique SRID').toBe(1);
+    expect(rows[0].srid).toBe(srid);
+  });
+
+  test('search by mobile number returns the matching complaint @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
+    test.skip(!!setupSkip, setupSkip);
+    await openInbox(page);
+
+    await page.locator('input[name="mobileNumber"]').fill(phone);
+    await runSearch(page);
+    const rows = await readInboxRows(page);
+    expect(rows.length, 'mobile search returns ≥1 row').toBeGreaterThan(0);
+    expect(rows.some((r) => r.srid === srid), 'the seeded complaint is among the mobile matches').toBeTruthy();
+  });
+
+  test('search for a well-formed but non-existent complaint number returns nothing @p1', { tag: ['@persona:employee'] }, async ({ page }) => {
+    test.skip(!!setupSkip, setupSkip);
+    await openInbox(page);
+
+    // Matches the field's PG-PGR-YYYY-MM-DD-###### pattern but cannot exist.
+    await page.locator('input[name="complaintNumber"]').fill('PG-PGR-2099-01-01-999999');
+    await runSearch(page);
+    const rows = await readInboxRows(page);
+    expect(rows.length, 'no rows for a non-existent complaint number').toBe(0);
+  });
+});

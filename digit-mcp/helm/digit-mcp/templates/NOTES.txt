@@ -1,0 +1,16 @@
+DIGIT MCP Server has been deployed!
+
+1. Get the service URL:
+   kubectl get svc {{ include "digit-mcp.fullname" . }}
+
+2. Port-forward to test locally:
+   kubectl port-forward svc/{{ include "digit-mcp.fullname" . }} 3000:{{ .Values.service.port }}
+
+3. Health check:
+   curl http://localhost:3000/healthz
+
+4. MCP endpoint:
+   POST http://localhost:3000/mcp
+
+5. Configure your MCP client to connect to:
+   http://{{ include "digit-mcp.fullname" . }}:{{ .Values.service.port }}/mcp

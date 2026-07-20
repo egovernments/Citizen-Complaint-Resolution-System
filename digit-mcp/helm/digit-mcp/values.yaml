@@ -1,0 +1,33 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/chakshugautam/digit-mcp
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+
+env:
+  MCP_TRANSPORT: http
+  MCP_PORT: "3000"
+  CRS_ENVIRONMENT: ""
+  CRS_TENANT_ID: ""
+
+secret:
+  # Set these when installing: --set secret.CRS_USERNAME=... --set secret.CRS_PASSWORD=...
+  CRS_USERNAME: ""
+  CRS_PASSWORD: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+healthcheck:
+  path: /healthz
+  port: 3000

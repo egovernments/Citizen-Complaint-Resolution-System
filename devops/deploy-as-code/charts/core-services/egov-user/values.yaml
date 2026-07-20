@@ -16,12 +16,26 @@ initContainers:
     schemaTable: "egov_user_schema"
     image:
       repository: "egov-user-db"
-      tag: master-d69ce29
+      tag: "2.12-87e13fe"
 
 # Container Configs
+# PARITY / IMAGE NOTE — why this is NOT the stock egov-user tag:
+#   The stock image previously HARDCODED the mobile-number validation regex
+#   (a Kenya/India format). Maputo's rule (MDMS common-masters.MobileNumberValidation)
+#   is +258 / numbers starting with 8, so a hardcoded-regex build REJECTS every
+#   valid Maputo number → citizen register/create/provisioning fails.
+#   2.12-87e13fe carries the Digit-Core#1044 fixes (MDMS-driven per-tenant mobile
+#   validation, tenant-aware encryption, SafeHtmlValidator/CCRS#771) that were
+#   previously only in the `mobilevalidation-jdk8-4984479` preview build.
+#   PARITY: Compose pins this EXACT image (local-setup/docker-compose.egov-digit.yaml)
+#   — diverging here would make k8s mobile validation behave differently than
+#   Compose. Keep them on the same tag.
+#   Still fix the twin frontend bug: digit-ui UserCreate.tsx hardcodes a Kenyan
+#   regex (v.mobileKERequired).
 image:
-  repository: "egov-user"
-  tag: master-d69ce29
+  repository: "egovio/egov-user"
+  tag: "2.12-87e13fe"
+  pullPolicy: "IfNotPresent"
 replicas: "1"
 healthChecks:
   enabled: true

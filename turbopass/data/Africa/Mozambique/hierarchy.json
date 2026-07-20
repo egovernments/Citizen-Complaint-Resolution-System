@@ -1,0 +1,5688 @@
+{
+  "code": "MZ",
+  "name": "Mozambique",
+  "continent": "Africa",
+  "type": "country",
+  "children": [
+    {
+      "code": "MZ-P",
+      "parent_code": "MZ",
+      "name": "Cabo Delgado Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-331690580",
+          "parent_code": "MZ-P",
+          "name": "Macomia",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331691040",
+          "parent_code": "MZ-P",
+          "name": "Sunate",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331691755",
+          "parent_code": "MZ-P",
+          "name": "Pemba",
+          "type": "city",
+          "population": "141316",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331693454",
+          "parent_code": "MZ-P",
+          "name": "Metoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331694684",
+          "parent_code": "MZ-P",
+          "name": "Montepuez",
+          "type": "city",
+          "population": "76139",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-771196551",
+          "parent_code": "MZ-P",
+          "name": "Mueda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425002986",
+          "parent_code": "MZ-P",
+          "name": "Balama",
+          "type": "city",
+          "population": "321085",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425268081",
+          "parent_code": "MZ-P",
+          "name": "Manilha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426073450",
+          "parent_code": "MZ-P",
+          "name": "Chiúre",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1426167045",
+          "parent_code": "MZ-P",
+          "name": "Nagulué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167049",
+          "parent_code": "MZ-P",
+          "name": "Mucojo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167056",
+          "parent_code": "MZ-P",
+          "name": "Metuge",
+          "type": "city",
+          "population": "3099",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167058",
+          "parent_code": "MZ-P",
+          "name": "Pangane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167061",
+          "parent_code": "MZ-P",
+          "name": "Quissanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167065",
+          "parent_code": "MZ-P",
+          "name": "Namaua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167077",
+          "parent_code": "MZ-P",
+          "name": "Nguia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167081",
+          "parent_code": "MZ-P",
+          "name": "Ingoane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167084",
+          "parent_code": "MZ-P",
+          "name": "Mpeme",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167087",
+          "parent_code": "MZ-P",
+          "name": "Diaca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167090",
+          "parent_code": "MZ-P",
+          "name": "Muepane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167092",
+          "parent_code": "MZ-P",
+          "name": "Nanili",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167101",
+          "parent_code": "MZ-P",
+          "name": "Mamude",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2239235327",
+          "parent_code": "MZ-P",
+          "name": "Namuno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2239235499",
+          "parent_code": "MZ-P",
+          "name": "Machoca (Tepere)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2282927369",
+          "parent_code": "MZ-P",
+          "name": "Mocímboa da Praia",
+          "type": "city",
+          "population": "127705",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2284634201",
+          "parent_code": "MZ-P",
+          "name": "Palma",
+          "type": "city",
+          "population": "75000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2333548899",
+          "parent_code": "MZ-P",
+          "name": "Nangade",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2333548900",
+          "parent_code": "MZ-P",
+          "name": "Olumbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574517921",
+          "parent_code": "MZ-P",
+          "name": "Inchúri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2670735128",
+          "parent_code": "MZ-P",
+          "name": "Natuco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3171936479",
+          "parent_code": "MZ-P",
+          "name": "Mieze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3341816573",
+          "parent_code": "MZ-P",
+          "name": "Mecúfi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4066348207",
+          "parent_code": "MZ-P",
+          "name": "Mienguleia",
+          "type": "city",
+          "population": "14603",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6436640888",
+          "parent_code": "MZ-P",
+          "name": "Nguida",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6438013167",
+          "parent_code": "MZ-P",
+          "name": "Napuda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6438195520",
+          "parent_code": "MZ-P",
+          "name": "Katapua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6438195581",
+          "parent_code": "MZ-P",
+          "name": "Meloco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6438470863",
+          "parent_code": "MZ-P",
+          "name": "Hucula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6439167041",
+          "parent_code": "MZ-P",
+          "name": "Ancuabe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7302123822",
+          "parent_code": "MZ-P",
+          "name": "Litingina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7302123864",
+          "parent_code": "MZ-P",
+          "name": "Namahaca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7302123919",
+          "parent_code": "MZ-P",
+          "name": "Guludo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7302123923",
+          "parent_code": "MZ-P",
+          "name": "Ntamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7302123926",
+          "parent_code": "MZ-P",
+          "name": "Mute",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7818599452",
+          "parent_code": "MZ-P",
+          "name": "Muaguide",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7818599453",
+          "parent_code": "MZ-P",
+          "name": "Mareria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8207327127",
+          "parent_code": "MZ-P",
+          "name": "Mbau",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8597232638",
+          "parent_code": "MZ-P",
+          "name": "Pundanhar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8597237122",
+          "parent_code": "MZ-P",
+          "name": "N'gapa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8636826771",
+          "parent_code": "MZ-P",
+          "name": "Muatide",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9502472077",
+          "parent_code": "MZ-P",
+          "name": "Meluco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9504169491",
+          "parent_code": "MZ-P",
+          "name": "Namacande",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9504565865",
+          "parent_code": "MZ-P",
+          "name": "Bilibiza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11374696762",
+          "parent_code": "MZ-P",
+          "name": "Sicura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11374696763",
+          "parent_code": "MZ-P",
+          "name": "Murrebe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11374699945",
+          "parent_code": "MZ-P",
+          "name": "Impire",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11374700009",
+          "parent_code": "MZ-P",
+          "name": "Muaria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11375675588",
+          "parent_code": "MZ-P",
+          "name": "Ibo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MZ-N",
+      "parent_code": "MZ",
+      "name": "Nampula Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-286426799",
+          "parent_code": "MZ-N",
+          "name": "Nampula",
+          "type": "city",
+          "population": "477900",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331695811",
+          "parent_code": "MZ-N",
+          "name": "Alua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331696283",
+          "parent_code": "MZ-N",
+          "name": "Nacaroa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331700542",
+          "parent_code": "MZ-N",
+          "name": "Namialo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331701991",
+          "parent_code": "MZ-N",
+          "name": "Ribaue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-899428253",
+          "parent_code": "MZ-N",
+          "name": "Moma",
+          "type": "city",
+          "population": "324442",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-899428267",
+          "parent_code": "MZ-N",
+          "name": "Mogincual",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-899428278",
+          "parent_code": "MZ-N",
+          "name": "Nacala",
+          "type": "city",
+          "population": "389000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-899428282",
+          "parent_code": "MZ-N",
+          "name": "Angoche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-918486883",
+          "parent_code": "MZ-N",
+          "name": "Monapo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-921743067",
+          "parent_code": "MZ-N",
+          "name": "Nametil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-925353462",
+          "parent_code": "MZ-N",
+          "name": "Murrupula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030848",
+          "parent_code": "MZ-N",
+          "name": "Sanfar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030852",
+          "parent_code": "MZ-N",
+          "name": "Pessene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030855",
+          "parent_code": "MZ-N",
+          "name": "Rôgia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030861",
+          "parent_code": "MZ-N",
+          "name": "Mesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030863",
+          "parent_code": "MZ-N",
+          "name": "Metochéria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030872",
+          "parent_code": "MZ-N",
+          "name": "Carapira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030876",
+          "parent_code": "MZ-N",
+          "name": "Rope",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426073446",
+          "parent_code": "MZ-N",
+          "name": "Nampuecha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426073447",
+          "parent_code": "MZ-N",
+          "name": "Memba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426073448",
+          "parent_code": "MZ-N",
+          "name": "Namapa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426073449",
+          "parent_code": "MZ-N",
+          "name": "Cava",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191727",
+          "parent_code": "MZ-N",
+          "name": "Mutuali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191752",
+          "parent_code": "MZ-N",
+          "name": "Namina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2281956004",
+          "parent_code": "MZ-N",
+          "name": "Nacala-a-Velha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2300099323",
+          "parent_code": "MZ-N",
+          "name": "Lalaua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2301745193",
+          "parent_code": "MZ-N",
+          "name": "Negururo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2306303592",
+          "parent_code": "MZ-N",
+          "name": "Mecubúri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2306304544",
+          "parent_code": "MZ-N",
+          "name": "Rapale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2308004845",
+          "parent_code": "MZ-N",
+          "name": "Imala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2308004848",
+          "parent_code": "MZ-N",
+          "name": "Muecate",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2311025706",
+          "parent_code": "MZ-N",
+          "name": "Corrane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2311079919",
+          "parent_code": "MZ-N",
+          "name": "Muatua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2544864123",
+          "parent_code": "MZ-N",
+          "name": "Quixaxe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3100665546",
+          "parent_code": "MZ-N",
+          "name": "Gêba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3421679973",
+          "parent_code": "MZ-N",
+          "name": "Namaita",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3421705545",
+          "parent_code": "MZ-N",
+          "name": "Cazuzu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3525001724",
+          "parent_code": "MZ-N",
+          "name": "Lumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3525041405",
+          "parent_code": "MZ-N",
+          "name": "Ilha de Mocambique",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3557107718",
+          "parent_code": "MZ-N",
+          "name": "Liupo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4169195934",
+          "parent_code": "MZ-N",
+          "name": "Malema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5178102049",
+          "parent_code": "MZ-N",
+          "name": "Riane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5178102051",
+          "parent_code": "MZ-N",
+          "name": "Iapala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7417083920",
+          "parent_code": "MZ-N",
+          "name": "Quinga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9968531300",
+          "parent_code": "MZ-N",
+          "name": "Meconta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9968545417",
+          "parent_code": "MZ-N",
+          "name": "Namecuna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MZ-A",
+      "parent_code": "MZ",
+      "name": "Niassa Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-335126704",
+          "parent_code": "MZ-A",
+          "name": "Lichinga",
+          "type": "city",
+          "population": "142253",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-335130819",
+          "parent_code": "MZ-A",
+          "name": "Cuamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418220292",
+          "parent_code": "MZ-A",
+          "name": "Marrupa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1419370812",
+          "parent_code": "MZ-A",
+          "name": "Insaca (Mecanhelas)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191717",
+          "parent_code": "MZ-A",
+          "name": "Metangula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191721",
+          "parent_code": "MZ-A",
+          "name": "Maniamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191724",
+          "parent_code": "MZ-A",
+          "name": "Lurio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191725",
+          "parent_code": "MZ-A",
+          "name": "Belém",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191728",
+          "parent_code": "MZ-A",
+          "name": "Mandimba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191756",
+          "parent_code": "MZ-A",
+          "name": "Massangulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225263",
+          "parent_code": "MZ-A",
+          "name": "Máua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225264",
+          "parent_code": "MZ-A",
+          "name": "Machomane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225290",
+          "parent_code": "MZ-A",
+          "name": "Chiconono",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225292",
+          "parent_code": "MZ-A",
+          "name": "Ajabo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225296",
+          "parent_code": "MZ-A",
+          "name": "Metarica",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225313",
+          "parent_code": "MZ-A",
+          "name": "Litunde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2528378257",
+          "parent_code": "MZ-A",
+          "name": "Massambala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3069039813",
+          "parent_code": "MZ-A",
+          "name": "Chimbonila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4487917433",
+          "parent_code": "MZ-A",
+          "name": "町",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9502660985",
+          "parent_code": "MZ-A",
+          "name": "Mecula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10135404554",
+          "parent_code": "MZ-A",
+          "name": "Malanga (Majune)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MZ-G",
+      "parent_code": "MZ",
+      "name": "Gaza Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-335077559",
+          "parent_code": "MZ-G",
+          "name": "Xai-Xai",
+          "type": "city",
+          "population": "116343",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-475542804",
+          "parent_code": "MZ-G",
+          "name": "Chibuto",
+          "type": "city",
+          "population": "57281",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-475542806",
+          "parent_code": "MZ-G",
+          "name": "Mabalane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-561314902",
+          "parent_code": "MZ-G",
+          "name": "Chicumbane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-561318715",
+          "parent_code": "MZ-G",
+          "name": "Macia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425179726",
+          "parent_code": "MZ-G",
+          "name": "Chidenguele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425212561",
+          "parent_code": "MZ-G",
+          "name": "Chissamuine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359818",
+          "parent_code": "MZ-G",
+          "name": "Magul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359820",
+          "parent_code": "MZ-G",
+          "name": "Cunzulene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359836",
+          "parent_code": "MZ-G",
+          "name": "Elija",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294326",
+          "parent_code": "MZ-G",
+          "name": "Domasse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426302413",
+          "parent_code": "MZ-G",
+          "name": "Chicualacuala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426302416",
+          "parent_code": "MZ-G",
+          "name": "Chigubo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426307246",
+          "parent_code": "MZ-G",
+          "name": "Guijá",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2084079005",
+          "parent_code": "MZ-G",
+          "name": "Praia de Bilene",
+          "type": "city",
+          "population": "151911",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2130849762",
+          "parent_code": "MZ-G",
+          "name": "Chókwè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2345015462",
+          "parent_code": "MZ-G",
+          "name": "Manjacaze",
+          "type": "city",
+          "population": "28300",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2519077112",
+          "parent_code": "MZ-G",
+          "name": "Massingir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5422676921",
+          "parent_code": "MZ-G",
+          "name": "Mavodze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6701482688",
+          "parent_code": "MZ-G",
+          "name": "Mapai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MZ-I",
+      "parent_code": "MZ",
+      "name": "Inhambane Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-331728890",
+          "parent_code": "MZ-I",
+          "name": "Inhambane",
+          "type": "city",
+          "population": "63837",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-335106276",
+          "parent_code": "MZ-I",
+          "name": "Maxixe",
+          "type": "city",
+          "population": "108824",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-335108360",
+          "parent_code": "MZ-I",
+          "name": "Morrumbene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-335109352",
+          "parent_code": "MZ-I",
+          "name": "Massinga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-771234715",
+          "parent_code": "MZ-I",
+          "name": "Inhassoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-899421044",
+          "parent_code": "MZ-I",
+          "name": "Vilankulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-903124226",
+          "parent_code": "MZ-I",
+          "name": "Chissibuca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-908782088",
+          "parent_code": "MZ-I",
+          "name": "Quissico",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425047888",
+          "parent_code": "MZ-I",
+          "name": "Vila Franca do Save",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425056794",
+          "parent_code": "MZ-I",
+          "name": "Farraça",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425066678",
+          "parent_code": "MZ-I",
+          "name": "Camacho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425066681",
+          "parent_code": "MZ-I",
+          "name": "Massitele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425068691",
+          "parent_code": "MZ-I",
+          "name": "Jamo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425092765",
+          "parent_code": "MZ-I",
+          "name": "Machacane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425092768",
+          "parent_code": "MZ-I",
+          "name": "Macombi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425093395",
+          "parent_code": "MZ-I",
+          "name": "Camele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425093396",
+          "parent_code": "MZ-I",
+          "name": "Cabo Primeiro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425093399",
+          "parent_code": "MZ-I",
+          "name": "Guiducua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425096395",
+          "parent_code": "MZ-I",
+          "name": "Lindela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425096396",
+          "parent_code": "MZ-I",
+          "name": "Cumbana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425096397",
+          "parent_code": "MZ-I",
+          "name": "Mahongage",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425179725",
+          "parent_code": "MZ-I",
+          "name": "Maputumane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425179727",
+          "parent_code": "MZ-I",
+          "name": "Muane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425179728",
+          "parent_code": "MZ-I",
+          "name": "Chicorôa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425179729",
+          "parent_code": "MZ-I",
+          "name": "Inhanombe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425206065",
+          "parent_code": "MZ-I",
+          "name": "Zandamela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425299450",
+          "parent_code": "MZ-I",
+          "name": "Pomene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425299453",
+          "parent_code": "MZ-I",
+          "name": "Nhanguile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425299460",
+          "parent_code": "MZ-I",
+          "name": "Chicoque",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425299461",
+          "parent_code": "MZ-I",
+          "name": "Macauzo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425299463",
+          "parent_code": "MZ-I",
+          "name": "Sitila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359839",
+          "parent_code": "MZ-I",
+          "name": "Nhacoongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359844",
+          "parent_code": "MZ-I",
+          "name": "Mavululane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294337",
+          "parent_code": "MZ-I",
+          "name": "Mabote",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426302414",
+          "parent_code": "MZ-I",
+          "name": "Funhalouro",
+          "type": "city",
+          "population": "26190",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2212550196",
+          "parent_code": "MZ-I",
+          "name": "Homoíne",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2343896198",
+          "parent_code": "MZ-I",
+          "name": "Inharrime",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4811606583",
+          "parent_code": "MZ-I",
+          "name": "Pande",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6115441063",
+          "parent_code": "MZ-I",
+          "name": "Nova Mambone",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6170852475",
+          "parent_code": "MZ-I",
+          "name": "Jangamo",
+          "type": "city",
+          "population": "93681",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-7724192316",
+          "parent_code": "MZ-I",
+          "name": "Vilanculos",
+          "type": "city",
+          "population": "24433",
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MZ-B",
+      "parent_code": "MZ",
+      "name": "Manica Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-331730346",
+          "parent_code": "MZ-B",
+          "name": "Gondola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331730931",
+          "parent_code": "MZ-B",
+          "name": "Chimoio",
+          "type": "city",
+          "population": "238976",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-663184240",
+          "parent_code": "MZ-B",
+          "name": "Inchope",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-902596093",
+          "parent_code": "MZ-B",
+          "name": "Cafumpe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1417339281",
+          "parent_code": "MZ-B",
+          "name": "Chitundo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1417339285",
+          "parent_code": "MZ-B",
+          "name": "Nova Vanduzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418211019",
+          "parent_code": "MZ-B",
+          "name": "Catandica",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1419408735",
+          "parent_code": "MZ-B",
+          "name": "Manica",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1423039747",
+          "parent_code": "MZ-B",
+          "name": "Guro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425009847",
+          "parent_code": "MZ-B",
+          "name": "Chirara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425010652",
+          "parent_code": "MZ-B",
+          "name": "Chicó",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425010743",
+          "parent_code": "MZ-B",
+          "name": "Canhaúfe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425017568",
+          "parent_code": "MZ-B",
+          "name": "Zinvari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006282",
+          "parent_code": "MZ-B",
+          "name": "Tambara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006290",
+          "parent_code": "MZ-B",
+          "name": "Mungari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294380",
+          "parent_code": "MZ-B",
+          "name": "Espungabera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294389",
+          "parent_code": "MZ-B",
+          "name": "Mandié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1482295439",
+          "parent_code": "MZ-B",
+          "name": "Amatongas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2281184283",
+          "parent_code": "MZ-B",
+          "name": "Sussundenga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2281984248",
+          "parent_code": "MZ-B",
+          "name": "Dombé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2285989726",
+          "parent_code": "MZ-B",
+          "name": "Macossa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2528017088",
+          "parent_code": "MZ-B",
+          "name": "Machipanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2715909938",
+          "parent_code": "MZ-B",
+          "name": "Nhamassonge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3659836840",
+          "parent_code": "MZ-B",
+          "name": "Messica",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7680250646",
+          "parent_code": "MZ-B",
+          "name": "Dacata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9980360327",
+          "parent_code": "MZ-B",
+          "name": "Garuso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MZ-L",
+      "parent_code": "MZ",
+      "name": "Maputo Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27564983",
+          "parent_code": "MZ-L",
+          "name": "Matola",
+          "type": "city",
+          "population": "675422",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-266982648",
+          "parent_code": "MZ-L",
+          "name": "Ponta do Ouro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-561322955",
+          "parent_code": "MZ-L",
+          "name": "Marracuene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-561322959",
+          "parent_code": "MZ-L",
+          "name": "Palmeira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-619885946",
+          "parent_code": "MZ-L",
+          "name": "Zitundo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-619885951",
+          "parent_code": "MZ-L",
+          "name": "Malongane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-849981485",
+          "parent_code": "MZ-L",
+          "name": "Goba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1108894705",
+          "parent_code": "MZ-L",
+          "name": "Ressano Garcia",
+          "type": "city",
+          "population": "11200",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425212559",
+          "parent_code": "MZ-L",
+          "name": "Chidona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425212560",
+          "parent_code": "MZ-L",
+          "name": "Taninga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425223000",
+          "parent_code": "MZ-L",
+          "name": "Bachite",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425223004",
+          "parent_code": "MZ-L",
+          "name": "Mapelane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359822",
+          "parent_code": "MZ-L",
+          "name": "Incoluane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359830",
+          "parent_code": "MZ-L",
+          "name": "Magude",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359833",
+          "parent_code": "MZ-L",
+          "name": "Xinavane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426307253",
+          "parent_code": "MZ-L",
+          "name": "Sabie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2531775102",
+          "parent_code": "MZ-L",
+          "name": "Boane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2562199645",
+          "parent_code": "MZ-L",
+          "name": "Moamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5509174683",
+          "parent_code": "MZ-L",
+          "name": "Bela Vista",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7391593265",
+          "parent_code": "MZ-L",
+          "name": "Mapulanguene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13031893008",
+          "parent_code": "MZ-L",
+          "name": "Matola-Rio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MZ-S",
+      "parent_code": "MZ",
+      "name": "Sofala Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-259593578",
+          "parent_code": "MZ-S",
+          "name": "Beira",
+          "type": "city",
+          "population": "436240",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331713674",
+          "parent_code": "MZ-S",
+          "name": "Caia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331719360",
+          "parent_code": "MZ-S",
+          "name": "Inhaminga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-369154470",
+          "parent_code": "MZ-S",
+          "name": "Marromeu",
+          "type": "city",
+          "population": "119718",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-369158185",
+          "parent_code": "MZ-S",
+          "name": "Sena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-568083903",
+          "parent_code": "MZ-S",
+          "name": "Dondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418232180",
+          "parent_code": "MZ-S",
+          "name": "Gorongosa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418241192",
+          "parent_code": "MZ-S",
+          "name": "Búzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1420307397",
+          "parent_code": "MZ-S",
+          "name": "Manga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1423061100",
+          "parent_code": "MZ-S",
+          "name": "Muxungue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425017564",
+          "parent_code": "MZ-S",
+          "name": "Ximana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425017570",
+          "parent_code": "MZ-S",
+          "name": "Miguel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425034026",
+          "parent_code": "MZ-S",
+          "name": "Nhabuto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425034447",
+          "parent_code": "MZ-S",
+          "name": "Mazungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425034448",
+          "parent_code": "MZ-S",
+          "name": "Chissiduana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425047890",
+          "parent_code": "MZ-S",
+          "name": "Chessungalane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425047892",
+          "parent_code": "MZ-S",
+          "name": "Maculuge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425047895",
+          "parent_code": "MZ-S",
+          "name": "Muave",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425047896",
+          "parent_code": "MZ-S",
+          "name": "Quatine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425268078",
+          "parent_code": "MZ-S",
+          "name": "Ziamechia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006240",
+          "parent_code": "MZ-S",
+          "name": "Chemba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006260",
+          "parent_code": "MZ-S",
+          "name": "Nharugue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006272",
+          "parent_code": "MZ-S",
+          "name": "Nhamedula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006280",
+          "parent_code": "MZ-S",
+          "name": "Murraca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1482297430",
+          "parent_code": "MZ-S",
+          "name": "Inhamizua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2285975056",
+          "parent_code": "MZ-S",
+          "name": "Maringué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2335946847",
+          "parent_code": "MZ-S",
+          "name": "Machanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2344416638",
+          "parent_code": "MZ-S",
+          "name": "Chibabava",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2470375864",
+          "parent_code": "MZ-S",
+          "name": "Nhamatanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3341901708",
+          "parent_code": "MZ-S",
+          "name": "Mafambisse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3723354796",
+          "parent_code": "MZ-S",
+          "name": "Tica",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6345459039",
+          "parent_code": "MZ-S",
+          "name": "Ambanhe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6362842626",
+          "parent_code": "MZ-S",
+          "name": "Divinhe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6378818946",
+          "parent_code": "MZ-S",
+          "name": "Muanza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6397735452",
+          "parent_code": "MZ-S",
+          "name": "Guara-Guara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6412618307",
+          "parent_code": "MZ-S",
+          "name": "Siluvo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6437397312",
+          "parent_code": "MZ-S",
+          "name": "Mutua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6447070323",
+          "parent_code": "MZ-S",
+          "name": "Metuchira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9975768829",
+          "parent_code": "MZ-S",
+          "name": "Magagade",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MZ-T",
+      "parent_code": "MZ",
+      "name": "Tete Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-369158328",
+          "parent_code": "MZ-T",
+          "name": "Mutarara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-560241406",
+          "parent_code": "MZ-T",
+          "name": "Tete",
+          "type": "city",
+          "population": "152909",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-561173471",
+          "parent_code": "MZ-T",
+          "name": "Moatize",
+          "type": "city",
+          "population": "39073",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-902588043",
+          "parent_code": "MZ-T",
+          "name": "Changara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418229005",
+          "parent_code": "MZ-T",
+          "name": "Kambulatsisi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1423049837",
+          "parent_code": "MZ-T",
+          "name": "Furancungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1423057284",
+          "parent_code": "MZ-T",
+          "name": "Ulongué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1423058753",
+          "parent_code": "MZ-T",
+          "name": "Zóbue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1423065191",
+          "parent_code": "MZ-T",
+          "name": "Songo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247196",
+          "parent_code": "MZ-T",
+          "name": "Cassacatiza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247200",
+          "parent_code": "MZ-T",
+          "name": "Fingoé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247204",
+          "parent_code": "MZ-T",
+          "name": "Bene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247206",
+          "parent_code": "MZ-T",
+          "name": "Mulomba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247217",
+          "parent_code": "MZ-T",
+          "name": "Chifunde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247220",
+          "parent_code": "MZ-T",
+          "name": "Chitima",
+          "type": "city",
+          "population": "36993",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247224",
+          "parent_code": "MZ-T",
+          "name": "Cataxa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247226",
+          "parent_code": "MZ-T",
+          "name": "Masamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247232",
+          "parent_code": "MZ-T",
+          "name": "Muende",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247235",
+          "parent_code": "MZ-T",
+          "name": "Mualadzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294322",
+          "parent_code": "MZ-T",
+          "name": "Campapa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294348",
+          "parent_code": "MZ-T",
+          "name": "Muze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294357",
+          "parent_code": "MZ-T",
+          "name": "Metico",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294360",
+          "parent_code": "MZ-T",
+          "name": "Màgoé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294363",
+          "parent_code": "MZ-T",
+          "name": "Maluera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294381",
+          "parent_code": "MZ-T",
+          "name": "Mucumbura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294394",
+          "parent_code": "MZ-T",
+          "name": "Chotombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294398",
+          "parent_code": "MZ-T",
+          "name": "Carinde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294401",
+          "parent_code": "MZ-T",
+          "name": "Zambué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2049455307",
+          "parent_code": "MZ-T",
+          "name": "Zumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2238449361",
+          "parent_code": "MZ-T",
+          "name": "Aldeia Chuchamano",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2289454880",
+          "parent_code": "MZ-T",
+          "name": "Doa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2435341471",
+          "parent_code": "MZ-T",
+          "name": "Vuende",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3899065178",
+          "parent_code": "MZ-T",
+          "name": "Cateme",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3917985444",
+          "parent_code": "MZ-T",
+          "name": "Nkatha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9359159325",
+          "parent_code": "MZ-T",
+          "name": "Domue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9360004748",
+          "parent_code": "MZ-T",
+          "name": "Manje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MZ-Q",
+      "parent_code": "MZ",
+      "name": "Zambezia Province",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-259593870",
+          "parent_code": "MZ-Q",
+          "name": "Quelimane",
+          "type": "city",
+          "population": "192876",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-318560545",
+          "parent_code": "MZ-Q",
+          "name": "Milange",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331705155",
+          "parent_code": "MZ-Q",
+          "name": "Mocuba",
+          "type": "city",
+          "population": "69045",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-335170812",
+          "parent_code": "MZ-Q",
+          "name": "Gurue",
+          "type": "city",
+          "population": "145466",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-369152953",
+          "parent_code": "MZ-Q",
+          "name": "Chinde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-370270596",
+          "parent_code": "MZ-Q",
+          "name": "Morrumbala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-899428244",
+          "parent_code": "MZ-Q",
+          "name": "Pebane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418216447",
+          "parent_code": "MZ-Q",
+          "name": "Alto Molócue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1419366273",
+          "parent_code": "MZ-Q",
+          "name": "Nicoadala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006248",
+          "parent_code": "MZ-Q",
+          "name": "Mabore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006263",
+          "parent_code": "MZ-Q",
+          "name": "Bivar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006266",
+          "parent_code": "MZ-Q",
+          "name": "Licuare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006292",
+          "parent_code": "MZ-Q",
+          "name": "Simôgo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426021070",
+          "parent_code": "MZ-Q",
+          "name": "Macuse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426021078",
+          "parent_code": "MZ-Q",
+          "name": "Tacuane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426021081",
+          "parent_code": "MZ-Q",
+          "name": "Uachave",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426023574",
+          "parent_code": "MZ-Q",
+          "name": "Namerrogolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426023580",
+          "parent_code": "MZ-Q",
+          "name": "Mugeba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426023582",
+          "parent_code": "MZ-Q",
+          "name": "Semouque",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426023584",
+          "parent_code": "MZ-Q",
+          "name": "Lugela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030874",
+          "parent_code": "MZ-Q",
+          "name": "Alto Ligonha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225265",
+          "parent_code": "MZ-Q",
+          "name": "Morire",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225266",
+          "parent_code": "MZ-Q",
+          "name": "Molumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225272",
+          "parent_code": "MZ-Q",
+          "name": "Chire",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225300",
+          "parent_code": "MZ-Q",
+          "name": "Lioma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2297897658",
+          "parent_code": "MZ-Q",
+          "name": "Mopeia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312755132",
+          "parent_code": "MZ-Q",
+          "name": "Gilé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312755133",
+          "parent_code": "MZ-Q",
+          "name": "Muiane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3421728892",
+          "parent_code": "MZ-Q",
+          "name": "Mulevala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3421730098",
+          "parent_code": "MZ-Q",
+          "name": "Mocubela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4274569531",
+          "parent_code": "MZ-Q",
+          "name": "Vulalo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4285835507",
+          "parent_code": "MZ-Q",
+          "name": "Dachudua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4285899116",
+          "parent_code": "MZ-Q",
+          "name": "Simbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5176292945",
+          "parent_code": "MZ-Q",
+          "name": "Errego (Ile)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5176359115",
+          "parent_code": "MZ-Q",
+          "name": "Namacurra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5177907686",
+          "parent_code": "MZ-Q",
+          "name": "Namarrói",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5178102063",
+          "parent_code": "MZ-Q",
+          "name": "Ruace",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5741625044",
+          "parent_code": "MZ-Q",
+          "name": "Chimuara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "MZ-MPM",
+      "parent_code": "MZ",
+      "name": "Cidade de Maputo",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27565081",
+          "parent_code": "MZ-MPM",
+          "name": "Maputo",
+          "type": "city",
+          "population": "1244227",
+          "place_type": "city"
+        }
+      ]
+    },
+    {
+      "code": "ST-16457769",
+      "parent_code": "MZ",
+      "name": "Zona Sul",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-27564983",
+          "parent_code": "ST-16457769",
+          "name": "Matola",
+          "type": "city",
+          "population": "675422",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-27565081",
+          "parent_code": "ST-16457769",
+          "name": "Maputo",
+          "type": "city",
+          "population": "1244227",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-266982648",
+          "parent_code": "ST-16457769",
+          "name": "Ponta do Ouro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331728890",
+          "parent_code": "ST-16457769",
+          "name": "Inhambane",
+          "type": "city",
+          "population": "63837",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-335077559",
+          "parent_code": "ST-16457769",
+          "name": "Xai-Xai",
+          "type": "city",
+          "population": "116343",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-335106276",
+          "parent_code": "ST-16457769",
+          "name": "Maxixe",
+          "type": "city",
+          "population": "108824",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-335108360",
+          "parent_code": "ST-16457769",
+          "name": "Morrumbene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-335109352",
+          "parent_code": "ST-16457769",
+          "name": "Massinga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-475542804",
+          "parent_code": "ST-16457769",
+          "name": "Chibuto",
+          "type": "city",
+          "population": "57281",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-475542806",
+          "parent_code": "ST-16457769",
+          "name": "Mabalane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-561314902",
+          "parent_code": "ST-16457769",
+          "name": "Chicumbane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-561318715",
+          "parent_code": "ST-16457769",
+          "name": "Macia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-561322955",
+          "parent_code": "ST-16457769",
+          "name": "Marracuene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-561322959",
+          "parent_code": "ST-16457769",
+          "name": "Palmeira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-619885946",
+          "parent_code": "ST-16457769",
+          "name": "Zitundo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-619885951",
+          "parent_code": "ST-16457769",
+          "name": "Malongane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-771234715",
+          "parent_code": "ST-16457769",
+          "name": "Inhassoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-849981485",
+          "parent_code": "ST-16457769",
+          "name": "Goba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-899421044",
+          "parent_code": "ST-16457769",
+          "name": "Vilankulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-903124226",
+          "parent_code": "ST-16457769",
+          "name": "Chissibuca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-908782088",
+          "parent_code": "ST-16457769",
+          "name": "Quissico",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1108894705",
+          "parent_code": "ST-16457769",
+          "name": "Ressano Garcia",
+          "type": "city",
+          "population": "11200",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425047888",
+          "parent_code": "ST-16457769",
+          "name": "Vila Franca do Save",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425056794",
+          "parent_code": "ST-16457769",
+          "name": "Farraça",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425066678",
+          "parent_code": "ST-16457769",
+          "name": "Camacho",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425066681",
+          "parent_code": "ST-16457769",
+          "name": "Massitele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425068691",
+          "parent_code": "ST-16457769",
+          "name": "Jamo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425092765",
+          "parent_code": "ST-16457769",
+          "name": "Machacane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425092768",
+          "parent_code": "ST-16457769",
+          "name": "Macombi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425093395",
+          "parent_code": "ST-16457769",
+          "name": "Camele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425093396",
+          "parent_code": "ST-16457769",
+          "name": "Cabo Primeiro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425093399",
+          "parent_code": "ST-16457769",
+          "name": "Guiducua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425096395",
+          "parent_code": "ST-16457769",
+          "name": "Lindela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425096396",
+          "parent_code": "ST-16457769",
+          "name": "Cumbana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425096397",
+          "parent_code": "ST-16457769",
+          "name": "Mahongage",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425179725",
+          "parent_code": "ST-16457769",
+          "name": "Maputumane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425179726",
+          "parent_code": "ST-16457769",
+          "name": "Chidenguele",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425179727",
+          "parent_code": "ST-16457769",
+          "name": "Muane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425179728",
+          "parent_code": "ST-16457769",
+          "name": "Chicorôa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425179729",
+          "parent_code": "ST-16457769",
+          "name": "Inhanombe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425206065",
+          "parent_code": "ST-16457769",
+          "name": "Zandamela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425212559",
+          "parent_code": "ST-16457769",
+          "name": "Chidona",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425212560",
+          "parent_code": "ST-16457769",
+          "name": "Taninga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425212561",
+          "parent_code": "ST-16457769",
+          "name": "Chissamuine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425223000",
+          "parent_code": "ST-16457769",
+          "name": "Bachite",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425223004",
+          "parent_code": "ST-16457769",
+          "name": "Mapelane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425299450",
+          "parent_code": "ST-16457769",
+          "name": "Pomene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425299453",
+          "parent_code": "ST-16457769",
+          "name": "Nhanguile",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425299460",
+          "parent_code": "ST-16457769",
+          "name": "Chicoque",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425299461",
+          "parent_code": "ST-16457769",
+          "name": "Macauzo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425299463",
+          "parent_code": "ST-16457769",
+          "name": "Sitila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359818",
+          "parent_code": "ST-16457769",
+          "name": "Magul",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359820",
+          "parent_code": "ST-16457769",
+          "name": "Cunzulene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359822",
+          "parent_code": "ST-16457769",
+          "name": "Incoluane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359830",
+          "parent_code": "ST-16457769",
+          "name": "Magude",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359833",
+          "parent_code": "ST-16457769",
+          "name": "Xinavane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359836",
+          "parent_code": "ST-16457769",
+          "name": "Elija",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359839",
+          "parent_code": "ST-16457769",
+          "name": "Nhacoongo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425359844",
+          "parent_code": "ST-16457769",
+          "name": "Mavululane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294326",
+          "parent_code": "ST-16457769",
+          "name": "Domasse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294337",
+          "parent_code": "ST-16457769",
+          "name": "Mabote",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426302413",
+          "parent_code": "ST-16457769",
+          "name": "Chicualacuala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426302414",
+          "parent_code": "ST-16457769",
+          "name": "Funhalouro",
+          "type": "city",
+          "population": "26190",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426302416",
+          "parent_code": "ST-16457769",
+          "name": "Chigubo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426307246",
+          "parent_code": "ST-16457769",
+          "name": "Guijá",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426307253",
+          "parent_code": "ST-16457769",
+          "name": "Sabie",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2084079005",
+          "parent_code": "ST-16457769",
+          "name": "Praia de Bilene",
+          "type": "city",
+          "population": "151911",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2130849762",
+          "parent_code": "ST-16457769",
+          "name": "Chókwè",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2212550196",
+          "parent_code": "ST-16457769",
+          "name": "Homoíne",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2343896198",
+          "parent_code": "ST-16457769",
+          "name": "Inharrime",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2345015462",
+          "parent_code": "ST-16457769",
+          "name": "Manjacaze",
+          "type": "city",
+          "population": "28300",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2519077112",
+          "parent_code": "ST-16457769",
+          "name": "Massingir",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2531775102",
+          "parent_code": "ST-16457769",
+          "name": "Boane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2562199645",
+          "parent_code": "ST-16457769",
+          "name": "Moamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4811606583",
+          "parent_code": "ST-16457769",
+          "name": "Pande",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5422676921",
+          "parent_code": "ST-16457769",
+          "name": "Mavodze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5509174683",
+          "parent_code": "ST-16457769",
+          "name": "Bela Vista",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6115441063",
+          "parent_code": "ST-16457769",
+          "name": "Nova Mambone",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6170852475",
+          "parent_code": "ST-16457769",
+          "name": "Jangamo",
+          "type": "city",
+          "population": "93681",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-6701482688",
+          "parent_code": "ST-16457769",
+          "name": "Mapai",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7391593265",
+          "parent_code": "ST-16457769",
+          "name": "Mapulanguene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7724192316",
+          "parent_code": "ST-16457769",
+          "name": "Vilanculos",
+          "type": "city",
+          "population": "24433",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-13031893008",
+          "parent_code": "ST-16457769",
+          "name": "Matola-Rio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-16458885",
+      "parent_code": "MZ",
+      "name": "Zona Norte",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-286426799",
+          "parent_code": "ST-16458885",
+          "name": "Nampula",
+          "type": "city",
+          "population": "477900",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331690580",
+          "parent_code": "ST-16458885",
+          "name": "Macomia",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331691040",
+          "parent_code": "ST-16458885",
+          "name": "Sunate",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331691755",
+          "parent_code": "ST-16458885",
+          "name": "Pemba",
+          "type": "city",
+          "population": "141316",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331693454",
+          "parent_code": "ST-16458885",
+          "name": "Metoro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331694684",
+          "parent_code": "ST-16458885",
+          "name": "Montepuez",
+          "type": "city",
+          "population": "76139",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-331695811",
+          "parent_code": "ST-16458885",
+          "name": "Alua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331696283",
+          "parent_code": "ST-16458885",
+          "name": "Nacaroa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331700542",
+          "parent_code": "ST-16458885",
+          "name": "Namialo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331701991",
+          "parent_code": "ST-16458885",
+          "name": "Ribaue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-335126704",
+          "parent_code": "ST-16458885",
+          "name": "Lichinga",
+          "type": "city",
+          "population": "142253",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-335130819",
+          "parent_code": "ST-16458885",
+          "name": "Cuamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-771196551",
+          "parent_code": "ST-16458885",
+          "name": "Mueda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-899428253",
+          "parent_code": "ST-16458885",
+          "name": "Moma",
+          "type": "city",
+          "population": "324442",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-899428267",
+          "parent_code": "ST-16458885",
+          "name": "Mogincual",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-899428278",
+          "parent_code": "ST-16458885",
+          "name": "Nacala",
+          "type": "city",
+          "population": "389000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-899428282",
+          "parent_code": "ST-16458885",
+          "name": "Angoche",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-918486883",
+          "parent_code": "ST-16458885",
+          "name": "Monapo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-921743067",
+          "parent_code": "ST-16458885",
+          "name": "Nametil",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-925353462",
+          "parent_code": "ST-16458885",
+          "name": "Murrupula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418220292",
+          "parent_code": "ST-16458885",
+          "name": "Marrupa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1419370812",
+          "parent_code": "ST-16458885",
+          "name": "Insaca (Mecanhelas)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425002986",
+          "parent_code": "ST-16458885",
+          "name": "Balama",
+          "type": "city",
+          "population": "321085",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425268081",
+          "parent_code": "ST-16458885",
+          "name": "Manilha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030848",
+          "parent_code": "ST-16458885",
+          "name": "Sanfar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030852",
+          "parent_code": "ST-16458885",
+          "name": "Pessene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030855",
+          "parent_code": "ST-16458885",
+          "name": "Rôgia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030861",
+          "parent_code": "ST-16458885",
+          "name": "Mesa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030863",
+          "parent_code": "ST-16458885",
+          "name": "Metochéria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030872",
+          "parent_code": "ST-16458885",
+          "name": "Carapira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030876",
+          "parent_code": "ST-16458885",
+          "name": "Rope",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426073446",
+          "parent_code": "ST-16458885",
+          "name": "Nampuecha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426073447",
+          "parent_code": "ST-16458885",
+          "name": "Memba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426073448",
+          "parent_code": "ST-16458885",
+          "name": "Namapa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426073449",
+          "parent_code": "ST-16458885",
+          "name": "Cava",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426073450",
+          "parent_code": "ST-16458885",
+          "name": "Chiúre",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1426167045",
+          "parent_code": "ST-16458885",
+          "name": "Nagulué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167049",
+          "parent_code": "ST-16458885",
+          "name": "Mucojo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167056",
+          "parent_code": "ST-16458885",
+          "name": "Metuge",
+          "type": "city",
+          "population": "3099",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167058",
+          "parent_code": "ST-16458885",
+          "name": "Pangane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167061",
+          "parent_code": "ST-16458885",
+          "name": "Quissanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167065",
+          "parent_code": "ST-16458885",
+          "name": "Namaua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167077",
+          "parent_code": "ST-16458885",
+          "name": "Nguia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167081",
+          "parent_code": "ST-16458885",
+          "name": "Ingoane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167084",
+          "parent_code": "ST-16458885",
+          "name": "Mpeme",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167087",
+          "parent_code": "ST-16458885",
+          "name": "Diaca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167090",
+          "parent_code": "ST-16458885",
+          "name": "Muepane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167092",
+          "parent_code": "ST-16458885",
+          "name": "Nanili",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426167101",
+          "parent_code": "ST-16458885",
+          "name": "Mamude",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191717",
+          "parent_code": "ST-16458885",
+          "name": "Metangula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191721",
+          "parent_code": "ST-16458885",
+          "name": "Maniamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191724",
+          "parent_code": "ST-16458885",
+          "name": "Lurio",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191725",
+          "parent_code": "ST-16458885",
+          "name": "Belém",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191727",
+          "parent_code": "ST-16458885",
+          "name": "Mutuali",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191728",
+          "parent_code": "ST-16458885",
+          "name": "Mandimba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191752",
+          "parent_code": "ST-16458885",
+          "name": "Namina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426191756",
+          "parent_code": "ST-16458885",
+          "name": "Massangulo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225263",
+          "parent_code": "ST-16458885",
+          "name": "Máua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225264",
+          "parent_code": "ST-16458885",
+          "name": "Machomane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225290",
+          "parent_code": "ST-16458885",
+          "name": "Chiconono",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225292",
+          "parent_code": "ST-16458885",
+          "name": "Ajabo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225296",
+          "parent_code": "ST-16458885",
+          "name": "Metarica",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225313",
+          "parent_code": "ST-16458885",
+          "name": "Litunde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2239235327",
+          "parent_code": "ST-16458885",
+          "name": "Namuno",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2239235499",
+          "parent_code": "ST-16458885",
+          "name": "Machoca (Tepere)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2281956004",
+          "parent_code": "ST-16458885",
+          "name": "Nacala-a-Velha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2282927369",
+          "parent_code": "ST-16458885",
+          "name": "Mocímboa da Praia",
+          "type": "city",
+          "population": "127705",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2284634201",
+          "parent_code": "ST-16458885",
+          "name": "Palma",
+          "type": "city",
+          "population": "75000",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-2300099323",
+          "parent_code": "ST-16458885",
+          "name": "Lalaua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2301745193",
+          "parent_code": "ST-16458885",
+          "name": "Negururo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2306303592",
+          "parent_code": "ST-16458885",
+          "name": "Mecubúri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2306304544",
+          "parent_code": "ST-16458885",
+          "name": "Rapale",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2308004845",
+          "parent_code": "ST-16458885",
+          "name": "Imala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2308004848",
+          "parent_code": "ST-16458885",
+          "name": "Muecate",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2311025706",
+          "parent_code": "ST-16458885",
+          "name": "Corrane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2311079919",
+          "parent_code": "ST-16458885",
+          "name": "Muatua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2333548899",
+          "parent_code": "ST-16458885",
+          "name": "Nangade",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2333548900",
+          "parent_code": "ST-16458885",
+          "name": "Olumbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2528378257",
+          "parent_code": "ST-16458885",
+          "name": "Massambala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2544864123",
+          "parent_code": "ST-16458885",
+          "name": "Quixaxe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2574517921",
+          "parent_code": "ST-16458885",
+          "name": "Inchúri",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2670735128",
+          "parent_code": "ST-16458885",
+          "name": "Natuco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3069039813",
+          "parent_code": "ST-16458885",
+          "name": "Chimbonila",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3100665546",
+          "parent_code": "ST-16458885",
+          "name": "Gêba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3171936479",
+          "parent_code": "ST-16458885",
+          "name": "Mieze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3341816573",
+          "parent_code": "ST-16458885",
+          "name": "Mecúfi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3421679973",
+          "parent_code": "ST-16458885",
+          "name": "Namaita",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3421705545",
+          "parent_code": "ST-16458885",
+          "name": "Cazuzu",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3525001724",
+          "parent_code": "ST-16458885",
+          "name": "Lumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3525041405",
+          "parent_code": "ST-16458885",
+          "name": "Ilha de Mocambique",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3557107718",
+          "parent_code": "ST-16458885",
+          "name": "Liupo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4066348207",
+          "parent_code": "ST-16458885",
+          "name": "Mienguleia",
+          "type": "city",
+          "population": "14603",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4169195934",
+          "parent_code": "ST-16458885",
+          "name": "Malema",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4487917433",
+          "parent_code": "ST-16458885",
+          "name": "町",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5178102049",
+          "parent_code": "ST-16458885",
+          "name": "Riane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5178102051",
+          "parent_code": "ST-16458885",
+          "name": "Iapala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6436640888",
+          "parent_code": "ST-16458885",
+          "name": "Nguida",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6438013167",
+          "parent_code": "ST-16458885",
+          "name": "Napuda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6438195520",
+          "parent_code": "ST-16458885",
+          "name": "Katapua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6438195581",
+          "parent_code": "ST-16458885",
+          "name": "Meloco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6438470863",
+          "parent_code": "ST-16458885",
+          "name": "Hucula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6439167041",
+          "parent_code": "ST-16458885",
+          "name": "Ancuabe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7302123822",
+          "parent_code": "ST-16458885",
+          "name": "Litingina",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7302123864",
+          "parent_code": "ST-16458885",
+          "name": "Namahaca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7302123919",
+          "parent_code": "ST-16458885",
+          "name": "Guludo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7302123923",
+          "parent_code": "ST-16458885",
+          "name": "Ntamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7302123926",
+          "parent_code": "ST-16458885",
+          "name": "Mute",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7417083920",
+          "parent_code": "ST-16458885",
+          "name": "Quinga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7818599452",
+          "parent_code": "ST-16458885",
+          "name": "Muaguide",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7818599453",
+          "parent_code": "ST-16458885",
+          "name": "Mareria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8207327127",
+          "parent_code": "ST-16458885",
+          "name": "Mbau",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8597232638",
+          "parent_code": "ST-16458885",
+          "name": "Pundanhar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8597237122",
+          "parent_code": "ST-16458885",
+          "name": "N'gapa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-8636826771",
+          "parent_code": "ST-16458885",
+          "name": "Muatide",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9502472077",
+          "parent_code": "ST-16458885",
+          "name": "Meluco",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9502660985",
+          "parent_code": "ST-16458885",
+          "name": "Mecula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9504169491",
+          "parent_code": "ST-16458885",
+          "name": "Namacande",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9504565865",
+          "parent_code": "ST-16458885",
+          "name": "Bilibiza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9968531300",
+          "parent_code": "ST-16458885",
+          "name": "Meconta",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9968545417",
+          "parent_code": "ST-16458885",
+          "name": "Namecuna",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-10135404554",
+          "parent_code": "ST-16458885",
+          "name": "Malanga (Majune)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11374696762",
+          "parent_code": "ST-16458885",
+          "name": "Sicura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11374696763",
+          "parent_code": "ST-16458885",
+          "name": "Murrebe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11374699945",
+          "parent_code": "ST-16458885",
+          "name": "Impire",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11374700009",
+          "parent_code": "ST-16458885",
+          "name": "Muaria",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-11375675588",
+          "parent_code": "ST-16458885",
+          "name": "Ibo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    },
+    {
+      "code": "ST-16459886",
+      "parent_code": "MZ",
+      "name": "Zona Centro",
+      "type": "state",
+      "children": [
+        {
+          "code": "CTY-259593578",
+          "parent_code": "ST-16459886",
+          "name": "Beira",
+          "type": "city",
+          "population": "436240",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-259593870",
+          "parent_code": "ST-16459886",
+          "name": "Quelimane",
+          "type": "city",
+          "population": "192876",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-318560545",
+          "parent_code": "ST-16459886",
+          "name": "Milange",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331705155",
+          "parent_code": "ST-16459886",
+          "name": "Mocuba",
+          "type": "city",
+          "population": "69045",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331713674",
+          "parent_code": "ST-16459886",
+          "name": "Caia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331719360",
+          "parent_code": "ST-16459886",
+          "name": "Inhaminga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331730346",
+          "parent_code": "ST-16459886",
+          "name": "Gondola",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-331730931",
+          "parent_code": "ST-16459886",
+          "name": "Chimoio",
+          "type": "city",
+          "population": "238976",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-335170812",
+          "parent_code": "ST-16459886",
+          "name": "Gurue",
+          "type": "city",
+          "population": "145466",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-369152953",
+          "parent_code": "ST-16459886",
+          "name": "Chinde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-369154470",
+          "parent_code": "ST-16459886",
+          "name": "Marromeu",
+          "type": "city",
+          "population": "119718",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-369158185",
+          "parent_code": "ST-16459886",
+          "name": "Sena",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-369158328",
+          "parent_code": "ST-16459886",
+          "name": "Mutarara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-370270596",
+          "parent_code": "ST-16459886",
+          "name": "Morrumbala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-560241406",
+          "parent_code": "ST-16459886",
+          "name": "Tete",
+          "type": "city",
+          "population": "152909",
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-561173471",
+          "parent_code": "ST-16459886",
+          "name": "Moatize",
+          "type": "city",
+          "population": "39073",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-568083903",
+          "parent_code": "ST-16459886",
+          "name": "Dondo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-663184240",
+          "parent_code": "ST-16459886",
+          "name": "Inchope",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-899428244",
+          "parent_code": "ST-16459886",
+          "name": "Pebane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-902588043",
+          "parent_code": "ST-16459886",
+          "name": "Changara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-902596093",
+          "parent_code": "ST-16459886",
+          "name": "Cafumpe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1417339281",
+          "parent_code": "ST-16459886",
+          "name": "Chitundo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1417339285",
+          "parent_code": "ST-16459886",
+          "name": "Nova Vanduzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418211019",
+          "parent_code": "ST-16459886",
+          "name": "Catandica",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418216447",
+          "parent_code": "ST-16459886",
+          "name": "Alto Molócue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418229005",
+          "parent_code": "ST-16459886",
+          "name": "Kambulatsisi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418232180",
+          "parent_code": "ST-16459886",
+          "name": "Gorongosa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1418241192",
+          "parent_code": "ST-16459886",
+          "name": "Búzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1419366273",
+          "parent_code": "ST-16459886",
+          "name": "Nicoadala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1419408735",
+          "parent_code": "ST-16459886",
+          "name": "Manica",
+          "type": "city",
+          "population": null,
+          "place_type": "city"
+        },
+        {
+          "code": "CTY-1420307397",
+          "parent_code": "ST-16459886",
+          "name": "Manga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1423039747",
+          "parent_code": "ST-16459886",
+          "name": "Guro",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1423049837",
+          "parent_code": "ST-16459886",
+          "name": "Furancungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1423057284",
+          "parent_code": "ST-16459886",
+          "name": "Ulongué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1423058753",
+          "parent_code": "ST-16459886",
+          "name": "Zóbue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1423061100",
+          "parent_code": "ST-16459886",
+          "name": "Muxungue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1423065191",
+          "parent_code": "ST-16459886",
+          "name": "Songo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425009847",
+          "parent_code": "ST-16459886",
+          "name": "Chirara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425010652",
+          "parent_code": "ST-16459886",
+          "name": "Chicó",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425010743",
+          "parent_code": "ST-16459886",
+          "name": "Canhaúfe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425017564",
+          "parent_code": "ST-16459886",
+          "name": "Ximana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425017568",
+          "parent_code": "ST-16459886",
+          "name": "Zinvari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425017570",
+          "parent_code": "ST-16459886",
+          "name": "Miguel",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425034026",
+          "parent_code": "ST-16459886",
+          "name": "Nhabuto",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425034447",
+          "parent_code": "ST-16459886",
+          "name": "Mazungo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425034448",
+          "parent_code": "ST-16459886",
+          "name": "Chissiduana",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425047890",
+          "parent_code": "ST-16459886",
+          "name": "Chessungalane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425047892",
+          "parent_code": "ST-16459886",
+          "name": "Maculuge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425047895",
+          "parent_code": "ST-16459886",
+          "name": "Muave",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425047896",
+          "parent_code": "ST-16459886",
+          "name": "Quatine",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1425268078",
+          "parent_code": "ST-16459886",
+          "name": "Ziamechia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006240",
+          "parent_code": "ST-16459886",
+          "name": "Chemba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006248",
+          "parent_code": "ST-16459886",
+          "name": "Mabore",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006260",
+          "parent_code": "ST-16459886",
+          "name": "Nharugue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006263",
+          "parent_code": "ST-16459886",
+          "name": "Bivar",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006266",
+          "parent_code": "ST-16459886",
+          "name": "Licuare",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006272",
+          "parent_code": "ST-16459886",
+          "name": "Nhamedula",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006280",
+          "parent_code": "ST-16459886",
+          "name": "Murraca",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006282",
+          "parent_code": "ST-16459886",
+          "name": "Tambara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006290",
+          "parent_code": "ST-16459886",
+          "name": "Mungari",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426006292",
+          "parent_code": "ST-16459886",
+          "name": "Simôgo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426021070",
+          "parent_code": "ST-16459886",
+          "name": "Macuse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426021078",
+          "parent_code": "ST-16459886",
+          "name": "Tacuane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426021081",
+          "parent_code": "ST-16459886",
+          "name": "Uachave",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426023574",
+          "parent_code": "ST-16459886",
+          "name": "Namerrogolo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426023580",
+          "parent_code": "ST-16459886",
+          "name": "Mugeba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426023582",
+          "parent_code": "ST-16459886",
+          "name": "Semouque",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426023584",
+          "parent_code": "ST-16459886",
+          "name": "Lugela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426030874",
+          "parent_code": "ST-16459886",
+          "name": "Alto Ligonha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225265",
+          "parent_code": "ST-16459886",
+          "name": "Morire",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225266",
+          "parent_code": "ST-16459886",
+          "name": "Molumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225272",
+          "parent_code": "ST-16459886",
+          "name": "Chire",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426225300",
+          "parent_code": "ST-16459886",
+          "name": "Lioma",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247196",
+          "parent_code": "ST-16459886",
+          "name": "Cassacatiza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247200",
+          "parent_code": "ST-16459886",
+          "name": "Fingoé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247204",
+          "parent_code": "ST-16459886",
+          "name": "Bene",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247206",
+          "parent_code": "ST-16459886",
+          "name": "Mulomba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247217",
+          "parent_code": "ST-16459886",
+          "name": "Chifunde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247220",
+          "parent_code": "ST-16459886",
+          "name": "Chitima",
+          "type": "city",
+          "population": "36993",
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247224",
+          "parent_code": "ST-16459886",
+          "name": "Cataxa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247226",
+          "parent_code": "ST-16459886",
+          "name": "Masamba",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247232",
+          "parent_code": "ST-16459886",
+          "name": "Muende",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426247235",
+          "parent_code": "ST-16459886",
+          "name": "Mualadzi",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294322",
+          "parent_code": "ST-16459886",
+          "name": "Campapa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294348",
+          "parent_code": "ST-16459886",
+          "name": "Muze",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294357",
+          "parent_code": "ST-16459886",
+          "name": "Metico",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294360",
+          "parent_code": "ST-16459886",
+          "name": "Màgoé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294363",
+          "parent_code": "ST-16459886",
+          "name": "Maluera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294380",
+          "parent_code": "ST-16459886",
+          "name": "Espungabera",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294381",
+          "parent_code": "ST-16459886",
+          "name": "Mucumbura",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294389",
+          "parent_code": "ST-16459886",
+          "name": "Mandié",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294394",
+          "parent_code": "ST-16459886",
+          "name": "Chotombo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294398",
+          "parent_code": "ST-16459886",
+          "name": "Carinde",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1426294401",
+          "parent_code": "ST-16459886",
+          "name": "Zambué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1482295439",
+          "parent_code": "ST-16459886",
+          "name": "Amatongas",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-1482297430",
+          "parent_code": "ST-16459886",
+          "name": "Inhamizua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2049455307",
+          "parent_code": "ST-16459886",
+          "name": "Zumbo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2238449361",
+          "parent_code": "ST-16459886",
+          "name": "Aldeia Chuchamano",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2281184283",
+          "parent_code": "ST-16459886",
+          "name": "Sussundenga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2281984248",
+          "parent_code": "ST-16459886",
+          "name": "Dombé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2285975056",
+          "parent_code": "ST-16459886",
+          "name": "Maringué",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2285989726",
+          "parent_code": "ST-16459886",
+          "name": "Macossa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2289454880",
+          "parent_code": "ST-16459886",
+          "name": "Doa",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2297897658",
+          "parent_code": "ST-16459886",
+          "name": "Mopeia",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312755132",
+          "parent_code": "ST-16459886",
+          "name": "Gilé",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2312755133",
+          "parent_code": "ST-16459886",
+          "name": "Muiane",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2335946847",
+          "parent_code": "ST-16459886",
+          "name": "Machanga",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2344416638",
+          "parent_code": "ST-16459886",
+          "name": "Chibabava",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2435341471",
+          "parent_code": "ST-16459886",
+          "name": "Vuende",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2470375864",
+          "parent_code": "ST-16459886",
+          "name": "Nhamatanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2528017088",
+          "parent_code": "ST-16459886",
+          "name": "Machipanda",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-2715909938",
+          "parent_code": "ST-16459886",
+          "name": "Nhamassonge",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3341901708",
+          "parent_code": "ST-16459886",
+          "name": "Mafambisse",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3421728892",
+          "parent_code": "ST-16459886",
+          "name": "Mulevala",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3421730098",
+          "parent_code": "ST-16459886",
+          "name": "Mocubela",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3659836840",
+          "parent_code": "ST-16459886",
+          "name": "Messica",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3723354796",
+          "parent_code": "ST-16459886",
+          "name": "Tica",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3899065178",
+          "parent_code": "ST-16459886",
+          "name": "Cateme",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-3917985444",
+          "parent_code": "ST-16459886",
+          "name": "Nkatha",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4274569531",
+          "parent_code": "ST-16459886",
+          "name": "Vulalo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4285835507",
+          "parent_code": "ST-16459886",
+          "name": "Dachudua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-4285899116",
+          "parent_code": "ST-16459886",
+          "name": "Simbe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5176292945",
+          "parent_code": "ST-16459886",
+          "name": "Errego (Ile)",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5176359115",
+          "parent_code": "ST-16459886",
+          "name": "Namacurra",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5177907686",
+          "parent_code": "ST-16459886",
+          "name": "Namarrói",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5178102063",
+          "parent_code": "ST-16459886",
+          "name": "Ruace",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-5741625044",
+          "parent_code": "ST-16459886",
+          "name": "Chimuara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6345459039",
+          "parent_code": "ST-16459886",
+          "name": "Ambanhe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6362842626",
+          "parent_code": "ST-16459886",
+          "name": "Divinhe",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6378818946",
+          "parent_code": "ST-16459886",
+          "name": "Muanza",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6397735452",
+          "parent_code": "ST-16459886",
+          "name": "Guara-Guara",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6412618307",
+          "parent_code": "ST-16459886",
+          "name": "Siluvo",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6437397312",
+          "parent_code": "ST-16459886",
+          "name": "Mutua",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-6447070323",
+          "parent_code": "ST-16459886",
+          "name": "Metuchira",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-7680250646",
+          "parent_code": "ST-16459886",
+          "name": "Dacata",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9359159325",
+          "parent_code": "ST-16459886",
+          "name": "Domue",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9360004748",
+          "parent_code": "ST-16459886",
+          "name": "Manje",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9975768829",
+          "parent_code": "ST-16459886",
+          "name": "Magagade",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        },
+        {
+          "code": "CTY-9980360327",
+          "parent_code": "ST-16459886",
+          "name": "Garuso",
+          "type": "city",
+          "population": null,
+          "place_type": "town"
+        }
+      ]
+    }
+  ]
+}

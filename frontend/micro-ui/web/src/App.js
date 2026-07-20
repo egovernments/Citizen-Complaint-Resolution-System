@@ -7,6 +7,7 @@
  * modules.
  */
 import React, { Suspense } from "react";
+import { useRouteMatch } from "react-router-dom";
 import { initLibraries } from "@egovernments/digit-ui-libraries";
 // import { initHRMSComponents } from "@egovernments/digit-ui-module-hrms";
 import { UICustomizations } from "./Customisations/UICustomizations";
@@ -15,6 +16,7 @@ import { initPGRComponents, PGRReducers, } from "@egovernments/digit-ui-module-c
 import { Loader } from "@egovernments/digit-ui-components";
 import { initWorkbenchComponents } from "@egovernments/digit-ui-module-workbench";
 import { initHRMSComponents } from "@egovernments/digit-ui-module-hrms";
+import AdminDashboard from "./dashboard/AdminDashboard";
 
 window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
 
@@ -55,12 +57,22 @@ const initDigitUI = () => {
 
 function App() {
   window.contextPath = window?.globalConfigs?.getConfig("CONTEXT_PATH");
+  const dashboardMatch = useRouteMatch("/employee/dashboard");
   const stateCode =
     window.globalConfigs?.getConfig("STATE_LEVEL_TENANT_ID") ||
     process.env.REACT_APP_STATE_LEVEL_TENANT_ID;
   if (!stateCode) {
     return <h1>stateCode is not defined</h1>;
   }
+
+  if (dashboardMatch) {
+    return (
+      <Suspense fallback={<Loader page={true} variant={"PageLoader"} />}>
+        <AdminDashboard />
+      </Suspense>
+    );
+  }
+
   return (
     <Suspense fallback={<Loader page={true} variant={"PageLoader"} />}>
       <DigitUI

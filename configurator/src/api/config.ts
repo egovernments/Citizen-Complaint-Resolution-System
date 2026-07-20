@@ -1,0 +1,122 @@
+// DIGIT Environment Configuration
+
+/** Auto-detect API base URL from the current origin. Each deployment serves
+ *  the configurator and DIGIT APIs from the same domain via nginx. */
+export function getApiBaseUrl(): string {
+  if (typeof window !== 'undefined') return window.location.origin;
+  return 'https://localhost';
+}
+
+// Root (state-level) tenant the deployment is configured for.
+//
+// The configurator is a STANDALONE Vite app — it does NOT expose digit-ui's
+// `window.globalConfigs` global (nothing injects a globalConfigs.js <script>
+// into this app's index.html), so reading `window.globalConfigs` here always
+// misses. The real config channel for a Vite build is a build-time env var:
+// the ansible deploy renders `VITE_STATE_TENANT_ID` from host_vars
+// `state_tenant_id` and passes it to `vite build` (see
+// local-setup/ansible/files/configurator-build.sh). A city tenant like
+// "mz.maputo" collapses to its root segment "mz". Empty when unset
+// (dev/standalone) — callers fall back to a neutral hint.
+export const STATE_TENANT_ID: string =
+  (import.meta.env.VITE_STATE_TENANT_ID as string | undefined)?.trim() || '';
+
+/** Root (state) tenant code for this deployment, e.g. "mz". Derived from the
+ *  build-time `VITE_STATE_TENANT_ID` (a city code collapses to its root
+ *  segment). Empty string when the build wasn't given one. */
+export function getConfiguredRootTenant(): string {
+  return STATE_TENANT_ID.split('.')[0];
+}
+
+// Service endpoints
+export const ENDPOINTS = {
+  // Authentication
+  AUTH: '/user/oauth/token',
+  USER_SEARCH: '/user/_search',
+
+  // MDMS
+  MDMS_SEARCH: '/mdms-v2/v2/_search',
+  MDMS_CREATE: '/mdms-v2/v2/_create',
+  MDMS_UPDATE: '/mdms-v2/v2/_update',
+  MDMS_SCHEMA_SEARCH: '/mdms-v2/schema/v1/_search',
+  MDMS_SCHEMA_CREATE: '/mdms-v2/schema/v1/_create',
+
+  // User (for tenant bootstrap)
+  USER_CREATE: '/user/users/_createnovalidate',
+
+  // Encryption (for tenant bootstrap — register a new tenant with egov-enc-service
+  // before any encrypt/decrypt call targets it; see tenantBootstrap.ts)
+  ENC_GENERATE_KEY: '/egov-enc-service/crypto/v1/_generatekey',
+
+  // Workflow (for tenant bootstrap — PGR state machine clone)
+  WORKFLOW_BS_SEARCH: '/egov-workflow-v2/egov-wf/businessservice/_search',
+  WORKFLOW_BS_CREATE: '/egov-workflow-v2/egov-wf/businessservice/_create',
+
+  // Boundary
+  BOUNDARY_SEARCH: '/boundary-service/boundary/_search',
+  BOUNDARY_HIERARCHY_SEARCH: '/boundary-service/boundary-hierarchy-definition/_search',
+  BOUNDARY_HIERARCHY_CREATE: '/boundary-service/boundary-hierarchy-definition/_create',
+  BOUNDARY_CREATE: '/boundary-service/boundary/_create',
+  BOUNDARY_RELATIONSHIP_CREATE: '/boundary-service/boundary-relationships/_create',
+  BOUNDARY_RELATIONSHIP_SEARCH: '/boundary-service/boundary-relationships/_search',
+
+  // HRMS
+  // KEEP IN SYNC with packages/data-provider/src/client/endpoints.ts
+  HRMS_EMPLOYEES_SEARCH: '/egov-hrms/employees/_search',
+  HRMS_EMPLOYEES_CREATE: '/egov-hrms/employees/_create',
+  HRMS_EMPLOYEES_UPDATE: '/egov-hrms/employees/_update',
+
+  // Localization
+  LOCALIZATION_SEARCH: '/localization/messages/v1/_search',
+  LOCALIZATION_UPSERT: '/localization/messages/v1/_upsert',
+  // Localization service caches per-tenant in memory; without this call
+  // after a write, `_search` (and the digit-ui's localStorage cache) keep
+  // returning the pre-write snapshot until restart.
+  LOCALIZATION_CACHE_BUST: '/localization/messages/cache-bust',
+
+  // Filestore
+  FILESTORE_UPLOAD: '/filestore/v1/files',
+  FILESTORE_URL: '/filestore/v1/files/url',
+};
+
+// MDMS Schema codes
+export const MDMS_SCHEMAS = {
+  DEPARTMENT: 'common-masters.Department',
+  DESIGNATION: 'common-masters.Designation',
+  GENDER_TYPE: 'common-masters.GenderType',
+  EMPLOYEE_STATUS: 'egov-hrms.EmployeeStatus',
+  EMPLOYEE_TYPE: 'egov-hrms.EmployeeType',
+  ROLES: 'ACCESSCONTROL-ROLES.roles',
+  // 2-master complaint hierarchy: the single adjacency-list master holding
+  // both interior classification nodes AND leaf complaint types. The old
+  // RAINMAKER-PGR.ServiceDefs / .ClassificationNode masters are gone.
+  COMPLAINT_HIERARCHY: 'RAINMAKER-PGR.ComplaintHierarchy',
+  TENANT: 'tenant.tenants',
+  MAP_CONFIG: 'RAINMAKER-PGR.MapConfig',
+};
+
+// OAuth credentials
+export const OAUTH_CONFIG = {
+  clientId: 'egov-user-client',
+  clientSecret: '',
+  grantType: 'password',
+  scope: 'read',
+};
+
+// Max boundary entities to pull in a single /boundary/_search.
+//
+// boundary-service limits to be aware of:
+//  - The endpoint DEFAULTS to ~50 results even when criteria are supplied,
+//    so you must pass an explicit `limit` to get more than a partial set.
+//  - It CAPS the page at ~300 — a larger `limit` is clamped server-side, so
+//    one request returns at most ~300 entities. A tenant with more boundaries
+//    than this needs offset pagination (not done today; the overview map only
+//    needs a representative set, and city/county hierarchies are well under).
+//
+// Configurable so a deployment whose boundary-service raises/lowers the cap
+// can match it without a code change: set VITE_BOUNDARY_SEARCH_LIMIT.
+export const BOUNDARY_SEARCH_LIMIT: number =
+  Number(import.meta.env.VITE_BOUNDARY_SEARCH_LIMIT) || 300;
+
+// Default employee password
+export const DEFAULT_PASSWORD = 'eGov@123';

@@ -59,6 +59,19 @@ public class RequestSearchCriteria {
     @JsonProperty("slaDeltaMaxLimit")
     private Long slaDeltaMaxLimit;
 
+    /**
+     * Internal (VisibilityService only, never client-bound): together these
+     * compose the reportee-scoped All predicate
+     * `(serviceRequestId IN visibilityIds OR applicationStatus IN visibilityUnassignedStates)`
+     * — team-assigned complaints plus the unassigned queues. Both restrict the
+     * result set; they can't widen a search.
+     */
+    @JsonIgnore
+    private Set<String> visibilityIds;
+
+    @JsonIgnore
+    private Set<String> visibilityUnassignedStates;
+
     @JsonProperty("slaDeltaMinLimit")
     private Long slaDeltaMinLimit;
 
@@ -83,16 +96,26 @@ public class RequestSearchCriteria {
     public enum SortBy {
         locality,
         applicationStatus,
-        serviceRequestId
+        serviceRequestId,
+        createdTime,
+        sla
     }
 
     @SafeHtml
     @JsonProperty("accountId")
     private String accountId;
 
+    @SafeHtml
+    @JsonProperty("assignee")
+    private String assignee;
+
+    @JsonIgnore
+    private Set<String> serviceRequestIds;
+
     public boolean isEmpty(){
         return (this.tenantId==null && this.serviceCode==null && this.mobileNumber==null && this.serviceRequestId==null
-        && this.applicationStatus==null && this.ids==null && this.userIds==null && this.locality==null);
+        && this.applicationStatus==null && this.ids==null && this.userIds==null && this.locality==null
+        && this.assignee==null);
     }
 
 }

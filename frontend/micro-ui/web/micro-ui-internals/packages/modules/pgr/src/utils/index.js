@@ -165,17 +165,82 @@ const getEffectiveServiceCode = (mainType, subType) => {
 };
 
 
+/**
+ * ADAPTER: ComplaintHierarchy (single adjacency list) -> legacy ServiceDefs shape.
+ *
+ * The MDMS master `RAINMAKER-PGR.ServiceDefs` has been replaced by
+ * `RAINMAKER-PGR.ComplaintHierarchy` (one adjacency list holding both interior
+ * nodes and leaf complaint types). This helper keeps only the LEAF rows and maps
+ * each one to the legacy ServiceDefs object so downstream components keep working
+ * with the same field names they always used (serviceCode, name, menuPath, ...).
+ *
+ * Leaf detection heuristic: a row is a leaf iff it carries `department` or
+ * `slaHours` (interior nodes omit both).
+ *
+ * Derived fields:
+ *   menuPath     = row.parentCode (group key)
+ *   menuPathName = name of the ComplaintHierarchy node whose code === row.parentCode
+ *
+ * @param {Array} rows - raw RAINMAKER-PGR.ComplaintHierarchy rows
+ * @returns {Array} legacy ServiceDefs-shaped rows
+ */
+export const adaptComplaintHierarchyToServiceDefs = (rows) => {
+  if (!Array.isArray(rows)) return [];
 
-export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
+  const isLeaf = (row) =>
+    row && (row.department != null || row.slaHours != null);
+
+  // code -> name lookup so leaves can resolve their parent node's display name
+  const nameByCode = {};
+  rows.forEach((row) => {
+    if (row && row.code != null) nameByCode[row.code] = row.name;
+  });
+
+  return rows.filter(isLeaf).map((row) => ({
+    serviceCode: row.code,
+    name: row.name,
+    department: row.department,
+    departments: row.departments,
+    slaHours: row.slaHours,
+    keywords: row.keywords,
+    order: row.order,
+    active: row.active,
+    parentCode: row.parentCode,
+    menuPath: row.parentCode,
+    menuPathName: nameByCode[row.parentCode] ?? row.parentCode,
+  }));
+};
+
+
+
+export const formPayloadToCreateComplaint = (formData, tenantId, user, hierarchyLevels = []) => {
   const userInfo = {
     "name": formData?.ComplainantName?.trim()?.length > 0 ? formData?.ComplainantName?.trim() : null,
     "mobileNumber": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
     "userName": formData?.ComplainantContactNumber?.trim()?.length > 0 ? formData?.ComplainantContactNumber?.trim() : null,
+    "countryCode": formData?.countryCode || "+91",
     "type": "EMPLOYEE",
     "tenantId": tenantId,
   };
 
-  const additionalDetail = { supervisorName: formData?.SupervisorName?.trim()?.length > 0 ? formData?.SupervisorName?.trim() : null, supervisorContactNumber: formData?.SupervisorContactNumber?.trim()?.length > 0 ? formData?.SupervisorContactNumber?.trim() : null };
+  const boundaryHierarchy = (() => {
+    const bc = Array.isArray(formData?.boundaryComponent) ? formData.boundaryComponent : [];
+    // hierarchyLevels is an ordered array of level names matching bc indices
+    if (Array.isArray(hierarchyLevels) && hierarchyLevels.length > 0) {
+      const obj = {};
+      hierarchyLevels.forEach((levelName, i) => {
+        if (levelName && bc[i]) obj[levelName] = bc[i];
+      });
+      return obj;
+    }
+    return bc; // flat array fallback
+  })();
+
+  const additionalDetail = {
+    supervisorName: formData?.SupervisorName?.trim()?.length > 0 ? formData?.SupervisorName?.trim() : null,
+    supervisorContactNumber: formData?.SupervisorContactNumber?.trim()?.length > 0 ? formData?.SupervisorContactNumber?.trim() : null,
+    boundaryHierarchy: boundaryHierarchy,
+  };
 
   const timestamp = Date.now();
   let complaint = {
@@ -199,19 +264,16 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
         },
         "geoLocation": {}
       },
-      "additionalDetail": JSON.stringify(additionalDetail),
+      "additionalDetail": additionalDetail,
       "auditDetails": {
         "createdBy": user?.uuid,
         "createdTime": timestamp,
         "lastModifiedBy": user?.uuid,
         "lastModifiedTime": timestamp
-      }
+      },
     },
     "workflow": {
       "action": "APPLY",
-      "assignes": [],
-      "hrmsAssignes": [],
-      "comments": ""
     }
   }
 

@@ -1,69 +1,95 @@
 # Novu Bridge (`novu-bridge`)
 
-Manage central notification orchestration for the DIGIT platform.
+Pass-through notification delivery for the DIGIT platform.
 
 ## Overview
 
-The central notification orchestrator for the DIGIT platform. It consumes domain events from Kafka, checks user consent, resolves the right template and provider from config-service, and triggers Novu (which delivers via Twilio to WhatsApp).
+novu-bridge is a thin delivery + tracking layer between PGR and Novu. **PGR owns
+all resolution**: it resolves the recipient, picks + fills + localizes the
+template, and publishes ONE pre-rendered event per (recipient × channel) to the
+`complaints.domain.events` Kafka topic, with the final text in `renderedBody`.
+
+novu-bridge does NOT resolve templates, providers, or localization, and makes
+no config-service `_resolve`/`_search` calls. Per event it only:
+
+1. validates the pre-rendered envelope,
+2. applies the channel gate (`novu.bridge.channels.enabled`, default
+   `SMS,EMAIL`) and the optional user-preference consent check,
+3. upserts the Novu subscriber (identify) with the carried contact profile, and
+4. triggers the fixed per-channel Novu workflow (`complaints-sms` /
+   `complaints-email`; `complaints-whatsapp` delivers via a Twilio Programmable
+   WhatsApp integration, with the recipient prefixed `whatsapp:`), passing the
+   pre-rendered body in `payload.body`, then
+5. records the outcome in `nb_dispatch_log` keyed by `transactionId`.
+
+WHATSAPP is a known channel but is disabled by default: until a legitimate
+provider is onboarded as a Novu integration, WHATSAPP events persist an honest
+`SKIPPED` / `NB_NO_PROVIDER` row instead of falling back to another channel.
 
 ## Pre-requisites
-
-Before you proceed with the configuration, make sure the following prerequisites are met:
 
 - Java 17
 - PostgreSQL
 - Kafka / Redpanda
 - Novu self-hosted (API at port 3000)
-- Config Service running
-- User Preferences Service running
-
-## Key Functionalities
-
-- **Module-agnostic** — any module publishing domain events to Kafka can trigger notifications
-- **Consent-first** — checks user preferences before sending; skips if consent not granted
-- **Multi-locale** — resolves templates based on user's preferred language
-- **Provider strategy** — Twilio-specific logic via strategy pattern, extensible for new providers
-- **Retry + DLQ** — failed events are retried, then moved to dead-letter queue
-- **Dispatch audit log** — every event logged with status, errors, and provider response
-- **Diagnostic endpoints** — `_validate`, `_dry-run`, `_test-trigger` for debugging
-
-## Database Diagram
-
-```mermaid
-erDiagram
-    nb_dispatch_log {
-        UUID id PK
-        VARCHAR(64) event_id
-        VARCHAR(256) reference_number
-        VARCHAR(128) module
-        VARCHAR(256) event_name
-        VARCHAR(256) tenant_id
-        VARCHAR(64) channel
-        VARCHAR(256) recipient_value
-        VARCHAR(256) template_key
-        VARCHAR(32) status
-        INT attempt_count
-        VARCHAR(128) last_error_code
-        TEXT last_error_message
-        JSONB provider_response_jsonb
-    }
-```
+- User Preferences Service (optional — consent gate; disabled via
+  `NOVU_BRIDGE_PREFERENCE_ENABLED=false`)
+- MDMS v2 (phone country-code prefix via
+  `ValidationConfigs.mobileNumberValidation`)
 
 ## Processing Pipeline
 
 ```
- 1. Validate event       (eventId, eventName, tenantId, workflow.toState)
- 2. Derive context       (audience, recipient mobile, userId, locale)
- 3. Resolve locale       (query user-preferences for preferred language)
- 4. Check consent        (query user-preferences for WhatsApp consent)
- 5. Resolve template     (query config-service _resolve for TemplateBinding)
- 6. Resolve provider     (query config-service _search for ProviderDetail)
- 7. Validate vars        (ensure all requiredVars present in event data)
- 8. Format phone         (add country prefix for WhatsApp)
- 9. Build overrides      (contentSid + contentVariables from paramOrder)
-10. Trigger Novu         (POST /v1/events/trigger)
-11. Persist log          (upsert to nb_dispatch_log)
+1. Validate envelope    (eventId, eventType, eventName, tenantId,
+                         channel, renderedBody, subscriberId)
+2. Derive context       (contact profile, channel, transactionId — all
+                         carried on the event; nothing is looked up)
+3. Preference gate      (optional consent check per channel — SKIPPED/
+                         NB_PREFERENCE_DENIED when denied)
+4. Channel gates        (unknown channel -> SKIPPED/NB_UNSUPPORTED_CHANNEL;
+                         known-but-disabled -> SKIPPED/NB_NO_PROVIDER;
+                         missing phone/email -> SKIPPED/NB_CONTACT_MISSING)
+5. Identify subscriber  (POST /v1/subscribers, TTL-cached, non-fatal)
+6. Trigger Novu         (POST /v1/events/trigger with the per-channel
+                         workflow id; rendered text in payload.body)
+7. Persist log          (upsert to nb_dispatch_log)
 ```
+
+## Domain Event Structure (pre-rendered envelope)
+
+PGR publishes one event per (recipient × channel):
+
+```json
+{
+  "eventId": "unique-uuid",
+  "eventType": "DOMAIN_EVENT",
+  "eventName": "COMPLAINTS.WORKFLOW.APPLY",
+  "tenantId": "pg.citya",
+  "module": "Complaints",
+  "entityType": "COMPLAINT",
+  "entityId": "PG-PGR-2026-03-25-043118",
+  "channel": "SMS",
+  "subscriberId": "pg.citya:user-uuid",
+  "renderedBody": "Dear Jane, your complaint PG-PGR-2026-03-25-043118 ...",
+  "renderedSubject": null,
+  "contact": {
+    "userId": "user-uuid",
+    "type": "CITIZEN",
+    "name": "Jane Doe",
+    "phone": "+919123456789",
+    "email": null,
+    "locale": "en_IN"
+  },
+  "data": { "complaintNo": "PG-PGR-2026-03-25-043118" }
+}
+```
+
+**Required fields:** `eventId`, `eventType`, `eventName`, `tenantId`,
+`channel`, `renderedBody`, `subscriberId`. `renderedSubject` is used for
+EMAIL. A legacy coarse shape (with a `workflow.toState` block) is still
+accepted by the dry-run endpoints.
+
+## Dispatch Log
 
 **Table:** `nb_dispatch_log`
 
@@ -75,12 +101,12 @@ erDiagram
 | `module` | VARCHAR(128) | Source module (e.g., `Complaints`) |
 | `event_name` | VARCHAR(256) | Event name (e.g., `COMPLAINTS.WORKFLOW.APPLY`) |
 | `tenant_id` | VARCHAR(256) | Tenant ID |
-| `channel` | VARCHAR(64) | Notification channel (`WHATSAPP`) |
-| `recipient_value` | VARCHAR(256) | Recipient's mobile number |
+| `channel` | VARCHAR(64) | `SMS`, `EMAIL`, or `WHATSAPP` |
+| `recipient_value` | VARCHAR(256) | Recipient's phone/email |
 | `template_key` | VARCHAR(256) | Novu workflow ID used |
 | `status` | VARCHAR(32) | `SENT`, `FAILED`, `SKIPPED`, or `RECEIVED` |
 | `attempt_count` | INT | Number of delivery attempts |
-| `last_error_code` | VARCHAR(128) | Error code if failed |
+| `last_error_code` | VARCHAR(128) | Error code if failed/skipped |
 | `last_error_message` | TEXT | Error details |
 | `provider_response_jsonb` | JSONB | Raw Novu API response |
 
@@ -88,184 +114,59 @@ erDiagram
 
 | Status | Meaning |
 |--------|---------|
-| `SENT` | Novu trigger succeeded (201) |
-| `FAILED` | Processing error |
-| `SKIPPED` | User consent not granted |
-| `RECEIVED` | Dry-run mode (no actual send) |
-
-## Domain Event Structure
-
-Any module can trigger notifications by publishing this event to the configured Kafka topic:
-
-```json
-{
-  "eventId": "unique-uuid",
-  "eventType": "DOMAIN_EVENT",
-  "eventName": "COMPLAINTS.WORKFLOW.APPLY",
-  "tenantId": "pg.citya",
-  "module": "Complaints",
-  "entityType": "COMPLAINT",
-  "entityId": "PG-PGR-2026-03-25-043118",
-  "workflow": { "toState": "PENDINGFORASSIGNMENT" },
-  "stakeholders": [
-    { "mobile": "9123456789", "userId": "user-uuid", "type": "CITIZEN" }
-  ],
-  "data": {
-    "complaintNo": "PG-PGR-2026-03-25-043118",
-    "status": "PENDINGFORASSIGNMENT",
-    "serviceName": "Burning of garbage",
-    "citizenName": "Jane Doe",
-    "departmentName": "DEPT_3"
-  }
-}
-```
-
-**Required fields:** `eventId`, `eventName`, `tenantId`, `workflow.toState`, `stakeholders`
-
-The `data` map must include all variables listed in the TemplateBinding's `requiredVars`.
+| `SENT` | Novu trigger succeeded (2xx) |
+| `FAILED` | Processing/delivery error |
+| `SKIPPED` | Gated: preference denied, unsupported/disabled channel, or missing contact |
+| `RECEIVED` | Validation-only mode (no actual send) |
 
 ## API Endpoints
 
-**Base path:** `/novu-bridge/novu-adapter/v1/dispatch`
+**Base path:** `/novu-bridge/novu-adapter/v1`
+
+Configurator proxy endpoints (routed through Kong; the DIGIT bearer token is
+validated server-side by `ProxyAuthFilter` against egov-user `/user/_details`):
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/_validate` | POST | Full pipeline without sending — checks config, consent, vars |
-| `/_dry-run?send=true` | POST | Full pipeline with optional actual send |
-| `/_test-trigger` | POST | Direct Novu trigger, bypasses consent and config |
+| `/logs` | GET | Dispatch log listing |
+| `/integrations` | GET | Novu integrations (secrets redacted) |
+| `/preferences` | GET | User notification preference listing |
+| `/providers` | POST | Create/activate a Novu provider integration |
+| `/providers/templates` | GET | Provider form templates |
+| `/providers/verify` | POST | Verify provider credentials |
+| `/providers/test-send` | POST | Send a test notification via a provider |
 
-### Test Trigger Example
+Diagnostics under `/dispatch/*` (intentionally NOT routed at the gateway —
+direct service access only):
 
-```bash
-curl -X POST "http://<host>/novu-bridge/novu-adapter/v1/dispatch/_test-trigger" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "RequestInfo": {},
-    "templateKey": "complaints-workflow-apply",
-    "subscriberId": "pg.citya:user-uuid",
-    "phone": "whatsapp:+916307817430",
-    "payload": { "complaintNo": "TEST-001", "status": "PENDING" },
-    "transactionId": "test-001",
-    "contentSid": "HX350aa0b139780ea87f554276b1f68d6c",
-    "contentVariables": { "1": "Service Name", "2": "TEST-001", "3": "25-Mar-2026" }
-  }'
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/dispatch/_validate` | POST | Full pipeline without sending |
+| `/dispatch/_dry-run?send=true` | POST | Full pipeline with optional actual send |
+| `/dispatch/_test-trigger` | POST | Direct Novu trigger, bypasses gates |
 
 ## Kafka Topics
 
 | Topic | Purpose |
 |-------|---------|
-| `complaints.domain.events` (configurable) | Input — domain events to process |
-| `novu-bridge.retry` | Retry queue for failed events |
-| `novu-bridge.dlq` | Dead-letter queue after all retries exhausted |
+| `complaints.domain.events` (configurable) | Input — pre-rendered events from PGR |
+| `novu-bridge.retry` | Reserved for future use — the consumer listens on it, but nothing publishes to it yet |
+| `novu-bridge.dlq` | Dead-letter queue for failed events |
 
 ## Setup
 
 ### Database
 
-Create a database (e.g., `egov`). Flyway auto-creates the `nb_dispatch_log` table.
+Create a database. Flyway auto-creates the `nb_dispatch_log` table.
 
 ### Bootstrap Novu
 
-Before starting novu-bridge, bootstrap Novu with the Twilio integration and workflows.
-
-**Step 1:** Ensure Novu self-hosted is running (API at `http://localhost:3000`).
-
-**Step 2:** Get your Novu API key. Register via the API if you haven't already:
-
-```bash
-# Register (first time only)
-curl -s -X POST http://localhost:3000/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "firstName": "Admin",
-    "lastName": "User",
-    "email": "admin@example.com",
-    "password": "YourPassword@123",
-    "organizationName": "your-org"
-  }' | jq .token
-
-# Get API key using the token from above
-curl -s http://localhost:3000/v1/environments \
-  -H "Authorization: Bearer <token>" | jq '.[].apiKeys'
-```
-
-**Step 3:** Edit `.env.novu` with your credentials:
-
-```bash
-cd novu-bridge/config
-cp .env.novu .env.novu.local
-vi .env.novu.local
-```
-
-Fill in these required values:
-
-```bash
-NOVU_BASE_URL=http://localhost:3000
-NOVU_API_KEY=<your-novu-api-key>
-
-TWILIO_ACCOUNT_SID=<your-twilio-account-sid>
-TWILIO_AUTH_TOKEN=<your-twilio-auth-token>
-TWILIO_WHATSAPP_FROM=whatsapp:+<your-sender-number>
-```
-
-Optional — customize workflows to create:
-
-```bash
-NOVU_EVENT_WORKFLOWS=COMPLAINTS.WORKFLOW.APPLY,COMPLAINTS.WORKFLOW.ASSIGN,COMPLAINTS.WORKFLOW.RESOLVE,COMPLAINTS.WORKFLOW.REJECT,COMPLAINTS.WORKFLOW.REASSIGN,COMPLAINTS.WORKFLOW.REOPEN,COMPLAINTS.WORKFLOW.RATE
-```
-
-**Step 4:** Run the bootstrap script:
-
-```bash
-# Requires: curl, jq
-NOVU_ENV_FILE=.env.novu.local bash bootstrap-novu-whatsapp.sh
-```
-
-**What it creates:**
-- Novu environment (`digit-dev`)
-- Twilio SMS integration with WhatsApp credentials
-- One workflow per event listed in `NOVU_EVENT_WORKFLOWS`
-
-**Step 5:** Verify:
-
-```bash
-# Check workflows
-curl -s "http://localhost:3000/v2/workflows?limit=100" \
-  -H "Authorization: ApiKey $NOVU_API_KEY" | jq '.workflows[].workflowId'
-
-# Check Twilio integration
-curl -s "http://localhost:3000/v1/integrations" \
-  -H "Authorization: ApiKey $NOVU_API_KEY" | jq '.[] | {identifier, channel, active}'
-```
-
-**Updating Twilio credentials later:**
-
-```bash
-# Get integration ID
-curl -s "http://localhost:3000/v1/integrations" \
-  -H "Authorization: ApiKey $NOVU_API_KEY" | jq '.[] | select(.identifier=="twilio-whatsapp") | ._id'
-
-# Update credentials
-curl -X PUT "http://localhost:3000/v1/integrations/<integration-id>" \
-  -H "Authorization: ApiKey $NOVU_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "credentials": {
-      "accountSid": "<new-sid>",
-      "token": "<new-token>",
-      "from": "whatsapp:+<new-number>"
-    }
-  }'
-```
-
-### Kafka Topics
-
-Create topics if they don't exist:
-
-```bash
-rpk topic create complaints.domain.events novu-bridge.retry novu-bridge.dlq --brokers <broker>
-```
+Bootstrap Novu with the provider integration and the per-channel workflows
+using [`config/bootstrap-novu-whatsapp.sh`](config/bootstrap-novu-whatsapp.sh)
+(requires `curl` + `jq`; credentials via a `.env.novu`-style file — see
+[`config/.env.novu`](config/.env.novu)). Providers can also be onboarded at
+runtime through the configurator's provider management screens (the
+`/providers*` endpoints above).
 
 ### Running Locally
 
@@ -282,47 +183,45 @@ NOVU_API_KEY=<your-key> java -jar target/novu-bridge-*.jar
 | `server.servlet.context-path` | `/novu-bridge` | API context path |
 | `spring.kafka.bootstrap-servers` | `localhost:9092` | Kafka broker |
 | `novu.bridge.kafka.input.topic` | `complaints.domain.events` | Input topic |
-| `novu.bridge.kafka.retry.topic` | `novu-bridge.retry` | Retry topic |
+| `novu.bridge.kafka.retry.topic` | `novu-bridge.retry` | Retry topic (reserved, not yet published to) |
 | `novu.bridge.kafka.dlq.topic` | `novu-bridge.dlq` | DLQ topic |
-| `novu.bridge.max.retries` | `3` | Max retries before DLQ |
-| `novu.bridge.channel` | `WHATSAPP` | Default channel |
-| `novu.bridge.default.locale` | `en_IN` | Fallback locale |
-| `novu.bridge.config.host` | `http://digit-config-service.egov:8080` | Config service URL |
+| `novu.bridge.channels.enabled` | `SMS,EMAIL` | Channels actually delivered; others persist `SKIPPED`/`NB_NO_PROVIDER` |
+| `novu.bridge.workflow.id.sms` | `complaints-sms` | Novu workflow for SMS |
+| `novu.bridge.workflow.id.email` | `complaints-email` | Novu workflow for EMAIL |
+| `novu.bridge.workflow.id.whatsapp` | `complaints-whatsapp` | Novu workflow for WHATSAPP |
+| `novu.bridge.identify.cache.ttl.ms` | `300000` | Subscriber identify TTL cache window |
+| `novu.bridge.preference.enabled` | `true` | Enable/disable the consent gate |
 | `novu.bridge.preference.host` | `http://digit-user-preferences-service.egov:8080/user-preference` | Preferences service URL |
-| `novu.bridge.preference.enabled` | `true` | Enable/disable consent check |
+| `novu.bridge.user.host` | `http://egov-user.egov:8080` | egov-user (proxy-auth token introspection) |
+| `novu.bridge.proxy.auth.enabled` | `true` | Validate DIGIT bearer tokens on proxy endpoints |
+| `mdms.host` | `http://mdms-v2.egov:8080` | MDMS v2 (phone country-code prefix) |
 | `novu.base.url` | `http://novu-api.novu:3000` | Novu API URL |
 | `novu.api.key` | (env `NOVU_API_KEY`) | Novu API key |
-| `spring.datasource.url` | `jdbc:postgresql://localhost:5432/egov` | Database URL |
+| `spring.datasource.url` | `jdbc:postgresql://localhost:5432/postgres4` | Database URL |
 | `novu.bridge.dispatch.log.enabled` | `true` | Enable dispatch logging |
-
-### Helm Chart
-
-Location: [`deploy-as-code/helm/charts/common-services/novu-bridge`](https://github.com/egovernments/DIGIT-DevOps/tree/sandbox-demo/deploy-as-code/helm/charts/common-services/novu-bridge)
 
 ## System Flow
 
 ```
-                                    ┌──────────────────────┐
-                            ┌──────▶│  User Preferences    │
-                            │  (1)  │  - Check consent     │
-                            │       │  - Get locale        │
-                            │       └──────────────────────┘
-┌────────────┐   Kafka   ┌──┴───────────┐                    ┌──────────────────────┐
-│ Your       │──────────▶│  Novu Bridge  │───────────────────▶│  Config Service      │
-│ Module     │  events   │               │  (2)               │  - Resolve template  │
-└────────────┘           └───────┬───────┘                    │  - Get provider      │
-                                 │                            └──────────────────────┘
-                                 │ (3) Trigger
-                                 ▼
-                           ┌───────────┐   Twilio   ┌───────────┐
-                           │   Novu    │───────────▶│ WhatsApp  │
-                           │           │            │ User      │
-                           └───────────┘            └───────────┘
+┌────────────┐   pre-rendered event    ┌──────────────┐  (1) consent   ┌──────────────────┐
+│    PGR     │────────────────────────▶│  Novu Bridge │───────────────▶│ User Preferences │
+│ (resolves, │  per (recipient×channel)│  (validate + │                └──────────────────┘
+│  renders,  │  on Kafka topic         │   gate +     │
+│  localizes)│  complaints.domain.     │   deliver)   │
+└────────────┘  events                 └──────┬───────┘
+                                              │ (2) trigger per-channel workflow
+                                              ▼
+                                        ┌───────────┐   provider    ┌───────────┐
+                                        │   Novu    │──────────────▶│ SMS/Email │
+                                        │           │  integration  │ recipient │
+                                        └───────────┘               └───────────┘
 ```
 
-1. **Your Module** publishes a domain event to Kafka
-2. **Novu Bridge** checks consent (1), resolves template + provider (2), triggers Novu (3)
-3. **Novu** delivers via Twilio to WhatsApp
+1. **PGR** resolves the recipient, renders + localizes the message, and
+   publishes one pre-rendered event per (recipient × channel)
+2. **Novu Bridge** validates the envelope, applies the channel + preference
+   gates, and triggers the per-channel Novu workflow with the rendered body
+3. **Novu** delivers through the configured provider integration
 
 ## Resources
 

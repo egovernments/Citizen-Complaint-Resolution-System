@@ -1,0 +1,67 @@
+[
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "HRMS",
+      "order": 2,
+      "active": true,
+      "module": "HRMS",
+      "tenants": [
+        {
+          "code": "ke"
+        },
+        {
+          "code": "ke.nairobi"
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "PGR",
+      "order": 2,
+      "active": true,
+      "module": "PGR",
+      "tenants": [
+        {
+          "code": "ke"
+        },
+        {
+          "code": "ke.nairobi"
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "Workbench",
+      "order": 13,
+      "active": true,
+      "module": "Workbench",
+      "tenants": [
+        {
+          "code": "ke"
+        }
+      ]
+    }
+  },
+  {
+    "tenantId": "ke",
+    "data": {
+      "code": "Dashboard",
+      "order": 14,
+      "active": true,
+      "module": "Dashboard",
+      "tenants": [
+        {
+          "code": "ke"
+        },
+        {
+          "code": "ke.nairobi"
+        }
+      ]
+    }
+  }
+]
