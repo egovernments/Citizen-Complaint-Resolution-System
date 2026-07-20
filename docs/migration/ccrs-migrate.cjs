@@ -223,9 +223,18 @@ async function searchAcross(tenants, schema) {
 }
 const DUP_RE = /already|exist|duplicate/i;
 async function mdmsCreate(tenantId, schemaCode, uniqueIdentifier, data) {
-  const r = await postJson(`/mdms-v2/v2/_create/${schemaCode}`, {
+  let r = await postJson(`/mdms-v2/v2/_create/${schemaCode}`, {
     RequestInfo: ri(), Mdms: { tenantId, schemaCode, uniqueIdentifier, data, isActive: true },
   });
+  // Freshly-registered schemas are strict (additionalProperties: false) and
+  // reject a tenantId INSIDE data ("extraneous key [tenantId] is not
+  // permitted") even though older envs' rows carry it. Retry once without it.
+  if (r.code === 400 && /extraneous key \[tenantId\]/.test(r.body) && data && 'tenantId' in data) {
+    const { tenantId: _drop, ...lean } = data;
+    r = await postJson(`/mdms-v2/v2/_create/${schemaCode}`, {
+      RequestInfo: ri(), Mdms: { tenantId, schemaCode, uniqueIdentifier, data: lean, isActive: true },
+    });
+  }
   const okResp = r.code >= 200 && r.code < 300;
   return { ok: okResp, exists: !okResp && (r.code === 409 || DUP_RE.test(r.body)), code: r.code, body: r.body };
 }
@@ -661,11 +670,11 @@ async function phaseLanding() {
 
 const CMS_ROLES = ['CMS_RECEPTION_OFFICER', 'CMS_SCREENING_OFFICER', 'CMS_SUPERVISOR', 'CMS_CASE_MANAGER', 'CMS_VIEWER'];
 
-async function cmsSearchAll(schemaCode) {
+async function cmsSearchAll(schemaCode, tenantId = CFG.state) {
   const out = [];
   for (let offset = 0; ; offset += 100) {
     const r = await postJson('/mdms-v2/v2/_search', {
-      RequestInfo: ri({ userInfo: cmsUserInfo() }), MdmsCriteria: { tenantId: CFG.state, schemaCode, limit: 100, offset },
+      RequestInfo: ri({ userInfo: cmsUserInfo() }), MdmsCriteria: { tenantId, schemaCode, limit: 100, offset },
     });
     const j = parse(r.body);
     const page = (j && j.mdms) || [];
@@ -682,15 +691,21 @@ async function phaseCms() {
     'Re-run with --tenant <state.city> --phases cms --cms');
   const failures = [];
   try {
-    // 1: roles
+    // 1: roles — at the STATE root and the CITY tenant. MDMS v1 role lookups
+    // do not overlay state rows onto a city tenant here (each tenant carries
+    // its own copy — MCP tenant bootstrap clones the stock ones), so the
+    // configurator's employee-upload validator at the city tenant only sees
+    // city-tenant rows.
     const roleRows = readJson(SEED.roles).filter((r) => CMS_ROLES.includes(r.code));
-    const haveRoles = new Set((await cmsSearchAll('ACCESSCONTROL-ROLES.roles')).map((m) => m.data && m.data.code));
-    for (const r of roleRows.filter((r) => !haveRoles.has(r.code))) {
-      if (CFG.dryRun) { info(`dry-run: would create role ${r.code}`); continue; }
-      const res = await mdmsCreate(CFG.state, 'ACCESSCONTROL-ROLES.roles', r.code, { ...r, tenantId: CFG.state });
-      if (!res.ok && !res.exists) failures.push(`role ${r.code}: HTTP ${res.code}`);
+    for (const T of [CFG.state, city]) {
+      const haveRoles = new Set((await cmsSearchAll('ACCESSCONTROL-ROLES.roles', T)).map((m) => m.data && m.data.code));
+      for (const r of roleRows.filter((r) => !haveRoles.has(r.code))) {
+        if (CFG.dryRun) { info(`dry-run: would create role ${r.code} @ ${T}`); continue; }
+        const res = await mdmsCreate(T, 'ACCESSCONTROL-ROLES.roles', r.code, { ...r, tenantId: T });
+        if (!res.ok && !res.exists) failures.push(`role ${r.code} @ ${T}: HTTP ${res.code}`);
+      }
     }
-    ok(`roles: ${CMS_ROLES.length} ensured`);
+    ok(`roles: ${CMS_ROLES.length} ensured @ ${CFG.state} + ${city}`);
     // 2+3: actions + grants
     const grants = readJson(SEED.roleactions).filter((g) => CMS_ROLES.includes(g.rolecode));
     const catalog = new Map(readJson(SEED.actionsTest).map((a) => [Number(a.id), a]));
