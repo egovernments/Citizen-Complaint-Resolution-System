@@ -1136,20 +1136,13 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    # 800-preview: adds the user-enrichment tenant fix (DIGIT-Common#70 /
-    # CCRS#800) on top of digit-common-boundary-uuidlink. With the prior
-    # image, /egov-hrms/employees/_search returned `"user": null` for
-    # every employee on multi-tenant deploys — HRMS was sending the
-    # state-stripped tenant (`ke`) to egov-user while EMPLOYEE rows
-    # actually live at the city tenant (`ke.bomet`), so the SQL WHERE
-    # missed every row. Drop this back to a canonical
-    # `digit-common-boundary-uuidlink-<post-fix>` tag once DIGIT-Common#70
-    # merges and a follow-up build is published.
-    #
-    # Previous lineage notes (still in this image):
-    # - CCRS#482: custom password on employee create
-    # - CCRS#484: null tenantId on User object breaking MDMS mobile
-    #   validation
+    # hrms-boundary-dd641a6: a released egovio/egov-hrms tag (repinned from the
+    # preview-only 800-preview build). Its lineage relative to the previously
+    # tracked fixes (DIGIT-Common#70/CCRS#800 tenant-scoped employee search,
+    # CCRS#482 custom password on employee create, CCRS#484 null tenantId
+    # breaking MDMS mobile validation) has not been re-verified — check for
+    # regressions in those specific behaviors before relying on this tag in
+    # a multi-tenant deploy.
     # EGOV_HRMS_DEV_MODE=true must be set so enrichUser() respects the
     # password supplied in the request instead of overwriting with the
     # default/auto-generated one.
