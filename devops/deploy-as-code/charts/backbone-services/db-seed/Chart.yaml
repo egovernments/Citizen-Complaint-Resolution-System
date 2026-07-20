@@ -1,0 +1,9 @@
+apiVersion: v2
+name: db-seed
+description: >-
+  Loads the default DIGIT seed dump into Postgres before any service migrates.
+  The K8s counterpart of compose's db_fast_path overlay
+  (local-setup/docker-compose.fast-path.yml).
+type: application
+version: 0.1.0
+appVersion: "1.0"

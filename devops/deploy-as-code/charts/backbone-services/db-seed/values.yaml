@@ -1,0 +1,39 @@
+# db-seed — loads db/full-dump.sql into Postgres before services migrate.
+#
+# This is the K8s counterpart of compose's db_fast_path overlay. Compose gets
+# the dump for free: it mounts it into Postgres' /docker-entrypoint-initdb.d/,
+# which runs exactly once on an empty PGDATA. K8s has no equivalent, because
+# deploy-as-code does not run Postgres in-cluster at all (the `postgresql`
+# release is installed: false — the DB is managed/external). So the dump has
+# to be pushed in by a Job instead.
+#
+# DEFAULT OFF, deliberately. Compose defaults db_fast_path to false on every
+# tenant because loading the dump over a populated DB destroys tenant state.
+# That risk is strictly worse here, where the target is a managed database
+# that may be shared. Opt in per environment, never globally.
+
+enabled: false
+
+namespace: egov
+
+# Guard table. The Job checks for this relation first and exits 0 without
+# touching anything if it already exists, so a re-run on a seeded DB is a
+# no-op rather than a partial re-apply. eg_user is in the dump and is not
+# created by any Flyway migration, which makes it a reliable "dump has been
+# loaded" marker.
+guardTable: public.eg_user
+
+# psql + gunzip. Pinned rather than :latest so a re-run months from now
+# behaves the same way.
+image:
+  repository: postgres
+  tag: "15-alpine"
+  pullPolicy: IfNotPresent
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi

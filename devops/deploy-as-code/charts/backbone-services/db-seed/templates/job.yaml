@@ -1,0 +1,116 @@
+{{- if .Values.enabled }}
+# Runs as a pre-install/pre-upgrade hook so the dump lands before the
+# per-service Flyway init containers get a chance to migrate. Ordering
+# matters: if Flyway runs first on an empty DB it creates the schema itself,
+# and the dump then collides with it (42P07 "relation already exists" — the
+# same failure compose hit for url-shortening, see docker-compose.fast-path.yml).
+#
+# hook-weight -5 puts this after the ConfigMap (-10) and before anything
+# unweighted. Cross-release ordering is helmfile's job: this release is listed
+# first in backboneservices-helmfile.yaml.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-seed
+  namespace: {{ .Values.namespace }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      name: db-seed
+    spec:
+      restartPolicy: Never
+      volumes:
+        - name: dump
+          configMap:
+            name: db-seed-dump
+      containers:
+        - name: db-seed
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          env:
+            - name: PGHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: egov-config
+                  key: db-host
+            - name: PGDATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: egov-config
+                  key: db-name
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: db
+                  key: flyway-username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db
+                  key: flyway-password
+            - name: GUARD_TABLE
+              value: {{ .Values.guardTable | quote }}
+          volumeMounts:
+            - name: dump
+              mountPath: /seed
+              readOnly: true
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+
+              # db-host carries a :port suffix (e.g. postgresql.backbone:5432)
+              # but PGHOST must be bare, so split it out into PGPORT.
+              case "$PGHOST" in
+                *:*)
+                  PGPORT="${PGHOST##*:}"
+                  PGHOST="${PGHOST%:*}"
+                  export PGHOST PGPORT
+                  ;;
+              esac
+
+              echo "db-seed: target ${PGHOST}:${PGPORT:-5432}/${PGDATABASE}"
+
+              until pg_isready -q; do
+                echo "db-seed: waiting for postgres..."
+                sleep 2
+              done
+
+              # Idempotency guard. to_regclass returns NULL when the relation
+              # does not exist, so a non-empty result means the dump (or a
+              # previous run) already populated this database. Exit 0 rather
+              # than 1: a seeded DB is success, not failure, and a non-zero
+              # exit here would abort the whole helm install.
+              existing=$(psql -tAc "SELECT to_regclass('${GUARD_TABLE}');")
+              if [ -n "$existing" ]; then
+                echo "db-seed: ${GUARD_TABLE} already present — nothing to do"
+                exit 0
+              fi
+
+              echo "db-seed: loading full-dump.sql"
+              # Decompress to a file rather than piping straight into psql.
+              # A pipeline in POSIX sh reports only the LAST command's status,
+              # so `gunzip | psql` would swallow a gunzip failure: psql would
+              # see empty input, succeed, and leave an unseeded database
+              # looking like a clean run. Staging the file makes that failure
+              # loud (set -e trips on gunzip) and lets us sanity-check size.
+              gunzip -c /seed/full-dump.sql.gz > /tmp/full-dump.sql
+              if [ ! -s /tmp/full-dump.sql ]; then
+                echo "db-seed: FATAL decompressed dump is empty" >&2
+                exit 1
+              fi
+
+              # ON_ERROR_STOP makes psql fail the Job on the first bad
+              # statement instead of plowing through and leaving the DB
+              # half-seeded, which is far harder to diagnose.
+              psql -v ON_ERROR_STOP=1 --quiet -f /tmp/full-dump.sql
+
+              echo "db-seed: done"
+{{- end }}
