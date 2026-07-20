@@ -16,7 +16,7 @@ initContainers:
     schemaTable: "egov_user_schema"
     image:
       repository: "egov-user-db"
-      tag: master-d69ce29
+      tag: "2.12-87e13fe"
 
 # Container Configs
 # PARITY / IMAGE NOTE — why this is NOT the stock egov-user tag:

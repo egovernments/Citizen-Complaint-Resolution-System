@@ -16,12 +16,12 @@ initContainers:
     schemaTable: "egov_localization_schema"
     image:
       repository: "egov-localization-db"
-      tag: v2.9.2-4a60f20
+      tag: "2.12-87e13fe"
 
 # Container Configs
 image:
   repository: "egov-localization"
-  tag: v2.9.2-4a60f20
+  tag: "2.12-87e13fe"
 replicas: "1"
 appType: "java-spring"
 tracing-enabled: true

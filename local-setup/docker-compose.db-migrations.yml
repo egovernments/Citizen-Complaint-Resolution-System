@@ -166,7 +166,7 @@ services:
       - egov-network
 
   egov-enc-service:
-    image: egovio/egov-enc-service:v2.9.2-4a60f20
+    image: egovio/egov-enc-service:2.12-87e13fe
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
@@ -216,7 +216,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: egovio/mdms-v2:v2.9.2-4a60f20
+    image: egovio/mdms-v2:maven-jdk21-9f83afb
     container_name: mdms-backend
     depends_on:
       pgbouncer:
@@ -279,7 +279,7 @@ services:
     - egov-network
 
   egov-idgen:
-    image: egovio/egov-idgen:v2.9.2-4a60f20
+    image: egovio/egov-idgen:maven-jdk21-9f83afb
     container_name: egov-idgen
     depends_on:
       pgbouncer:
@@ -344,7 +344,7 @@ services:
     restart: "no"
 
   egov-user:
-    image: egovio/egov-user:master-e22c7c5
+    image: egovio/egov-user:2.12-87e13fe
     container_name: egov-user
     depends_on:
       pgbouncer:
@@ -521,7 +521,7 @@ services:
     - egov-network
 
   egov-workflow-v2:
-    image: egovio/egov-workflow-v2:v2.9.2-4a60f20
+    image: egovio/egov-workflow-v2:2.12-87e13fe
     container_name: egov-workflow-v2
     depends_on:
       pgbouncer:
@@ -574,7 +574,7 @@ services:
     - egov-network
 
   egov-localization:
-    image: egovio/egov-localization:v2.9.2-4a60f20
+    image: egovio/egov-localization:2.12-87e13fe
     container_name: egov-localization
     depends_on:
       pgbouncer:
@@ -618,7 +618,7 @@ services:
     - egov-network
 
   boundary-service:
-    image: egovio/boundary-service:v2.9.2-4a60f20
+    image: egovio/boundary-service:maven-jdk21-9f83afb
     container_name: boundary-service
     depends_on:
       pgbouncer:
@@ -672,7 +672,7 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: egovio/egov-accesscontrol:v2.9.2-4a60f20
+    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -739,7 +739,7 @@ services:
       - egov-network
 
   egov-persister:
-    image: egovio/egov-persister:v2.9.2-4a60f20
+    image: egovio/egov-persister:maven-jdk21-9f83afb
     container_name: egov-persister
     depends_on:
       pgbouncer:
@@ -782,7 +782,7 @@ services:
   # Filestore Service - File upload/download
   # ===========================================================================
   egov-filestore:
-    image: egovio/egov-filestore:v2.9.2-4a60f20
+    image: egovio/egov-filestore:maven-jdk21-9f83afb
     container_name: egov-filestore
     depends_on:
       pgbouncer:
@@ -872,7 +872,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    image: egovio/egov-hrms:hrms-boundary-0a4e737
+    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:800-preview
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1172,7 +1172,7 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: pgr-services-dev
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-70916ea}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -1254,7 +1254,7 @@ services:
   # docker build -t digit-ui-dev -f ../frontend/micro-ui/web/docker/Dockerfile ../frontend/micro-ui
   # ===========================================================================
   digit-ui:
-    image: digit-ui-dev
+    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
     container_name: digit-ui
     ports:
       - "18080:80"

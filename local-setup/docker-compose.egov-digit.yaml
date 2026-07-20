@@ -1422,7 +1422,7 @@ services:
   pgr-services:
     # Parameterized so deploys can pin a nightly-develop (or other) build via
     # PGR_SERVICES_IMAGE in the env; default keeps the prior behaviour.
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-3d1b7d4}
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-70916ea}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -2100,7 +2100,7 @@ services:
   # The Ansible playbook flips this on when `enable_novu: true` in
   # host_vars.
   digit-config-service:
-    image: registry.preview.egov.theflywheel.in/egovio/digit-config-service:latest
+    image: egovio/digit-config-service:develop-70916ea
     container_name: digit-config-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2158,7 +2158,7 @@ services:
       - egov-network
 
   digit-user-preferences-service:
-    image: registry.preview.egov.theflywheel.in/egovio/digit-user-preferences-service:latest
+    image: egovio/digit-user-preferences-service:develop-70916ea
     container_name: digit-user-preferences-service
     restart: unless-stopped
     profiles: ["notifications"]
@@ -2188,7 +2188,7 @@ services:
     # + localizes; the bridge only identifies the Novu subscriber and
     # delivers renderedBody — design D4/D6). CI builds+pushes to the VPC
     # registry; default keeps the prior preview tag.
-    image: ${NOVU_BRIDGE_IMAGE:-registry.preview.egov.theflywheel.in/egovio/novu-bridge:latest}
+    image: ${NOVU_BRIDGE_IMAGE:-egovio/novu-bridge:develop-70916ea}
     container_name: novu-bridge
     restart: unless-stopped
     profiles: ["notifications"]

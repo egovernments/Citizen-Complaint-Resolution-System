@@ -170,7 +170,7 @@ services:
     depends_on: { audit-service-migration: { condition: service_completed_successfully } }
 
   boundary-service-migration:
-    image: egovio/boundary-service-db:v2.9.2-4a60f20
+    image: egovio/boundary-service-db:maven-jdk21-9f83afb
     container_name: boundary-service-migration
     depends_on:
       postgres-db: { condition: service_healthy }
@@ -233,7 +233,7 @@ services:
     depends_on: { egov-user-migration: { condition: service_completed_successfully } }
 
   mdms-backend-migration:
-    image: egovio/mdms-v2-db:v2.9.2-4a60f20
+    image: egovio/mdms-v2-db:maven-jdk21-9f83afb
     container_name: mdms-backend-migration
     depends_on:
       postgres-db: { condition: service_healthy }
@@ -253,7 +253,7 @@ services:
     depends_on: { mdms-backend-migration: { condition: service_completed_successfully } }
 
   egov-idgen-migration:
-    image: egovio/egov-idgen-db:v2.9.2-4a60f20
+    image: egovio/egov-idgen-db:maven-jdk21-9f83afb
     container_name: egov-idgen-migration
     depends_on:
       postgres-db: { condition: service_healthy }
@@ -313,7 +313,7 @@ services:
     depends_on: { egov-enc-service-migration: { condition: service_completed_successfully } }
 
   egov-filestore-migration:
-    image: egovio/egov-filestore-db:v2.9.2-4a60f20
+    image: egovio/egov-filestore-db:maven-jdk21-9f83afb
     container_name: egov-filestore-migration
     depends_on:
       postgres-db: { condition: service_healthy }
@@ -353,7 +353,7 @@ services:
     depends_on: { egov-workflow-v2-migration: { condition: service_completed_successfully } }
 
   egov-hrms-migration:
-    image: egovio/egov-hrms-db:hrms-boundary-0a4e737
+    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms-db:800-preview
     container_name: egov-hrms-migration
     depends_on:
       postgres-db: { condition: service_healthy }
@@ -373,7 +373,7 @@ services:
     depends_on: { egov-hrms-migration: { condition: service_completed_successfully } }
 
   egov-url-shortening-migration:
-    image: egovio/egov-url-shortening-db:v2.9.2-4a60f20
+    image: egovio/egov-url-shortening-db:maven-jdk21-983e8b2
     container_name: egov-url-shortening-migration
     depends_on:
       postgres-db: { condition: service_healthy }

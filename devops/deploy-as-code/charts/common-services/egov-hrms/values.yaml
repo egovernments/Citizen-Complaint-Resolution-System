@@ -16,7 +16,7 @@ initContainers:
     schemaTable: "egov_hrms_schema"
     image:
       repository: "egov-hrms-db"
-      tag: "hrms-boundary-0a4e737"
+      tag: "800-preview"
 
 # Container Configs
 # PARITY / IMAGE NOTE — why this is NOT the chart-default tag:
