@@ -213,7 +213,7 @@ services:
   # There is no -db tag matching the app's exact tag (the app is a custom preview
   # build); this is the closest published tag in the same lineage.
   egov-user-migration:
-    image: egovio/egov-user-db:mobile-validation-user-otp-9883730
+    image: egovio/egov-user-db:2.12-87e13fe
     container_name: egov-user-migration
     depends_on:
       postgres-db: { condition: service_healthy }
@@ -273,7 +273,7 @@ services:
     depends_on: { egov-idgen-migration: { condition: service_completed_successfully } }
 
   egov-localization-migration:
-    image: egovio/egov-localization-db:v2.9.2-4a60f20
+    image: egovio/egov-localization-db:2.12-87e13fe
     container_name: egov-localization-migration
     depends_on:
       postgres-db: { condition: service_healthy }
@@ -293,7 +293,7 @@ services:
     depends_on: { egov-localization-migration: { condition: service_completed_successfully } }
 
   egov-enc-service-migration:
-    image: egovio/egov-enc-service-db:v2.9.2-4a60f20
+    image: egovio/egov-enc-service-db:2.12-87e13fe
     container_name: egov-enc-service-migration
     depends_on:
       postgres-db: { condition: service_healthy }
@@ -333,7 +333,7 @@ services:
     depends_on: { egov-filestore-migration: { condition: service_completed_successfully } }
 
   egov-workflow-v2-migration:
-    image: egovio/egov-workflow-v2-db:v2.9.2-4a60f20
+    image: egovio/egov-workflow-v2-db:2.12-87e13fe
     container_name: egov-workflow-v2-migration
     depends_on:
       postgres-db: { condition: service_healthy }
