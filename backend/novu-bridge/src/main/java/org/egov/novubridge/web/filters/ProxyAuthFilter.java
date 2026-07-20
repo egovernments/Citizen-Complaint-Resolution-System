@@ -28,8 +28,9 @@ import java.util.stream.Collectors;
 /**
  * Server-side authentication for the configurator proxy endpoints
  * ({@code GET /novu-adapter/v1/logs}, {@code /novu-adapter/v1/integrations},
- * {@code /novu-adapter/v1/preferences} and the {@code /novu-adapter/v1/providers}
- * self-service management paths — GET/POST).
+ * {@code /novu-adapter/v1/preferences}, the {@code /novu-adapter/v1/providers}
+ * self-service management paths — GET/POST — and the {@code /novu-adapter/v1/dispatch}
+ * diagnostic endpoints).
  *
  * <p>DIGIT access tokens are opaque OAuth tokens minted by egov-user. This filter
  * introspects the incoming {@code Authorization: Bearer <token>} against egov-user
@@ -72,7 +73,8 @@ public class ProxyAuthFilter extends OncePerRequestFilter {
         return !(path.startsWith("/novu-adapter/v1/logs")
                 || path.startsWith("/novu-adapter/v1/integrations")
                 || path.startsWith("/novu-adapter/v1/preferences")
-                || path.startsWith("/novu-adapter/v1/providers"));
+                || path.startsWith("/novu-adapter/v1/providers")
+                || path.startsWith("/novu-adapter/v1/dispatch"));
     }
 
     @Override
