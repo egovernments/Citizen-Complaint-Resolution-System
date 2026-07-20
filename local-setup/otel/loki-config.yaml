@@ -10,6 +10,12 @@ common:
       chunks_directory: /loki/chunks
       rules_directory: /loki/rules
   replication_factor: 1
+  # Single-node ring (inmemory kvstore) doesn't need real inter-node gossip,
+  # but the memberlist-kv module still initializes and tries to auto-detect
+  # an advertise address via `eth0`/`en0` — which fails fast in some
+  # container-networking setups before the interface is visible. Pinning
+  # instance_addr skips that auto-detection entirely.
+  instance_addr: 127.0.0.1
   ring:
     kvstore:
       store: inmemory
