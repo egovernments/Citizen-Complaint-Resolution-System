@@ -16,6 +16,26 @@ enabled: false
 
 namespace: egov
 
+# Connection details.
+#
+# These are resolved at RENDER time, not looked up at run time. db-seed runs in
+# the backbone tier, which helmfile applies BEFORE core-services — and the
+# `egov-config` ConfigMap and `db` Secret are created by core-services'
+# `configmaps` chart. Referencing those objects with configMapKeyRef /
+# secretKeyRef would work on a cluster that had already been applied once, and
+# fail with CreateContainerConfigError on a genuinely fresh one, which is the
+# exact scenario this chart exists to serve.
+#
+# Leave these empty to inherit from the shared environment values that helmfile
+# merges in (environments/env.yaml and env-secrets.yaml) — the same source
+# `configmaps` renders from, so the values agree without the runtime coupling.
+# Set them explicitly to point db-seed at a different database.
+db:
+  host: ""      # falls back to configmaps.egov-config.data.db-host
+  name: ""      # falls back to configmaps.egov-config.data.db-name
+  user: ""      # falls back to secrets.db.flywayUsername
+  password: ""  # falls back to secrets.db.flywayPassword
+
 # Guard table. The Job checks for this relation first and exits 0 without
 # touching anything if it already exists, so a re-run on a seeded DB is a
 # no-op rather than a partial re-apply. eg_user is in the dump and is not

@@ -5,9 +5,12 @@
 # and the dump then collides with it (42P07 "relation already exists" — the
 # same failure compose hit for url-shortening, see docker-compose.fast-path.yml).
 #
-# hook-weight -5 puts this after the ConfigMap (-10) and before anything
-# unweighted. Cross-release ordering is helmfile's job: this release is listed
-# first in backboneservices-helmfile.yaml.
+# hook-weight -5 puts this after the dump ConfigMap and credentials Secret
+# (both -10) and before anything unweighted. Cross-release ordering is
+# helmfile's job: this release is listed first in
+# backboneservices-helmfile.yaml. Running first is only safe because the
+# chart resolves its connection details at render time and owns its own
+# Secret — it has no runtime dependency on core-services objects.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -35,26 +38,24 @@ spec:
           resources:
 {{ toYaml .Values.resources | indent 12 }}
           env:
+            # Host and database name are rendered in, not read from
+            # egov-config: that ConfigMap belongs to core-services, which
+            # helmfile applies AFTER this tier. Credentials come from the
+            # Secret this chart owns. See values.yaml `db:` for why.
             - name: PGHOST
-              valueFrom:
-                configMapKeyRef:
-                  name: egov-config
-                  key: db-host
+              value: {{ include "db-seed.dbHost" . | quote }}
             - name: PGDATABASE
-              valueFrom:
-                configMapKeyRef:
-                  name: egov-config
-                  key: db-name
+              value: {{ include "db-seed.dbName" . | quote }}
             - name: PGUSER
               valueFrom:
                 secretKeyRef:
-                  name: db
-                  key: flyway-username
+                  name: db-seed-db
+                  key: username
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: db
-                  key: flyway-password
+                  name: db-seed-db
+                  key: password
             - name: GUARD_TABLE
               value: {{ .Values.guardTable | quote }}
           volumeMounts:
