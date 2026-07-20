@@ -299,12 +299,9 @@ const CreateComplaintForm = ({
       key: "isConfidential",
       type: "checkbox",
       isMandatory: false,
-      // withoutLabel drops the empty left label column and gives the field
-      // width:100% (FormComposerV2), so the checkbox + its own title sit at the
-      // LEFT edge instead of being indented into the right-hand control column.
-      // The checkbox renders its own label via populators.title, so no field
-      // label column is needed.
-      withoutLabel: true,
+      // Left edge sits in the control column (~x698), i.e. directly beneath the
+      // upload drop zone above it — NOT pulled to the extreme left. This is the
+      // default label-column layout, so no withoutLabel/inline override.
       populators: { name: "isConfidential", title: "PGR_EXT_IS_CONFIDENTIAL_LABEL" },
     });
     return cfgs;
