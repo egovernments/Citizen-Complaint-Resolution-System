@@ -71,6 +71,14 @@ jobs:
       - name: preflight — tracked example must pass
         run: python3 local-setup/scripts/preflight.py local-setup/ansible/inventory/host_vars/_example.yml
 
+      # Renders the daemon.json the deploy would write across a matrix of
+      # docker_log_* combinations and asserts three things per case: it parses
+      # as JSON, `dockerd --validate` accepts it, and max-size * max-file stays
+      # within docker_log_total_size. The last check is the point — dockerd
+      # will happily accept a config allowing 10GB per container.
+      - name: daemon.json render matrix
+        run: local-setup/scripts/test-daemon-json.sh
+
       # Cross-file contracts lint can't see: compose -f stack discipline,
       # :latest pin freeze, overlay-service existence.
       - name: infra contract tests

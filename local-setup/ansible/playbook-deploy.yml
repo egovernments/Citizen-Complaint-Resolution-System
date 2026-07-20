@@ -320,20 +320,54 @@
         # NOTE: daemon-level log-opts apply to containers CREATED after the
         # daemon restart. Containers already running keep the settings they
         # were created with until they are recreated.
-        - name: Configure Docker daemon (log rotation + insecure registries)
-          copy:
-            dest: /etc/docker/daemon.json
-            content: >-
-              {{ ({'log-driver': 'json-file',
-                   'log-opts': {'max-size': docker_log_max_size,
-                                'max-file': docker_log_max_file_effective | string}}
-                  | combine(
-                      {'insecure-registries': insecure_registries}
-                      if (insecure_registries | default([]) | length > 0) else {}
-                    )) | to_nice_json }}
+        # Read any existing daemon.json so operator-set keys survive. This task
+        # used to be gated on insecure_registries being non-empty, so hosts on
+        # a TLS registry were never touched at all. Now that it always runs, a
+        # blind overwrite would silently discard whatever else is in the file —
+        # storage-driver, data-root, live-restore, registry-mirrors,
+        # default-address-pools. Merge instead: our keys win, everything else
+        # is preserved.
+        - name: "Docker daemon — read existing daemon.json (if any)"
+          ansible.builtin.slurp:
+            src: /etc/docker/daemon.json
+          register: daemon_json_existing
+          failed_when: false
+          changed_when: false
 
-            mode: '0644'
-          register: daemon_json
+        # An unparseable existing file makes from_json raise inside the
+        # template, which surfaces as a bare traceback. block/rescue turns it
+        # into something an operator can act on. The file is left untouched
+        # either way — we refuse to overwrite what we could not read.
+        - name: "Docker daemon — write merged daemon.json"
+          block:
+            - name: "Docker daemon — merge log rotation + insecure registries"
+              vars:
+                _existing: >-
+                  {{ (daemon_json_existing.content | default('') | b64decode | from_json)
+                     if (daemon_json_existing.content is defined
+                         and (daemon_json_existing.content | b64decode | trim | length) > 0)
+                     else {} }}
+                _ours: >-
+                  {{ {'log-driver': 'json-file',
+                      'log-opts': {'max-size': docker_log_max_size,
+                                   'max-file': docker_log_max_file_effective | string}}
+                     | combine(
+                         {'insecure-registries': insecure_registries}
+                         if (insecure_registries | default([]) | length > 0) else {}
+                       ) }}
+              ansible.builtin.copy:
+                dest: /etc/docker/daemon.json
+                content: "{{ _existing | combine(_ours, recursive=True) | to_nice_json }}\n"
+                mode: '0644'
+              register: daemon_json
+          rescue:
+            - name: "Docker daemon — existing daemon.json is unreadable"
+              ansible.builtin.fail:
+                msg: >-
+                  /etc/docker/daemon.json exists but could not be parsed as
+                  JSON, so the log-rotation settings were not merged in. Fix or
+                  remove that file and re-run — it has been left untouched
+                  rather than overwritten.
 
         - name: Restart docker if daemon.json changed
           service:
