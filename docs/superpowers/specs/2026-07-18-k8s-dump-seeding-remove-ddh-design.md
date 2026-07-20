@@ -66,13 +66,20 @@ In Helm, migrations run in each service's separate `dbMigration` initContainer (
 
 Implementation task: enumerate every service with `dbMigration.enabled: true`, list its `schemaTable`, and cross-check against the Flyway history table names the dump carries. Align them so each initContainer sees migrations as applied and no-ops — by adjusting how the dump is generated and/or the per-service `schemaTable`. Known divergent case to verify first: `egov-url-shortening` (`schemaTable: egov-url-shortening_schema`).
 
-> **CRITICAL — keep ONE dump; bring k3s to migration PARITY with compose (validated live 2026-07-19).**
-> `schemaTable` alignment only makes Flyway no-op if the dump's recorded history has the **same checksums** as the deploy's migration source. A live k3s deploy proved the mismatch — but the resolution is **not** to fork a k3s-specific dump. The dump is fine; the two deploys must be **identical systems** at the migration layer:
+> **CRITICAL — keep ONE dump; the parity gap is narrow (per-service audit, 2026-07-19/20).**
+> `schemaTable` alignment (Task 4) only makes Flyway no-op if the dump's recorded history matches the deploy's migration source. A per-service audit — running **every** `*-db` image against the dump-seeded DB with the dump's history-table name — showed the gap is **tiny, not systemic**:
 >
-> - **Compose** runs migrations through **one unified image** — `tilt-demo-db-migrations:latest`, built from this repo's migration SQL (`local-setup/docker/db-migrations/`, `migrate-all.sh` → per-service `flyway -baselineOnMigrate=true -outOfOrder=true -ignoreMigrationPatterns="*:missing"`) — with **every service's Spring Flyway disabled** (`SPRING_FLYWAY_ENABLED=false`). The dump's history matches that image → clean no-op.
-> - **k3s** instead runs **per-service `*-db` initContainers pinned to divergent upstream tags** (`egov-user-db:master-d69ce29`, `mdms-v2-db:v2.9.2-4a60f20`, …). Different migration source → `validate` fails: `V20180731215512` = `1357995898` in the dump vs `1212019426` in the k3s image, plus each side ships migrations the other lacks (incl. seed-data migrations).
+> | Result | Services |
+> | --- | --- |
+> | ✅ no-op (image already matches dump) | mdms-v2, egov-workflow-v2, egov-enc-service, egov-filestore, boundary-service, egov-localization, egov-url-shortening (all `*-db:v2.9.2-4a60f20`); pgr-services (`v2.11-a520687`); egov-hrms |
+> | ⚠️ no-op **only with** `-ignoreMigrationPatterns="*:missing"` | egov-idgen — the dump carries MORE idgen migrations than the image ships; `validate` rejects "applied migration not resolved locally" without the flag |
+> | ❌ true checksum divergence | **egov-user** — `egov-user-db:master-d69ce29` is a genuinely different build (`V20180731215512` = `1357995898` in the dump vs `1212019426` in the image) |
 >
-> **Fix = migration parity (Task 0), not dump regeneration.** k3s must run the **same unified `db-migrations` image compose uses** (as a single migration Job after the dump-restore, same `migrate-all.sh` flags incl. `-ignoreMigrationPatterns="*:missing"`), and the per-service `*-db` initContainers must be disabled — the k3s app images already have Spring Flyway off (`common/values.yaml` `extraEnv.java: SPRING_FLYWAY_ENABLED=false`). Then the single checked-in `full-dump.sql` is valid in both, and the migration Job no-ops against it exactly like compose. Ideally the **service app images** are also pinned to the same builds across both deploys, so compose and k3s are fully identical systems. (The `schemaTable` values from Task 4 become irrelevant once per-service Flyway is off — Task 4 can be dropped in favor of the unified image; keep it only as a no-op safety if per-service Flyway is retained.)
+> **Fix = two narrow changes, NOT a dump regen or a unified-image refactor:**
+> 1. **Add `-ignoreMigrationPatterns="*:missing"` to per-service Flyway** — matches compose's `migrate-all.sh`; lets the shared dump carry extra migrations. Implemented as `FLYWAY_IGNORE_MIGRATION_PATTERNS: "*:missing"` in `common/values.yaml` (`initContainers.dbMigration.env`). **Validation stays ON**, so a real checksum divergence still fails loudly (that's how egov-user was caught).
+> 2. **Re-pin only `egov-user`'s db + app image** to the build that produced the dump (the egov-user migrations bundled in `tilt-demo-db-migrations` no-op against it). Exact tag TBD from whoever produced the dump; every other image already matches.
+>
+> (Compose reaches the same end state a different way — a 3-service unified `tilt-demo-db-migrations` image plus `SPRING_FLYWAY_ENABLED=false`, with the dump supplying the rest. Either mechanism is fine; k3s's per-service Flyway now no-ops identically once the two changes above are made. A full-coverage db-migrations image can NOT be built from this repo — `backend/*/db/migration` only holds the CCRS-owned services; the core services live in external egovio images.)
 
 ### 4. Retire DDH (staged)
 
@@ -93,16 +100,16 @@ Implementation task: enumerate every service with `dbMigration.enabled: true`, l
 - Full deletion of the DDH chart/files (deferred to a later staged step).
 - Migrating the external managed DB to the in-cluster `postgresql` chart.
 
-## Hard requirement — migration parity between k3s and compose (keep ONE dump)
+## Hard requirement — keep ONE dump; close the narrow parity gap
 
-**Do not fork a k3s-specific dump.** Keep the single `local-setup/db/full-dump.sql` and make the k3s migration layer identical to compose's, so that one dump is valid in both (see the CRITICAL note under §3). Concretely:
+**Do not fork a k3s-specific dump.** Keep the single `local-setup/db/full-dump.sql`. The per-service audit (§3) showed the shared dump already no-ops against **10 of 11** deploy-as-code `*-db` images. Two narrow changes close the rest:
 
-1. **k3s runs the same unified `db-migrations` image compose uses** (`tilt-demo-db-migrations:latest`, or a repo-built equivalent from `local-setup/docker/db-migrations/`) as a **single migration Job**, ordered **after** the dump-restore Job and **before** services — with the same `migrate-all.sh` flags (`-baselineOnMigrate=true -outOfOrder=true -ignoreMigrationPatterns="*:missing"`). Against the dump-seeded DB it no-ops; on a fresh DB (no dump) it creates the schema — exactly the compose behavior.
-2. **Disable the per-service `*-db` initContainers** (`initContainers.dbMigration.enabled: false`) across `deploy-as-code`. The app images already run with Spring Flyway off (`common/values.yaml` `extraEnv.java: SPRING_FLYWAY_ENABLED=false`), so nothing else migrates.
-3. **Pin service app images to the same builds compose uses** (ideal end-state — fully identical systems). At minimum the migration image must match; app-image parity removes remaining drift.
-4. Regenerate `full-dump.sql` **only** when the shared `db-migrations` image's migrations change — and do it once, consumed by both deploys (never per-deploy).
+1. **`FLYWAY_IGNORE_MIGRATION_PATTERNS: "*:missing"`** in `common/values.yaml` (`initContainers.dbMigration.env`) — matches compose's `migrate-all.sh`, so a service whose image ships fewer migrations than the dump (egov-idgen) validates and no-ops instead of failing on "applied migration not resolved locally". **Done in this PR.** Validation stays on.
+2. **Re-pin `egov-user`'s db + app image** (currently `egov-user-db:master-d69ce29`) to the build that produced the dump — the only true checksum divergence. Exact tag comes from whoever generated the dump; all other images already match.
 
-After this, the single dump loads in k3s, the unified migration Job validates cleanly and no-ops, and no `checksum mismatch` / `42P07` occurs — the k3s Flyway path is byte-for-byte the compose path.
+Optionally, pin every service app image to the same builds compose uses, so compose and k3s are byte-for-byte identical systems. Regenerate `full-dump.sql` only when a service's migrations genuinely change, once, consumed by both deploys.
+
+After these, a fresh k3s deploy loads the single dump and every per-service Flyway init-container validates cleanly and no-ops — no `checksum mismatch`, no `42P07` — the same outcome as compose's fast-path.
 
 ## Config that must be aligned to the dump (learned from the live deploy)
 

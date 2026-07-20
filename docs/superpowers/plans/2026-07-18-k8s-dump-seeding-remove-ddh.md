@@ -44,17 +44,22 @@
 
 ---
 
-## Task 0: Migration parity — run compose's unified `db-migrations` image in k3s (keep ONE dump)
+## Task 0: Close the narrow parity gap (keep ONE dump)
 
-**Why (proven live 2026-07-19):** the seeding flow is sound (compose uses this exact dump and it works). The k3s Flyway failure is a **parity gap, not a dump problem**: compose runs migrations via **one unified image** (`tilt-demo-db-migrations:latest`, `migrate-all.sh`, all services' `SPRING_FLYWAY_ENABLED=false`), and the dump matches that image. k3s runs **per-service `*-db` initContainers pinned to divergent upstream tags** (`egov-user-db:master-d69ce29`, `mdms-v2-db:v2.9.2-4a60f20`, …) → checksum mismatch (`V20180731215512`: 1357995898 dump vs 1212019426 k3s) + divergent seed migrations. **Fix = make k3s use the same migration source as compose; do NOT regenerate a k3s-specific dump.**
+**Why (per-service audit 2026-07-19/20):** the seeding flow is sound (compose uses this exact dump). Running **every** `*-db` image against the dump-seeded DB showed the shared dump already **no-ops on 10 of 11** services. Only two narrow gaps remain — no dump regen, no unified-image refactor, no full db-migrations rebuild (impossible anyway: `backend/*/db/migration` only holds CCRS services, not the core egovio ones).
+
+| Result | Services |
+| --- | --- |
+| no-op (image matches dump) | mdms-v2, egov-workflow-v2, egov-enc-service, egov-filestore, boundary-service, egov-localization, egov-url-shortening, pgr-services, egov-hrms |
+| no-op only w/ `*:missing` | egov-idgen (dump has extra migrations) |
+| checksum divergence | egov-user (`egov-user-db:master-d69ce29`) |
 
 **Procedure:**
-- [ ] Add a **`db-migrations` Job** to `deploy-as-code` using the **same image compose uses** (`tilt-demo-db-migrations:latest`, or built from `local-setup/docker/db-migrations/`), with the same flags (`-baselineOnMigrate=true -outOfOrder=true -ignoreMigrationPatterns="*:missing"`). Order it **after** `db-dump-restore` (Task 3) and **before** core-services (helmfile `wait: true`).
-- [ ] Set `initContainers.dbMigration.enabled: false` for **every** service in `deploy-as-code` (the unified Job now owns migrations; app-level Spring Flyway is already off via `common/values.yaml extraEnv.java`). This makes Task 4's `schemaTable` values moot — Task 4 can be dropped (or kept as inert).
-- [ ] Pin service **app** image tags to the same builds compose uses (ideal — fully identical systems; at minimum the migration image must match).
-- [ ] Regenerate `full-dump.sql` only when the shared `db-migrations` image changes, once, consumed by both deploys.
+- [x] **`FLYWAY_IGNORE_MIGRATION_PATTERNS: "*:missing"`** added to `common/values.yaml` (`initContainers.dbMigration.env`) — matches compose's `migrate-all.sh`; fixes egov-idgen and any subset image. Validation stays ON (real checksum mismatches still fail).
+- [ ] **Re-pin `egov-user`'s db + app image** to the dump-matching build (the only checksum divergence). Get the tag from whoever produced the dump; verify with an audit Job (run the new image against the dump-seeded DB → must log "up to date").
+- [ ] (Optional, ideal) pin every service app image to compose's builds so compose and k3s are byte-for-byte identical.
 
-**Verify:** fresh k3s deploy → dump restores → `db-migrations` Job logs per-service "up to date" / "Successfully validated" — **no `checksum mismatch`, no `42P07`, no seed-data conflict** — identical to `docker compose ... logs db-migrations` on the fast-path.
+**Verify:** fresh k3s deploy with per-service Flyway **enabled** (Task 4 schemaTable) → dump restores → every `db-migration` init-container logs "up to date" / "Successfully validated" — **no `checksum mismatch`, no `42P07`**.
 
 **Config that must also match the dump** (compose pins these; `deploy-as-code` defaults don't): enc-service master secret = the values the dump's `eg_enc_*_keys` were built with (fast-path: `asd@#$@$!132123`/`qweasdzx`/`qweasdzxqwea`); `state-level-tenant-id`/`host-map` = the dump's tenant (fast-path: `pg`); chart memory limits ≥ ~1Gi (512Mi OOMs the JVMs).
 
@@ -340,7 +345,7 @@ git commit -m "feat(devops): run db-dump-restore between backbone and core with 
 
 ## Task 4: Align per-service Flyway `schemaTable` to the dump's history tables
 
-> **SUPERSEDED BY Task 0 (migration parity).** A live k3s deploy (2026-07-19) showed per-service `schemaTable` alignment can't no-op against this dump, because the k3s `*-db` images are a different migration source than the dump (checksum mismatch + divergent seed migrations). The chosen fix (Task 0) is to make k3s run the **same unified `db-migrations` image compose uses** and **disable all per-service `*-db` initContainers** — which makes this task's `schemaTable` values inert. Keep this task only if the project decides to retain per-service Flyway (not recommended); otherwise drop it in favor of Task 0.
+> **WORKS once Task 0 is done (per-service audit 2026-07-19/20).** This `schemaTable` alignment is correct and necessary for per-service Flyway. The audit showed it no-ops against the shared dump for **10 of 11** services as-is; the remaining two are handled by Task 0 (the `*:missing` flag for egov-idgen, and re-pinning egov-user's image). No need to disable per-service Flyway or fork the dump.
 
 **Files (Modify — all under `devops/deploy-as-code/charts/`):**
 - `core-services/egov-filestore/values.yaml`

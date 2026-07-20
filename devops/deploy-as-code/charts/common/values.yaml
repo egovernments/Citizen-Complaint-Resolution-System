@@ -63,6 +63,14 @@ initContainers:
                 key: flyway-locations
         - name: "SCHEMA_NAME"
           value: "public"
+        # Match compose's db-migrations (migrate-all.sh) so per-service Flyway
+        # no-ops cleanly against a dump-seeded DB: the shared full-dump.sql can
+        # carry MORE migrations than a given *-db image ships (e.g. egov-idgen),
+        # and Flyway's validate rejects "applied migration not resolved locally"
+        # without this. Validation stays ON — a genuine checksum mismatch (an
+        # image built from a different source than the dump) still fails loudly.
+        - name: "FLYWAY_IGNORE_MIGRATION_PATTERNS"
+          value: "*:missing"
 
   gitSync:
     enabled: false
