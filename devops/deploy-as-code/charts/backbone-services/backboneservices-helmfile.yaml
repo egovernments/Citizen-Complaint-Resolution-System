@@ -17,6 +17,9 @@ releases:
 # Listed first so the seed dump lands before core-services' Flyway init
 # containers run. Ships disabled — see db-seed/values.yaml for why loading a
 # dump into a managed DB is opt-in-per-environment rather than a default.
+#
+# `installed:` is the ONLY switch, as with every sibling release here. Flipping
+# it to true is sufficient; the chart has no second internal gate.
 - name: db-seed
   installed: false
   chart: ./db-seed

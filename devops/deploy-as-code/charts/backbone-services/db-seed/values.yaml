@@ -11,10 +11,23 @@
 # tenant because loading the dump over a populated DB destroys tenant state.
 # That risk is strictly worse here, where the target is a managed database
 # that may be shared. Opt in per environment, never globally.
-
-enabled: false
+#
+# There is ONE switch: `installed:` on the db-seed release in
+# backboneservices-helmfile.yaml, the same flag every sibling release uses.
+# An earlier revision also gated the templates on a chart-level `enabled` key,
+# which meant flipping `installed: true` alone produced a release reporting
+# STATUS deployed with zero resources rendered — a silent no-op that looked
+# like a successful seed while core-services then migrated an unseeded DB.
 
 namespace: egov
+
+# How long the Job waits for Postgres to accept connections before failing.
+# Bounded so a wrong host fails loudly instead of spinning until the deadline.
+pgWaitSeconds: 120
+
+# Ceiling on the whole Job including retries. The dump is ~500KB uncompressed
+# and loads in seconds; this only exists to stop a wedged run hanging forever.
+activeDeadlineSeconds: 1800
 
 # Connection details.
 #

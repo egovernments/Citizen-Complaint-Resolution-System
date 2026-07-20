@@ -1,4 +1,3 @@
-{{- if .Values.enabled }}
 # Runs as a pre-install/pre-upgrade hook so the dump lands before the
 # per-service Flyway init containers get a chance to migrate. Ordering
 # matters: if Flyway runs first on an empty DB it creates the schema itself,
@@ -22,6 +21,9 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 2
+  # Hard ceiling on the whole Job, retries included, so nothing can hang
+  # indefinitely even if a container wedges below the script's own timeout.
+  activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
   template:
     metadata:
       name: db-seed
@@ -58,6 +60,8 @@ spec:
                   key: password
             - name: GUARD_TABLE
               value: {{ .Values.guardTable | quote }}
+            - name: PG_WAIT_SECONDS
+              value: {{ .Values.pgWaitSeconds | quote }}
           volumeMounts:
             - name: dump
               mountPath: /seed
@@ -79,9 +83,19 @@ spec:
 
               echo "db-seed: target ${PGHOST}:${PGPORT:-5432}/${PGDATABASE}"
 
+              # Bounded wait. An unbounded `until pg_isready` loop cannot tell
+              # "still starting" from "will never resolve", so a wrong host
+              # would spin until the Job deadline with nothing useful logged.
+              # Fail loudly instead, naming the host that could not be reached.
+              waited=0
               until pg_isready -q; do
-                echo "db-seed: waiting for postgres..."
+                if [ "$waited" -ge "${PG_WAIT_SECONDS}" ]; then
+                  echo "db-seed: FATAL postgres not reachable at ${PGHOST}:${PGPORT:-5432} after ${PG_WAIT_SECONDS}s" >&2
+                  exit 1
+                fi
+                echo "db-seed: waiting for postgres... (${waited}s/${PG_WAIT_SECONDS}s)"
                 sleep 2
+                waited=$((waited + 2))
               done
 
               # Idempotency guard. to_regclass returns NULL when the relation
@@ -135,4 +149,3 @@ spec:
               psql -v ON_ERROR_STOP=1 --single-transaction --quiet -f /tmp/full-dump.sql
 
               echo "db-seed: done"
-{{- end }}
