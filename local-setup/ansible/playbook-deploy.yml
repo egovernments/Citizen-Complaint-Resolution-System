@@ -53,6 +53,7 @@
         docker compose -f docker-compose.egov-digit.yaml down --remove-orphans --timeout 30
       args:
         chdir: "{{ digit_dir }}"
+        executable: /bin/bash
       register: clean_teardown
       changed_when: true
       when:
@@ -68,6 +69,8 @@
           echo "$orphans" | xargs docker network rm 2>/dev/null || true
           echo "pruned: $orphans"
         fi
+      args:
+        executable: /bin/bash
       register: network_prune
       changed_when: "'pruned:' in network_prune.stdout"
       failed_when: false
@@ -103,6 +106,8 @@
           docker stop digit-ui
           echo stopped
         fi
+      args:
+        executable: /bin/bash
       register: stop_digit_ui
       changed_when: stop_digit_ui.stdout == "stopped"
       when: digit_ui_mode == "hmr"
@@ -1005,6 +1010,8 @@
         tar -C "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}/build" \
             --exclude=globalConfigs.js --exclude=silent-check-sso.html -cf - . \
           | docker exec -i digit-ui tar -C /var/web/digit-ui -xf -
+      args:
+        executable: /bin/bash
       register: digit_ui_tar
       changed_when: true
       when:
@@ -1025,6 +1032,8 @@
             echo "swept $c"
           fi
         done
+      args:
+        executable: /bin/bash
       register: search_sweep
       changed_when: search_sweep.stdout | length > 0
       when: not (enable_search_stack | default(false))
@@ -1078,6 +1087,8 @@
           docker stop digit-ui
           echo stopped
         fi
+      args:
+        executable: /bin/bash
       register: stop_digit_ui_static
       changed_when: stop_digit_ui_static.stdout == "stopped"
       when: digit_ui_mode == "static"
@@ -1189,6 +1200,8 @@
           docker stop digit-ui
           echo stopped
         fi
+      args:
+        executable: /bin/bash
       register: post_up_stop_digit_ui
       changed_when: post_up_stop_digit_ui.stdout == "stopped"
       when: digit_ui_mode == "hmr"
@@ -1202,6 +1215,8 @@
             "PORT=18080 GLOBAL_CONFIGS={{ digit_dir }}/nginx/globalConfigs.js node esbuild.dev.js 2>&1 | tee /var/log/esbuild.log"
           echo started
         fi
+      args:
+        executable: /bin/bash
       register: start_esbuild
       changed_when: start_esbuild.stdout == "started"
       when: digit_ui_mode == "hmr"
@@ -1531,6 +1546,8 @@
         set -o pipefail
         printf "ALTER ROLE egov WITH PASSWORD '%s';\n" "$NEWPW" \
           | docker exec -i docker-postgres psql -U egov -d egov
+      args:
+        executable: /bin/bash
       environment:
         NEWPW: "{{ bao_secrets.json.data.data.postgres_password }}"
       no_log: true
@@ -1547,6 +1564,8 @@
         set -o pipefail
         printf "ALTER ROLE mcp WITH PASSWORD '%s';\n" "$NEWPW" \
           | docker exec -i digit-mcp-postgres psql -U mcp -d mcp_sessions
+      args:
+        executable: /bin/bash
       environment:
         NEWPW: "{{ bao_secrets.json.data.data.mcp_db_password }}"
       no_log: true
@@ -2086,6 +2105,7 @@
         fi
       args:
         chdir: "{{ digit_dir }}"
+        executable: /bin/bash
       changed_when: false
 
     # ── Service health through Kong ───────────────────────────────────────
@@ -2978,6 +2998,8 @@
           -s providerId=google \
           -s 'config.clientId={{ keycloak_google_client_id }}' \
           -s 'config.clientSecret={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}' 2>&1 | grep -v "Conflict" || true
+      args:
+        executable: /bin/bash
       when:
         - enable_keycloak | default(false)
         - (keycloak_google_client_id | default('')) | length > 0
@@ -3230,6 +3252,8 @@
           curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
           apt-get install -y nodejs
         fi
+      args:
+        executable: /bin/bash
       register: nodejs_install
       changed_when: "'nodejs is already' not in nodejs_install.stdout"
       when:
