@@ -19,11 +19,12 @@ import {
 } from "@egovernments/digit-ui-react-components";
 
 import TimeLine from "../../components/TimeLine";
+import useReopenWindow from "../../hooks/useReopenWindow";
 
 const WorkflowComponent = ({ complaintDetails, id, getWorkFlow, zoomImage }) => {
   const tenantId = Digit.Utils.getMultiRootTenant()?  Digit.ULBService.getStateId() : Digit.SessionStorage.get("CITIZEN.COMMON.HOME.CITY")?.code || complaintDetails.service.tenantId;
   let workFlowDetails = Digit.Hooks.useWorkflowDetails({ tenantId: tenantId, id, moduleCode: "PGR" });
-  // const { data: ComplainMaxIdleTime, isLoading: ComplainMaxIdleTimeLoading } = Digit.Hooks.pgr.useMDMS.ComplainClosingTime(tenantId?.split(".")[0]);
+  const ComplainMaxIdleTime = useReopenWindow(tenantId);
 
   useEffect(() => {
     getWorkFlow(workFlowDetails.data);
@@ -43,7 +44,7 @@ const WorkflowComponent = ({ complaintDetails, id, getWorkFlow, zoomImage }) => 
         rating={complaintDetails.audit.rating}
         zoomImage={zoomImage}
         complaintDetails={complaintDetails}
-        // ComplainMaxIdleTime={ComplainMaxIdleTime}
+        ComplainMaxIdleTime={ComplainMaxIdleTime}
       />
     )
   );

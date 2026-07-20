@@ -34,6 +34,7 @@ import { Close } from "../../Icons";
 import { useTranslation } from "react-i18next";
 import { isError, useQueryClient } from "react-query";
 import StarRated from "../../components/timelineInstances/StarRated";
+import useReopenWindow from "../../hooks/useReopenWindow";
 
 const MapView = (props) => {
   return (
@@ -252,7 +253,11 @@ export const ComplaintDetails = (props) => {
   const { isLoading, complaintDetails, revalidate: revalidateComplaintDetails } = Digit.Hooks.pgr.useComplaintDetails({ tenantId, id });
   const workflowDetails = Digit.Hooks.useWorkflowDetails({ tenantId, id, moduleCode: "PGR", role: "EMPLOYEE" });
   const [imagesToShowBelowComplaintDetails, setImagesToShowBelowComplaintDetails] = useState([])
-  
+
+  // Same REOPENSLA window the citizen timeline gates on, so employee and citizen can never
+  // disagree about the deadline. undefined => defer to pgr-services (see useReopenWindow).
+  const reopenWindowMs = useReopenWindow(tenantId);
+
   // RAIN-5692 PGR : GRO is assigning complaint, Selecting employee and assign. Its not getting assigned.
   // Fix for next action  assignee dropdown issue
   if (workflowDetails && workflowDetails?.data){
@@ -276,11 +281,19 @@ export const ComplaintDetails = (props) => {
   const [assignResponse, setAssignResponse] = useState(null);
   const [loader, setLoader] = useState(false);
   const [rerender, setRerender] = useState(1);
+  const [validationToast, setValidationToast] = useState(null);
   const client = useQueryClient();
   function popupCall(option) {
     setDisplayMenu(false);
     setPopup(true);
   }
+
+  useEffect(() => {
+    if (validationToast) {
+      const timer = setTimeout(() => setValidationToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [validationToast]);
 
   useEffect(() => {
     (async () => {
@@ -350,10 +363,17 @@ export const ComplaintDetails = (props) => {
         setPopup(true);
         setDisplayMenu(false);
         break;
-      case "REOPEN":
-        setPopup(true);
-        setDisplayMenu(false);
+      case "REOPEN": {
+        const lastModifiedTime = complaintDetails?.service?.auditDetails?.lastModifiedTime;
+        if (reopenWindowMs && lastModifiedTime && Date.now() - lastModifiedTime > reopenWindowMs) {
+          setValidationToast(t("CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE"));
+          setDisplayMenu(false);
+        } else {
+          setPopup(true);
+          setDisplayMenu(false);
+        }
         break;
+      }
       default:
         setDisplayMenu(false);
     }
@@ -534,6 +554,7 @@ export const ComplaintDetails = (props) => {
         />
       ) : null}
       {toast && <Toast label={t(assignResponse ? `CS_ACTION_${selectedAction}_TEXT` : "CS_ACTION_ASSIGN_FAILED")} onClose={closeToast} />}
+      {validationToast && <Toast error={true} isDleteBtn={true} label={validationToast} onClose={() => setValidationToast(null)} />}
       {!workflowDetails?.isLoading && workflowDetails?.data?.nextActions?.length > 0 && (
         <ActionBar>
           {displayMenu && workflowDetails?.data?.nextActions ? (

@@ -12,6 +12,7 @@ import Urls from "../../utils/urls";
 import ComplaintPhotos from "../../components/ComplaintPhotos";
 import { buildComplaintPath } from "../../utils/complaintHierarchyPath";
 import { selectServiceDefsFromComplaintHierarchy } from "../../utils";
+import useReopenWindow from "../../hooks/pgr/useReopenWindow";
 
 // Action configurations used for handling different workflow actions like ASSIGN, REJECT, RESOLVE
 // TO DO: Move this to MDMS for handling Action Modal properties
@@ -276,6 +277,10 @@ const PGRDetails = () => {
     },
     { schemaCode: "PGR_COMPLAINT_HIERARCHY_DETAILS" }
   );
+
+  // Same REOPENSLA window the citizen timeline gates on, so employee and citizen can never
+  // disagree about the deadline. undefined => defer to pgr-services (see useReopenWindow).
+  const reopenWindowMs = useReopenWindow(tenantId);
 
   // Complaint classification hierarchy (configurable N levels). Absent on
   // un-migrated tenants -> buildComplaintPath returns null and the flat
@@ -796,6 +801,17 @@ const PGRDetails = () => {
               label={t("ES_COMMON_TAKE_ACTION")}
               onOptionSelect={(selected) => {
                 console.log("*** Log ===> selected", selected);
+                if (selected.action === "REOPEN") {
+                  const lastModifiedTime = pgrData?.ServiceWrappers?.[0]?.service?.auditDetails?.lastModifiedTime;
+                  if (reopenWindowMs && lastModifiedTime && Date.now() - lastModifiedTime > reopenWindowMs) {
+                    setToast({
+                      show: true,
+                      type: "error",
+                      label: t("CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE"),
+                    });
+                    return;
+                  }
+                }
                 setSelectedAction(selected);
                 setOpenModal(true);
               }}
