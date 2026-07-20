@@ -189,29 +189,20 @@ services:
     environment: { SPRING_FLYWAY_ENABLED: "false" }
     depends_on: { boundary-service-migration: { condition: service_completed_successfully } }
 
-  # Lineage fix (NOT a routine bump). The app runs egov-user:mobilevalidation-*,
-  # which USES eg_user.countrycode, but this migrator was pinned to master-d69ce29,
-  # which predates V20260309120000__alter_eg_user_add_countrycode.sql. App and
-  # migrator were from different lineages — the exact thing the per-service pin is
-  # supposed to prevent.
+  # History: this migrator was once pinned to master-d69ce29 while the app ran a
+  # newer mobile-validation-* build that used eg_user.countrycode, a column
+  # master-d69ce29 predates (V20260309120000__alter_eg_user_add_countrycode.sql) —
+  # app and migrator were on different lineages, the exact thing a per-service pin
+  # is supposed to prevent. The fast-path dump masked it (countrycode was already
+  # baked into the dump's CREATE TABLE with no matching history row), so a
+  # from-empty build was the only way it surfaced.
   #
-  # The fast path hid it: the dump was baked from an environment that had already
-  # run that migration, so `countrycode` is baked into the dump's CREATE TABLE while
-  # its history does NOT record the migration. A from-empty build therefore produced
-  # an eg_user with no countrycode under an app that expects one.
-  #
-  # mobile-validation-user-otp-9883730 is a strict superset of master-d69ce29
-  # (28 migrations = the same 27 + countrycode, no regressions) and the migration is
-  # ADD COLUMN IF NOT EXISTS, so it is safe both ways: on the dump it no-ops the
-  # ALTER and records the history row (26 eg_user rows verified untouched); on empty
-  # it creates the column. Verified: both paths then agree at 766 columns.
-  #
-  # K8s is NOT affected and needs no change — its chart pins the app AND the db to
-  # master-d69ce29, so it is self-consistent (on an older feature set). Only compose
-  # bumped the app without its -db.
-  #
-  # There is no -db tag matching the app's exact tag (the app is a custom preview
-  # build); this is the closest published tag in the same lineage.
+  # Both compose and the egov-user Helm chart now pin app AND db to 2.12-87e13fe —
+  # the currently-correct, kept-in-lockstep tag (carries Digit-Core#1044 tenant-aware
+  # encryption + the CCRS#771 SafeHtmlValidator fix; also a superset of the
+  # countrycode migration above). Re-verify this note on the next egov-user bump:
+  # keep app and db tags identical in both compose and the chart, or this class of
+  # bug recurs.
   egov-user-migration:
     image: egovio/egov-user-db:2.12-87e13fe
     container_name: egov-user-migration
@@ -353,7 +344,7 @@ services:
     depends_on: { egov-workflow-v2-migration: { condition: service_completed_successfully } }
 
   egov-hrms-migration:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms-db:800-preview
+    image: egovio/egov-hrms-db:hrms-boundary-dd641a6
     container_name: egov-hrms-migration
     depends_on:
       postgres-db: { condition: service_healthy }

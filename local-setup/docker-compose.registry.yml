@@ -233,7 +233,7 @@ services:
   # Elasticsearch Indexer - Reads Kafka topics, indexes into Elasticsearch
   # ===========================================================================
   egov-indexer:
-    image: egovio/egov-indexer:maven-jdk21-9f83afb
+    image: registry.preview.egov.theflywheel.in/egovio/egov-indexer:maven-jdk21-9f83afb
     container_name: egov-indexer
     depends_on:
       pgbouncer:
@@ -360,7 +360,7 @@ services:
     - egov-network
 
   egov-enc-service:
-    image: egovio/egov-enc-service:2.12-87e13fe
+    image: registry.preview.egov.theflywheel.in/egovio/egov-enc-service:2.12-87e13fe
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
@@ -413,7 +413,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: egovio/mdms-v2:maven-jdk21-9f83afb
+    image: registry.preview.egov.theflywheel.in/egovio/mdms-v2:maven-jdk21-9f83afb
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -479,7 +479,7 @@ services:
     - egov-network
 
   egov-idgen:
-    image: egovio/egov-idgen:maven-jdk21-9f83afb
+    image: registry.preview.egov.theflywheel.in/egovio/egov-idgen:maven-jdk21-9f83afb
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -543,7 +543,7 @@ services:
     restart: "no"
 
   egov-user:
-    image: egovio/egov-user:2.12-87e13fe
+    image: registry.preview.egov.theflywheel.in/egovio/egov-user:2.12-87e13fe
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -747,7 +747,7 @@ services:
     - egov-network
 
   egov-workflow-v2:
-    image: egovio/egov-workflow-v2:2.12-87e13fe
+    image: registry.preview.egov.theflywheel.in/egovio/egov-workflow-v2:2.12-87e13fe
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -829,7 +829,7 @@ services:
     - egov-network
 
   egov-localization:
-    image: egovio/egov-localization:2.12-87e13fe
+    image: registry.preview.egov.theflywheel.in/egovio/egov-localization:2.12-87e13fe
     container_name: egov-localization
     depends_on:
       pgbouncer:
@@ -877,7 +877,7 @@ services:
     - egov-network
 
   boundary-service:
-    image: egovio/boundary-service:maven-jdk21-9f83afb
+    image: registry.preview.egov.theflywheel.in/egovio/boundary-service:maven-jdk21-9f83afb
     container_name: boundary-service
     depends_on:
       pgbouncer:
@@ -935,7 +935,7 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
+    image: registry.preview.egov.theflywheel.in/egovio/egov-accesscontrol:maven-jdk21-9f83afb
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -1006,7 +1006,7 @@ services:
       - egov-network
 
   egov-persister:
-    image: egovio/egov-persister:maven-jdk21-9f83afb
+    image: registry.preview.egov.theflywheel.in/egovio/egov-persister:maven-jdk21-9f83afb
     container_name: egov-persister
     depends_on:
       pgbouncer:
@@ -1054,7 +1054,7 @@ services:
   # Filestore Service - File upload/download
   # ===========================================================================
   egov-filestore:
-    image: egovio/egov-filestore:maven-jdk21-9f83afb
+    image: registry.preview.egov.theflywheel.in/egovio/egov-filestore:maven-jdk21-9f83afb
     container_name: egov-filestore
     depends_on:
       pgbouncer:
@@ -1148,7 +1148,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:800-preview
+    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:hrms-boundary-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1460,7 +1460,7 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-70916ea}
+    image: ${PGR_SERVICES_IMAGE:-registry.preview.egov.theflywheel.in/egovio/pgr-services:develop-70916ea}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -1540,7 +1540,7 @@ services:
   # URL Shortening Service (required by PGR for notification links)
   # ===========================================================================
   egov-url-shortening:
-    image: egovio/egov-url-shortening:maven-jdk21-983e8b2
+    image: registry.preview.egov.theflywheel.in/egovio/egov-url-shortening:maven-jdk21-983e8b2
     container_name: egov-url-shortening
     restart: unless-stopped
     depends_on:

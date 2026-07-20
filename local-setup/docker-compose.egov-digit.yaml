@@ -1153,7 +1153,7 @@ services:
     # EGOV_HRMS_DEV_MODE=true must be set so enrichUser() respects the
     # password supplied in the request instead of overwriting with the
     # default/auto-generated one.
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:800-preview
+    image: egovio/egov-hrms:hrms-boundary-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:

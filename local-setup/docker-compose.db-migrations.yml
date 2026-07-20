@@ -872,7 +872,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    image: registry.preview.egov.theflywheel.in/egovio/egov-hrms:800-preview
+    image: egovio/egov-hrms:hrms-boundary-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
