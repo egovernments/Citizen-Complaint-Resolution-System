@@ -56,7 +56,7 @@
 
 **Procedure:**
 - [x] **`FLYWAY_IGNORE_MIGRATION_PATTERNS: "*:missing"`** added to `common/values.yaml` (`initContainers.dbMigration.env`) — matches compose's `migrate-all.sh`; fixes egov-idgen and any subset image. Validation stays ON (real checksum mismatches still fail).
-- [ ] **Re-pin `egov-user`'s db + app image** to the dump-matching build (the only checksum divergence). Get the tag from whoever produced the dump; verify with an audit Job (run the new image against the dump-seeded DB → must log "up to date").
+- [ ] **Fix `egov-user`'s migration source** (the only checksum divergence). The dump-matching migrations are already in-repo at `local-setup/docker/db-migrations/sql/egov-user/` (27 files — the same set compose's unified `db-migrations` runs; `V20180731215512__alter_eg_role_address_fk.sql` there carries the dump's checksum). k3s's `egov-user-db:master-d69ce29` was built from a *different* version of these files. Rebuild `egov-user-db` from that in-repo source (and align the app image to compose's `egovio/egov-user:mobilevalidation-jdk8-4984479`, which runs with Flyway off). Verify with an audit Job (run the rebuilt image against the dump-seeded DB → must log "up to date"). Compose uses **no** `egov-user-db` image — migrations come from the unified `db-migrations` image.
 - [ ] (Optional, ideal) pin every service app image to compose's builds so compose and k3s are byte-for-byte identical.
 
 **Verify:** fresh k3s deploy with per-service Flyway **enabled** (Task 4 schemaTable) → dump restores → every `db-migration` init-container logs "up to date" / "Successfully validated" — **no `checksum mismatch`, no `42P07`**.
