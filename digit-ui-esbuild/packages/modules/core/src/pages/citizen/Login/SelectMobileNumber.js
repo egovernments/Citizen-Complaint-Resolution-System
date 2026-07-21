@@ -78,9 +78,13 @@ const SelectMobileNumber = ({
   // texts value through t() when building stepItems). Re-running them through
   // tr() made the `v === key` guard always true for translated strings, so the
   // hardcoded English fallback rendered even when the PT translation existed.
-  // Consume the pre-translated values directly.
-  const headerText = config?.texts?.header || "Sign in";
-  const cardText = config?.texts?.cardText || null;
+  // Consume the pre-translated values directly — but when a tenant/locale has
+  // a seeding gap, t() echoes the raw ALL_CAPS key back; treat that as missing
+  // so the English fallback still renders instead of the key.
+  const looksLikeRawKey = (s) => typeof s === "string" && /^[A-Z0-9_]{3,}$/.test(s.trim());
+  const pick = (v, fb) => (v && !looksLikeRawKey(v) ? v : fb);
+  const headerText = pick(config?.texts?.header, "Sign in");
+  const cardText = pick(config?.texts?.cardText, null);
 
   return (
     <V2LoginShell>
@@ -208,7 +212,7 @@ const SelectMobileNumber = ({
             disabled={!isMobileValid || !canSubmit}
             width="full"
           >
-            {config?.texts?.nextText || tr("CS_COMMONS_NEXT", "Continue")}
+            {pick(config?.texts?.nextText, null) || tr("CS_COMMONS_NEXT", "Continue")}
           </V2Button>
         </form>
 
