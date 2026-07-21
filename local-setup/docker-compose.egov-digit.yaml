@@ -397,6 +397,11 @@ services:
     depends_on:
       egov-mdms-service:
         condition: service_healthy
+      # Flyway is disabled for this service, so the external db-migrations
+      # container must finish before enc starts — otherwise it races an
+      # unmigrated schema on a cold start (matches egov-user et al.).
+      db-migrations:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
