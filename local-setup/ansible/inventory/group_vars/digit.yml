@@ -159,7 +159,9 @@ docker_log_total_size: "1g"
 # Escape hatch: set docker_log_max_file to pin the file count directly. This
 # BYPASSES the derivation and the cap check, so the effective ceiling becomes
 # docker_log_max_size * docker_log_max_file. Only use it if you need Docker's
-# native two-knob behaviour.
+# native two-knob behaviour. It is a file COUNT, not a size — a unit on it
+# ('10m') is rejected by preflight. Uncommenting it and leaving the value blank
+# is treated as unset, so the derivation still applies.
 # docker_log_max_file: 10
 
 # On-target directory for digit-mcp when build_mcp is true. Vendored deploys

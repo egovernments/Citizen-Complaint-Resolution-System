@@ -268,7 +268,9 @@ def _parse_size(val):
     "('100'), a non-size ('abc') or an empty string raises an unhandled "
     "templating error mid-deploy; '0m' divides by zero. A max-size larger than "
     "the total silently allows more than the cap, because Docker always keeps "
-    "at least one log file per container.",
+    "at least one log file per container. docker_log_max_file is a file count, "
+    "not a size — a unit on it ('10m') reaches daemon.json and dockerd refuses "
+    "to start.",
 )
 def r_docker_log_rotation(cfg):
     raw_size = get(cfg, "docker_log_max_size")
@@ -295,14 +297,32 @@ def r_docker_log_rotation(cfg):
                f"({raw_total}). Docker keeps at least one file per container, so "
                f"the effective cap would be {raw_size}, not {raw_total}.")
 
-    if get(cfg, "docker_log_max_file") is not None and size and total:
-        eff = size * float(get(cfg, "docker_log_max_file"))
-        if eff > total:
-            yield (WARN,
-                   f"docker_log_max_file pins the count directly, so the cap is "
-                   f"{raw_size} x {get(cfg, 'docker_log_max_file')} = "
-                   f"{eff / 1048576:.0f} MB, above docker_log_total_size "
-                   f"({raw_total}).")
+    # A falsy value (null, 0, '') is treated as unset: the playbook derives the
+    # count with `default(..., true)`, which substitutes for those too. Anything
+    # truthy is an explicit override and has to be a positive integer — it is a
+    # file count, not a size, but it sits between two size-string vars in both
+    # this rule and group_vars, so 'docker_log_max_file: 10m' is an easy slip.
+    # Convert it defensively: an unguarded float() would kill preflight with a
+    # traceback instead of the actionable message this tool exists to print.
+    raw_count = get(cfg, "docker_log_max_file")
+    if raw_count:
+        try:
+            count = int(str(raw_count).strip())
+            if count < 1:
+                raise ValueError(raw_count)
+        except (TypeError, ValueError):
+            yield (FAIL,
+                   f"docker_log_max_file: {raw_count!r} is not a positive "
+                   f"integer. It is a file count, not a size — Docker rejects "
+                   f"anything else. Drop the unit, or unset it and let "
+                   f"docker_log_total_size derive the count.")
+        else:
+            eff = size * count if (size and total) else None
+            if eff is not None and eff > total:
+                yield (WARN,
+                       f"docker_log_max_file pins the count directly, so the "
+                       f"cap is {raw_size} x {count} = {eff / 1048576:.0f} MB, "
+                       f"above docker_log_total_size ({raw_total}).")
 
 
 # ── Self-test: each rule gets a firing and a non-firing case ────────────────
@@ -324,6 +344,24 @@ SELF_TEST_CASES = [
      {"docker_log_max_size": "500m", "docker_log_total_size": "1g",
       "docker_log_max_file": 10},
      {"docker-log-rotation"}),
+    ("max-file written as a size string fires (would crash on float())",
+     {"docker_log_max_size": "100m", "docker_log_total_size": "1g",
+      "docker_log_max_file": "10m"},
+     {"docker-log-rotation"}),
+    ("max-file that is not a number fires",
+     {"docker_log_max_size": "100m", "docker_log_total_size": "1g",
+      "docker_log_max_file": "abc"},
+     {"docker-log-rotation"}),
+    ("zero max-file fires",
+     {"docker_log_max_size": "100m", "docker_log_total_size": "1g",
+      "docker_log_max_file": -1},
+     {"docker-log-rotation"}),
+    ("max-file left blank is clean — the playbook derives it",
+     {"docker_log_max_size": "100m", "docker_log_total_size": "1g",
+      "docker_log_max_file": None}, set()),
+    ("max-file as a string integer is clean",
+     {"docker_log_max_size": "100m", "docker_log_total_size": "1g",
+      "docker_log_max_file": "10"}, set()),
     ("defaults are clean",
      {"docker_log_max_size": "100m", "docker_log_total_size": "1g"}, set()),
     ("uppercase units are clean",
