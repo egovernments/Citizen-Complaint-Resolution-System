@@ -34,8 +34,8 @@ import ImageComponent from "../../../components/ImageComponent";
 const DEFAULT_TENANT = Digit?.ULBService?.getStateId?.();
 // CCSD-1989: strict email shape (blank ok) so "a@b." fails client-side with a
 // localized error instead of the unlocalized backend save failure. FALLBACK
-// only — the live pattern comes from common-masters.MobileNumberValidation
-// (emailRegex) via validationConfig, same channel as the mobile pattern.
+// only — the live pattern comes from common-masters.FormValidations
+// (fieldType "email") via validationConfig, same channel as the mobile pattern.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Derive the maximum digit count from a mobile regex pattern string.
@@ -299,11 +299,15 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   };
 
   // Read from common-masters.MobileNumberValidation — the single source
-  // of truth for mobile validation across all frontends and backends.
+  // of truth for mobile validation across all frontends and backends —
+  // plus common-masters.FormValidations, which carries per-fieldType user
+  // patterns (currently email). mdms-v2's v1 _search omits masters whose
+  // schema isn't registered, so envs without FormValidations still resolve
+  // the mobile rule and simply keep the EMAIL_RE fallback.
   const { data: mdmsValidationData, isValidationConfigLoading } = Digit.Hooks.useCustomMDMS(
     stateLvlTenantId,
     "common-masters",
-    [{ name: "MobileNumberValidation" }],
+    [{ name: "MobileNumberValidation" }, { name: "FormValidations" }],
     {
       select: (data) => {
         const list = data?.["common-masters"]?.MobileNumberValidation || [];
@@ -311,14 +315,22 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
           list.find((x) => x.default === true && x.isActive !== false) ||
           list.find((x) => x.isActive !== false) ||
           null;
-        if (!record) return null;
-        const maxLen = mobileRegexMaxLength(record.mobileNumberRegex) || 15;
+        const formValidations = data?.["common-masters"]?.FormValidations || [];
+        const emailRecord =
+          formValidations.find((x) => x?.fieldType === "email" && x?.isActive !== false) || null;
+        if (!record && !emailRecord) return null;
         return {
-          // email is optional in the master — undefined entries are dropped
-          // below so the built-in EMAIL_RE fallback stays in effect.
-          UserProfileValidationConfig: [{ mobileNumber: record.mobileNumberRegex, email: record.emailRegex }],
-          prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
-          maxLength: maxLen,
+          // Either master may be unseeded — undefined entries are dropped
+          // below so the globalConfigs/EMAIL_RE fallbacks stay in effect.
+          // prefix/maxLength only ride along with an actual mobile record,
+          // so an email-only master never clobbers the globalConfigs prefix.
+          UserProfileValidationConfig: [{ mobileNumber: record?.mobileNumberRegex, email: emailRecord?.regex }],
+          ...(record
+            ? {
+                prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
+                maxLength: mobileRegexMaxLength(record.mobileNumberRegex) || 15,
+              }
+            : {}),
         };
       },
       enabled: !!stateLvlTenantId,
