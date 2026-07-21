@@ -217,6 +217,16 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
     }
   }
 
+  // QA #26: receipt channel picked by the Reception Officer. Additive —
+  // attached only when the officer picked one, so existing payloads are
+  // unchanged.
+  const receivedChannel = formData?.ReceivedChannel?.code;
+  if (receivedChannel) {
+    complaint.service.extendedAttributes = {
+      ...(complaint.service.extendedAttributes || {}),
+      receivedChannel,
+    };
+  }
   return complaint;
 };
 

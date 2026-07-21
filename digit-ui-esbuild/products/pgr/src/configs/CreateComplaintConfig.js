@@ -278,12 +278,36 @@ export const CreateComplaintConfig = {
                 maxLength: 1000,
                 validation: {
                   required: true,
-                  // CCSD-1980: reject numbers-only / whitespace-only descriptions
-                  // (e.g. "000000000000") — require at least 3 letters (any
-                  // language). Non-empty is implied.
-                  pattern: /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u,
+                  // CCSD-1956 + QA #27: 20-1000 chars AND at least 3 letters, so
+                  // "00000000000000000000" (20 digits) and all-whitespace are
+                  // both rejected. The single error message covers both rules.
+                  minLength: 20,
+                  pattern: /^(?=[\s\S]{20,1000}$)(?=(?:[\s\S]*?\p{L}){3})[\s\S]*$/u,
                 },
-                error: "CORE_COMMON_REQUIRED_ERRMSG",
+                error: "CS_DESC_MIN_CHARS",
+              },
+            },
+            {
+              // QA #26: how the complaint reached the Reception Officer
+              // (email / in-person / letter / linha verde). Optional; travels
+              // as extendedAttributes.receivedChannel and shows on the details
+              // pages via the generic extended-attributes card. The stored
+              // value is the human-readable option code — the viewer renders
+              // values verbatim by design.
+              isMandatory: false,
+              key: "ReceivedChannel",
+              type: "dropdown",
+              label: "ES_CREATECOMPLAINT_RECEIVED_CHANNEL",
+              disable: false,
+              populators: {
+                name: "ReceivedChannel",
+                optionsKey: "name",
+                options: [
+                  { code: "E-mail", name: "PGR_CHANNEL_EMAIL" },
+                  { code: "Presencial", name: "PGR_CHANNEL_IN_PERSON" },
+                  { code: "Carta", name: "PGR_CHANNEL_LETTER" },
+                  { code: "Linha Verde", name: "PGR_CHANNEL_LINHA_VERDE" },
+                ],
               },
             },
           ],
