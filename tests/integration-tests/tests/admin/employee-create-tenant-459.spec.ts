@@ -22,7 +22,7 @@ test.describe('admin employee create — tenant + form-clears #459 #471 #476', (
     // so the "Select boundary" combobox is empty and the form can't be
     // completed. Left skipped rather than faked — re-enable on deployments
     // where the root tenant has a populated boundary tree.
-    test.skip(true, 'root tenant has no jurisdiction boundaries to select in the employee-create form');
+    test.skip(true, 'root tenant has no jurisdiction boundaries to select in the employee-create form — boundary-relationships _search at ROOT returns 0 boundaries for every hierarchy (probe-verified)');
     const stamp = Date.now();
     const empCode = `INT_TEST_CSR_${stamp}`;
     // Mobile prefix from env (CITIZEN_PHONE_PREFIX) — no hardcoded Kenya '7'.

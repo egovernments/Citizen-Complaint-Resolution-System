@@ -316,6 +316,14 @@ Tolerant of show-vs-edit routing differences — works whether /:id lands on Sho
     // Update Name and Save.
     const nameInput = page.getByLabel(/^Name/i);
     await nameInput.fill(`PW Edited ${uniq}`);
+    // B5 diagnostic guard: if the form is invalid (e.g. a stale bundle's
+    // mobile validator rejecting a live-rule-valid number), Save clicks
+    // silently no-op and the waitForResponse below times out at 30s with a
+    // confusing message. Fail loudly here instead.
+    await expect(
+      page.locator('[aria-invalid="true"]'),
+      'form must be valid before Save',
+    ).toHaveCount(0);
     // Wait for the update to ACTUALLY complete (react-admin's submit is async)
     // rather than a fixed sleep, so the API probe below can't race ahead of it.
     await Promise.all([

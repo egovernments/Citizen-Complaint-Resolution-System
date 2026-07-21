@@ -65,6 +65,13 @@ let SEED_DESIG = process.env.SEED_DESIG || 'DESIG_58';
 let SEED_HIERARCHY = process.env.SEED_HIERARCHY || 'ADMIN';
 let SEED_BOUNDARY_TYPE = process.env.SEED_BOUNDARY_TYPE || 'County';
 
+// Tracks whether resolveSeedFks() found a live employee to derive FKs from.
+// Tests that API-seed employees (4a/5/6) need a real boundary/dept/designation
+// combo; without live resolution AND without an explicit env override they'd
+// silently fall back to the Kenya literals above, which fail (or worse,
+// silently mis-seed) on any non-Kenya tenant. See B6 in ADMIN-SUITE-PLAN.md.
+let seedFksResolved = false;
+
 /**
  * Derive boundary / department / designation FKs from a real employee on the
  * deployment so HRMS _create seeds validate. Env overrides take precedence;
@@ -88,6 +95,7 @@ async function resolveSeedFks(): Promise<void> {
         if (!process.env.SEED_BOUNDARY_TYPE) SEED_BOUNDARY_TYPE = boundaryType;
         if (!process.env.SEED_DEPT) SEED_DEPT = dept;
         if (!process.env.SEED_DESIG) SEED_DESIG = desig;
+        seedFksResolved = true;
         return;
       }
     }
@@ -288,17 +296,25 @@ Cleanup uses the inline softDeleteEmployee helper because HRMS has no DELETE end
     await page.goto(`${LIST_PATH}/create`);
 
     // --- Pre-assertions (CCRS#404 / #419 + CCRS#416) ---
-    // CCRS#404 / #419: DOB must be marked required on the Create form. We
-    // prefer the HTML `required` attribute because the red-asterisk copy
-    // depends on a FormLabel CSS class that can shift across shadcn upgrades.
+    // CCRS#404 / #419: DOB must be marked required on the Create form.
+    // DigitFormInput never sets the HTML `required` attribute — required-ness
+    // renders as the label's `aria-label="required"` asterisk marker instead
+    // (configurator/src/admin/DigitFormInput.tsx:69-73). Assert that marker.
     const dobInput = page.getByLabel(/^Date of Birth/i);
     await expect(dobInput).toBeVisible();
-    await expect(dobInput).toHaveAttribute('required', '');
+    const dobLabel = page.locator('label', { hasText: /^Date of Birth/i }).first();
+    await expect(dobLabel.locator('[aria-label="required"]')).toBeVisible();
 
     // CCRS#416 (UI): Tenant picker is present on Create and defaults to the
     // session tenant. We accept either a native input (read via `value`) or a
     // combobox trigger whose rendered text contains the tenant code.
-    const tenantField = page.getByLabel(/^Tenant$/i).first();
+    // Tenant is required (v.codeRequired), so its Label's computed accessible
+    // name includes the aria-label="required" asterisk marker's text
+    // ("Tenant required", not a bare "Tenant") — anchoring with a trailing
+    // `$` (as employees#1's Status label does, where the field is optional
+    // and unmarked) never matches. Use a prefix match like every other label
+    // lookup in this spec (Name, Mobile Number, Date of Birth, ...).
+    const tenantField = page.getByLabel(/^Tenant/i).first();
     await expect(tenantField).toBeVisible();
     const tenantTag = await tenantField.evaluate((el) => el.tagName.toLowerCase());
     if (tenantTag === 'input' || tenantTag === 'select') {
@@ -320,6 +336,23 @@ Cleanup uses the inline softDeleteEmployee helper because HRMS has no DELETE end
     await page.getByLabel(/^Email/i).fill(`${code.toLowerCase()}@example.com`);
     await page.getByLabel(/^Date of Birth/i).fill('1990-05-14');
     await page.getByLabel(/^Date of Appointment/i).fill('2026-01-15');
+
+    // Follow-on locator gap surfaced once the DOB pre-assertion (above) was
+    // fixed and the flow could actually reach Create: HRMS's _create rejects
+    // employees with zero roles (ERR_HRMS_MISSING_ROLES) and the create
+    // form's default is an empty user.roles array — nothing auto-selects
+    // one. Pick EMPLOYEE via the RolesEditor combobox (same pattern as
+    // test 4a's CITIZEN pick) so the happy path actually reaches HRMS.
+    const roleCombobox = page.getByRole('combobox', { name: /^Roles?$/i }).first();
+    await roleCombobox.click();
+    await roleCombobox.fill('EMPLOYEE');
+    // The option's accessible name concatenates code + name with no
+    // separator ("EMPLOYEEEmployee") so a `\b`-anchored regex never finds a
+    // word boundary there — match on the code PREFIX only. The query also
+    // substring-matches on role name (e.g. "Auto Escalation Employee"), so a
+    // plain "contains" match would be ambiguous; anchoring at `^` picks only
+    // the row whose code itself starts with EMPLOYEE.
+    await page.getByRole('option', { name: /^EMPLOYEE/i }).first().click();
 
     // Submit. List path is `/configurator/manage/employees`.
     await Promise.all([
@@ -381,8 +414,19 @@ Pairs with the happy-path test (#2) — together they bracket valid + invalid mo
     // The validator error copy is sourced from HRMS clamping the MDMS rule.
     // Assert on the rule.errorMessage substring (escaped for regex) with a
     // loose fallback to tolerate minor copy variants across HRMS releases.
+    //
+    // The live form's own useMobileValidator (configurator/src/admin/hrms/
+    // useMobileValidator.ts buildErrorMessage) composes a DIFFERENT string
+    // than this test util's mdms-mobile.ts errorMessage: the app renders
+    // "Please enter a valid mobile number (9 digits, starting with 8)"
+    // (base phrase + parenthetical), not "Please enter a valid 9-digit
+    // mobile number". The two also punctuate the digits/starting clause
+    // differently ("9 digits, starting with 8" has a comma the old
+    // `digits starting` alternative didn't tolerate). Add both a
+    // comma-tolerant variant and the app's own generic (deployment-agnostic
+    // — no tenant literal) base phrase as fallbacks.
     const ruleMsgRe = new RegExp(
-      `${escapeRegex(mobileRule.errorMessage)}|MobileNumber|must be \\d+|digits starting`,
+      `${escapeRegex(mobileRule.errorMessage)}|MobileNumber|must be \\d+|digits,?\\s*starting|valid mobile number`,
       'i',
     );
     const errorText = page.getByText(ruleMsgRe).first();
@@ -422,6 +466,15 @@ Code and Username are write-once because HRMS doesn't allow mutating either afte
     await codeInput.fill(code);
     await page.getByLabel(/^Mobile Number/i).fill(mobile);
     await page.getByLabel(/^Date of Birth/i).fill('1985-07-20');
+    // Date of Appointment is required (v.required, EmployeeCreate.tsx) — was
+    // missing here, which silently blocked the form from ever submitting.
+    await page.getByLabel(/^Date of Appointment/i).fill('2026-01-15');
+    // HRMS _create rejects a zero-role employee (ERR_HRMS_MISSING_ROLES) —
+    // see test 2's comment for the full explanation.
+    const roleCombobox = page.getByRole('combobox', { name: /^Roles?$/i }).first();
+    await roleCombobox.click();
+    await roleCombobox.fill('EMPLOYEE');
+    await page.getByRole('option', { name: /^EMPLOYEE/i }).first().click();
 
     await Promise.all([
       page.waitForURL(LIST_PATH, { timeout: 45_000 }),
@@ -441,9 +494,15 @@ Code and Username are write-once because HRMS doesn't allow mutating either afte
     const dobInput = page.getByLabel(/^Date of Birth/i);
     await expect(dobInput).toHaveValue('1985-07-20');
 
-    // Code + Username are disabled on edit.
+    // Code + Username are write-once. Employee Code is disabled on edit;
+    // Username has no separate field at all any more (CCRS#460 —
+    // EmployeeShow.tsx:39-41 documents that HRMS always overwrites userName
+    // with the employee code, so a distinct "Username" input/display would
+    // just duplicate Employee Code under a misleading label). Its absence
+    // from the DOM is an even stronger write-once guarantee than `disabled`
+    // would be, so assert that instead of a stale `toBeDisabled()`.
     await expect(page.getByLabel(/^Employee Code/i)).toBeDisabled();
-    await expect(page.getByLabel(/^Username/i)).toBeDisabled();
+    await expect(page.getByLabel(/^Username/i)).toHaveCount(0);
 
     // Mutate name + save; verify via API.
     await page.getByLabel(/^Name/i).fill(`PW Edited ${uniq}`);
@@ -459,28 +518,41 @@ Code and Username are write-once because HRMS doesn't allow mutating either afte
     expect((emp.user as any)?.name).toMatch(/PW Edited/);
   });
 
-  test('4a. edit — add CITIZEN role round-trips without JsonMappingException (CCRS#439)', {
+  test('4a. edit — add GRO role round-trips without JsonMappingException (CCRS#439)', {
     annotation: {
       type: 'description',
-      description: `Catches CCRS#439: adding a CITIZEN role to an existing employee through the RolesEditor used to surface a JsonMappingException because the configurator sent the role array in a shape egov-hrms couldn't deserialize. Post-fix the round-trip succeeds and HRMS reflects the new role within 5s.
+      description: `Catches CCRS#439: adding a role to an existing employee through the RolesEditor used to surface a JsonMappingException because the configurator sent the role array in a shape egov-hrms couldn't deserialize. Post-fix the round-trip succeeds and HRMS reflects the new role within 5s.
+
+Uses GRO (a PGR employee role — EMP001 already carries it) rather than the
+original repro's CITIZEN: this deployment's egov-hrms now enforces
+ERR_HRMS_INVALID_ROLE for CITIZEN on a type=EMPLOYEE user (probe-verified
+directly against /egov-hrms/employees/_create — same 400 regardless of client
+payload shape), which is a legitimate role/type compatibility rule, not the
+JsonMappingException deserialization bug #439 targets. GRO exercises the same
+"add a not-yet-present role via RolesEditor, Save, no crash, HRMS reflects it"
+path without tripping that unrelated validation.
 
 Steps:
-1. Generate a unique code + Kenya mobile; track for cleanup.
+1. Generate a unique code + tenant-valid mobile; track for cleanup.
 2. Seed a fresh employee via API with ONLY [EMPLOYEE] role.
-3. Confirm the seed has no CITIZEN role yet (assert preRoles.some code === CITIZEN === false).
+3. Confirm the seed has no GRO role yet (assert preRoles.some code === GRO === false).
 4. Open Edit via list-row click.
-5. Locate the Roles combobox by role + name; click; type "CITIZEN"; click the matching option.
+5. Locate the Roles combobox by role + name; click; type "GRO"; click the matching option.
 6. Click Save.
 7. Assert no role=status toast OR body text contains 'JsonMappingException' (count === 0 for both).
-8. expect.poll on HRMS: within 5s, the user.roles array should contain CITIZEN.
+8. expect.poll on HRMS: within 5s, the user.roles array should contain GRO.
 
 Hermetic: doesn't rely on tenant content — seeds and verifies its own employee. Cleanup is via afterAll's softDeleteEmployee; role removal is a known TODO since the helper soft-deactivates the whole employee.`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@ccrs:439', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
+    test.skip(
+      !seedFksResolved && !process.env.SEED_DEPT,
+      'no existing employee to derive live HRMS FKs from — set SEED_* env vars',
+    );
     // Create a fresh employee via API so we own it + know it has only EMPLOYEE
-    // role (no CITIZEN yet). This keeps the test hermetic instead of relying
+    // role (no GRO yet). This keeps the test hermetic instead of relying
     // on fishing a suitable victim out of the shared tenant.
     const code = testCode(testInfo, 'EMP_ROLE');
     const uniq = code.split('_').pop() || '44444';
@@ -505,7 +577,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
       }],
     });
 
-    // Confirm the seed employee has no CITIZEN role yet — if it somehow does
+    // Confirm the seed employee has no GRO role yet — if it somehow does
     // (roles seeded server-side?), skip rather than produce a misleading pass.
     const preSearch = await postJson(auth,
       `${HRMS_SEARCH}?tenantId=${TENANT_CODE}&codes=${encodeURIComponent(code)}&limit=1&offset=0`,
@@ -513,7 +585,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
     const preEmp = ((preSearch.Employees as HrmsEmployee[]) || [])[0];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const preRoles = ((preEmp?.user as any)?.roles || []) as Array<{ code?: string }>;
-    expect(preRoles.some((r) => r.code === 'CITIZEN')).toBe(false);
+    expect(preRoles.some((r) => r.code === 'GRO')).toBe(false);
 
     // Open Edit via list-row click (same entry-point as test 4).
     await page.goto(LIST_PATH);
@@ -522,15 +594,18 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
     await page.getByRole('row').filter({ hasText: code }).click();
     await page.getByRole('button', { name: /^Edit$/i }).click();
 
-    // Roles section — RolesEditor is a combobox. Typing "CITIZEN" should
+    // Roles section — RolesEditor is a combobox. Typing "GRO" should
     // surface a match; click the first option. We key on `combobox` role
     // rather than label text because the label copy varies ("Roles" vs
-    // "Assign roles") across tenants.
+    // "Assign roles") across tenants. The option's accessible name
+    // concatenates code+name with no separator, and the query substring-
+    // matches on role name too (e.g. "DGRO" also contains "gro"), so anchor
+    // at `^` to pick only the row whose code itself starts with GRO.
     const roleCombobox = page.getByRole('combobox', { name: /^Roles?$/i }).first();
     await expect(roleCombobox).toBeVisible({ timeout: 10_000 });
     await roleCombobox.click();
-    await roleCombobox.fill('CITIZEN');
-    await page.getByRole('option', { name: /CITIZEN/i }).first().click();
+    await roleCombobox.fill('GRO');
+    await page.getByRole('option', { name: /^GRO/i }).first().click();
 
     await page.getByRole('button', { name: /^Save$/i }).click();
 
@@ -541,7 +616,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
     const errorBanner = page.getByText(/JsonMappingException/i);
     await expect(errorBanner).toHaveCount(0);
 
-    // Within 5s, the mutation is visible server-side — CITIZEN is now in the
+    // Within 5s, the mutation is visible server-side — GRO is now in the
     // user's roles array. We poll HRMS rather than DOM because the list may
     // re-render without showing roles inline.
     await expect.poll(async () => {
@@ -551,7 +626,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
       const emp = ((res.Employees as HrmsEmployee[]) || [])[0];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const roles = ((emp?.user as any)?.roles || []) as Array<{ code?: string }>;
-      return roles.some((r) => r.code === 'CITIZEN');
+      return roles.some((r) => r.code === 'GRO');
     }, { timeout: 5_000 }).toBeTruthy();
 
     // TODO: role-removal cleanup — afterAll soft-deactivates the employee,
@@ -581,6 +656,10 @@ The MDMS reason source is asserted indirectly — if the dropdown has no options
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
+    test.skip(
+      !seedFksResolved && !process.env.SEED_DEPT,
+      'no existing employee to derive live HRMS FKs from — set SEED_* env vars',
+    );
     const code = testCode(testInfo, 'EMP_DEACT');
     const uniq = code.split('_').pop() || '22222';
     const mobile = generateValidMobile(mobileRule);
@@ -675,6 +754,10 @@ Affirms the safety contract — admins must explicitly opt-in to password rotati
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
   }, testInfo) => {
+    test.skip(
+      !seedFksResolved && !process.env.SEED_DEPT,
+      'no existing employee to derive live HRMS FKs from — set SEED_* env vars',
+    );
     const code = testCode(testInfo, 'EMP_PWD');
     const uniq = code.split('_').pop() || '33333';
     const mobile = generateValidMobile(mobileRule);
@@ -725,7 +808,7 @@ Affirms the safety contract — admins must explicitly opt-in to password rotati
   test('7. bulk import — 3 valid + 2 invalid rows, create 3 lands', {
     annotation: {
       type: 'description',
-      description: `Bulk-import end-to-end with mixed validity: 3 well-formed rows + 2 deliberately broken rows (short mobile + bad date; unknown department + unknown role). Confirms the preview marks 2 errors, the Create button shows "3" (not 5), and HRMS lands all 3 valid employees. Optionally exercises the credentials CSV download.
+      description: `Bulk-import end-to-end with mixed validity: 3 well-formed rows + 2 deliberately broken rows (short mobile; unknown department + unknown role). Confirms the preview marks 2 errors, the Create button shows "3" (not 5), and HRMS lands all 3 valid employees. Optionally exercises the credentials CSV download.
 
 Steps:
 1. Generate 3 valid + 2 invalid codes; track only valid for cleanup.
@@ -739,7 +822,25 @@ Steps:
 9. For each valid code, POST HRMS _search; assert exactly 1 result, isActive !== false.
 10. If "credentials CSV" download button is visible, click it and confirm the download path is non-empty.
 
-The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee/Employees/EmployeeMaster/HRMS/employee).`,
+The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee/Employees/EmployeeMaster/HRMS/employee).
+
+No \`jurisdictions\` column is populated: EmployeeBulkImport.tsx treats it as
+fully optional (parse-time: a warning, not a blocking error; validateRow:
+skipped entirely when falsy) — and on this deployment the ROOT tenant (where
+this spec manages employees) has zero boundary-hierarchy nodes at all
+(same fact employee-create-tenant-459 documents), so ANY jurisdiction code
+would fail the row-level "Boundary not found" check regardless of which
+code was chosen. Omitting the column sidesteps a tenant-shape dependency
+this test was never actually about.
+
+Invalid row 1 uses a syntactically well-formed DOB (only the mobile is
+short) rather than mobile+DOB both broken: excelParser.ts's parseEmployeeExcel
+treats a malformed DOB as a parse-time failure and drops the row from the
+returned data array entirely (never reaches the preview table at all), which
+would silently shrink "Total" from 5 to 4 and defeat this test's own "preview
+marks 2 errors" contract. A bad mobile alone still fails validateRow's
+per-tenant MDMS length/pattern check and shows as an Error row, which is what
+the test is actually asserting.`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:edge-case', '@layer:ui', '@persona:admin'] }, async ({
     page,
@@ -758,7 +859,9 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
     ).toBeVisible({ timeout: 30_000 });
 
     const rows = [
-      // Valid trio — PW_ codes, 10-digit 07-prefix mobiles, real dept/desig/boundary.
+      // Valid trio — PW_ codes, tenant-valid mobiles, real dept/desig. No
+      // jurisdictions column (see annotation — optional, and unusable at
+      // this spec's ROOT tenant which has no boundary hierarchy at all).
       ...validCodes.map((c, i) => ({
         employeeCode: c,
         name: `PW Bulk ${i + 1}`,
@@ -771,10 +874,13 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         department: SEED_DEPT,
         designation: SEED_DESIG,
         roles: 'EMPLOYEE',
-        jurisdictions: SEED_BOUNDARY,
+        jurisdictions: '',
         dateOfAppointment: '2026-02-01',
       })),
-      // Invalid row 1 — mobile too short, DOB malformed.
+      // Invalid row 1 — mobile too short. DOB is well-formed on purpose: a
+      // malformed DOB makes excelParser.ts drop the row at PARSE time (never
+      // reaches the preview table), which would silently shrink this test's
+      // "5 rows, 2 errors" contract to 4 rows — see annotation.
       {
         employeeCode: invalidCodes[0],
         name: 'PW Bulk Bad1',
@@ -782,11 +888,11 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         mobileNumber: '99999',
         emailId: '',
         gender: 'MALE',
-        dob: 'not-a-date',
+        dob: '1988-04-10',
         department: SEED_DEPT,
         designation: SEED_DESIG,
         roles: 'EMPLOYEE',
-        jurisdictions: SEED_BOUNDARY,
+        jurisdictions: '',
         dateOfAppointment: '',
       },
       // Invalid row 2 — unknown department + unknown role code.
@@ -802,7 +908,7 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
         department: 'NO_SUCH_DEPT',
         designation: SEED_DESIG,
         roles: 'NO_SUCH_ROLE',
-        jurisdictions: SEED_BOUNDARY,
+        jurisdictions: '',
         dateOfAppointment: '',
       },
     ];
@@ -828,7 +934,11 @@ The xlsx sheet name is 'Employee' to match excelParser.ts's allow-list (Employee
     await createBtn.click();
 
     // Completion page — 3 landed, download-credentials CTA surfaces.
-    await expect(page.getByText(/3\s*(created|success)/i).first()).toBeVisible({
+    // RC8: completion copy is "Created 3 employees" (number AFTER the word),
+    // not "3 created" — accept either order.
+    await expect(
+      page.getByText(/(?:created\s+3|3\s+(?:created|success))/i).first(),
+    ).toBeVisible({
       timeout: 90_000,
     });
 

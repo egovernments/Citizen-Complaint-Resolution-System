@@ -48,15 +48,16 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/localization', () => {
-  test('1. tenant parity — both ke and ke.nairobi return the same rainmaker-common en_IN count', {
+  test('1. tenant parity — root and city tenants serve a coherent rainmaker-common en_IN bundle', {
     annotation: {
       type: 'description',
-      description: `Tenant-parity guard: localization counts at root tenant (ke) and city tenant (ke.nairobi) for rainmaker-common / en_IN must match within ±2 rows. Probed 2026-04-23 at 4,259 rows on each. Tiny skew is tolerated to absorb seed/inline-edit churn.
+      description: `Tenant-parity guard: localization counts at root tenant and city tenant for rainmaker-common / en_IN must be coherent. On a FLAT deployment (root tenant IS the city tenant — the same tenant queried twice) the two counts must match EXACTLY. On a TWO-LEVEL deployment (root != city, e.g. mz / mz.maputo) the localization service resolves the city bundle as root rows PLUS city-specific additions (measured on mz/mz.maputo: 5,789 root rows vs 6,224 city rows — the city adds 435 city-specific rows), so a strict ±2 parity assert is a flat-deployment (Kenya-seed) convention, not a portable service contract. The portable contract this test enforces instead: the city bundle must be AT LEAST as complete as the root's — a city count BELOW root means city-level lookups lost inherited rows, which is the actual regression this test guards against.
 
 Steps:
 1. In parallel, locSearch(TENANT_CODE, 'en_IN', 'rainmaker-common') and locSearch(CITY_TENANT, 'en_IN', 'rainmaker-common').
 2. Assert keRows.length > 100.
-3. Assert |keRows.length - cityRows.length| <= 2.
+3. If TENANT_CODE === CITY_TENANT (flat deployment): assert cityRows.length === keRows.length exactly.
+   Else (two-level deployment): assert cityRows.length >= keRows.length.
 
 Catches a regression where city-level localization stops inheriting from root, or where one tenant gets a partial seed.`,
     },
@@ -75,8 +76,17 @@ Catches a regression where city-level localization stops inheriting from root, o
       'rainmaker-common en_IN not seeded on this deployment (localization bundle not loaded)',
     );
     expect(keRows.length).toBeGreaterThan(100);
-    // ±2 slack — seed / inline-edit churn can create tiny skew.
-    expect(Math.abs(keRows.length - cityRows.length)).toBeLessThanOrEqual(2);
+    if (TENANT_CODE === CITY_TENANT) {
+      // Flat deployment: same tenant queried twice must agree exactly.
+      expect(cityRows.length).toBe(keRows.length);
+    } else {
+      // Two-level deployment: the localization service resolves city = root
+      // rows + city-specific additions (measured on mz/mz.maputo: 5,789 vs
+      // 6,224), so the city bundle must be at least as complete as the
+      // root's. A city count BELOW root means city-level lookups lost
+      // inherited rows — the actual regression this test guards.
+      expect(cityRows.length).toBeGreaterThanOrEqual(keRows.length);
+    }
   });
 
   test('2. upsert + cache-bust round-trip — value lands after bust, not before', {

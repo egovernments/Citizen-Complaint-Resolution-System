@@ -21,7 +21,7 @@ import {
   type AuthInfo,
 } from '../utils/manage/api';
 import { cleanupPgrComplaints } from '../utils/manage/teardown';
-import { generateCitizenPhone, ROOT_TENANT, TENANT } from '../utils/env';
+import { generateCitizenPhone, ROOT_TENANT, TENANT, LOCALITY_CODE } from '../utils/env';
 
 // Tenant identifiers come from env so the suite runs on any deployment.
 // TENANT_CODE is the STATE/root tenant (citizen tenantId); CITY_TENANT is the
@@ -138,10 +138,15 @@ Citizen tenant must be ROOT — assigning to city would break login flows. Clean
       'PW filed-by-test — complaint description over ten chars',
     );
 
-    // LocalityPicker is three cascading selects. We pick the first hierarchy
-    // option, then the first boundary type, then either liveBoundaryCode
-    // (if known on this tenant) or the first listed boundary.
-    await pickLocality(page, liveBoundaryCode || undefined);
+    // LocalityPicker is three cascading selects. pickLocality does a first
+    // pass across EVERY hierarchy x boundary-type combo looking ONLY for a
+    // boundary matching the known-good code (liveBoundaryCode from a recent
+    // complaint, or the env/profile LOCALITY_CODE floor); only if that comes
+    // up empty everywhere does it fall back to the first combo with any
+    // option (RC6 — the old single-combo-first behavior stamped ROOT tenant
+    // whenever the default hierarchy's tree had no city boundaries).
+    const preferredLocality = liveBoundaryCode || LOCALITY_CODE;
+    const { pickedPreferred } = await pickLocality(page, preferredLocality);
 
     // Citizen mobile — valid for the deployment's MDMS mobile rule
     // (9 digits starting with 7/1). A raw 10-digit 7… fails that rule.
@@ -163,9 +168,20 @@ Citizen tenant must be ROOT — assigning to city would break login flows. Clean
 
     // Citizen tenant must be the STATE tenant, not the city.
     expect((service.citizen as Record<string, unknown>)?.tenantId).toBe(TENANT_CODE);
-    // Address tenant is the city.
+    // Address tenant. When pickLocality found the known-good (city) boundary
+    // in pass 1, the app must stamp CITY — that's the strict contract this
+    // test guards. When pass 1 found nothing anywhere and pass 2 fell back to
+    // whatever combo offered ANY option (e.g. a flat deployment or a
+    // deployment whose only reachable tree is the root hierarchy), the address
+    // tenant must be whichever tenant actually owns the picked boundary —
+    // see resolveComplaintAddressTenant (dataProvider.ts:355-391). On a flat
+    // deployment ROOT === CITY so both branches are equally strict there.
     const address = service.address as Record<string, unknown>;
-    expect(address?.tenantId).toBe(CITY_TENANT);
+    if (pickedPreferred) {
+      expect(address?.tenantId).toBe(CITY_TENANT);
+    } else {
+      expect([TENANT_CODE, CITY_TENANT]).toContain(address?.tenantId);
+    }
     expect(((address?.locality as Record<string, unknown>)?.code) ?? '').toBeTruthy();
 
     // Wait for the redirect to the Show page with a fresh <PREFIX>-PGR-* id
@@ -776,17 +792,35 @@ async function pickComplaintType(
   }
 }
 
+/** Escape regex metacharacters so a live boundary code can be used verbatim
+ *  inside a `getByRole('option', { name: new RegExp(...) })` match. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function pickLocality(
   page: import('@playwright/test').Page,
   preferredCode?: string,
-): Promise<void> {
+): Promise<{ pickedPreferred: boolean }> {
   // LocalityPicker is three radix Selects in one grid — Hierarchy → Boundary
   // Type → Boundary(locality). Only the last carries a "Locality" label
   // (htmlFor); the first two expose no accessible label, so scope to the grid
   // and drive them positionally. The default hierarchy can be one with no
   // usable city boundaries (e.g. ADMIN 400s on this tenant while MAPUTO_ADMIN
   // holds the real tree), so iterate hierarchy × boundary-type until the
-  // Boundary select actually offers options, then pick preferredCode or first.
+  // Boundary select actually offers options.
+  //
+  // RC6: picking the FIRST combo offering ANY option used to stop the walk
+  // even when that combo was the root-level tree — the app then (correctly)
+  // stamps address.tenantId = ROOT via resolveComplaintAddressTenant
+  // (dataProvider.ts:355-391), breaking the "address tenant = CITY" contract.
+  // So we walk the WHOLE combo space twice: pass 1 looks only for
+  // `preferredCode` (a boundary code known to live under the city tree);
+  // pass 2 — only if pass 1 found nothing anywhere — falls back to today's
+  // original "first combo, first option" behavior. Boundary options render
+  // the raw code (LocalityPicker.tsx: `{b.name ?? b.code}`; relationship
+  // nodes carry no name), so a code-regex match is reliable.
+  //
   // Anchor on the picker's help text (unique) to scope to its 3 selects —
   // the individual Hierarchy/Boundary-Type triggers carry no accessible label.
   const localityGroup = page
@@ -799,20 +833,6 @@ async function pickLocality(
   const boundaryType = selects.nth(1);
   const localityTrigger = selects.nth(2);
 
-  const pickFirstOrPreferred = async (): Promise<boolean> => {
-    const options = page.getByRole('option');
-    if ((await options.count()) === 0) return false;
-    if (preferredCode) {
-      const pref = page.getByRole('option', { name: new RegExp(preferredCode) });
-      if (await pref.first().isVisible().catch(() => false)) {
-        await pref.first().click();
-        return true;
-      }
-    }
-    await options.first().click();
-    return true;
-  };
-
   const countOptions = async (trigger: import('@playwright/test').Locator): Promise<number> => {
     if (!(await trigger.isEnabled().catch(() => false))) return 0;
     await trigger.click();
@@ -821,28 +841,65 @@ async function pickLocality(
     return n;
   };
 
-  const hierN = await countOptions(hierarchy);
-  for (let h = 0; h < Math.max(hierN, 1); h++) {
-    if (hierN > 0) {
-      await page.getByRole('option').nth(h).click();
-    }
-    const typeN = await countOptions(boundaryType);
-    for (let t = 0; t < typeN; t++) {
-      await page.getByRole('option').nth(t).click();
-      if (!(await localityTrigger.isEnabled().catch(() => false))) continue;
-      await localityTrigger.click();
-      if (await pickFirstOrPreferred()) return;
-      await page.keyboard.press('Escape').catch(() => {});
-      // Re-open the type select for the next candidate.
-      if (t + 1 < typeN && (await boundaryType.isEnabled().catch(() => false))) {
-        await boundaryType.click();
+  // Walk every hierarchy x boundary-type combo, opening the locality select
+  // for each one. `onLocalityOpen` decides whether to pick an option for
+  // THIS combo (returning true stops the walk) or to back out (Escape) and
+  // let the walk continue to the next combo (returning false).
+  const walkCombos = async (
+    onLocalityOpen: () => Promise<boolean>,
+  ): Promise<boolean> => {
+    const hierN = await countOptions(hierarchy);
+    for (let h = 0; h < Math.max(hierN, 1); h++) {
+      if (hierN > 0) {
+        await page.getByRole('option').nth(h).click();
+      }
+      const typeN = await countOptions(boundaryType);
+      for (let t = 0; t < typeN; t++) {
+        await page.getByRole('option').nth(t).click();
+        if (await localityTrigger.isEnabled().catch(() => false)) {
+          await localityTrigger.click();
+          if (await onLocalityOpen()) return true;
+          await page.keyboard.press('Escape').catch(() => {});
+        }
+        // Re-open the type select for the next candidate.
+        if (t + 1 < typeN && (await boundaryType.isEnabled().catch(() => false))) {
+          await boundaryType.click();
+        }
+      }
+      // Re-open the hierarchy select for the next candidate.
+      if (h + 1 < hierN && (await hierarchy.isEnabled().catch(() => false))) {
+        await hierarchy.click();
       }
     }
-    // Re-open the hierarchy select for the next candidate.
-    if (h + 1 < hierN && (await hierarchy.isEnabled().catch(() => false))) {
-      await hierarchy.click();
-    }
+    return false;
+  };
+
+  // Pass 1: across ALL combos, look ONLY for preferredCode.
+  if (preferredCode) {
+    const found = await walkCombos(async () => {
+      const options = page.getByRole('option');
+      if ((await options.count()) === 0) return false;
+      const pref = page.getByRole('option', { name: new RegExp(escapeRegex(preferredCode)) });
+      if (await pref.first().isVisible().catch(() => false)) {
+        await pref.first().click();
+        return true;
+      }
+      return false;
+    });
+    if (found) return { pickedPreferred: true };
   }
+
+  // Pass 2: preferredCode not reachable anywhere — fall back to the first
+  // combo that offers ANY option, picking its first option (original
+  // behavior, kept for flat/degenerate deployments).
+  const fellBack = await walkCombos(async () => {
+    const options = page.getByRole('option');
+    if ((await options.count()) === 0) return false;
+    await options.first().click();
+    return true;
+  });
+  if (fellBack) return { pickedPreferred: false };
+
   throw new Error('pickLocality: no hierarchy/type combination yielded a selectable boundary');
 }
 

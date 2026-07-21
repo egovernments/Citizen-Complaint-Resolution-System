@@ -258,7 +258,11 @@ Loose regex on "department|row" tolerates UI label changes between Create-N-depa
     await createBtn.click();
 
     // Complete screen — should report 5 created / 0 failed.
-    await expect(page.getByText(/5\s*(created|success)/i).first()).toBeVisible({
+    // RC8: completion copy is "Created 5 departments" (number AFTER the
+    // word), not "5 created" — accept either order.
+    await expect(
+      page.getByText(/(?:created\s+5|5\s+(?:created|success))/i).first(),
+    ).toBeVisible({
       timeout: 60_000,
     });
 

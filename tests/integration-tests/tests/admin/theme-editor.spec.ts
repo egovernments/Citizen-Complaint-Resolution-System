@@ -160,16 +160,16 @@ Uses the auth.setup.ts storageState — admin token already in localStorage.`,
 test('editing a brand token updates the preview live', {
   annotation: {
     type: 'description',
-    description: `Round-trip test for the editor's live preview: changing a color token in the form must mutate the matching preview element's computed backgroundColor on the next render. We drive the "Primary button / bg default" token (colors.button-primary-bg-default) — ThemePreview fans it into the v1 primary.main path that the Primary preview button renders, and it is the last writer to primary.main in ThemePreview's V2_TO_V1_FALLBACK map, so the change is deterministic regardless of the seed record's other tokens. Uses #FF1493 (hot pink) so it can't collide with any kenya-green default. Reverts before exiting so the test is idempotent and never leaves MDMS dirty.
+    description: `Round-trip test for the editor's live preview: changing a color token in the form must mutate the matching preview element's computed backgroundColor on the next render. We drive the "Chart 1" token (colors.chart-1) — in ThemePreview's V2_TO_V1_FALLBACK map, 'chart-1' -> ['digitv2.chart-1'] is the ONLY writer of that v1 path (unlike 'primary.main', which 'sidebar-selected-text' also writes later in Object.entries order, making that assertion record-dependent — green on some theme records, red on others, e.g. bomet's). Chart tokens fan into their own digitv2.chart-N slot with no other writer, so the assertion is deterministic for any theme record. Uses #FF1493 (hot pink) so it can't collide with any seed default. Reverts before exiting so the test is idempotent and never leaves MDMS dirty.
 
 Steps:
 1. setTimeout 90s; navigate to the edit URL.
-2. Click the "Buttons" tab.
-3. Locate the "Primary button / bg default" row, find its <input type="text"> (the form-bound hex input); wait for visibility.
-4. Capture the originalHex (default '#006B3F' fallback).
+2. Click the "Charts" tab.
+3. Locate the "Chart 1" row, find its <input type="text"> (the form-bound hex input); wait for visibility.
+4. Capture the originalHex.
 5. Fill TEST_HEX = '#FF1493' and blur.
-6. Locate the preview button [data-token~="colors.primary.main"] filtered by text "Primary"; assert visible.
-7. Use expect.poll on getComputedStyle(button).backgroundColor; assert it becomes 'rgb(255, 20, 147)' within 5s.
+6. Locate the preview element [data-token~="colors.digitv2.chart-1"] (the first chart bar); assert visible.
+7. Use expect.poll on getComputedStyle(el).backgroundColor; assert it becomes 'rgb(255, 20, 147)' within 5s.
 8. Fill the input back to originalHex and blur.
 
 Doesn't actually click Save — the revert keeps MDMS clean even if a stray click hits the save button.`,
@@ -182,42 +182,40 @@ Doesn't actually click Save — the revert keeps MDMS clean even if a stray clic
     timeout: 45_000,
   });
 
-  // Switch to the Buttons tab so the input is visible.
-  await page.getByRole('tab', { name: 'Buttons' }).first().click({ timeout: 30_000 });
+  // Switch to the Charts tab so the input is visible.
+  await page.getByRole('tab', { name: 'Charts' }).first().click({ timeout: 30_000 });
 
   // ColorInput renders a native <input type=color> + a text box. Target the
   // text box since that binds directly to the form value. The label text
-  // comes from the theme-config descriptor (colors.button-primary-bg-default).
-  const primaryMainRow = page
-    .locator('label', { hasText: /Primary button \/ bg default/i })
+  // comes from the theme-config descriptor (colors.chart-1, label "Chart 1").
+  const chart1Row = page
+    .locator('label', { hasText: /^Chart 1$/i })
     .first()
     .locator('..');
-  const hexInput = primaryMainRow.locator('input[type="text"]').first();
+  const hexInput = chart1Row.locator('input[type="text"]').first();
   await expect(hexInput).toBeVisible({ timeout: 15_000 });
 
   const originalHex = (await hexInput.inputValue()) || '#006B3F';
 
   // A clearly-distinct test color — hot pink, won't collide with any
-  // kenya-green default.
+  // seed default.
   const TEST_HEX = '#FF1493';
   await hexInput.fill(TEST_HEX);
   await hexInput.blur();
 
-  // Read the computed bg color off the primary button in the preview.
-  // Several elements carry data-token~="colors.primary.main" (sidebar
-  // active item, button) but only the button's background is driven by
-  // primary.main — the sidebar active item uses selected-bg. Target the
-  // button by its visible label.
-  const previewButton = page
-    .locator('[data-token~="colors.primary.main"]')
-    .filter({ hasText: /^Primary$/ })
+  // Read the computed bg color off the first chart bar in the preview.
+  // colors.digitv2.chart-1 is written ONLY by the chart-1 form field
+  // (ThemePreview.tsx V2_TO_V1_FALLBACK) — no other token maps into it,
+  // so this is deterministic regardless of the seed record's other tokens.
+  const previewBar = page
+    .locator('[data-token~="colors.digitv2.chart-1"]')
     .first();
-  await expect(previewButton).toBeVisible();
+  await expect(previewBar).toBeVisible();
 
   await expect
     .poll(
       async () =>
-        previewButton.evaluate((el) => getComputedStyle(el as HTMLElement).backgroundColor),
+        previewBar.evaluate((el) => getComputedStyle(el as HTMLElement).backgroundColor),
       { timeout: 5_000 },
     )
     .toBe('rgb(255, 20, 147)');
