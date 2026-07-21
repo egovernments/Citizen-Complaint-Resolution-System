@@ -185,9 +185,12 @@ const SelectOtp = ({
 
   // QA #2: config.texts.* arrive ALREADY translated (see SelectMobileNumber) —
   // and cardText is even composed with the phone number upstream. Consume
-  // directly instead of re-translating into the English fallback.
-  const headerText = config?.texts?.header || "Verify your number";
-  const cardText = config?.texts?.cardText || null;
+  // directly instead of re-translating into the English fallback; raw
+  // ALL_CAPS keys (unseeded tenant/locale) still fall back to English.
+  const looksLikeRawKey = (s) => typeof s === "string" && /^[A-Z0-9_]{3,}$/.test(s.trim());
+  const pick = (v, fb) => (v && !looksLikeRawKey(v) ? v : fb);
+  const headerText = pick(config?.texts?.header, "Verify your number");
+  const cardText = pick(config?.texts?.cardText, null);
 
   const isReady = otp?.length === OTP_LENGTH && canSubmit;
 
@@ -251,7 +254,7 @@ const SelectOtp = ({
             </p>
           ) : null}
           <V2Button type="submit" disabled={!isReady} width="full">
-            {config?.texts?.nextText || tr("CS_COMMONS_NEXT", "Continue")}
+            {pick(config?.texts?.nextText, null) || tr("CS_COMMONS_NEXT", "Continue")}
           </V2Button>
         </form>
 
