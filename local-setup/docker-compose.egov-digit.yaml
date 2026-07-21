@@ -414,7 +414,14 @@ services:
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
+      # Schema is owned by the external egov-enc-service-migration container
+      # (like every other service — egov-user/filestore/localization all set
+      # this false). enc was the lone service still running embedded Flyway;
+      # on an existing DB the app's Flyway then fights the migrator's history
+      # table (enc_schema_version vs the standard egov_enc_service_schema) and
+      # the service crash-loops on "relation enc_schema_version_pk already
+      # exists". Disable it so the external migrator is the single source.
+      SPRING_FLYWAY_ENABLED: 'false'
       SPRING_FLYWAY_TABLE: enc_schema_version
       SERVER_PORT: 1234
       OTEL_TRACES_EXPORTER: otlp
