@@ -45,13 +45,15 @@ const TopBar = ({
 
         <div className="RightMostTopBarOptions">
           {!hideNotificationIconOnSomeUrlsWhenNotLoggedIn ? changeLanguage : null}
-          {!hideNotificationIconOnSomeUrlsWhenNotLoggedIn ? (
+          {/* QA #16: the bell renders only when there ARE unread notifications.
+              When the count query is disabled (no notification service for the
+              tenant) notificationCountLoaded stays false, so the bell — and its
+              dead-end empty page — never shows. */}
+          {!hideNotificationIconOnSomeUrlsWhenNotLoggedIn && notificationCountLoaded && notificationCount > 0 ? (
             <div className="EventNotificationWrapper" onClick={onNotificationIconClick}>
-              {notificationCountLoaded && notificationCount ? (
-                <span>
-                  <p>{notificationCount}</p>
-                </span>
-              ) : null}
+              <span>
+                <p>{notificationCount}</p>
+              </span>
               <NotificationBell />
             </div>
           ) : null}

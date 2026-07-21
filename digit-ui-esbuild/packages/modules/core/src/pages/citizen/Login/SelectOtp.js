@@ -183,11 +183,22 @@ const SelectOtp = ({
     );
   }
 
-  const headerText = config?.texts?.header
-    ? tr(config.texts.header, "Verify your number")
-    : "Verify your number";
-  const cardText = config?.texts?.cardText
-    ? tr(config.texts.cardText, "Enter the 6-digit code we just sent.")
+  // QA #2: config.texts.* arrive ALREADY translated (see SelectMobileNumber) —
+  // and cardText is even composed with the phone number upstream. Consume
+  // directly instead of re-translating into the English fallback; raw
+  // ALL_CAPS keys (unseeded tenant/locale) still fall back to English.
+  const looksLikeRawKey = (s) => typeof s === "string" && /^[A-Z0-9_]{3,}$/.test(s.trim());
+  const pick = (v, fb) => (v && !looksLikeRawKey(v) ? v : fb);
+  const headerText = pick(config?.texts?.header, "Verify your number");
+  // cardText is composed upstream as "<translated> <mobileNumber>", so an
+  // unseeded key yields "CS_LOGIN_OTP_TEXT 2588…" — whole-string matching
+  // misses it. Test only the FIRST token; on a raw key fall back to the
+  // English default (the pre-existing tr() behaviour).
+  const cardTextValue = config?.texts?.cardText;
+  const cardText = cardTextValue
+    ? looksLikeRawKey(String(cardTextValue).trim().split(/\s+/)[0])
+      ? "Enter the 6-digit code we just sent."
+      : cardTextValue
     : null;
 
   const isReady = otp?.length === OTP_LENGTH && canSubmit;
@@ -252,7 +263,7 @@ const SelectOtp = ({
             </p>
           ) : null}
           <V2Button type="submit" disabled={!isReady} width="full">
-            {tr(config?.texts?.nextText || "CS_COMMONS_NEXT", "Continue")}
+            {pick(config?.texts?.nextText, null) || tr("CS_COMMONS_NEXT", "Continue")}
           </V2Button>
         </form>
 

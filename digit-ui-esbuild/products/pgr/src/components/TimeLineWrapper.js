@@ -27,7 +27,11 @@ const maskPhone = (phone) => {
 const isCitizenActor = (person) =>
   Array.isArray(person?.roles) && person.roles.some((r) => (r?.code || r) === "CITIZEN");
 
-const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", currentStateChildren = null, maskConfidential = false }) => {
+// QA #19: maskEmployeeContacts — set by the EMPLOYEE details page only —
+// masks every non-citizen actor's name and mobile in the timeline (the
+// requirement is mask, not remove). The citizen page never passes it, so
+// citizen-side behaviour is driven by maskConfidential/backend masking alone.
+const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", currentStateChildren = null, maskConfidential = false, maskEmployeeContacts = false }) => {
     const { t } = useTranslation();
 
     const tenantId = Digit.ULBService.getCurrentTenantId();
@@ -179,7 +183,9 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                 const personRecord = isAssigningAction(instance?.action) ? assignee : instance?.assigner;
                 // Confidential complaints: mask the CITIZEN actor's identity
                 // (employees stay visible — accountability is intact).
-                const maskThis = maskConfidential && isCitizenActor(personRecord);
+                const maskThis =
+                  (maskConfidential && isCitizenActor(personRecord)) ||
+                  (maskEmployeeContacts && personRecord && !isCitizenActor(personRecord));
                 const mobile = isAssigningAction(instance?.action) ? assignee?.mobileNumber : instance?.assigner?.mobileNumber;
                 // The backend already masks the mobile per viewer privilege
                 // ("Contact Details: *****0104"). Mirror that decision onto the

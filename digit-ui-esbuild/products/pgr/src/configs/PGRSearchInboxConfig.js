@@ -210,33 +210,11 @@ const PGRSearchInboxConfig = (visibilityEnabled = true) => {
 
                     },
                     fields: [
-                        // Legacy assigned-to-me / assigned-to-all radio,
-                        // restored only when the visibility tabs are OFF.
-                        ...(visibilityEnabled
-                            ? []
-                            : [
-                                  {
-                                      label: "",
-                                      type: "radio",
-                                      isMandatory: false,
-                                      disable: false,
-                                      populators: {
-                                          name: "assignedToMe",
-                                          options: [
-                                              { code: "ASSIGNED_TO_ME", name: "ASSIGNED_TO_ME" },
-                                              { code: "ASSIGNED_TO_ALL", name: "ASSIGNED_TO_ALL" },
-                                          ],
-                                          optionsKey: "name",
-                                          styles: {
-                                              "gap": "1rem",
-                                              "flexDirection": "column"
-                                          },
-                                          innerStyles: {
-                                              "display": "flex"
-                                          }
-                                      },
-                                  },
-                              ]),
+                        // QA #18: the assigned-to-me / assigned-to-all radio is
+                        // gone from the left panel. The defaultValues block above
+                        // keeps assignedToMe=ASSIGNED_TO_ALL, and preProcess only
+                        // narrows to the logged-in user on ASSIGNED_TO_ME — so
+                        // with no control the inbox always searches ALL.
                         {
 
                             label: "CS_COMPLAINT_DETAILS_COMPLAINT_SUBTYPE",
