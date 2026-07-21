@@ -74,7 +74,8 @@ const PGRSearchInbox = () => {
   // assigned-to-me radio restored, OPEN_STATES default — and skips the
   // workflow/_count requests entirely.
   const { enabled: visibilityEnabled, serverSide: visibilityServerSide, isLoading: visLoading } = useInboxVisibility();
-  const [activeTab, setActiveTab] = useState("MY");
+  // QA #18: default scope is "everyone's complaints" — in tabs mode too.
+  const [activeTab, setActiveTab] = useState("ALL");
   // Both tabs share the same status scope (all open/actionable states); they
   // differ on the assignee axis — My = assigned to me, All = everyone's
   // (PO decision 2026-07-15; the tabs replaced the assigned-to-me radio).

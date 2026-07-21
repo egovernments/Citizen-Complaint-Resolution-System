@@ -4,7 +4,27 @@ import { PopUp, Timeline, TimelineMolecule, Loader } from '@egovernments/digit-u
 import { useMyContext } from "../utils/context";
 import { convertEpochFormateToDate } from '../utils';
 
-const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "" }) => {
+// QA #19 (employee timeline): mask, don't remove, people details.
+// Fixed-shape masks so real lengths don't leak: names keep the first letter of
+// each word ("Roberta Manhica" -> "R*** M***"), numbers keep the last 4 digits.
+const maskName = (name) => {
+  if (!name || name.length < 2) return name;
+  return String(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0) + "***")
+    .join(" ");
+};
+const maskPhone = (phone) => {
+  if (!phone || phone.length < 4) return phone;
+  return "******" + String(phone).slice(-4);
+};
+const isCitizenActor = (person) =>
+  Array.isArray(person?.roles) && person.roles.some((r) => (r?.code || r) === "CITIZEN");
+
+// maskEmployeeContacts is passed by the EMPLOYEE details page only — the
+// citizen page never sets it, so citizen-side rendering is unchanged.
+const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", maskEmployeeContacts = false }) => {
     const { state } = useMyContext();
     const { t } = useTranslation();
 
@@ -65,9 +85,13 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
             const steps = workflowData.ProcessInstances.map((instance, index) => {
                 const assignee = instance?.assignes?.[0];
                 const personRecord = isAssigningAction(instance?.action) ? assignee : instance?.assigner;
-                const personLine = formatPerson(personRecord);
                 const mobile = isAssigningAction(instance?.action) ? assignee?.mobileNumber : instance?.assigner?.mobileNumber;
-                const contactLine = mobile ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${mobile}` : null;
+                // QA #19: on the employee page, employee (non-citizen) actors'
+                // name and contact number are masked — visible shape, hidden value.
+                const maskThis = maskEmployeeContacts && personRecord && !isCitizenActor(personRecord);
+                const personLine = maskThis ? maskName(formatPerson(personRecord)) : formatPerson(personRecord);
+                const shownMobile = maskThis ? maskPhone(mobile) : mobile;
+                const contactLine = shownMobile ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${shownMobile}` : null;
 
                 return {
                     label: t(`${labelPrefix}${instance?.action}`),
