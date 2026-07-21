@@ -71,12 +71,21 @@ export const CreateComplaintConfig = {
                     const raw = window?.__DIGIT_USER_VALIDATION?.name?.pattern;
                     if (raw) {
                       try {
-                        return raw instanceof RegExp ? raw : new RegExp(raw);
+                        if (raw instanceof RegExp) return raw;
+                        // Compile with the `u` flag first so Unicode property
+                        // escapes (\p{L}/\p{N}) in the master work; fall back
+                        // to a plain compile for legacy patterns that aren't
+                        // valid in Unicode mode.
+                        try {
+                          return new RegExp(raw, "u");
+                        } catch (eu) {
+                          return new RegExp(raw);
+                        }
                       } catch (e) {
                         console.error("Invalid name pattern in FormValidations master:", e);
                       }
                     }
-                    return /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{0,29}$)^.*$/;
+                    return /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[\p{L}][\p{L}\p{N} _\-\(\)]{0,29}$)^.*$/u;
                   },
                 }
               },

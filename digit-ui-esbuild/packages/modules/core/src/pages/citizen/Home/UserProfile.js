@@ -169,7 +169,14 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
 
               acc[key] = new RegExp(pattern, flags); // Converting properly
             } else {
-              acc[key] = new RegExp(value); // Treating it as a normal regex pattern (no flags)
+              // Prefer Unicode mode so property escapes (\p{L}) from MDMS
+              // masters work; fall back to a plain compile for legacy
+              // patterns that aren't valid under the `u` flag.
+              try {
+                acc[key] = new RegExp(value, "u");
+              } catch (eu) {
+                acc[key] = new RegExp(value); // Treating it as a normal regex pattern (no flags)
+              }
             }
           } catch (error) {
             console.error(`Error parsing regex for key "${key}":`, error);
@@ -328,6 +335,10 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
           ...(record
             ? {
                 prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
+                // The employee Edit-Profile branch reads `countryCode` (not
+                // `prefix`) — expose the master's value under both names so
+                // it doesn't silently fall back to the +91 default.
+                countryCode: record.countryCode || DEFAULT_MOBILE_PREFIX,
                 maxLength: mobileRegexMaxLength(record.mobileNumberRegex) || 15,
               }
             : {}),

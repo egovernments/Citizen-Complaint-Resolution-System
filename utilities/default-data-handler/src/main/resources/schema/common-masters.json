@@ -703,7 +703,7 @@
         },
         "regex": {
           "type": "string"
-        },
+        }
       },
       "x-ref-schema": [],
       "additionalProperties": false
