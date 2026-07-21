@@ -70,10 +70,12 @@ PLAYBOOK
 }
 
 check() {  # label size total registries expected_max_file [extra_vars_json]
-  local label="$1" size="$2" total="$3" regs="$4" want="$5" extra="${6:-}"
+  # Not named `extra`: render() has a local array by that name, and shellcheck
+  # tracks the name globally — it would read this scalar as SC2178/SC2128.
+  local label="$1" size="$2" total="$3" regs="$4" want="$5" extra_vars="${6:-}"
   local json ok=1 detail=""
 
-  if ! json="$(render "$size" "$total" "$regs" "$extra")"; then
+  if ! json="$(render "$size" "$total" "$regs" "$extra_vars")"; then
     echo "FAIL  $label — render failed"; fail=$((fail+1)); return
   fi
 
@@ -145,7 +147,7 @@ check "explicit max-file overrides the derivation"  100m 1g '[]' 5 \
 # Everything above renders onto an empty host. These start from a file already
 # on disk, which is where the merge can go wrong in ways a fresh write cannot.
 
-merge_check() {  # label existing_json assertion_py
+merge_check() {  # label existing_json assertion_py [registries_json]
   local label="$1"
   printf '%s' "$2" > "$WORK/existing.json"
   local json
