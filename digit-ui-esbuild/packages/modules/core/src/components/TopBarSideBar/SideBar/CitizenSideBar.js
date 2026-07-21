@@ -417,22 +417,16 @@ export const CitizenSideBar = ({
     icon: "Language",
   }));
 
+  // QA #10: the city (tenant-name) and Modules entries are removed from the
+  // citizen hamburger — neither leads anywhere useful for a citizen here.
+  // HOME stays, localized via COMMON_BOTTOM_NAVIGATION_HOME.
   const hamburgerItems = [
     {
       label: t("COMMON_BOTTOM_NAVIGATION_HOME"),
       value: "HOME",
       icon: "Home",
-      // children: transformedSelectedCityData?.length>0 ? transformedSelectedCityData : undefined,
       type: "custom",
       key: "home",
-    },
-    {
-      label: city,
-      value: city,
-      children: transformedSelectedCityData?.length > 0 ? transformedSelectedCityData : undefined,
-      type: "custom",
-      icon: "LocationCity",
-      key: "city",
     },
     {
       label: t("Language"),
@@ -451,11 +445,6 @@ export const CitizenSideBar = ({
         },
       ]
     : []),
-    {
-      label: t("Modules"),
-      icon: "DriveFileMove",
-      children: transformedMenuItems,
-    },
   ];
   return isMobile ? (
     <Hamburger
