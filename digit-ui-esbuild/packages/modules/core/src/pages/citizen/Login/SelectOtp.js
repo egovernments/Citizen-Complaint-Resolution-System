@@ -190,7 +190,16 @@ const SelectOtp = ({
   const looksLikeRawKey = (s) => typeof s === "string" && /^[A-Z0-9_]{3,}$/.test(s.trim());
   const pick = (v, fb) => (v && !looksLikeRawKey(v) ? v : fb);
   const headerText = pick(config?.texts?.header, "Verify your number");
-  const cardText = pick(config?.texts?.cardText, null);
+  // cardText is composed upstream as "<translated> <mobileNumber>", so an
+  // unseeded key yields "CS_LOGIN_OTP_TEXT 2588…" — whole-string matching
+  // misses it. Test only the FIRST token; on a raw key fall back to the
+  // English default (the pre-existing tr() behaviour).
+  const cardTextValue = config?.texts?.cardText;
+  const cardText = cardTextValue
+    ? looksLikeRawKey(String(cardTextValue).trim().split(/\s+/)[0])
+      ? "Enter the 6-digit code we just sent."
+      : cardTextValue
+    : null;
 
   const isReady = otp?.length === OTP_LENGTH && canSubmit;
 
