@@ -183,12 +183,11 @@ const SelectOtp = ({
     );
   }
 
-  const headerText = config?.texts?.header
-    ? tr(config.texts.header, "Verify your number")
-    : "Verify your number";
-  const cardText = config?.texts?.cardText
-    ? tr(config.texts.cardText, "Enter the 6-digit code we just sent.")
-    : null;
+  // QA #2: config.texts.* arrive ALREADY translated (see SelectMobileNumber) —
+  // and cardText is even composed with the phone number upstream. Consume
+  // directly instead of re-translating into the English fallback.
+  const headerText = config?.texts?.header || "Verify your number";
+  const cardText = config?.texts?.cardText || null;
 
   const isReady = otp?.length === OTP_LENGTH && canSubmit;
 
@@ -252,7 +251,7 @@ const SelectOtp = ({
             </p>
           ) : null}
           <V2Button type="submit" disabled={!isReady} width="full">
-            {tr(config?.texts?.nextText || "CS_COMMONS_NEXT", "Continue")}
+            {config?.texts?.nextText || tr("CS_COMMONS_NEXT", "Continue")}
           </V2Button>
         </form>
 

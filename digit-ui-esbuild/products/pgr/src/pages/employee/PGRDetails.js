@@ -55,7 +55,10 @@ const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false,
       },
     });
   }
-  if (!isTerminal && (assigneeRoles?.length || 0) > 0) {
+  // QA #23: rejecting a complaint must not offer an assignee — REJECT is a
+  // verdict, not a hand-off (the CMS workflow's REJECT target state is not
+  // terminal and has assignable roles, which is why the dropdown appeared).
+  if (action !== "REJECT" && !isTerminal && (assigneeRoles?.length || 0) > 0) {
     body.push({
       type: "component",
       // Callers pass assigneeMandatory (dept-mapping + actor aware); default
@@ -611,6 +614,9 @@ const PGRDetails = () => {
                         // CCSD-1971 (B4): confidential complaints hide the
                         // citizen's identity from the employee timeline.
                         maskConfidential={!!pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes?.isConfidential}
+                        // QA #19: employee-side timeline masks employee names +
+                        // contact numbers (mask, not remove).
+                        maskEmployeeContacts
                       />
                     ),
                   },

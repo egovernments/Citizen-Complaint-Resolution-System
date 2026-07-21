@@ -59,9 +59,20 @@ const TONE_STYLES = {
 function StatusPill({ status, t }) {
   const tone = statusToTone(status);
   const palette = TONE_STYLES[tone];
-  const labelKey = `CS_COMMON_${palette.label}`;
-  const translated = t(labelKey);
-  const label = translated === labelKey ? palette.label : translated.toUpperCase();
+  // QA #17: label with the FULL workflow status (same CS_COMMON_<status> key
+  // the details page header uses) so the card and the opened complaint always
+  // agree. The 3-way tone bucket now drives the pill COLOR only. Falls back to
+  // the bucket label when the status key isn't localized.
+  const statusKey = `CS_COMMON_${status}`;
+  const translatedStatus = t(statusKey);
+  let label;
+  if (translatedStatus !== statusKey) {
+    label = translatedStatus.toUpperCase();
+  } else {
+    const labelKey = `CS_COMMON_${palette.label}`;
+    const translated = t(labelKey);
+    label = translated === labelKey ? palette.label : translated.toUpperCase();
+  }
   return (
     <span
       style={{
@@ -118,11 +129,6 @@ function ComplaintRow({ data, onClick, t, typeName }) {
   const dateStr = auditDetails?.createdTime
     ? Digit.DateUtils.ConvertTimestampToDate(auditDetails.createdTime)
     : "";
-  const stageKey = `${LOCALIZATION_KEY.CS_COMMON}_${applicationStatus}`;
-  const stage = (() => {
-    const v = t(stageKey);
-    return v === stageKey ? applicationStatus : v;
-  })();
   return (
     <Card
       role="button"
@@ -187,7 +193,9 @@ function ComplaintRow({ data, onClick, t, typeName }) {
               {serviceRequestId}
             </span>
             {dateStr ? <span>{dateStr}</span> : null}
-            {stage && stage !== title ? <span>{stage}</span> : null}
+            {/* QA #17: bottom state line removed — the title pill now carries
+                the full workflow status, so this duplicate (and previously
+                contradictory) line is gone. */}
           </div>
         </div>
         <ChevronRight

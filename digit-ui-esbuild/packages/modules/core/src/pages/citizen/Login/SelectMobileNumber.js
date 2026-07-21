@@ -74,12 +74,13 @@ const SelectMobileNumber = ({
     return v === key ? fallback : v;
   };
 
-  const headerText = config?.texts?.header
-    ? tr(config.texts.header, "Sign in")
-    : "Sign in";
-  const cardText = config?.texts?.cardText
-    ? tr(config.texts.cardText, "We'll send you a one-time password to verify your number.")
-    : null;
+  // QA #2: config.texts.* arrive ALREADY translated (Login/index.js runs every
+  // texts value through t() when building stepItems). Re-running them through
+  // tr() made the `v === key` guard always true for translated strings, so the
+  // hardcoded English fallback rendered even when the PT translation existed.
+  // Consume the pre-translated values directly.
+  const headerText = config?.texts?.header || "Sign in";
+  const cardText = config?.texts?.cardText || null;
 
   return (
     <V2LoginShell>
@@ -207,7 +208,7 @@ const SelectMobileNumber = ({
             disabled={!isMobileValid || !canSubmit}
             width="full"
           >
-            {tr(config?.texts?.nextText || "CS_COMMONS_NEXT", "Continue")}
+            {config?.texts?.nextText || tr("CS_COMMONS_NEXT", "Continue")}
           </V2Button>
         </form>
 

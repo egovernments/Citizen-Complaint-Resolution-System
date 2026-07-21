@@ -827,7 +827,8 @@ function Step0Type({ data, patch, serviceDefs, hierarchyDef, nodes, t }: StepBod
   }, [data.SelectComplaintType?.menuPath, serviceDefs]);
 
   return (
-    <StepShell title={tr(t, "CS_COMPLAINT_CATEGORY", "Complaint Category")} collapsible>
+    // QA #11: collapsible removed — the section is always expanded.
+    <StepShell title={tr(t, "CS_COMPLAINT_CATEGORY", "Complaint Category")}>
       <div className="space-y-5">
         {hierarchyActive ? (
           <ComplaintHierarchyPicker
