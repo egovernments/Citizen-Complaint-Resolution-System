@@ -260,6 +260,17 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, extOpts) 
     };
   }
 
+  // QA #26: receipt channel picked by the Reception Officer. Attached like
+  // complainantAddress — even without a category mapping — so the value never
+  // silently drops; absent when the officer didn't pick one.
+  const receivedChannel = formData?.ReceivedChannel?.code;
+  if (receivedChannel) {
+    complaint.service.extendedAttributes = {
+      ...(complaint.service.extendedAttributes || {}),
+      receivedChannel,
+    };
+  }
+
   return complaint;
 };
 

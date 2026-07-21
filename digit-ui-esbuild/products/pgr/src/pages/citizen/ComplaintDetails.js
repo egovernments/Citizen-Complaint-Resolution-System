@@ -302,11 +302,26 @@ const ComplaintDetailsPage = () => {
 
   const geoLocation = complaintDetails?.service?.address?.geoLocation;
   const address = complaintDetails?.service?.address;
+  // QA #31: complaints store only the lowercase boundary CODE (name is null),
+  // so the Endereço line rendered raw codes like "zumbo". Resolve through the
+  // boundary localization (module rainmaker-boundary-*) when loaded; otherwise
+  // title-case the code — always readable, never a raw identifier.
+  const localityLabel = (() => {
+    const loc = address?.locality;
+    if (!loc) return null;
+    if (loc.name) return loc.name;
+    if (!loc.code) return null;
+    const viaT = t(loc.code);
+    if (viaT && viaT !== loc.code) return viaT;
+    return String(loc.code)
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  })();
   const displayAddress = [
     address?.buildingName,
     address?.street,
     address?.landmark,
-    address?.locality?.name || address?.locality?.code,
+    localityLabel,
     address?.pincode,
   ]
     .filter(Boolean)
