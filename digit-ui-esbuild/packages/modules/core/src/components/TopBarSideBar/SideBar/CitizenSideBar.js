@@ -418,8 +418,11 @@ export const CitizenSideBar = ({
   }));
 
   // QA #10: the city (tenant-name) and Modules entries are removed from the
-  // citizen hamburger — neither leads anywhere useful for a citizen here.
+  // CITIZEN hamburger — neither leads anywhere useful for a citizen here.
   // HOME stays, localized via COMMON_BOTTOM_NAVIGATION_HOME.
+  // The same drawer renders the EMPLOYEE mobile navigation (isEmployee) —
+  // EmployeeSideBar is desktop-only, so Modules is an employee's ONLY mobile
+  // nav surface. Both entries stay for employees.
   const hamburgerItems = [
     {
       label: "HOME",
@@ -428,6 +431,18 @@ export const CitizenSideBar = ({
       type: "custom",
       key: "home",
     },
+    ...(isEmployee
+      ? [
+          {
+            label: city,
+            value: city,
+            children: transformedSelectedCityData?.length > 0 ? transformedSelectedCityData : undefined,
+            type: "custom",
+            icon: "LocationCity",
+            key: "city",
+          },
+        ]
+      : []),
     {
       label: t("Language"),
       children: transformedLanguageData?.length > 0 ? transformedLanguageData : undefined,
@@ -445,6 +460,15 @@ export const CitizenSideBar = ({
         },
       ]
     : []),
+    ...(isEmployee
+      ? [
+          {
+            label: t("Modules"),
+            icon: "DriveFileMove",
+            children: transformedMenuItems,
+          },
+        ]
+      : []),
   ];
   return isMobile ? (
     <Hamburger
