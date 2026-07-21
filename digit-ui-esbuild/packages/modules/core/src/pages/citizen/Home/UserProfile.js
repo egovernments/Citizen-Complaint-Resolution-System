@@ -325,15 +325,18 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         const formValidations = data?.["common-masters"]?.FormValidations || [];
         const emailRecord =
           formValidations.find((x) => x?.fieldType === "email" && x?.isActive !== false) || null;
-        const nameRecord =
-          formValidations.find((x) => x?.fieldType === "name" && x?.isActive !== false) || null;
-        if (!record && !emailRecord && !nameRecord) return null;
+        // NOTE: the fieldType:"name" row is deliberately NOT surfaced here.
+        // It carries the PGR complainant-name rule (CCSD-1990: letter-first,
+        // no apostrophe/period) — the PROFILE name rule must stay on the
+        // permissive built-in fallback (CCRS#556: OTP-signup users have their
+        // mobile number as name, and "O'Brien" / "John Jr." must save).
+        if (!record && !emailRecord) return null;
         return {
           // Either master may be unseeded — undefined entries are dropped
           // below so the globalConfigs/EMAIL_RE fallbacks stay in effect.
           // prefix/maxLength only ride along with an actual mobile record,
           // so an email-only master never clobbers the globalConfigs prefix.
-          UserProfileValidationConfig: [{ mobileNumber: record?.mobileNumberRegex, email: emailRecord?.regex, name: nameRecord?.regex }],
+          UserProfileValidationConfig: [{ mobileNumber: record?.mobileNumberRegex, email: emailRecord?.regex }],
           ...(record
             ? {
                 prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
