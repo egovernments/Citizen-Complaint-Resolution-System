@@ -704,10 +704,6 @@
         "regex": {
           "type": "string"
         },
-        "isActive": {
-          "type": "boolean",
-          "default": true
-        }
       },
       "x-ref-schema": [],
       "additionalProperties": false
