@@ -95,6 +95,15 @@ services:
   postgres-db:
     image: registry.preview.egov.theflywheel.in/postgres:16
     container_name: docker-postgres
+    # /dev/shm sizing (issue #1365). Postgres puts the dynamic shared memory
+    # that a parallel query's workers use to exchange tuples here — about 8 MB
+    # per query. Docker's default pad is 64 MB, so the 9th concurrent parallel
+    # query fails with "could not resize shared memory segment ... No space
+    # left on device". pgbouncer runs transaction pooling, so its
+    # DEFAULT_POOL_SIZE (60 below) is what bounds concurrency at the database:
+    # 60 x 8 MB = 480 MB worst case. A tmpfs is a ceiling, not a reservation —
+    # unused pages cost no memory.
+    shm_size: 1gb
     environment:
       POSTGRES_USER: egov
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
