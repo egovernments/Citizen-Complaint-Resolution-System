@@ -38,7 +38,7 @@ export type IconComponent = React.ComponentType<{ className?: string; "aria-hidd
 export const LANDING_COPY = {
   // Chrome ------------------------------------------------------------------
   GOV_NAME: { pt: "República de Moçambique", en: "Republic of Mozambique" },
-  PORTAL_NAME: { pt: "Portal de Reclamações e Denúncias", en: "Complaints and Reports Portal" },
+  PORTAL_NAME: { pt: "Fala Cidadão", en: "Complaints and Reports Portal" },
   ORG_NAMES: { pt: "IGE e IGSAE", en: "IGE and IGSAE" },
   TAGLINE: { pt: "O cidadão fala. O Estado responde.", en: "The citizen speaks. The State responds." },
   MOTTO_VALUES: { pt: "Transparência · Integridade", en: "Transparency · Integrity" },
@@ -63,7 +63,7 @@ export const LANDING_COPY = {
 
   // Hero -----------------------------------------------------------------—--
   HERO_EYEBROW: { pt: "República de Moçambique · IGE · IGSAE", en: "Republic of Mozambique · IGE · IGSAE" },
-  HERO_TITLE: { pt: "Portal de Reclamações e Denúncias", en: "Complaints and Reports Portal" },
+  HERO_TITLE: { pt: "Fala Cidadão", en: "Complaints and Reports Portal" },
   HERO_LEDE: {
     pt: "Canal nacional para reclamações, queixas, petições e denúncias sobre serviços públicos, administração pública e actividades económicas — com acompanhamento simples, seguro e transparente.",
     en: "The national channel for complaints, grievances, petitions and reports about public services, public administration and economic activities — with simple, secure and transparent tracking.",
@@ -93,11 +93,6 @@ export const LANDING_COPY = {
   TYPE_GRIEVANCE_DESC: {
     pt: "Comunicação de má conduta, negligência, abuso de poder ou incumprimento de deveres por funcionários, agentes ou instituições públicas.",
     en: "Reporting misconduct, negligence, abuse of power or failure to perform duties by public officials, agents or institutions.",
-  },
-  TYPE_PETITION_TITLE: { pt: "Petições", en: "Petitions" },
-  TYPE_PETITION_DESC: {
-    pt: "Pedidos formais dirigidos ao Estado para apreciação, intervenção, revisão de decisões ou adopção de medidas de interesse público.",
-    en: "Formal requests addressed to the State for consideration, intervention, review of decisions or adoption of public-interest measures.",
   },
   TYPE_REPORT_TITLE: { pt: "Denúncias", en: "Reports" },
   TYPE_REPORT_DESC: {
@@ -204,7 +199,7 @@ export const LANDING_COPY = {
   FOOTER_TERMS: { pt: "Termos de Utilização", en: "Terms of Use" },
   FOOTER_ACCESSIBILITY: { pt: "Acessibilidade", en: "Accessibility" },
   FOOTER_COPYRIGHT: {
-    pt: "Portal de Reclamações e Denúncias · República de Moçambique. Todos os direitos reservados.",
+    pt: "Fala Cidadão · República de Moçambique. Todos os direitos reservados.",
     en: "Complaints and Reports Portal · Republic of Mozambique. All rights reserved.",
   },
 
@@ -247,7 +242,6 @@ export interface ManifestationType {
 export const MANIFESTATION_TYPES: ManifestationType[] = [
   { id: "reclamacao", icon: FileText, titleKey: "TYPE_COMPLAINT_TITLE", descKey: "TYPE_COMPLAINT_DESC", accentVar: "--pgrl-type-complaint", route: "REGISTER_COMPLAINT" },
   { id: "queixa", icon: Megaphone, titleKey: "TYPE_GRIEVANCE_TITLE", descKey: "TYPE_GRIEVANCE_DESC", accentVar: "--pgrl-type-grievance", route: "REGISTER_COMPLAINT" },
-  { id: "peticao", icon: Scale, titleKey: "TYPE_PETITION_TITLE", descKey: "TYPE_PETITION_DESC", accentVar: "--pgrl-type-petition", route: "REGISTER_COMPLAINT" },
   { id: "denuncia", icon: ShieldAlert, titleKey: "TYPE_REPORT_TITLE", descKey: "TYPE_REPORT_DESC", accentVar: "--pgrl-type-report", route: "REGISTER_COMPLAINT" },
 ];
 
@@ -315,10 +309,10 @@ export const DEFAULT_NEWS: NewsItem[] = [
     dateLabel: "07 Jul 2026",
     dateTime: "2026-07-07",
     tag: "Portal",
-    title: "Portal de Reclamações e Denúncias inicia fase piloto em três províncias do norte do país",
+    title: "Fala Cidadão inicia fase piloto em três províncias do norte do país",
     excerpt:
       "O Governo de Moçambique lançou oficialmente a fase piloto do Portal nas províncias de Nampula, Cabo Delgado e Niassa, com expansão gradual prevista para os próximos três meses.",
-    source: "Portal de Reclamações e Denúncias",
+    source: "Fala Cidadão",
     href: "#",
   },
   {
@@ -340,7 +334,7 @@ export const DEFAULT_NEWS: NewsItem[] = [
     title: "Mil formadores comunitários capacitados para promover a utilização do portal em todo o país",
     excerpt:
       "Formadores de todas as províncias actuarão como embaixadores da plataforma, apoiando a sensibilização dos cidadãos e o uso dos canais digitais junto das suas comunidades.",
-    source: "Portal de Reclamações e Denúncias",
+    source: "Fala Cidadão",
     href: "#",
   },
   {
