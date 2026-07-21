@@ -325,13 +325,15 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
         const formValidations = data?.["common-masters"]?.FormValidations || [];
         const emailRecord =
           formValidations.find((x) => x?.fieldType === "email" && x?.isActive !== false) || null;
-        if (!record && !emailRecord) return null;
+        const nameRecord =
+          formValidations.find((x) => x?.fieldType === "name" && x?.isActive !== false) || null;
+        if (!record && !emailRecord && !nameRecord) return null;
         return {
           // Either master may be unseeded — undefined entries are dropped
           // below so the globalConfigs/EMAIL_RE fallbacks stay in effect.
           // prefix/maxLength only ride along with an actual mobile record,
           // so an email-only master never clobbers the globalConfigs prefix.
-          UserProfileValidationConfig: [{ mobileNumber: record?.mobileNumberRegex, email: emailRecord?.regex }],
+          UserProfileValidationConfig: [{ mobileNumber: record?.mobileNumberRegex, email: emailRecord?.regex, name: nameRecord?.regex }],
           ...(record
             ? {
                 prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
