@@ -19,7 +19,9 @@ const SKIP_KEYS = new Set([
   "schemaVersion",
   "hierarchyLevel1",
   "hierarchyLevel2",
-  "complainantAddress",
+  // complainantAddress is SHOWN (product call, sheet-v4 review): it renders
+  // as its own "Endereço do Reclamante" row via PGR_EXT_COMPLAINANT_ADDRESS_LABEL.
+  // The backend still masks it ("****") on confidential complaints.
   "email",
   // Moz QA (CCSD-1988): consents are an internal acceptance record, not a
   // user-facing data row — never show them on the view screens.
