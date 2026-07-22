@@ -30,7 +30,7 @@ export function ComplaintCreate() {
   };
 
   return (
-    <DigitCreate title="File Complaint" record={{}} transform={transform}>
+    <DigitCreate title="File Complaint" record={{}} transform={transform} redirect="show">
       <FieldSection title="Complaint">
         <div className="space-y-4">
           <ComplaintHierarchyCascade
