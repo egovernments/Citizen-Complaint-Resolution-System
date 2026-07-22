@@ -520,6 +520,11 @@ public class NotificationService {
 
 
         String localisedComplaint = notificationUtil.getCustomizedMsgForPlaceholder(localizationMessage,"COMPLAINT_HIERARCHY."+request.getService().getServiceCode());
+        // A missing COMPLAINT_HIERARCHY.<code> entry must not abort the notification: a null
+        // replacement makes String.replace throw. Fall back to the raw service code.
+        if (!StringUtils.hasText(localisedComplaint))
+            localisedComplaint = StringUtils.hasText(request.getService().getServiceCode())
+                    ? request.getService().getServiceCode() : "";
 
         Long createdTime = serviceWrapper.getService().getAuditDetails().getCreatedTime();
         LocalDate date = Instant.ofEpochMilli(createdTime > 1_000_000_000_000L ? createdTime : createdTime * 1000)
