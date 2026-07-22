@@ -936,6 +936,21 @@
     # 404'ing globalConfigs.js. tar over the baked SPA, leaving those two file
     # mounts intact, sidesteps that. No registry/pinned-image dependency.
     # Default off → no Linux behaviour change.
+    #
+    # digit-ui-build.sh runs `npm run build` on the target host directly (no
+    # Docker), same as the configurator build below — unlike the MCP build,
+    # which builds inside a container and needs no host Node. Unlike the
+    # digit-ui mode=static / digit-ui-v2 / integration-tests build paths,
+    # this one had no ensure-node20 include, so a target with no Node
+    # pre-installed failed with "ERROR: node not on PATH".
+    - name: "Build digit-ui from source — ensure Node 20 + npm (NodeSource)"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "digit-ui build_digit_ui"
+      when:
+        - build_digit_ui | default(false)
+        - ansible_system != "Darwin"
+
     - name: "Build digit-ui from source (when build_digit_ui)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/digit-ui-build.sh
@@ -1752,6 +1767,18 @@
     # script prints the dist path on its last line; captured into the
     # `configurator_build` var the sync task below consumes. (A real
     # configurator_repo_url still clones, for transitional/standalone use.)
+    #
+    # configurator-build.sh runs `npm`/vite on the target host directly, same
+    # requirement as the digit-ui build above — ensure Node 20 first instead
+    # of assuming it's already on PATH.
+    - name: "Configurator SPA — ensure Node 20 + npm (NodeSource)"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "configurator build_configurator"
+      when:
+        - build_configurator | default(false)
+        - ansible_system != "Darwin"
+
     - name: "Configurator SPA — build dist (when build_configurator)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/configurator-build.sh
