@@ -8,16 +8,18 @@ export const CreateComplaintConfig = {
           head: "ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS",
           body: [
             {
-              // QA #26 (product call): channel-of-receipt CHIP selector at the
-              // top of the form (above the mobile number). The selected CODE
-              // becomes service.source at submit (email / inperson / letter /
-              // linhaverde — kept in pgr-services' allowed.source list).
-              // Defaults to "inperson" via the mount-time draft seed.
+              // QA #26 (product call): channel-of-receipt CHIP selector just
+              // above the mobile number — label in the LEFT column, chips in
+              // the control column (inline row, same as the fields below).
+              // The selected CODE becomes service.source at submit (email /
+              // inperson / letter / linhaverde — kept in pgr-services'
+              // allowed.source list). "In Person" is first and pre-selected.
+              inline: true,
               isMandatory: false,
               type: "component",
               component: "PGRChannelChipsComponent",
               key: "ReceivedChannel",
-              withoutLabel: true,
+              label: "ES_CREATECOMPLAINT_RECEIVED_CHANNEL",
               populators: { name: "ReceivedChannel" },
             },
             {
