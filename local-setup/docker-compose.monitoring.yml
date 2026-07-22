@@ -37,6 +37,11 @@ services:
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
-      - /:/rootfs:ro
+      # rslave (node_exporter's documented recommendation) so mount points that
+      # appear on the host AFTER the container starts propagate in and show up
+      # in the filesystem panels. Docker's default rprivate hides them. The
+      # Ubuntu deploy targets mount / as `shared` by default, so rslave binds
+      # cleanly there.
+      - /:/rootfs:ro,rslave
     networks:
       - egov-network
