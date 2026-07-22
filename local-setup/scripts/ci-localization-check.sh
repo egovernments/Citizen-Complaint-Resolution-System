@@ -16,11 +16,13 @@ echo "Localization API: $LOC_API"
 echo ""
 
 # Core modules that must have messages for PGR to function.
-# These are the modules actually seeded by the full-dump.sql load.
+# These are the modules actually seeded into public.message by full-dump.sql.
+# NOTE: egov-user was previously listed here but has never been present in the
+# dump — the message table only ships rainmaker-common / rainmaker-pgr /
+# rainmaker-workbench — so the assertion failed on every run (see #1308).
 MODULES=(
   "rainmaker-common"
   "rainmaker-pgr"
-  "egov-user"
 )
 
 LOCALE="en_IN"

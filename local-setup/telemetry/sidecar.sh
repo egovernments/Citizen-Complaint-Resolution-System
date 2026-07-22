@@ -121,6 +121,33 @@ trap shutdown TERM INT
 FILTER=$(printf '{"label":["com.docker.compose.project=%s"],"type":["container"]}' \
   "$COMPOSE_PROJECT" | jq -sRr @uri)
 
+# ── Backfill containers already running before the sidecar started ─
+# The event stream below only reports events at/after $START_SINCE. Under
+# `tilt ci` (and any orchestrator that starts this sidecar after the app
+# containers) their "start" events predate that window and would be missed,
+# leaving the run with zero start events. Enumerate the already-running
+# project containers up front and count each one. A shared file de-dupes
+# against the live stream so no container is ever counted twice.
+STARTED_FILE=$(mktemp 2>/dev/null || echo "/tmp/telemetry-started.$$")
+: > "$STARTED_FILE"
+
+emit_start() {
+  _svc="$1"
+  [ -z "$_svc" ] && return 0
+  if grep -qxF "$_svc" "$STARTED_FILE" 2>/dev/null; then
+    return 0
+  fi
+  echo "$_svc" >> "$STARTED_FILE"
+  echo "[telemetry] + $_svc started"
+  send_event "container" "start" "$_svc"
+}
+
+docker_api "/containers/json" \
+  | jq -r ".[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\") | .Labels[\"com.docker.compose.service\"] // empty" 2>/dev/null \
+  | while IFS= read -r svc; do
+      emit_start "$svc"
+    done
+
 echo "[telemetry] Monitoring container events..."
 
 docker_api "/events?since=${START_SINCE}&filters=${FILTER}" | while IFS= read -r line; do
@@ -130,8 +157,7 @@ docker_api "/events?since=${START_SINCE}&filters=${FILTER}" | while IFS= read -r
 
   case "$ACTION" in
     start)
-      echo "[telemetry] + $SERVICE started"
-      send_event "container" "start" "$SERVICE"
+      emit_start "$SERVICE"
       ;;
     die)
       CODE=$(echo "$line" | jq -r '.Actor.Attributes.exitCode // "?"' 2>/dev/null)
