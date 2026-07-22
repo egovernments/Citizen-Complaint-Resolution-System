@@ -57,6 +57,9 @@ and find the master.
 - Query grammar reference: `backend/pgr-services/ANALYTICS-QUERY-API.md`
 - RBAC design series: `docs/dashboard-rbac-design/`
 - Live MDMS examples: `ansible/nairobi-mdms/mdms/dss/KpiDefinition.json`, `DashboardPack.json`
+- Enabling it on a running deployment: `local-setup/scripts/enable-dashboard.sh` (installer form
+  of the issue #631 runbook — schemas, catalog, role gate, sidebar action, l10n, verify), with
+  supporting schemas + message packs in `local-setup/db/dss-mdms-seed/`
 - Backend: `backend/pgr-services/src/main/java/org/egov/pgr/analytics/`
 - Frontend (deployed, post-#1062): `digit-ui-esbuild/products/dashboard/` — module root (`Module.js`,
   `roles.js`, `DashboardCard.js`) with the engine under `src/` (`AdminDashboard.jsx`, `components/`,

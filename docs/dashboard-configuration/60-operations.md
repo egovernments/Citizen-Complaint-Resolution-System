@@ -88,11 +88,29 @@ Per-tier notes:
 - **New city under an existing state root** (`ke.newcity`): nothing to do — the KPI catalog is
   read at the **state root** (`KpiCatalogService` collapses the tenant), so city tenants inherit
   `ke`'s defs/packs automatically.
-- **New state root** (`mz`, `pg.x` as its own root): covered by bootstrap since PR #1062. On
-  roots bootstrapped with an OLDER digit-mcp, seed `dss.KpiDefinition` + `dss.DashboardPack`
-  manually (copy `ansible/nairobi-mdms/mdms/dss/*.json`, rewrite `tenantId`, mdms-v2 `_create`),
-  or the dashboard renders empty (`/packs` returns no tiles; the service logs "MDMS path not
-  found for dss.KpiDefinition" and gracefully returns empty).
+- **New state root** (`mz`, `pg.x` as its own root): covered by bootstrap since PR #1062 —
+  **provided the source root actually has a catalog**. Bootstrap *copies* `dss.*` from the
+  source; when the source has no `dss.KpiDefinition` rows it copies nothing and still reports
+  success, and the new root gets a working dashboard shell with an empty catalog. (This is
+  what happened to `mz`.) Since then bootstrap emits an explicit `warnings[]` entry for that
+  case instead of staying silent.
+- **Any running deployment** — a root bootstrapped with an older digit-mcp, a root whose source
+  had no catalog, or one whose role taxonomy differs from the seed's — run the installer:
+
+  ```bash
+  DASHBOARD_TENANT=<root> ./local-setup/scripts/enable-dashboard.sh --dry-run   # read-only preflight
+  DASHBOARD_TENANT=<root> ./local-setup/scripts/enable-dashboard.sh
+  ```
+
+  It seeds from the repo files rather than another tenant, so it does not depend on a source
+  root already being correct: schemas, the 39 defs + pack (roles remapped via `ROLE_MAP`),
+  `dss.DashboardConfig`, the sidebar action, the localization packs, the cache-bust and token
+  flush, then verifies end-to-end. Step 0 is read-only and reports the problems seeding cannot
+  fix — unheld roles, missing department enrichment (#1280), and schema-as-data corruption.
+  Full detail: `local-setup/db/dss-mdms-seed/README.md` and the runbook on issue #631.
+
+  Without any of this the dashboard renders empty (`/packs` returns no tiles; the service logs
+  "MDMS path not found for dss.KpiDefinition" and gracefully returns empty).
 
 ## 4. What a redeploy wipes — never hand-patch bundles
 
