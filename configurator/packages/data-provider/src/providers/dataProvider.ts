@@ -870,7 +870,11 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         return { data: normalizeRecord(users[0], config) };
       }
       if (config.type === 'workflow-bs') {
-        const services = await client.workflowBusinessServiceSearch(tenantId, [String(params.id)]);
+        // Honor a meta.tenantId override — a complaint's PGR workflow (actions
+        // like ESCALATE) lives at the CITY tenant; the root/session tenant's PGR
+        // config differs, so reading it there hides city-only actions.
+        const wfTenant = (params.meta as Record<string, unknown> | undefined)?.tenantId as string | undefined;
+        const services = await client.workflowBusinessServiceSearch(wfTenant || tenantId, [String(params.id)]);
         if (!services.length) throw new Error(`Workflow business service not found: ${params.id}`);
         return { data: normalizeRecord(services[0], config) };
       }

@@ -106,10 +106,12 @@ export function WorkflowActionSelect({
     (useWatch({ name: 'address.tenantId' }) as string | undefined) ||
     (useWatch({ name: 'tenantId' }) as string | undefined);
 
-  // Fetch the workflow business service definition
+  // Fetch the workflow business service definition — from the complaint's CITY
+  // tenant (recordTenant), not the session/root tenant, so city-only actions
+  // (e.g. ESCALATE) are offered. Falls back to the session tenant when unknown.
   const { data: workflowDef, isLoading } = useGetOne(
     'workflow-business-services',
-    { id: businessService },
+    { id: businessService, meta: recordTenant ? { tenantId: recordTenant } : undefined },
     { enabled: !!businessService },
   );
 
