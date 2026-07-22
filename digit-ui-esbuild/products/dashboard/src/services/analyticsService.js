@@ -83,13 +83,10 @@ async function postAnalytics(path, body) {
     recordApiCall(`${ANALYTICS_BASE}${path}`, endedAt - startedAt, 0, false);
     const error = new Error(`Analytics request failed (${response.status})`);
     error.status = response.status;
-    // Read once — response.json() failure still consumes the body, so a
-    // follow-up response.text() throws "body stream already read".
-    const raw = await response.text();
     try {
-      error.payload = raw ? JSON.parse(raw) : raw;
+      error.payload = await response.json();
     } catch {
-      error.payload = raw;
+      error.payload = await response.text();
     }
     throw error;
   }

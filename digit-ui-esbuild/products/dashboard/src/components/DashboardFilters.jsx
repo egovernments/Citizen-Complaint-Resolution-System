@@ -100,13 +100,25 @@ const DashboardFilters = ({
   filterOptions,
   filterOptionsLoading = false,
 }) => {
-  const { t } = useDashboardT();
+  const { t, i18nTick } = useDashboardT();
   const canClear = hasActiveFilters(filters);
 
-  const geographyOptions = filterOptions?.geography ?? GEOGRAPHY_OPTIONS;
-  const complaintTypeOptions =
-    filterOptions?.complaintType ?? COMPLAINT_TYPE_OPTIONS;
+  // Resolve labels at render time (i18nTick) so "All wards" / "All types"
+  // flip with the language dropdown — never trust a snapshotted English string
+  // from the options memo (#1108).
+  const geographyOptions = (filterOptions?.geography ?? GEOGRAPHY_OPTIONS).map((opt) =>
+    opt.id === "all"
+      ? { ...opt, label: t("DASHBOARD_FILTERS_ALL_WARDS", "All wards") }
+      : opt
+  );
+  const complaintTypeOptions = (filterOptions?.complaintType ?? COMPLAINT_TYPE_OPTIONS).map(
+    (opt) =>
+      opt.id === "all"
+        ? { ...opt, label: t("DASHBOARD_FILTERS_ALL_TYPES", "All types") }
+        : opt
+  );
   const complaintTypeTree = filterOptions?.complaintTypeTree ?? null;
+  void i18nTick; // keep render coupled to late bundle arrival
 
   const dateFrom = filters?.dateFrom ?? GLOBAL_FILTER_FIELDS.find((f) => f.id === "dateFrom")?.defaultValue;
   const dateTo = filters?.dateTo ?? GLOBAL_FILTER_FIELDS.find((f) => f.id === "dateTo")?.defaultValue;

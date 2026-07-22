@@ -20,7 +20,12 @@ export default function useDashboardT() {
   const [tick, bump] = useReducer((x) => x + 1, 0);
   useEffect(() => {
     ensureMessages();
-    return subscribe(bump);
+    return subscribe(() => {
+      // Language switch writes Employee.locale sync, then bundles arrive later.
+      // Re-fetch the active locale into the side-cache on every signal.
+      ensureMessages();
+      bump();
+    });
   }, []);
   return { t: translate, exists, language: getLanguage(), i18nTick: tick };
 }

@@ -866,15 +866,7 @@ const AdminDashboardInner = ({ onSignOut, embedded = false }) => {
         {showEmpty && !isExternalDrag ? (
           <div className="tw-pointer-events-none tw-absolute tw-inset-0 tw-z-[1] tw-flex tw-min-h-[12rem] tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-text-center">
             <p className="tw-text-[12px] tw-text-muted-foreground">
-              {catalogItems.length
-                ? t(
-                    "DASHBOARD_COMMON_EMPTY_ADD_KPI",
-                    "No widgets on this dashboard yet. Use Add KPI to place tiles."
-                  )
-                : t(
-                    "DASHBOARD_COMMON_NO_TILES_FOR_ROLE",
-                    "No tiles in the catalog pack for this role."
-                  )}
+              {t("DASHBOARD_COMMON_NO_TILES_FOR_ROLE", "No tiles in the catalog pack for this role.")}
             </p>
           </div>
         ) : null}

@@ -9,7 +9,6 @@ import {
   browseBaseCode,
   childrenOf,
   clearedSelection,
-  humanizeTypeCode,
   nodeOf,
   selectionFromCode,
   truncateTrail,
@@ -41,16 +40,14 @@ import {
  * every open, leaf selections opening at their parent so sibling switching
  * stays one click — the old flat-select ergonomics at that level).
  *
- * Labels resolve through the dimensionLabel seam (COMPLAINT_HIERARCHY.<code>
- * first, then the master's data-owned name); interior nodes whose MDMS name
- * is just the code fall back to a humanised last-segment — never a raw
- * dotted code in the chip or trail (validation risk #3ii).
+ * Labels resolve through dimensionLabel (skips taxonomy-path i18n messages
+ * like reclamações.categories.* and humanises the last segment).
  */
 
 export function nodeDisplayLabel(tree, code) {
   const node = nodeOf(tree, code);
-  const resolved = dimensionLabel(code, "complaintType", node?.label);
-  return resolved === String(code) ? humanizeTypeCode(code) : resolved;
+  // dimensionLabel already humanises taxonomy-path messages / name===code.
+  return dimensionLabel(code, "complaintType", node?.label);
 }
 
 /** Max rendered trail entries (root + ellipsis + 2 nearest) — ke's PGR_TEST

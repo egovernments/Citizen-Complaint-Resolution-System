@@ -22,7 +22,8 @@ const DashboardModule = ({ stateCode }) => {
   const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
   const { isLoading } = Digit.Services.useStore({
     stateCode,
-    moduleCode: ["dashboard", "pgr", `boundary-${hierarchyType?.toString().toLowerCase()}`],
+    // rainmaker-common carries COMMON_MASTERS_DEPARTMENT_* for chart/filter dept labels
+    moduleCode: ["dashboard", "pgr", "common", `boundary-${hierarchyType?.toString().toLowerCase()}`],
     language: Digit.StoreData.getCurrentLanguage(),
     modulePrefix: "rainmaker",
   });

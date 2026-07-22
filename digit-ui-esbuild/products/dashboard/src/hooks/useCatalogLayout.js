@@ -6,8 +6,14 @@ import {
   FULL_WIDTH_TABLE_GRID,
   DEFAULT_CHART_GRID,
   DROPPING_ITEM_ID,
+  findFirstOpenPosition,
 } from "../constants/layoutConfig";
 import { createCatalogDragGeometry, isCatalogCard } from "../utils/catalogDragGeometry";
+import { getTenantId, getUserUuid } from "../services/analyticsService";
+import {
+  LEGACY_STORAGE_KEY,
+  storageKeyFor,
+} from "../utils/layoutStore";
 
 /**
  * useCatalogLayout — catalog-world layout hook (kpiId-keyed).
@@ -17,7 +23,7 @@ import { createCatalogDragGeometry, isCatalogCard } from "../utils/catalogDragGe
  * swap + column-aware compaction on stop, RGL re-sync via moved flag.
  */
 
-const STORAGE_KEY = "ccrs.dashboard.catalog-layout.v1";
+const STORAGE_KEY = LEGACY_STORAGE_KEY;
 
 const CARD_KINDS = new Set([
   "number-tile-delta",
@@ -89,19 +95,34 @@ function normalizeItem(item, kpis) {
 }
 
 function buildSeedLayout(packLayout, kpis) {
-  return (packLayout || [])
-    .filter((item) => kpis[item.kpiId])
-    .map((item) =>
-      normalizeItem({ i: item.kpiId, x: item.x, y: item.y, w: item.w, h: item.h }, kpis)
+  const items = (packLayout || []).filter((item) => kpis[item.kpiId]);
+  const out = [];
+  for (const item of items) {
+    const defaults = defaultSizeForKpi(item.kpiId, kpis);
+    const w = Number.isFinite(Number(item.w)) ? Number(item.w) : defaults.w;
+    const h = Number.isFinite(Number(item.h)) ? Number(item.h) : defaults.h;
+    const hasPos = Number.isFinite(Number(item.x)) && Number.isFinite(Number(item.y));
+    const pos = hasPos
+      ? { x: Number(item.x), y: Number(item.y) }
+      : findFirstOpenPosition(out, w, h, GRID_COLS);
+    out.push(
+      normalizeItem({ i: item.kpiId, x: pos.x, y: pos.y, w, h }, kpis)
     );
+  }
+  return out;
 }
 
 function readSaved() {
   try {
-    const raw = window.localStorage?.getItem(STORAGE_KEY);
-    if (raw == null) return null;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : null;
+    const scopedKey = storageKeyFor(getTenantId(), getUserUuid());
+    // Prefer the per-user key (#1276); fall back to the legacy global slot.
+    for (const key of scopedKey === STORAGE_KEY ? [STORAGE_KEY] : [scopedKey, STORAGE_KEY]) {
+      const raw = window.localStorage?.getItem(key);
+      if (raw == null) continue;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -109,10 +130,13 @@ function readSaved() {
 
 function persistPositions(layout) {
   try {
-    window.localStorage?.setItem(
-      STORAGE_KEY,
-      JSON.stringify(layout.map(({ i, x, y, w, h }) => ({ i, x, y, w, h })))
-    );
+    const scopedKey = storageKeyFor(getTenantId(), getUserUuid());
+    const payload = JSON.stringify(layout.map(({ i, x, y, w, h }) => ({ i, x, y, w, h })));
+    window.localStorage?.setItem(scopedKey, payload);
+    // Keep the legacy slot in sync so older builds still see the layout.
+    if (scopedKey !== STORAGE_KEY) {
+      window.localStorage?.setItem(STORAGE_KEY, payload);
+    }
   } catch {
     /* ignore */
   }
@@ -139,7 +163,7 @@ export function useCatalogLayout(kpis, packLayout) {
   const geom = useMemo(() => createCatalogDragGeometry(kpis), [kpis]);
   // Catalog (not seed) is the hydration signal: /packs often returns
   // defaultLayout: [] when no DashboardPack matches roles, while the user may
-  // still have a saved layout from Add-KPI (#1276 / #1108 empty-dashboard).
+  // still have a saved layout from Add-KPI (#1276).
   const catalogReady = useMemo(() => Object.keys(kpis || {}).length > 0, [kpis]);
 
   const [layout, setLayout] = useState([]);
@@ -156,8 +180,17 @@ export function useCatalogLayout(kpis, packLayout) {
     if (!catalogReady) return;
     const saved = readSaved();
     // saved === null → first visit, use pack seed (may be empty).
-    // saved === [] → intentional empty; do not re-apply seed.
-    const source = saved !== null ? saved : seed;
+    // saved === [] with a non-empty seed → recover from the empty-defaultLayout
+    // era / failed hydrate that persisted an empty array and blocked the pack.
+    // saved with items → user's arrangement wins.
+    let source;
+    if (saved !== null && saved.length > 0) {
+      source = saved;
+    } else if (seed.length > 0) {
+      source = seed;
+    } else {
+      source = saved !== null ? saved : [];
+    }
     const reconciled = source
       .filter((item) => kpis[item.i])
       .map((item) => normalizeItem(item, kpis));
@@ -165,7 +198,12 @@ export function useCatalogLayout(kpis, packLayout) {
       ? geom.resolveRemainingOverlaps(reconciled, [])
       : reconciled;
     setLayout(repaired);
-    if (repaired !== reconciled) persist(repaired);
+    // Always persist a recovered seed so the next reload does not re-hit [].
+    if (saved !== null && saved.length === 0 && repaired.length > 0) {
+      persist(repaired);
+    } else if (repaired !== reconciled) {
+      persist(repaired);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed, catalogReady, geom]);
 

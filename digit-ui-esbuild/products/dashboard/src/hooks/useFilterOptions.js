@@ -25,10 +25,11 @@ import {
  * The analytics distinct decides WHICH codes appear; the MDMS complaint
  * hierarchy (RAINMAKER-PGR.ComplaintHierarchy, fetched in parallel) supplies
  * the complaint-type display names and root-category grouping. Ward labels
- * also pull boundary-service localname (same as the map) so missing
- * rainmaker-boundary-* keys still show an operator-authored name instead of
- * a raw code (#1108). All labels resolve through dimensionLabel: localized
- * message first, then the master's display name, then the raw code.
+ * also pull boundary-service localname when present; on Bomet that field is
+ * null, so dimensionLabel falls through to en_IN rainmaker-boundary-* place
+ * names (and a pt_PT seed when operators have upserted one) (#1108). All
+ * labels resolve through dimensionLabel: localized message first, then the
+ * master's display name, then the raw code.
  *
  * Returns: { options, loading }
  * - options: { geography: [{id,label}], complaintType: [{id,label,group?}] } —
@@ -123,7 +124,7 @@ export function useFilterOptions() {
     boundaries: null,
     loading: true,
   });
-  const { language } = useDashboardT();
+  const { language, i18nTick } = useDashboardT();
 
   useEffect(() => {
     let cancelled = false;
@@ -208,6 +209,8 @@ export function useFilterOptions() {
       options: Object.keys(options).length ? options : null,
       loading: raw.loading,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- language re-labels cached rows
-  }, [raw, language]);
+    // language + i18nTick: re-label when locale switches OR when the en_IN
+    // boundary side-cache (ensureMessages) arrives after first paint (#1108).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- i18nTick covers late bundles
+  }, [raw, language, i18nTick]);
 }
