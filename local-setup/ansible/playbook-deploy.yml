@@ -320,10 +320,35 @@
                      * _u[(docker_log_max_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
             _tt: "{{ (docker_log_total_size | regex_search('^([0-9.]+)', '\\1') | first | float)
                      * _u[(docker_log_total_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+          # The divisor below is floored at 1 byte — `[1, (_sz | float)] | max`
+          # — so the division can never raise. Two reasons that is not paranoia:
+          #
+          # 1. ansible-lint renders a task's Jinja using that task's `vars`
+          #    only. It never loads inventory group_vars, and this playbook has
+          #    no committed inventory (deploy.sh generates hosts.yml, and
+          #    group_vars live under inventory/). So at lint time
+          #    docker_log_max_size is undefined, `| float` yields 0.0, and an
+          #    unfloored division aborts the whole run with "jinja[invalid]:
+          #    Error rendering template: float division by zero" — a CI failure
+          #    with no runtime counterpart.
+          #
+          # 2. `default()` evaluates its argument eagerly, so this division runs
+          #    even when docker_log_max_file IS set. The guard task above is
+          #    skipped in exactly that case, so a host combining the escape
+          #    hatch with docker_log_max_size: "0m" would hit a real
+          #    ZeroDivisionError at runtime.
+          #
+          # Keep the floor INLINE. Hoisting it into a helper var does not work:
+          # ansible-lint resolves a task var only when it is self-contained, so
+          # a var defined in terms of _sz reads back as undefined, collapses to
+          # 0.0, and reintroduces the very error this avoids.
+          #
+          # A zero max-size reaching this point is still caught downstream —
+          # dockerd rejects a "max-size": "0m" log-opt itself.
           ansible.builtin.set_fact:
             docker_log_max_file_effective: >-
               {{ docker_log_max_file
-                 | default([1, ((_tt | float) / (_sz | float)) | int] | max, true) }}
+                 | default([1, ((_tt | float) / ([1, (_sz | float)] | max)) | int] | max, true) }}
 
         # daemon.json is written unconditionally now. It used to be gated on
         # insecure_registries being non-empty, which meant hosts on a TLS
