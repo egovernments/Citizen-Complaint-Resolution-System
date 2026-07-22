@@ -11,6 +11,7 @@ import org.egov.pgr.util.HRMSUtil;
 import org.egov.pgr.util.MDMSUtils;
 import org.egov.pgr.util.NotificationUtil;
 import org.egov.pgr.web.models.AuditDetails;
+import org.egov.pgr.web.models.Notification.SMSRequest;
 import org.egov.pgr.web.models.Service;
 import org.egov.pgr.web.models.ServiceRequest;
 import org.egov.pgr.web.models.User;
@@ -37,6 +38,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -158,6 +161,114 @@ public class NotificationConfigDrivenEmissionTest {
         notificationService.process(assignRequest(), "save-pgr-request");
         verify(notificationRouter, org.mockito.Mockito.never())
                 .route(anyString(), anyString(), any(), anyString(), anyString());
+    }
+
+    /**
+     * Pins the localization key prefix used in the legacy (config-driven=false) path.
+     * NotificationService.getFinalMessage() must call getCustomizedMsgForPlaceholder with
+     * "COMPLAINT_HIERARCHY.<serviceCode>", NOT the old "pgr.complaint.category.<serviceCode>".
+     *
+     * The test drives the APPLY->PENDINGFORASSIGNMENT transition because "APPLY_PENDINGFORASSIGNMENT"
+     * is in NOTIFICATION_ENABLE_FOR_STATUS and the branch reaches line 522 without any HTTP calls
+     * (no assignee lookup needed).
+     */
+    @Test
+    void legacyPath_complaintLocalizationLookup_usesComplaintHierarchyPrefix() {
+        when(config.getNotificationConfigDriven()).thenReturn(false);
+
+        // Stub the citizen body and default msg so getFinalMessage() does not bail before line 522.
+        when(notificationUtil.getCustomizedMsg(eq("APPLY"), eq("PENDINGFORASSIGNMENT"), eq("CITIZEN"), anyString()))
+                .thenReturn("Dear Citizen, your complaint {complaint_type} has been filed.");
+        when(notificationUtil.getDefaultMsg(eq("CITIZEN"), anyString())).thenReturn("Default notification.");
+        when(notificationUtil.getCustomizedMsgForPlaceholder(anyString(), startsWith("COMPLAINT_HIERARCHY.")))
+                .thenReturn("Garbage Not Collected");
+        when(notificationUtil.getShortnerURL(anyString())).thenReturn("http://short/x");
+
+        notificationService.process(legacyApplyRequest(), "save-pgr-request");
+
+        // The localization key for complaint type MUST use the COMPLAINT_HIERARCHY prefix.
+        verify(notificationUtil).getCustomizedMsgForPlaceholder(anyString(), eq("COMPLAINT_HIERARCHY.GarbageNeeds"));
+    }
+
+    /**
+     * When the COMPLAINT_HIERARCHY.<serviceCode> entry is missing from localization,
+     * getCustomizedMsgForPlaceholder returns null; the legacy path must fall back to the raw
+     * service code instead of NPE-ing inside String.replace (which the catch-all in process()
+     * would swallow, silently dropping the notification).
+     */
+    @Test
+    void legacyPath_missingComplaintLocalization_fallsBackToServiceCode() {
+        when(config.getNotificationConfigDriven()).thenReturn(false);
+        when(config.getIsSMSEnabled()).thenReturn(true);
+
+        when(notificationUtil.getCustomizedMsg(eq("APPLY"), eq("PENDINGFORASSIGNMENT"), eq("CITIZEN"), anyString()))
+                .thenReturn("Dear Citizen, your complaint {complaint_type} has been filed.");
+        when(notificationUtil.getDefaultMsg(eq("CITIZEN"), anyString())).thenReturn("Default notification.");
+        when(notificationUtil.getCustomizedMsgForPlaceholder(anyString(), startsWith("COMPLAINT_HIERARCHY.")))
+                .thenReturn(null);
+        when(notificationUtil.getShortnerURL(anyString())).thenReturn("http://short/x");
+
+        notificationService.process(legacyApplyRequest(), "save-pgr-request");
+
+        // The citizen SMS must still go out, with the raw service code in place of the label.
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<SMSRequest>> sms = ArgumentCaptor.forClass((Class) List.class);
+        verify(notificationUtil, atLeastOnce()).sendSMS(eq(TENANT), sms.capture());
+        assertTrue(sms.getAllValues().stream().flatMap(List::stream)
+                        .anyMatch(r -> r.getMessage() != null
+                                && r.getMessage().contains("your complaint GarbageNeeds has been filed")),
+                "citizen SMS should contain the raw service code as the complaint-type fallback");
+    }
+
+    /**
+     * Tenants localized before the hierarchy migration only carry pgr.complaint.category.<code>
+     * entries: when COMPLAINT_HIERARCHY.<code> misses, the label must resolve from the legacy
+     * namespace before falling back to the raw code.
+     */
+    @Test
+    void legacyPath_missingHierarchyKey_fallsBackToLegacyCategoryKey() {
+        when(config.getNotificationConfigDriven()).thenReturn(false);
+        when(config.getIsSMSEnabled()).thenReturn(true);
+
+        when(notificationUtil.getCustomizedMsg(eq("APPLY"), eq("PENDINGFORASSIGNMENT"), eq("CITIZEN"), anyString()))
+                .thenReturn("Dear Citizen, your complaint {complaint_type} has been filed.");
+        when(notificationUtil.getDefaultMsg(eq("CITIZEN"), anyString())).thenReturn("Default notification.");
+        when(notificationUtil.getCustomizedMsgForPlaceholder(anyString(), startsWith("COMPLAINT_HIERARCHY.")))
+                .thenReturn(null);
+        when(notificationUtil.getCustomizedMsgForPlaceholder(anyString(), eq("pgr.complaint.category.GarbageNeeds")))
+                .thenReturn("Garbage Not Collected");
+        when(notificationUtil.getShortnerURL(anyString())).thenReturn("http://short/x");
+
+        notificationService.process(legacyApplyRequest(), "save-pgr-request");
+
+        // The hierarchy namespace is tried first; the legacy namespace then supplies the label.
+        verify(notificationUtil).getCustomizedMsgForPlaceholder(anyString(), eq("COMPLAINT_HIERARCHY.GarbageNeeds"));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<SMSRequest>> sms = ArgumentCaptor.forClass((Class) List.class);
+        verify(notificationUtil, atLeastOnce()).sendSMS(eq(TENANT), sms.capture());
+        assertTrue(sms.getAllValues().stream().flatMap(List::stream)
+                        .anyMatch(r -> r.getMessage() != null
+                                && r.getMessage().contains("your complaint Garbage Not Collected has been filed")),
+                "citizen SMS should carry the label resolved from the legacy pgr.complaint.category namespace");
+    }
+
+    /** APPLY -> PENDINGFORASSIGNMENT request for the legacy-path tests. */
+    private ServiceRequest legacyApplyRequest() {
+        User citizen = User.builder()
+                .uuid("citizen-uuid").name("Jane Doe")
+                .mobileNumber("712345678").countryCode("+254").emailId("jane@example.com")
+                .build();
+        Service service = Service.builder()
+                .tenantId(TENANT)
+                .serviceRequestId("PGR-2026-001")
+                .applicationStatus("PENDINGFORASSIGNMENT")
+                .serviceCode("GarbageNeeds")
+                .citizen(citizen)
+                .auditDetails(AuditDetails.builder().createdTime(1719600000000L).createdBy("citizen-uuid").build())
+                .build();
+        Workflow workflow = Workflow.builder().action("APPLY").assignes(Collections.emptyList()).build();
+        return ServiceRequest.builder()
+                .requestInfo(new RequestInfo()).service(service).workflow(workflow).build();
     }
 
     /** Stub egov-user _search to return the given (uuid, mobile, email) users for a roleCodes query. */

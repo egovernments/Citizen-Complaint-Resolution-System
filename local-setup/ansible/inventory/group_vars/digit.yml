@@ -142,6 +142,28 @@ docker_registry: 10.0.0.4:5000
 insecure_registries:
   - "{{ docker_registry }}"
 
+# Docker log rotation (daemon.json log-opts). Without these the json-file
+# driver grows a container's log without bound; a chatty JVM service can fill
+# the disk on a long-running tenant.
+#
+# Docker's real per-container ceiling is max-size * max-file, so these are not
+# independent. docker_log_total_size is the INVARIANT — the most any single
+# container may consume — and docker_log_max_size is the tunable slice size.
+# The file count is derived (total / max-size) so changing the slice size
+# cannot breach the cap. The deploy fails fast if max-size exceeds the total.
+#
+# 100m x 10 = 1g per container by default.
+docker_log_max_size: "100m"
+docker_log_total_size: "1g"
+#
+# Escape hatch: set docker_log_max_file to pin the file count directly. This
+# BYPASSES the derivation and the cap check, so the effective ceiling becomes
+# docker_log_max_size * docker_log_max_file. Only use it if you need Docker's
+# native two-knob behaviour. It is a file COUNT, not a size — a unit on it
+# ('10m') is rejected by preflight. Uncommenting it and leaving the value blank
+# is treated as unset, so the derivation still applies.
+# docker_log_max_file: 10
+
 # On-target directory for digit-mcp when build_mcp is true. Vendored deploys
 # rsync CCRS digit-mcp/ here; a git mcp_repo_url clones/updates here instead.
 mcp_repo: "{{ digit_dir }}/digit-mcp"
