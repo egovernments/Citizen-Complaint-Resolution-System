@@ -417,7 +417,9 @@ const CreateComplaintForm = ({
     const withOptional = withExt.map((section) => ({
       ...section,
       body: (section.body || []).map((field) =>
-        field?.label && field.isMandatory !== true
+        // noOptionalSuffix: per-field opt-out (e.g. the channel chips — it
+        // always has a value via its default, so "(Optional)" is noise).
+        field?.label && field.isMandatory !== true && !field.noOptionalSuffix
           ? { ...field, label: `${t(field.label)} ${optionalSuffix}` }
           : field
       ),

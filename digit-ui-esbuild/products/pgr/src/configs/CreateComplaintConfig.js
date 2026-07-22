@@ -16,6 +16,9 @@ export const CreateComplaintConfig = {
               // allowed.source list). "In Person" is first and pre-selected.
               inline: true,
               isMandatory: false,
+              // Always carries a value (defaults to inperson) — suppress the
+              // generic "(Optional)" label suffix.
+              noOptionalSuffix: true,
               type: "component",
               component: "PGRChannelChipsComponent",
               key: "ReceivedChannel",
