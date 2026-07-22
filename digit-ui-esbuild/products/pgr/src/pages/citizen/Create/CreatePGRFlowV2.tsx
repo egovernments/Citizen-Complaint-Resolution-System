@@ -430,7 +430,13 @@ function mapFormDataToRequest(formData: FormData, tenantId: string, user: any, d
       rowVersion: 1,
       address: {
         landmark: validateString(formData?.landmark),
-        buildingName: "",
+        // Product call (sheet-v4 review): the typed complainant address ALSO
+        // travels as the complaint's plain address so the details Address row
+        // can show it (the extendedAttributes copy is withheld by the backend
+        // DataSecurity pipeline on read). Skipped on CONFIDENTIAL complaints —
+        // there the complainant's address must stay hidden, and the details
+        // row falls back to the administrative chain.
+        buildingName: formData?.isConfidential ? "" : validateString(formData?.complainantAddress) || "",
         street: "",
         pincode: validateString(formData?.postalCode),
         locality: {
