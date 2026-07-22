@@ -10,6 +10,7 @@ import ComplaintHierarchyComponent from "./components/ComplaintHierarchyComponen
 import PGRDetails from "./pages/employee/PGRDetails";
 import TimelineWrapper from "./components/TimeLineWrapper";
 import AssigneeComponent from "./components/AssigneeComponent";
+import ChannelChipsComponent from "./components/ChannelChipsComponent";
 import PGRSearchInbox from "./pages/employee/PGRInbox";
 import CreateComplaint from "./pages/employee/CreateComplaint";
 import Response from "./components/Response";
@@ -107,6 +108,7 @@ const componentsToRegister = {
   PGRComplaintDetails: PGRDetails,
   PGRTimeLineWrapper: TimelineWrapper,
   PGRAssigneeComponent: AssigneeComponent,
+  PGRChannelChipsComponent: ChannelChipsComponent,
   PGRSearchInbox,
   PGRCreateComplaint: CreateComplaint,
   PGRResponse: Response,

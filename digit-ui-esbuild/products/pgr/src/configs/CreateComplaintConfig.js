@@ -8,6 +8,19 @@ export const CreateComplaintConfig = {
           head: "ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS",
           body: [
             {
+              // QA #26 (product call): channel-of-receipt CHIP selector at the
+              // top of the form (above the mobile number). The selected CODE
+              // becomes service.source at submit (email / inperson / letter /
+              // linhaverde — kept in pgr-services' allowed.source list).
+              // Defaults to "inperson" via the mount-time draft seed.
+              isMandatory: false,
+              type: "component",
+              component: "PGRChannelChipsComponent",
+              key: "ReceivedChannel",
+              withoutLabel: true,
+              populators: { name: "ReceivedChannel" },
+            },
+            {
               inline: true,
               label: "COMPLAINTS_COMPLAINANT_CONTACT_NUMBER",
               isMandatory: true,
@@ -285,28 +298,6 @@ export const CreateComplaintConfig = {
                   pattern: /^(?=[\s\S]{20,1000}$)(?=(?:[\s\S]*?\p{L}){3})[\s\S]*$/u,
                 },
                 error: "CS_DESC_MIN_CHARS",
-              },
-            },
-            {
-              // QA #26 (product call): how the complaint reached the Reception
-              // Officer. The selected CODE becomes the complaint's
-              // service.source (replacing the hardcoded "web") — codes must
-              // stay in pgr-services' allowed.source list. Not displayed on
-              // the details pages.
-              isMandatory: false,
-              key: "ReceivedChannel",
-              type: "dropdown",
-              label: "ES_CREATECOMPLAINT_RECEIVED_CHANNEL",
-              disable: false,
-              populators: {
-                name: "ReceivedChannel",
-                optionsKey: "name",
-                options: [
-                  { code: "email", name: "PGR_CHANNEL_EMAIL" },
-                  { code: "inperson", name: "PGR_CHANNEL_IN_PERSON" },
-                  { code: "letter", name: "PGR_CHANNEL_LETTER" },
-                  { code: "linhaverde", name: "PGR_CHANNEL_LINHA_VERDE" },
-                ],
               },
             },
           ],
