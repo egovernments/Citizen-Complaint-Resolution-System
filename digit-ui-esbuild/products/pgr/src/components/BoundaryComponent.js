@@ -60,6 +60,28 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
 
   const { data: rawChildrenData, isLoading: isBoundaryLoading } = Digit.Hooks.pgr.useFetchBoundaries(tenantId);
 
+  // Hierarchy type + highest/lowest level are configured per-state on
+  // CMS-BOUNDARY.HierarchySchema (written by the onboarding tooling — see
+  // utilities/crs_dataloader/unified_loader_v1.py's update_hierarchy_schema)
+  // and take priority over the ansible-templated globalConfigs values, which
+  // are a deploy-time fallback for tenants where this MDMS master hasn't
+  // been seeded yet. Mirrors the established pattern already used on the
+  // citizen/employee create-complaint pages in frontend/micro-ui.
+  const stateId = Digit.ULBService.getStateId();
+  const { data: hierarchySchema } = Digit.Hooks.useCustomMDMS(
+    stateId,
+    "CMS-BOUNDARY",
+    [{ name: "HierarchySchema" }],
+    {
+      select: (data) => {
+        const rows = data?.["CMS-BOUNDARY"]?.HierarchySchema;
+        return Array.isArray(rows) ? rows.find((row) => row.moduleName === "CMS") : null;
+      },
+      retry: false,
+      enabled: !!stateId,
+    }
+  );
+
   const childrenData = useMemo(() => {
     if (!rawChildrenData || !allowedRoots) return rawChildrenData;
     const filterTree = (nodes) =>
@@ -100,14 +122,36 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
     const order = Digit.SessionStorage.get("boundaryHierarchyOrder");
     return Array.isArray(order) ? order.map((item) => item.code) : [];
   }, [tenantId]);
-  const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
+  const hierarchyType =
+    hierarchySchema?.hierarchy || window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
 
-  // Respect the tenant's configured lowest boundary level. A tenant whose
-  // boundary tree is shallower than the declared hierarchy (Maputo: many
-  // bairros have no Quarteirão) otherwise leaves the deepest declared level
-  // with no options — the required leaf dropdown never renders and the
-  // citizen can't submit. Cap the rendered cascade at the configured lowest
-  // level so the last selectable level becomes the effective leaf.
+  // Respect the tenant's configured highest AND lowest boundary levels.
+  // PGR_BOUNDARY_LOWEST_LEVEL caps the bottom: a tenant whose boundary tree
+  // is shallower than the declared hierarchy (Maputo: many bairros have no
+  // Quarteirão) otherwise leaves the deepest declared level with no options
+  // — the required leaf dropdown never renders and the citizen can't
+  // submit. PGR_BOUNDARY_HIGHEST_LEVEL caps the top: previously this config
+  // was written to globalConfigs by ansible but never actually read here,
+  // so the cascade always started at whatever level the boundary-service
+  // happened to return as root, regardless of the configured highest level
+  // (egovernments/CCRS#721).
+  //
+  // CMS-BOUNDARY.HierarchySchema (fetched above) is the primary source for
+  // both levels — it's the master an operator actually edits post-deploy —
+  // with the ansible-templated globalConfigs value used only as a fallback
+  // for tenants where that MDMS record hasn't been seeded yet.
+  //
+  // Neither source is trusted blindly: `findIndex` below returns -1 for a
+  // configured level that doesn't exist in this tenant's hierarchy at all
+  // (typo'd MDMS value, or a level declared for another tenant), in which
+  // case the corresponding cap is silently skipped rather than collapsing
+  // the whole cascade. Separately, a level that's only MISSING on some
+  // branches (e.g. a handful of bairros with no Quarteirão child) is not
+  // a findIndex concern at all — `lowestLevelCapped` only records whether
+  // the cap was configured and matched in the hierarchy's type list; the
+  // childless-node-is-leaf fallback below (keyed off it) is what actually
+  // tolerates a specific branch running out of children before reaching
+  // the configured lowest level.
   // `lowestLevelCapped` records whether PGR_BOUNDARY_LOWEST_LEVEL was BOTH
   // configured AND matched in this tree (the cap actually applied). The
   // childless-node-is-leaf fallback keys off it: only a deployment that
@@ -115,15 +159,26 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
   // Unconfigured deployments keep strict deepest-level-only leaf semantics so a
   // County seeded without children can't become fileable (egovernments/CCRS#478).
   const { effectiveHierarchy, lowestLevelCapped } = useMemo(() => {
-    const configuredLowest = window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
-    if (!configuredLowest) return { effectiveHierarchy: boundaryHierarchy, lowestLevelCapped: false };
-    const idx = boundaryHierarchy.findIndex(
+    const configuredHighest =
+      hierarchySchema?.highestHierarchy || window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_HIGHEST_LEVEL");
+    const configuredLowest =
+      hierarchySchema?.lowestHierarchy || window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
+
+    const highestIdx = configuredHighest
+      ? boundaryHierarchy.findIndex((k) => String(k).toLowerCase() === String(configuredHighest).toLowerCase())
+      : -1;
+    const startIdx = highestIdx >= 0 ? highestIdx : 0;
+
+    if (!configuredLowest) {
+      return { effectiveHierarchy: boundaryHierarchy.slice(startIdx), lowestLevelCapped: false };
+    }
+    const lowestIdx = boundaryHierarchy.findIndex(
       (k) => String(k).toLowerCase() === String(configuredLowest).toLowerCase()
     );
-    return idx >= 0
-      ? { effectiveHierarchy: boundaryHierarchy.slice(0, idx + 1), lowestLevelCapped: true }
-      : { effectiveHierarchy: boundaryHierarchy, lowestLevelCapped: false };
-  }, [boundaryHierarchy]);
+    return lowestIdx >= startIdx
+      ? { effectiveHierarchy: boundaryHierarchy.slice(startIdx, lowestIdx + 1), lowestLevelCapped: true }
+      : { effectiveHierarchy: boundaryHierarchy.slice(startIdx), lowestLevelCapped: false };
+  }, [boundaryHierarchy, hierarchySchema]);
 
   // State to manage selected values and dropdown options
   const [selectedValues, setSelectedValues] = useState({});
