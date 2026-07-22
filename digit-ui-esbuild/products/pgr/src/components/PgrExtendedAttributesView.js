@@ -23,6 +23,10 @@ const SKIP_KEYS = new Set([
   // details pages (product call, sheet-v4 review) — skipping it here avoids
   // a duplicate row in the Additional Details card.
   "complainantAddress",
+  // receivedChannel now travels as service.source (product call) and is not
+  // a display row; skipping also hides it on complaints created while it
+  // briefly lived in extendedAttributes.
+  "receivedChannel",
   "email",
   // Moz QA (CCSD-1988): consents are an internal acceptance record, not a
   // user-facing data row — never show them on the view screens.
