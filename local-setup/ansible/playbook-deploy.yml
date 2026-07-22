@@ -475,6 +475,20 @@
     # contexts under docker/ (the existing build-context convention) and repoint
     # them with an Ansible-only overlay. docker-compose.migrations.yml itself
     # stays valid for anyone running compose straight from the repo.
+    #
+    # rsync creates only the FINAL component of the destination path, so this
+    # needs {{ digit_dir }}/docker to exist already. On a cold-start box it does
+    # not: the task that creates it ("Synchronize docker build context dirs")
+    # runs ~100 tasks later. Without this the FIRST deploy to a fresh host dies
+    # with rsync rc=11, mkdir "<digit_dir>/docker/pgr-services-db" failed
+    # (ENOENT) — while a re-deploy onto a host that already has the directory
+    # passes, which is why it went unnoticed. Idempotent.
+    - name: Ensure docker build-context dir exists (cold start)
+      file:
+        path: "{{ digit_dir }}/docker"
+        state: directory
+        mode: "0755"
+
     - name: Synchronize in-repo migrator build contexts
       synchronize:
         src: "../../backend/{{ item }}/src/main/resources/db/"
