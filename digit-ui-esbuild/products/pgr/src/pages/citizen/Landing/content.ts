@@ -156,6 +156,29 @@ export const LANDING_COPY = {
   },
   PRIVACY_LINK: { pt: "Ler a Política de Privacidade", en: "Read the Privacy Policy" },
 
+  // Privacy policy (full page) ---------------------------------------------
+  PRIVACY_PAGE_TITLE: { pt: "Política de Privacidade", en: "Privacy Policy" },
+  PRIVACY_PAGE_P1: {
+    pt: "A Plataforma Fala Cidadão está empenhada em proteger a sua privacidade e em assegurar que as suas informações pessoais são tratadas de forma segura, transparente e em conformidade com a legislação aplicável.",
+    en: "The Fala Cidadão Platform is committed to protecting your privacy and ensuring your personal information is handled securely, transparently and in compliance with applicable law.",
+  },
+  PRIVACY_PAGE_P2: {
+    pt: "Ao utilizar esta Plataforma, o utilizador consente na recolha e no tratamento das informações que fornece para efeitos de registo, investigação, gestão e resolução da sua reclamação, petições, queixas e denúncia. As informações recolhidas podem incluir o seu nome, dados de contacto, elementos de identificação quando aplicável, detalhes da reclamação, documentos de suporte, fotografias e outras provas que decida apresentar.",
+    en: "By using this Platform you consent to the collection and processing of the information you provide to register, investigate, manage and resolve your complaint, petitions, grievances and reports. This may include your name, contact details, identifying details where applicable, complaint details, supporting documents, photographs and other evidence you submit.",
+  },
+  PRIVACY_PAGE_P3: {
+    pt: "As suas informações pessoais apenas serão acedidas por funcionários e instituições do Governo devidamente autorizados e responsáveis pelo tratamento da sua reclamação. Não serão partilhadas com terceiros não autorizados nem utilizadas para fins comerciais ou de marketing. Nos casos previstos pela Plataforma, as reclamações submetidas como confidenciais terão a identidade do autor protegida, sendo esta divulgada apenas para um grupo restrito e senior de funcionarios ou quando exigido por lei.",
+    en: "Your personal information will only be accessed by duly authorised government officials and institutions responsible for handling your complaint. It will not be shared with unauthorised third parties or used for commercial or marketing purposes. Where the Platform allows, complaints submitted as confidential will have the author's identity protected, disclosed only to a restricted, senior group of officials or when required by law.",
+  },
+  PRIVACY_PAGE_P4: {
+    pt: "A Plataforma implementa medidas técnicas e organizativas adequadas para salvaguardar as suas informações contra o acesso, alteração, divulgação ou perda não autorizados. Podem igualmente ser recolhidas informações técnicas, tais como dados do dispositivo, endereço IP e utilização do sistema, com o objetivo de melhorar a segurança, o desempenho do sistema e a qualidade do serviço.",
+    en: "The Platform implements appropriate technical and organisational measures to safeguard your information against unauthorised access, alteration, disclosure or loss. Technical information may also be collected, such as device data, IP address and system usage, to improve security, system performance and service quality.",
+  },
+  PRIVACY_PAGE_P5: {
+    pt: "As suas informações serão conservadas apenas durante o período necessário para processar a sua reclamação, cumprir obrigações legais e manter os registos oficiais do Governo. O utilizador pode solicitar o acesso às suas informações pessoais ou a respetiva correção, sujeito à legislação aplicável e a quaisquer restrições necessárias para proteger investigações em curso.",
+    en: "Your information will be retained only for the period necessary to process your complaint, comply with legal obligations and maintain official government records. You may request access to or correction of your personal information, subject to applicable law and any restrictions necessary to protect ongoing investigations.",
+  },
+
   // News ---------------------------------------------------------------—---
   NEWS_TITLE: { pt: "Últimas Actualizações", en: "Latest Updates" },
   NEWS_READ_MORE: { pt: "Ler mais", en: "Read more" },

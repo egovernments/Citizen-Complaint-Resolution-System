@@ -105,6 +105,16 @@ function ConfiguredLanding(props: PGRLandingPageProps) {
     [i18n]
   );
 
+  // Portuguese-first public page: if the app's active locale isn't PT, switch
+  // to pt_PT once on mount (through the same handler the switcher uses, so the
+  // locale bundle loads). Keeps the landing in Portuguese even when the app
+  // default is English.
+  React.useEffect(() => {
+    const active = String(i18n?.language || "").toLowerCase();
+    if (!active.startsWith("pt")) (props.onLanguageChange ?? defaultLanguageChange)("pt_PT");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <LandingRenderer
       config={config}

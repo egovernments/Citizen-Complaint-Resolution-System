@@ -75,6 +75,8 @@ export const DigitApp = ({ stateCode, modules, appTenants, logoUrl, logoUrlWhite
   // Public PGR landing page — mounted shell-free (no topbar/sidebar) below.
   // Registered by the PGR module; absent when PGR isn't an enabled module.
   const PGRLandingPage = Digit?.ComponentRegistryService?.getComponent?.("PGRLandingPage");
+  // Public privacy-policy page — also shell-free; linked from the landing.
+  const PGRPrivacyPolicy = Digit?.ComponentRegistryService?.getComponent?.("PGRPrivacyPolicy");
   let sourceUrl = `${window.location.origin}/citizen`;
   const commonProps = {
     stateInfo,
@@ -98,6 +100,11 @@ export const DigitApp = ({ stateCode, modules, appTenants, logoUrl, logoUrlWhite
       {PGRLandingPage && (
         <Route exact path={`/${window?.contextPath}/landing`}>
           <PGRLandingPage />
+        </Route>
+      )}
+      {PGRPrivacyPolicy && (
+        <Route exact path={`/${window?.contextPath}/privacy-policy`}>
+          <PGRPrivacyPolicy />
         </Route>
       )}
      {allowedUserTypes?.some(userType=>userType=="employee")&& <Route path={`/${window?.contextPath}/employee`}>
