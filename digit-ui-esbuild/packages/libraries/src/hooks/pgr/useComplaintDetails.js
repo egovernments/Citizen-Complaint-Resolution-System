@@ -53,10 +53,16 @@ const getDetailsRow = ({ id, service, complaintType }) => ({
   CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE: `COMPLAINT_HIERARCHY.${service.serviceCode.toUpperCase()}`,
   CS_COMPLAINT_ADDTIONAL_DETAILS: service.description,
   CS_COMPLAINT_FILED_DATE: Digit.DateUtils.ConvertTimestampToDate(service.auditDetails.createdTime),
+  // QA #31/#25: the Endereço row shows ONLY what the complainant typed —
+  // the boundary key (ADMIN_<code>) and the tenant name (TENANT_TENANTS_*)
+  // were concatenated here and rendered as raw codes / authority names
+  // ("MZ_IGE_ADMIN_hungaro", "…, Matola, IGSAE"). Both removed per product
+  // call; buildingName/street included so employee-created complaints (which
+  // store the address there) still show their address.
   ES_CREATECOMPLAINT_ADDRESS: [
+    service.address.buildingName,
+    service.address.street,
     service.address.landmark,
-    Digit.Utils.getMultiRootTenant() ? `ADMIN_${service.address.locality.code}` : Digit.Utils.locale.getLocalityCode(service.address.locality, service.tenantId),
-    `TENANT_TENANTS_${service?.tenantId?.toUpperCase?.()?.replace(".", "_")}`,
     service.address.pincode,
   ],
 });
