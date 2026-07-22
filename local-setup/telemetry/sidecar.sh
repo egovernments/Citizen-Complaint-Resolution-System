@@ -153,14 +153,39 @@ emit_start() {
   send_event "container" "start" "$_svc"
 }
 
-# One-shot, time-bounded query (the shared docker_api helper is intentionally
-# unbounded for the long-lived events stream below, so use an explicit timeout
-# here to guarantee startup cannot block indefinitely).
-curl -s --max-time 10 --unix-socket "$DOCKER_SOCKET" "http://localhost/containers/json" 2>/dev/null \
-  | jq -r ".[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\") | \"\(.Id)\t\(.Labels[\"com.docker.compose.service\"] // \"\")\"" 2>/dev/null \
-  | while IFS="$TAB" read -r cid svc; do
-      emit_start "$cid" "$svc"
-    done
+# Query the running-container list, distinguishing a real (possibly empty) JSON
+# array from a transient socket/API failure so a blip does not silently drop
+# already-running services from the backfill. Each attempt is time-bounded (the
+# shared docker_api helper is intentionally unbounded for the long-lived events
+# stream below), with a few bounded retries before giving up.
+enumerate_running() {
+  _i=0
+  while [ "$_i" -lt 3 ]; do
+    _out=$(curl -s --max-time 10 --unix-socket "$DOCKER_SOCKET" \
+      "http://localhost/containers/json" 2>/dev/null)
+    if [ -n "$_out" ] && printf '%s' "$_out" | jq -e 'type == "array"' >/dev/null 2>&1; then
+      printf '%s' "$_out"
+      return 0
+    fi
+    _i=$((_i + 1))
+    sleep 1
+  done
+  return 1
+}
+
+if RUNNING_JSON=$(enumerate_running); then
+  printf '%s' "$RUNNING_JSON" \
+    | jq -r ".[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\") | \"\(.Id)\t\(.Labels[\"com.docker.compose.service\"] // \"\")\"" 2>/dev/null \
+    | while IFS="$TAB" read -r cid svc; do
+        emit_start "$cid" "$svc"
+      done
+else
+  # Not fatal: the live event stream (opened from $START_SINCE) still captures
+  # everything that starts from here on; only containers that were already up
+  # before the sidecar may go uncounted.
+  echo "[telemetry] WARN: could not enumerate running containers for backfill after retries;" \
+       "relying on the live event stream"
+fi
 
 echo "[telemetry] Monitoring container events..."
 
