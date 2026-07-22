@@ -305,31 +305,13 @@ const ComplaintDetailsPage = () => {
 
   const geoLocation = complaintDetails?.service?.address?.geoLocation;
   const address = complaintDetails?.service?.address;
-  // QA #31: complaints store only the lowercase boundary CODE (name is null),
-  // so the Endereço line rendered raw codes like "zumbo". Resolve through the
-  // boundary localization (module rainmaker-boundary-*) when loaded; otherwise
-  // title-case the code — always readable, never a raw identifier.
-  const localityLabel = (() => {
-    const loc = address?.locality;
-    if (!loc) return null;
-    if (loc.name) return loc.name;
-    if (!loc.code) return null;
-    const viaT = t(loc.code);
-    if (viaT && viaT !== loc.code) return viaT;
-    // QA #25/#31 (sheet v4): some environments prefix boundary codes with the
-    // tenant/hierarchy chain (e.g. "MZ_IGE_ADMIN_hungaro") — strip the leading
-    // ALL-CAPS segments so the citizen sees "Hungaro", not the raw chain.
-    // Bare codes ("zumbo", "vila_de_sena") pass through untouched.
-    const bare = String(loc.code).replace(/^(?:[A-Z0-9]+_)+(?=[^A-Z])/, "");
-    return bare
-      .replace(/[_-]+/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-  })();
+  // QA #31/#25: show ONLY what the complainant typed — no boundary code, no
+  // tenant/authority name (those rendered as raw identifiers like
+  // "MZ_IGE_ADMIN_hungaro" or appended "…, IGSAE").
   const displayAddress = [
     address?.buildingName,
     address?.street,
     address?.landmark,
-    localityLabel,
     address?.pincode,
   ]
     .filter(Boolean)
