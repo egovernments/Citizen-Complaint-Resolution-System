@@ -43,7 +43,19 @@ const fetchBoundaryAncestors = async (tenantId, localityCode) => {
   }
 };
 
-const getDetailsRow = ({ id, service, complaintType }) => ({
+// Boundary codes arrive as raw identifiers, sometimes prefixed with the
+// tenant/hierarchy chain ("MZ_IGE_ADMIN_hungaro"). Render them readable
+// without depending on the boundary localization module being loaded:
+// strip the ALL-CAPS prefix, then title-case ("Hungaro", "Vila De Sena").
+const readableBoundary = (code) => {
+  if (!code) return null;
+  const bare = String(code).replace(/^(?:[A-Z0-9]+_)+(?=[^A-Z])/, "");
+  return bare
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const getDetailsRow = ({ id, service, complaintType, boundaryAncestors }) => ({
   CS_COMPLAINT_DETAILS_COMPLAINT_NO: id,
   CS_COMPLAINT_DETAILS_APPLICATION_STATUS: `CS_COMMON_${service.applicationStatus}`,
   // Key-based (COMPLAINT_HIERARCHY.<code>) — the display t()s these values, so
@@ -53,16 +65,17 @@ const getDetailsRow = ({ id, service, complaintType }) => ({
   CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE: `COMPLAINT_HIERARCHY.${service.serviceCode.toUpperCase()}`,
   CS_COMPLAINT_ADDTIONAL_DETAILS: service.description,
   CS_COMPLAINT_FILED_DATE: Digit.DateUtils.ConvertTimestampToDate(service.auditDetails.createdTime),
-  // QA #31/#25: the Endereço row shows ONLY what the complainant typed —
-  // the boundary key (ADMIN_<code>) and the tenant name (TENANT_TENANTS_*)
-  // were concatenated here and rendered as raw codes / authority names
-  // ("MZ_IGE_ADMIN_hungaro", "…, Matola, IGSAE"). Both removed per product
-  // call; buildingName/street included so employee-created complaints (which
-  // store the address there) still show their address.
+  // QA #31/#25: Endereço = what the complainant typed + the READABLE
+  // administrative chain, leaf upward ("Landmark, locality, district,
+  // province"). The old raw boundary key (ADMIN_<code>) and the tenant /
+  // authority name (TENANT_TENANTS_* → "…, IGSAE") are gone. Boundary names
+  // are derived readable (see readableBoundary) so nothing renders as a raw
+  // identifier even when boundary localization isn't loaded.
   ES_CREATECOMPLAINT_ADDRESS: [
     service.address.buildingName,
     service.address.street,
     service.address.landmark,
+    ...[...(boundaryAncestors || [])].reverse().map((b) => readableBoundary(b?.code)),
     service.address.pincode,
   ],
 });
