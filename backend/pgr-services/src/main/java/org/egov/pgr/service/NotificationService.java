@@ -519,7 +519,12 @@ public class NotificationService {
         }
 
 
-        String localisedComplaint = notificationUtil.getCustomizedMsgForPlaceholder(localizationMessage,"pgr.complaint.category."+request.getService().getServiceCode());
+        String localisedComplaint = getLocalisedComplaintType(localizationMessage, request.getService().getServiceCode());
+        // An entry missing from both namespaces must not abort the notification: a null
+        // replacement makes String.replace throw. Fall back to the raw service code.
+        if (!StringUtils.hasText(localisedComplaint))
+            localisedComplaint = StringUtils.hasText(request.getService().getServiceCode())
+                    ? request.getService().getServiceCode() : "";
 
         Long createdTime = serviceWrapper.getService().getAuditDetails().getCreatedTime();
         LocalDate date = Instant.ofEpochMilli(createdTime > 1_000_000_000_000L ? createdTime : createdTime * 1000)
@@ -547,6 +552,24 @@ public class NotificationService {
         message.put(EMPLOYEE, Arrays.asList(messageForEmployee));
 
         return message;
+    }
+
+    /**
+     * Resolves the localized complaint-type label for a service code: the current
+     * COMPLAINT_HIERARCHY.<code> namespace first, then the legacy pgr.complaint.category.<code>
+     * namespace for tenants whose localization predates the hierarchy migration.
+     *
+     * @param localizationMessage - Localization messages blob for the rainmaker-pgr module
+     * @param serviceCode - Service code of the complaint
+     * @return - Returns the localized label, or null when neither namespace has an entry
+     */
+    private String getLocalisedComplaintType(String localizationMessage, String serviceCode) {
+        String localised = notificationUtil.getCustomizedMsgForPlaceholder(localizationMessage,
+                "COMPLAINT_HIERARCHY." + serviceCode);
+        if (!StringUtils.hasText(localised))
+            localised = notificationUtil.getCustomizedMsgForPlaceholder(localizationMessage,
+                    "pgr.complaint.category." + serviceCode);
+        return localised;
     }
 
     /**
@@ -1168,8 +1191,7 @@ public class NotificationService {
         try {
             String loc = notificationUtil.getLocalizationMessages(tenantId, ri, PGR_MODULE);
             if (StringUtils.hasText(service.getServiceCode())) {
-                String ct = notificationUtil.getCustomizedMsgForPlaceholder(loc,
-                        "pgr.complaint.category." + service.getServiceCode());
+                String ct = getLocalisedComplaintType(loc, service.getServiceCode());
                 if (StringUtils.hasText(ct)) put(v, "complaint_type", ct);
             }
             if (StringUtils.hasText(service.getApplicationStatus())) {

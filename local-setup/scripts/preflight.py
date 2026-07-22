@@ -247,9 +247,128 @@ def report(path, findings, strict):
     return bad
 
 
+_SIZE_RE = re.compile(r"^(\d+(?:\.\d+)?)([kmg])b?$", re.IGNORECASE)
+_UNITS = {"k": 1024, "m": 1048576, "g": 1073741824}
+
+
+def _parse_size(val):
+    """Return bytes for '100m'/'1G'/'512k', or None if unparseable."""
+    if not isinstance(val, str):
+        return None
+    m = _SIZE_RE.match(val.strip())
+    if not m:
+        return None
+    return float(m.group(1)) * _UNITS[m.group(2).lower()]
+
+
+@rule(
+    "docker-log-rotation",
+    "docker_log_max_size / docker_log_total_size are fed straight into a Jinja "
+    "size parser that builds daemon.json log-opts. A value without a unit "
+    "('100'), a non-size ('abc') or an empty string raises an unhandled "
+    "templating error mid-deploy; '0m' divides by zero. A max-size larger than "
+    "the total silently allows more than the cap, because Docker always keeps "
+    "at least one log file per container. docker_log_max_file is a file count, "
+    "not a size — a unit on it ('10m') reaches daemon.json and dockerd refuses "
+    "to start.",
+)
+def r_docker_log_rotation(cfg):
+    raw_size = get(cfg, "docker_log_max_size")
+    raw_total = get(cfg, "docker_log_total_size")
+
+    for key, raw in (("docker_log_max_size", raw_size),
+                     ("docker_log_total_size", raw_total)):
+        if raw is None:
+            continue  # unset is fine — group_vars supplies the default
+        if _parse_size(raw) is None:
+            yield (FAIL,
+                   f"{key}: {raw!r} is not a valid Docker size. Use a number "
+                   f"with a k/m/g unit, e.g. '100m' or '1g'.")
+        elif _parse_size(raw) == 0:
+            yield (FAIL,
+                   f"{key}: {raw!r} is zero. Docker would reject it and the "
+                   f"file-count derivation divides by it.")
+
+    size = _parse_size(raw_size) if raw_size is not None else None
+    total = _parse_size(raw_total) if raw_total is not None else None
+    if size and total and size > total:
+        yield (FAIL,
+               f"docker_log_max_size ({raw_size}) exceeds docker_log_total_size "
+               f"({raw_total}). Docker keeps at least one file per container, so "
+               f"the effective cap would be {raw_size}, not {raw_total}.")
+
+    # A falsy value (null, 0, '') is treated as unset: the playbook derives the
+    # count with `default(..., true)`, which substitutes for those too. Anything
+    # truthy is an explicit override and has to be a positive integer — it is a
+    # file count, not a size, but it sits between two size-string vars in both
+    # this rule and group_vars, so 'docker_log_max_file: 10m' is an easy slip.
+    # Convert it defensively: an unguarded float() would kill preflight with a
+    # traceback instead of the actionable message this tool exists to print.
+    raw_count = get(cfg, "docker_log_max_file")
+    if raw_count:
+        try:
+            count = int(str(raw_count).strip())
+            if count < 1:
+                raise ValueError(raw_count)
+        except (TypeError, ValueError):
+            yield (FAIL,
+                   f"docker_log_max_file: {raw_count!r} is not a positive "
+                   f"integer. It is a file count, not a size — Docker rejects "
+                   f"anything else. Drop the unit, or unset it and let "
+                   f"docker_log_total_size derive the count.")
+        else:
+            eff = size * count if (size and total) else None
+            if eff is not None and eff > total:
+                yield (WARN,
+                       f"docker_log_max_file pins the count directly, so the "
+                       f"cap is {raw_size} x {count} = {eff / 1048576:.0f} MB, "
+                       f"above docker_log_total_size ({raw_total}).")
+
+
 # ── Self-test: each rule gets a firing and a non-firing case ────────────────
 
 SELF_TEST_CASES = [
+    # ── docker log rotation ──
+    ("log size without a unit fires", {"docker_log_max_size": "100"},
+     {"docker-log-rotation"}),
+    ("log size that is not a size fires", {"docker_log_max_size": "abc"},
+     {"docker-log-rotation"}),
+    ("empty log size fires", {"docker_log_max_size": ""},
+     {"docker-log-rotation"}),
+    ("zero log size fires", {"docker_log_max_size": "0m"},
+     {"docker-log-rotation"}),
+    ("log max-size above the total cap fires",
+     {"docker_log_max_size": "2g", "docker_log_total_size": "1g"},
+     {"docker-log-rotation"}),
+    ("explicit max-file breaching the cap warns",
+     {"docker_log_max_size": "500m", "docker_log_total_size": "1g",
+      "docker_log_max_file": 10},
+     {"docker-log-rotation"}),
+    ("max-file written as a size string fires (would crash on float())",
+     {"docker_log_max_size": "100m", "docker_log_total_size": "1g",
+      "docker_log_max_file": "10m"},
+     {"docker-log-rotation"}),
+    ("max-file that is not a number fires",
+     {"docker_log_max_size": "100m", "docker_log_total_size": "1g",
+      "docker_log_max_file": "abc"},
+     {"docker-log-rotation"}),
+    ("zero max-file fires",
+     {"docker_log_max_size": "100m", "docker_log_total_size": "1g",
+      "docker_log_max_file": -1},
+     {"docker-log-rotation"}),
+    ("max-file left blank is clean — the playbook derives it",
+     {"docker_log_max_size": "100m", "docker_log_total_size": "1g",
+      "docker_log_max_file": None}, set()),
+    ("max-file as a string integer is clean",
+     {"docker_log_max_size": "100m", "docker_log_total_size": "1g",
+      "docker_log_max_file": "10"}, set()),
+    ("defaults are clean",
+     {"docker_log_max_size": "100m", "docker_log_total_size": "1g"}, set()),
+    ("uppercase units are clean",
+     {"docker_log_max_size": "100M", "docker_log_total_size": "1G"}, set()),
+    ("size equal to the total is clean",
+     {"docker_log_max_size": "1g", "docker_log_total_size": "1g"}, set()),
+    ("unset log vars are clean (group_vars supplies defaults)", {}, set()),
     # (description, cfg, expected rule ids that FAIL/WARN)
     ("fastpath without ack fires", {"db_fast_path": True,
       "bootstrap_secrets": {"elasticsearch_master_password": DUMP_MASTER_PASSWORD}},

@@ -34,8 +34,8 @@ import ImageComponent from "../../../components/ImageComponent";
 const DEFAULT_TENANT = Digit?.ULBService?.getStateId?.();
 // CCSD-1989: strict email shape (blank ok) so "a@b." fails client-side with a
 // localized error instead of the unlocalized backend save failure. FALLBACK
-// only — the live pattern comes from common-masters.MobileNumberValidation
-// (emailRegex) via validationConfig, same channel as the mobile pattern.
+// only — the live pattern comes from common-masters.FormValidations
+// (fieldType "email") via validationConfig, same channel as the mobile pattern.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Derive the maximum digit count from a mobile regex pattern string.
@@ -171,7 +171,14 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
 
               acc[key] = new RegExp(pattern, flags); // Converting properly
             } else {
-              acc[key] = new RegExp(value); // Treating it as a normal regex pattern (no flags)
+              // Prefer Unicode mode so property escapes (\p{L}) from MDMS
+              // masters work; fall back to a plain compile for legacy
+              // patterns that aren't valid under the `u` flag.
+              try {
+                acc[key] = new RegExp(value, "u");
+              } catch (eu) {
+                acc[key] = new RegExp(value); // Treating it as a normal regex pattern (no flags)
+              }
             }
           } catch (error) {
             console.error(`Error parsing regex for key "${key}":`, error);
@@ -301,11 +308,15 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
   };
 
   // Read from common-masters.MobileNumberValidation — the single source
-  // of truth for mobile validation across all frontends and backends.
+  // of truth for mobile validation across all frontends and backends —
+  // plus common-masters.FormValidations, which carries per-fieldType user
+  // patterns (currently email). mdms-v2's v1 _search omits masters whose
+  // schema isn't registered, so envs without FormValidations still resolve
+  // the mobile rule and simply keep the EMAIL_RE fallback.
   const { data: mdmsValidationData, isValidationConfigLoading } = Digit.Hooks.useCustomMDMS(
     stateLvlTenantId,
     "common-masters",
-    [{ name: "MobileNumberValidation" }],
+    [{ name: "MobileNumberValidation" }, { name: "FormValidations" }],
     {
       select: (data) => {
         const list = data?.["common-masters"]?.MobileNumberValidation || [];
@@ -313,14 +324,31 @@ const UserProfile = ({ stateCode, userType, cityDetails }) => {
           list.find((x) => x.default === true && x.isActive !== false) ||
           list.find((x) => x.isActive !== false) ||
           null;
-        if (!record) return null;
-        const maxLen = mobileRegexMaxLength(record.mobileNumberRegex) || 15;
+        const formValidations = data?.["common-masters"]?.FormValidations || [];
+        const emailRecord =
+          formValidations.find((x) => x?.fieldType === "email" && x?.isActive !== false) || null;
+        // NOTE: the fieldType:"name" row is deliberately NOT surfaced here.
+        // It carries the PGR complainant-name rule (CCSD-1990: letter-first,
+        // no apostrophe/period) — the PROFILE name rule must stay on the
+        // permissive built-in fallback (CCRS#556: OTP-signup users have their
+        // mobile number as name, and "O'Brien" / "John Jr." must save).
+        if (!record && !emailRecord) return null;
         return {
-          // email is optional in the master — undefined entries are dropped
-          // below so the built-in EMAIL_RE fallback stays in effect.
-          UserProfileValidationConfig: [{ mobileNumber: record.mobileNumberRegex, email: record.emailRegex }],
-          prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
-          maxLength: maxLen,
+          // Either master may be unseeded — undefined entries are dropped
+          // below so the globalConfigs/EMAIL_RE fallbacks stay in effect.
+          // prefix/maxLength only ride along with an actual mobile record,
+          // so an email-only master never clobbers the globalConfigs prefix.
+          UserProfileValidationConfig: [{ mobileNumber: record?.mobileNumberRegex, email: emailRecord?.regex }],
+          ...(record
+            ? {
+                prefix: record.countryCode || DEFAULT_MOBILE_PREFIX,
+                // The employee Edit-Profile branch reads `countryCode` (not
+                // `prefix`) — expose the master's value under both names so
+                // it doesn't silently fall back to the +91 default.
+                countryCode: record.countryCode || DEFAULT_MOBILE_PREFIX,
+                maxLength: mobileRegexMaxLength(record.mobileNumberRegex) || 15,
+              }
+            : {}),
         };
       },
       enabled: !!stateLvlTenantId,
