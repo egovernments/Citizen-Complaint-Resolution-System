@@ -495,11 +495,20 @@ const CreateComplaintForm = ({
 
 
 
+  // QA #26: channel-of-receipt defaults to "Presencial" (in person) — the
+  // Reception Officer's most common case. A session-persisted choice wins
+  // (spread order); memoized so the defaultValues reference only changes
+  // when the session data does (FormComposerV2 resets on reference change).
+  const defaultValuesWithChannel = useMemo(
+    () => ({ ReceivedChannel: { code: "inperson", name: "PGR_CHANNEL_IN_PERSON" }, ...(sessionFormData || {}) }),
+    [sessionFormData]
+  );
+
   return (
     <React.Fragment>
       <FormComposerV2
         onSubmit={onFormSubmit}
-        defaultValues={sessionFormData}
+        defaultValues={defaultValuesWithChannel}
         heading={t("")}
         config={updatedConfig?.form}
         className="custom-form"
