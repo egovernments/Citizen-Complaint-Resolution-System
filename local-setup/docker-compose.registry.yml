@@ -1565,6 +1565,22 @@ services:
       SPRING_FLYWAY_USER: egov
       SPRING_FLYWAY_PASSWORD: egov123
       JAVA_OPTS: '-Xmx96m -Xms96m'
+      # Unlike the javaagent-instrumented services above, this app is left
+      # without the OTEL javaagent mounted, so without disabling the
+      # exporters below the OTEL Java SDK bundled with the OpenTelemetryDriver
+      # (see the jdbc:otel: note above) defaults to trying an OTLP export and
+      # the container never reports healthy. docker-compose.yml /
+      # docker-compose.deploy.yaml already carry this; this file didn't.
+      OTEL_TRACES_EXPORTER: none
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      OTEL_INSTRUMENTATION_JDBC_ENABLED: 'false'
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/egov-url-shortening/actuator/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - egov-network
 
