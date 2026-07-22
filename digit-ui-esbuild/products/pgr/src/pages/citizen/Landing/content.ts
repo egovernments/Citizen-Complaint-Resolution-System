@@ -223,10 +223,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { labelKey: "NAV_HOME", route: "HOME" },
   { labelKey: "NAV_SUBMIT", route: "REGISTER_COMPLAINT" },
-  { labelKey: "NAV_TRACK", route: "TRACK_COMPLAINT" },
-  { labelKey: "NAV_TRAINING", route: "TRAINING" },
-  { labelKey: "NAV_ABOUT", route: "ABOUT" },
-  { labelKey: "NAV_CONTACTS", route: "CONTACTS" },
+  { labelKey: "NAV_TRACK", route: "TRACK_COMPLAINT" }
 ];
 
 export interface ManifestationType {
