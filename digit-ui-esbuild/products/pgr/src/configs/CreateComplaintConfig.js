@@ -17,10 +17,10 @@ export const CreateComplaintConfig = {
                 name: "ComplainantContactNumber",
                 error: "CORE_COMMON_MOBILE_ERROR",
                 // Read order (per @vinothrallapalli-eGov review on
-                // PR #689, canonical UserValidation pattern):
+                // PR #689, canonical FormValidations pattern):
                 //   1. `window.__DIGIT_USER_VALIDATION.mobile` —
                 //      populated by `useMobileValidation` from the
-                //      `common-masters.UserValidation` MDMS master.
+                //      `common-masters.FormValidations` MDMS master.
                 //   2. `globalConfigs.CORE_MOBILE_CONFIGS` — build-time
                 //      fallback rendered by the playbook for tenants
                 //      that haven't seeded the master OR for the first
@@ -54,11 +54,11 @@ export const CreateComplaintConfig = {
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
                 validation: {
                   required: true,
-                  // Read order (canonical UserValidation pattern, same as the
+                  // Read order (canonical FormValidations pattern, same as the
                   // mobile field above):
                   //   1. `window.__DIGIT_USER_VALIDATION.name` — populated by
-                  //      `useMobileValidation` from the validation MDMS master
-                  //      (nameRegex, optional field).
+                  //      `useMobileValidation` from common-masters.FormValidations
+                  //      (the fieldType:"name" row, optional).
                   //   2. Built-in fallback below — always valid, so an
                   //      unseeded or malformed master value can't break the form.
                   // Getter re-evaluates on every read, so the MDMS value wins
@@ -71,12 +71,21 @@ export const CreateComplaintConfig = {
                     const raw = window?.__DIGIT_USER_VALIDATION?.name?.pattern;
                     if (raw) {
                       try {
-                        return raw instanceof RegExp ? raw : new RegExp(raw);
+                        if (raw instanceof RegExp) return raw;
+                        // Compile with the `u` flag first so Unicode property
+                        // escapes (\p{L}/\p{N}) in the master work; fall back
+                        // to a plain compile for legacy patterns that aren't
+                        // valid in Unicode mode.
+                        try {
+                          return new RegExp(raw, "u");
+                        } catch (eu) {
+                          return new RegExp(raw);
+                        }
                       } catch (e) {
-                        console.error("Invalid nameRegex in validation master:", e);
+                        console.error("Invalid name pattern in FormValidations master:", e);
                       }
                     }
-                    return /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{0,29}$)^.*$/;
+                    return /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[\p{L}][\p{L}\p{N} _\-\(\)]{0,29}$)^.*$/u;
                   },
                 }
               },

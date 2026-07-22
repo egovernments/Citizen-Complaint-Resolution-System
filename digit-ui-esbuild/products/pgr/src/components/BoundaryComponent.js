@@ -2,6 +2,7 @@ import { Loader } from "@egovernments/digit-ui-components";
 import { Field as V2Field, Select as V2Select } from "@egovernments/digit-ui-components-v2";
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { sameLevelName } from "../utils/boundaryLevels";
 
 // Humanize a boundary-type code for use as a graceful fallback when its
 // localization key isn't seeded: "SUB_COUNTY" -> "Sub County", "bairro" ->
@@ -122,9 +123,10 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
   const { effectiveHierarchy, lowestLevelCapped } = useMemo(() => {
     const configuredLowest = window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
     if (!configuredLowest) return { effectiveHierarchy: boundaryHierarchy, lowestLevelCapped: false };
-    const idx = boundaryHierarchy.findIndex(
-      (k) => String(k).toLowerCase() === String(configuredLowest).toLowerCase()
-    );
+    // Accent-insensitive: operators author this in host_vars with the tenant's
+    // own orthography, which need not match how the loader spelled the level in
+    // the tree. A miss here is silent — the cap just never applies.
+    const idx = boundaryHierarchy.findIndex((k) => sameLevelName(k, configuredLowest));
     return idx >= 0
       ? { effectiveHierarchy: boundaryHierarchy.slice(0, idx + 1), lowestLevelCapped: true }
       : { effectiveHierarchy: boundaryHierarchy, lowestLevelCapped: false };
@@ -213,10 +215,19 @@ useEffect(() => {
     // value directly as a fallback so auto-fill recovers once init
     // lands. Skip only when BOTH are empty; the effect re-runs when
     // childrenData settles.
-    let hierarchy = boundaryHierarchy;
+    // Match the hint at the level the cascade actually files at — the CAPPED
+    // hierarchy. Using the raw tree depth here made the map and the cascade
+    // disagree whenever PGR_BOUNDARY_LOWEST_LEVEL sits above the deepest seeded
+    // level: the map resolved a pin to the deeper level, findWardPath looked for
+    // a node of that deeper type, and on a tenant that seeds it only patchily the
+    // lookup found nothing and auto-fill silently no-opped.
+    let hierarchy = effectiveHierarchy;
     if (hierarchy.length === 0) {
       const order = Digit.SessionStorage.get("boundaryHierarchyOrder");
       hierarchy = Array.isArray(order) ? order.map((item) => item.code) : [];
+      const configuredLowest = window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
+      const idx = configuredLowest ? hierarchy.findIndex((k) => sameLevelName(k, configuredLowest)) : -1;
+      if (idx >= 0) hierarchy = hierarchy.slice(0, idx + 1);
     }
     if (hierarchy.length === 0) return;
     const targetType = hierarchy[hierarchy.length - 1];
