@@ -794,7 +794,10 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         if (!hasClientFilter) {
           const tenant = pickTenant(tenantId, filter);
           const offset = (page - 1) * perPage;
-          const raw = await client.mdmsSearch(tenant, config.schema!, { limit: perPage, offset });
+          // isActive:true so the server paginates over active rows only. The
+          // client-side .filter below stays as a defensive fallback for any MDMS
+          // that ignores the criterion (degrades to old behavior, never worse).
+          const raw = await client.mdmsSearch(tenant, config.schema!, { limit: perPage, offset, isActive: true });
           const data = raw.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
           const sorted = clientSort(data, field, order);
           const total = raw.length >= perPage ? offset + perPage + 1 : offset + data.length;
@@ -984,8 +987,13 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
           tenantId,
           typeof localityCode === 'string' ? localityCode : undefined,
         );
+        // The complaint's service.tenantId must be the boundary's CITY tenant
+        // (same as address.tenantId, resolved above), NOT the session/root tenant:
+        // pgr-services validates the picked locality against service.tenantId, and
+        // root has no boundaries → INVALID_BOUNDARY_CODE. A root-`mz` admin session
+        // previously passed `mz` here and every create 400'd.
         const wrapper = await client.pgrCreate(
-          tenantId,
+          String(address.tenantId || tenantId),
           String(data.serviceCode),
           String(data.description || ''),
           address,

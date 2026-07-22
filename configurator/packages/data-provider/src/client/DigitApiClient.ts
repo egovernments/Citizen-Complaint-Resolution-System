@@ -187,11 +187,16 @@ export class DigitApiClient {
   // --- MDMS v2 ---
 
   async mdmsSearch(tenantId: string, schemaCode: string, options?: {
-    limit?: number; offset?: number; uniqueIdentifiers?: string[];
+    limit?: number; offset?: number; uniqueIdentifiers?: string[]; isActive?: boolean;
   }): Promise<MdmsRecord[]> {
     const criteria: Record<string, unknown> = { tenantId, limit: options?.limit || 100, offset: options?.offset || 0 };
     if (schemaCode) criteria.schemaCode = schemaCode;
     if (options?.uniqueIdentifiers) criteria.uniqueIdentifiers = options.uniqueIdentifiers;
+    // Push isActive to the server so limit/offset paginate over the FILTERED set.
+    // Filtering active rows client-side after a raw page is fetched drops rows the
+    // page already spent, so a window of soft-deleted rows renders empty under a
+    // "showing 1-N of M" footer (MDMS v2 honors this criterion).
+    if (options?.isActive !== undefined) criteria.isActive = options.isActive;
 
     const data = await this.request<{ mdms?: MdmsRecord[] }>(this.endpoint('MDMS_SEARCH'), {
       RequestInfo: this.buildRequestInfo(), MdmsCriteria: criteria,
