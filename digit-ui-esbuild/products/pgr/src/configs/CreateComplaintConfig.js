@@ -286,6 +286,29 @@ export const CreateComplaintConfig = {
                 error: "CS_DESC_MIN_CHARS",
               },
             },
+            {
+              // QA #26: how the complaint reached the Reception Officer
+              // (email / in-person / letter / linha verde). Optional; travels
+              // as extendedAttributes.receivedChannel and shows on the details
+              // pages via the generic extended-attributes card. The stored
+              // value is the human-readable option code — the viewer renders
+              // values verbatim by design.
+              isMandatory: false,
+              key: "ReceivedChannel",
+              type: "dropdown",
+              label: "ES_CREATECOMPLAINT_RECEIVED_CHANNEL",
+              disable: false,
+              populators: {
+                name: "ReceivedChannel",
+                optionsKey: "name",
+                options: [
+                  { code: "E-mail", name: "PGR_CHANNEL_EMAIL" },
+                  { code: "Presencial", name: "PGR_CHANNEL_IN_PERSON" },
+                  { code: "Carta", name: "PGR_CHANNEL_LETTER" },
+                  { code: "Linha Verde", name: "PGR_CHANNEL_LINHA_VERDE" },
+                ],
+              },
+            },
           ],
         },
 
