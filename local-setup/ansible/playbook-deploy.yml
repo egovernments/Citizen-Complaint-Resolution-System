@@ -279,18 +279,114 @@
             enabled: yes
 
         # ==================== Docker Configuration ====================
-        # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
-        # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
-        # over plain HTTP. Without this entry Docker refuses to pull with
-        # `http: server gave HTTP response to HTTPS client`. Restart the
-        # daemon when the file changes so the new config takes effect.
-        - name: Configure Docker insecure-registries for VPC registry
-          copy:
-            dest: /etc/docker/daemon.json
-            content: "{{ {'insecure-registries': insecure_registries | default([])} | to_nice_json }}\n"
-            mode: '0644'
-          register: daemon_json
-          when: insecure_registries | default([]) | length > 0
+        # Log rotation. Docker's json-file driver keeps growing a container's
+        # log forever unless max-size/max-file are set, and a chatty JVM
+        # service can fill a disk over a long-running deploy.
+        #
+        # The per-container ceiling is max-size * max-file, so the two settings
+        # cannot be chosen independently. docker_log_total_size is the
+        # invariant (1g) and docker_log_max_size is the knob; the file count is
+        # derived so raising or lowering the slice size cannot breach the cap.
+        # Set docker_log_max_file explicitly only to override that derivation.
+        #
+        # "Override" means a truthy value. `default()` without boolean=true only
+        # substitutes for an *undefined* variable, so an operator who uncomments
+        # the escape hatch in group_vars and leaves it blank (docker_log_max_file:
+        # -> YAML null) would be treated as having opted in: the cap guard below
+        # would skip, the derivation would pass None through, and daemon.json
+        # would get the literal "max-file": "None", which dockerd refuses. Both
+        # tasks therefore test the value, not its mere definedness.
+        - name: "Docker logging — reject a max-size larger than the total cap"
+          vars:
+            _u: {k: 1024, m: 1048576, g: 1073741824}
+            _sz: "{{ (docker_log_max_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_max_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+            _tt: "{{ (docker_log_total_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_total_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+          ansible.builtin.fail:
+            msg: >-
+              docker_log_max_size ({{ docker_log_max_size }}) exceeds
+              docker_log_total_size ({{ docker_log_total_size }}). Docker keeps
+              at least one log file per container, so this would allow
+              {{ docker_log_max_size }} per container — above the cap.
+          when:
+            - not (docker_log_max_file | default('', true))
+            - (_sz | float) > (_tt | float)
+
+        - name: "Docker logging — derive max-file from the total cap"
+          vars:
+            _u: {k: 1024, m: 1048576, g: 1073741824}
+            _sz: "{{ (docker_log_max_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_max_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+            _tt: "{{ (docker_log_total_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_total_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+          ansible.builtin.set_fact:
+            docker_log_max_file_effective: >-
+              {{ docker_log_max_file
+                 | default([1, ((_tt | float) / (_sz | float)) | int] | max, true) }}
+
+        # daemon.json is written unconditionally now. It used to be gated on
+        # insecure_registries being non-empty, which meant hosts on a TLS
+        # registry never got a daemon.json at all — and would therefore never
+        # get log rotation either.
+        #
+        # NOTE: daemon-level log-opts apply to containers CREATED after the
+        # daemon restart. Containers already running keep the settings they
+        # were created with until they are recreated.
+        # Read any existing daemon.json so operator-set keys survive. This task
+        # used to be gated on insecure_registries being non-empty, so hosts on
+        # a TLS registry were never touched at all. Now that it always runs, a
+        # blind overwrite would silently discard whatever else is in the file —
+        # storage-driver, data-root, live-restore, registry-mirrors,
+        # default-address-pools. Merge instead: our keys win, everything else
+        # is preserved.
+        - name: "Docker daemon — read existing daemon.json (if any)"
+          ansible.builtin.slurp:
+            src: /etc/docker/daemon.json
+          register: daemon_json_existing
+          failed_when: false
+          changed_when: false
+
+        # An unparseable existing file makes from_json raise inside the
+        # template, which surfaces as a bare traceback. block/rescue turns it
+        # into something an operator can act on. The file is left untouched
+        # either way — we refuse to overwrite what we could not read.
+        - name: "Docker daemon — write merged daemon.json"
+          block:
+            - name: "Docker daemon — merge log rotation + insecure registries"
+              vars:
+                _existing: >-
+                  {{ (daemon_json_existing.content | default('') | b64decode | from_json)
+                     if (daemon_json_existing.content is defined
+                         and (daemon_json_existing.content | b64decode | trim | length) > 0)
+                     else {} }}
+                # insecure-registries is always present, never conditionally
+                # omitted. combine() only adds and overwrites — a key that
+                # exists solely in _existing survives untouched. Omitting the
+                # key when the list is empty would therefore leave a stale
+                # entry on disk forever for exactly the host that needs it
+                # gone: one that deployed with the default non-empty list and
+                # later migrated to a TLS registry (insecure_registries: []).
+                # Writing [] clears it, because combine's list_merge defaults
+                # to replace.
+                _ours: >-
+                  {{ {'log-driver': 'json-file',
+                      'log-opts': {'max-size': docker_log_max_size,
+                                   'max-file': docker_log_max_file_effective | string},
+                      'insecure-registries': insecure_registries | default([])} }}
+              ansible.builtin.copy:
+                dest: /etc/docker/daemon.json
+                content: "{{ _existing | combine(_ours, recursive=True) | to_nice_json }}\n"
+                mode: '0644'
+              register: daemon_json
+          rescue:
+            - name: "Docker daemon — existing daemon.json is unreadable"
+              ansible.builtin.fail:
+                msg: >-
+                  /etc/docker/daemon.json exists but could not be parsed as
+                  JSON, so the log-rotation settings were not merged in. Fix or
+                  remove that file and re-run — it has been left untouched
+                  rather than overwritten.
 
         - name: Restart docker if daemon.json changed
           service:
