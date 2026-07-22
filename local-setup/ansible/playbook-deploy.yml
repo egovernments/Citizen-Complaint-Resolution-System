@@ -1057,6 +1057,25 @@
       until: hrms_health.stdout == 'healthy'
       changed_when: false
 
+    # ==================== Reload Prometheus config (issue #1335) ====================
+    # `up -d` recreates a container only when its service SPEC changes — a
+    # content-only change to the bind-mounted otel/prometheus.yml does not
+    # trigger a recreate. So on a REDEPLOY of an already-running tenant, the
+    # live Prometheus keeps its old in-memory config and never picks up a newly
+    # added scrape job (e.g. the `node` job for node-exporter) until it happens
+    # to restart. A fresh deploy is unaffected — Prometheus boots with the new
+    # config. Prometheus runs with --web.enable-lifecycle, so POST /-/reload
+    # rereads the file in place. Best-effort: on a first deploy Prometheus may
+    # not be up yet (and already loaded fresh config), so a failure here is fine.
+    - name: Reload Prometheus config (pick up new scrape jobs without a recreate)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19090/-/reload
+        method: POST
+        status_code: [200]
+      register: prometheus_reload
+      changed_when: prometheus_reload.status == 200
+      failed_when: false
+
     # ==================== digit-ui mode convergence ====================
     # Three runtime models, picked by host_vars `digit_ui_mode`:
     #
