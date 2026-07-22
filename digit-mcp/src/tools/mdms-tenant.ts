@@ -176,11 +176,35 @@ export function normalizePincodeAllowlist(input: unknown): Array<string | number
  * ServiceDefs) whose emptiness at the source is the correct, expected state —
  * they are operator-owned and loaded via the configurator.
  */
-const SCHEMAS_EMPTY_IS_A_PROBLEM = new Set([
-  'dss.KpiDefinition',
-  'dss.DashboardPack',
-  'INBOX.InboxQueryConfiguration',
-  'ACCESSCONTROL-ROLEACTIONS.roleactions',
+const SCHEMAS_EMPTY_IS_A_PROBLEM = new Map<string, { impact: string; remedy: string }>([
+  [
+    'dss.KpiDefinition',
+    {
+      impact: 'the dashboard will render an empty catalog',
+      remedy: 'local-setup/scripts/enable-dashboard.sh',
+    },
+  ],
+  [
+    'dss.DashboardPack',
+    {
+      impact: 'the dashboard will render no tiles for any role',
+      remedy: 'local-setup/scripts/enable-dashboard.sh',
+    },
+  ],
+  [
+    'INBOX.InboxQueryConfiguration',
+    {
+      impact: 'employee inbox searches will fail to resolve their query config',
+      remedy: 'copy the master from a populated root (no installer script covers this one)',
+    },
+  ],
+  [
+    'ACCESSCONTROL-ROLEACTIONS.roleactions',
+    {
+      impact: 'no role will have any action grants, so every sidebar renders empty',
+      remedy: 'seed ACCESSCONTROL-ROLEACTIONS from the ansible seed files',
+    },
+  ],
 ]);
 
 /**
@@ -1595,11 +1619,12 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // with an empty catalog — which is indistinguishable from success in
           // the copied/skipped/failed counters. This is exactly how `mz` was
           // bootstrapped to a dashboard with zero KPIs. Say so out loud.
-          if (sourceRecords.length === 0 && SCHEMAS_EMPTY_IS_A_PROBLEM.has(schemaCode)) {
+          const emptyImpact = SCHEMAS_EMPTY_IS_A_PROBLEM.get(schemaCode);
+          if (sourceRecords.length === 0 && emptyImpact) {
             const warning =
               `Source tenant "${source}" has no ${schemaCode} records — nothing was copied to ` +
-              `"${target}". The dashboard will render an empty catalog. Seed it from the repo ` +
-              `files with local-setup/scripts/enable-dashboard.sh (DASHBOARD_TENANT=${target}).`;
+              `"${target}", so ${emptyImpact.impact}. Seed it from the repo files: ` +
+              `${emptyImpact.remedy} (tenant "${target}").`;
             results.warnings.push(warning);
             console.warn(`[tenant_bootstrap] ${warning}`);
             emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode } });

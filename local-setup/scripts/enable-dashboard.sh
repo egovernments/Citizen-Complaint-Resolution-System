@@ -205,6 +205,30 @@ mdms_post() {
   curl -s -X POST "$MDMS_URL$1" -H 'Content-Type: application/json' --max-time 60 --data-binary "@$2"
 }
 
+# mdms_search <schemaCode> [uid] — search records, echo the response.
+#
+# The schemaCode goes in the CRITERIA, not the path: `POST /mdms-v2/v2/_search/
+# <schema>` is not a route and 400/404s with "No static resource". Only the
+# WRITE endpoints (_create/_update) take the schema as a path suffix. Same
+# convention the integration tests document at
+# tests/integration-tests/tests/utils/probes.ts:423.
+mdms_search() {
+  local code="$1" uid="${2:-}" criteria
+  criteria="$(jq -nc --arg t "$DASHBOARD_TENANT" --arg c "$code" --arg u "$uid" \
+    '{tenantId:$t, schemaCode:$c, limit:500} + (if $u == "" then {} else {uniqueIdentifiers:[$u]} end)')"
+  curl -s -X POST "$MDMS_URL/mdms-v2/v2/_search" -H 'Content-Type: application/json' --max-time 30 \
+    -d "$(jq -nc --argjson ri "$REQUEST_INFO" --argjson mc "$criteria" '{RequestInfo:$ri, MdmsCriteria:$mc}')"
+}
+
+# mdms_first_record <schemaCode> [uid] — echo the first FULL record object, or
+# nothing. Returning empty on a failed//empty search matters: callers merge onto
+# this, and `null + {isActive:false}` is a valid jq expression that exits 0 —
+# so a broken search would otherwise sail through as a bodyless update.
+mdms_first_record() {
+  local resp; resp="$(mdms_search "$1" "${2:-}")"
+  printf '%s' "$resp" | jq -ce '.mdms[0] // empty' 2>/dev/null
+}
+
 # mdms_create <schemaCode> <data-json> — create one record, echo the response.
 #
 # Schema creation goes through Kafka, so for a few seconds after step 1 a data
@@ -253,6 +277,67 @@ step0() {
   # -- tooling -------------------------------------------------------------
   for c in jq python3 curl; do command -v "$c" >/dev/null || { err "$c not on PATH"; fatal=1; }; done
 
+  # -- the seed data must satisfy the schema this script registers ---------
+  #
+  # Step 1 registers the schema files and step 2 seeds the catalog data; the
+  # two are separate files that drift. When they disagree, every failing
+  # record is rejected at create time — but ONLY on a tenant where step 1
+  # actually registered something. On a tenant that already has an older,
+  # broader schema, step 1 logs "already registered" and the mismatch stays
+  # invisible. That asymmetry means the from-scratch path (the one this
+  # script exists for) is the one that breaks, so check it offline, here.
+  local schema_check
+  schema_check="$(python3 - "$DSS_SCHEMA_DIR" "$DSS_DATA_DIR" <<'PY'
+import json,sys,os
+sd, dd = sys.argv[1], sys.argv[2]
+try:
+    from jsonschema import Draft7Validator
+except ImportError:
+    print("SKIP python3 jsonschema not installed — cannot pre-validate seed data"); raise SystemExit
+bad_total = 0
+for code, f in (('dss.KpiDefinition','KpiDefinition'), ('dss.DashboardPack','DashboardPack'),
+                ('dss.DashboardConfig','DashboardConfig')):
+    sp, dp = os.path.join(sd, code + '.json'), os.path.join(dd, f + '.json')
+    if not (os.path.exists(sp) and os.path.exists(dp)): continue
+    schema = json.load(open(sp))
+    if not schema.get('x-unique'):
+        print(f"FAIL {code}: schema declares no x-unique — mdms-v2 derives the record "
+              f"uniqueIdentifier from it; without it creates fail and re-runs duplicate")
+        bad_total += 1
+    v = Draft7Validator(schema)
+    recs = [r.get('data', r) for r in json.load(open(dp))]
+    bad = [(r.get('id'), next(iter(v.iter_errors(r))).message) for r in recs if list(v.iter_errors(r))]
+    if bad:
+        bad_total += len(bad)
+        print(f"FAIL {code}: {len(bad)}/{len(recs)} seed records violate the schema this script registers")
+        for rid, msg in bad[:3]:
+            print(f"FAIL   {rid}: {msg[:110]}")
+        if len(bad) > 3: print(f"FAIL   … and {len(bad)-3} more")
+if bad_total == 0: print("OK schema and seed data agree")
+PY
+)"
+  while IFS= read -r line; do
+    case "$line" in
+      OK\ *)   ok "${line#OK }" ;;
+      SKIP\ *) warn "${line#SKIP }" ;;
+      FAIL\ *) err "${line#FAIL }"; fatal=1 ;;
+    esac
+  done <<< "$schema_check"
+  [[ "$schema_check" == FAIL* ]] && note "Reconcile local-setup/db/dss-mdms-seed/schemas/ with ansible/nairobi-mdms/mdms/dss/ before seeding."
+
+  # -- postgres reachable --------------------------------------------------
+  # Without this, a wrong DB_CONTAINER makes every read return empty, and the
+  # role/facts/corruption checks below report a confident "0 holders",
+  # "0 matviews", "no corruption" — advice that is wrong rather than absent.
+  if $SUDO docker exec "$DB_CONTAINER" pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then
+    ok "postgres reachable ($DB_CONTAINER, db=$DB_NAME)"
+  else
+    err "cannot reach postgres in container '$DB_CONTAINER' as user '$DB_USER'"
+    note "Set DB_CONTAINER / DB_USER / DB_NAME. Every check below reads from it,"
+    note "and would otherwise report empty results as clean."
+    fatal=1
+  fi
+
   # -- mdms-v2 reachable on the DIRECT port --------------------------------
   if [[ "$(http_code "$MDMS_URL/mdms-v2/health")" =~ ^[23] ]]; then
     ok "mdms-v2 reachable at $MDMS_URL (direct, not Kong)"
@@ -263,16 +348,21 @@ step0() {
   fi
 
   # -- pgr-services actually serves the analytics tier ---------------------
-  # An old image 404s here, and every downstream step would still "succeed"
-  # while the dashboard stayed blank.
+  # An old image has no analytics routes at all, and every downstream step
+  # would still "succeed" while the dashboard stayed blank.
   local acat
   acat="$(http_code -X POST "$PGR_URL/pgr-services/v2/analytics/catalog/_search" \
     -H 'Content-Type: application/json' -d "{\"RequestInfo\":{},\"tenantId\":\"$DASHBOARD_TENANT\"}")"
   if [[ "$acat" =~ ^[23] ]]; then
     ok "pgr-services serves /v2/analytics (HTTP $acat)"
   else
-    err "pgr-services /v2/analytics/catalog/_search -> HTTP $acat"
-    note "This image predates the analytics tier. Upgrade pgr-services before seeding."
+    # Don't assert the cause. A missing route can surface as 404 OR as 400 —
+    # tracer's catch-all @ControllerAdvice remaps NoResourceFoundException —
+    # and a genuine 400 from a rejected body looks identical from here.
+    err "pgr-services /v2/analytics/catalog/_search -> HTTP $acat (expected 2xx)"
+    note "Most often the image predates the analytics tier; confirm with:"
+    note "  docker exec <pgr> sh -c 'unzip -l /opt/egov/*.jar | grep -c analytics'"
+    note "Zero means upgrade the image. Non-zero means the route exists and the request was rejected."
     fatal=1
   fi
 
@@ -286,9 +376,13 @@ step0() {
   # yields a row whose data has "$schema"/"properties" and none of the master's
   # own fields. It occupies the uid, so a later good seed is skipped as
   # "already exists" and the catalog stays broken forever. Found live on moz.
+  # Type-check both markers, matching isSchemaDocument() in
+  # digit-mcp/src/tools/mdms-tenant.ts — key presence alone would flag a record
+  # that legitimately carries a field named `properties`.
   CORRUPT_UIDS="$(psql_q "select schemacode||'/'||uniqueidentifier from eg_mdms_data
       where tenantid='$DASHBOARD_TENANT' and schemacode like 'dss.%'
-        and data ? '\$schema' and data ? 'properties'")"
+        and jsonb_typeof(data->'\$schema') = 'string'
+        and jsonb_typeof(data->'properties') = 'object'")"
   if [[ -n "$CORRUPT_UIDS" ]]; then
     warn "schema-as-data rows detected (a JSON Schema stored as a record):"
     printf '        %s\n' $CORRUPT_UIDS
@@ -502,16 +596,26 @@ step2() {
       local sc="${entry%%/*}" uid="${entry##*/}"
       if [[ "$DRY_RUN" == true ]]; then log "[dry-run] deactivate $sc/$uid"; continue; fi
       local cur body resp
-      cur="$(curl -s -X POST "$MDMS_URL/mdms-v2/v2/_search/$sc" -H 'Content-Type: application/json' \
-        -d "{\"RequestInfo\":$REQUEST_INFO,\"MdmsCriteria\":{\"tenantId\":\"$DASHBOARD_TENANT\",
-             \"schemaCode\":\"$sc\",\"uniqueIdentifiers\":[\"$uid\"]}}")"
+      # Read the whole record back before mutating it. An empty read is a hard
+      # stop, not a warning: repair is the reason --repair was passed, and a
+      # bodyless update that "succeeds" would leave the corruption in place
+      # while the run reports the catalog seeded.
+      cur="$(mdms_first_record "$sc" "$uid")"
+      if [[ -z "$cur" ]]; then
+        err "could not read $sc/$uid back for repair — refusing to send a bodyless update"
+        note "Deactivate it by hand (mdms-v2 _update with isActive:false), then re-run."
+        return 1
+      fi
       body="$(mktemp)"
       jq -n --argjson ri "$REQUEST_INFO" --argjson cur "$cur" \
-        '{RequestInfo:$ri, Mdms:($cur.mdms[0] + {isActive:false})}' > "$body" 2>/dev/null || {
-          warn "could not read $sc/$uid for repair — deactivate it by hand"; rm -f "$body"; continue; }
+        '{RequestInfo:$ri, Mdms:($cur + {isActive:false})}' > "$body"
       resp="$(mdms_post "/mdms-v2/v2/_update/$sc" "$body")"; rm -f "$body"
-      printf '%s' "$resp" | grep -qi 'mdms' && ok "deactivated corrupt $sc/$uid" \
-        || warn "repair of $sc/$uid returned: $(printf '%s' "$resp" | head -c 160)"
+      if printf '%s' "$resp" | grep -qi '"mdms"'; then
+        ok "deactivated corrupt $sc/$uid"
+      else
+        err "repair of $sc/$uid failed: $(printf '%s' "$resp" | head -c 200)"
+        return 1
+      fi
     done
   fi
 
@@ -582,13 +686,13 @@ update_record() {
   local uid cur body resp
   uid="$(printf '%s' "$rec" | jq -r '.id // empty')"
   [[ -n "$uid" ]] || return 1
-  cur="$(curl -s -X POST "$MDMS_URL/mdms-v2/v2/_search/$code" -H 'Content-Type: application/json' \
-    -d "{\"RequestInfo\":$REQUEST_INFO,\"MdmsCriteria\":{\"tenantId\":\"$DASHBOARD_TENANT\",
-         \"schemaCode\":\"$code\",\"uniqueIdentifiers\":[\"$uid\"]}}")"
+  # mdms-v2 _update needs the row's own `id` (a uuid) from a readback — the
+  # record's business key is not enough. No readback, no update.
+  cur="$(mdms_first_record "$code" "$uid")"
+  [[ -n "$cur" ]] || { warn "$code/$uid: could not read the existing record back for update"; return 1; }
   body="$(mktemp)"
   jq -n --argjson ri "$REQUEST_INFO" --argjson cur "$cur" --argjson d "$rec" \
-    '{RequestInfo:$ri, Mdms:($cur.mdms[0] + {data:$d, isActive:true})}' > "$body" 2>/dev/null || {
-      rm -f "$body"; return 1; }
+    '{RequestInfo:$ri, Mdms:($cur + {data:$d, isActive:true})}' > "$body"
   resp="$(mdms_post "/mdms-v2/v2/_update/$code" "$body")"; rm -f "$body"
   printf '%s' "$resp" | grep -qi '"mdms"'
 }
@@ -649,12 +753,23 @@ print(' '.join(rmap.get(r.strip(),r.strip()) for r in '''$DASHBOARD_ALLOWED_ROLE
 
   # Mirror an existing roleactions row's shape rather than inventing fields —
   # the master's columns vary by deployment vintage.
-  local template
-  template="$(curl -s -X POST "$MDMS_URL/mdms-v2/v2/_search/ACCESSCONTROL-ROLEACTIONS.roleactions" \
-    -H 'Content-Type: application/json' \
-    -d "{\"RequestInfo\":$REQUEST_INFO,\"MdmsCriteria\":{\"tenantId\":\"$DASHBOARD_TENANT\",
-         \"schemaCode\":\"ACCESSCONTROL-ROLEACTIONS.roleactions\",\"limit\":1}}" | jq -c '.mdms[0].data // empty')"
-  if [[ -z "$template" ]]; then
+  local template=""
+  if [[ "$DRY_RUN" != true ]]; then
+    template="$(mdms_first_record ACCESSCONTROL-ROLEACTIONS.roleactions | jq -c '.data // empty')"
+  fi
+  if [[ -z "$template" && "$DRY_RUN" != true ]]; then
+    # Distinguish "this deployment has no roleactions" from "we failed to read
+    # them". Guessing wrong here sends the operator to seed a master that is
+    # already populated — which is exactly what the broken _search path did.
+    local live_rows
+    live_rows="$(psql_q "select count(*) from eg_mdms_data
+        where schemacode='ACCESSCONTROL-ROLEACTIONS.roleactions'
+          and tenantid='$DASHBOARD_TENANT' and isactive")"
+    if [[ "${live_rows:-0}" -gt 0 ]]; then
+      err "could not read ACCESSCONTROL-ROLEACTIONS via mdms-v2, but ${live_rows} active rows exist at $DASHBOARD_TENANT"
+      note "The search call failed — not a missing master. Check $MDMS_URL before granting."
+      return 1
+    fi
     warn "no existing roleactions row to mirror — skipping sidebar grants"
     note "Seed ACCESSCONTROL-ROLEACTIONS first, then re-run with --only step4."
     return 0
@@ -842,6 +957,14 @@ step7() {
   log "verifying locales: $locales"
   for loc in $locales; do
     local missing
+    # A locale the deployment offers but for which this repo ships no pack is
+    # a real gap, but not one this run introduced or can close — the pack has
+    # to be authored first. Report it, do not fail the enablement on it.
+    if [[ ! -f "$DSS_L10N_DIR/${loc}.json" ]]; then
+      warn "$loc is offered in StateInfo.languages but this repo ships no pack — tiles will show raw keys"
+      note "Author a $loc pack in digit-mcp/src/tools/dashboard-l10n-seed.ts, then re-run --only step5."
+      continue
+    fi
     missing="$(psql_q "
       with keys as (
         select distinct k from eg_mdms_data d,
@@ -868,7 +991,25 @@ step7() {
 # =============================================================================
 # CLI.
 # =============================================================================
-usage() { sed -n '2,75p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+# Print the header block: every line from line 2 up to the closing banner,
+# so the help never truncates when the header grows.
+usage() {
+  awk 'NR>1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
+}
+
+# require_arg <flag> <value> — a flag that takes an argument must get one.
+# Without this, `--only` with nothing after it dies on `$2: unbound variable`
+# under `set -u`.
+require_arg() {
+  [[ -n "${2:-}" && "${2:-}" != --* ]] || { err "$1 needs an argument"; exit 2; }
+}
+
+# valid_step <name> — is this one of the known step ids?
+valid_step() {
+  local s
+  for s in "${ALL_STEPS[@]}"; do [[ "$s" == "$1" ]] && return 0; done
+  return 1
+}
 
 RUN_STEPS=("${ALL_STEPS[@]}")
 main() {
@@ -881,14 +1022,21 @@ main() {
       --repair) DO_REPAIR=true ;;
       --update) DO_UPDATE=true ;;
       --no-color) NO_COLOR=1 ;;
-      --only) only="$2"; shift ;;
-      --from) from="$2"; shift ;;
-      --to) to="$2"; shift ;;
+      --only) require_arg --only "${2:-}"; only="$2"; shift ;;
+      --from) require_arg --from "${2:-}"; from="$2"; shift ;;
+      --to)   require_arg --to   "${2:-}"; to="$2";   shift ;;
       *) err "unknown argument: $1"; usage; exit 2 ;;
     esac
     shift
   done
   init_colors
+
+  # Validate step names up front. A typo used to select nothing and exit 0,
+  # which reads exactly like a successful run that had nothing to do.
+  local s
+  for s in ${only//,/ } $from $to; do
+    valid_step "$s" || { err "unknown step: $s"; note "Known steps: ${ALL_STEPS[*]}"; exit 2; }
+  done
 
   if [[ -n "$only" ]]; then
     IFS=',' read -r -a RUN_STEPS <<< "$only"
@@ -901,6 +1049,7 @@ main() {
     done
     RUN_STEPS=("${sel[@]}")
   fi
+  [[ ${#RUN_STEPS[@]} -gt 0 ]] || { err "no steps selected"; exit 2; }
 
   printf '%s%s enable-dashboard.sh — tenant=%s, mdms=%s%s\n' \
     "${C_BOLD}" "${C_CYN}" "$DASHBOARD_TENANT" "$MDMS_URL" "${C_RESET}"
@@ -913,9 +1062,18 @@ main() {
     [[ "$DRY_RUN" == true ]] || mint_request_info
   fi
 
+  # Call each step DIRECTLY rather than as `"$s" || { … }`. A function invoked
+  # on the left of `||` runs with errexit suppressed for its whole body, so an
+  # unchecked failing command mid-step would be ignored — `set -euo pipefail`
+  # would be decorative. The ERR trap gives the same friendly message without
+  # disarming it.
+  local CURRENT_STEP
+  trap 'err "step ${CURRENT_STEP:-?} failed — stopping"; exit 1' ERR
   for s in "${RUN_STEPS[@]}"; do
-    "$s" || { err "step $s failed — stopping"; exit 1; }
+    CURRENT_STEP="$s"
+    "$s"
   done
+  trap - ERR
 }
 
 main "$@"

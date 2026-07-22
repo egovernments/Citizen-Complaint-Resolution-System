@@ -1,18 +1,29 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "DashboardConfig",
   "type": "object",
-  "required": ["id", "allowedRoles"],
+  "title": "DashboardConfig",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "required": [
+    "id",
+    "allowedRoles"
+  ],
+  "x-unique": [
+    "id"
+  ],
   "properties": {
-    "id": { "type": "string", "description": "Config record key; the UI reads the \"default\" record (single-record master)" },
+    "id": {
+      "type": "string",
+      "description": "Config record key; the UI reads the \"default\" record (single-record master)"
+    },
     "allowedRoles": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 },
+      "items": {
+        "type": "string"
+      },
       "minItems": 1,
-      "description": "Role codes allowed to see the dashboard home card and open /employee/dashboard. Nav/route gate only — NOT a security boundary: the data plane is enforced server-side by the analytics catalog + scope RBAC. Absent record → the UI falls back to its built-in DASHBOARD_ROLES list."
+      "description": "Role codes allowed to see the dashboard home card and open /employee/dashboard. Nav/route gate only \u2014 NOT a security boundary: the data plane is enforced server-side by the analytics catalog + scope RBAC. Absent record \u2192 the UI falls back to its built-in DASHBOARD_ROLES list."
     },
     "numberFormat": {
-      "description": "Number DISPLAY mask for the supervisor dashboard — separators only, resolved PER LOCALE. Canonical form: an object keyed by locale code (the values of common-masters.StateInfo.languages, e.g. \"en_IN\") with an optional \"default\" mask for locales without an entry — each user sees their selected language's convention. Legacy form: a plain string = one mask applied for every locale (kept for back-compat). Mask syntax: placeholder chars are [#0]; the first non-placeholder is the grouping separator, the last is the decimal separator; decimal COUNT stays per-KPI (viz.format). Examples: \"#,##0.00\" (en_IN → 1,234.56), \"#.##0,00\" (pt_PT → 1.234,56), \"# ##0,00\" (fr_FR → 1 234,56). Absent/malformed (or no entry for the locale and no default) → the UI keeps its built-in formatting unchanged. Display-only: CSV export always stays raw.",
+      "description": "Number DISPLAY mask for the supervisor dashboard \u2014 separators only, resolved PER LOCALE. Canonical form: an object keyed by locale code (the values of common-masters.StateInfo.languages, e.g. \"en_IN\") with an optional \"default\" mask for locales without an entry \u2014 each user sees their selected language's convention. Legacy form: a plain string = one mask applied for every locale (kept for back-compat). Mask syntax: placeholder chars are [#0]; the first non-placeholder is the grouping separator, the last is the decimal separator; decimal COUNT stays per-KPI (viz.format). Examples: \"#,##0.00\" (en_IN \u2192 1,234.56), \"#.##0,00\" (pt_PT \u2192 1.234,56), \"# ##0,00\" (fr_FR \u2192 1 234,56). Absent/malformed (or no entry for the locale and no default) \u2192 the UI keeps its built-in formatting unchanged. Display-only: CSV export always stays raw.",
       "oneOf": [
         {
           "type": "string",
@@ -22,13 +33,24 @@
           "type": "object",
           "description": "Per-locale masks, keyed by locale code, plus optional \"default\"",
           "properties": {
-            "default": { "type": "string" }
+            "default": {
+              "type": "string"
+            }
           },
-          "additionalProperties": { "type": "string" },
+          "additionalProperties": {
+            "type": "string"
+          },
           "minProperties": 1
         }
       ]
+    },
+    "departmentScoping": {
+      "type": "string",
+      "enum": [
+        "enforced",
+        "disabled"
+      ],
+      "description": "Whether analytics scopes employees to their HRMS department. 'disabled' widens visibility to all employees on the tenant \u2014 temporary, pending department enrichment (#1280). Absent = enforced."
     }
-  },
-  "x-unique": ["id"]
+  }
 }
