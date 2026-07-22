@@ -23,7 +23,12 @@ const STANDALONE_MODULES = [
   "rainmaker-dashboard",
   "rainmaker-pgr",
   "rainmaker-common",
-  "rainmaker-boundary-admin",
+  // Match Module.js: rainmaker-boundary-<HIERARCHY_TYPE> (default admin).
+  `rainmaker-boundary-${
+    (typeof window !== "undefined" &&
+      window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE")?.toString?.().toLowerCase()) ||
+    "admin"
+  }`,
 ];
 
 const standalone = {
@@ -49,7 +54,13 @@ export function getLanguage() {
 export function exists(key) {
   if (key == null || key === "") return false;
   const host = hostI18next();
-  if (host) return host.exists(String(key));
+  if (host) {
+    // Active locale only. Host i18next is configured with fallbackLng=en_IN, so
+    // a bare exists(key) is true whenever English has the message — Portuguese
+    // UI then renders English COMPLAINT_HIERARCHY / boundary labels (#1108).
+    const lng = getLanguage();
+    return host.exists(String(key), { lng, fallbackLng: false });
+  }
   const map = standalone.messages[getLanguage()];
   return !!map && Object.prototype.hasOwnProperty.call(map, String(key));
 }
@@ -70,7 +81,10 @@ export function translate(key, seedEnglish) {
   const k = String(key);
   const host = hostI18next();
   if (host) {
-    return host.exists(k) ? host.t(k) : k;
+    const lng = getLanguage();
+    return host.exists(k, { lng, fallbackLng: false })
+      ? host.t(k, { lng, fallbackLng: false })
+      : k;
   }
   const map = standalone.messages[getLanguage()];
   if (map && Object.prototype.hasOwnProperty.call(map, k)) return map[k];
