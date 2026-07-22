@@ -7423,7 +7423,7 @@
     },
     {
         "code": "PGR_LANDING_UTILITY_GREEN_LINE",
-        "message": "Green Line 1490",
+        "message": "Linha Verde 1490",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7579,7 +7579,7 @@
     },
     {
         "code": "PGR_LANDING_HERO_CHANNEL_LINE",
-        "message": "Green Line 1490",
+        "message": "Linha Verde 1490",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7795,7 +7795,7 @@
     },
     {
         "code": "PGR_LANDING_CHANNEL_LINE_TITLE",
-        "message": "Green Line 1490",
+        "message": "Linha Verde 1490",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7945,7 +7945,7 @@
     },
     {
         "code": "PGR_LANDING_FOOTER_GREEN_LINE",
-        "message": "Green Line 1490",
+        "message": "Linha Verde 1490",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
