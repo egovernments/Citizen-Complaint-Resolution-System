@@ -218,7 +218,12 @@ const ComplaintDetailsPage = () => {
     if (!loc.code) return null;
     const viaT = t(loc.code);
     if (viaT && viaT !== loc.code) return viaT;
-    return String(loc.code)
+    // QA #25/#31 (sheet v4): some environments prefix boundary codes with the
+    // tenant/hierarchy chain (e.g. "MZ_IGE_ADMIN_hungaro") — strip the leading
+    // ALL-CAPS segments so the citizen sees "Hungaro", not the raw chain.
+    // Bare codes ("zumbo", "vila_de_sena") pass through untouched.
+    const bare = String(loc.code).replace(/^(?:[A-Z0-9]+_)+(?=[^A-Z])/, "");
+    return bare
       .replace(/[_-]+/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
   })();
