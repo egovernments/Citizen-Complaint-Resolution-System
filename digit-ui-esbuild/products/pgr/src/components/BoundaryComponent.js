@@ -102,12 +102,16 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
   }, [tenantId]);
   const hierarchyType = window?.globalConfigs?.getConfig("HIERARCHY_TYPE") || "ADMIN";
 
-  // Respect the tenant's configured lowest boundary level. A tenant whose
-  // boundary tree is shallower than the declared hierarchy (Maputo: many
-  // bairros have no Quarteirão) otherwise leaves the deepest declared level
-  // with no options — the required leaf dropdown never renders and the
-  // citizen can't submit. Cap the rendered cascade at the configured lowest
-  // level so the last selectable level becomes the effective leaf.
+  // Respect the tenant's configured highest AND lowest boundary levels.
+  // PGR_BOUNDARY_LOWEST_LEVEL caps the bottom: a tenant whose boundary tree
+  // is shallower than the declared hierarchy (Maputo: many bairros have no
+  // Quarteirão) otherwise leaves the deepest declared level with no options
+  // — the required leaf dropdown never renders and the citizen can't
+  // submit. PGR_BOUNDARY_HIGHEST_LEVEL caps the top: previously this config
+  // was written to globalConfigs by ansible but never actually read here,
+  // so the cascade always started at whatever level the boundary-service
+  // happened to return as root, regardless of the configured highest level
+  // (egovernments/CCRS#721).
   // `lowestLevelCapped` records whether PGR_BOUNDARY_LOWEST_LEVEL was BOTH
   // configured AND matched in this tree (the cap actually applied). The
   // childless-node-is-leaf fallback keys off it: only a deployment that
@@ -115,14 +119,23 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
   // Unconfigured deployments keep strict deepest-level-only leaf semantics so a
   // County seeded without children can't become fileable (egovernments/CCRS#478).
   const { effectiveHierarchy, lowestLevelCapped } = useMemo(() => {
+    const configuredHighest = window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_HIGHEST_LEVEL");
     const configuredLowest = window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
-    if (!configuredLowest) return { effectiveHierarchy: boundaryHierarchy, lowestLevelCapped: false };
-    const idx = boundaryHierarchy.findIndex(
+
+    const highestIdx = configuredHighest
+      ? boundaryHierarchy.findIndex((k) => String(k).toLowerCase() === String(configuredHighest).toLowerCase())
+      : -1;
+    const startIdx = highestIdx >= 0 ? highestIdx : 0;
+
+    if (!configuredLowest) {
+      return { effectiveHierarchy: boundaryHierarchy.slice(startIdx), lowestLevelCapped: false };
+    }
+    const lowestIdx = boundaryHierarchy.findIndex(
       (k) => String(k).toLowerCase() === String(configuredLowest).toLowerCase()
     );
-    return idx >= 0
-      ? { effectiveHierarchy: boundaryHierarchy.slice(0, idx + 1), lowestLevelCapped: true }
-      : { effectiveHierarchy: boundaryHierarchy, lowestLevelCapped: false };
+    return lowestIdx >= startIdx
+      ? { effectiveHierarchy: boundaryHierarchy.slice(startIdx, lowestIdx + 1), lowestLevelCapped: true }
+      : { effectiveHierarchy: boundaryHierarchy.slice(startIdx), lowestLevelCapped: false };
   }, [boundaryHierarchy]);
 
   // State to manage selected values and dropdown options
