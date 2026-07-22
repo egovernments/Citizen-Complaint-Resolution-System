@@ -74,12 +74,17 @@ const SelectMobileNumber = ({
     return v === key ? fallback : v;
   };
 
-  const headerText = config?.texts?.header
-    ? tr(config.texts.header, "Sign in")
-    : "Sign in";
-  const cardText = config?.texts?.cardText
-    ? tr(config.texts.cardText, "We'll send you a one-time password to verify your number.")
-    : null;
+  // QA #2: config.texts.* arrive ALREADY translated (Login/index.js runs every
+  // texts value through t() when building stepItems). Re-running them through
+  // tr() made the `v === key` guard always true for translated strings, so the
+  // hardcoded English fallback rendered even when the PT translation existed.
+  // Consume the pre-translated values directly — but when a tenant/locale has
+  // a seeding gap, t() echoes the raw ALL_CAPS key back; treat that as missing
+  // so the English fallback still renders instead of the key.
+  const looksLikeRawKey = (s) => typeof s === "string" && /^[A-Z0-9_]{3,}$/.test(s.trim());
+  const pick = (v, fb) => (v && !looksLikeRawKey(v) ? v : fb);
+  const headerText = pick(config?.texts?.header, "Sign in");
+  const cardText = pick(config?.texts?.cardText, null);
 
   return (
     <V2LoginShell>
@@ -207,7 +212,7 @@ const SelectMobileNumber = ({
             disabled={!isMobileValid || !canSubmit}
             width="full"
           >
-            {tr(config?.texts?.nextText || "CS_COMMONS_NEXT", "Continue")}
+            {pick(config?.texts?.nextText, null) || tr("CS_COMMONS_NEXT", "Continue")}
           </V2Button>
         </form>
 

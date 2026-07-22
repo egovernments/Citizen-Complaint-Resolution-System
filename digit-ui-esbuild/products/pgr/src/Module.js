@@ -14,6 +14,7 @@ import TimelineWrapper from "./components/TimeLineWrapper";
 import AssigneeComponent from "./components/AssigneeComponent";
 import VerificationDocsComponent from "./components/VerificationDocsComponent";
 import ActionUploadComponent from "./components/ActionUploadComponent";
+import ChannelChipsComponent from "./components/ChannelChipsComponent";
 import PGRSearchInbox from "./pages/employee/PGRInbox";
 import CreateComplaint from "./pages/employee/CreateComplaint";
 import Response from "./components/Response";
@@ -112,6 +113,7 @@ const componentsToRegister = {
   PGRAssigneeComponent: AssigneeComponent,
   PGRVerificationDocsComponent: VerificationDocsComponent,
   PGRActionUploadComponent: ActionUploadComponent,
+  PGRChannelChipsComponent: ChannelChipsComponent,
   PGRSearchInbox,
   PGRAdminSearch,
   PGRCreateComplaint: CreateComplaint,

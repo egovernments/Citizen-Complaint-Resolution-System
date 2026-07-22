@@ -183,7 +183,11 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, extOpts) 
       "serviceCode": getEffectiveServiceCode(formData?.SelectComplaintType,formData?.SelectSubComplaintType),
       "description": formData?.description,
       "applicationStatus": "CREATED",
-      "source": "web",
+      // QA #26 (product call): the Reception Officer's channel-of-receipt IS
+      // the complaint's source (was hardcoded "web"). Codes must exist in
+      // pgr-services' allowed.source list (email/inperson/letter/linhaverde
+      // added there). Employee flow only — the citizen wizard stays "web".
+      "source": formData?.ReceivedChannel?.code || "web",
       "citizen": userInfo,
       "isDeleted": false,
       "rowVersion": 1,

@@ -217,6 +217,9 @@ function WorkflowComponent({ complaintDetails, id }) {
       workflowData={workflowData}
       labelPrefix="WF_PGR_"
       currentStateChildren={currentStateChildren}
+      // QA #19 part 1 (sheet v4): the citizen must not see which employee
+      // handled the complaint — employee name + contact lines are omitted.
+      hideEmployeeContacts
     />
   );
 }
@@ -302,11 +305,13 @@ const ComplaintDetailsPage = () => {
 
   const geoLocation = complaintDetails?.service?.address?.geoLocation;
   const address = complaintDetails?.service?.address;
+  // QA #31/#25: show ONLY what the complainant typed — no boundary code, no
+  // tenant/authority name (those rendered as raw identifiers like
+  // "MZ_IGE_ADMIN_hungaro" or appended "…, IGSAE").
   const displayAddress = [
     address?.buildingName,
     address?.street,
     address?.landmark,
-    address?.locality?.name || address?.locality?.code,
     address?.pincode,
   ]
     .filter(Boolean)

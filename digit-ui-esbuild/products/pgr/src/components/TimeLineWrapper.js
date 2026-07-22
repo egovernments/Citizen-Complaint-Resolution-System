@@ -27,7 +27,13 @@ const maskPhone = (phone) => {
 const isCitizenActor = (person) =>
   Array.isArray(person?.roles) && person.roles.some((r) => (r?.code || r) === "CITIZEN");
 
-const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", currentStateChildren = null, maskConfidential = false }) => {
+// QA #19: maskEmployeeContacts — set by the EMPLOYEE details page —
+// masks every non-citizen actor's name and mobile in the timeline (the
+// requirement is mask, not remove).
+// QA #19 part 1 (sheet v4): hideEmployeeContacts — set by the CITIZEN details
+// page — OMITS employee name and contact lines entirely (the citizen must not
+// see who handled the complaint). Citizen actors' own entries stay visible.
+const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPrefix = "", currentStateChildren = null, maskConfidential = false, maskEmployeeContacts = false, hideEmployeeContacts = false }) => {
     const { t } = useTranslation();
 
     const tenantId = Digit.ULBService.getCurrentTenantId();
@@ -179,16 +185,23 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
                 const personRecord = isAssigningAction(instance?.action) ? assignee : instance?.assigner;
                 // Confidential complaints: mask the CITIZEN actor's identity
                 // (employees stay visible — accountability is intact).
-                const maskThis = maskConfidential && isCitizenActor(personRecord);
+                const isEmployeeActor = personRecord && !isCitizenActor(personRecord);
+                const maskThis =
+                  (maskConfidential && isCitizenActor(personRecord)) ||
+                  (maskEmployeeContacts && isEmployeeActor);
+                // QA #19 part 1: citizen view drops employee identity lines
+                // entirely (hide, not mask).
+                const hideThis = hideEmployeeContacts && isEmployeeActor;
                 const mobile = isAssigningAction(instance?.action) ? assignee?.mobileNumber : instance?.assigner?.mobileNumber;
                 // The backend already masks the mobile per viewer privilege
                 // ("Contact Details: *****0104"). Mirror that decision onto the
                 // NAME: a viewer the backend won't show the number to shouldn't
                 // see the person's identity either.
                 const backendMasked = typeof mobile === "string" && mobile.includes("*");
-                const personLine =
-                  maskThis || backendMasked ? maskName(formatPerson(personRecord)) : formatPerson(personRecord);
-                const shownMobile = maskThis ? maskPhone(mobile) : mobile;
+                const personLine = hideThis
+                  ? null
+                  : maskThis || backendMasked ? maskName(formatPerson(personRecord)) : formatPerson(personRecord);
+                const shownMobile = hideThis ? null : maskThis ? maskPhone(mobile) : mobile;
                 const contactLine = shownMobile ? `${t("ES_COMMON_CONTACT_DETAILS")}: ${shownMobile}` : null;
 
                 // Workflow-driven label: try the localized key, else fall back to the

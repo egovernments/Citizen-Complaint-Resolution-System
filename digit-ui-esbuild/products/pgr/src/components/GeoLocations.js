@@ -197,13 +197,25 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   }, [formData, config.key]);
 
   const fetchAddress = async (lat, lng) => {
-    const ward = resolveWard(lat, lng, tenantBoundaries);
+    // QA #12: resolveWard ran OUTSIDE the try below — a bad point (turf throws
+    // on non-finite coordinates) aborted fetchAddress before any onSelect, so
+    // the click errored in the console and the location was never captured.
+    // A ward-resolution failure must never lose the location.
+    let ward = null;
+    try {
+      ward = resolveWard(lat, lng, tenantBoundaries);
+    } catch (e) {
+      console.error("Ward resolution failed:", e);
+    }
     setSelectedWard(ward?.code || null);
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&countrycodes=${nominatimCountry}`,
         { headers: { "Accept-Language": nominatimLang } }
       );
+      // Rate-limited/blocked responses (429/403) return non-JSON bodies —
+      // bail to the coords-only fallback instead of throwing in json().
+      if (!response.ok) throw new Error(`reverse geocode HTTP ${response.status}`);
       const data = await response.json();
       if (data && data.display_name) {
         setAddress(data.display_name);

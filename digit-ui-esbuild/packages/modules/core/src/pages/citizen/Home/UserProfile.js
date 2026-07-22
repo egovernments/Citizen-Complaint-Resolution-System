@@ -97,7 +97,9 @@ const defaultValidationConfig = {
       // negative lookahead forbids starting with space/period/apostrophe/hyphen
       // so "-" / "-John" / " x" fail HERE with the localized name error, while
       // "O'Brien" / "Mary-Anne" / "John Jr." / a mobile-number name still pass.
-      name: "/^(?![ .'\\-])[a-zA-Z0-9 .'\\-]+$/i",
+      // QA #21: admit accented Latin letters (À-ÖØ-öø-ÿ) so Portuguese
+      // names like "Manhiça" / "Conceição" pass on citizen and employee profiles.
+      name: "/^(?![ .'\\-])[a-zA-Z0-9À-ÖØ-öø-ÿ .'\\-]+$/i",
       // Fallback mobile pattern for when the MDMS ValidationConfigs master
       // isn't seeded for the tenant. Pull the tenant's pattern from
       // globalConfigs.CORE_MOBILE_CONFIGS (e.g. Mozambique "^8[0-9]{8}$")
