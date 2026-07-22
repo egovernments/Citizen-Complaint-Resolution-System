@@ -438,7 +438,11 @@ for k in kpis:
     ceiling = [r for r in vis if r != 'PUBLIC']
     if ceiling and not any(live(r) for r in ceiling):
         orphans.append(k.get('id', '<no id>'))
-gate = [r.strip() for r in allowed.split(',') if r.strip()]
+# Report gate roles by their POST-remap name. Printing the source name for a
+# remapped role claims holders for a role that has none — the report has to
+# name the role the seed actually writes.
+gate = [rmap.get(r.strip(), r.strip()) for r in allowed.split(',') if r.strip()]
+gate = list(dict.fromkeys(gate))
 gate_live = [r for r in gate if live(r)]
 dead = sorted({rmap.get(r, r) for k in kpis
                for r in (((k.get('rbac') or {}).get('visibleTo')) or [])
@@ -715,7 +719,12 @@ base = json.load(open(path))[0] if os.path.exists(path) else {"id": "default"}
 # Seed files are MDMS-v2 wrapped; the record we write is the inner object.
 if isinstance(base.get("data"), dict): base = base["data"]
 base["id"] = "default"
-base["allowedRoles"] = [rmap.get(r.strip(), r.strip()) for r in allowed.split(',') if r.strip()]
+# Dedupe AFTER the remap, preserving order: several canonical roles routinely
+# collapse onto one target (PGR_SUPERVISOR and PGR_ADMIN -> SUPERVISOR and
+# SUPERUSER on a stock box), and a role listed twice in the written record is
+# noise the operator has to reason about later.
+base["allowedRoles"] = list(dict.fromkeys(
+    rmap.get(r.strip(), r.strip()) for r in allowed.split(',') if r.strip()))
 if scoping: base["departmentScoping"] = scoping
 else: base.pop("departmentScoping", None)
 print(json.dumps(base))
@@ -749,7 +758,55 @@ step4() {
   local gate_roles; gate_roles="$(python3 -c "
 import json,sys
 rmap=json.loads('''$ROLE_MAP_JSON''')
-print(' '.join(rmap.get(r.strip(),r.strip()) for r in '''$DASHBOARD_ALLOWED_ROLES'''.split(',') if r.strip()))")"
+roles=[rmap.get(r.strip(),r.strip()) for r in '''$DASHBOARD_ALLOWED_ROLES'''.split(',') if r.strip()]
+print(' '.join(dict.fromkeys(roles)))")"
+
+  # The action itself must exist before it can be granted. mdms-v2 enforces the
+  # reference and rejects the grant with REFERENCE_VALIDATION_ERR — which the
+  # loop below would otherwise report as a per-role warning while the run went
+  # on to declare the dashboard enabled with no sidebar entry for anyone.
+  # A stock tenant genuinely may not have it: on the box this was found, `pg`
+  # had 368 roleactions rows and 246 actions, and no action id 4557 at all.
+  if [[ "$DRY_RUN" != true ]]; then
+    local action_rows
+    action_rows="$(psql_q "select count(*) from eg_mdms_data
+        where schemacode like 'ACCESSCONTROL-ACTIONS%' and tenantid='$DASHBOARD_TENANT'
+          and data->>'id' = '$DASHBOARD_ACTION_ID' and isactive")"
+    if [[ "${action_rows:-0}" -eq 0 ]]; then
+      err "action id $DASHBOARD_ACTION_ID does not exist at $DASHBOARD_TENANT — cannot grant it"
+      note "The dashboard's sidebar action must be seeded first, in BOTH masters"
+      note "(ACCESSCONTROL-ACTIONS.actions and ACCESSCONTROL-ACTIONS-TEST.actions-test —"
+      note "the bridge in 30-view-access.md §5 explains why both). A reference deployment"
+      note "carries it as: {\"id\": $DASHBOARD_ACTION_ID, \"name\": \"Dashboard\", …}."
+      note "Then re-run: --only step4"
+      return 1
+    fi
+    ok "action id $DASHBOARD_ACTION_ID exists at $DASHBOARD_TENANT (${action_rows} master row(s))"
+
+    # mdms-v2 validates roleactions' x-ref fields by comparing the field VALUE
+    # against the referenced record's uniqueIdentifier. That only works where
+    # ACCESSCONTROL-ROLES rows carry their code as the uid. Where the master
+    # was seeded through the schema-driven path instead, the uid is a hash of
+    # the code, `rolecode:"GRO"` matches nothing, and EVERY roleactions create
+    # is rejected with REFERENCE_VALIDATION_ERR — including pairs that already
+    # exist as rows. Nothing this script can send will succeed there, so say
+    # that plainly instead of emitting one opaque rejection per role.
+    local hashed_roles
+    hashed_roles="$(psql_q "select count(*) from eg_mdms_data
+        where schemacode='ACCESSCONTROL-ROLES.roles' and tenantid='$DASHBOARD_TENANT'
+          and isactive and uniqueidentifier <> data->>'code'")"
+    if [[ "${hashed_roles:-0}" -gt 0 ]]; then
+      err "ACCESSCONTROL-ROLES uses schema-derived (hashed) uniqueIdentifiers at $DASHBOARD_TENANT"
+      note "mdms-v2 resolves the roleactions rolecode reference against that uid, so every"
+      note "grant is rejected with REFERENCE_VALIDATION_ERR — verified true even for role/action"
+      note "pairs that already exist as rows. This is a property of how the ACCESSCONTROL"
+      note "masters were seeded here, not of the grant payload."
+      note "Seed the grants through the platform path (DDH / dataloader) instead, or re-seed"
+      note "ACCESSCONTROL-ROLES with code-valued uniqueIdentifiers, then re-run --only step4."
+      note "Deployments seeded the reference way (uid == role code) are unaffected."
+      return 1
+    fi
+  fi
 
   # Mirror an existing roleactions row's shape rather than inventing fields —
   # the master's columns vary by deployment vintage.
@@ -792,8 +849,14 @@ print(' '.join(rmap.get(r.strip(),r.strip()) for r in '''$DASHBOARD_ALLOWED_ROLE
     resp="$(mdms_post /mdms-v2/v2/_create/ACCESSCONTROL-ROLEACTIONS.roleactions "$body")"; rm -f "$body"
     if printf '%s' "$resp" | grep -qiE 'DUPLICATE|Duplicate record'; then log "  $uid — already granted"
     elif printf '%s' "$resp" | grep -qi '"mdms"'; then ok "granted $uid"
-    else warn "$uid: $(printf '%s' "$resp" | head -c 160)"; fi
+    else
+      # A failed grant is not cosmetic: that role gets no sidebar entry. Fail
+      # the step rather than warning and reporting the dashboard enabled.
+      err "$uid: $(printf '%s' "$resp" | head -c 200)"
+      grant_failed=1
+    fi
   done
+  [[ ${grant_failed:-0} -eq 0 ]] || { err "one or more sidebar grants failed"; return 1; }
   note "accesscontrol reads MDMS live, but clients cache actions — users must re-login (step 6)."
 }
 
@@ -920,6 +983,29 @@ step7() {
   log "catalog/_search — anonymous ${anon}, admin ${admin}"
   [[ "${admin:-0}" -gt 0 ]] && ok "catalog serves KPIs to an authenticated admin" \
     || { err "catalog is empty for the admin principal"; rc=1; }
+
+  # Sidebar grants. Step 7 previously verified the data plane only, so a run
+  # in which every grant failed still ended with "Dashboard enabled" — the
+  # user would reach the page by URL and never see a link to it.
+  local granted expected
+  # Match on the actionid FIELD, not on a `%.<id>` uniqueIdentifier pattern:
+  # the uid is `ROLE.ACTION` only where the master was seeded with explicit
+  # uids. Schema-derived uids are hashes, and the pattern would report zero
+  # grants on a correctly granted deployment.
+  granted="$(psql_q "select count(*) from eg_mdms_data
+      where schemacode='ACCESSCONTROL-ROLEACTIONS.roleactions' and tenantid='$DASHBOARD_TENANT'
+        and data->>'actionid' = '${DASHBOARD_ACTION_ID}' and isactive")"
+  expected="$(python3 -c "
+import json
+rmap=json.loads('''$ROLE_MAP_JSON''')
+roles=[rmap.get(r.strip(),r.strip()) for r in '''$DASHBOARD_ALLOWED_ROLES'''.split(',') if r.strip()]
+print(len(dict.fromkeys(roles)))")"
+  if [[ "${granted:-0}" -ge "${expected:-1}" ]]; then
+    ok "sidebar action granted to ${granted} role(s)"
+  else
+    err "sidebar action granted to only ${granted:-0} of ${expected} gate role(s) — the link will be missing for the rest"
+    rc=1
+  fi
 
   local tiles; tiles="$(curl -s -X POST "$PGR_URL/pgr-services/v2/analytics/packs" \
     -H 'Content-Type: application/json' \
