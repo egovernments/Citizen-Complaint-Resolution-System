@@ -415,7 +415,9 @@ Catches a regression where filters render but only update local state instead of
       if (/\/pgr-services\/v2\/request\/_search/.test(url)) seen.push(url);
     });
 
-    const statusFilter = page.getByLabel(/^Status$/i).first();
+    // The filter renders as a combobox with an accessible name (not a <label>
+    // association), so match by role+name, not getByLabel.
+    const statusFilter = page.getByRole('combobox', { name: /^Status$/i }).first();
     if (!(await statusFilter.isVisible().catch(() => false))) {
       test.skip(true, 'Status filter not present on this build');
     }
@@ -456,7 +458,7 @@ Loose match via text inclusion tolerates whatever the row actually renders (labe
     },
     tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
-    const filter = page.getByLabel(/^Department/i).first();
+    const filter = page.getByRole('combobox', { name: /^Department/i }).first();
     if (!(await filter.isVisible().catch(() => false))) {
       test.skip(true, 'Department filter not present on this build');
     }
