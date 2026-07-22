@@ -64,6 +64,10 @@ export const LANDING_COPY = {
   // Hero -----------------------------------------------------------------—--
   HERO_EYEBROW: { pt: "República de Moçambique · IGE · IGSAE", en: "Republic of Mozambique · IGE · IGSAE" },
   HERO_TITLE: { pt: "Fala Cidadão", en: "Complaints and Reports Portal" },
+  HERO_PILOT_NOTICE: {
+    pt: "Esta plataforma está em fase piloto e, de momento, está disponível apenas para a Cidade de Maputo.",
+    en: "This platform is in a pilot phase and, for now, is available only for the City of Maputo.",
+  },
   HERO_LEDE: {
     pt: "Canal nacional para reclamações, queixas, petições e denúncias sobre serviços públicos, administração pública e actividades económicas — com acompanhamento simples, seguro e transparente.",
     en: "The national channel for complaints, grievances, petitions and reports about public services, public administration and economic activities — with simple, secure and transparent tracking.",

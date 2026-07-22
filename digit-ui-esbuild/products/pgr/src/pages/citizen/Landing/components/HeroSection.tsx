@@ -12,7 +12,7 @@
 //     above the fold; secondary channels shrink to compact chips.
 
 import * as React from "react";
-import { Send, Search, Lock, Hash, Bell, Smartphone, MessageCircle, Phone } from "lucide-react";
+import { Send, Search, Lock, Hash, Bell, Smartphone, MessageCircle, Phone, Info } from "lucide-react";
 import { cn } from "@egovernments/digit-ui-components-v2";
 import { CtaLink } from "./CtaLink";
 import { useLandingCopy } from "../useLandingCopy";
@@ -91,6 +91,16 @@ export function HeroSection({ routes, imageUrl, section }: HeroSectionProps) {
           <p className="mb-0 mt-4 max-w-2xl text-base leading-relaxed text-[hsl(var(--pgrl-on-primary))] sm:text-lg">
             {c(section?.subtitleKey, "HERO_LEDE")}
           </p>
+
+          {/* Pilot-phase notice: government yellow with dark on-accent text (the
+              approved high-contrast pairing for accent surfaces). */}
+          <div
+            role="note"
+            className="mt-4 flex items-start gap-2 rounded-lg bg-[hsl(var(--pgrl-accent))] px-4 py-3 text-sm font-medium text-[hsl(var(--pgrl-on-accent))] shadow-sm sm:text-base"
+          >
+            <Info aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
+            <span>{c("HERO_PILOT_NOTICE")}</span>
+          </div>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
             <CtaLink

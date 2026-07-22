@@ -732,6 +732,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "PGR_LANDING_HERO_PILOT_NOTICE",
+        "message": "Esta plataforma está em fase piloto e, de momento, está disponível apenas para a Cidade de Maputo.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_LANDING_HERO_LEDE",
         "message": "Canal nacional para reclamações, queixas, petições e denúncias sobre serviços públicos, administração pública e actividades económicas — com acompanhamento simples, seguro e transparente.",
         "module": "rainmaker-pgr",

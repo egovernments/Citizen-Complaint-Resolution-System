@@ -7518,6 +7518,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_HERO_PILOT_NOTICE",
+        "message": "This platform is in a pilot phase and, for now, is available only for the City of Maputo.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_HERO_LEDE",
         "message": "The national channel for complaints, grievances, petitions and reports about public services, public administration and economic activities — with simple, secure and transparent tracking.",
         "module": "rainmaker-pgr",
