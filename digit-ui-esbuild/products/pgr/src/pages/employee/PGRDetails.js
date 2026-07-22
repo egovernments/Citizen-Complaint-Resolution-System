@@ -100,23 +100,8 @@ const ACTION_CONFIGS = [
       form: [
         {
           body: [
-            {
-              isMandatory: false,
-              key: "SelectedReason",
-              type: "dropdown",
-              label: "CS_REJECT_COMPLAINT",
-              disable: false,
-              populators: {
-                name: "SelectedReason",
-                optionsKey: "name",
-                error: "Required",
-                mdmsConfig: {
-                  masterName: "RejectionReasons",
-                  moduleName: "RAINMAKER-PGR",
-                  localePrefix: "CS_REJECTION_",
-                },
-              },
-            },
+            // QA #23 follow-up: REJECT offers NO dropdowns — the officer's
+            // justification goes in the mandatory comments field.
             {
               type: "textarea",
               isMandatory: true,
