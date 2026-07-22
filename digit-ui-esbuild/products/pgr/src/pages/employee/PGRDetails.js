@@ -515,6 +515,29 @@ const PGRDetails = () => {
                     label: t("CS_COMPLAINT_LANDMARK__DETAILS"),
                     value: pgrData?.ServiceWrappers[0].service?.address?.landmark || "NA",
                   },
+                  // Typed address (product call, sheet-v4 review): the
+                  // complainant-entered address shows as its own row —
+                  // arrives masked ("****") on confidential complaints.
+                  ...(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes?.complainantAddress
+                    ? [
+                        {
+                          inline: true,
+                          label: t("ES_CREATECOMPLAINT_ADDRESS"),
+                          value: pgrData.ServiceWrappers[0].service.extendedAttributes.complainantAddress,
+                        },
+                      ]
+                    : []),
+                  // Pincode is optional in this deployment; only show it when set.
+                  ...(pgrData?.ServiceWrappers[0].service?.address?.pincode
+                    ? [
+                        {
+                          inline: true,
+                          label: t("CORE_COMMON_PINCODE"),
+                          type: "text",
+                          value: pgrData?.ServiceWrappers[0].service?.address?.pincode,
+                        },
+                      ]
+                    : []),
                   {
                     inline: true,
                     label: t("CS_COMPLAINT_DETAILS_ADDITIONAL_DETAILS_DESCRIPTION"),
