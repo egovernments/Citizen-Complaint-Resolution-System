@@ -11,7 +11,7 @@
 import { test, expect } from '@playwright/test';
 import { loginEmployeeBrowser } from '../utils/employee-ui';
 import {
-  BASE_URL, ADMIN_USER, ADMIN_PASS, POSTAL_CODE_VALID,
+  BASE_URL, ADMIN_USER, ADMIN_PASS, POSTAL_CODE_VALID, POSTAL_CODE_PATTERN,
 } from '../utils/env';
 
 // Default to the deployment ADMIN. The previous default
@@ -30,6 +30,29 @@ const CITY_ADMIN_PASS = process.env.CITY_ADMIN_PASS || ADMIN_PASS;
 // samples may no longer hold — override or gate the tests there.
 
 const CREATE_URL = `${BASE_URL}/digit-ui/employee/pgr/create-complaint`;
+
+/**
+ * Derive postal samples the DEPLOYMENT's own pattern rejects, so the negative
+ * cases stay honest cross-deployment instead of assuming the Kenya 5-digit rule.
+ * `110001`/`123` were only "invalid" against that one shape — on a 6-digit-postal
+ * deployment `110001` is valid and the rejection expectation is simply wrong.
+ *  - tooLong: a valid code with digits appended until the pattern no longer matches.
+ *  - tooShort: the shortest all-`1` prefix the pattern rejects.
+ */
+function postalRejectedSamples(pattern: string, validBase: string): { tooLong: string; tooShort: string } {
+  let re: RegExp;
+  try { re = new RegExp(pattern); } catch { return { tooLong: '1234567', tooShort: '1' }; }
+  let tooLong = validBase || '1';
+  for (let i = 0; i < 12 && re.test(tooLong); i++) tooLong += '9';
+  let tooShort = '1';
+  for (let n = 1; n <= (validBase.length || 5) + 6; n++) {
+    const cand = '1'.repeat(n);
+    if (!re.test(cand)) { tooShort = cand; break; }
+  }
+  return { tooLong, tooShort };
+}
+const { tooLong: INVALID_POSTAL_LONG, tooShort: INVALID_POSTAL_SHORT } =
+  postalRejectedSamples(POSTAL_CODE_PATTERN, POSTAL_CODE_VALID.split('-')[0]);
 
 test.describe('PGR Postal Code Validation (#478)', () => {
   test.beforeEach(async ({ page }) => {
@@ -111,8 +134,6 @@ Catches a regression where the validator over-restricts and rejects valid codes.
     await page.waitForTimeout(1_000);
 
     // No error should appear for the postal code field
-    // The error element is typically a sibling or nearby element with the error key
-    const cardSection = postalInput.locator('xpath=ancestor::div[contains(@class,"field")]');
     const errorNearby = page.locator('text=CS_COMPLAINT_POSTALCODE_INVALID_ERROR');
     await expect(errorNearby).toHaveCount(0);
   });
@@ -140,9 +161,9 @@ Catches a regression where the regex reverts to the legacy 6-digit Indian PIN co
     const postalInput = page.locator('input[name="postalCode"]');
     await expect(postalInput).toBeVisible({ timeout: 15_000 });
 
-    // Enter an over-long postal code (6 digits) — invalid under both the Kenya
-    // 5-digit and Mozambique 4-digit(+suffix) patterns.
-    await postalInput.fill('110001');
+    // Enter an over-long postal code the deployment's own pattern rejects
+    // (valid code + appended digits), not a Kenya-shaped literal.
+    await postalInput.fill(INVALID_POSTAL_LONG);
 
     // Need to trigger form submission for react-hook-form to validate
     // Find the Submit button.
@@ -162,11 +183,12 @@ Catches a regression where the regex reverts to the legacy 6-digit Indian PIN co
     await submitBtn.click();
     await page.waitForTimeout(2_000);
 
-    // The form should show a validation error — either:
-    // 1. The localized error string for CS_COMPLAINT_POSTALCODE_INVALID_ERROR
-    // 2. Or the form stays on the create page (does not navigate away)
-    // We check that we're still on the create-complaint page
+    // Navigation must be blocked AND the postal validation error must surface.
+    // The URL check alone is vacuous (submit could no-op for any reason); pairing
+    // it with the explicit error element proves the postal validator is what
+    // fired — symmetric to the valid case, which asserts count 0 of this locator.
     expect(page.url()).toContain('create-complaint');
+    await expect(page.locator('text=CS_COMPLAINT_POSTALCODE_INVALID_ERROR')).toBeVisible();
   });
 
   test('invalid postal code (short / 3 digits) is rejected', {
@@ -192,9 +214,9 @@ Pairs with the 6-digit edge case to bracket the accepted length range from both 
     const postalInput = page.locator('input[name="postalCode"]');
     await expect(postalInput).toBeVisible({ timeout: 15_000 });
 
-    // Enter a too-short postal code (3 digits) — invalid under every supported
-    // pattern.
-    await postalInput.fill('123');
+    // Enter a too-short postal code the deployment's own pattern rejects,
+    // derived from that pattern rather than assuming a sub-4-digit literal.
+    await postalInput.fill(INVALID_POSTAL_SHORT);
 
     // Submit to trigger validation.
     const submitBtn = page.locator('button[type="button"], button[type="submit"]')
@@ -209,7 +231,8 @@ Pairs with the 6-digit edge case to bracket the accepted length range from both 
     await submitBtn.click();
     await page.waitForTimeout(2_000);
 
-    // Should still be on create-complaint page (validation blocked submission)
+    // Navigation blocked AND the postal error surfaced (see the 6-digit case).
     expect(page.url()).toContain('create-complaint');
+    await expect(page.locator('text=CS_COMPLAINT_POSTALCODE_INVALID_ERROR')).toBeVisible();
   });
 });
