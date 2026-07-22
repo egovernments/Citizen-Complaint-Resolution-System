@@ -66,14 +66,17 @@ const getDetailsRow = ({ id, service, complaintType, boundaryAncestors }) => ({
   CS_COMPLAINT_ADDTIONAL_DETAILS: service.description,
   CS_COMPLAINT_FILED_DATE: Digit.DateUtils.ConvertTimestampToDate(service.auditDetails.createdTime),
   // QA #31/#25 (product call): Endereço shows the TYPED address when one
-  // exists — the complainant-entered address (extendedAttributes, arrives
-  // masked "****" on confidential complaints) plus any typed location parts.
-  // Only when nothing was typed does it fall back to the READABLE
-  // administrative chain, leaf upward ("Municipio Namaacha, Namaacha,
-  // Maputo Provincia"). The raw boundary key and tenant/authority name of
-  // the original composition stay gone.
+  // exists. The typed complainant address is persisted by the BACKEND into
+  // the User Service and returned as service.citizen.correspondenceAddress
+  // (the extendedAttributes copy is stripped on write) — masking there is
+  // backend policy. Typed location parts follow; only when nothing was
+  // typed does the row fall back to the READABLE administrative chain,
+  // leaf upward ("Municipio Namaacha, Namaacha, Maputo Provincia"). The
+  // raw boundary key and tenant/authority name of the original composition
+  // stay gone.
   ES_CREATECOMPLAINT_ADDRESS: (() => {
     const typed = [
+      service.citizen?.correspondenceAddress,
       (service.extendedAttributes || {}).complainantAddress,
       service.address.buildingName,
       service.address.street,
