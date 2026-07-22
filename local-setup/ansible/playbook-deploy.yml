@@ -210,7 +210,7 @@
           See inventory/host_vars/_example.yml for a worked example.
       when:
         - core_mobile_configs is defined
-        - core_mobile_configs
+        - core_mobile_configs | length > 0
         - _mobile_missing_keys | length > 0
 
     # ==================== Docker host install + config ====================
@@ -450,6 +450,16 @@
     # contexts under docker/ (the existing build-context convention) and repoint
     # them with an Ansible-only overlay. docker-compose.migrations.yml itself
     # stays valid for anyone running compose straight from the repo.
+    # rsync only creates the final path component of `dest`, not
+    # intermediate ones — on a first-time deploy {{ digit_dir }}/docker/
+    # doesn't exist yet (it's only synced wholesale further down, by
+    # "Synchronize docker build context dirs"), so create it explicitly here
+    # rather than relying on task order or a prior run having left it behind.
+    - name: "Ensure docker/ build-context directory exists"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/docker"
+        state: directory
+
     - name: Synchronize in-repo migrator build contexts
       synchronize:
         src: "../../backend/{{ item }}/src/main/resources/db/"
