@@ -137,6 +137,10 @@ function persist(layout) {
 export function useCatalogLayout(kpis, packLayout) {
   const seed = useMemo(() => buildSeedLayout(packLayout, kpis), [packLayout, kpis]);
   const geom = useMemo(() => createCatalogDragGeometry(kpis), [kpis]);
+  // Catalog (not seed) is the hydration signal: /packs often returns
+  // defaultLayout: [] when no DashboardPack matches roles, while the user may
+  // still have a saved layout from Add-KPI (#1276 / #1108 empty-dashboard).
+  const catalogReady = useMemo(() => Object.keys(kpis || {}).length > 0, [kpis]);
 
   const [layout, setLayout] = useState([]);
   const [gridSyncKey, setGridSyncKey] = useState(0);
@@ -149,8 +153,10 @@ export function useCatalogLayout(kpis, packLayout) {
   layoutRef.current = layout;
 
   useEffect(() => {
-    if (!seed.length) return;
+    if (!catalogReady) return;
     const saved = readSaved();
+    // saved === null → first visit, use pack seed (may be empty).
+    // saved === [] → intentional empty; do not re-apply seed.
     const source = saved !== null ? saved : seed;
     const reconciled = source
       .filter((item) => kpis[item.i])
@@ -161,7 +167,7 @@ export function useCatalogLayout(kpis, packLayout) {
     setLayout(repaired);
     if (repaired !== reconciled) persist(repaired);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seed, geom]);
+  }, [seed, catalogReady, geom]);
 
   const syncFlagRef = useRef(false);
   const stampSync = useCallback((next) => {
