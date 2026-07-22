@@ -72,6 +72,8 @@ deployment offers in `common-masters.StateInfo.languages`.
 
 ## Related
 
-- Runbook (issue #631): preconditions, traps, and the manual form of each step
+- **`docs/dashboard-configuration/05-enablement-runbook.md`** — prerequisites, the seven steps,
+  the role-remap decision, and a symptom→cause table for every known blocker
+- Runbook (issue #631): the original, with the manual form of each step
 - `docs/dashboard-configuration/` — the reference docs this seeds against
 - `local-setup/db/notif-mdms-seed/` — the same pattern for notification masters

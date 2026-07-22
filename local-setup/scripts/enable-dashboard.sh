@@ -69,6 +69,11 @@
 # Idempotent: re-runs report existing records as skipped. By DEFAULT it does
 # NOT overwrite a live record that already exists — see --update and the
 # "stale catalog" note in docs/dashboard-configuration/60-operations.md §4.
+#
+# RUNBOOK: docs/dashboard-configuration/05-enablement-runbook.md — prerequisites,
+# the role-remap decision, the data caveats that make a correct seed look broken,
+# and a symptom -> cause table for every known blocker. Read it before a first run
+# on an unfamiliar deployment.
 # =============================================================================
 
 set -euo pipefail
