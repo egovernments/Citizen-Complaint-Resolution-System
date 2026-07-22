@@ -368,6 +368,16 @@
         src: ../docker-compose.migrations.ansible.yml
         dest: "{{ digit_dir }}/docker-compose.migrations.ansible.yml"
 
+    # ── Monitoring overlay (issue #1335) ────────────────────────────────────────
+    # node-exporter for host-level metrics (CPU/mem/disk/net). Always layered
+    # (see "Compute compose -f flags"): node metrics are wanted on every box,
+    # matching the k8s tier's always-on node_exporter DaemonSet. The scrape job
+    # ships in otel/prometheus.yml (synced via digit_config_dirs below).
+    - name: Copy monitoring overlay
+      copy:
+        src: ../docker-compose.monitoring.yml
+        dest: "{{ digit_dir }}/docker-compose.monitoring.yml"
+
     # Per-tenant compose overlay convention. If a file named
     # local-setup/docker-compose.<inventory_hostname>.yml exists on the
     # controller, copy it to the target and include it in every compose
@@ -690,7 +700,7 @@
     # The migration overlay is layered ALWAYS (see "Copy DB-migration overlay"):
     # it is the migration model, not an opt-in extra. It must come BEFORE the
     # per-tenant overlay so a tenant can still override a migrator if it has to.
-    - name: "Compute compose -f flags (fast-path + migrations + per-tenant overlay)"
+    - name: "Compute compose -f flags (fast-path + migrations + monitoring + per-tenant overlay)"
       ansible.builtin.set_fact:
         compose_files: >-
           {{
@@ -698,6 +708,7 @@
             (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
             ' -f docker-compose.migrations.yml' +
             ' -f docker-compose.migrations.ansible.yml' +
+            ' -f docker-compose.monitoring.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
@@ -1045,6 +1056,25 @@
       delay: 10
       until: hrms_health.stdout == 'healthy'
       changed_when: false
+
+    # ==================== Reload Prometheus config (issue #1335) ====================
+    # `up -d` recreates a container only when its service SPEC changes — a
+    # content-only change to the bind-mounted otel/prometheus.yml does not
+    # trigger a recreate. So on a REDEPLOY of an already-running tenant, the
+    # live Prometheus keeps its old in-memory config and never picks up a newly
+    # added scrape job (e.g. the `node` job for node-exporter) until it happens
+    # to restart. A fresh deploy is unaffected — Prometheus boots with the new
+    # config. Prometheus runs with --web.enable-lifecycle, so POST /-/reload
+    # rereads the file in place. Best-effort: on a first deploy Prometheus may
+    # not be up yet (and already loaded fresh config), so a failure here is fine.
+    - name: Reload Prometheus config (pick up new scrape jobs without a recreate)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19090/-/reload
+        method: POST
+        status_code: [200]
+      register: prometheus_reload
+      changed_when: prometheus_reload.status == 200
+      failed_when: false
 
     # ==================== digit-ui mode convergence ====================
     # Three runtime models, picked by host_vars `digit_ui_mode`:
