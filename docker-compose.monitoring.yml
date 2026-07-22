@@ -1,0 +1,42 @@
+# Host-level metrics for the compose tier (issue #1335).
+#
+# The base stack's Prometheus scrapes only otel-collector:8889 (JVM/runtime
+# metrics via OTLP) — it has no view of the host the containers run on. This
+# overlay adds prom/node-exporter so CPU, memory, disk, filesystem and network
+# metrics for the DIGIT box land in the same Prometheus, matching the k8s tier
+# (kube-prometheus-stack already ships node_exporter as a DaemonSet).
+#
+# Layered ALWAYS by the Ansible deploy (see playbook-deploy.yml "Compute
+# compose -f flags"), like the migrations overlay — node metrics are wanted on
+# every deployed box, not gated behind an opt-in flag.
+#
+# The scrape job lives in otel/prometheus.yml (job_name: node ->
+# node-exporter:9100); Prometheus reaches this container by its DNS name over
+# egov-network, so no host port is published.
+#
+# NOTE (macOS thin path): node-exporter reports the Docker VM, not the Mac —
+# harmless but not meaningful. The real targets are the Linux VPS boxes.
+services:
+  node-exporter:
+    # Official Docker Hub image (same source as the base stack's
+    # prom/prometheus) — not the registry.preview mirror.
+    image: prom/node-exporter:v1.8.2
+    container_name: digit-node-exporter
+    restart: unless-stopped
+    # A containerised node-exporter sees only the container's namespaces
+    # unless pointed at the host's. pid:host + the read-only /proc, /sys and /
+    # mounts (rebased via --path.*) give it a true host view.
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      # Drop pseudo/virtual mounts and Docker's overlay layers so the
+      # filesystem panels show real volumes, not per-container churn.
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|rootfs/var/lib/docker/.+)($|/)
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - egov-network

@@ -368,6 +368,16 @@
         src: ../docker-compose.migrations.ansible.yml
         dest: "{{ digit_dir }}/docker-compose.migrations.ansible.yml"
 
+    # ── Monitoring overlay (issue #1335) ────────────────────────────────────────
+    # node-exporter for host-level metrics (CPU/mem/disk/net). Always layered
+    # (see "Compute compose -f flags"): node metrics are wanted on every box,
+    # matching the k8s tier's always-on node_exporter DaemonSet. The scrape job
+    # ships in otel/prometheus.yml (synced via digit_config_dirs below).
+    - name: Copy monitoring overlay
+      copy:
+        src: ../docker-compose.monitoring.yml
+        dest: "{{ digit_dir }}/docker-compose.monitoring.yml"
+
     # Per-tenant compose overlay convention. If a file named
     # local-setup/docker-compose.<inventory_hostname>.yml exists on the
     # controller, copy it to the target and include it in every compose
@@ -690,7 +700,7 @@
     # The migration overlay is layered ALWAYS (see "Copy DB-migration overlay"):
     # it is the migration model, not an opt-in extra. It must come BEFORE the
     # per-tenant overlay so a tenant can still override a migrator if it has to.
-    - name: "Compute compose -f flags (fast-path + migrations + per-tenant overlay)"
+    - name: "Compute compose -f flags (fast-path + migrations + monitoring + per-tenant overlay)"
       ansible.builtin.set_fact:
         compose_files: >-
           {{
@@ -698,6 +708,7 @@
             (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
             ' -f docker-compose.migrations.yml' +
             ' -f docker-compose.migrations.ansible.yml' +
+            ' -f docker-compose.monitoring.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
