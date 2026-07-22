@@ -677,15 +677,19 @@ const PGRDetails = () => {
                     label: t("CS_COMPLAINT_LANDMARK__DETAILS"),
                     value: pgrData?.ServiceWrappers[0].service?.address?.landmark || "NA",
                   },
-                  // Typed address (product call, sheet-v4 review): the
-                  // complainant-entered address shows as its own row —
-                  // arrives masked ("****") on confidential complaints.
-                  ...(pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes?.complainantAddress
+                  // Typed address (product call, sheet-v4 review): the backend
+                  // persists the complainant-entered address into the User
+                  // Service and returns it as citizen.correspondenceAddress —
+                  // masked/absent per backend policy on confidential complaints.
+                  ...((pgrData?.ServiceWrappers?.[0]?.service?.citizen?.correspondenceAddress ||
+                      pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes?.complainantAddress)
                     ? [
                         {
                           inline: true,
                           label: t("ES_CREATECOMPLAINT_ADDRESS"),
-                          value: pgrData.ServiceWrappers[0].service.extendedAttributes.complainantAddress,
+                          value:
+                            pgrData.ServiceWrappers[0].service.citizen?.correspondenceAddress ||
+                            pgrData.ServiceWrappers[0].service.extendedAttributes?.complainantAddress,
                         },
                       ]
                     : []),
