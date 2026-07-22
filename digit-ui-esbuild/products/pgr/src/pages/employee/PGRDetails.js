@@ -59,7 +59,11 @@ const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false,
   // QA #23: rejecting a complaint must not offer an assignee — REJECT is a
   // verdict, not a hand-off (the CMS workflow's REJECT target state is not
   // terminal and has assignable roles, which is why the dropdown appeared).
-  if (action !== "REJECT" && !isTerminal && (assigneeRoles?.length || 0) > 0) {
+  // QA #22 (sheet v4 decision): AWAITINGINFORMATION is a state update — the
+  // complaint waits on the CITIZEN, so picking a "next level user" makes no
+  // sense and mis-assigned it to another case manager. No assignee here either.
+  const NO_ASSIGNEE_ACTIONS = ["REJECT", "AWAITINGINFORMATION"];
+  if (!NO_ASSIGNEE_ACTIONS.includes(action) && !isTerminal && (assigneeRoles?.length || 0) > 0) {
     body.push({
       type: "component",
       // Callers pass assigneeMandatory (dept-mapping + actor aware); default

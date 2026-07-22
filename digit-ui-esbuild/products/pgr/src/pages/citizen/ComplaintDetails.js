@@ -217,6 +217,9 @@ function WorkflowComponent({ complaintDetails, id }) {
       workflowData={workflowData}
       labelPrefix="WF_PGR_"
       currentStateChildren={currentStateChildren}
+      // QA #19 part 1 (sheet v4): the citizen must not see which employee
+      // handled the complaint — employee name + contact lines are omitted.
+      hideEmployeeContacts
     />
   );
 }
@@ -313,7 +316,12 @@ const ComplaintDetailsPage = () => {
     if (!loc.code) return null;
     const viaT = t(loc.code);
     if (viaT && viaT !== loc.code) return viaT;
-    return String(loc.code)
+    // QA #25/#31 (sheet v4): some environments prefix boundary codes with the
+    // tenant/hierarchy chain (e.g. "MZ_IGE_ADMIN_hungaro") — strip the leading
+    // ALL-CAPS segments so the citizen sees "Hungaro", not the raw chain.
+    // Bare codes ("zumbo", "vila_de_sena") pass through untouched.
+    const bare = String(loc.code).replace(/^(?:[A-Z0-9]+_)+(?=[^A-Z])/, "");
+    return bare
       .replace(/[_-]+/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
   })();
