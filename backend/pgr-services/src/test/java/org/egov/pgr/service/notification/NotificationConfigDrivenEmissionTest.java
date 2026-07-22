@@ -220,6 +220,38 @@ public class NotificationConfigDrivenEmissionTest {
                 "citizen SMS should contain the raw service code as the complaint-type fallback");
     }
 
+    /**
+     * Tenants localized before the hierarchy migration only carry pgr.complaint.category.<code>
+     * entries: when COMPLAINT_HIERARCHY.<code> misses, the label must resolve from the legacy
+     * namespace before falling back to the raw code.
+     */
+    @Test
+    void legacyPath_missingHierarchyKey_fallsBackToLegacyCategoryKey() {
+        when(config.getNotificationConfigDriven()).thenReturn(false);
+        when(config.getIsSMSEnabled()).thenReturn(true);
+
+        when(notificationUtil.getCustomizedMsg(eq("APPLY"), eq("PENDINGFORASSIGNMENT"), eq("CITIZEN"), anyString()))
+                .thenReturn("Dear Citizen, your complaint {complaint_type} has been filed.");
+        when(notificationUtil.getDefaultMsg(eq("CITIZEN"), anyString())).thenReturn("Default notification.");
+        when(notificationUtil.getCustomizedMsgForPlaceholder(anyString(), startsWith("COMPLAINT_HIERARCHY.")))
+                .thenReturn(null);
+        when(notificationUtil.getCustomizedMsgForPlaceholder(anyString(), eq("pgr.complaint.category.GarbageNeeds")))
+                .thenReturn("Garbage Not Collected");
+        when(notificationUtil.getShortnerURL(anyString())).thenReturn("http://short/x");
+
+        notificationService.process(legacyApplyRequest(), "save-pgr-request");
+
+        // The hierarchy namespace is tried first; the legacy namespace then supplies the label.
+        verify(notificationUtil).getCustomizedMsgForPlaceholder(anyString(), eq("COMPLAINT_HIERARCHY.GarbageNeeds"));
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<SMSRequest>> sms = ArgumentCaptor.forClass((Class) List.class);
+        verify(notificationUtil, atLeastOnce()).sendSMS(eq(TENANT), sms.capture());
+        assertTrue(sms.getAllValues().stream().flatMap(List::stream)
+                        .anyMatch(r -> r.getMessage() != null
+                                && r.getMessage().contains("your complaint Garbage Not Collected has been filed")),
+                "citizen SMS should carry the label resolved from the legacy pgr.complaint.category namespace");
+    }
+
     /** APPLY -> PENDINGFORASSIGNMENT request for the legacy-path tests. */
     private ServiceRequest legacyApplyRequest() {
         User citizen = User.builder()
