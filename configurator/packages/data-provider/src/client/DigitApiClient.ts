@@ -491,7 +491,10 @@ export class DigitApiClient {
   async pgrUpdate(service: Record<string, unknown>, action: string, options?: {
     comment?: string; assignees?: string[]; rating?: number;
   }): Promise<Record<string, unknown>> {
-    const workflow: Record<string, unknown> = { action, assignees: options?.assignees || [], comments: options?.comment };
+    // The PGR workflow POJO binds `assignes` (single-e), NOT `assignees`. Sending
+    // `assignees` silently drops the assignee, so an ASSIGN runs with no target and
+    // pgr-services 400s with a NullPointerException. Send the key the server reads.
+    const workflow: Record<string, unknown> = { action, assignes: options?.assignees || [], comments: options?.comment };
     if (options?.rating !== undefined) workflow.rating = options.rating;
 
     const data = await this.request<{ ServiceWrappers?: Record<string, unknown>[] }>(this.endpoint('PGR_UPDATE'), {

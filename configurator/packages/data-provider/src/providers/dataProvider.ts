@@ -203,16 +203,19 @@ async function mdmsGetList(client: DigitApiClient, config: ResourceConfig, tenan
   return records.filter((r) => r.isActive).map((r) => normalizeMdmsRecord(r, config));
 }
 
-async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string): Promise<RaRecord[]> {
-  // First try searching the given tenant
-  const employees = await client.employeeSearch(tenantId, { limit: 500 });
+async function hrmsGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
+  // Honor a __tenantId override (e.g. the assignee picker on a city complaint
+  // must list the CITY's employees, not the root/session tenant's).
+  const tenant = pickTenant(tenantId, filter);
+  // First try searching the resolved tenant
+  const employees = await client.employeeSearch(tenant, { limit: 500 });
   if (employees.length > 0) return employees.map((e) => normalizeRecord(e, config));
 
   // If root tenant returned 0 results, search all city-level sub-tenants
-  if (!tenantId.includes('.')) {
-    const tenantRecords = await client.mdmsSearch(tenantId, 'tenant.tenants', { limit: 200 });
+  if (!tenant.includes('.')) {
+    const tenantRecords = await client.mdmsSearch(tenant, 'tenant.tenants', { limit: 200 });
     const cityTenants = tenantRecords
-      .filter((r) => r.isActive && r.data?.code && String(r.data.code).startsWith(`${tenantId}.`))
+      .filter((r) => r.isActive && r.data?.code && String(r.data.code).startsWith(`${tenant}.`))
       .map((r) => String(r.data.code));
 
     if (cityTenants.length > 0) {
@@ -660,7 +663,7 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
     const config = resolveConfig(resource);
     switch (config.type) {
       case 'mdms': return mdmsGetList(client, config, tenantId, filter);
-      case 'hrms': return hrmsGetList(client, config, tenantId);
+      case 'hrms': return hrmsGetList(client, config, tenantId, filter);
       case 'boundary': return boundaryGetList(client, config, tenantId);
       case 'pgr': return pgrGetList(client, config, tenantId, filter);
       case 'localization': return localizationGetList(client, config, tenantId, filter);
@@ -1160,7 +1163,13 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         // and only the workflow action, comment, assignees, and rating survived.
         const editableTop = ['serviceCode', 'description', 'source', 'additionalDetail'];
         for (const key of editableTop) {
-          if (key in data) service[key] = data[key];
+          // Only overwrite when the form actually carries a value. A complaint
+          // edit that only changes the description leaves serviceCode null on the
+          // form (the hierarchy cascade doesn't repopulate it), and blindly
+          // merging that null clobbers the real serviceCode → pgr-services NPEs on
+          // ASSIGN (it needs the type to validate the assignee's department).
+          const val = data[key];
+          if (key in data && val != null && val !== '') service[key] = val;
         }
         if (data.address && typeof data.address === 'object') {
           service.address = {

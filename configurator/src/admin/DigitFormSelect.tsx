@@ -34,6 +34,8 @@ export interface DigitFormSelectProps extends InputProps {
   optionValue?: string;
   /** Field to use as the option label when using reference (default: 'name') */
   optionText?: string;
+  /** Optional filter passed to the reference getList (e.g. a tenant override). */
+  filter?: Record<string, unknown>;
   /** Optional helper text shown below the select (muted) */
   help?: string;
 }
@@ -47,6 +49,7 @@ export function DigitFormSelect({
   reference,
   optionValue = 'code',
   optionText = 'name',
+  filter,
   help,
   ...inputProps
 }: DigitFormSelectProps) {
@@ -60,7 +63,7 @@ export function DigitFormSelect({
   // Auto-fetch choices from a resource when `reference` is provided
   const { data, isLoading } = useGetList(
     reference ?? '_unused',
-    { pagination: { page: 1, perPage: 1000 }, sort: { field: optionText, order: 'ASC' as const } },
+    { pagination: { page: 1, perPage: 1000 }, sort: { field: optionText, order: 'ASC' as const }, filter },
     { enabled: !!reference },
   );
 

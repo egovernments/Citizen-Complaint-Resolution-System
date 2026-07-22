@@ -98,6 +98,14 @@ export function WorkflowActionSelect({
   // Watch the current application status in the form
   const currentStatus = useWatch({ name: statusSource }) as string | undefined;
 
+  // The record's CITY tenant (address.tenantId, else the record tenantId).
+  // The assignee list must come from the complaint's city, not the root/session
+  // tenant — a root admin editing a city complaint otherwise gets the root's
+  // employees (none valid for a city ASSIGN), so pgr-services 400s.
+  const recordTenant =
+    (useWatch({ name: 'address.tenantId' }) as string | undefined) ||
+    (useWatch({ name: 'tenantId' }) as string | undefined);
+
   // Fetch the workflow business service definition
   const { data: workflowDef, isLoading } = useGetOne(
     'workflow-business-services',
@@ -244,6 +252,7 @@ export function WorkflowActionSelect({
               optionValue="uuid"
               optionText="user.name"
               placeholder="Select employee..."
+              filter={recordTenant ? { __tenantId: recordTenant } : undefined}
             />
           )}
 
