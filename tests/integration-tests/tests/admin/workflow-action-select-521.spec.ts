@@ -43,29 +43,17 @@ test.describe('admin Workflow Action — Escalate visible #521', () => {
     }).catch(() => []);
     test.skip(workable.length === 0, 'no PENDINGATLME complaint seeded to exercise the Escalate action');
 
-    await page.goto(`${BASE_URL}${COMPLAINTS_LIST_URL}?cb=${Date.now()}`);
+    // RC7: the list is sorted most-recent-first, so clicking the FIRST row
+    // used to drive whatever complaint happened to be newest — often a
+    // terminal (CLOSEDAFTERRESOLUTION) one with no workflow action select at
+    // all, not the PENDINGATLME complaint `pgrSearch` above just found.
+    // Navigate straight to that complaint's edit page instead.
+    const workableId = (workable[0]?.service as any)?.serviceRequestId as string;
+    test.skip(!workableId, 'PENDINGATLME complaint had no serviceRequestId');
+
+    await page.goto(`${BASE_URL}${COMPLAINTS_LIST_URL}/${encodeURIComponent(workableId)}/edit?cb=${Date.now()}`);
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3_500);
-
-    const firstRow = page.locator('tbody tr').first();
-    if (!(await firstRow.isVisible().catch(() => false))) {
-      // No data — fall back to "complaints page mounted without crash".
-      const bodyText = (await page.textContent('body')) ?? '';
-      expect(bodyText).not.toMatch(/Cannot read properties|TypeError|Error boundary/i);
-      return;
-    }
-
-    await firstRow.click();
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(3_500);
-
-    // Click Edit to surface the Workflow section.
-    const editBtn = page.getByRole('button', { name: /^Edit$/ }).first();
-    if (await editBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await editBtn.click();
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(3_000);
-    }
 
     await expect(page.getByText(/^Workflow$/i).first()).toBeVisible({ timeout: 10_000 });
 

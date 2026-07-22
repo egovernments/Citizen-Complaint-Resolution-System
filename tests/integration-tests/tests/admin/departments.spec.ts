@@ -27,7 +27,9 @@ const LIST_PATH = '/configurator/manage/departments';
 
 const createdCodes = new Set<string>();
 
-test.describe.configure({ mode: 'serial' });
+// Default mode (not serial): workers=1 keeps file order, but a failure no longer
+// cascade-skips the rest — each test self-seeds its own department code.
+test.describe.configure({ mode: 'default' });
 
 test.afterAll(async () => {
   if (createdCodes.size === 0) return;
@@ -174,6 +176,13 @@ Guard banner check is loose because exact wording depends on dependency type and
     await page.getByRole('button', { name: /^Save$/i }).click();
     await expect(page.getByText(editedName).first()).toBeVisible();
 
+    // After Save the edit form returns to the LIST (DigitEdit redirect default),
+    // so reopen the record's Show page before the deactivate edit — otherwise the
+    // top-level "Edit" button doesn't exist on the list and the click hangs.
+    await page.getByPlaceholder(/search/i).first().fill(code);
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.getByRole('row').filter({ hasText: code }).first().click();
+
     // --- Deactivate ---
     await page.getByRole('button', { name: /^Edit$/i }).click();
     const activeCheckbox = page.getByLabel(/^Active$/i);
@@ -258,7 +267,11 @@ Loose regex on "department|row" tolerates UI label changes between Create-N-depa
     await createBtn.click();
 
     // Complete screen — should report 5 created / 0 failed.
-    await expect(page.getByText(/5\s*(created|success)/i).first()).toBeVisible({
+    // RC8: completion copy is "Created 5 departments" (number AFTER the
+    // word), not "5 created" — accept either order.
+    await expect(
+      page.getByText(/(?:created\s+5|5\s+(?:created|success))/i).first(),
+    ).toBeVisible({
       timeout: 60_000,
     });
 

@@ -602,7 +602,11 @@ Critical for tenant onboarding workflows that use comma-list xlsx as their canon
     await page.getByRole('button', {
       name: /Create\s+\d+\s+(designation|row)s?/i,
     }).click();
-    await expect(page.getByText(/1\s*(created|success)/i).first()).toBeVisible({
+    // RC8: completion copy is "Created 1 designations" (number AFTER the
+    // word), not "1 created" — accept either order.
+    await expect(
+      page.getByText(/(?:created\s+1|1\s+(?:created|success))/i).first(),
+    ).toBeVisible({
       timeout: 60_000,
     });
 

@@ -12,6 +12,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { BASE_URL, TENANT, ROOT_TENANT, KC_BASE, KC_REALM, KC_CLIENT_ID, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { tryGetProfile } from '../utils/profile';
 import { getDigitToken, loginViaApi } from '../utils/auth';
 
 /**
@@ -228,7 +229,7 @@ test.describe('API Proxy Coverage', () => {
       },
       {
         name: 'Boundary search',
-        url: `${BASE_URL}/boundary-service/boundary-relationships/_search?tenantId=${TENANT}&hierarchyType=ADMIN`,
+        url: `${BASE_URL}/boundary-service/boundary-relationships/_search?tenantId=${TENANT}&hierarchyType=${tryGetProfile()?.boundary.hierarchyType || 'ADMIN'}`,
         body: {
           RequestInfo: { apiId: 'Rainmaker' },
         },

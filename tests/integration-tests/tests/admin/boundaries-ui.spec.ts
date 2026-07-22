@@ -161,7 +161,11 @@ Steps:
 Regression (#21 gap D, fixed): the BoundaryList data provider aggregates city sub-tenants at state level — when the session is the root tenant ('ke'), dataProvider.ts concatenates every active 'ke.*' sub-tenant's boundary tree, so boundaries created at the freshly-onboarded child tenant now surface in the admin list viewed from root. This spec asserts that post-fix behaviour and is expected to pass. Teardown is API-only because the configurator has no UI delete affordance for tenants — tracked in CCRS#21.`,
     },
     tag: ['@area:manage-boundaries', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
-    test.setTimeout(180_000);
+    // Bumped from 180s: the boundary-create pipeline (create + localizations +
+    // cache-bust + boundary-path repair, Phase2Page.tsx handleUploadBoundaries)
+    // can run past a minute when the shared local stack is under concurrent
+    // load from other suites; give it headroom rather than flake.
+    test.setTimeout(240_000);
 
     // -------- Login (Onboarding mode) --------
     await page.goto('/configurator/login');
@@ -193,15 +197,36 @@ Regression (#21 gap D, fixed): the BoundaryList data provider aggregates city su
 
     // -------- Phase 2: hierarchy + boundaries --------
     await expect(page.getByText('Phase 2: Boundary Setup')).toBeVisible();
+    // Phase 2 now opens with a "Choose Your Data Source" chooser (OSM vs Excel);
+    // the manual hierarchy + xlsx flow lives behind the Excel card (Phase2Page.tsx).
+    const excelCard = page.getByRole('button', { name: /Upload from Excel/i });
+    if (await excelCard.isVisible({ timeout: 5_000 }).catch(() => false)) {
+      await excelCard.click();
+    }
     await page.getByRole('button', { name: /Option 1: Create New Hierarchy/i }).click();
     await expect(page.locator('#hierarchyType')).toBeVisible({ timeout: 15_000 });
     await page.locator('#hierarchyType').fill(HIERARCHY_TYPE);
+    // The wizard's "Define Levels" defaults to 4 levels (Country/State/City/
+    // Ward), but BOUNDARY_FIXTURE only defines 2 (Country -> City directly).
+    // boundary-service enforces strict direct-descendant hierarchy checks —
+    // a relationship whose child boundaryType isn't the parent's immediate
+    // next level is permanently rejected (HIERARCHY_ERROR: "Hierarchy of
+    // child should be the direct descendant of parent's boundary hierarchy
+    // type"), confirmed against the live boundary-relationships/_create API.
+    // Remove the unused "State" and "Ward" levels so the created hierarchy
+    // is exactly [Country, City], matching the fixture.
+    await page.getByText(/^Level 2:$/).locator('..').getByRole('button').click();
+    await page.getByText(/^Level 3:$/).locator('..').getByRole('button').click();
+    await expect(page.getByText(/^Level 3:$/)).toHaveCount(0);
     await page.getByRole('button', { name: /Create Hierarchy/i }).click();
     await expect(page.getByText('Boundary Data Upload')).toBeVisible({ timeout: 60_000 });
     await page.locator('input[type="file"]').first().setInputFiles(BOUNDARY_FIXTURE);
     await expect(page.getByText('Verify Boundary Data')).toBeVisible({ timeout: 30_000 });
     await page.getByRole('button', { name: /Upload \d+ Boundaries/i }).click();
-    await expect(page.getByText('Boundaries Created Successfully!')).toBeVisible({ timeout: 60_000 });
+    // Generous timeout: handleUploadBoundaries (Phase2Page.tsx) chains boundary
+    // create + localizations + cache-bust + boundary-path repair before landing
+    // here, and can run past a minute when the shared local stack is busy.
+    await expect(page.getByText('Boundaries Created Successfully!')).toBeVisible({ timeout: 120_000 });
 
     // -------- Switch to Management via the header button --------
     // The Layout header carries a "Management" button that flips
