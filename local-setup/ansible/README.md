@@ -514,6 +514,23 @@ enable_search_stack: true   # ~2 GB RAM extra
 The playbook resolves this into `docker compose --profile search …`
 flags. Setting back to `false` sweeps the running search containers.
 
+### Seed an OOTB theme (issue #1035)
+
+```bash
+# In host_vars/<tenant>.yml:
+seed_theme_preset: bomet-blue    # or maputo-green — see digit-ui-esbuild/src/theme/presets/
+./deploy.sh <tenant>
+# Add-on to an existing deploy, without a full re-run:
+./deploy.sh <tenant> --tags theme-seed
+```
+
+Seeds the `common-masters.ThemeConfig` MDMS schema (if not already present)
+plus the named preset's data row, at both the state root and the city
+tenant — mirroring how the reference `kenya-green` theme is seeded at both
+`ke` and `ke.nairobi`. Idempotent: re-running, or switching to a different
+`seed_theme_preset`, deactivates whichever theme was previously active for
+that tenant rather than leaving two active side by side.
+
 ### Just check that everything's wired up correctly
 
 ```bash

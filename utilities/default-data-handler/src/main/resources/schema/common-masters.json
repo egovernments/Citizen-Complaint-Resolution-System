@@ -708,5 +708,37 @@
       "x-ref-schema": [],
       "additionalProperties": false
     }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "common-masters.ThemeConfig",
+    "description": "Per-tenant UI theme configuration — colors are validated client-side against digit-ui-esbuild/src/theme/schema.json, kept loosely typed here",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Theme Config",
+      "type": "object",
+      "required": [
+        "code"
+      ],
+      "x-unique": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "colors": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    }
   }
 ]
