@@ -126,26 +126,40 @@ FILTER=$(printf '{"label":["com.docker.compose.project=%s"],"type":["container"]
 # `tilt ci` (and any orchestrator that starts this sidecar after the app
 # containers) their "start" events predate that window and would be missed,
 # leaving the run with zero start events. Enumerate the already-running
-# project containers up front and count each one. A shared file de-dupes
-# against the live stream so no container is ever counted twice.
-STARTED_FILE=$(mktemp 2>/dev/null || echo "/tmp/telemetry-started.$$")
-: > "$STARTED_FILE"
+# project containers up front and count each one. Records are keyed by the
+# stable container ID (not the service name) so the same container is never
+# counted twice across the backfill and the live stream, while distinct
+# containers of a scaled service are each counted. The Docker socket/API was
+# already validated above (CONTAINER_COUNT), so this enumeration is
+# best-effort — an empty result just means no peers are up yet and the live
+# stream will catch them.
+STARTED_FILE=$(mktemp) || {
+  echo "[telemetry] FATAL: could not create temp file for start-event de-dup"
+  exit 1
+}
+TAB=$(printf '\t')
 
 emit_start() {
-  _svc="$1"
+  _id="$1" _svc="$2"
   [ -z "$_svc" ] && return 0
-  if grep -qxF "$_svc" "$STARTED_FILE" 2>/dev/null; then
+  # De-dup on the container ID, falling back to the service name if an event
+  # carries no ID.
+  _key="${_id:-$_svc}"
+  if grep -qxF "$_key" "$STARTED_FILE" 2>/dev/null; then
     return 0
   fi
-  echo "$_svc" >> "$STARTED_FILE"
+  echo "$_key" >> "$STARTED_FILE"
   echo "[telemetry] + $_svc started"
   send_event "container" "start" "$_svc"
 }
 
-docker_api "/containers/json" \
-  | jq -r ".[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\") | .Labels[\"com.docker.compose.service\"] // empty" 2>/dev/null \
-  | while IFS= read -r svc; do
-      emit_start "$svc"
+# One-shot, time-bounded query (the shared docker_api helper is intentionally
+# unbounded for the long-lived events stream below, so use an explicit timeout
+# here to guarantee startup cannot block indefinitely).
+curl -s --max-time 10 --unix-socket "$DOCKER_SOCKET" "http://localhost/containers/json" 2>/dev/null \
+  | jq -r ".[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\") | \"\(.Id)\t\(.Labels[\"com.docker.compose.service\"] // \"\")\"" 2>/dev/null \
+  | while IFS="$TAB" read -r cid svc; do
+      emit_start "$cid" "$svc"
     done
 
 echo "[telemetry] Monitoring container events..."
@@ -157,7 +171,8 @@ docker_api "/events?since=${START_SINCE}&filters=${FILTER}" | while IFS= read -r
 
   case "$ACTION" in
     start)
-      emit_start "$SERVICE"
+      CID=$(echo "$line" | jq -r '.Actor.ID // .id // empty' 2>/dev/null)
+      emit_start "$CID" "$SERVICE"
       ;;
     die)
       CODE=$(echo "$line" | jq -r '.Actor.Attributes.exitCode // "?"' 2>/dev/null)

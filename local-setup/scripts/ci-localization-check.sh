@@ -15,11 +15,13 @@ echo "=== Localization Module Check ==="
 echo "Localization API: $LOC_API"
 echo ""
 
-# Core modules that must have messages for PGR to function.
-# These are the modules actually seeded into public.message by full-dump.sql.
-# NOTE: egov-user was previously listed here but has never been present in the
-# dump — the message table only ships rainmaker-common / rainmaker-pgr /
-# rainmaker-workbench — so the assertion failed on every run (see #1308).
+# PGR-critical localization modules to assert. The citizen/employee PGR flows
+# break without these, so they are the ones we gate on. full-dump.sql also
+# seeds rainmaker-workbench into public.message, but that module is not required
+# for PGR, so it is intentionally not asserted here.
+# NOTE: egov-user was previously in this list but has never been present in the
+# dump (public.message ships only rainmaker-common / rainmaker-pgr /
+# rainmaker-workbench), so the assertion failed on every run — see #1308.
 MODULES=(
   "rainmaker-common"
   "rainmaker-pgr"
