@@ -59,8 +59,10 @@ const ChannelChipsComponent = ({ config, onSelect, formData }) => {
   const pick = (opt) => onSelect(key, { code: opt.code, name: opt.name });
 
   return (
-    <div style={{ width: "100%" }}>
-      <div role="radiogroup" aria-label={t("ES_CREATECOMPLAINT_RECEIVED_CHANNEL")} style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+    // Same width cap as the inputs below (the platform caps field controls at
+    // ~600px) so the chip row's right edge lines up with the mobile number.
+    <div style={{ width: "100%", maxWidth: "600px" }}>
+      <div role="radiogroup" aria-label={t("ES_CREATECOMPLAINT_RECEIVED_CHANNEL")} style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
         {OPTIONS.map((opt) => {
           const isSelected = selected === opt.code;
           return (
@@ -79,14 +81,22 @@ const ChannelChipsComponent = ({ config, onSelect, formData }) => {
               style={{
                 display: "inline-flex",
                 alignItems: "center",
+                // Fill the control column: 140px basis + grow → all 4 chips
+                // share one row on desktop (4×140 + gaps < 600px cap) and the
+                // row's right edge lines up with the inputs below; on phones
+                // they wrap into a tidy 2×2 grid instead of overflowing.
+                flex: "1 1 140px",
+                minWidth: "140px",
+                whiteSpace: "nowrap",
+                justifyContent: "space-between",
                 gap: "8px",
-                padding: "8px 14px",
+                padding: "8px 10px",
                 borderRadius: "8px",
                 border: `1px solid ${isSelected ? ACCENT : "#E0E0E0"}`,
                 backgroundColor: isSelected ? ACCENT_BG : "#F7F7F7",
                 color: isSelected ? ACCENT : "#363636",
                 fontWeight: 600,
-                fontSize: "0.875rem",
+                fontSize: "0.8125rem",
                 lineHeight: 1,
                 cursor: "pointer",
                 userSelect: "none",
@@ -94,8 +104,10 @@ const ChannelChipsComponent = ({ config, onSelect, formData }) => {
                 transition: "background-color 0.12s ease-out, border-color 0.12s ease-out",
               }}
             >
-              {ICONS[opt.icon]}
-              <span>{t(opt.name)}</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                {ICONS[opt.icon]}
+                <span>{t(opt.name)}</span>
+              </span>
               {isSelected ? (
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
                   <circle cx="12" cy="12" r="10" style={{ fill: ACCENT }} />
