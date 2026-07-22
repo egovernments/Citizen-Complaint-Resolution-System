@@ -189,12 +189,7 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user, extOpts) 
       "rowVersion": 1,
       "address": {
         "landmark": formData?.landmark,
-        // Product call (sheet-v4 review): the typed complainant address ALSO
-        // travels as the complaint's plain address (the extendedAttributes
-        // copy is withheld by the backend on read). Confidential complaints
-        // skip the copy so the complainant's address stays hidden. AddressOne
-        // (legacy building field) wins when a caller ever supplies it.
-        "buildingName": formData?.AddressOne || (!formData?.isConfidential && formData?.ComplainantAddress?.trim()) || "",
+        "buildingName": formData?.AddressOne,
         "street": formData?.AddressTwo,
         "pincode": formData?.postalCode,
         // `SelectedBoundary` is the deepest node the operator picked
