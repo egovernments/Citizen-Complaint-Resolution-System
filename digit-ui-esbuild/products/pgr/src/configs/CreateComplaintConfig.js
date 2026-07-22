@@ -8,6 +8,24 @@ export const CreateComplaintConfig = {
           head: "ES_CREATECOMPLAINT_PROVIDE_COMPLAINANT_DETAILS",
           body: [
             {
+              // QA #26 (product call): channel-of-receipt CHIP selector just
+              // above the mobile number — label in the LEFT column, chips in
+              // the control column (inline row, same as the fields below).
+              // The selected CODE becomes service.source at submit (email /
+              // inperson / letter / linhaverde — kept in pgr-services'
+              // allowed.source list). "In Person" is first and pre-selected.
+              inline: true,
+              isMandatory: false,
+              // Always carries a value (defaults to inperson) — suppress the
+              // generic "(Optional)" label suffix.
+              noOptionalSuffix: true,
+              type: "component",
+              component: "PGRChannelChipsComponent",
+              key: "ReceivedChannel",
+              label: "ES_CREATECOMPLAINT_RECEIVED_CHANNEL",
+              populators: { name: "ReceivedChannel" },
+            },
+            {
               inline: true,
               label: "COMPLAINTS_COMPLAINANT_CONTACT_NUMBER",
               isMandatory: true,
@@ -284,29 +302,6 @@ export const CreateComplaintConfig = {
                   pattern: /^(?=[\s\S]{20,1000}$)(?=(?:[\s\S]*?\p{L}){3})[\s\S]*$/u,
                 },
                 error: "CS_DESC_MIN_CHARS",
-              },
-            },
-            {
-              // QA #26: how the complaint reached the Reception Officer
-              // (email / in-person / letter / linha verde). Optional; travels
-              // as extendedAttributes.receivedChannel and shows on the details
-              // pages via the generic extended-attributes card. The stored
-              // value is the human-readable option code — the viewer renders
-              // values verbatim by design.
-              isMandatory: false,
-              key: "ReceivedChannel",
-              type: "dropdown",
-              label: "ES_CREATECOMPLAINT_RECEIVED_CHANNEL",
-              disable: false,
-              populators: {
-                name: "ReceivedChannel",
-                optionsKey: "name",
-                options: [
-                  { code: "E-mail", name: "PGR_CHANNEL_EMAIL" },
-                  { code: "Presencial", name: "PGR_CHANNEL_IN_PERSON" },
-                  { code: "Carta", name: "PGR_CHANNEL_LETTER" },
-                  { code: "Linha Verde", name: "PGR_CHANNEL_LINHA_VERDE" },
-                ],
               },
             },
           ],

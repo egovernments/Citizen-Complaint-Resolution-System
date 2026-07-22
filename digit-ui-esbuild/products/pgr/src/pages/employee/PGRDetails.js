@@ -41,25 +41,19 @@ const parseAdditionalDetail = (ad) => {
 
 const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false, docUploadRequired = false, assigneeMandatory }) => {
   const body = [];
-  if (action === "REJECT") {
-    body.push({
-      isMandatory: false,
-      key: "SelectedReason",
-      type: "dropdown",
-      label: "CS_REJECT_COMPLAINT",
-      disable: false,
-      populators: {
-        name: "SelectedReason",
-        optionsKey: "name",
-        error: "Required",
-        mdmsConfig: { masterName: "RejectionReasons", moduleName: "RAINMAKER-PGR", localePrefix: "CS_REJECTION_" },
-      },
-    });
-  }
+  // QA #23 (sheet v4 follow-up): the REJECT modal carries NO dropdowns at all —
+  // no assignee (below) and no rejection-reason picker (removed per product
+  // call; the officer's justification goes in the mandatory comments).
+  // handleActionSubmit still parses legacy "[CODE] …" comments for complaints
+  // rejected while the picker existed, so old timelines render unchanged.
   // QA #23: rejecting a complaint must not offer an assignee — REJECT is a
   // verdict, not a hand-off (the CMS workflow's REJECT target state is not
   // terminal and has assignable roles, which is why the dropdown appeared).
-  if (action !== "REJECT" && !isTerminal && (assigneeRoles?.length || 0) > 0) {
+  // QA #22 (sheet v4 decision): AWAITINGINFORMATION is a state update — the
+  // complaint waits on the CITIZEN, so picking a "next level user" makes no
+  // sense and mis-assigned it to another case manager. No assignee here either.
+  const NO_ASSIGNEE_ACTIONS = ["REJECT", "AWAITINGINFORMATION"];
+  if (!NO_ASSIGNEE_ACTIONS.includes(action) && !isTerminal && (assigneeRoles?.length || 0) > 0) {
     body.push({
       type: "component",
       // Callers pass assigneeMandatory (dept-mapping + actor aware); default
@@ -584,6 +578,22 @@ const PGRDetails = () => {
                     label: t("CS_COMPLAINT_LANDMARK__DETAILS"),
                     value: pgrData?.ServiceWrappers[0].service?.address?.landmark || "NA",
                   },
+                  // Typed address (product call, sheet-v4 review): the backend
+                  // persists the complainant-entered address into the User
+                  // Service and returns it as citizen.correspondenceAddress —
+                  // masked/absent per backend policy on confidential complaints.
+                  ...((pgrData?.ServiceWrappers?.[0]?.service?.citizen?.correspondenceAddress ||
+                      pgrData?.ServiceWrappers?.[0]?.service?.extendedAttributes?.complainantAddress)
+                    ? [
+                        {
+                          inline: true,
+                          label: t("ES_CREATECOMPLAINT_ADDRESS"),
+                          value:
+                            pgrData.ServiceWrappers[0].service.citizen?.correspondenceAddress ||
+                            pgrData.ServiceWrappers[0].service.extendedAttributes?.complainantAddress,
+                        },
+                      ]
+                    : []),
                   // Pincode is optional in this deployment; only show it when set.
                   ...(pgrData?.ServiceWrappers[0].service?.address?.pincode
                     ? [

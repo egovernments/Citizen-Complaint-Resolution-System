@@ -43,7 +43,19 @@ const fetchBoundaryAncestors = async (tenantId, localityCode) => {
   }
 };
 
-const getDetailsRow = ({ id, service, complaintType }) => ({
+// Boundary codes arrive as raw identifiers, sometimes prefixed with the
+// tenant/hierarchy chain ("MZ_IGE_ADMIN_hungaro"). Render them readable
+// without depending on the boundary localization module being loaded:
+// strip the ALL-CAPS prefix, then title-case ("Hungaro", "Vila De Sena").
+const readableBoundary = (code) => {
+  if (!code) return null;
+  const bare = String(code).replace(/^(?:[A-Z0-9]+_)+(?=[^A-Z])/, "");
+  return bare
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const getDetailsRow = ({ id, service, complaintType, boundaryAncestors }) => ({
   CS_COMPLAINT_DETAILS_COMPLAINT_NO: id,
   CS_COMPLAINT_DETAILS_APPLICATION_STATUS: `CS_COMMON_${service.applicationStatus}`,
   // Key-based (COMPLAINT_HIERARCHY.<code>) — the display t()s these values, so
@@ -53,12 +65,27 @@ const getDetailsRow = ({ id, service, complaintType }) => ({
   CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE: `COMPLAINT_HIERARCHY.${service.serviceCode.toUpperCase()}`,
   CS_COMPLAINT_ADDTIONAL_DETAILS: service.description,
   CS_COMPLAINT_FILED_DATE: Digit.DateUtils.ConvertTimestampToDate(service.auditDetails.createdTime),
-  ES_CREATECOMPLAINT_ADDRESS: [
-    service.address.landmark,
-    Digit.Utils.getMultiRootTenant() ? `ADMIN_${service.address.locality.code}` : Digit.Utils.locale.getLocalityCode(service.address.locality, service.tenantId),
-    `TENANT_TENANTS_${service?.tenantId?.toUpperCase?.()?.replace(".", "_")}`,
-    service.address.pincode,
-  ],
+  // QA #31/#25 (product call): Endereço shows the TYPED address when one
+  // exists. The typed complainant address is persisted by the BACKEND into
+  // the User Service and returned as service.citizen.correspondenceAddress
+  // (the extendedAttributes copy is stripped on write) — masking there is
+  // backend policy. Typed location parts follow; only when nothing was
+  // typed does the row fall back to the READABLE administrative chain,
+  // leaf upward ("Municipio Namaacha, Namaacha, Maputo Provincia"). The
+  // raw boundary key and tenant/authority name of the original composition
+  // stay gone.
+  ES_CREATECOMPLAINT_ADDRESS: (() => {
+    const typed = [
+      service.citizen?.correspondenceAddress,
+      (service.extendedAttributes || {}).complainantAddress,
+      service.address.buildingName,
+      service.address.street,
+      service.address.landmark,
+      service.address.pincode,
+    ].filter((v) => v && String(v).trim());
+    if (typed.length) return typed;
+    return [...(boundaryAncestors || [])].reverse().map((b) => readableBoundary(b?.code));
+  })(),
 });
 
 const isEmptyOrNull = (obj) => obj === undefined || obj === null || Object.keys(obj).length === 0;
