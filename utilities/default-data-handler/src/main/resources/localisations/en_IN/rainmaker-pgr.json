@@ -7518,6 +7518,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_HERO_PILOT_NOTICE",
+        "message": "This platform is in a pilot phase and, for now, is available only for the City of Maputo.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_HERO_LEDE",
         "message": "The national channel for complaints, grievances, petitions and reports about public services, public administration and economic activities — with simple, secure and transparent tracking.",
         "module": "rainmaker-pgr",
@@ -8108,6 +8114,42 @@
     {
         "code": "CS_CANNOT_REOPEN_COMPLAINT_PAST_DEADLINE",
         "message": "The window for reopening this complaint has closed",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_PAGE_TITLE",
+        "message": "Privacy Policy",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_PAGE_P1",
+        "message": "The Fala Cidadão Platform is committed to protecting your privacy and ensuring your personal information is handled securely, transparently and in compliance with applicable law.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_PAGE_P2",
+        "message": "By using this Platform you consent to the collection and processing of the information you provide to register, investigate, manage and resolve your complaint, petitions, grievances and reports. This may include your name, contact details, identifying details where applicable, complaint details, supporting documents, photographs and other evidence you submit.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_PAGE_P3",
+        "message": "Your personal information will only be accessed by duly authorised government officials and institutions responsible for handling your complaint. It will not be shared with unauthorised third parties or used for commercial or marketing purposes. Where the Platform allows, complaints submitted as confidential will have the author's identity protected, disclosed only to a restricted, senior group of officials or when required by law.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_PAGE_P4",
+        "message": "The Platform implements appropriate technical and organisational measures to safeguard your information against unauthorised access, alteration, disclosure or loss. Technical information may also be collected, such as device data, IP address and system usage, to improve security, system performance and service quality.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_PRIVACY_PAGE_P5",
+        "message": "Your information will be retained only for the period necessary to process your complaint, comply with legal obligations and maintain official government records. You may request access to or correction of your personal information, subject to applicable law and any restrictions necessary to protect ongoing investigations.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     }

@@ -22,6 +22,7 @@ export function PGRLandingEntry() {
       TRACK_COMPLAINT: `/${ctx}/citizen/pgr/complaints`,
       CITIZEN_LOGIN: `/${ctx}/citizen/login`,
       EMPLOYEE_LOGIN: `/${ctx}/employee`,
+      PRIVACY: `/${ctx}/privacy-policy`,
     }),
     [ctx]
   );

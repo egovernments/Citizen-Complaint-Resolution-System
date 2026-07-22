@@ -38,7 +38,7 @@ export type IconComponent = React.ComponentType<{ className?: string; "aria-hidd
 export const LANDING_COPY = {
   // Chrome ------------------------------------------------------------------
   GOV_NAME: { pt: "República de Moçambique", en: "Republic of Mozambique" },
-  PORTAL_NAME: { pt: "Portal de Reclamações e Denúncias", en: "Complaints and Reports Portal" },
+  PORTAL_NAME: { pt: "Fala Cidadão", en: "Complaints and Reports Portal" },
   ORG_NAMES: { pt: "IGE e IGSAE", en: "IGE and IGSAE" },
   TAGLINE: { pt: "O cidadão fala. O Estado responde.", en: "The citizen speaks. The State responds." },
   MOTTO_VALUES: { pt: "Transparência · Integridade", en: "Transparency · Integrity" },
@@ -63,7 +63,11 @@ export const LANDING_COPY = {
 
   // Hero -----------------------------------------------------------------—--
   HERO_EYEBROW: { pt: "República de Moçambique · IGE · IGSAE", en: "Republic of Mozambique · IGE · IGSAE" },
-  HERO_TITLE: { pt: "Portal de Reclamações e Denúncias", en: "Complaints and Reports Portal" },
+  HERO_TITLE: { pt: "Fala Cidadão", en: "Complaints and Reports Portal" },
+  HERO_PILOT_NOTICE: {
+    pt: "Esta plataforma está em fase piloto e, de momento, está disponível apenas para a Cidade de Maputo.",
+    en: "This platform is in a pilot phase and, for now, is available only for the City of Maputo.",
+  },
   HERO_LEDE: {
     pt: "Canal nacional para reclamações, queixas, petições e denúncias sobre serviços públicos, administração pública e actividades económicas — com acompanhamento simples, seguro e transparente.",
     en: "The national channel for complaints, grievances, petitions and reports about public services, public administration and economic activities — with simple, secure and transparent tracking.",
@@ -93,11 +97,6 @@ export const LANDING_COPY = {
   TYPE_GRIEVANCE_DESC: {
     pt: "Comunicação de má conduta, negligência, abuso de poder ou incumprimento de deveres por funcionários, agentes ou instituições públicas.",
     en: "Reporting misconduct, negligence, abuse of power or failure to perform duties by public officials, agents or institutions.",
-  },
-  TYPE_PETITION_TITLE: { pt: "Petições", en: "Petitions" },
-  TYPE_PETITION_DESC: {
-    pt: "Pedidos formais dirigidos ao Estado para apreciação, intervenção, revisão de decisões ou adopção de medidas de interesse público.",
-    en: "Formal requests addressed to the State for consideration, intervention, review of decisions or adoption of public-interest measures.",
   },
   TYPE_REPORT_TITLE: { pt: "Denúncias", en: "Reports" },
   TYPE_REPORT_DESC: {
@@ -161,6 +160,29 @@ export const LANDING_COPY = {
   },
   PRIVACY_LINK: { pt: "Ler a Política de Privacidade", en: "Read the Privacy Policy" },
 
+  // Privacy policy (full page) ---------------------------------------------
+  PRIVACY_PAGE_TITLE: { pt: "Política de Privacidade", en: "Privacy Policy" },
+  PRIVACY_PAGE_P1: {
+    pt: "A Plataforma Fala Cidadão está empenhada em proteger a sua privacidade e em assegurar que as suas informações pessoais são tratadas de forma segura, transparente e em conformidade com a legislação aplicável.",
+    en: "The Fala Cidadão Platform is committed to protecting your privacy and ensuring your personal information is handled securely, transparently and in compliance with applicable law.",
+  },
+  PRIVACY_PAGE_P2: {
+    pt: "Ao utilizar esta Plataforma, o utilizador consente na recolha e no tratamento das informações que fornece para efeitos de registo, investigação, gestão e resolução da sua reclamação, petições, queixas e denúncia. As informações recolhidas podem incluir o seu nome, dados de contacto, elementos de identificação quando aplicável, detalhes da reclamação, documentos de suporte, fotografias e outras provas que decida apresentar.",
+    en: "By using this Platform you consent to the collection and processing of the information you provide to register, investigate, manage and resolve your complaint, petitions, grievances and reports. This may include your name, contact details, identifying details where applicable, complaint details, supporting documents, photographs and other evidence you submit.",
+  },
+  PRIVACY_PAGE_P3: {
+    pt: "As suas informações pessoais apenas serão acedidas por funcionários e instituições do Governo devidamente autorizados e responsáveis pelo tratamento da sua reclamação. Não serão partilhadas com terceiros não autorizados nem utilizadas para fins comerciais ou de marketing. Nos casos previstos pela Plataforma, as reclamações submetidas como confidenciais terão a identidade do autor protegida, sendo esta divulgada apenas para um grupo restrito e senior de funcionarios ou quando exigido por lei.",
+    en: "Your personal information will only be accessed by duly authorised government officials and institutions responsible for handling your complaint. It will not be shared with unauthorised third parties or used for commercial or marketing purposes. Where the Platform allows, complaints submitted as confidential will have the author's identity protected, disclosed only to a restricted, senior group of officials or when required by law.",
+  },
+  PRIVACY_PAGE_P4: {
+    pt: "A Plataforma implementa medidas técnicas e organizativas adequadas para salvaguardar as suas informações contra o acesso, alteração, divulgação ou perda não autorizados. Podem igualmente ser recolhidas informações técnicas, tais como dados do dispositivo, endereço IP e utilização do sistema, com o objetivo de melhorar a segurança, o desempenho do sistema e a qualidade do serviço.",
+    en: "The Platform implements appropriate technical and organisational measures to safeguard your information against unauthorised access, alteration, disclosure or loss. Technical information may also be collected, such as device data, IP address and system usage, to improve security, system performance and service quality.",
+  },
+  PRIVACY_PAGE_P5: {
+    pt: "As suas informações serão conservadas apenas durante o período necessário para processar a sua reclamação, cumprir obrigações legais e manter os registos oficiais do Governo. O utilizador pode solicitar o acesso às suas informações pessoais ou a respetiva correção, sujeito à legislação aplicável e a quaisquer restrições necessárias para proteger investigações em curso.",
+    en: "Your information will be retained only for the period necessary to process your complaint, comply with legal obligations and maintain official government records. You may request access to or correction of your personal information, subject to applicable law and any restrictions necessary to protect ongoing investigations.",
+  },
+
   // News ---------------------------------------------------------------—---
   NEWS_TITLE: { pt: "Últimas Actualizações", en: "Latest Updates" },
   NEWS_READ_MORE: { pt: "Ler mais", en: "Read more" },
@@ -204,7 +226,7 @@ export const LANDING_COPY = {
   FOOTER_TERMS: { pt: "Termos de Utilização", en: "Terms of Use" },
   FOOTER_ACCESSIBILITY: { pt: "Acessibilidade", en: "Accessibility" },
   FOOTER_COPYRIGHT: {
-    pt: "Portal de Reclamações e Denúncias · República de Moçambique. Todos os direitos reservados.",
+    pt: "Fala Cidadão · República de Moçambique. Todos os direitos reservados.",
     en: "Complaints and Reports Portal · Republic of Mozambique. All rights reserved.",
   },
 
@@ -228,10 +250,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { labelKey: "NAV_HOME", route: "HOME" },
   { labelKey: "NAV_SUBMIT", route: "REGISTER_COMPLAINT" },
-  { labelKey: "NAV_TRACK", route: "TRACK_COMPLAINT" },
-  { labelKey: "NAV_TRAINING", route: "TRAINING" },
-  { labelKey: "NAV_ABOUT", route: "ABOUT" },
-  { labelKey: "NAV_CONTACTS", route: "CONTACTS" },
+  { labelKey: "NAV_TRACK", route: "TRACK_COMPLAINT" }
 ];
 
 export interface ManifestationType {
@@ -247,7 +266,6 @@ export interface ManifestationType {
 export const MANIFESTATION_TYPES: ManifestationType[] = [
   { id: "reclamacao", icon: FileText, titleKey: "TYPE_COMPLAINT_TITLE", descKey: "TYPE_COMPLAINT_DESC", accentVar: "--pgrl-type-complaint", route: "REGISTER_COMPLAINT" },
   { id: "queixa", icon: Megaphone, titleKey: "TYPE_GRIEVANCE_TITLE", descKey: "TYPE_GRIEVANCE_DESC", accentVar: "--pgrl-type-grievance", route: "REGISTER_COMPLAINT" },
-  { id: "peticao", icon: Scale, titleKey: "TYPE_PETITION_TITLE", descKey: "TYPE_PETITION_DESC", accentVar: "--pgrl-type-petition", route: "REGISTER_COMPLAINT" },
   { id: "denuncia", icon: ShieldAlert, titleKey: "TYPE_REPORT_TITLE", descKey: "TYPE_REPORT_DESC", accentVar: "--pgrl-type-report", route: "REGISTER_COMPLAINT" },
 ];
 
@@ -315,10 +333,10 @@ export const DEFAULT_NEWS: NewsItem[] = [
     dateLabel: "07 Jul 2026",
     dateTime: "2026-07-07",
     tag: "Portal",
-    title: "Portal de Reclamações e Denúncias inicia fase piloto em três províncias do norte do país",
+    title: "Fala Cidadão inicia fase piloto em três províncias do norte do país",
     excerpt:
       "O Governo de Moçambique lançou oficialmente a fase piloto do Portal nas províncias de Nampula, Cabo Delgado e Niassa, com expansão gradual prevista para os próximos três meses.",
-    source: "Portal de Reclamações e Denúncias",
+    source: "Fala Cidadão",
     href: "#",
   },
   {
@@ -340,7 +358,7 @@ export const DEFAULT_NEWS: NewsItem[] = [
     title: "Mil formadores comunitários capacitados para promover a utilização do portal em todo o país",
     excerpt:
       "Formadores de todas as províncias actuarão como embaixadores da plataforma, apoiando a sensibilização dos cidadãos e o uso dos canais digitais junto das suas comunidades.",
-    source: "Portal de Reclamações e Denúncias",
+    source: "Fala Cidadão",
     href: "#",
   },
   {

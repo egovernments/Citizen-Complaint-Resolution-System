@@ -19,8 +19,7 @@ export interface LanguageOption {
 }
 
 export const DEFAULT_LANGUAGES: LanguageOption[] = [
-  { code: "pt_PT", label: "PT" },
-  { code: "en_IN", label: "EN" },
+  { code: "pt_PT", label: "PT" }
 ];
 
 export interface UtilityBarProps {
@@ -68,7 +67,7 @@ export function UtilityBar({ routes, languages, onLanguageChange }: UtilityBarPr
             {c("UTILITY_PHONE_LABEL")}
           </a>
 
-          <div role="group" aria-label={c("ARIA_LANGUAGE")} className="flex items-center gap-1">
+          {languages.length > 1 && <div role="group" aria-label={c("ARIA_LANGUAGE")} className="flex items-center gap-1">
             {languages.map((lng, i) => (
               <React.Fragment key={lng.code}>
                 {i > 0 && (
@@ -93,7 +92,7 @@ export function UtilityBar({ routes, languages, onLanguageChange }: UtilityBarPr
                 </button>
               </React.Fragment>
             ))}
-          </div>
+          </div>}
 
           <LandingLink to={routes.CITIZEN_LOGIN} className={cn(UTIL_LINK, "font-semibold")}>
             <LogIn aria-hidden className="h-3.5 w-3.5" />

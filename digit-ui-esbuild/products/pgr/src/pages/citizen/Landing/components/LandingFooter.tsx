@@ -36,11 +36,7 @@ const GROUPS: FooterGroup[] = [
     titleKey: "FOOTER_LINKS",
     links: [
       { labelKey: "NAV_SUBMIT", route: "REGISTER_COMPLAINT" },
-      { labelKey: "NAV_TRACK", route: "TRACK_COMPLAINT" },
-      { labelKey: "NAV_TRAINING", route: "TRAINING" },
-      { labelKey: "FOOTER_FAQ", route: "FAQ" },
-      { labelKey: "NAV_CONTACTS", route: "CONTACTS" },
-      { labelKey: "NAV_ABOUT", route: "ABOUT" },
+      { labelKey: "NAV_TRACK", route: "TRACK_COMPLAINT" }
     ],
   },
   {
