@@ -41,21 +41,11 @@ const parseAdditionalDetail = (ad) => {
 
 const buildActionFormConfig = ({ action, assigneeRoles = [], isTerminal = false, docUploadRequired = false, assigneeMandatory }) => {
   const body = [];
-  if (action === "REJECT") {
-    body.push({
-      isMandatory: false,
-      key: "SelectedReason",
-      type: "dropdown",
-      label: "CS_REJECT_COMPLAINT",
-      disable: false,
-      populators: {
-        name: "SelectedReason",
-        optionsKey: "name",
-        error: "Required",
-        mdmsConfig: { masterName: "RejectionReasons", moduleName: "RAINMAKER-PGR", localePrefix: "CS_REJECTION_" },
-      },
-    });
-  }
+  // QA #23 (sheet v4 follow-up): the REJECT modal carries NO dropdowns at all —
+  // no assignee (below) and no rejection-reason picker (removed per product
+  // call; the officer's justification goes in the mandatory comments).
+  // handleActionSubmit still parses legacy "[CODE] …" comments for complaints
+  // rejected while the picker existed, so old timelines render unchanged.
   // QA #23: rejecting a complaint must not offer an assignee — REJECT is a
   // verdict, not a hand-off (the CMS workflow's REJECT target state is not
   // terminal and has assignable roles, which is why the dropdown appeared).
