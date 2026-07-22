@@ -519,7 +519,7 @@ public class NotificationService {
         }
 
 
-        String localisedComplaint = notificationUtil.getCustomizedMsgForPlaceholder(localizationMessage,"pgr.complaint.category."+request.getService().getServiceCode());
+        String localisedComplaint = notificationUtil.getCustomizedMsgForPlaceholder(localizationMessage,"COMPLAINT_HIERARCHY."+request.getService().getServiceCode());
 
         Long createdTime = serviceWrapper.getService().getAuditDetails().getCreatedTime();
         LocalDate date = Instant.ofEpochMilli(createdTime > 1_000_000_000_000L ? createdTime : createdTime * 1000)

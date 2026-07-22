@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -158,6 +159,49 @@ public class NotificationConfigDrivenEmissionTest {
         notificationService.process(assignRequest(), "save-pgr-request");
         verify(notificationRouter, org.mockito.Mockito.never())
                 .route(anyString(), anyString(), any(), anyString(), anyString());
+    }
+
+    /**
+     * Pins the localization key prefix used in the legacy (config-driven=false) path.
+     * NotificationService.getFinalMessage() must call getCustomizedMsgForPlaceholder with
+     * "COMPLAINT_HIERARCHY.<serviceCode>", NOT the old "pgr.complaint.category.<serviceCode>".
+     *
+     * The test drives the APPLY->PENDINGFORASSIGNMENT transition because "APPLY_PENDINGFORASSIGNMENT"
+     * is in NOTIFICATION_ENABLE_FOR_STATUS and the branch reaches line 522 without any HTTP calls
+     * (no assignee lookup needed).
+     */
+    @Test
+    void legacyPath_complaintLocalizationLookup_usesComplaintHierarchyPrefix() {
+        when(config.getNotificationConfigDriven()).thenReturn(false);
+
+        // Stub the citizen body and default msg so getFinalMessage() does not bail before line 522.
+        when(notificationUtil.getCustomizedMsg(eq("APPLY"), eq("PENDINGFORASSIGNMENT"), eq("CITIZEN"), anyString()))
+                .thenReturn("Dear Citizen, your complaint {complaint_type} has been filed.");
+        when(notificationUtil.getDefaultMsg(eq("CITIZEN"), anyString())).thenReturn("Default notification.");
+        when(notificationUtil.getCustomizedMsgForPlaceholder(anyString(), startsWith("COMPLAINT_HIERARCHY.")))
+                .thenReturn("Garbage Not Collected");
+        when(notificationUtil.getShortnerURL(anyString())).thenReturn("http://short/x");
+
+        User citizen = User.builder()
+                .uuid("citizen-uuid").name("Jane Doe")
+                .mobileNumber("712345678").countryCode("+254").emailId("jane@example.com")
+                .build();
+        Service service = Service.builder()
+                .tenantId(TENANT)
+                .serviceRequestId("PGR-2026-001")
+                .applicationStatus("PENDINGFORASSIGNMENT")
+                .serviceCode("GarbageNeeds")
+                .citizen(citizen)
+                .auditDetails(AuditDetails.builder().createdTime(1719600000000L).createdBy("citizen-uuid").build())
+                .build();
+        Workflow workflow = Workflow.builder().action("APPLY").assignes(Collections.emptyList()).build();
+        ServiceRequest applyRequest = ServiceRequest.builder()
+                .requestInfo(new RequestInfo()).service(service).workflow(workflow).build();
+
+        notificationService.process(applyRequest, "save-pgr-request");
+
+        // The localization key for complaint type MUST use the COMPLAINT_HIERARCHY prefix.
+        verify(notificationUtil).getCustomizedMsgForPlaceholder(anyString(), eq("COMPLAINT_HIERARCHY.GarbageNeeds"));
     }
 
     /** Stub egov-user _search to return the given (uuid, mobile, email) users for a roleCodes query. */
