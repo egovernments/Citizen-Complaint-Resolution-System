@@ -55,7 +55,15 @@ const CreateComplaintForm = ({
     const draftValid = __draftMeta
       ? __draftMeta.tenant === tenantId && __draftMeta.user === draftUserUuid
       : Object.keys(draftValues).length === 0; // legacy/unstamped non-empty drafts are stale — drop
-    initialDraftRef.current = draftValid ? draftValues : {};
+    const seeded = draftValid ? draftValues : {};
+    // QA #26: channel-of-receipt defaults to "Presencial" (in person) — the
+    // Reception Officer's most common case — unless the draft carries a
+    // choice already. The user can still change it; the code rides
+    // service.source at submit.
+    if (!seeded.ReceivedChannel) {
+      seeded.ReceivedChannel = { code: "inperson", name: "PGR_CHANNEL_IN_PERSON" };
+    }
+    initialDraftRef.current = seeded;
   }
   // JSON snapshot of the last persisted draft — cheap change detection so the
   // sessionStorage write (and the re-render it causes) happens only on real
