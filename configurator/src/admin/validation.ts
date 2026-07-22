@@ -58,12 +58,26 @@ export const phone = raRegex(
  * at validation time (every keystroke), not at module-import time.
  * That way a tenant switch mid-session picks up the latest rule.
  *
+ * There is no separate "error message" config field to keep in sync with
+ * the pattern (CCRS#722 — a hand-set message drifted from the pattern's
+ * actual digit count on more than one tenant). The message is always
+ * derived from the pattern itself: the digit count when it's a plain
+ * `^[0-9]{N}$` shape, otherwise a generic message. The MDMS master may
+ * still supply its own `errorMessage` alongside its `pattern` — that's a
+ * genuinely different, per-tenant-authored rule, not a config knob that
+ * can drift from this validator's own pattern.
+ *
  * Form usage: `<DigitFormInput validate={v.postalCode} ... />` — the
  * old `postalCodeKE` alias still works as a backward-compat shim
  * pointing at the same dynamic validator.
  */
 const DEFAULT_POSTAL_PATTERN = /^[0-9]{5}$/;
-const DEFAULT_POSTAL_MESSAGE = 'Enter a valid 5-digit postal code (e.g. 00100)';
+const GENERIC_POSTAL_MESSAGE = 'Enter a valid postal code';
+
+function deriveMessage(patternStr: string): string {
+  const m = patternStr.match(/\{\s*(\d+)\s*\}/); // ^[0-9]{5}$ -> "5"
+  return m ? `Enter a valid ${m[1]}-digit postal code` : GENERIC_POSTAL_MESSAGE;
+}
 
 function resolvePostalRule(): { pattern: RegExp; message: string } {
   const userValidation =
@@ -84,20 +98,17 @@ function resolvePostalRule(): { pattern: RegExp; message: string } {
   const patternStr =
     (mdmsRule?.pattern as string | undefined) ||
     (globalRule?.postalCodePattern as string | undefined);
-  const message =
-    (mdmsRule?.errorMessage as string | undefined) ||
-    (globalRule?.postalCodeErrorMessage as string | undefined) ||
-    DEFAULT_POSTAL_MESSAGE;
+  const mdmsMessage = mdmsRule?.errorMessage as string | undefined;
 
   if (patternStr) {
     try {
-      return { pattern: new RegExp(patternStr), message };
+      return { pattern: new RegExp(patternStr), message: mdmsMessage || deriveMessage(patternStr) };
     } catch {
       // Bad pattern in MDMS — fall through to the default rather than
       // throwing during validation.
     }
   }
-  return { pattern: DEFAULT_POSTAL_PATTERN, message };
+  return { pattern: DEFAULT_POSTAL_PATTERN, message: mdmsMessage || deriveMessage(DEFAULT_POSTAL_PATTERN.source) };
 }
 
 export const postalCode = (value: unknown) => {

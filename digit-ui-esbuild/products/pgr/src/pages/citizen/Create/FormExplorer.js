@@ -16,6 +16,7 @@ import { additionalDetails } from "../../citizen/Create/steps-config/additionalD
 import { locationDetails } from "../../citizen/Create/steps-config/locationDetails";
 import { useQueryClient } from "react-query";
 import { useHistory, useRouteMatch, useParams } from "react-router-dom";
+import { isPostalCodeValid, getPostalCodeErrorMessage } from "../../../utils/postalCode";
 
 const configs = [
   createComplaint,
@@ -289,15 +290,10 @@ const FormExplorer = () => {
     // egovernments/CCRS#478 — postal validation message.
     if (merged?.postalCode != null && String(merged.postalCode).trim().length > 0) {
       const pc = String(merged.postalCode).trim();
-      // Postal-code shape is per-country. Read from globalConfigs
-      // `CORE_POSTAL_CONFIGS` so each tenant can pin their own pattern
-      // (Kenya 5 digits, India 6, UK alnum, US 5/5+4, …). Falls back to
-      // the legacy hard default when the host hasn't configured it.
-      const postalCfg = window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS") || {};
-      const postalPattern = postalCfg.postalCodePattern || "^[0-9]{5}$";
-      const postalErrorKey = postalCfg.postalCodeErrorMessage || "CS_COMPLAINT_POSTALCODE_INVALID_ERROR";
-      if (!new RegExp(postalPattern).test(pc)) {
-        setToast({ label: t(postalErrorKey), type: "error" });
+      // Pattern + message are config-driven per tenant (CCRS#722) — see
+      // utils/postalCode.js.
+      if (!isPostalCodeValid(pc)) {
+        setToast({ label: getPostalCodeErrorMessage(t), type: "error" });
         return;
       }
     }

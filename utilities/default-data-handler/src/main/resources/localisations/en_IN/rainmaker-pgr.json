@@ -2214,6 +2214,18 @@
         "locale": "en_IN"
     },
     {
+        "code": "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN",
+        "message": "Please enter a valid {{length}}-digit postal code",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC",
+        "message": "Please enter a valid postal code",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "CS_COMPLAINT_RATE_HELP_TEXT",
         "message": "How would you rate your experience with us?",
         "module": "rainmaker-pgr",
