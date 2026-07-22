@@ -288,12 +288,11 @@ export const CreateComplaintConfig = {
               },
             },
             {
-              // QA #26: how the complaint reached the Reception Officer
-              // (email / in-person / letter / linha verde). Optional; travels
-              // as extendedAttributes.receivedChannel and shows on the details
-              // pages via the generic extended-attributes card. The stored
-              // value is the human-readable option code — the viewer renders
-              // values verbatim by design.
+              // QA #26 (product call): how the complaint reached the Reception
+              // Officer. The selected CODE becomes the complaint's
+              // service.source (replacing the hardcoded "web") — codes must
+              // stay in pgr-services' allowed.source list. Not displayed on
+              // the details pages.
               isMandatory: false,
               key: "ReceivedChannel",
               type: "dropdown",
@@ -303,10 +302,10 @@ export const CreateComplaintConfig = {
                 name: "ReceivedChannel",
                 optionsKey: "name",
                 options: [
-                  { code: "E-mail", name: "PGR_CHANNEL_EMAIL" },
-                  { code: "Presencial", name: "PGR_CHANNEL_IN_PERSON" },
-                  { code: "Carta", name: "PGR_CHANNEL_LETTER" },
-                  { code: "Linha Verde", name: "PGR_CHANNEL_LINHA_VERDE" },
+                  { code: "email", name: "PGR_CHANNEL_EMAIL" },
+                  { code: "inperson", name: "PGR_CHANNEL_IN_PERSON" },
+                  { code: "letter", name: "PGR_CHANNEL_LETTER" },
+                  { code: "linhaverde", name: "PGR_CHANNEL_LINHA_VERDE" },
                 ],
               },
             },

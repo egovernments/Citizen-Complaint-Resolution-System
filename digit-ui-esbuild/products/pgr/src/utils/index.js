@@ -183,7 +183,11 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
       "serviceCode": getEffectiveServiceCode(formData?.SelectComplaintType,formData?.SelectSubComplaintType),
       "description": formData?.description,
       "applicationStatus": "CREATED",
-      "source": "web",
+      // QA #26 (product call): the Reception Officer's channel-of-receipt IS
+      // the complaint's source (was hardcoded "web"). Codes must exist in
+      // pgr-services' allowed.source list (email/inperson/letter/linhaverde
+      // added there). Employee flow only — the citizen wizard stays "web".
+      "source": formData?.ReceivedChannel?.code || "web",
       "citizen": userInfo,
       "isDeleted": false,
       "rowVersion": 1,
@@ -217,16 +221,6 @@ export const formPayloadToCreateComplaint = (formData, tenantId, user) => {
     }
   }
 
-  // QA #26: receipt channel picked by the Reception Officer. Additive —
-  // attached only when the officer picked one, so existing payloads are
-  // unchanged.
-  const receivedChannel = formData?.ReceivedChannel?.code;
-  if (receivedChannel) {
-    complaint.service.extendedAttributes = {
-      ...(complaint.service.extendedAttributes || {}),
-      receivedChannel,
-    };
-  }
   return complaint;
 };
 
