@@ -10,7 +10,7 @@ const OPTIONS = [
   { code: "email", name: "PGR_CHANNEL_EMAIL", icon: "mail" },
   { code: "inperson", name: "PGR_CHANNEL_IN_PERSON", icon: "person" },
   { code: "letter", name: "PGR_CHANNEL_LETTER", icon: "letter" },
-  { code: "linhaverde", name: "PGR_CHANNEL_LINHA_VERDE", icon: "headset" },
+  { code: "linhaverde", name: "PGR_CHANNEL_LINHA_VERDE", icon: "phone" },
 ];
 
 const ICONS = {
@@ -33,11 +33,9 @@ const ICONS = {
       <path d="M9 12h6M9 16h6" />
     </svg>
   ),
-  headset: (
+  phone: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M4 13a8 8 0 0 1 16 0" />
-      <rect x="3" y="13" width="4" height="6" rx="2" />
-      <rect x="17" y="13" width="4" height="6" rx="2" />
+      <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z" />
     </svg>
   ),
 };
