@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import AddKpiPreview from "./AddKpiPreview";
+import useDashboardT from "../i18n/useDashboardT";
 
 const PANEL_WIDTH_PX = 320; // ~tw-w-80
 
@@ -68,10 +69,11 @@ function MetricIcon({ kind }) {
   );
 }
 
-function itemTypeLabel(item) {
-  if (item.itemType === "kpi") return "STAT";
-  if (item.type === "data-table" || item.type === "sla-risk-table") return "TABLE";
-  return "CHART";
+function itemTypeLabel(item, t) {
+  if (item.itemType === "kpi") return t("DASHBOARD_HEADER_TYPE_STAT", "STAT");
+  if (item.type === "data-table" || item.type === "sla-risk-table")
+    return t("DASHBOARD_HEADER_TYPE_TABLE", "TABLE");
+  return t("DASHBOARD_HEADER_TYPE_CHART", "CHART");
 }
 
 const AddKpiDropdown = ({
@@ -86,6 +88,7 @@ const AddKpiDropdown = ({
   allowedWidgetIds,
   catalogItems,
 }) => {
+  const { t } = useDashboardT();
   const panelRef = useRef(null);
   const [panelPosition, setPanelPosition] = useState(null);
   const [hoveredItem, setHoveredItem] = useState(null);
@@ -178,11 +181,19 @@ const AddKpiDropdown = ({
       }}
       role="menu"
     >
-      <p className="dashboard-add-kpi-header">Available KPIs</p>
+      <p className="dashboard-add-kpi-header">{t("DASHBOARD_HEADER_AVAILABLE_KPIS", "Available KPIs")}</p>
       <ul className="dashboard-add-kpi-list tw-min-h-0 tw-flex-1 tw-overflow-y-auto tw-overscroll-contain">
         {availableItems.length === 0 ? (
           <li className="tw-px-4 tw-py-6 tw-text-center tw-text-[12px] tw-font-normal tw-text-muted-foreground">
-            All KPIs are on the dashboard
+            {(catalogItems || []).length === 0
+              ? // Role-filtered catalog is empty — nothing this user could ever add.
+                t("DASHBOARD_HEADER_NO_KPIS_FOR_ROLE", "No KPIs available for your role")
+              : // Catalog has tiles but every one is already placed — not a bug,
+                // but indistinguishable from one without saying so.
+                t(
+                  "DASHBOARD_HEADER_ALL_KPIS_ON_DASHBOARD",
+                  "All available KPIs are already on your dashboard"
+                )}
           </li>
         ) : (
           availableItems.map((item) => (
@@ -208,7 +219,7 @@ const AddKpiDropdown = ({
                   <span className="dashboard-add-kpi-item-label">{item.metric}</span>
                 </div>
                 <div className="dashboard-add-kpi-item-aside">
-                  <span className="dashboard-add-kpi-type">{itemTypeLabel(item)}</span>
+                  <span className="dashboard-add-kpi-type">{itemTypeLabel(item, t)}</span>
                   <button
                     type="button"
                     draggable={false}
@@ -218,7 +229,7 @@ const AddKpiDropdown = ({
                       onOpenChange(false);
                     }}
                     className="dashboard-add-kpi-add-btn"
-                    aria-label={`Add ${item.metric}`}
+                    aria-label={`${t("DASHBOARD_HEADER_ADD", "Add")} ${item.metric}`}
                   >
                     +
                   </button>

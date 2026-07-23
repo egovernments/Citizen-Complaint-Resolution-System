@@ -22,9 +22,7 @@
           "type": "boolean"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -52,9 +50,7 @@
           "type": "string"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -115,9 +111,7 @@
           }
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -150,9 +144,7 @@
           "default": true
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -194,9 +186,7 @@
           "type": "string"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -232,9 +222,7 @@
           "type": "string"
         }
       },
-      "x-ref-schema": [
-        
-      ],
+      "x-ref-schema": [],
       "additionalProperties": false
     },
     "isActive": true
@@ -686,6 +674,35 @@
         "default": {
           "type": "boolean",
           "default": false
+        }
+      },
+      "x-ref-schema": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "tenantId": "{tenantid}",
+    "code": "common-masters.FormValidations",
+    "description": "Form field validation patterns (one row per field type, e.g. email, name)",
+    "isActive": true,
+    "definition": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Form Validations",
+      "type": "object",
+      "required": [
+        "fieldType",
+        "regex"
+      ],
+      "x-unique": [
+        "fieldType"
+      ],
+      "properties": {
+        "fieldType": {
+          "type": "string",
+          "description": "Which user field this pattern validates, e.g. \"email\". Frontends fall back to their built-in pattern when a fieldType row is absent."
+        },
+        "regex": {
+          "type": "string"
         }
       },
       "x-ref-schema": [],

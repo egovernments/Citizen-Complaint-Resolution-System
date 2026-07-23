@@ -1,0 +1,69 @@
+name: Frontend lockfile drift
+
+# frontend/micro-ui/web/yarn.lock pins the ~2.3k-package transitive tree that package.json
+# cannot: package.json pins 21 of 23 direct deps exactly, but everything below that is only
+# held down by the lockfile. Committing the lockfile stops the tree floating against the live
+# npm registry; this job stops the lockfile going stale, which would let it float again one
+# package at a time.
+#
+# Why not just use `yarn install --frozen-lockfile` in the image build (the usual guard)?
+# It cannot pass in this project, for a reason that has nothing to do with drift:
+# react-scripts depends on babel-loader at exactly 8.1.0 while `resolutions` force-overrides
+# **/babel-loader to 8.2.2. yarn honours the resolution, installs 8.2.2, writes the lockfile
+# entry `babel-loader@8.1.0, babel-loader@8.2.2: version "8.2.2"`, then rejects that entry when
+# it reads the file back, because 8.2.2 does not satisfy exact 8.1.0. yarn generates a lockfile
+# it will not accept, so --frozen-lockfile fails 100% of the time whether or not anything drifted.
+# The Dockerfile therefore uses --pure-lockfile (install the locked tree, never rewrite it).
+#
+# This job restores the guarantee --frozen-lockfile would have given, from the other side:
+# run a normal `yarn install` (which rewrites yarn.lock only if package.json needs something the
+# lockfile doesn't have) and let git decide. A clean diff means the lockfile is current.
+#
+# This is only usable because a plain install against a current lockfile is byte-stable here —
+# verified: re-running install against the committed lockfile reproduces it exactly, 0 diff. The
+# few entries yarn rejects and re-resolves (babel-loader, node-releases) are force-pinned to exact
+# versions by `resolutions`, so they land on the same version every time. If someone adds a
+# range-based resolution, re-check that assumption or this job will flap.
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/micro-ui/web/package.json'
+      - 'frontend/micro-ui/web/yarn.lock'
+      - 'frontend/micro-ui/web/micro-ui-internals/**/package.json'
+      - '.github/workflows/frontend-lockfile-drift.yml'
+  push:
+    branches: [develop]
+    paths:
+      - 'frontend/micro-ui/web/package.json'
+      - 'frontend/micro-ui/web/yarn.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lockfile-current:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve dependencies in the image's own Node
+        # node:14-bullseye-slim is the base image in web/docker/Dockerfile. Resolving in the same
+        # Node keeps this check honest: a newer Node would not trip the `engines` constraints that
+        # the real image build has to satisfy.
+        run: |
+          docker run --rm \
+            -v "$PWD/frontend/micro-ui":/app \
+            -w /app/web \
+            node:14-bullseye-slim \
+            sh -c 'yarn config set network-timeout 600000 && yarn install'
+
+      - name: Fail if yarn.lock is out of date
+        run: |
+          if ! git diff --exit-code -- frontend/micro-ui/web/yarn.lock; then
+            echo "::error file=frontend/micro-ui/web/yarn.lock::yarn.lock is out of date with package.json. Run 'yarn install' in frontend/micro-ui/web and commit the updated yarn.lock (the diff above is what changed)."
+            exit 1
+          fi
+          echo "yarn.lock is current."

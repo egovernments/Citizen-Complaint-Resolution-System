@@ -103,8 +103,14 @@ function mapLeafToServiceDef(
  *  The metadata strip (id / `_*`) is left to the caller. */
 function serviceDefToLeafWrite(data: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...data };
-  // serviceCode -> code (the leaf's code IS the serviceCode stored on a complaint)
-  if (out.serviceCode != null && out.code == null) out.code = out.serviceCode;
+  // serviceCode -> code (the leaf's code IS the serviceCode stored on a
+  // complaint). Populate `code` from a filled Service Code whenever `code` is
+  // absent OR blank — the create form carries `code: ""` (empty string, not
+  // null), so the old `code == null` guard left the uniqueIdentifier empty and
+  // MDMS rejected the write with UNIQUE_IDENTIFIER_EMPTY_ERR.
+  const serviceCodeStr = out.serviceCode == null ? '' : String(out.serviceCode).trim();
+  const codeStr = out.code == null ? '' : String(out.code).trim();
+  if (serviceCodeStr !== '' && codeStr === '') out.code = out.serviceCode;
   delete out.serviceCode;
   // menuPath / menuPathName are adapter projections, never master fields.
   delete out.menuPath;
@@ -338,6 +344,51 @@ async function boundaryGetList(client: DigitApiClient, config: ResourceConfig, t
   }
 
   return rootFlat;
+}
+
+/** Resolve the tenant that a complaint's `address.tenantId` must carry.
+ *  Complaint boundaries live under a CITY sub-tenant, so a complaint filed
+ *  from a root/state session (e.g. `mz`) must still stamp the boundary's city
+ *  tenant (`mz.maputo`) on the address — that's the live PGR contract.
+ *  (citizen.tenantId stays at the state/root tenant; that is handled upstream.)
+ *  A city-level session already owns the boundary tree, so its own tenant is
+ *  the answer. */
+async function resolveComplaintAddressTenant(
+  client: DigitApiClient,
+  sessionTenant: string,
+  localityCode: string | undefined,
+): Promise<string> {
+  if (sessionTenant.includes('.')) return sessionTenant;
+  const tenantRecords = await client
+    .mdmsSearch(sessionTenant, 'tenant.tenants', { limit: 200 })
+    .catch(() => [] as MdmsRecord[]);
+  const cityTenants = tenantRecords
+    .filter((r) => r.isActive && r.data?.code && String(r.data.code).startsWith(`${sessionTenant}.`))
+    .map((r) => String(r.data.code));
+  if (cityTenants.length === 0) return sessionTenant;
+  if (cityTenants.length === 1) {
+    const city = cityTenants[0];
+    // Even with a single city under this root, a root-seeded boundary tree can
+    // place the locality directly under the root (the explicitly-supported
+    // "tree at the root tenant" case, e.g. a Bomet tree seeded at `ke`), where
+    // stamping the city would misroute the complaint. Verify the locality
+    // actually lives under the city before returning it; otherwise keep the
+    // root/session tenant — mirrors the multi-city path below.
+    if (localityCode) {
+      const found = await client.boundarySearch(city, [localityCode]).catch(() => []);
+      if (found.length > 0) return city;
+    }
+    return sessionTenant;
+  }
+  // Multiple cities under this root: pick the one whose boundary space
+  // actually contains the picked locality code.
+  if (localityCode) {
+    for (const ct of cityTenants) {
+      const found = await client.boundarySearch(ct, [localityCode]).catch(() => []);
+      if (found.length > 0) return ct;
+    }
+  }
+  return sessionTenant;
 }
 
 async function pgrGetList(client: DigitApiClient, config: ResourceConfig, tenantId: string, filter?: Record<string, unknown>): Promise<RaRecord[]> {
@@ -915,14 +966,24 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
       }
       if (config.type === 'pgr') {
         const data = params.data as Record<string, unknown>;
-        // Stamp address.tenantId from the session tenant. Live PGR records
-        // always carry address.tenantId (never address.city, which is nullable
-        // and unused downstream). Operators don't fill this manually.
+        // Live PGR records always carry address.tenantId (never address.city,
+        // which is nullable and unused downstream). Operators don't fill this
+        // manually.
         const formAddress = (data.address as Record<string, unknown> | undefined) ?? {};
-        const address: Record<string, unknown> = { ...formAddress, tenantId };
+        const address: Record<string, unknown> = { ...formAddress };
         if (!address.locality && typeof data['address.locality.code'] === 'string') {
           address.locality = { code: data['address.locality.code'] };
         }
+        // address.tenantId must be the boundary's CITY tenant (e.g.
+        // `mz.maputo`), NOT the session tenant. A root-`mz` admin session
+        // previously stamped `mz`, violating the PGR address contract and
+        // filing the complaint outside the city it belongs to.
+        const localityCode = (address.locality as Record<string, unknown> | undefined)?.code;
+        address.tenantId = await resolveComplaintAddressTenant(
+          client,
+          tenantId,
+          typeof localityCode === 'string' ? localityCode : undefined,
+        );
         const wrapper = await client.pgrCreate(
           tenantId,
           String(data.serviceCode),
@@ -1064,6 +1125,15 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const { id: _stringId, ...rest } = data;
         void _stringId;
         const merged: Record<string, unknown> = { ...base, ...rest };
+        // No form input ever edits reActivateEmployee (EmployeeEdit.tsx has no
+        // field for it), so any value present in `rest` is a stale artifact of
+        // the form's initial defaultValues (e.g. a create-response cache that
+        // never set it) rather than an intentional edit. egov-hrms/employees/
+        // _update NPEs on Employee.getReActivateEmployee().booleanValue() when
+        // this is null, so `rest`'s value silently overriding the freshly
+        // re-fetched `base` — the same failure mode `id` is guarded against
+        // above — breaks editing (closes #813). Always trust the fresh fetch.
+        merged.reActivateEmployee = base.reActivateEmployee ?? false;
         const [employee] = await client.employeeUpdate(targetTenantId, [merged]);
         return { data: normalizeRecord(employee, config) };
       }
@@ -1168,6 +1238,27 @@ export function createDigitDataProvider(client: DigitApiClient, tenantId: string
         const updated = await client.boundaryUpdate(tenantId, [merged]);
         if (updated.length) return { data: normalizeRecord(updated[0], config) };
         return { data: { ...data, id: code } as RaRecord };
+      }
+      if (config.type === 'user') {
+        // egov-user's _updatenovalidate needs the FULL user object (native
+        // numeric `id`, auditDetails, roles, etc.). normalizeRecord set the
+        // react-admin `id` to the uuid string (idField: 'uuid'), so re-fetch
+        // the server record and merge only the form-editable fields onto it —
+        // userName and type are disabled in the UI and must round-trip
+        // unchanged. Without this branch the update path threw
+        // "Update not supported for resource type: user" and Save was a no-op.
+        const data = params.data as Record<string, unknown>;
+        const uuid = typeof data.uuid === 'string' && data.uuid ? data.uuid : String(params.id);
+        const existing = await client.userSearch(tenantId, { uuid: [uuid] });
+        if (!existing.length) throw new Error(`User not found: ${uuid}`);
+        const base = existing[0] as Record<string, unknown>;
+        const editable = ['name', 'mobileNumber', 'emailId', 'gender'];
+        const merged: Record<string, unknown> = { ...base };
+        for (const key of editable) {
+          if (key in data) merged[key] = data[key];
+        }
+        const updated = await client.userUpdate(merged);
+        return { data: normalizeRecord(updated, config) };
       }
       throw new Error(`Update not supported for resource type: ${config.type}`);
     },

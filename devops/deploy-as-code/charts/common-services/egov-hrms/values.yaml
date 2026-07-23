@@ -15,13 +15,17 @@ initContainers:
     enabled: true
     schemaTable: "hrms_schema_version"
     image:
-      repository: "egov-hrms-db"
-      tag: "hrms-boundary-0a4e737"
+      repository: "egovio/egov-hrms-db"
+      tag: "hrms-boundary-dd641a6"
 
 # Container Configs
+# PARITY: pinned to the same tag as local-setup/docker-compose.egov-digit.yaml
+# so k8s and Compose stay on one build. Keep app + dbMigration tags identical
+# on every future bump.
 image:
-  repository: "egov-hrms"
-  tag: "hrms-boundary-0a4e737"
+  repository: "egovio/egov-hrms"
+  tag: "hrms-boundary-dd641a6"
+  pullPolicy: "IfNotPresent"
 replicas: "1"
 healthChecks:
   enabled: true

@@ -11,6 +11,18 @@ export const GRID_COLS = 12;
 export const KPI_ROW_HEIGHT = 52;
 export const GRID_MARGIN_Y = 16;
 
+/** react-grid-layout placeholder id while dragging from the Add-KPI inventory. */
+export const DROPPING_ITEM_ID = "__dropping-kpi__";
+
+export const DROPPING_ITEM = {
+  i: DROPPING_ITEM_ID,
+  w: 2,
+  h: 2,
+  x: 0,
+  y: 0,
+};
+
+
 /** Default grid size for full-width data tables (header + rows + updated stamp). */
 export const FULL_WIDTH_TABLE_GRID = {
   w: 12,
@@ -36,6 +48,9 @@ export const MAP_SIZE_CONSTRAINTS = {
   maxW: 12,
   maxH: 14,
 };
+
+/** Default size when adding a chart from the catalog. */
+export const DEFAULT_CHART_GRID = { w: 4, h: 6 };
 
 /**
  * Per-chart default sizes (keyed by the legacy dash-case scrollKey). The catalog

@@ -5,22 +5,32 @@ import {
   getDataTableThClass,
 } from "../config/visualizationStyles";
 import { buildRedSeverityStyle } from "../config/tablePresentation";
-import { formatOfficerLabel } from "../config/kpiDisplay";
+import { formatOfficerLabel, dimensionKindForName } from "../config/kpiDisplay";
+import useDashboardT from "../i18n/useDashboardT";
+import { dimensionLabel } from "../i18n/dimensionLabel";
+import { translate as t } from "../i18n/localeRuntime";
+import { seriesEntryLabel } from "../i18n/textResolver";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
+import DashboardTableFrame, { SrOnlyTableHead } from "./DashboardTableFrame";
+import { formatNumber } from "../utils/numberFormat";
 
+// Cell formatters route their NUMERIC part through the tenant mask
+// (formatNumber, null when unconfigured -> each `??` fallback keeps the
+// pre-#1213 expression byte-for-byte); unit suffixes (%, h, hr/hrs/day/days,
+// /5) stay here.
 const TrendCell = ({ value }) => {
   const { muted, trendUp, trendDown } = DATA_TABLE_STYLES;
   if (value == null || !Number.isFinite(value)) {
     return <span className={muted}>—</span>;
   }
   if (value === 0) {
-    return <span className={muted}>0.0%</span>;
+    return <span className={muted}>{formatNumber(0, { decimals: 1 }) ?? "0.0"}%</span>;
   }
   const up = value > 0;
   return (
     <span className={up ? trendUp : trendDown}>
-      {up ? "↑" : "↓"} {Math.abs(value).toFixed(1)}%
+      {up ? "↑" : "↓"} {formatNumber(Math.abs(value), { decimals: 1 }) ?? Math.abs(value).toFixed(1)}%
     </span>
   );
 };
@@ -28,16 +38,16 @@ const TrendCell = ({ value }) => {
 const formatPercent = (value, decimals = 1) => {
   if (value == null || !Number.isFinite(value)) return "—";
   const pct = value <= 1 ? value * 100 : value;
-  return `${pct.toFixed(decimals)}%`;
+  return `${formatNumber(pct, { decimals }) ?? pct.toFixed(decimals)}%`;
 };
 
 const formatHours = (ms) => {
   if (ms == null || !Number.isFinite(ms)) return "—";
   const hours = ms / 3600000;
+  const nearWhole = Math.abs(hours - Math.round(hours)) < 0.05;
   const formatted =
-    Math.abs(hours - Math.round(hours)) < 0.05
-      ? String(Math.round(hours))
-      : hours.toFixed(1);
+    formatNumber(nearWhole ? Math.round(hours) : hours, { decimals: nearWhole ? 0 : 1 }) ??
+    (nearWhole ? String(Math.round(hours)) : hours.toFixed(1));
   return `${formatted}h`;
 };
 
@@ -49,24 +59,35 @@ const formatHoursDays = (ms) => {
   const hours = ms / MS_PER_HOUR;
   if (hours < 48) {
     const rounded = Math.round(hours * 10) / 10;
-    const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-    return `${formatted} ${rounded === 1 ? "hr" : "hrs"}`;
+    const formatted =
+      formatNumber(rounded, { decimals: 1, trim: true }) ??
+      (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
+    return `${formatted} ${rounded === 1 ? t("DASHBOARD_UNIT_HR", "hr") : t("DASHBOARD_UNIT_HRS", "hrs")}`;
   }
   const days = ms / MS_PER_DAY;
   const rounded = Math.round(days * 10) / 10;
-  const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-  return `${formatted} ${rounded === 1 ? "day" : "days"}`;
+  const formatted =
+    formatNumber(rounded, { decimals: 1, trim: true }) ??
+    (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
+  return `${formatted} ${rounded === 1 ? t("DASHBOARD_UNIT_DAY", "day") : t("DASHBOARD_UNIT_DAYS", "days")}`;
 };
 
 const formatRating = (value) => {
   if (value == null || !Number.isFinite(value)) return "—";
-  return `${Number(value).toFixed(1)}/5`;
+  return `${formatNumber(value, { decimals: 1 }) ?? Number(value).toFixed(1)}/5`;
 };
 
 const formatInteger = (value) => {
   if (value == null || !Number.isFinite(value)) return "—";
-  return String(Math.round(value));
+  // Masked path adds thousands grouping — the ungrouped String(Math.round())
+  // was part of bug #1251; unconfigured tenants keep it unchanged.
+  return formatNumber(value, { decimals: 0 }) ?? String(Math.round(value));
 };
+
+// Legacy humaniser — retained verbatim as the dimensionLabel fallback so
+// unseeded environments render exactly what they render today.
+const humanizeCellCode = (value) =>
+  String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase());
 
 const CELL_RENDERERS = {
   text: (value) => value ?? "—",
@@ -81,11 +102,14 @@ const CELL_RENDERERS = {
   department: (value) =>
     !value || value === "null" || value === "undefined"
       ? "—"
-      : String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase()),
-  dimension: (value) =>
-    !value || value === "null" || value === "undefined"
-      ? "—"
-      : String(value).replace(/[_.]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase()),
+      : dimensionLabel(String(value), "department", humanizeCellCode(value)),
+  dimension: (value, col) => {
+    if (!value || value === "null" || value === "undefined") return "—";
+    const kind = dimensionKindForName(col?.dimension ?? col?.id);
+    return kind
+      ? dimensionLabel(String(value), kind, humanizeCellCode(value))
+      : humanizeCellCode(value);
+  },
 };
 
 function resolveToneClass(tone, styles) {
@@ -166,37 +190,53 @@ function annotateRowsFromThresholds(rows, columns) {
       const tone = evaluateThresholdTone(row[c.id], c.threshold);
       if (!tone) continue;
       cellTones[c.id] = tone;
-      const label = c.threshold.tag?.[tone];
+      // threshold.tagKey.{watch,breach} (DASHBOARD_BADGE_*) wins when seeded,
+      // else the descriptor's literal threshold.tag.{watch,breach}.
+      const label = seriesEntryLabel(
+        { labelKey: c.threshold.tagKey?.[tone] },
+        c.threshold.tag?.[tone]
+      );
       if (label) tags.push({ label, tone });
     }
     if (!Object.keys(cellTones).length && !hasTagsCol) return row;
     const next = { ...row, cellTones };
-    if (hasTagsCol) next.statusTagItems = tags.length ? tags : [{ label: "On track", tone: null }];
+    if (hasTagsCol) {
+      next.statusTagItems = tags.length
+        ? tags
+        : [{ label: t("DASHBOARD_BADGE_ON_TRACK", "On track"), tone: null }];
+    }
     return next;
   });
 }
 
-const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
+const DashboardTable = ({ columns, rows, emptyMessage }) => {
+  // Subscribes to language/bundle changes; `language` also invalidates the
+  // annotation memo so translated tag labels re-resolve on a language switch.
+  const { language } = useDashboardT();
   const styles = DATA_TABLE_STYLES;
   const safeRows = rows ?? [];
   const annotatedRows = useMemo(
     () => annotateRowsFromThresholds(safeRows, columns),
-    [safeRows, columns]
+    [safeRows, columns, language]
   );
   const { sortState, handleSort, sortRows } = useTableSort(columns);
   const sortedRows = useMemo(() => sortRows(annotatedRows), [annotatedRows, sortRows]);
 
-  return (
-    <table className={styles.table}>
-      <colgroup>
-        {columns.map((col) => (
-          <col
-            key={col.id}
-            className={col.width ? styles.colFixed : undefined}
-            style={col.width ? { width: col.width } : undefined}
-          />
-        ))}
-      </colgroup>
+  const colgroup = (
+    <colgroup>
+      {columns.map((col) => (
+        <col
+          key={col.id}
+          className={col.width ? styles.colFixed : undefined}
+          style={col.width ? { width: col.width } : undefined}
+        />
+      ))}
+    </colgroup>
+  );
+
+  const headTable = (
+    <table className={`${styles.table} ${DATA_TABLE_STYLES.tableHead}`}>
+      {colgroup}
       <thead>
         <tr>
           {columns.map((col) => (
@@ -206,11 +246,18 @@ const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
           ))}
         </tr>
       </thead>
+    </table>
+  );
+
+  const bodyTable = (
+    <table className={`${styles.table} ${DATA_TABLE_STYLES.tableBody}`}>
+      {colgroup}
+      <SrOnlyTableHead columns={columns} />
       <tbody>
         {sortedRows.length === 0 ? (
           <tr>
             <td colSpan={columns.length} className={styles.empty}>
-              {emptyMessage}
+              {emptyMessage ?? t("DASHBOARD_COMMON_NO_DATA", "No data")}
             </td>
           </tr>
         ) : (
@@ -238,7 +285,7 @@ const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
                   ? renderStatusTags(row, styles)
                   : col.type === "trend"
                     ? render(raw)
-                    : render(raw);
+                    : render(raw, col);
               const labelText = typeof raw === "string" ? raw : String(raw ?? "");
               const toneKey = col.thresholdKey ?? col.id;
               const tone = row.cellTones?.[toneKey];
@@ -287,6 +334,8 @@ const DashboardTable = ({ columns, rows, emptyMessage = "No data" }) => {
       </tbody>
     </table>
   );
+
+  return <DashboardTableFrame head={headTable} body={bodyTable} />;
 };
 
 export default DashboardTable;

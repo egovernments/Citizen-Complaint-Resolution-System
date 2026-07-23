@@ -21,7 +21,9 @@ import {
   setLineChartMarkersVisible,
 } from "../config/lineChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE, SHARED_CHROME } from "../config/visualizationStyles";
+import { translate } from "../i18n/localeRuntime";
 import { useChartContainerSize } from "../hooks/useChartContainerSize";
+import { getNumberFormatStamp } from "../utils/numberFormat";
 import ViewToggle from "./demo/ViewToggle";
 
 function resolveActiveDataset({ categories, series, periods, period }) {
@@ -48,6 +50,7 @@ const LineChart = ({
 
   const { containerRef, containerSize } = useChartContainerSize();
   const { width: containerWidth, height: containerHeight } = containerSize;
+  const numberFormatStamp = getNumberFormatStamp();
 
   const handlePeriodChange = useCallback((nextPeriod) => {
     hoveredIndexRef.current = -1;
@@ -179,8 +182,26 @@ const LineChart = ({
         hover: { filter: { type: "none" } },
         active: { filter: { type: "none" } },
       },
+      // Not an Apex option — a stringifiable stamp of the per-locale
+      // numberFormat mask (#1272). react-apexcharts compares
+      // JSON.stringify(options), which drops the y-axis/tooltip formatter
+      // closures, so without this a language switch that only changes the
+      // mask would never redraw the baked tick/tooltip numbers. The parent
+      // KpiTile subscribes to the locale runtime, so this component
+      // re-renders (and re-reads the stamp) after AdminDashboard re-primes
+      // the mask store.
+      _numberFormatStamp: numberFormatStamp,
     }),
-    [categories, chartEvents, colors, containerWidth, normalizedSeries, xAxisLabelHeight, yAxisConfig]
+    [
+      categories,
+      chartEvents,
+      colors,
+      containerWidth,
+      normalizedSeries,
+      xAxisLabelHeight,
+      yAxisConfig,
+      numberFormatStamp,
+    ]
   );
 
   const markerStyleVars = useMemo(
@@ -232,7 +253,10 @@ const LineChart = ({
           value={period}
           onChange={handlePeriodChange}
           variant="primary"
-          options={LINE_CHART_PERIOD_OPTIONS}
+          options={LINE_CHART_PERIOD_OPTIONS.map((opt) => ({
+            ...opt,
+            label: translate(opt.labelKey, opt.label),
+          }))}
         />
       </header>
       <div className={lineStyles.widgetBody}>{chart}</div>

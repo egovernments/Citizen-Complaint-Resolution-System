@@ -17,7 +17,7 @@ initContainers:
     schemaTable: "pgr_services_schema"
     image:
       repository: "pgr-services-db"
-      tag: "v2.11-a520687"
+      tag: "develop-70916ea"
     env: |
         {{- if index .Values "pgr-ismultischema-enabled" }}        
         - name: SCHEMA_NAME
@@ -47,9 +47,13 @@ initContainers:
                 key: flyway-locations
 
 # Container Configs
+# Repinned to develop-70916ea (matches local-setup/docker-compose.egov-digit.yaml) to
+# keep k8s and Compose on the same build. This tag is built from a commit well after
+# #1100 (fix/pgr-search-citizen-scoping — PrincipalScopeResolver.java, EnrichmentService.java,
+# the citizen-scoping / search-IDOR fix) landed on develop, so the fix is included.
 image:
   repository: "pgr-services"
-  tag: "v2.11-a520687"
+  tag: "develop-70916ea"
 replicas: "1"
 healthChecks:
   enabled: true

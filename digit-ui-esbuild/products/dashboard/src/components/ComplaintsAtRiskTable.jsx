@@ -8,22 +8,27 @@ import {
   SLA_RISK_TABLE_STYLES,
 } from "../config/visualizationStyles";
 import { complaintDetailHref } from "../config/complaintsAtRiskPresentation";
+import useDashboardT from "../i18n/useDashboardT";
 import useTableSort from "../hooks/useTableSort";
 import TableSortHeader from "./TableSortHeader";
+import DashboardTableFrame, { SrOnlyTableHead } from "./DashboardTableFrame";
 
-const COLUMNS = [
-  { id: "id", label: "ID", align: "left", type: "text" },
-  { id: "typeLabel", label: "Type", align: "left", type: "text" },
-  { id: "subtypeLabel", label: "Subtype", align: "left", type: "text" },
-  { id: "locality", label: "Locality", align: "left", type: "text" },
-  { id: "ownerName", label: "Owner", align: "left", type: "text" },
-  { id: "ownerRole", label: "Owner role", align: "left", type: "text" },
-  { id: "statusLabel", label: "Status", align: "left", type: "text" },
-  { id: "slaLabel", label: "SLA status", align: "left", type: "text" },
-  { id: "breachDurationMs", label: "Breach duration", align: "left", type: "integer" },
+// Built at render (never a module constant) so headers track the language.
+const buildColumns = (t) => [
+  { id: "id", label: t("DASHBOARD_COL_ID", "ID"), align: "left", type: "text" },
+  { id: "typeLabel", label: t("DASHBOARD_COL_TYPE", "Type"), align: "left", type: "text" },
+  { id: "subtypeLabel", label: t("DASHBOARD_COL_SUBTYPE", "Subtype"), align: "left", type: "text" },
+  { id: "locality", label: t("DASHBOARD_COL_LOCALITY", "Locality"), align: "left", type: "text" },
+  { id: "ownerName", label: t("DASHBOARD_COL_OWNER", "Owner"), align: "left", type: "text" },
+  { id: "ownerRole", label: t("DASHBOARD_COL_OWNER_ROLE", "Owner role"), align: "left", type: "text" },
+  { id: "statusLabel", label: t("DASHBOARD_COL_STATUS", "Status"), align: "left", type: "text" },
+  { id: "slaLabel", label: t("DASHBOARD_COL_SLA_STATUS", "SLA status"), align: "left", type: "text" },
+  { id: "breachDurationMs", label: t("DASHBOARD_COL_BREACH_DURATION", "Breach duration"), align: "left", type: "integer" },
 ];
 
 const ComplaintsAtRiskTable = ({ rows = [] }) => {
+  const { t, language } = useDashboardT();
+  const COLUMNS = useMemo(() => buildColumns(t), [t, language]);
   const tableStyles = DATA_TABLE_STYLES;
   const slaStyles = SLA_RISK_TABLE_STYLES;
   const { sortState, handleSort, sortRows } = useTableSort(COLUMNS, {
@@ -31,16 +36,19 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
     defaultDirection: "desc",
   });
   const sortedRows = useMemo(() => sortRows(rows), [rows, sortRows]);
+  const tableClass = `${tableStyles.table} ${tableStyles.tableEqualCols} ${slaStyles.table}`;
 
-  return (
-    <table
-      className={`${tableStyles.table} ${tableStyles.tableEqualCols} ${slaStyles.table}`}
-    >
-      <colgroup>
-        {COLUMNS.map((col) => (
-          <col key={col.id} style={{ width: `${100 / COLUMNS.length}%` }} />
-        ))}
-      </colgroup>
+  const colgroup = (
+    <colgroup>
+      {COLUMNS.map((col) => (
+        <col key={col.id} style={{ width: `${100 / COLUMNS.length}%` }} />
+      ))}
+    </colgroup>
+  );
+
+  const headTable = (
+    <table className={`${tableClass} ${DATA_TABLE_STYLES.tableHead}`}>
+      {colgroup}
       <thead>
         <tr>
           {COLUMNS.map((col) => (
@@ -50,11 +58,18 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
           ))}
         </tr>
       </thead>
+    </table>
+  );
+
+  const bodyTable = (
+    <table className={`${tableClass} ${DATA_TABLE_STYLES.tableBody}`}>
+      {colgroup}
+      <SrOnlyTableHead columns={COLUMNS} />
       <tbody>
         {sortedRows.length === 0 ? (
           <tr>
             <td colSpan={COLUMNS.length} className={tableStyles.empty}>
-              No complaints at risk
+              {t("DASHBOARD_TABLE_EMPTY_AT_RISK", "No complaints at risk")}
             </td>
           </tr>
         ) : (
@@ -103,6 +118,8 @@ const ComplaintsAtRiskTable = ({ rows = [] }) => {
       </tbody>
     </table>
   );
+
+  return <DashboardTableFrame head={headTable} body={bodyTable} />;
 };
 
 export default ComplaintsAtRiskTable;

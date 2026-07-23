@@ -16,6 +16,77 @@ defaults:
     working-directory: local-setup
 
 jobs:
+  ansible-lint:
+    name: Ansible static validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: local-setup/ansible
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linters
+        run: pip install ansible-lint yamllint
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: ansible-lint
+        run: ansible-lint playbook-deploy.yml
+
+      - name: yamllint — playbook
+        run: yamllint -c .yamllint playbook-deploy.yml
+
+      - name: yamllint — inventory
+        run: yamllint -c .yamllint inventory/group_vars/ inventory/host_vars/
+
+  config-contracts:
+    name: Config combination + infra contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Incident-derived combination rules (rules-as-code, each cites the
+      # incident it encodes). Real tenant host_vars are gitignored, so CI
+      # proves the RULES (self-test + fixtures + the tracked example);
+      # deploy.sh applies the same gate to operators' real configs.
+      - name: preflight — rule self-test
+        run: python3 local-setup/scripts/preflight.py --self-test
+
+      - name: preflight — fixtures (valid must pass, invalid must trip)
+        run: python3 local-setup/scripts/preflight.py --fixtures local-setup/tests/fixtures/host_vars/
+
+      - name: preflight — tracked example must pass
+        run: python3 local-setup/scripts/preflight.py local-setup/ansible/inventory/host_vars/_example.yml
+
+      # Renders the daemon.json the deploy would write across a matrix of
+      # docker_log_* combinations and asserts three things per case: it parses
+      # as JSON, `dockerd --validate` accepts it, and max-size * max-file stays
+      # within docker_log_total_size. The last check is the point — dockerd
+      # will happily accept a config allowing 10GB per container.
+      - name: daemon.json render matrix
+        run: local-setup/scripts/test-daemon-json.sh
+
+      # Cross-file contracts lint can't see: compose -f stack discipline,
+      # :latest pin freeze, overlay-service existence.
+      - name: infra contract tests
+        working-directory: local-setup/tests
+        run: |
+          npm ci
+          npx jest static/infra-contracts.test.ts
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -221,7 +292,84 @@ jobs:
 
       - name: Run health checks
         run: |
-          bash scripts/health-check.sh http://localhost
+          bash scripts/health-check.sh http://localhost:18000
+
+      - name: Gatus health dashboard check
+        continue-on-error: true
+        run: |
+          bash scripts/ci-gatus-check.sh http://localhost:18889
+
+      - name: Localization module check
+        run: |
+          bash scripts/ci-localization-check.sh http://localhost:18000
+
+      - name: nginx smoke test
+        run: |
+          echo "=== nginx / digit-ui Smoke Test ==="
+
+          echo -n "  GET http://localhost:18080/digit-ui/ ... "
+          HTTP=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 http://localhost:18080/digit-ui/ 2>/dev/null)
+          if [ "$HTTP" = "200" ]; then
+            echo "OK (200)"
+          else
+            echo "FAIL (HTTP $HTTP, expected 200)"
+            exit 1
+          fi
+
+          echo -n "  GET http://localhost:18080/ ... "
+          HTTP=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 http://localhost:18080/ 2>/dev/null || echo "000")
+          FIRST=$(echo "$HTTP" | cut -c1)
+          if [ "$FIRST" != "5" ] && [ "$HTTP" != "000" ]; then
+            echo "OK (HTTP $HTTP, non-5xx)"
+          else
+            echo "FAIL (HTTP $HTTP)"
+            exit 1
+          fi
+
+          echo "=== nginx smoke test passed ==="
+
+      - name: Kong route validation
+        run: |
+          echo "=== Kong Route Validation ==="
+
+          echo -n "  Kong admin API (port 18001) ... "
+          ADMIN=$(curl -sf --max-time 10 http://localhost:18001/ 2>/dev/null)
+          if echo "$ADMIN" | jq -e '.tagline' > /dev/null 2>&1; then
+            echo "OK"
+          else
+            echo "FAIL (admin API not responding or wrong format)"
+            echo "  Response: $(echo "$ADMIN" | head -c 200)"
+            exit 1
+          fi
+
+          echo -n "  Kong route count ... "
+          ROUTE_COUNT=$(curl -sf --max-time 10 http://localhost:18001/routes 2>/dev/null | jq '.data | length' 2>/dev/null)
+          if [ -n "$ROUTE_COUNT" ] && [ "$ROUTE_COUNT" -ge 10 ]; then
+            echo "OK ($ROUTE_COUNT routes configured)"
+          else
+            echo "FAIL (expected >=10 routes, got: $ROUTE_COUNT)"
+            exit 1
+          fi
+
+          echo -n "  Kong proxy — user route ... "
+          HTTP=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 http://localhost:18000/user/health 2>/dev/null)
+          if [ "$HTTP" = "200" ]; then
+            echo "OK (200)"
+          else
+            echo "FAIL (HTTP $HTTP, expected 200)"
+            exit 1
+          fi
+
+          echo -n "  Kong proxy — PGR route ... "
+          HTTP=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 10 http://localhost:18000/pgr-services/health 2>/dev/null)
+          if [ "$HTTP" = "200" ]; then
+            echo "OK (200)"
+          else
+            echo "FAIL (HTTP $HTTP, expected 200)"
+            exit 1
+          fi
+
+          echo "=== Kong route validation passed ==="
 
       - name: Wait for PGR functional readiness
         run: |

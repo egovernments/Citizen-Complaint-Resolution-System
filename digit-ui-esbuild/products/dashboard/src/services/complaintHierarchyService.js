@@ -1,5 +1,6 @@
 import { getTenantId, hasAuth } from "./analyticsService";
-import { formatDimensionLabel } from "../config/labelFormat";
+import { selectHierarchyDefinition, orderedLevels } from "../utils/hierLevelGrouping";
+import { withTraceHeaders } from "./dashboardMetrics";
 
 /**
  * MDMS context path from globalConfigs (deployments serve MDMS under
@@ -51,14 +52,14 @@ function buildRequestInfo() {
 /**
  * Display name for a hierarchy node. Live masters carry real display names on
  * leaves ("Ambulance breakdown / Crew unresponsive") but category records often
- * have name === code ("MedicalServices", "complaints.categories.X") — those go
- * through the shared code humanizer instead.
+ * have name === code ("MedicalServices", "complaints.categories.X") — those
+ * return undefined so the dimension-label seam surfaces the raw code as a
+ * localisation gap instead of a humanised pseudo-name.
  */
 function displayName(record) {
   const code = String(record?.code ?? "").trim();
   const name = String(record?.name ?? "").trim();
-  if (name && name !== code) return name;
-  return formatDimensionLabel(code);
+  return name && name !== code ? name : undefined;
 }
 
 /**
@@ -103,20 +104,22 @@ export function buildComplaintTypeIndex(records) {
 }
 
 /**
- * Fetch the PGR complaint hierarchy master (state-root tenant, same-origin
- * MDMS v1 — same auth/tenant conventions as boundaryService) and return the
- * code → { label, rootCode, rootLabel } index.
+ * Fetch the raw PGR complaint hierarchy records (state-root tenant,
+ * same-origin MDMS v1 — same auth/tenant conventions as boundaryService).
+ * ONE fetch feeds both derived shapes the dashboard needs: the flat
+ * code → label/root index (buildComplaintTypeIndex) and the traversal tree
+ * (utils/complaintTypeTree.js buildComplaintTree).
  *
  * Resolves null on any failure (never rejects) so callers can fall back to
  * humanized flat labels without blocking the dashboard.
  */
-export async function fetchComplaintTypeIndex() {
+export async function fetchComplaintHierarchyRecords() {
   if (!hasAuth()) return null;
 
   try {
     const response = await fetch(getMdmsSearchUrl(), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withTraceHeaders({ "Content-Type": "application/json" }),
       credentials: "omit",
       body: JSON.stringify({
         RequestInfo: buildRequestInfo(),
@@ -139,12 +142,101 @@ export async function fetchComplaintTypeIndex() {
 
     const payload = await response.json();
     const records = payload?.MdmsRes?.["RAINMAKER-PGR"]?.ComplaintHierarchy;
-    if (!Array.isArray(records) || !records.length) return null;
-
-    const indexed = buildComplaintTypeIndex(records);
-    return indexed.size ? indexed : null;
+    return Array.isArray(records) && records.length ? records : null;
   } catch (error) {
     console.warn("egov-mdms-service ComplaintHierarchy _search error", error);
     return null;
+  }
+}
+
+/**
+ * Fetch + index in one step (code → { label, rootCode, rootLabel }).
+ * Resolves null on any failure (never rejects).
+ */
+export async function fetchComplaintTypeIndex() {
+  const records = await fetchComplaintHierarchyRecords();
+  if (!records) return null;
+  const indexed = buildComplaintTypeIndex(records);
+  return indexed.size ? indexed : null;
+}
+
+/**
+ * The deployment's complaint hierarchyType pin. Optional globalConfigs key —
+ * ke's MDMS carries BOTH a "PGR" (2-level) and a "PGR_TEST" (4-level)
+ * ComplaintHierarchyDefinition, and only the deployment knows which one its
+ * complaints are coded against. Unset → selectHierarchyDefinition falls back
+ * to the rows-backed heuristic the PGR complaint pages use.
+ */
+function getComplaintHierarchyTypePin() {
+  const get = window.globalConfigs?.getConfig?.bind(window.globalConfigs);
+  const pin = get?.("COMPLAINT_HIERARCHY_TYPE");
+  return pin ? String(pin) : "";
+}
+
+const NO_HIERARCHY = Object.freeze({ hasHierarchy: false, hierarchyType: null, levels: [] });
+
+/**
+ * Fetch the deployment's complaint-hierarchy LEVELS for the per-widget
+ * "Group by" control (#1111 PR2): ComplaintHierarchyDefinition (level order +
+ * names) scoped to the deployment's hierarchyType, alongside the
+ * ComplaintHierarchy rows needed to pick the live definition when no
+ * COMPLAINT_HIERARCHY_TYPE pin is configured.
+ *
+ * Returns { hasHierarchy, hierarchyType, levels:[{ levelCode, label, order,
+ * isLeafServiceCode }] }; hasHierarchy is false when the tenant has no usable
+ * definition (flat/legacy tenant) so callers hide the control. Resolves the
+ * NO_HIERARCHY shape on any failure (never rejects).
+ */
+export async function fetchComplaintHierarchyLevels() {
+  if (!hasAuth()) return NO_HIERARCHY;
+
+  try {
+    const response = await fetch(getMdmsSearchUrl(), {
+      method: "POST",
+      headers: withTraceHeaders({ "Content-Type": "application/json" }),
+      credentials: "omit",
+      body: JSON.stringify({
+        RequestInfo: buildRequestInfo(),
+        MdmsCriteria: {
+          tenantId: getTenantId(),
+          moduleDetails: [
+            {
+              moduleName: "RAINMAKER-PGR",
+              masterDetails: [
+                { name: "ComplaintHierarchyDefinition" },
+                { name: "ComplaintHierarchy" },
+              ],
+            },
+          ],
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(
+        `egov-mdms-service ComplaintHierarchyDefinition _search failed (${response.status})`
+      );
+      return NO_HIERARCHY;
+    }
+
+    const payload = await response.json();
+    const pgr = payload?.MdmsRes?.["RAINMAKER-PGR"] || {};
+    const definition = selectHierarchyDefinition(
+      pgr.ComplaintHierarchyDefinition,
+      pgr.ComplaintHierarchy,
+      getComplaintHierarchyTypePin()
+    );
+    if (!definition) return NO_HIERARCHY;
+
+    const levels = orderedLevels(definition);
+    if (!levels.length) return NO_HIERARCHY;
+    return {
+      hasHierarchy: true,
+      hierarchyType: definition.hierarchyType ?? null,
+      levels,
+    };
+  } catch (error) {
+    console.warn("egov-mdms-service ComplaintHierarchyDefinition _search error", error);
+    return NO_HIERARCHY;
   }
 }

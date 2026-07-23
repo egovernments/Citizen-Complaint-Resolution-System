@@ -15,12 +15,12 @@ initContainers:
     schemaTable: "boundary_schema_version"
     image:
       repository: "boundary-service-db"
-      tag: "v2.9.2-4a60f20"
+      tag: "maven-jdk21-9f83afb"
 
 # Container Configs
 image:
   repository: "boundary-service"
-  tag: "v2.9.2-4a60f20"
+  tag: "maven-jdk21-9f83afb"
 replicas: "1"
 healthChecks:
   enabled: true
@@ -36,7 +36,7 @@ kafka-topics-create-boundary-hierarchy: "save-boundary-hierarchy-definition"
 kafka-topics-update-boundary-hierarchy: "update-boundary-hierarchy-definition"
 kafka-topics-create-boundary-relationship: "save-boundary-relationship"
 kafka-topics-update-boundary-relationship: "update-boundary-relationship"
-memory_limits: "512Mi"
+memory_limits: "1024Mi"
 cpu_limits: "200m"
 
 # Additional Container Envs

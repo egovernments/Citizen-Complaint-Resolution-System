@@ -14,9 +14,9 @@
  * honest drive.
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, EMPLOYEE_USER, EMPLOYEE_PASS, TENANT_LABEL } from '../utils/env';
+import { BASE_URL, TENANT, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { loginViaApi } from '../utils/auth';
 
-const LOGIN_URL = '/digit-ui/employee/user/login';
 const PROFILE_URL = '/digit-ui/employee/user/profile';
 const CRASH_PATTERNS = [
   /Cannot read properties of (undefined|null) \(reading ['"]test['"]\)/i,
@@ -27,31 +27,28 @@ const CRASH_PATTERNS = [
 test.describe('employee profile — validationConfig null-safety #445', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('post-auth UserProfile mount + onChange do not throw', async ({ page }) => {
+  test('post-auth UserProfile mount + onChange do not throw', { tag: ['@persona:employee'] }, async ({ page }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => {
       pageErrors.push(`${err.name}: ${err.message}`);
     });
 
-    // ============ UI login ============
-    await page.goto(`${BASE_URL}${LOGIN_URL}?cb=${Date.now()}`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2_500);
-
-    await page.locator('input[type="text"]').first().pressSequentially(EMPLOYEE_USER, { delay: 60 });
-    await page.locator('input[type="password"]').first().pressSequentially(EMPLOYEE_PASS, { delay: 60 });
-    const cityCombo = page.getByRole('combobox', { name: /City/i });
-    if (!(await cityCombo.textContent())?.includes(TENANT_LABEL)) {
-      await cityCombo.click();
-      await page.waitForTimeout(700);
-      await page.getByRole('option', { name: new RegExp(TENANT_LABEL, 'i') }).first().click();
-      await page.waitForTimeout(700);
-    }
-    await page.getByText(/I agree to the DIGIT/i).click();
-    await page.waitForTimeout(700);
-    await page.getByRole('button', { name: /^Login$/i }).click();
-    await page.waitForURL(/\/digit-ui\/employee(?!\/user\/login)/, { timeout: 30_000 });
-    await page.waitForTimeout(3_000);
+    // ============ Auth ============
+    // The profile route is behind PrivateRoute in the digit-ui EMPLOYEE
+    // shell (reads its own `Employee.token`); a bare navigation lands on
+    // the login gate and UserProfile.js never mounts. Inject an employee
+    // session via the tenant-agnostic loginViaApi helper (ADMIN — always
+    // present at the root tenant post-bootstrap). We deliberately do NOT
+    // walk the login form here: this spec exercises UserProfile null-safety
+    // (#445), not the login surface, and the form's City picker renders the
+    // tenant's short name ("Maputo") rather than the configured display
+    // label on deployments whose tenant-name localization is unseeded,
+    // which made the form-driven variant hang.
+    await loginViaApi(page, {
+      tenant: TENANT,
+      username: ADMIN_USER,
+      password: ADMIN_PASS,
+    });
 
     // Drop pre-profile errors so the spec only fails on errors that
     // happen during the post-auth profile mount.

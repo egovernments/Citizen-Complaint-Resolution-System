@@ -3,6 +3,15 @@ services:
   postgres-db:
     image: postgres:16
     container_name: docker-postgres
+    # /dev/shm sizing (issue #1365). Postgres puts the dynamic shared memory
+    # that a parallel query's workers use to exchange tuples here — about 8 MB
+    # per query — and Docker's default pad is only 64 MB. pgbouncer's
+    # DEFAULT_POOL_SIZE is 20 on this stack, so 20 x 8 MB = 160 MB covers it.
+    # Not 1gb like the deployed stacks: this container is capped at 768M below,
+    # and /dev/shm is a tmpfs charged to that same cgroup, so a 1 GB pad would
+    # let postgres be OOM-killed by filling shm alone — a worse failure than
+    # the one being fixed.
+    shm_size: 256m
     environment:
       POSTGRES_USER: egov
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
@@ -166,7 +175,7 @@ services:
       - egov-network
 
   egov-enc-service:
-    image: egovio/egov-enc-service:v2.9.2-4a60f20
+    image: egovio/egov-enc-service:2.12-87e13fe
     container_name: egov-enc-service
     depends_on:
       egov-mdms-service:
@@ -216,7 +225,7 @@ services:
 
   # MDMS Backend (actual service)
   mdms-backend:
-    image: egovio/mdms-v2:v2.9.2-4a60f20
+    image: egovio/mdms-v2:maven-jdk21-9f83afb
     container_name: mdms-backend
     depends_on:
       pgbouncer:
@@ -279,7 +288,7 @@ services:
     - egov-network
 
   egov-idgen:
-    image: egovio/egov-idgen:v2.9.2-4a60f20
+    image: egovio/egov-idgen:maven-jdk21-9f83afb
     container_name: egov-idgen
     depends_on:
       pgbouncer:
@@ -344,7 +353,7 @@ services:
     restart: "no"
 
   egov-user:
-    image: egovio/egov-user:master-e22c7c5
+    image: egovio/egov-user:2.12-87e13fe
     container_name: egov-user
     depends_on:
       pgbouncer:
@@ -521,7 +530,7 @@ services:
     - egov-network
 
   egov-workflow-v2:
-    image: egovio/egov-workflow-v2:v2.9.2-4a60f20
+    image: egovio/egov-workflow-v2:2.12-87e13fe
     container_name: egov-workflow-v2
     depends_on:
       pgbouncer:
@@ -574,7 +583,7 @@ services:
     - egov-network
 
   egov-localization:
-    image: egovio/egov-localization:v2.9.2-4a60f20
+    image: egovio/egov-localization:2.12-87e13fe
     container_name: egov-localization
     depends_on:
       pgbouncer:
@@ -618,7 +627,7 @@ services:
     - egov-network
 
   boundary-service:
-    image: egovio/boundary-service:v2.9.2-4a60f20
+    image: egovio/boundary-service:maven-jdk21-9f83afb
     container_name: boundary-service
     depends_on:
       pgbouncer:
@@ -672,7 +681,7 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: egovio/egov-accesscontrol:v2.9.2-4a60f20
+    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -739,7 +748,7 @@ services:
       - egov-network
 
   egov-persister:
-    image: egovio/egov-persister:v2.9.2-4a60f20
+    image: egovio/egov-persister:maven-jdk21-9f83afb
     container_name: egov-persister
     depends_on:
       pgbouncer:
@@ -761,7 +770,7 @@ services:
       OTEL_TRACES_EXPORTER: none
       JAVA_TOOL_OPTIONS: -Xms64m -Xmx192m
     volumes:
-    - ./configs/persister:/persister-config:ro
+    - ./configs/egov-persister:/persister-config:ro
     ports:
     - 18091:8091
     healthcheck:
@@ -782,7 +791,7 @@ services:
   # Filestore Service - File upload/download
   # ===========================================================================
   egov-filestore:
-    image: egovio/egov-filestore:v2.9.2-4a60f20
+    image: egovio/egov-filestore:maven-jdk21-9f83afb
     container_name: egov-filestore
     depends_on:
       pgbouncer:
@@ -872,7 +881,7 @@ services:
   # HRMS Service - Employee management
   # ===========================================================================
   egov-hrms:
-    image: egovio/egov-hrms:hrms-boundary-0a4e737
+    image: egovio/egov-hrms:hrms-boundary-dd641a6
     container_name: egov-hrms
     depends_on:
       pgbouncer:
@@ -1109,7 +1118,7 @@ services:
       - egov-network
     restart: "no"
 
-    db-seed:
+  db-seed:
     image: postgres:16
     container_name: db-seed-container
     depends_on:
@@ -1172,7 +1181,7 @@ services:
   # PGR Services (Public Grievance Redressal)
   # ===========================================================================
   pgr-services:
-    image: pgr-services-dev
+    image: ${PGR_SERVICES_IMAGE:-egovio/pgr-services:develop-70916ea}
     container_name: pgr-services
     depends_on:
       pgbouncer:
@@ -1252,9 +1261,11 @@ services:
   # DIGIT UI (React Frontend)
   # Image built by Tilt from CCRS repo, or manually with:
   # docker build -t digit-ui-dev -f ../frontend/micro-ui/web/docker/Dockerfile ../frontend/micro-ui
+  # Defaults to the remote pgr-fixes tag; set DIGIT_UI_IMAGE=digit-ui-dev to use
+  # a local build instead.
   # ===========================================================================
   digit-ui:
-    image: digit-ui-dev
+    image: ${DIGIT_UI_IMAGE:-registry.preview.egov.theflywheel.in/digit-ui:pgr-fixes}
     container_name: digit-ui
     ports:
       - "18080:80"
@@ -1338,6 +1349,16 @@ services:
       - "18889:8080"
     environment:
       GATUS_CONFIG_PATH: /config/config.yaml
+      # These services are ungated in this file, so the toggles are fixed:
+      # "true" where the service always starts, "false" where it is absent.
+      GATUS_PROFILE_OTP: "true"
+      GATUS_PROFILE_SEARCH: "false"
+      GATUS_PROFILE_MCP: "false"
+      GATUS_PROFILE_KEYCLOAK: "false"
+      GATUS_PROFILE_NOTIFICATIONS: "false"
+      GATUS_AUDIT: "false"
+      GATUS_PROXIES: "false"
+      GATUS_SMS_PORT: "8080"
     deploy:
       resources:
         limits:

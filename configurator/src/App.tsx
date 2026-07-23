@@ -37,6 +37,7 @@ import { NotificationProviderList } from '@/resources/notification-providers/Not
 import { NotificationPreferenceList } from '@/resources/notification-preferences/NotificationPreferenceList';
 import { NotificationConfigure } from '@/resources/notification-configure/NotificationConfigure';
 import PgrDashboard from './pages/PgrDashboard';
+import OrgChartPage from './pages/org-chart/OrgChartPage';
 import { getGenericMdmsResources, getDataProvider, getAuthProvider, configureDigitClient, digitClient, resetProviders, i18nProvider } from '@/providers/bridge';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import HelpModal from './components/ui/HelpModal';
@@ -50,7 +51,7 @@ import HelpModal from './components/ui/HelpModal';
 // without unique-key collisions).
 // import UndoToast from './components/ui/UndoToast';
 import { Toaster } from './components/ui/toaster';
-import { apiClient, getApiBaseUrl } from './api';
+import { apiClient, getApiBaseUrl, getConfiguredRootTenant } from './api';
 import { identifyUser, clearUser, trackEvent } from './lib/telemetry';
 import PageViewTracker from './components/PageViewTracker';
 import './App.css';
@@ -160,6 +161,7 @@ function ManagementAdmin() {
           <Route path="/notification-configure" element={<NotificationConfigure />} />
           <Route path="/advanced" element={<AdvancedPage />} />
           <Route path="/pgr-dashboard" element={<PgrDashboard />} />
+          <Route path="/org-chart" element={<OrgChartPage />} />
           <Route path="/employees/bulk" element={<EmployeeBulkImport />} />
           <Route path="/departments/bulk" element={<DepartmentBulkImport />} />
           <Route path="/designations/bulk" element={<DesignationBulkImport />} />
@@ -172,6 +174,10 @@ function ManagementAdmin() {
 
 // Storage key for persisting auth state
 const AUTH_STORAGE_KEY = 'crs-auth-state';
+
+// One-shot flag (sessionStorage) set when a request is rejected for an expired
+// session, read by LoginPage to explain why the operator was sent back.
+export const SESSION_EXPIRED_KEY = 'crs-session-expired';
 
 // Helper to restore apiClient from localStorage
 function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppState['user']; environment: string; tenant: string; targetTenant: string; mode: AppMode; currentPhase: number; completedPhases: number[] } | null {
@@ -229,6 +235,17 @@ function restoreApiClientFromStorage(): { isAuthenticated: boolean; user: AppSta
   return null;
 }
 
+// Root (state-level) tenant the deployment is configured for, read from the
+// build-time VITE_STATE_TENANT_ID (rendered by the ansible deploy from
+// host_vars `state_tenant_id`). Used only as the pre-login default; once the
+// operator logs in, `state.tenant` becomes the tenant they authenticated
+// against. Kept config-driven so no country code is baked into the build.
+// City tenants like "mz.maputo" collapse to their root segment; empty string
+// when the build wasn't given one.
+function getConfiguredTenantDefault(): string {
+  return getConfiguredRootTenant();
+}
+
 function App() {
   // Initialize state from localStorage if available
   const [state, setState] = useState<AppState>(() => {
@@ -240,12 +257,13 @@ function App() {
         showHelp: false,
       };
     }
+    const defaultTenant = getConfiguredTenantDefault();
     return {
       isAuthenticated: false,
       user: null,
       environment: getApiBaseUrl(),
-      tenant: 'ke',
-      targetTenant: 'ke',
+      tenant: defaultTenant,
+      targetTenant: defaultTenant,
       mode: 'onboarding',
       currentPhase: 1,
       completedPhases: [],
@@ -253,6 +271,23 @@ function App() {
       showHelp: false,
     };
   });
+
+  // Drop the session and bounce to /login when any request reports the token
+  // is no longer valid (e.g. it expired while the operator was partway through
+  // a long flow like the Phase 2 OSM boundary fetch). Without this, an expired
+  // token surfaces only on the first write, as a cryptic downstream NPE, with
+  // the UI still pretending to be logged in.
+  useEffect(() => {
+    apiClient.setSessionExpiredHandler(() => {
+      try { sessionStorage.setItem(SESSION_EXPIRED_KEY, '1'); } catch { /* ignore */ }
+      clearUser();
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      apiClient.logout();
+      digitClient.clearAuth();
+      resetProviders();
+      setState(s => ({ ...s, isAuthenticated: false, user: null }));
+    });
+  }, []);
 
   // Re-sync apiClient on every render if authenticated (handles HMR)
   useEffect(() => {

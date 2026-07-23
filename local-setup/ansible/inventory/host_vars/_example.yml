@@ -27,7 +27,7 @@ ansible_host: 10.0.0.10
 #   - Grafana root URL (so dashboard links use the real domain)
 #   - Let's Encrypt certificate
 #   - Citizen-facing URLs the UI generates
-domain: digit.example.com  
+domain: digit.example.com
 
 # Default `true`. Renders nginx with `listen 443 ssl` + HTTP→HTTPS
 # redirect, expects Let's Encrypt certs at /etc/letsencrypt/live/<domain>/.
@@ -57,6 +57,14 @@ state_tenant_id: ke.mycity
 boot_tenant: ke.mycity
 tenant_id: ke.mycity
 
+# Tenant the admin/citizen SPA lands on. Rendered into globalConfigs as
+# STATE_LEVEL_TENANT_ID (see templates/globalConfigs.js.j2). The configurator
+# login screen also derives its tenant-code placeholder from this, and the
+# app's pre-login default tenant collapses it to its root segment — so set it
+# to your city tenant to keep the UI deployment-agnostic (no hardcoded code).
+# Defaults to `pg` (the dump's always-seeded tenant) when unset.
+ui_state_tenant_id: ke.mycity
+
 # Default map centre — UI map starts here when no GPS / no complaint
 # location. Pick something inside your service area.
 map_center:
@@ -85,6 +93,14 @@ employee_module_denylist:
 pgr_boundary_highest_level: "County"
 pgr_boundary_lowest_level: "Ward"
 boundary_type: "Ward"          # what the smallest selectable boundary is called
+
+# Boundary hierarchy name. Rendered into globalConfigs as HIERARCHY_TYPE; the
+# citizen/PGR UI (and the configurator's OSM onboarding path) resolve boundaries
+# against it. MUST match the hierarchy actually created for this tenant —
+# city_setup_from_xlsx auto-creates "<CITY>_ADMIN" (e.g. mycity → MYCITY_ADMIN),
+# so leaving the default 'ADMIN' makes the complaint form's boundary picker 400
+# (HIERARCHY_DEFINITION_DOES_NOT_EXIST_ERR). Defaults to 'ADMIN' when unset.
+hierarchy_type: "ADMIN"
 
 # Mobile-number validation rules used by the citizen-side UI on signup.
 # Kenya: +254 prefix, 9-10 digits starting with 7 (Safaricom) or 1 (Airtel/Telkom).
@@ -280,6 +296,17 @@ enable_overpass: false
 # Novu still comes up, operator can configure it via the UI later.
 enable_novu: false
 
+# Build a subpath-rebased Novu dashboard image locally so the SPA serves cleanly
+# under /novu (backend/novu-dashboard/Dockerfile, tagged novu-dashboard:local).
+# Strongly recommended — REQUIRED when Keycloak shares this domain (enable_keycloak),
+# because the stock dashboard's nginx workaround hijacks the whole /auth/ prefix.
+# When false, the stock image is pulled and the legacy root-path nginx workaround
+# is rendered instead. See nginx-site.conf.j2 (enable_novu branch).
+build_novu_dashboard: false
+# novu_dashboard_version: "2.3.0"   # upstream tag to rebase FROM
+# novu_base_path: "/novu"           # subpath to bake into the rebased dist
+# novu_dashboard_image: ""          # override to pin a prebuilt image instead of building
+
 # Pasted from the Novu dashboard after first sign-up.
 # https://docs.novu.co/sdks/api-keys for where to find it.
 novu_api_key: ""
@@ -398,11 +425,24 @@ requires_nairobi_mdms: false
 # volume — the overlay also corrects the named-volume mount path,
 # which forces container recreation and wipes the existing data.
 db_fast_path: true
+# scripts/preflight.py refuses db_fast_path without this explicit ack —
+# it encodes the data-wipe trap above. Set it only after confirming the
+# target box has no anonymous-volume postgres data worth keeping.
+db_fast_path_ack_data_wipe: true
 
 # Run the post-deploy CI suite (XLSX dataloader + Playwright). Requires
 # a sibling `digit-ui-fix/` clone next to this repo on the controller.
 # Off by default — production deploys skip CI tests.
 run_ci_tests: false
+
+# Tear down the running stack before re-deploying. Stops + removes all
+# containers and orphaned networks, then re-deploys from scratch.
+# Volumes (Postgres data, Minio objects) are preserved — only containers
+# and compose-managed networks are removed.
+#
+# Use on CI boxes or when you deliberately want a clean redeploy.
+# NEVER enable on a tenant with live data you cannot afford to interrupt.
+force_clean: false
 
 # Install Claude Code CLI + sync controller's ~/.claude config to the
 # target. Hard-codes /root/.claude paths; only safe when the controller

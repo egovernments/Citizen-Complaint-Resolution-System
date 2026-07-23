@@ -19,7 +19,7 @@ frontend. Two audiences:
 | expose a KPI to anonymous/public | add `"PUBLIC"` to `visibleTo` | **No** | [20](20-packs-and-rbac.md) §2 |
 | which rows a user's tiles aggregate (department scoping) | HRMS assignments (+ role choice) | **No** | [20](20-packs-and-rbac.md) layer 1 |
 | home card for the dashboard | MDMS `tenant.citymodule` (`Dashboard` row) | **No** | [30-view-access.md](30-view-access.md) §1a |
-| which roles can *open* the view (card + deep-link route) | `products/dashboard/roles.js` `DASHBOARD_ROLES` | **Yes** (FE bundle) | [70-esbuild-embedding.md](70-esbuild-embedding.md) §4 |
+| which roles can *open* the view (card + deep-link route) | MDMS `dss.DashboardConfig` `allowedRoles` (fallback: `products/dashboard/roles.js` `DASHBOARD_ROLES`) | **No** | [70-esbuild-embedding.md](70-esbuild-embedding.md) §4 |
 | how the dashboard is mounted inside digit-ui | esbuild product module + always-on route fallback | — | [70-esbuild-embedding.md](70-esbuild-embedding.md) |
 | sidebar entry + role gating of the view | MDMS `ACCESSCONTROL-ACTIONS-TEST` + `ACCESSCONTROL-ROLEACTIONS` | **No** | [30-view-access.md](30-view-access.md) |
 | menu/card labels | localization `_upsert` + cache bust | **No** | [30](30-view-access.md) §3–4 |
@@ -32,6 +32,7 @@ frontend. Two audiences:
 | SLA precedence / grain shape | Flyway migration (append-only; reproduce the MVs) | **Yes** | [50](50-sla-and-hierarchies.md) |
 | new `viz.kind` / render behavior | `KpiTile.jsx` + dashboard components | **Yes** (FE bundle) | [10](10-kpi-catalog.md) §3 |
 | scope-resolution policy (HRMS → policy engine) | `PrincipalScopeResolver` ("the seam") | **Yes** | [20](20-packs-and-rbac.md) layer 1 |
+| any on-screen text / new language | localization `_upsert` (module `rainmaker-dashboard` + platform families) + cache bust | **No** | [90-localization.md](90-localization.md) |
 
 Rule of thumb: **tenant-specific values live in MDMS, never in code.** If you find yourself
 wanting to hardcode a deployment's ward list, SLA, or role name in the FE or a service — stop
@@ -49,12 +50,17 @@ and find the master.
 | [60-operations.md](60-operations.md) | MV refresh scheduler + manual REFRESH commands, the `asOf` staleness signal, tenant-bootstrap coverage (and the `dss.*` gap), what a redeploy wipes |
 | [70-esbuild-embedding.md](70-esbuild-embedding.md) | **The frontend architecture (PR #1062).** How the dashboard embeds into digit-ui: module registry, `App.js` `enabledModules`, the always-on route fallback vs the citymodule-gated card, `roles.js` `DASHBOARD_ROLES`, embedded mode, the analytics API client + MDMS context-path resolution, and the catalog→tile render pipeline (`useCatalog`/`useCatalogLayout`/`KpiTile`) |
 | [80-live-bomet-state.md](80-live-bomet-state.md) | **Live-verified snapshot (2026-07-09).** A reproducible bomet probe: 37 published defs / 10 PUBLIC tiles, the two-pack first-match (`executive-default` vs `supervisor-default`), the anonymous inline lock, the **catalog-divergence trap** (repo seed vs mdms-v2 store vs served catalog; the #1026 stale-record no-op), the sidebar seeding bug (ACCESSCONTROL actions under `-TEST`; fixed via the actions bridge, CCRS#1106), and an empty-tile triage flow |
+| [90-localization.md](90-localization.md) | **Localizing the dashboard.** The no-fallback rule (missing message ⇒ raw key/code on screen), the three bundles the module loads, every dashboard-owned key family (`DASHBOARD_*`, KPI `titleKey`/`subtitleKey`, series/column `labelKey`s, geo-tier vocabulary), the reused platform families (`COMPLAINT_HIERARCHY.*`, boundary codes, departments), the gap-triage table, the generated en_IN pack + tenant_bootstrap floor, and the add-a-language cookbook |
 
 ## Primary sources (cross-linked throughout)
 
 - Query grammar reference: `backend/pgr-services/ANALYTICS-QUERY-API.md`
 - RBAC design series: `docs/dashboard-rbac-design/`
 - Live MDMS examples: `ansible/nairobi-mdms/mdms/dss/KpiDefinition.json`, `DashboardPack.json`
+- Enabling it on a running deployment: `local-setup/scripts/enable-dashboard.sh` (run `--help`
+  for usage and flags; the full runbook — prerequisites, the role-remap decision, and a
+  symptom→cause table for every known blocker — is the enablement-PR comment that graduates
+  here on merge), with supporting schemas + message packs in `local-setup/db/dss-mdms-seed/`
 - Backend: `backend/pgr-services/src/main/java/org/egov/pgr/analytics/`
 - Frontend (deployed, post-#1062): `digit-ui-esbuild/products/dashboard/` — module root (`Module.js`,
   `roles.js`, `DashboardCard.js`) with the engine under `src/` (`AdminDashboard.jsx`, `components/`,

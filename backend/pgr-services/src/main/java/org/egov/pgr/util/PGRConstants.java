@@ -156,6 +156,10 @@ public class PGRConstants {
     public static final String MDMS_NOTIFICATION_TEMPLATE_MASTER = "NotificationTemplate";
     public static final String MDMS_NOTIFICATION_ROUTING_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationRouting";
     public static final String MDMS_NOTIFICATION_TEMPLATE_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationTemplate";
+    // Provider→template mapping (Twilio WhatsApp Content SIDs + ordered variables). Resolved for
+    // the WHATSAPP channel only; business-initiated WhatsApp must reference an approved template.
+    public static final String MDMS_NOTIFICATION_PROVIDER_TEMPLATE_MASTER = "NotificationProviderTemplate";
+    public static final String MDMS_NOTIFICATION_PROVIDER_TEMPLATE_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.NotificationProviderTemplate";
 
     // Channels — must match the MDMS schema enum.
     public static final String CHANNEL_SMS = "SMS";
@@ -187,7 +191,20 @@ public class PGRConstants {
 
     public static final String ESCALATE = "ESCALATE";
 
+    // MDMS master under module RAINMAKER-PGR (mdms-v2 schema code
+    // RAINMAKER-PGR.MDMS_ESCALATION_CONFIG, seeded by default-data-handler):
+    // the per-tenant visibility feature flag + resolver config. The JSONPATH
+    // constant is where that master lands in an MdmsRes payload.
+    
     public static final String MDMS_ESCALATION_CONFIG = "EscalationConfig";
+
+    // MDMS master under module RAINMAKER-PGR (mdms-v2 schema code
+    // RAINMAKER-PGR.InboxVisibilityConfig, seeded by default-data-handler):
+    // the per-tenant visibility feature flag + resolver config. The JSONPATH
+    // constant is where that master lands in an MdmsRes payload.
+    public static final String MDMS_INBOX_VISIBILITY_CONFIG = "InboxVisibilityConfig";
+
+    public static final String MDMS_INBOX_VISIBILITY_CONFIG_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.InboxVisibilityConfig";
 
     public static final String MDMS_ESCALATION_CONFIG_JSONPATH = "$.MdmsRes.RAINMAKER-PGR.EscalationConfig";
 

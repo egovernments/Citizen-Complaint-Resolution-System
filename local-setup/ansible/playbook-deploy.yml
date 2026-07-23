@@ -27,6 +27,57 @@
     DOCKER_DEFAULT_PLATFORM: "{{ docker_default_platform | default('') }}"
 
   pre_tasks:
+    # ── Force-clean teardown ───────────────────────────────────────────────
+    # Opt-in via `force_clean: true` in host_vars. Tears down all running
+    # containers and removes orphaned networks before re-deploying, so a
+    # second run starts from a clean slate rather than conflicting with
+    # leftover state (bound ports, stale containers, overlapping networks).
+    #
+    # NOT enabled by default — production tenants must never lose a running
+    # stack without intent. Only flip this on for dev/CI boxes or tenants
+    # where you intentionally want a full redeploy from scratch.
+    #
+    # NOTE: volumes are deliberately preserved (`--remove-orphans` only,
+    # no `-v`). Postgres + Minio data survives the teardown; only containers
+    # and compose-managed networks are removed.
+    - name: "force-clean — check if stack directory exists"
+      ansible.builtin.stat:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+      register: existing_compose
+      when: force_clean | default(false)
+
+    - name: "force-clean — tear down existing DIGIT stack"
+      ansible.builtin.shell: |
+        set -eo pipefail
+        cd "{{ digit_dir }}"
+        docker compose -f docker-compose.egov-digit.yaml down --remove-orphans --timeout 30
+      args:
+        chdir: "{{ digit_dir }}"
+        executable: /bin/bash
+      register: clean_teardown
+      changed_when: true
+      when:
+        - force_clean | default(false)
+        - existing_compose.stat.exists | default(false)
+
+    - name: "force-clean — prune orphaned Docker networks left by previous run"
+      ansible.builtin.shell: |
+        set -o pipefail
+        project="{{ digit_dir | basename }}"
+        orphans=$(docker network ls --filter "name=${project}" --format '{{ "{{" }}.Name{{ "}}" }}' 2>/dev/null || true)
+        if [ -n "$orphans" ]; then
+          echo "$orphans" | xargs docker network rm 2>/dev/null || true
+          echo "pruned: $orphans"
+        fi
+      args:
+        executable: /bin/bash
+      register: network_prune
+      changed_when: "'pruned:' in network_prune.stdout"
+      failed_when: false
+      when:
+        - force_clean | default(false)
+        - existing_compose.stat.exists | default(false)
+
     # digit-ui can be served two ways, both binding port 18080:
     #   - `static` mode: digit-ui Docker container with a pre-built bundle.
     #   - `hmr` mode:    host-side `node esbuild.dev.js` in tmux session
@@ -50,10 +101,13 @@
 
     - name: "digit-ui mode=hmr — stop digit-ui container if running"
       ansible.builtin.shell: |
+        set -o pipefail
         if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
           docker stop digit-ui
           echo stopped
         fi
+      args:
+        executable: /bin/bash
       register: stop_digit_ui
       changed_when: stop_digit_ui.stdout == "stopped"
       when: digit_ui_mode == "hmr"
@@ -166,84 +220,204 @@
     - name: "Docker host install + config (Linux/Debian targets only)"
       when: ansible_system != "Darwin"
       block:
-      # ==================== Docker Installation ====================
-      - name: Install Docker prerequisites
-        apt:
-          # jq is used by config/bootstrap-novu-whatsapp.sh (Twilio provider bootstrap).
-          name: [ca-certificates, curl, gnupg, jq]
-          state: present
-          update_cache: yes
+        # ==================== Docker Installation ====================
+        - name: Install Docker prerequisites
+          apt:
+            name: [ca-certificates, curl, gnupg]
+            state: present
+            update_cache: yes
 
-      - name: Add Docker GPG key
-        shell: |
-          install -m 0755 -d /etc/apt/keyrings
-          curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-          chmod a+r /etc/apt/keyrings/docker.asc
-        args:
-          creates: /etc/apt/keyrings/docker.asc
+        - name: Add Docker GPG key
+          shell: |
+            install -m 0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+            chmod a+r /etc/apt/keyrings/docker.asc
+          args:
+            creates: /etc/apt/keyrings/docker.asc
 
-      - name: Add Docker repository
-        shell: |
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
-        args:
-          creates: /etc/apt/sources.list.d/docker.list
+        - name: Add Docker repository
+          shell: |
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+          args:
+            creates: /etc/apt/sources.list.d/docker.list
 
-      # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
-      # archive. Both conflict with Docker's upstream packages — they own
-      # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
-      # so dpkg refuses to install the upstream packages until the archive
-      # ones are removed. Idempotent: no-op if they're not installed.
-      - name: Remove conflicting Ubuntu-archive Docker packages
-        apt:
-          name:
-            - docker.io
-            - docker-doc
-            - docker-compose
-            - docker-compose-v2
-            - podman-docker
-            - containerd
-            - runc
-          state: absent
-          purge: yes
+        # Ubuntu 24.04 ships `docker.io` + `docker-compose-v2` from the
+        # archive. Both conflict with Docker's upstream packages — they own
+        # the same `/usr/libexec/docker/cli-plugins/docker-compose` file —
+        # so dpkg refuses to install the upstream packages until the archive
+        # ones are removed. Idempotent: no-op if they're not installed.
+        - name: Remove conflicting Ubuntu-archive Docker packages
+          apt:
+            name:
+              - docker.io
+              - docker-doc
+              - docker-compose
+              - docker-compose-v2
+              - podman-docker
+              - containerd
+              - runc
+            state: absent
+            purge: yes
 
-      - name: Install Docker Engine
-        apt:
-          name:
-            - docker-ce
-            - docker-ce-cli
-            - containerd.io
-            - docker-buildx-plugin
-            - docker-compose-plugin
-          state: present
-          update_cache: yes
+        - name: Install Docker Engine
+          apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-buildx-plugin
+              - docker-compose-plugin
+            state: present
+            update_cache: yes
 
-      # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
-      # start it explicitly so subsequent tasks can talk to the daemon.
-      - name: Ensure docker daemon is enabled + running
-        service:
-          name: docker
-          state: started
-          enabled: yes
+        # apt installs docker.service `disabled` on Ubuntu 24.04 — enable +
+        # start it explicitly so subsequent tasks can talk to the daemon.
+        - name: Ensure docker daemon is enabled + running
+          service:
+            name: docker
+            state: started
+            enabled: yes
 
-      # ==================== Docker Configuration ====================
-      # The Hetzner VPC registry at {{ docker_registry }} (egov-ci) hosts every
-      # custom-built DIGIT image (digit-mcp, sb35-rebuilt egov-* services)
-      # over plain HTTP. Without this entry Docker refuses to pull with
-      # `http: server gave HTTP response to HTTPS client`. Restart the
-      # daemon when the file changes so the new config takes effect.
-      - name: Configure Docker insecure-registries for VPC registry
-        copy:
-          dest: /etc/docker/daemon.json
-          content: "{{ {'insecure-registries': insecure_registries | default([])} | to_nice_json }}\n"
-          mode: '0644'
-        register: daemon_json
-        when: insecure_registries | default([]) | length > 0
+        # ==================== Docker Configuration ====================
+        # Log rotation. Docker's json-file driver keeps growing a container's
+        # log forever unless max-size/max-file are set, and a chatty JVM
+        # service can fill a disk over a long-running deploy.
+        #
+        # The per-container ceiling is max-size * max-file, so the two settings
+        # cannot be chosen independently. docker_log_total_size is the
+        # invariant (1g) and docker_log_max_size is the knob; the file count is
+        # derived so raising or lowering the slice size cannot breach the cap.
+        # Set docker_log_max_file explicitly only to override that derivation.
+        #
+        # "Override" means a truthy value. `default()` without boolean=true only
+        # substitutes for an *undefined* variable, so an operator who uncomments
+        # the escape hatch in group_vars and leaves it blank (docker_log_max_file:
+        # -> YAML null) would be treated as having opted in: the cap guard below
+        # would skip, the derivation would pass None through, and daemon.json
+        # would get the literal "max-file": "None", which dockerd refuses. Both
+        # tasks therefore test the value, not its mere definedness.
+        - name: "Docker logging — reject a max-size larger than the total cap"
+          vars:
+            _u: {k: 1024, m: 1048576, g: 1073741824}
+            _sz: "{{ (docker_log_max_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_max_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+            _tt: "{{ (docker_log_total_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_total_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+          ansible.builtin.fail:
+            msg: >-
+              docker_log_max_size ({{ docker_log_max_size }}) exceeds
+              docker_log_total_size ({{ docker_log_total_size }}). Docker keeps
+              at least one log file per container, so this would allow
+              {{ docker_log_max_size }} per container — above the cap.
+          when:
+            - not (docker_log_max_file | default('', true))
+            - (_sz | float) > (_tt | float)
 
-      - name: Restart docker if daemon.json changed
-        service:
-          name: docker
-          state: restarted
-        when: daemon_json is defined and daemon_json.changed | default(false)
+        - name: "Docker logging — derive max-file from the total cap"
+          vars:
+            _u: {k: 1024, m: 1048576, g: 1073741824}
+            _sz: "{{ (docker_log_max_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_max_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+            _tt: "{{ (docker_log_total_size | regex_search('^([0-9.]+)', '\\1') | first | float)
+                     * _u[(docker_log_total_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+          # The divisor below is floored at 1 byte — `[1, (_sz | float)] | max`
+          # — so the division can never raise. Two reasons that is not paranoia:
+          #
+          # 1. ansible-lint renders a task's Jinja using that task's `vars`
+          #    only. It never loads inventory group_vars, and this playbook has
+          #    no committed inventory (deploy.sh generates hosts.yml, and
+          #    group_vars live under inventory/). So at lint time
+          #    docker_log_max_size is undefined, `| float` yields 0.0, and an
+          #    unfloored division aborts the whole run with "jinja[invalid]:
+          #    Error rendering template: float division by zero" — a CI failure
+          #    with no runtime counterpart.
+          #
+          # 2. `default()` evaluates its argument eagerly, so this division runs
+          #    even when docker_log_max_file IS set. The guard task above is
+          #    skipped in exactly that case, so a host combining the escape
+          #    hatch with docker_log_max_size: "0m" would hit a real
+          #    ZeroDivisionError at runtime.
+          #
+          # Keep the floor INLINE. Hoisting it into a helper var does not work:
+          # ansible-lint resolves a task var only when it is self-contained, so
+          # a var defined in terms of _sz reads back as undefined, collapses to
+          # 0.0, and reintroduces the very error this avoids.
+          #
+          # A zero max-size reaching this point is still caught downstream —
+          # dockerd rejects a "max-size": "0m" log-opt itself.
+          ansible.builtin.set_fact:
+            docker_log_max_file_effective: >-
+              {{ docker_log_max_file
+                 | default([1, ((_tt | float) / ([1, (_sz | float)] | max)) | int] | max, true) }}
+
+        # daemon.json is written unconditionally now. It used to be gated on
+        # insecure_registries being non-empty, which meant hosts on a TLS
+        # registry never got a daemon.json at all — and would therefore never
+        # get log rotation either.
+        #
+        # NOTE: daemon-level log-opts apply to containers CREATED after the
+        # daemon restart. Containers already running keep the settings they
+        # were created with until they are recreated.
+        # Read any existing daemon.json so operator-set keys survive. This task
+        # used to be gated on insecure_registries being non-empty, so hosts on
+        # a TLS registry were never touched at all. Now that it always runs, a
+        # blind overwrite would silently discard whatever else is in the file —
+        # storage-driver, data-root, live-restore, registry-mirrors,
+        # default-address-pools. Merge instead: our keys win, everything else
+        # is preserved.
+        - name: "Docker daemon — read existing daemon.json (if any)"
+          ansible.builtin.slurp:
+            src: /etc/docker/daemon.json
+          register: daemon_json_existing
+          failed_when: false
+          changed_when: false
+
+        # An unparseable existing file makes from_json raise inside the
+        # template, which surfaces as a bare traceback. block/rescue turns it
+        # into something an operator can act on. The file is left untouched
+        # either way — we refuse to overwrite what we could not read.
+        - name: "Docker daemon — write merged daemon.json"
+          block:
+            - name: "Docker daemon — merge log rotation + insecure registries"
+              vars:
+                _existing: >-
+                  {{ (daemon_json_existing.content | default('') | b64decode | from_json)
+                     if (daemon_json_existing.content is defined
+                         and (daemon_json_existing.content | b64decode | trim | length) > 0)
+                     else {} }}
+                # insecure-registries is always present, never conditionally
+                # omitted. combine() only adds and overwrites — a key that
+                # exists solely in _existing survives untouched. Omitting the
+                # key when the list is empty would therefore leave a stale
+                # entry on disk forever for exactly the host that needs it
+                # gone: one that deployed with the default non-empty list and
+                # later migrated to a TLS registry (insecure_registries: []).
+                # Writing [] clears it, because combine's list_merge defaults
+                # to replace.
+                _ours: >-
+                  {{ {'log-driver': 'json-file',
+                      'log-opts': {'max-size': docker_log_max_size,
+                                   'max-file': docker_log_max_file_effective | string},
+                      'insecure-registries': insecure_registries | default([])} }}
+              ansible.builtin.copy:
+                dest: /etc/docker/daemon.json
+                content: "{{ _existing | combine(_ours, recursive=True) | to_nice_json }}\n"
+                mode: '0644'
+              register: daemon_json
+          rescue:
+            - name: "Docker daemon — existing daemon.json is unreadable"
+              ansible.builtin.fail:
+                msg: >-
+                  /etc/docker/daemon.json exists but could not be parsed as
+                  JSON, so the log-rotation settings were not merged in. Fix or
+                  remove that file and re-run — it has been left untouched
+                  rather than overwritten.
+
+        - name: Restart docker if daemon.json changed
+          service:
+            name: docker
+            state: restarted
+          when: daemon_json is defined and daemon_json.changed | default(false)
 
     # check_mode: false forces this to run even under `--check`, so the
     # version-compare task below has a real value to test against.
@@ -280,6 +454,50 @@
       copy:
         src: ../docker-compose.fast-path.yml
         dest: "{{ digit_dir }}/docker-compose.fast-path.yml"
+
+    # ── DB-migration overlay (item #10) ────────────────────────────────────────
+    # Per-service Flyway init containers + the db-history-normalize guard that
+    # runs ahead of them. Always layered: it IS the migration model (it turns the
+    # apps' embedded Flyway off and gates them on their migrator), so a deploy
+    # without it silently falls back to embedded Flyway and, on an
+    # operator-supplied dump, can destroy data. See docs/db-migration-flow.md.
+    #
+    # db/ is already synchronized below (digit_config_dirs), which carries
+    # db/normalize/ (the guard's build context) and db/flyway-history-map.yml.
+    - name: Copy DB-migration overlay
+      copy:
+        src: ../docker-compose.migrations.yml
+        dest: "{{ digit_dir }}/docker-compose.migrations.yml"
+
+    # The overlay's three in-repo migrators (pgr-services, novu-bridge,
+    # digit-config-service) build from ../backend/<svc>/src/main/resources/db.
+    # That path exists in the repo but NOT on a deployed host, so sync those
+    # contexts under docker/ (the existing build-context convention) and repoint
+    # them with an Ansible-only overlay. docker-compose.migrations.yml itself
+    # stays valid for anyone running compose straight from the repo.
+    - name: Synchronize in-repo migrator build contexts
+      synchronize:
+        src: "../../backend/{{ item }}/src/main/resources/db/"
+        dest: "{{ digit_dir }}/docker/{{ item }}-db/"
+      loop:
+        - pgr-services
+        - novu-bridge
+        - digit-config-service
+
+    - name: Copy DB-migration overlay (Ansible build-context paths)
+      copy:
+        src: ../docker-compose.migrations.ansible.yml
+        dest: "{{ digit_dir }}/docker-compose.migrations.ansible.yml"
+
+    # ── Monitoring overlay (issue #1335) ────────────────────────────────────────
+    # node-exporter for host-level metrics (CPU/mem/disk/net). Always layered
+    # (see "Compute compose -f flags"): node metrics are wanted on every box,
+    # matching the k8s tier's always-on node_exporter DaemonSet. The scrape job
+    # ships in otel/prometheus.yml (synced via digit_config_dirs below).
+    - name: Copy monitoring overlay
+      copy:
+        src: ../docker-compose.monitoring.yml
+        dest: "{{ digit_dir }}/docker-compose.monitoring.yml"
 
     # Per-tenant compose overlay convention. If a file named
     # local-setup/docker-compose.<inventory_hostname>.yml exists on the
@@ -396,6 +614,20 @@
              | default('default-data-handler:local' if (build_default_data_handler | default(false))
                        else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260611-111521') }}
 
+    # Novu dashboard: when `build_novu_dashboard: true` we build a subpath-rebased
+    # image locally (backend/novu-dashboard/Dockerfile, tag novu-dashboard:local)
+    # so the SPA serves under /novu with a single strip-prefix nginx location;
+    # otherwise pull the stock image, which serves at base=/ and needs the legacy
+    # root-path workarounds. Override either with `novu_dashboard_image:` in
+    # host_vars. Consumed by digit.env.j2 (NOVU_DASHBOARD_IMAGE) → compose
+    # ${NOVU_DASHBOARD_IMAGE}.
+    - name: "Resolve novu-dashboard image tag"
+      ansible.builtin.set_fact:
+        novu_dashboard_image: >-
+          {{ novu_dashboard_image
+             | default('novu-dashboard:local' if (build_novu_dashboard | default(false))
+                       else 'ghcr.io/novuhq/novu/dashboard:' ~ (novu_dashboard_version | default('2.3.0'))) }}
+
     # ==================== Compose .env (per-tenant overrides) ====================
     # Templates Grafana's public root URL (so the JVM dashboard / observability
     # links match the tenant's actual domain). Compose auto-loads .env from the
@@ -506,6 +738,40 @@
         regexp: '^(\s+)DEFAULT_TENANT_ID: pg$'
         replace: '\1DEFAULT_TENANT_ID: {{ state_root }}'
 
+    # egov-user's OWN mobile-number-validation fallback (Spring env vars,
+    # baked into the image's application.properties as India's +91 /
+    # 10-digit regex). Distinct from the MDMS common-masters
+    # .MobileNumberValidation config that mcp-bootstrap seeds later from
+    # this same core_mobile_configs — that MDMS config only governs
+    # UI-driven, MDMS-aware validation. egov-user itself falls back to
+    # THIS env var whenever a request doesn't carry a country code (e.g.
+    # a direct /user/citizen/_create call that bypasses the UI), so
+    # without this rewrite every tenant silently validates against India's
+    # format regardless of its actual mobileNumberRegex/countryCode. No
+    # bootstrap-order dependency here (unlike STATE_LEVEL_TENANT_ID above),
+    # so this runs pre-boot alongside the other tenant-shaped literals.
+    # Same re.sub()-as-replacement-template hazard as the REGEX task below —
+    # double any backslashes in countryCode before it reaches `replace:`.
+    # A backslash in a country code is unlikely in practice, but the fix is
+    # free, so apply it here too for consistency.
+    - name: Set EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE (egov-user) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: ''\+91''$'
+        replace: '\1EGOV_MOBILE_VALIDATION_DEFAULT_COUNTRY_CODE: ''{{ core_mobile_configs.countryCode | default(''+91'') | replace(''\\'', ''\\\\'') }}'''
+
+    # The `replace:` value below is fed straight into Python's re.sub() as
+    # the replacement string, which treats backslash specially (\1, \g<...>
+    # are backreferences; any other \<letter> — e.g. a tenant's regex using
+    # \d or \w shorthand instead of [0-9]/[A-Za-z0-9_] — raises "bad escape").
+    # Double every backslash in the tenant's mobileNumberRegex first so it
+    # survives re.sub() and lands in the compose file unchanged.
+    - name: Set EGOV_MOBILE_VALIDATION_DEFAULT_REGEX (egov-user) in compose
+      replace:
+        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
+        regexp: '^(\s+)EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: ''\^\[6-9\]\[0-9\]\{9\}\$''$'
+        replace: '\1EGOV_MOBILE_VALIDATION_DEFAULT_REGEX: ''{{ core_mobile_configs.mobileNumberRegex | default(''^[6-9][0-9]{9}$'') | replace(''\\'', ''\\\\'') }}'''
+
     # ==================== Publish digit-mcp image ====================
     # digit-mcp ships from the same registry as every other DIGIT image
     # ({{ docker_registry }}/digit-mcp:latest). Compose `pull` picks it
@@ -525,6 +791,7 @@
         docker push 10.0.0.4:5000/digit-mcp:latest
       delegate_to: localhost
       become: false
+      changed_when: true
       tags: ['mcp-publish', 'never']  # opt-in only; not part of default deploy
 
     # ==================== Pull & Start ====================
@@ -551,12 +818,18 @@
     # Tenants opt into the DB fast-path with `db_fast_path: true` in their
     # host_vars. When on, layer the overlay onto every compose invocation
     # below (pull, up, recreate). Default off — never touches live tenants.
-    - name: "Compute compose -f flags (fast-path + per-tenant overlay opt-in)"
+    # The migration overlay is layered ALWAYS (see "Copy DB-migration overlay"):
+    # it is the migration model, not an opt-in extra. It must come BEFORE the
+    # per-tenant overlay so a tenant can still override a migrator if it has to.
+    - name: "Compute compose -f flags (fast-path + migrations + monitoring + per-tenant overlay)"
       ansible.builtin.set_fact:
         compose_files: >-
           {{
             '-f docker-compose.egov-digit.yaml' +
             (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
+            ' -f docker-compose.migrations.yml' +
+            ' -f docker-compose.migrations.ansible.yml' +
+            ' -f docker-compose.monitoring.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
@@ -638,6 +911,28 @@
       changed_when: true
       when:
         - build_default_data_handler | default(false)
+
+    # ==================== Build novu-dashboard image locally ==============
+    # When `build_novu_dashboard: true`, derive a subpath-rebased dashboard
+    # image from the official one (backend/novu-dashboard/Dockerfile) and tag it
+    # novu-dashboard:local; compose picks it up via NOVU_DASHBOARD_IMAGE. The
+    # build context is just the Dockerfile dir (FROM the upstream image — no
+    # repo source needed), so this is cheap and works for local + remote targets.
+    # NOVU_BASE_PATH defaults to /novu; override via host_vars novu_base_path.
+    - name: "Build novu-dashboard image locally (when build_novu_dashboard)"
+      ansible.builtin.command: >-
+        docker build
+        -t novu-dashboard:local
+        --build-arg NOVU_DASHBOARD_VERSION={{ novu_dashboard_version | default('2.3.0') }}
+        --build-arg NOVU_BASE_PATH={{ novu_base_path | default('/novu') }}
+        .
+      args:
+        chdir: "{{ playbook_dir }}/../../backend/novu-dashboard"
+      register: novu_dashboard_build_run
+      changed_when: true
+      when:
+        - enable_novu | default(false)
+        - build_novu_dashboard | default(false)
 
     # ==================== Build otp-publisher image locally ===============
     # When `build_otp_publisher: true`, build the vendored Node service at
@@ -785,11 +1080,13 @@
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
       args:
         chdir: "{{ digit_dir }}"
+      changed_when: false
 
     - name: Start DIGIT stack (Linux/Debian)
       shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
       args:
         chdir: "{{ digit_dir }}"
+      changed_when: false
       when: ansible_system != "Darwin"
 
     # macOS/Rosetta: JVM services cold-start slower than compose's
@@ -819,7 +1116,7 @@
     # a dir-mount fails, 404'ing globalConfigs.js.
     - name: "Lay digit-ui from-source build into the container (when build_digit_ui)"
       ansible.builtin.shell: |
-        set -e
+        set -eo pipefail
         for i in $(seq 1 24); do
           if [ "$(docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' digit-ui 2>/dev/null)" = "true" ]; then break; fi
           sleep 5
@@ -827,6 +1124,8 @@
         tar -C "{{ digit_ui_esbuild_repo_dir | default(playbook_dir ~ '/../../digit-ui-esbuild') }}/build" \
             --exclude=globalConfigs.js --exclude=silent-check-sso.html -cf - . \
           | docker exec -i digit-ui tar -C /var/web/digit-ui -xf -
+      args:
+        executable: /bin/bash
       register: digit_ui_tar
       changed_when: true
       when:
@@ -839,6 +1138,7 @@
     # Sweep them explicitly when search is OFF.
     - name: "Sweep search-stack containers when profile is OFF"
       ansible.builtin.shell: |
+        set -o pipefail
         for c in digit-elasticsearch egov-indexer digit-inbox; do
           if docker ps --filter name=^${c}$ --format '{{ "{{" }}.Names{{ "}}" }}' | grep -q "^${c}$"; then
             docker stop "$c" >/dev/null
@@ -846,6 +1146,8 @@
             echo "swept $c"
           fi
         done
+      args:
+        executable: /bin/bash
       register: search_sweep
       changed_when: search_sweep.stdout | length > 0
       when: not (enable_search_stack | default(false))
@@ -876,6 +1178,25 @@
       until: hrms_health.stdout == 'healthy'
       changed_when: false
 
+    # ==================== Reload Prometheus config (issue #1335) ====================
+    # `up -d` recreates a container only when its service SPEC changes — a
+    # content-only change to the bind-mounted otel/prometheus.yml does not
+    # trigger a recreate. So on a REDEPLOY of an already-running tenant, the
+    # live Prometheus keeps its old in-memory config and never picks up a newly
+    # added scrape job (e.g. the `node` job for node-exporter) until it happens
+    # to restart. A fresh deploy is unaffected — Prometheus boots with the new
+    # config. Prometheus runs with --web.enable-lifecycle, so POST /-/reload
+    # rereads the file in place. Best-effort: on a first deploy Prometheus may
+    # not be up yet (and already loaded fresh config), so a failure here is fine.
+    - name: Reload Prometheus config (pick up new scrape jobs without a recreate)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19090/-/reload
+        method: POST
+        status_code: [200]
+      register: prometheus_reload
+      changed_when: prometheus_reload.status == 200
+      failed_when: false
+
     # ==================== digit-ui mode convergence ====================
     # Three runtime models, picked by host_vars `digit_ui_mode`:
     #
@@ -894,10 +1215,13 @@
     # --- static mode ---
     - name: "digit-ui mode=static — stop digit-ui container if running (host nginx serves now)"
       ansible.builtin.shell: |
+        set -o pipefail
         if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
           docker stop digit-ui
           echo stopped
         fi
+      args:
+        executable: /bin/bash
       register: stop_digit_ui_static
       changed_when: stop_digit_ui_static.stdout == "stopped"
       when: digit_ui_mode == "static"
@@ -928,10 +1252,13 @@
         - digit_ui_mode == "static"
         - (digit_ui_bundle_image | default('')) | length > 0
 
-    - name: "digit-ui mode=static — install Node 20 if missing (esbuild.build.js needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Node 20 + npm for the on-host esbuild build. esbuild.build.js needs
+    # Node 20 + npm; see tasks/ensure-node20.yml for why apt's nodejs isn't
+    # enough on Ubuntu (Node 18, no npm) and how the version gate works.
+    - name: "digit-ui mode=static — ensure Node 20 + npm (NodeSource) for on-host build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "digit-ui static"
       when:
         - digit_ui_mode == "static"
         - ansible_system != "Darwin"
@@ -945,15 +1272,27 @@
         # node_modules is stale and esbuild.build.js fails to resolve.
         # Re-run if package.json or package-lock.json is newer than the
         # node_modules root, or if node_modules doesn't exist at all.
+        #
+        # Fail LOUD: this block previously had no error handling, so a
+        # missing npm (Ubuntu apt nodejs ships no npm) or a failed install
+        # still echoed "installed" and reported success — the real error
+        # only surfaced one task later as a confusing "Cannot find module
+        # esbuild". Detect a broken environment here, at the right task.
+        # -e so a failed `cd` aborts instead of running the npm checks (and
+        # echoing a false "skipped"/"installed") in the wrong directory.
+        set -euo pipefail
         cd /opt/digit-ui-esbuild
+        command -v npm >/dev/null || { echo "ERROR: npm not on PATH (apt nodejs ships no npm on Ubuntu; NodeSource task above should have fixed this)"; exit 1; }
         if [ ! -d node_modules ] \
            || [ package.json -nt node_modules ] \
            || [ package-lock.json -nt node_modules ]; then
-          npm install --legacy-peer-deps
+          npm install --legacy-peer-deps || { echo "ERROR: npm install failed"; exit 1; }
           echo installed
         else
           echo skipped
         fi
+      args:
+        executable: /bin/bash
       register: npm_install
       changed_when: npm_install.stdout == "installed"
       when:
@@ -962,6 +1301,7 @@
 
     - name: "digit-ui mode=static — run esbuild.build.js (idempotent: skips if build/ index newer than sources)"
       ansible.builtin.shell: |
+        set -o pipefail
         cd /opt/digit-ui-esbuild
         # Quick freshness check: if build/index.html is newer than the
         # most-recent source file, skip the rebuild (~5s saved on
@@ -988,22 +1328,28 @@
     # --- hmr mode ---
     - name: "digit-ui mode=hmr — stop digit-ui container after compose brought it up"
       ansible.builtin.shell: |
+        set -o pipefail
         if docker ps --filter name=^digit-ui$ --format '{% raw %}{{.Names}}{% endraw %}' | grep -q '^digit-ui$'; then
           docker stop digit-ui
           echo stopped
         fi
+      args:
+        executable: /bin/bash
       register: post_up_stop_digit_ui
       changed_when: post_up_stop_digit_ui.stdout == "stopped"
       when: digit_ui_mode == "hmr"
 
     - name: "digit-ui mode=hmr — start tmux esbuild session"
       ansible.builtin.shell: |
+        set -o pipefail
         if ! tmux has-session -t esbuild 2>/dev/null; then
           cd /opt/digit-ui-esbuild
           tmux new-session -d -s esbuild \
             "PORT=18080 GLOBAL_CONFIGS={{ digit_dir }}/nginx/globalConfigs.js node esbuild.dev.js 2>&1 | tee /var/log/esbuild.log"
           echo started
         fi
+      args:
+        executable: /bin/bash
       register: start_esbuild
       changed_when: start_esbuild.stdout == "started"
       when: digit_ui_mode == "hmr"
@@ -1064,10 +1410,11 @@
         force: true
       when: enable_digit_ui_v2 | default(false)
 
-    - name: "digit-ui-v2 — install Node 20 if missing (Vite build needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Node 20 + npm for the Vite build (see tasks/ensure-node20.yml).
+    - name: "digit-ui-v2 — ensure Node 20 + npm (NodeSource) for Vite build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "digit-ui-v2"
       when:
         - enable_digit_ui_v2 | default(false)
         - ansible_system != "Darwin"
@@ -1328,9 +1675,12 @@
     # On repeat deploys the named volume already has data, initdb won't
     # re-run, so this ALTER is the only way the password gets updated.
     - name: "OpenBao — sync postgres role password with vault secret"
-      ansible.builtin.shell: >-
-        printf "ALTER ROLE egov WITH PASSWORD '%s';\n" "$NEWPW" |
-        docker exec -i docker-postgres psql -U egov -d egov
+      ansible.builtin.shell: |
+        set -o pipefail
+        printf "ALTER ROLE egov WITH PASSWORD '%s';\n" "$NEWPW" \
+          | docker exec -i docker-postgres psql -U egov -d egov
+      args:
+        executable: /bin/bash
       environment:
         NEWPW: "{{ bao_secrets.json.data.data.postgres_password }}"
       no_log: true
@@ -1343,9 +1693,12 @@
     # send the vault value, which the role doesn't accept. ALTER the
     # role inside digit-mcp-postgres so the next up -d's MCP can connect.
     - name: "OpenBao — sync mcp-postgres role password with vault secret"
-      ansible.builtin.shell: >-
-        printf "ALTER ROLE mcp WITH PASSWORD '%s';\n" "$NEWPW" |
-        docker exec -i digit-mcp-postgres psql -U mcp -d mcp_sessions
+      ansible.builtin.shell: |
+        set -o pipefail
+        printf "ALTER ROLE mcp WITH PASSWORD '%s';\n" "$NEWPW" \
+          | docker exec -i digit-mcp-postgres psql -U mcp -d mcp_sessions
+      args:
+        executable: /bin/bash
       environment:
         NEWPW: "{{ bao_secrets.json.data.data.mcp_db_password }}"
       no_log: true
@@ -1424,7 +1777,6 @@
             scp {{ ansible_user }}@{{ ansible_host }}:{{ digit_dir }}/.openbao/init.json ./init-{{ inventory_hostname }}.json
 
           Secrets path for this tenant: {{ secrets_path }}
-      ignore_errors: yes
 
     # ============================================================
     # Host nginx — must be in place + reloaded BEFORE the validation
@@ -1457,6 +1809,11 @@
       # otherwise → the code default (public Overpass) applies.
       environment:
         VITE_OVERPASS_URL: "{{ '/overpass/api/interpreter' if (enable_overpass | default(false)) else '' }}"
+        # Root (state) tenant baked into the build so the standalone configurator
+        # (which has no digit-ui window.globalConfigs) can hint the login tenant
+        # placeholder + pre-login default from the real deployment tenant. A city
+        # code collapses to its root segment at runtime.
+        VITE_STATE_TENANT_ID: "{{ state_tenant_id | default('') }}"
       register: configurator_build_run
       changed_when: true
       when:
@@ -1619,10 +1976,11 @@
     # nginx_preserve_vhost (e.g. Bomet) the template is NOT rendered, so wire
     # the blocks from tests/integration-tests/deploy/nginx-integration-tests.conf
     # by hand there.
-    - name: "integration-tests — install Node 20 if missing (Vite build needs it)"
-      ansible.builtin.apt:
-        name: nodejs
-        state: present
+    # Node 20 + npm for the Vite build (see tasks/ensure-node20.yml).
+    - name: "integration-tests — ensure Node 20 + npm (NodeSource) for Vite build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "integration-tests"
       when:
         - enable_integration_tests | default(false)
         - ansible_system != "Darwin"
@@ -1696,7 +2054,7 @@
         dest: "/var/www/integration-tests-v2/{{ item }}"
         state: link
         force: true
-      loop: [ 'catalog.json', 'history.json', 'runs' ]
+      loop: ['catalog.json', 'history.json', 'runs']
       when:
         - enable_integration_tests | default(false)
         - integration_tests_dir is defined
@@ -1782,10 +2140,10 @@
     - name: "Host nginx — Linux/Debian only"
       when: ansible_system != "Darwin"
       block:
-      - name: "Host nginx — install if missing"
-        ansible.builtin.apt:
-          name: nginx
-          state: present
+        - name: "Host nginx — install if missing"
+          ansible.builtin.apt:
+            name: nginx
+            state: present
 
       # `nginx_preserve_vhost: true` in host_vars makes the next three tasks
       # (render / enable / remove-default) no-op. Use it for tenants whose
@@ -1795,32 +2153,32 @@
       # install task above still runs (idempotent), so the package is
       # always present; only the site file is left alone.
 
-      - name: "Host nginx — render site config from template"
-        ansible.builtin.template:
-          src: templates/nginx-site.conf.j2
-          dest: "/etc/nginx/sites-available/{{ domain }}"
-          mode: '0644'
-        notify: Reload nginx
-        when: not (nginx_preserve_vhost | default(false))
+        - name: "Host nginx — render site config from template"
+          ansible.builtin.template:
+            src: templates/nginx-site.conf.j2
+            dest: "/etc/nginx/sites-available/{{ domain }}"
+            mode: '0644'
+          notify: Reload nginx
+          when: not (nginx_preserve_vhost | default(false))
 
-      - name: "Host nginx — enable site"
-        ansible.builtin.file:
-          src: "/etc/nginx/sites-available/{{ domain }}"
-          dest: "/etc/nginx/sites-enabled/{{ domain }}"
-          state: link
-          force: yes   # convert pre-existing regular-file copies (older deploys) into a symlink
-        notify: Reload nginx
-        when: not (nginx_preserve_vhost | default(false))
+        - name: "Host nginx — enable site"
+          ansible.builtin.file:
+            src: "/etc/nginx/sites-available/{{ domain }}"
+            dest: "/etc/nginx/sites-enabled/{{ domain }}"
+            state: link
+            force: yes   # convert pre-existing regular-file copies (older deploys) into a symlink
+          notify: Reload nginx
+          when: not (nginx_preserve_vhost | default(false))
 
-      - name: "Host nginx — remove default site"
-        ansible.builtin.file:
-          path: /etc/nginx/sites-enabled/default
-          state: absent
-        notify: Reload nginx
-        when: not (nginx_preserve_vhost | default(false))
+        - name: "Host nginx — remove default site"
+          ansible.builtin.file:
+            path: /etc/nginx/sites-enabled/default
+            state: absent
+          notify: Reload nginx
+          when: not (nginx_preserve_vhost | default(false))
 
-      - name: "Host nginx — flush handlers so reload happens before validation"
-        ansible.builtin.meta: flush_handlers
+        - name: "Host nginx — flush handlers so reload happens before validation"
+          ansible.builtin.meta: flush_handlers
 
     # macOS thin path: run nginx as a container instead of host nginx.
     # Renders the same template (upstream host -> host.docker.internal so
@@ -1869,7 +2227,7 @@
         # Bad signals: "Restarting", "Exited" (with non-zero), or
         # "(unhealthy)". One-shot init containers that finished
         # successfully report "Exited (0)" — those are fine too.
-        set -e
+        set -eo pipefail
         bad=$(docker compose -f {{ digit_dir }}/docker-compose.egov-digit.yaml ps \
                 --format '{{ "{{" }}.Name{{ "}}" }} {{ "{{" }}.Status{{ "}}" }}' \
               | grep -E 'Restarting|\(unhealthy\)|Exited \([1-9]' || true)
@@ -1880,7 +2238,38 @@
         fi
       args:
         chdir: "{{ digit_dir }}"
+        executable: /bin/bash
       changed_when: false
+
+    # ── Service health through Kong ───────────────────────────────────────
+    # Hit each core service's health endpoint via Kong (port 18000), not
+    # via direct internal ports. This validates the full routing chain
+    # (Kong route registration, strip_path, upstream reachability) — a
+    # service can be alive on its internal port while its Kong route is
+    # broken. Always hits 127.0.0.1:18000 regardless of tls_enabled since
+    # we're probing from the server itself.
+    - name: "validate — core services healthy through Kong"
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ upstream_kong_port }}{{ item.path }}"
+        status_code: [200]
+        timeout: 10
+      loop:
+        - {name: MDMS,         path: /mdms-v2/health}
+        - {name: User,         path: /user/health}
+        - {name: ENC Service,  path: /egov-enc-service/actuator/health}
+        - {name: IDGEN,        path: /egov-idgen/health}
+        - {name: Workflow,     path: /egov-workflow-v2/health}
+        - {name: Localization, path: /localization/actuator/health}
+        - {name: Boundary-v2,  path: /boundary-service/actuator/health}
+        - {name: AccessControl, path: /access/health}
+        - {name: Persister,    path: /common-persist/actuator/health}
+        - {name: PGR-Services, path: /pgr-services/health}
+      loop_control:
+        label: "{{ item.name }}"
+      register: kong_svc_health
+      retries: 3
+      delay: 10
+      until: kong_svc_health.status == 200
 
     # When tls_enabled=false (sandbox), hit the box on plain HTTP and pass
     # `Host: {{ domain }}` so nginx routes to the right server-name block.
@@ -1976,11 +2365,12 @@
     # tenant BEFORE MCP bootstrap creates the ADMIN user. egov-enc-service
     # discovers tenants via MDMS search under STATE_LEVEL_TENANT_ID — at this
     # point that's still `pg.citya`, so `mz` (a different root) is unknown and
-    # user encrypt/decrypt for `mz` throws "Tenant Id not found". The custom
-    # `:generatekey-endpoint` image exposes POST /crypto/v1/_generatekey which
-    # inserts the key row directly, bypassing MDMS discovery — solving the
-    # chicken-and-egg between bootstrap needing encryption and enc-service not
-    # yet knowing the new tenant. Idempotent (created: false when key exists).
+    # user encrypt/decrypt for `mz` throws "Tenant Id not found". egov-enc-service
+    # 2.12-87e13fe (formerly the custom `:generatekey-endpoint` preview build)
+    # exposes POST /crypto/v1/_generatekey which inserts the key row directly,
+    # bypassing MDMS discovery — solving the chicken-and-egg between bootstrap
+    # needing encryption and enc-service not yet knowing the new tenant.
+    # Idempotent (created: false when key exists).
     - name: "pre-bootstrap — generate enc-service key for state root ({{ state_root }})"
       ansible.builtin.uri:
         url: "http://127.0.0.1:11234/egov-enc-service/crypto/v1/_generatekey"
@@ -2100,7 +2490,7 @@
       when:
         - state_root != 'pg'
         - mcp_root_bootstrap is defined
-        - (mcp_root_bootstrap.json.success | default(true)) == false
+        - not (mcp_root_bootstrap.json.success | default(true))
 
     - name: "mcp-bootstrap — print detailed failure entries (city)"
       ansible.builtin.debug:
@@ -2113,7 +2503,7 @@
       when:
         - state_root != 'pg'
         - mcp_city_bootstrap is defined
-        - (mcp_city_bootstrap.json.success | default(true)) == false
+        - not (mcp_city_bootstrap.json.success | default(true))
 
     # Bail out if either bootstrap reported failures. `ignore_errors: true`
     # on the API call only suppresses 4xx/5xx so we can still capture the
@@ -2134,10 +2524,10 @@
         - not (tolerate_bootstrap_failures | default(false))
         - >
           (mcp_root_bootstrap is defined and
-            (mcp_root_bootstrap.json.success | default(true)) == false)
+            not (mcp_root_bootstrap.json.success | default(true)))
           or
           (mcp_city_bootstrap is defined and
-            (mcp_city_bootstrap.json.success | default(true)) == false)
+            not (mcp_city_bootstrap.json.success | default(true)))
 
     # ────────────────────────────────────────────────────────────────
     # Post-bootstrap STATE_LEVEL_TENANT_ID rewrite. The upstream compose
@@ -2339,6 +2729,7 @@
         docker compose {{ compose_files }} up -d --force-recreate egov-hrms
       args:
         chdir: "{{ digit_dir }}"
+      changed_when: true
       when: state_root != 'pg'
 
     # Without this wait a crash-looping HRMS (e.g. missing system user on
@@ -2733,12 +3124,15 @@
 
     - name: "keycloak-bootstrap — wire Google IdP (when configured)"
       ansible.builtin.shell: |
+        set -o pipefail
         docker exec keycloak /opt/keycloak/bin/kcadm.sh create identity-provider/instances \
           -r "{{ state_tenant_id }}" \
           -s alias=google \
           -s providerId=google \
           -s 'config.clientId={{ keycloak_google_client_id }}' \
           -s 'config.clientSecret={{ bao_secrets.json.data.data.keycloak_google_client_secret | default('') }}' 2>&1 | grep -v "Conflict" || true
+      args:
+        executable: /bin/bash
       when:
         - enable_keycloak | default(false)
         - (keycloak_google_client_id | default('')) | length > 0
@@ -2896,7 +3290,7 @@
       ansible.builtin.systemd:
         name: nginx
         state: reloaded
-      ignore_errors: true
+      failed_when: false
 
     - name: "validate — MDMS lookup: StateInfo returns at least one record"
       ansible.builtin.uri:
@@ -2986,10 +3380,13 @@
 
     - name: Install Node.js 20 LTS (needed for CC and tests)
       shell: |
+        set -o pipefail
         if ! node --version 2>/dev/null | grep -qE "^v2[02]"; then
           curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
           apt-get install -y nodejs
         fi
+      args:
+        executable: /bin/bash
       register: nodejs_install
       changed_when: "'nodejs is already' not in nodejs_install.stdout"
       when:
@@ -3030,7 +3427,7 @@
       loop:
         - { src: "/root/.claude/settings.json", dest: "/root/.claude/settings.json" }
         - { src: "/root/.claude/settings.local.json", dest: "/root/.claude/settings.local.json" }
-      ignore_errors: yes
+      failed_when: false
       when: install_claude_code | default(false)
 
     - name: Synchronize Claude Code skills
@@ -3362,6 +3759,7 @@
         INPUT_XLSX={{ digit_dir }}/ci-tests/data/county-data.xlsx \
         python3 ci-dataloader-xlsx.py
       register: xlsx_dataloader_result
+      changed_when: false
       timeout: 600
       ignore_errors: yes
 
@@ -3413,12 +3811,14 @@
       shell: npm install
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
+      changed_when: false
 
       when: run_ci_tests | default(false) and (run_playwright_tests | default(false))
     - name: Install Playwright Chromium with system dependencies
-      shell: 'npx playwright install{{ " --with-deps" if ansible_system != "Darwin" else "" }} chromium' 
+      shell: 'npx playwright install{{ " --with-deps" if ansible_system != "Darwin" else "" }} chromium'
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
+      changed_when: false
       # Browser binaries + system deps via apt — first run on a fresh box
       # routinely hits 4-6 min on a 4-core VPS. 300s was too tight.
       timeout: 600
@@ -3453,6 +3853,7 @@
       args:
         chdir: "{{ digit_dir }}/e2e-tests"
       register: playwright_result
+      changed_when: false
       timeout: 900
       ignore_errors: yes
 

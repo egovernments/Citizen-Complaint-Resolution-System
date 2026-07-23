@@ -13,12 +13,16 @@ import {
 import { useScrollableChartSize } from "../hooks/useScrollableChartSize";
 import { resolveBarChartColumnWidth } from "../config/barChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
+import useDashboardT from "../i18n/useDashboardT";
 import ChartScrollViewport from "./ChartScrollViewport";
+import { formatNumber, getNumberFormatStamp } from "../utils/numberFormat";
 
+// Numeric part goes through the tenant mask (formatNumber, null when
+// unconfigured -> pre-#1213 expression).
 function formatRatio(value) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return "0.00";
-  return n.toFixed(2);
+  if (!Number.isFinite(n)) return formatNumber(0, { decimals: 2 }) ?? "0.00";
+  return formatNumber(n, { decimals: 2 }) ?? n.toFixed(2);
 }
 
 function breakEvenSeriesValues(value, breakEven) {
@@ -31,15 +35,21 @@ function breakEvenSeriesValues(value, breakEven) {
 }
 
 const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
+  const { t, language } = useDashboardT();
+  // Per-locale numberFormat mask stamp (#1272): baked into the options memo
+  // because react-apexcharts compares JSON.stringify(options), which drops
+  // the total-label/tooltip formatter closures — `language` alone can miss a
+  // mask change whose translated strings happen to coincide.
+  const numberFormatStamp = getNumberFormatStamp();
   const rows = useMemo(
     () =>
       (data || []).map((entry) => ({
-        label: String(entry.label ?? "Unknown"),
+        label: String(entry.label ?? t("DASHBOARD_COMMON_UNKNOWN", "Unknown")),
         value: Number(entry.value ?? entry.count) || 0,
         resolved: Number(entry.resolved),
         created: Number(entry.created),
       })),
-    [data]
+    [data, t, language]
   );
 
   const categories = useMemo(() => rows.map((d) => d.label), [rows]);
@@ -136,7 +146,10 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
         horizontalAlign: "center",
         fontSize: "11px",
         offsetY: 2,
-        customLegendItems: ["Falling behind (<1.0)", "Catching up (≥1.0)"],
+        customLegendItems: [
+          t("DASHBOARD_TILE_LEGEND_FALLING_BEHIND", "Falling behind (<1.0)"),
+          t("DASHBOARD_TILE_LEGEND_CATCHING_UP", "Catching up (≥1.0)"),
+        ],
         markers: {
           fillColors: [belowBreakEvenColor, atOrAboveBreakEvenColor],
         },
@@ -172,7 +185,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
             Number.isFinite(row.resolved) &&
             Number.isFinite(row.created) &&
             row.created > 0
-              ? `${row.resolved} resolved ÷ ${row.created} created`
+              ? `${formatNumber(row.resolved, { decimals: 0 }) ?? row.resolved} ${t("DASHBOARD_COMMON_RESOLVED", "resolved")} ÷ ${formatNumber(row.created, { decimals: 0 }) ?? row.created} ${t("DASHBOARD_COMMON_CREATED", "created")}`
               : "";
           const value = `${formatRatio(row.value)}${detail ? ` — ${detail}` : ""}`;
           return buildChartTooltipMarkup({
@@ -181,6 +194,9 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
           });
         },
       }),
+      // Not an Apex option — stringifiable stamp of the per-locale mask so
+      // the JSON.stringify options comparison sees mask-only changes.
+      _numberFormatStamp: numberFormatStamp,
     }),
     [
       axisMax,
@@ -194,15 +210,18 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
       foregroundColor,
       mutedColor,
       rows,
+      t,
+      language,
+      numberFormatStamp,
     ]
   );
 
   const series = useMemo(
     () => [
-      { name: "Falling behind (<1.0)", data: belowSeries },
-      { name: "Catching up (≥1.0)", data: aboveSeries },
+      { name: t("DASHBOARD_TILE_LEGEND_FALLING_BEHIND", "Falling behind (<1.0)"), data: belowSeries },
+      { name: t("DASHBOARD_TILE_LEGEND_CATCHING_UP", "Catching up (≥1.0)"), data: aboveSeries },
     ],
-    [aboveSeries, belowSeries]
+    [aboveSeries, belowSeries, t, language]
   );
 
   const hasData = rows.length > 0;

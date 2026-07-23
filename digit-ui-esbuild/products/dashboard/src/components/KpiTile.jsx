@@ -10,7 +10,9 @@ import DashboardTable from './DashboardTable';
 import ComplaintsAtRiskTable from './ComplaintsAtRiskTable';
 import OpenComplaintsByGeographyWidget from './OpenComplaintsByGeographyWidget';
 import { evaluateCompose } from '../utils/composeKpi';
-import { getNumberTileDeltaClass, formatOfficerLabel } from '../config/kpiDisplay';
+import { applyGroupByToColumns } from '../utils/hierLevelGrouping';
+import { formatNumber } from '../utils/numberFormat';
+import { getNumberTileDeltaClass, formatOfficerLabel, dimensionKindForName } from '../config/kpiDisplay';
 import {
   resolveSlaRiskPresentation,
   computeBreachDurationMs,
@@ -18,6 +20,11 @@ import {
   formatWorkflowStatusLabel,
   normalizeWorkflowStatusKey,
 } from '../config/complaintsAtRiskPresentation';
+import useDashboardT from '../i18n/useDashboardT';
+import { dimensionLabel } from '../i18n/dimensionLabel';
+import { translate as t } from '../i18n/localeRuntime';
+import { resolveTitle, resolveSubtitle, seriesEntryLabel, resolveSeriesLabel } from '../i18n/textResolver';
+import { markFirstWidgetVisible } from '../services/dashboardMetrics';
 
 /**
  * Generic viz-kind-driven tile renderer (the dashboard RENDERING ENGINE).
@@ -40,8 +47,10 @@ import {
  *
  * The viz descriptor (`def.viz`) keys this engine understands:
  *   kind, format, accent, dimensionKey, measureKey(s), seriesKeys, stackKey,
- *   stackSeries, titleKey, valueKey, priorKey, sparklineKey, compose, breakEven,
- *   limit, colors, columns, deltaLabel, delta.
+ *   stackSeries, titleKey, subtitleKey, valueKey, priorKey, sparklineKey, compose,
+ *   breakEven, limit, colors, columns, deltaLabel, delta. i18n: titleKey/subtitleKey
+ *   resolve through the locale seam when seeded; stackSeries/seriesDefs entries and
+ *   viz.columns may carry a `labelKey` that wins over their `label`/`name`.
  *
  * Props:
  * - def: tile descriptor from catalog (viz, titleKey, kpiId, ...)
@@ -51,29 +60,46 @@ import {
  * - vizOverride: optional user-chosen viz kind
  * - loading: pass-through loading flag for the child components
  * - onRemove: pass-through remove handler for card chrome
+ * - groupBy: { level, label } | null — the widget's effective non-leaf
+ *   "Group by" hierarchy level (#1111 PR2). The backend already aliases the
+ *   level code back AS service_code, so charts need nothing; table kinds use
+ *   this to drop the now-redundant service_group column and relabel the
+ *   service_code column to the level's name.
  */
-export function KpiTile({ def, result, results, error, vizOverride, loading = false, onRemove }) {
+export function KpiTile({ def, result, results, error, vizOverride, loading = false, onRemove, groupBy = null }) {
+  // Subscribes the whole tile to language/bundle changes so every label
+  // computed below re-renders on a language switch.
+  const { language } = useDashboardT();
   const viz = def?.viz || {};
   const title = resolveTitle(def);
+
+  // first_widget_visible (#1110): one-shot per load, fired by whichever tile
+  // first renders NON-skeleton content — including the error and "No data"
+  // paths (R9/F8) so failed loads still measure. The metrics module dedupes
+  // and stamps post-paint, so repeat calls are cheap no-ops.
+  const isSkeleton = !result && !error && loading;
+  React.useEffect(() => {
+    if (!isSkeleton) markFirstWidgetVisible();
+  }, [isSkeleton]);
 
   if (error) {
     return (
       <div className="kpi-tile kpi-tile--error" data-error-code={error.code}>
         <span className="kpi-tile__error-code">{errorLabel(error.code)}</span>
-        <span className="kpi-tile__error-msg">{error.message || 'Failed to load'}</span>
+        <span className="kpi-tile__error-msg">{error.message || t("DASHBOARD_TILE_ERR_FAILED_TO_LOAD", "Failed to load")}</span>
       </div>
     );
   }
 
   if (!result && !loading) {
-    return <div className="kpi-tile kpi-tile--empty"><span className="kpi-tile__empty">No data</span></div>;
+    return <div className="kpi-tile kpi-tile--empty"><span className="kpi-tile__empty">{t("DASHBOARD_COMMON_NO_DATA", "No data")}</span></div>;
   }
   if (!result) {
     return <div className="kpi-tile kpi-tile--loading"><div className="kpi-tile__skeleton" /></div>;
   }
 
   const kind = vizOverride || viz.kind || 'scalar';
-  const ctx = { def, viz, result, results, title, loading, onRemove };
+  const ctx = { def, viz, result, results, title, loading, onRemove, groupBy, locale: language?.replace('_', '-') };
 
   const content = renderByKind(kind, ctx);
 
@@ -247,6 +273,9 @@ function computeDelta(current, prior, format, mode) {
   return ((current - prior) / Math.abs(prior)) * 100; // relative %
 }
 
+// Delta numbers route their NUMERIC part through the tenant mask
+// (formatNumber, null when unconfigured -> the pre-#1213 expression); the
+// arrow and pp/%/day/hr unit suffixes stay here.
 function formatDeltaDisplay(delta, format, mode) {
   if (delta == null || !Number.isFinite(delta)) return null;
   const arrow = delta >= 0 ? '▲' : '▼';
@@ -254,12 +283,14 @@ function formatDeltaDisplay(delta, format, mode) {
   const eff = mode || (isPercentFormat(format) ? 'percentPoint' : 'percent');
   if (eff === 'duration') {
     return abs >= 86400000
-      ? `${arrow} ${(abs / 86400000).toFixed(1)} days`
-      : `${arrow} ${(abs / 3600000).toFixed(1)} hrs`;
+      ? `${arrow} ${formatNumber(abs / 86400000, { decimals: 1 }) ?? (abs / 86400000).toFixed(1)} ${t("DASHBOARD_UNIT_DAYS", "days")}`
+      : `${arrow} ${formatNumber(abs / 3600000, { decimals: 1 }) ?? (abs / 3600000).toFixed(1)} ${t("DASHBOARD_UNIT_HRS", "hrs")}`;
   }
   const rounded = Math.round(abs * 10) / 10;
-  const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
-  if (eff === 'days') return `${arrow} ${formatted} ${rounded === 1 ? 'day' : 'days'}`;
+  const formatted =
+    formatNumber(rounded, { decimals: 1, trim: true }) ??
+    (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
+  if (eff === 'days') return `${arrow} ${formatted} ${rounded === 1 ? t("DASHBOARD_UNIT_DAY", "day") : t("DASHBOARD_UNIT_DAYS", "days")}`;
   if (eff === 'rating') return `${arrow} ${formatted}`;
   const unit = eff === 'percentPoint' ? 'pp' : '%';
   return `${arrow} ${formatted}${unit}`;
@@ -327,7 +358,7 @@ function statusToSeriesColor(status) {
 }
 
 function renderNumberTileDelta(ctx) {
-  const { viz, title, loading, onRemove } = ctx;
+  const { viz, title, loading, onRemove, locale } = ctx;
   const value = resolveScalar(ctx);
   const prior = resolvePrior(ctx);
   const delta = computeDelta(value, prior, viz.format, viz.delta?.mode);
@@ -335,8 +366,8 @@ function renderNumberTileDelta(ctx) {
   return (
     <KpiCard
       title={title}
-      value={loading ? undefined : applyFormat(value, viz.format)}
-      context={viz.subtitle || viz.description || viz.contextLabel || ''}
+      value={loading ? undefined : applyFormat(value, viz.format, locale)}
+      context={resolveSubtitle(viz)}
       status={status}
       deltaDisplay={formatDeltaDisplay(delta, viz.format, viz.delta?.mode)}
       deltaClass={resolveDeltaClass(viz, value, delta)}
@@ -371,7 +402,7 @@ function resolveSparkline(ctx) {
 }
 
 function renderNumberTileSparkline(ctx) {
-  const { viz, title, loading, onRemove } = ctx;
+  const { viz, title, loading, onRemove, locale } = ctx;
   const value = resolveScalar(ctx);
   const prior = resolvePrior(ctx);
   const delta = computeDelta(value, prior, viz.format, viz.delta?.mode);
@@ -379,7 +410,7 @@ function renderNumberTileSparkline(ctx) {
   return (
     <KpiSparklineCard
       title={title}
-      value={loading ? undefined : applyFormat(value, viz.format)}
+      value={loading ? undefined : applyFormat(value, viz.format, locale)}
       status={status}
       deltaDisplay={formatDeltaDisplay(delta, viz.format, viz.delta?.mode)}
       deltaClass={resolveDeltaClass(viz, value, delta)}
@@ -398,13 +429,13 @@ function renderNumberTileSparkline(ctx) {
 // ---------------------------------------------------------------------------
 
 function adaptBarRows(ctx) {
-  const { viz, result } = ctx;
+  const { viz, result, locale } = ctx;
   const dimKey = primaryDimensionKey(result, viz);
   const measure = primaryMeasure(result, viz);
   const isPercent = viz.format === 'percent' || viz.format === 'percentOneDecimal';
 
   let rows = (result.rows || []).map((row) => ({
-    label: formatDimLabel(row[dimKey], viz),
+    label: formatDimLabel(row[dimKey], viz, dimKey, locale),
     count: percentToChartScale(Number(row[measure.name]) || 0, isPercent),
   }));
 
@@ -431,8 +462,8 @@ function adaptBarRows(ctx) {
 function renderBar(ctx, { histogram }) {
   const { viz, loading } = ctx;
   const data = adaptBarRows(ctx);
-  if (loading && !data.length) return <Placeholder message="Loading…" />;
-  if (!data.length) return <Placeholder message="No data" />;
+  if (loading && !data.length) return <Placeholder message={t("DASHBOARD_COMMON_LOADING", "Loading…")} />;
+  if (!data.length) return <Placeholder message={t("DASHBOARD_COMMON_NO_DATA", "No data")} />;
   return (
     <DepartmentBarChart
       data={data}
@@ -451,7 +482,7 @@ function renderBar(ctx, { histogram }) {
 // ---------------------------------------------------------------------------
 
 function adaptHorizontalRows(ctx) {
-  const { viz, result } = ctx;
+  const { viz, result, locale } = ctx;
   const dimKey = primaryDimensionKey(result, viz);
   const valueKey = viz.measureKey || primaryMeasure(result, viz).name;
   const numeratorKey = viz.numeratorKey;   // e.g. resolved
@@ -471,13 +502,17 @@ function adaptHorizontalRows(ctx) {
   }
   const isRatio = numeratorKey != null && denominatorKey != null;
   let rows = [...grouped.entries()].map(([key, b]) => ({
-    label: formatDimLabel(key, viz),
+    label: formatDimLabel(key, viz, dimKey, locale),
     value: isRatio ? (b.den > 0 ? b.num / b.den : 0) : b.val,
     resolved: numeratorKey != null ? b.num : undefined,
     created: denominatorKey != null ? b.den : undefined,
   }));
   // Drop zero-denominator categories (reference filters created<=0).
-  if (isRatio) rows = rows.filter((r) => (r.created || 0) > 0);
+  // Only hide zero *values* for ratio charts (e.g. flow ratio) — count bars
+  // should still show an explicit zero bar (#1028 / review on #1311).
+  if (isRatio) {
+    rows = rows.filter((r) => (r.created || 0) > 0 && Number(r.value) > 0);
+  }
   if (viz.sort !== 'none') rows = rows.sort((a, b) => a.value - b.value);
   if (viz.limit) rows = rows.slice(0, viz.limit);
   return rows;
@@ -486,8 +521,8 @@ function adaptHorizontalRows(ctx) {
 function renderHorizontalBar(ctx) {
   const { viz, loading } = ctx;
   const data = adaptHorizontalRows(ctx);
-  if (loading && !data.length) return <Placeholder message="Loading…" />;
-  if (!data.length) return <Placeholder message="No data" />;
+  if (loading && !data.length) return <Placeholder message={t("DASHBOARD_COMMON_LOADING", "Loading…")} />;
+  if (!data.length) return <Placeholder message={t("DASHBOARD_COMMON_NO_DATA", "No data")} />;
   return (
     <HorizontalBarChart
       data={data}
@@ -506,7 +541,7 @@ function renderHorizontalBar(ctx) {
 // ---------------------------------------------------------------------------
 
 function adaptStacked(ctx) {
-  const { viz, result } = ctx;
+  const { viz, result, locale } = ctx;
 
   // BE-shaped passthrough.
   if (result.series && Array.isArray(result.series) && result.categories) {
@@ -521,14 +556,14 @@ function adaptStacked(ctx) {
   // Single-series stacked (e.g. complaints-by-type "Filed").
   if (!stackKey || !stackSeries?.length) {
     let rows = (result.rows || []).map((row) => ({
-      label: formatDimLabel(row[dimKey], viz),
+      label: formatDimLabel(row[dimKey], viz, dimKey, locale),
       value: Number(row[measureKey]) || 0,
     }));
     if (viz.sort !== 'none') rows = rows.sort((a, b) => b.value - a.value);
     if (viz.limit) rows = rows.slice(0, viz.limit);
     return {
       categories: rows.map((r) => r.label),
-      series: [{ name: viz.seriesLabel || 'Count', data: rows.map((r) => r.value) }],
+      series: [{ name: resolveSeriesLabel(viz, viz.seriesLabel || t("DASHBOARD_COMMON_COUNT", "Count")), data: rows.map((r) => r.value) }],
       colors: viz.colors || ['var(--chart-1)'],
     };
   }
@@ -563,9 +598,9 @@ function adaptStacked(ctx) {
   if (viz.limit) entries = entries.slice(0, viz.limit);
 
   return {
-    categories: entries.map((e) => formatDimLabel(e.key, viz)),
+    categories: entries.map((e) => formatDimLabel(e.key, viz, dimKey, locale)),
     series: stackSeries.map((def) => ({
-      name: def.label,
+      name: seriesEntryLabel(def, def.label),
       data: entries.map((e) => e.segments[normalizeSeg(def.key)] ?? 0),
     })),
     colors: stackSeries.map((def) => def.color),
@@ -576,8 +611,8 @@ function renderStackedBar(ctx) {
   const { viz, loading } = ctx;
   const { categories, series, colors } = adaptStacked(ctx);
   const hasData = categories.length > 0 && series.some((s) => s.data?.some((v) => Number(v) > 0));
-  if (loading && !hasData) return <Placeholder message="Loading…" />;
-  if (!hasData) return <Placeholder message="No data" />;
+  if (loading && !hasData) return <Placeholder message={t("DASHBOARD_COMMON_LOADING", "Loading…")} />;
+  if (!hasData) return <Placeholder message={t("DASHBOARD_COMMON_NO_DATA", "No data")} />;
   return (
     <StackedBarChart
       categories={categories}
@@ -596,7 +631,7 @@ function renderStackedBar(ctx) {
 // ---------------------------------------------------------------------------
 
 function adaptPie(ctx) {
-  const { viz, result } = ctx;
+  const { viz, result, locale } = ctx;
   const dimKey = primaryDimensionKey(result, viz);
   const measure = primaryMeasure(result, viz);
   const colors = viz.colors || [];
@@ -608,7 +643,7 @@ function adaptPie(ctx) {
   }
   let rows = (result.rows || [])
     .map((row, i) => ({
-      label: formatDimLabel(row[dimKey], viz),
+      label: formatDimLabel(row[dimKey], viz, dimKey, locale),
       count: Number(row[measure.name]) || 0,
       color: colors[i],
     }))
@@ -635,7 +670,11 @@ function adaptChannelPie(result, dimKey, measure, viz) {
     if (totals.has(id)) totals.set(id, totals.get(id) + count);
   }
   return channels
-    .map((c) => ({ label: c.label, count: totals.get(c.id) ?? 0, color: c.color }))
+    .map((c) => ({
+      label: seriesEntryLabel(c, dimensionLabel(c.id, 'channel', c.label)),
+      count: totals.get(c.id) ?? 0,
+      color: c.color,
+    }))
     .filter((s) => s.count > 0)
     .sort((a, b) => (b.count - a.count) || a.label.localeCompare(b.label));
 }
@@ -647,8 +686,8 @@ function normalizeSourceKey(source) {
 function renderPie(ctx) {
   const { loading } = ctx;
   const data = adaptPie(ctx);
-  if (loading && !data.length) return <Placeholder message="Loading…" />;
-  if (!data.length) return <Placeholder message="No data" />;
+  if (loading && !data.length) return <Placeholder message={t("DASHBOARD_COMMON_LOADING", "Loading…")} />;
+  if (!data.length) return <Placeholder message={t("DASHBOARD_COMMON_NO_DATA", "No data")} />;
   return <PieChart data={data} />;
 }
 
@@ -660,7 +699,7 @@ function renderPie(ctx) {
 // ---------------------------------------------------------------------------
 
 function adaptLine(ctx) {
-  const { viz, result, title } = ctx;
+  const { viz, result, title, locale } = ctx;
   if (result.periods) {
     return { periods: result.periods, defaultPeriod: result.defaultPeriod || viz.defaultPeriod || 'daily', headerTitle: result.title || title };
   }
@@ -671,7 +710,7 @@ function adaptLine(ctx) {
   const rows = [...(result.rows || [])].sort((a, b) =>
     String(a[dimKey] ?? '').localeCompare(String(b[dimKey] ?? ''))
   );
-  const categories = rows.map((r) => formatDimLabel(r[dimKey], viz));
+  const categories = rows.map((r) => formatDimLabel(r[dimKey], viz, dimKey, locale));
 
   // Descriptor-driven multi-series with per-series colour / dual y-axis grouping.
   // Each seriesDef is either a direct measure ({ measureKey }) or a computed
@@ -682,7 +721,7 @@ function adaptLine(ctx) {
     return {
       categories,
       series: viz.seriesDefs.map((def) => ({
-        name: def.name,
+        name: seriesEntryLabel(def, def.name),
         color: def.color,
         yAxisGroup: def.yAxisGroup,
         dashArray: def.dashArray ?? 0,
@@ -703,7 +742,7 @@ function adaptLine(ctx) {
   return {
     categories,
     series: measures.map((m) => ({
-      name: m.label || m.name,
+      name: seriesEntryLabel(m, m.label || m.name),
       data: rows.map((r) => Number(r[m.name]) || 0),
     })),
   };
@@ -715,8 +754,8 @@ function renderLine(ctx) {
   const hasStructure = props.periods
     ? Object.values(props.periods).some((p) => p.categories?.length > 0)
     : (props.categories?.length > 0 && props.series?.length > 0);
-  if (loading && !hasStructure) return <Placeholder message="Loading…" />;
-  if (!hasStructure) return <Placeholder message="No data" />;
+  if (loading && !hasStructure) return <Placeholder message={t("DASHBOARD_COMMON_LOADING", "Loading…")} />;
+  if (!hasStructure) return <Placeholder message={t("DASHBOARD_COMMON_NO_DATA", "No data")} />;
   return <LineChart {...props} />;
 }
 
@@ -727,17 +766,23 @@ function renderLine(ctx) {
 // ---------------------------------------------------------------------------
 
 function renderTable(ctx) {
-  const { viz, result, loading } = ctx;
-  const columns = viz.columns || deriveColumnsFromResult(result);
+  const { viz, result, loading, groupBy } = ctx;
+  // #1111 PR2 (R4): at a non-leaf "Group by" level, drop the redundant
+  // service_group ("Type") column and relabel service_code to the level's
+  // name — see applyGroupByToColumns. The ideal_sla_ms avg-of-heterogeneous-
+  // SLAs caveat at non-leaf levels is documented in the KPI catalog docs
+  // (PR1), not surfaced in-cell.
+  const columns = applyGroupByToColumns(viz.columns || deriveColumnsFromResult(result), groupBy);
   const rows = result.rows || [];
-  if (loading && !rows.length) return <Placeholder message="Loading…" />;
-  return <DashboardTable columns={columns} rows={rows} emptyMessage={viz.emptyMessage || 'No data'} />;
+  if (loading && !rows.length) return <Placeholder message={t("DASHBOARD_COMMON_LOADING", "Loading…")} />;
+  return <DashboardTable columns={columns} rows={rows} emptyMessage={viz.emptyMessage || t("DASHBOARD_COMMON_NO_DATA", "No data")} />;
 }
 
 function deriveColumnsFromResult(result) {
   return (result.columns || []).map((c) => ({
     id: c.name,
     label: c.label || c.name,
+    labelKey: c.labelKey,
     align: c.role === 'measure' ? 'right' : 'left',
     type: mapFormatToCellType(c.format),
     thresholdKey: c.thresholdKey,
@@ -791,9 +836,9 @@ function adaptSlaRiskRows(ctx) {
 
       return {
         id: complaintId,
-        typeLabel: typeKey ? formatDimensionLabel(typeKey) : '—',
-        subtypeLabel: subtypeKey ? formatDimensionLabel(subtypeKey) : '—',
-        locality: row.ward_code ? formatDimensionLabel(String(row.ward_code)) : '—',
+        typeLabel: typeKey ? dimensionLabel(typeKey, 'complaintType') : '—',
+        subtypeLabel: subtypeKey ? dimensionLabel(subtypeKey, 'complaintType') : '—',
+        locality: row.ward_code ? dimensionLabel(String(row.ward_code), 'boundary') : '—',
         ownerName: formatOfficerLabel(row.current_assignee_uuid),
         ownerRole: '—',
         status: normalizeWorkflowStatusKey(applicationStatus),
@@ -813,7 +858,7 @@ function adaptSlaRiskRows(ctx) {
 function renderSlaRiskTable(ctx) {
   const { loading } = ctx;
   const rows = adaptSlaRiskRows(ctx);
-  if (loading && !rows.length) return <Placeholder message="Loading…" />;
+  if (loading && !rows.length) return <Placeholder message={t("DASHBOARD_COMMON_LOADING", "Loading…")} />;
   return <ComplaintsAtRiskTable rows={rows} />;
 }
 
@@ -847,7 +892,7 @@ function adaptMapLayers(ctx) {
       const resolved = Number(row.resolved) || 0;
       return {
         wardCode,
-        label: formatLabel(wardCode),
+        label: dimensionLabel(wardCode, 'boundary'),
         count: filed,
         total: filed,
         // named counts so the choropleth hover tooltip (reads created/open/resolved) has values
@@ -877,11 +922,11 @@ function renderChoroplethMap(ctx) {
 // ---------------------------------------------------------------------------
 
 function adaptRanked(ctx) {
-  const { viz, result } = ctx;
+  const { viz, result, locale } = ctx;
   const dimKey = primaryDimensionKey(result, viz);
   const measure = primaryMeasure(result, viz);
   let rows = (result.rows || []).map((row) => ({
-    label: formatDimLabel(row[dimKey], viz),
+    label: formatDimLabel(row[dimKey], viz, dimKey, locale),
     value: Number(row[measure.name]) || 0,
   }));
   if (viz.sort !== 'none') rows = rows.sort((a, b) => b.value - a.value);
@@ -901,29 +946,43 @@ function adaptDow(ctx) {
 }
 
 function RankedListDisplay({ rows, format }) {
-  if (!rows?.length) return <Placeholder message="No data" />;
+  const { language } = useDashboardT();
+  if (!rows?.length) return <Placeholder message={t("DASHBOARD_COMMON_NO_DATA", "No data")} />;
+  const locale = language?.replace('_', '-');
   return (
     <ol className="kpi-ranked-list">
       {rows.map((row, i) => (
         <li key={i}>
           <span className="kpi-ranked-list__rank">{i + 1}</span>
           <span className="kpi-ranked-list__label" title={row.label}>{row.label}</span>
-          <span className="kpi-ranked-list__value">{applyFormat(row.value, format)}</span>
+          <span className="kpi-ranked-list__value">{applyFormat(row.value, format, locale)}</span>
         </li>
       ))}
     </ol>
   );
 }
 
-const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// Invoked at render (never a module constant) so labels track the language.
+const dowLabels = () => [
+  t("DASHBOARD_DOW_SUN", "Sun"),
+  t("DASHBOARD_DOW_MON", "Mon"),
+  t("DASHBOARD_DOW_TUE", "Tue"),
+  t("DASHBOARD_DOW_WED", "Wed"),
+  t("DASHBOARD_DOW_THU", "Thu"),
+  t("DASHBOARD_DOW_FRI", "Fri"),
+  t("DASHBOARD_DOW_SAT", "Sat"),
+];
 function DowDisplay({ rows, format }) {
-  if (!rows?.length) return <Placeholder message="No data" />;
+  const { language } = useDashboardT();
+  if (!rows?.length) return <Placeholder message={t("DASHBOARD_COMMON_NO_DATA", "No data")} />;
+  const locale = language?.replace('_', '-');
+  const labels = dowLabels();
   return (
     <div className="kpi-dow">
       {rows.map((row, i) => (
         <div key={i} className="kpi-dow__bar">
-          <span className="kpi-dow__label">{DOW_LABELS[row.dow] ?? row.dow}</span>
-          <span className="kpi-dow__value">{applyFormat(row.value, format)}</span>
+          <span className="kpi-dow__label">{labels[row.dow] ?? row.dow}</span>
+          <span className="kpi-dow__value">{applyFormat(row.value, format, locale)}</span>
         </div>
       ))}
     </div>
@@ -937,34 +996,42 @@ function DowDisplay({ rows, format }) {
 const MS_PER_DAY = 86400000;
 const MS_PER_HOUR = 3600000;
 
-function applyFormat(val, format) {
+// Every case routes its NUMERIC part through the tenant mask via formatNumber
+// (utils/numberFormat.js): null when no dss.DashboardConfig.numberFormat is
+// configured, so each `??` fallback keeps the pre-#1213 expression untouched.
+// Unit suffixes (%, /5, h, hr/hrs/day/days, ordinal) stay here — the mask
+// contributes separators only, decimal counts stay per-format (R3); durations
+// take the mask decimal separator too (R7).
+function applyFormat(val, format, locale) {
   if (val == null || !Number.isFinite(Number(val))) return '—';
   const n = Number(val);
   switch (format) {
-    case 'integer':           return Math.round(n).toLocaleString();
+    case 'integer':           return formatNumber(n, 'integer') ?? Math.round(n).toLocaleString(locale);
     case 'percentInteger':
-    case 'percentNoDecimal':  return `${Math.round(normalizePct(n))}%`;
+    case 'percentNoDecimal':  return `${formatNumber(normalizePct(n), 'percentInteger') ?? Math.round(normalizePct(n))}%`;
     case 'percentOneDecimal':
-    case 'percent':           return `${normalizePct(n).toFixed(1)}%`;
-    case 'decimalOne':        return n.toFixed(1);
-    case 'decimalTwo':        return n.toFixed(2);
-    case 'ratingOutOfFive':   return `${n.toFixed(1)}/5`;
+    case 'percent':           return `${formatNumber(normalizePct(n), 'percent') ?? normalizePct(n).toFixed(1)}%`;
+    case 'decimalOne':        return formatNumber(n, 'decimalOne') ?? n.toFixed(1);
+    case 'decimalTwo':        return formatNumber(n, 'decimalTwo') ?? n.toFixed(2);
+    case 'ratingOutOfFive':   return `${formatNumber(n, 'ratingOutOfFive') ?? n.toFixed(1)}/5`;
     case 'hoursDays': {
       const hours = n / MS_PER_HOUR;
       if (hours < 48) {
         const r = Math.round(hours * 10) / 10;
-        return `${Number.isInteger(r) ? r : r.toFixed(1)} ${r === 1 ? 'hr' : 'hrs'}`;
+        const num = formatNumber(r, { decimals: 1, trim: true }) ?? (Number.isInteger(r) ? r : r.toFixed(1));
+        return `${num} ${r === 1 ? t("DASHBOARD_UNIT_HR", "hr") : t("DASHBOARD_UNIT_HRS", "hrs")}`;
       }
       const days = n / MS_PER_DAY;
       const r = Math.round(days * 10) / 10;
-      return `${Number.isInteger(r) ? r : r.toFixed(1)} ${r === 1 ? 'day' : 'days'}`;
+      const num = formatNumber(r, { decimals: 1, trim: true }) ?? (Number.isInteger(r) ? r : r.toFixed(1));
+      return `${num} ${r === 1 ? t("DASHBOARD_UNIT_DAY", "day") : t("DASHBOARD_UNIT_DAYS", "days")}`;
     }
-    case 'hoursDecimal':      return `${(n / MS_PER_HOUR).toFixed(1)}h`;
-    case 'signedInteger':     return `${n >= 0 ? '+' : ''}${Math.round(n).toLocaleString()}`;
+    case 'hoursDecimal':      return `${formatNumber(n / MS_PER_HOUR, 'hoursDecimal') ?? (n / MS_PER_HOUR).toFixed(1)}h`;
+    case 'signedInteger':     return `${n >= 0 ? '+' : ''}${formatNumber(n, 'signedInteger') ?? Math.round(n).toLocaleString(locale)}`;
     case 'ordinal': {
       const v = Math.round(n) % 100;
       const s = ['th', 'st', 'nd', 'rd'];
-      return Math.round(n) + (s[(v - 20) % 10] || s[v] || s[0]);
+      return (formatNumber(n, 'integer') ?? Math.round(n)) + (s[(v - 20) % 10] || s[v] || s[0]);
     }
     default: return String(val);
   }
@@ -997,8 +1064,8 @@ function msToHours(ms) {
 }
 
 function formatLabel(value) {
-  const s = String(value ?? 'Unknown');
-  if (!s || s === 'null' || s === 'undefined') return 'Unknown';
+  const s = String(value ?? '');
+  if (!s || s === 'null' || s === 'undefined') return t("DASHBOARD_COMMON_UNKNOWN", "Unknown");
   return s;
 }
 
@@ -1007,27 +1074,31 @@ function formatLabel(value) {
  * client-side label shaping (kpiQueries.formatDimensionLabel /
  * formatOfficerStackedLabel) into the engine so chart categories match the
  * reference verbatim without per-tile code.
- *   - "dimension": humanise CamelCase / snake_case / dotted codes
+ *   - "dimension": localize via the dimensionLabel seam (kind derived from the
+ *     query dimension name `dim`), falling back to the legacy humaniser
  *   - "officer":   mask an assignee UUID -> "Officer …<last6>" / "Unassigned"
  * No labelFormat => identity (formatLabel).
  */
-function formatDimLabel(value, viz) {
+function formatDimLabel(value, viz, dim, locale) {
   switch (viz?.labelFormat) {
-    case 'dimension':  return formatDimensionLabel(value);
-    case 'department': return formatDepartmentLabel(value);
+    case 'dimension': {
+      const kind = dimensionKindForName(dim);
+      return kind ? dimensionLabel(value, kind) : String(value);
+    }
+    case 'department': return dimensionLabel(value, 'department');
     case 'officer':    return formatOfficerLabel(value);
-    case 'date-dow':   return formatDateDow(value);
+    case 'date-dow':   return formatDateDow(value, locale);
     default:           return formatLabel(value);
   }
 }
 
 // Port of kpiQueries.formatOverTimeDailyLabel: epoch-ms / yyyy-MM-dd -> short weekday.
-function formatDateDow(value) {
+function formatDateDow(value, locale) {
   const key = epochOrIsoToDateKey(value);
   if (!key) return formatLabel(value);
   const d = new Date(`${key}T12:00:00`);
   if (Number.isNaN(d.getTime())) return key;
-  return d.toLocaleDateString(undefined, { weekday: 'short' });
+  return d.toLocaleDateString(locale, { weekday: 'short' });
 }
 
 function epochOrIsoToDateKey(value) {
@@ -1041,66 +1112,16 @@ function epochOrIsoToDateKey(value) {
   return iso ? iso[1] : s;
 }
 
-// Port of complaintTypeDepartmentConfig.formatDepartmentLabel.
-function formatDepartmentLabel(code) {
-  const c = String(code ?? '').trim();
-  if (!c || c === 'Unknown' || c === 'Unmapped' || c === 'null' || c === 'undefined') return 'Unknown';
-  return c.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (ch) => ch.toUpperCase());
-}
-
-// Port of kpiQueries.formatDimensionLabel (humanise service/ward/dept codes).
-function formatDimensionLabel(code) {
-  const humanized = String(code ?? '').replace(/([a-z])([A-Z])/g, '$1 $2');
-  const wardMatch = humanized.match(/ward[_\s-]?(\d+)/i);
-  if (wardMatch) return `Ward ${wardMatch[1]}`;
-  const dot = humanized.lastIndexOf('.');
-  if (dot >= 0) {
-    return humanized.slice(dot + 1).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-  const parts = humanized.split('_').filter(Boolean);
-  if (parts.length > 2) return parts.slice(-2).join(' ').replace(/_/g, ' ');
-  const out = humanized.replace(/_/g, ' ');
-  return out || 'Unknown';
-}
-
 function normalizeSeg(value) {
   return String(value ?? '').toUpperCase();
 }
 
-/**
- * Title resolution for the inverted catalog. The MDMS def now carries a human
- * `viz.title` (the single source of truth, sourced from the reference dashboard
- * labels); prefer it. `titleKey` is retained on the def for a future i18n layer
- * but is a raw key (RAINMAKER-PGR.DASHBOARD_KPI_*) so it is only ever used as a
- * last-resort, prettified, fallback — never rendered verbatim.
- */
-function resolveTitle(def) {
-  return (
-    def?.viz?.title ||
-    def?.title ||
-    def?.name ||
-    prettifyTitleKey(def?.viz?.titleKey || def?.titleKey) ||
-    ''
-  );
-}
-
-function prettifyTitleKey(key) {
-  if (!key) return '';
-  const tail = String(key).split('.').pop().replace(/^DASHBOARD_KPI_/, '');
-  if (!tail) return '';
-  return tail
-    .toLowerCase()
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .trim();
-}
-
 function errorLabel(code) {
   switch (code) {
-    case 'pii_forbidden': return 'Restricted';
-    case 'kpi_forbidden': return 'No access';
-    case 'scope_forbidden': return 'Out of scope';
-    default: return code || 'ERROR';
+    case 'pii_forbidden': return t("DASHBOARD_TILE_ERR_RESTRICTED", "Restricted");
+    case 'kpi_forbidden': return t("DASHBOARD_TILE_ERR_NO_ACCESS", "No access");
+    case 'scope_forbidden': return t("DASHBOARD_TILE_ERR_OUT_OF_SCOPE", "Out of scope");
+    default: return code || t("DASHBOARD_TILE_ERR_GENERIC", "ERROR");
   }
 }
 
@@ -1108,8 +1129,8 @@ function def_scrollKey(ctx) {
   return ctx.def?.kpiId || ctx.def?.id || undefined;
 }
 
-function formatAsOf(asOf) {
-  try { return new Date(asOf).toLocaleString(); } catch { return String(asOf); }
+function formatAsOf(asOf, locale) {
+  try { return new Date(asOf).toLocaleString(locale); } catch { return String(asOf); }
 }
 
 const Placeholder = ({ message }) => (

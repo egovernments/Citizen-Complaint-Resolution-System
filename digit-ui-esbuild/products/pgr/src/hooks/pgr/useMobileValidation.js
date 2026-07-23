@@ -5,6 +5,7 @@ import {
   DEFAULT_MOBILE_PATTERN,
   DEFAULT_MOBILE_PREFIX,
 } from "@egovernments/digit-ui-libraries";
+import { useTranslation } from "react-i18next";
 
 /**
  * Custom hook that returns the mobile-number validation config for the
@@ -34,6 +35,7 @@ import {
  * @returns {object} - Returns validation rules and loading state
  */
 const useMobileValidation = (tenantId, validationName = "defaultMobileValidation") => {
+  const { t } = useTranslation();
   const reqCriteria = {
     url: `/${window?.globalConfigs?.getConfig?.("MDMS_V1_CONTEXT_PATH") || "mdms-v2"}/v1/_search`,
     params: {
@@ -48,6 +50,13 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
             masterDetails: [
               {
                 name: "MobileNumberValidation",
+              },
+              // CCSD-1989 follow-up: email pattern lives in its own master
+              // (one row per fieldType). mdms-v2's v1 _search simply omits
+              // masters whose schema isn't registered, so envs that haven't
+              // seeded FormValidations still resolve the mobile rule normally.
+              {
+                name: "FormValidations",
               },
             ],
           },
@@ -71,6 +80,15 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
     mobileNumberValidationList.find((entry) => entry?.default === true && entry?.isActive !== false) ||
     mobileNumberValidationList.find((entry) => entry?.isActive !== false) ||
     null;
+
+  // common-masters.FormValidations — per-fieldType user validation patterns
+  // ({ fieldType, regex, isActive }). Carries the non-mobile user rules
+  // (email, name); MobileNumberValidation stays mobile-number-only.
+  const formValidationList = data?.["common-masters"]?.FormValidations || [];
+  const emailValidationConfig =
+    formValidationList.find((entry) => entry?.fieldType === "email" && entry?.isActive !== false) || null;
+  const nameValidationConfig =
+    formValidationList.find((entry) => entry?.fieldType === "name" && entry?.isActive !== false) || null;
 
   /** ---------- Priority 2: Global Config ---------- */
   const globalConfig = window?.globalConfigs?.getConfig?.("CORE_MOBILE_CONFIGS") || {};
@@ -107,7 +125,10 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
     minLength: resolvedMin,
     maxLength: resolvedMax > 0 ? resolvedMax : 15,
 
-    errorMessage: buildMobileErrorMessage(resolvedPattern),
+    // `t` from react-i18next resolves ERR_INVALID_MOBILE_NUMBER / MOBILE_VALIDATION_*
+    // against the active locale (module: rainmaker-common) — without it this
+    // message is hardcoded English regardless of the selected language.
+    errorMessage: buildMobileErrorMessage(resolvedPattern, t),
 
     isActive: mdmsConfig?.isActive !== undefined ? mdmsConfig.isActive : true,
   };
@@ -117,9 +138,23 @@ const useMobileValidation = (tenantId, validationName = "defaultMobileValidation
   // pick up the same MDMS-sourced value the React tree just computed.
   // Falls back to globalConfigs naturally for any consumer that runs
   // before the first React render.
-  if (typeof window !== "undefined" && !isLoading && mdmsConfig) {
+  if (typeof window !== "undefined" && !isLoading) {
     window.__DIGIT_USER_VALIDATION = window.__DIGIT_USER_VALIDATION || {};
-    window.__DIGIT_USER_VALIDATION.mobile = validationRules;
+    // CCSD-1990/1989: name and email both ride common-masters.FormValidations
+    // (one row per fieldType) — MobileNumberValidation stays mobile-number-only.
+    // All three publish to the same canonical window channel. Synchronous
+    // consumers (config getters) fall back to their built-in patterns when a
+    // row is absent — an unseeded or partially-seeded master can never break
+    // a form.
+    if (mdmsConfig) {
+      window.__DIGIT_USER_VALIDATION.mobile = validationRules;
+    }
+    if (nameValidationConfig?.regex) {
+      window.__DIGIT_USER_VALIDATION.name = { pattern: nameValidationConfig.regex };
+    }
+    if (emailValidationConfig?.regex) {
+      window.__DIGIT_USER_VALIDATION.email = { pattern: emailValidationConfig.regex };
+    }
   }
 
   const getMinMaxValues = () => {

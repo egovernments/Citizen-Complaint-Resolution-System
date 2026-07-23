@@ -17,10 +17,10 @@ export const CreateComplaintConfig = {
                 name: "ComplainantContactNumber",
                 error: "CORE_COMMON_MOBILE_ERROR",
                 // Read order (per @vinothrallapalli-eGov review on
-                // PR #689, canonical UserValidation pattern):
+                // PR #689, canonical FormValidations pattern):
                 //   1. `window.__DIGIT_USER_VALIDATION.mobile` —
                 //      populated by `useMobileValidation` from the
-                //      `common-masters.UserValidation` MDMS master.
+                //      `common-masters.FormValidations` MDMS master.
                 //   2. `globalConfigs.CORE_MOBILE_CONFIGS` — build-time
                 //      fallback rendered by the playbook for tenants
                 //      that haven't seeded the master OR for the first
@@ -54,10 +54,39 @@ export const CreateComplaintConfig = {
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
                 validation: {
                   required: true,
+                  // Read order (canonical FormValidations pattern, same as the
+                  // mobile field above):
+                  //   1. `window.__DIGIT_USER_VALIDATION.name` — populated by
+                  //      `useMobileValidation` from common-masters.FormValidations
+                  //      (the fieldType:"name" row, optional).
+                  //   2. Built-in fallback below — always valid, so an
+                  //      unseeded or malformed master value can't break the form.
+                  // Getter re-evaluates on every read, so the MDMS value wins
+                  // as soon as the hook resolves.
                   // CCRS#437: Allow 4-character names (e.g. "John"). The
                   // quantifier counts characters AFTER the leading letter,
-                  // so {3,29} = total length 4–30, not 5–30.
-                  pattern: /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[A-Za-z][A-Za-z0-9 _\-\(\)]{3,29}$)^.*$/,
+                  // CCSD-1990: min length 1 (was 4). {0,29} = total 1–30.
+                  // Letter-first / no leading-trailing-doubled separator kept.
+                  get pattern() {
+                    const raw = window?.__DIGIT_USER_VALIDATION?.name?.pattern;
+                    if (raw) {
+                      try {
+                        if (raw instanceof RegExp) return raw;
+                        // Compile with the `u` flag first so Unicode property
+                        // escapes (\p{L}/\p{N}) in the master work; fall back
+                        // to a plain compile for legacy patterns that aren't
+                        // valid in Unicode mode.
+                        try {
+                          return new RegExp(raw, "u");
+                        } catch (eu) {
+                          return new RegExp(raw);
+                        }
+                      } catch (e) {
+                        console.error("Invalid name pattern in FormValidations master:", e);
+                      }
+                    }
+                    return /^(?!.*[ _-]{2})(?!^[\s_-])(?!.*[\s_-]$)(?=^[\p{L}][\p{L}\p{N} _\-\(\)]{0,29}$)^.*$/u;
+                  },
                 }
               },
             },
@@ -258,7 +287,10 @@ export const CreateComplaintConfig = {
                 maxLength: 1000,
                 validation: {
                   required: true,
-                  pattern: /^(?!\s*$).+/,
+                  // CCSD-1980: reject numbers-only / whitespace-only descriptions
+                  // (e.g. "000000000000") — require at least 3 letters (any
+                  // language). Non-empty is implied.
+                  pattern: /^(?=(?:[\s\S]*?\p{L}){3})[\s\S]+$/u,
                 },
                 error: "CORE_COMMON_REQUIRED_ERRMSG",
               },

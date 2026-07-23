@@ -16,12 +16,12 @@ initContainers:
     schemaTable: "egov_url_shortening_schema_version"
     image:
       repository: "egov-url-shortening-db"
-      tag: v2.9.2-4a60f20
+      tag: "maven-jdk21-983e8b2"
 
 # Container Configs
 image:
   repository: "egov-url-shortening"
-  tag: v2.9.2-4a60f20
+  tag: "maven-jdk21-983e8b2"
 replicas: "1"
 healthChecks:
   enabled: true

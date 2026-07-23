@@ -3,17 +3,21 @@
  */
 
 import { getKpiDisplayConfig, getKpiDisplayTitle } from "./kpiDisplay";
+import { translate } from "../i18n/localeRuntime";
 
+// translate() is only called from inside these render-time helpers (never at
+// module scope), so the labels react to language switches.
 function formatPreviewTarget(metricId) {
   const threshold = getKpiDisplayConfig(metricId).threshold;
   if (!threshold) return null;
 
   const { kind, onTrack } = threshold;
-  if (kind === "percent") return `Target: ${onTrack}%`;
-  if (kind === "rating") return `Target: ${onTrack}/5`;
+  if (kind === "percent") return `${translate("DASHBOARD_HEADER_TARGET", "Target")}: ${onTrack}%`;
+  if (kind === "rating") return `${translate("DASHBOARD_HEADER_TARGET", "Target")}: ${onTrack}/5`;
   if (kind === "count") {
-    if (metricId === "cl-metric-oldest-open") return `Target: ${onTrack} days`;
-    return `Target: ${onTrack}`;
+    if (metricId === "cl-metric-oldest-open")
+      return `${translate("DASHBOARD_HEADER_TARGET", "Target")}: ${onTrack} ${translate("DASHBOARD_COMMON_DAYS", "days")}`;
+    return `${translate("DASHBOARD_HEADER_TARGET", "Target")}: ${onTrack}`;
   }
   return null;
 }

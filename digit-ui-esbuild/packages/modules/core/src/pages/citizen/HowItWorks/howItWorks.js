@@ -56,8 +56,12 @@ const HowItWorks = ({ module }) => {
     Digit.ULBService.getStateId()
   );
 
+  // Defensive read: the MDMS master may be unseeded/empty/shaped without
+  // this module's key. Raw member access on a missing level used to throw
+  // and render the module error fallback (CCRS#12); default to {} so the
+  // page renders its (empty) chrome instead.
   const mdmsConfigResult =
-    data?.MdmsRes["common-masters"]?.howItWorks[0]?.[`${module}`];
+    data?.MdmsRes?.["common-masters"]?.howItWorks?.[0]?.[`${module}`] || {};
   const languages = [
     {
       label: "ENGLISH",
@@ -96,7 +100,7 @@ const HowItWorks = ({ module }) => {
             </div>
           ))}
         </div>
-        {mdmsConfigResult.videosJson.map((videos, index) => (
+        {(mdmsConfigResult.videosJson || []).map((videos, index) => (
           <div>
             <div
               className="WhatsNewCard"

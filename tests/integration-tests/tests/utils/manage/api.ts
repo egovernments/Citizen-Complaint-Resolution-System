@@ -11,6 +11,7 @@
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { TENANT, BASE_URL } from '../env';
 
 export interface AuthInfo {
   token: string;
@@ -61,11 +62,17 @@ export function loadAuth(authFile: string = DEFAULT_AUTH_FILE): AuthInfo {
     return {
       token: parsed.authToken,
       user: parsed.user || null,
-      tenant: parsed.tenant || (process.env.TENANT_CODE || 'ke'),
-      baseUrl:
-        parsed.environment ||
-        process.env.BASE_URL ||
-        'https://naipepea.digit.org',
+      // This used to be its own `process.env.TENANT_CODE || 'ke'` chain,
+      // bypassing env.ts's deployment-profile-aware TENANT entirely — the
+      // moment env pins were removed it silently authenticated the manage
+      // suite against 'ke' on a non-Kenya stack. TENANT already resolves
+      // env var -> discovered profile -> legacy default; route through it
+      // instead of re-deriving.
+      tenant: parsed.tenant || TENANT,
+      // Same shadow-copy bug: 'https://naipepea.digit.org' is a dead demo
+      // host. BASE_URL is env.ts's own env-var-or-localhost chain — reuse
+      // it rather than re-reading process.env.BASE_URL with a stale floor.
+      baseUrl: parsed.environment || BASE_URL,
     };
   }
 
@@ -73,6 +80,49 @@ export function loadAuth(authFile: string = DEFAULT_AUTH_FILE): AuthInfo {
     `No crs-auth-state localStorage entry found in ${authFile}. ` +
     'Did the auth.setup.ts setup project run?',
   );
+}
+
+/**
+ * Obtain a FRESH, fully-resolved API token via a direct OAuth password grant
+ * (ADMIN@ROOT_TENANT). Use this — not loadAuth() — for API assertions/teardown
+ * that hit RBAC-ENFORCED endpoints (e.g. /user/_search, /user/users/_*).
+ *
+ * Why: the configurator storageState token (loadAuth) resolves to INSUFFICIENT
+ * roles on a fail-closed gateway. The k8s Spring gateway RBAC-checks /user/_search
+ * against the token's *resolved* roles and returns 401 ("not authorized"), so the
+ * `create — citizen user` verify step fails on k3s while passing on Compose (whose
+ * Kong treats /user/_search as auth-optional). A password-grant login resolves the
+ * operator's real roles (SUPERUSER/EMPLOYEE — both granted /user/_search), so the
+ * check passes on BOTH stacks. The UI create flow still uses the configurator
+ * session; only the API verify/teardown uses this token. Refs #1160.
+ */
+export async function apiAuth(): Promise<AuthInfo> {
+  const baseUrl = process.env.BASE_URL || 'http://localhost';
+  const digitTenant = process.env.DIGIT_TENANT;
+  const rootTenant =
+    process.env.ROOT_TENANT ||
+    (digitTenant && digitTenant.includes('.') ? digitTenant.split('.')[0] : digitTenant) ||
+    'ke';
+  const body = new URLSearchParams({
+    username: process.env.DIGIT_USERNAME || 'ADMIN',
+    password: process.env.DIGIT_PASSWORD || 'eGov@123',
+    grant_type: 'password',
+    scope: 'read',
+    tenantId: rootTenant,
+    userType: 'EMPLOYEE',
+  });
+  const res = await fetch(`${baseUrl}/user/oauth/token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      // egov-user-client:(no secret) — the stock DIGIT OAuth basic header
+      Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
+    },
+    body,
+  });
+  if (!res.ok) throw new Error(`apiAuth OAuth login failed (${res.status}): ${await res.text()}`);
+  const j = (await res.json()) as { access_token: string; UserRequest?: Record<string, unknown> };
+  return { token: j.access_token, user: j.UserRequest || null, tenant: rootTenant, baseUrl };
 }
 
 function buildRequestInfo(auth: AuthInfo, action?: string): Record<string, unknown> {
@@ -83,7 +133,25 @@ function buildRequestInfo(auth: AuthInfo, action?: string): Record<string, unkno
     action,
     msgId: `${Date.now()}|en_IN`,
     authToken: auth.token,
-    userInfo: auth.user || undefined,
+    // The configurator storageState stores roles as bare code strings; services
+    // deserialize RequestInfo.userInfo.roles into Role objects. Compose's Kong
+    // re-resolves userInfo from the token so string roles are tolerated, but the
+    // stock k8s gateway forwards the body verbatim → mdms/tenant/user 500
+    // ("Cannot construct Role from String"). Expand to Role objects so the harness
+    // sends a well-formed request to either gateway.
+    userInfo: auth.user
+      ? {
+          ...auth.user,
+          roles: (Array.isArray((auth.user as { roles?: unknown }).roles)
+            ? ((auth.user as { roles: unknown[] }).roles)
+            : []
+          ).map((r) =>
+            typeof r === 'string'
+              ? { code: r, name: r, tenantId: (auth.user as { tenantId?: string }).tenantId }
+              : r,
+          ),
+        }
+      : undefined,
   };
 }
 

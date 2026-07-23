@@ -35,6 +35,13 @@ public class ComplaintsDomainEvent {
                                      // NOT yet emitted by pgr-services (NotificationService.publishRenderedEvent
                                      // must add it) — null until then, forward-compatible here.
 
+    // ---- Provider-template delivery (WHATSAPP only) ----
+    // Set by pgr-services when an approved NotificationProviderTemplate exists for this routing key.
+    // When present, novu-bridge sends the Twilio ContentSid + positional contentVariables via a
+    // provider override instead of the free-form renderedBody. Null for SMS/EMAIL / free-form.
+    private String templateId;                     // e.g. Twilio WhatsApp Content SID (HX…)
+    private Map<String, Object> contentVariables;  // positional 1-based ({"1":.., "2":..})
+
     // ---- Legacy fields (retained for the old coarse-event / dry-run path) ----
     private Actor actor;
     private WorkflowInfo workflow;

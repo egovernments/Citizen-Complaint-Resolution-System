@@ -66,11 +66,10 @@ public class DispatchPipelineService {
                 ? event.getSubscriberId()
                 : context.getSubscriberId();
         if (!StringUtils.hasText(subscriberId)) {
-            // Record the terminal status before throwing — every other branch in
-            // process() persists, and the class invariant is that every consumed
-            // event leaves an explicit status row in nb_dispatch_log.
-            persist(event, context, "FAILED", "NB_SUBSCRIBER_ID_MISSING",
-                    "subscriberId is required (PGR resolved it; null means a bad event)", null, 1);
+            // A blank subscriberId is a pre-delivery validation-family rejection: throw
+            // WITHOUT writing a dispatch-log row. This is the tested contract — see
+            // EnvelopePipelineNegativesTest.assertRejected (verify(dispatchLogRepository,
+            // never()).upsert(...)). Do NOT add a persist() here.
             throw new CustomException("NB_SUBSCRIBER_ID_MISSING",
                     "subscriberId is required (PGR resolved it; null means a bad event)");
         }
@@ -151,12 +150,39 @@ public class DispatchPipelineService {
                     .build();
         }
 
+        // WhatsApp template gate: a business-initiated WhatsApp message MUST reference an approved
+        // Twilio Content template (SID). PGR emits WHATSAPP events with a null templateId when no
+        // approved NotificationProviderTemplate matched — persist an auditable SKIP here rather than
+        // fall through to a free-form send, which Twilio rejects (63016). Bridge-side defense: hold
+        // regardless of the producer.
+        if ("WHATSAPP".equalsIgnoreCase(channel) && !StringUtils.hasText(event.getTemplateId())) {
+            persist(event, context, "SKIPPED", "NB_TEMPLATE_NOT_APPROVED",
+                    "No approved Twilio Content template for this WhatsApp event; free-form WhatsApp is "
+                    + "rejected (63016). Map an approved template in NotificationProviderTemplate.", null, 1);
+            return DispatchResult.builder()
+                    .valid(true).preferenceAllowed(true).derivedContext(context)
+                    .novuTriggered(false)
+                    .diagnostics(Collections.singletonList("WhatsApp event has no approved provider template; skipped"))
+                    .build();
+        }
+
+        // WhatsApp recipient formatting: Twilio requires the recipient as `whatsapp:+<E164 digits>`.
+        // PGR emits the phone as country-code + national number with no `+` and no `whatsapp:` prefix
+        // (e.g. 254712345678), which Twilio rejects on delivery (63024). Mirror the working test-send
+        // path (ProviderController: "whatsapp:+" + digitsOnly(phone)). digitsOnly strips any pre-existing
+        // `+` or `whatsapp:` prefix, so this is idempotent (never double-prefixed). SMS and EMAIL are
+        // left untouched — the country code was already prepended by PGR; the bridge only adds the prefix.
+        if ("WHATSAPP".equalsIgnoreCase(channel) && StringUtils.hasText(contact.getPhone())) {
+            contact.setPhone("whatsapp:+" + digitsOnly(contact.getPhone()));
+        }
+
         NovuClient.NovuResponse response;
         try {
             response = novuClient.identifyThenTrigger(
                     subscriberId, contact, channel,
                     context.getRenderedBody(), context.getRenderedSubject(),
-                    context.getTransactionId(), event.getData());
+                    context.getTransactionId(), event.getData(),
+                    event.getTemplateId(), event.getContentVariables());
         } catch (CustomException ce) {
             persist(event, context, "FAILED", ce.getCode(), ce.getMessage(), null, 1);
             throw ce;   // consumer logs + DLQs as before
@@ -229,6 +255,12 @@ public class DispatchPipelineService {
                 .email(context.getEmail())
                 .locale(context.getLocale())
                 .build();
+    }
+
+    /** Strip everything but digits — mirrors ProviderController.digitsOnly so the real
+     *  delivery path and the test-send path build the WhatsApp recipient identically. */
+    private static String digitsOnly(String value) {
+        return value == null ? "" : value.replaceAll("\\D", "");
     }
 
     private String formatRecipientPhone(String mobile, String tenantId, String channel, RequestInfo requestInfo) {

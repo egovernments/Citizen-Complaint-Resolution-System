@@ -42,7 +42,10 @@ export function DigitFormInput({
     isRequired,
   } = useInput(parseProps);
 
-  const hasError = fieldState.invalid && fieldState.isTouched;
+  // `isTouched` only flips on blur, so gating on it alone leaves the field
+  // showing no error while the user is still typing an invalid value.
+  // `isDirty` flips on the first change, giving immediate feedback.
+  const hasError = fieldState.invalid && (fieldState.isDirty || fieldState.isTouched);
   // ra-core v5 wraps validator errors as `@@react-admin@@${JSON.stringify(msg)}`
   // before storing them in react-hook-form state. Strip the prefix and unwrap
   // the JSON string so the raw human-readable message is rendered.

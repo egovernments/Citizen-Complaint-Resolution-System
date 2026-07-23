@@ -9,6 +9,9 @@ const Urls = {
   pgr: {
     inboxSearch: `/inbox/v2/_search`,
     search: `/pgr-services/v2/request/_search`,
+    // Visibility V1 step-2: server-resolved inbox tabs (pgr-services)
+    visibilitySearch: `/pgr-services/v2/request/inbox/_search`,
+    visibilityCount: `/pgr-services/v2/request/inbox/_count`,
     create: `/pgr-services/v2/request/_create`,
     update: `/pgr-services/v2/request/_update`,
   },

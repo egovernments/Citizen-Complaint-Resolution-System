@@ -1,6 +1,7 @@
 import React from "react";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import { getNumberTileValueClass } from "../config/kpiDisplay";
+import useDashboardT from "../i18n/useDashboardT";
 import ResizeGrip from "./ResizeGrip";
 
 const numberTile = VISUALIZATION_STYLES[VIZ_TYPE.NUMBER_TILE_DELTA];
@@ -36,6 +37,7 @@ const KpiCard = ({
   loading = false,
   onRemove,
 }) => {
+  const { t } = useDashboardT();
   const isUnavailable = value === "—";
   const displayValue = value ?? (loading ? "…" : "—");
   const valueClass = getNumberTileValueClass(status, { unavailable: isUnavailable });
@@ -54,11 +56,11 @@ const KpiCard = ({
       {onRemove ? (
         <button
           type="button"
-          title="Remove from dashboard"
+          title={t("DASHBOARD_TILE_REMOVE", "Remove from dashboard")}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={onRemove}
           className="dashboard-widget-remove-btn"
-          aria-label={`Remove ${title}`}
+          aria-label={`${t("DASHBOARD_TILE_REMOVE_ARIA", "Remove")} ${title}`}
         >
           <RemoveIcon />
         </button>
@@ -129,7 +131,7 @@ const KpiCard = ({
             </ol>
           ) : (
             <p className="tw-text-[12px] tw-text-muted-foreground">
-              {loading ? "Loading…" : "No list data"}
+              {loading ? t("DASHBOARD_COMMON_LOADING", "Loading…") : t("DASHBOARD_TILE_NO_LIST_DATA", "No list data")}
             </p>
           )}
         </div>

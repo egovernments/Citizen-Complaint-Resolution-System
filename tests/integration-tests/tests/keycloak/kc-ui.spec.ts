@@ -63,7 +63,7 @@ test.describe('Keycloak SSO — citizen SPA UI', () => {
     }
   });
 
-  test('mobile + OTP (existing citizen) authenticates via overlay and lands at dashboard with KC tokens', async ({ page, request }) => {
+  test('mobile + OTP (existing citizen) authenticates via overlay and lands at dashboard with KC tokens', { tag: ['@persona:citizen'] }, async ({ page, request }) => {
     // Mint a unique 9-digit mobile valid for the Kenya regex.
     const mobile = `${CITIZEN_PHONE_PREFIX}${Date.now().toString().slice(-(9 - CITIZEN_PHONE_PREFIX.length))}`;
 
@@ -160,7 +160,7 @@ test.describe('Keycloak SSO — citizen SPA UI', () => {
     expect(claims.iss).toBe(`${BASE_URL}/auth/realms/${KC_REALM}`);
   });
 
-  test('Continue with Google emits an /authorize URL with PKCE S256 + kc_idp_hint=google', async ({ page }) => {
+  test('Continue with Google emits an /authorize URL with PKCE S256 + kc_idp_hint=google', { tag: ['@persona:citizen'] }, async ({ page }) => {
     await page.goto(LOGIN_URL);
 
     // The button only renders in KC mode — its absence is itself a
