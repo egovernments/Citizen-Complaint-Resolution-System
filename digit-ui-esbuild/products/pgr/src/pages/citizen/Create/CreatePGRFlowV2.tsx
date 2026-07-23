@@ -349,6 +349,9 @@ interface StepBodyProps {
   hierarchyDef?: ComplaintHierarchyDef | null;
   nodes?: ClassificationNode[];
   t: (key: string) => string;
+  /** Tenant the complaint will be created under. Steps that read tenant-scoped
+   *  masters must use THIS, not a tenant re-derived from the session. */
+  tenantId?: string;
 }
 
 /**
@@ -658,7 +661,7 @@ function Step1Map({ data, patch, t }: StepBodyProps) {
  * pincode missing from Nominatim) the affected control becomes
  * interactive so the user can fill the gap manually.
  */
-function Step2Location({ data, patch, t }: StepBodyProps) {
+function Step2Location({ data, patch, t, tenantId }: StepBodyProps) {
   const PGRBoundaryComponent = Digit?.ComponentRegistryService?.getComponent("PGRBoundaryComponent");
 
   // The map's resolveWard writes ward.{code, name} into
@@ -694,7 +697,13 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
           <PGRBoundaryComponent
             t={t}
             userType="citizen"
-            config={{ key: "SelectedBoundary", populators: { name: "SelectedBoundary" }, label: "" }}
+            // Scope the cascade to the tenant the complaint FILES under, which is
+            // the same tenant the map resolves against. Without it the cascade
+            // falls back to ULBService.getCurrentTenantId(), which returns
+            // STATE_LEVEL_TENANT_ID for every citizen — so a citizen whose home
+            // city is set would pick boundaries out of the state root's tree and
+            // attach them to a complaint filed in their city.
+            config={{ key: "SelectedBoundary", populators: { name: "SelectedBoundary" }, label: "", tenantId }}
             formData={data}
             // Ask the cascade to render its dropdowns as disabled
             // wherever it has an auto-filled value. Levels left empty
@@ -1023,6 +1032,7 @@ const CreatePGRFlowV2: React.FC = () => {
     hierarchyDef: hierData?.def ?? null,
     nodes: hierData?.nodes ?? [],
     t,
+    tenantId,
   };
 
   return (

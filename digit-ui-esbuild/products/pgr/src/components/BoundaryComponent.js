@@ -16,7 +16,15 @@ const humanizeBoundaryType = (raw) =>
 
 const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }) => {
 
-  const tenantId = Digit.ULBService.getCurrentTenantId();
+  // Callers that know which tenant the record belongs to pass it explicitly.
+  // The fallback is only a default, and a poor one for citizens:
+  // ULBService.getCurrentTenantId() returns the user's own tenant for EMPLOYEE
+  // but STATE_LEVEL_TENANT_ID for everyone else, so a citizen always lands on
+  // the state root regardless of the city they are filing in. A state root
+  // commonly carries no boundary tree of its own, which renders the cascade
+  // empty; worse, where it does, the citizen picks boundaries from one tenant
+  // and the complaint is created in another.
+  const tenantId = config?.tenantId || Digit.ULBService.getCurrentTenantId();
 
   // Employee jurisdiction gate (egovernments/CCRS#496).
   //
