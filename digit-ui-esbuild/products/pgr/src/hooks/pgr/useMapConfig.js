@@ -115,8 +115,12 @@ const asViewbox = (v) => {
 //
 // MDMS errors (master not registered for this tenant) must not break the map —
 // they are swallowed and every field falls through to its next tier.
-const useMapConfig = () => {
+const useMapConfig = (tenantIdOverride) => {
+  // Acting tenant, most specific first: an explicit caller override (the
+  // citizen wizard's authority-resolved sub-tenant), the citizen's chosen
+  // city, then the logged-in tenant.
   const tenantId =
+    (typeof tenantIdOverride === "string" && tenantIdOverride.trim()) ||
     Digit?.SessionStorage?.get?.("CITIZEN.COMMON.HOME.CITY")?.code ||
     Digit?.ULBService?.getCurrentTenantId?.();
 
@@ -130,7 +134,12 @@ const useMapConfig = () => {
       enabled: !!tenantId,
       select: (d) => d?.["RAINMAKER-PGR"]?.MapConfig,
     },
-    { schemaCode: "RAINMAKER-PGR.MapConfig" }
+    // tenantId MUST ride inside the mdmsv2 arg: the hook's mdmsv2 branch
+    // ignores the positional tenant and falls back to the logged-in tenant
+    // (state root "mz" for citizens) — which is how the citizen map read the
+    // state MapConfig record instead of the acting authority's. Also
+    // tenant-scopes the hook's cache key.
+    { schemaCode: "RAINMAKER-PGR.MapConfig", tenantId }
   );
 
   // The MDMS read is async, so on the first render every field still holds its

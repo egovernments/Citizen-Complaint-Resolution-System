@@ -936,6 +936,10 @@ function Step1Map({ data, patch, t }: StepBodyProps) {
       {GeoLocations ? (
         <GeoLocations
           t={t}
+          // The map's MapConfig + ward-boundary tree resolve at the tenant the
+          // FIRST dropdown picked (ComplaintRelatedToMap tenantCode), not the
+          // citizen's login tenant (state root) whose tree is empty.
+          tenantId={(data as any)?.resolvedTenantId}
           config={{
             key: "GeoLocationsPoint",
             populators: { name: "GeoLocationsPoint" },
