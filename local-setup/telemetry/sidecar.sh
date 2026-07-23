@@ -121,6 +121,72 @@ trap shutdown TERM INT
 FILTER=$(printf '{"label":["com.docker.compose.project=%s"],"type":["container"]}' \
   "$COMPOSE_PROJECT" | jq -sRr @uri)
 
+# ── Backfill containers already running before the sidecar started ─
+# The event stream below only reports events at/after $START_SINCE. Under
+# `tilt ci` (and any orchestrator that starts this sidecar after the app
+# containers) their "start" events predate that window and would be missed,
+# leaving the run with zero start events. Enumerate the already-running
+# project containers up front and count each one. Records are keyed by the
+# stable container ID (not the service name) so the same container is never
+# counted twice across the backfill and the live stream, while distinct
+# containers of a scaled service are each counted. The Docker socket/API was
+# already validated above (CONTAINER_COUNT), so this enumeration is
+# best-effort — an empty result just means no peers are up yet and the live
+# stream will catch them.
+STARTED_FILE=$(mktemp) || {
+  echo "[telemetry] FATAL: could not create temp file for start-event de-dup"
+  exit 1
+}
+TAB=$(printf '\t')
+
+emit_start() {
+  _id="$1" _svc="$2"
+  [ -z "$_svc" ] && return 0
+  # De-dup on the container ID, falling back to the service name if an event
+  # carries no ID.
+  _key="${_id:-$_svc}"
+  if grep -qxF "$_key" "$STARTED_FILE" 2>/dev/null; then
+    return 0
+  fi
+  echo "$_key" >> "$STARTED_FILE"
+  echo "[telemetry] + $_svc started"
+  send_event "container" "start" "$_svc"
+}
+
+# Query the running-container list, distinguishing a real (possibly empty) JSON
+# array from a transient socket/API failure so a blip does not silently drop
+# already-running services from the backfill. Each attempt is time-bounded (the
+# shared docker_api helper is intentionally unbounded for the long-lived events
+# stream below), with a few bounded retries before giving up.
+enumerate_running() {
+  _i=0
+  while [ "$_i" -lt 3 ]; do
+    _out=$(curl -s --max-time 10 --unix-socket "$DOCKER_SOCKET" \
+      "http://localhost/containers/json" 2>/dev/null)
+    if [ -n "$_out" ] && printf '%s' "$_out" | jq -e 'type == "array"' >/dev/null 2>&1; then
+      printf '%s' "$_out"
+      return 0
+    fi
+    _i=$((_i + 1))
+    sleep 1
+  done
+  return 1
+}
+
+if RUNNING_JSON=$(enumerate_running); then
+  printf '%s' "$RUNNING_JSON" \
+    | jq -r ".[] | select(.Labels[\"com.docker.compose.project\"]==\"$COMPOSE_PROJECT\") | \"\(.Id)\t\(.Labels[\"com.docker.compose.service\"] // \"\")\"" 2>/dev/null \
+    | while IFS="$TAB" read -r cid svc; do
+        emit_start "$cid" "$svc"
+      done
+else
+  # Not fatal: the live event stream (opened from $START_SINCE) still captures
+  # everything that starts from here on; only containers that were already up
+  # before the sidecar may go uncounted.
+  echo "[telemetry] WARN: could not enumerate running containers for backfill after retries;" \
+       "relying on the live event stream"
+fi
+
 echo "[telemetry] Monitoring container events..."
 
 docker_api "/events?since=${START_SINCE}&filters=${FILTER}" | while IFS= read -r line; do
@@ -130,8 +196,8 @@ docker_api "/events?since=${START_SINCE}&filters=${FILTER}" | while IFS= read -r
 
   case "$ACTION" in
     start)
-      echo "[telemetry] + $SERVICE started"
-      send_event "container" "start" "$SERVICE"
+      CID=$(echo "$line" | jq -r '.Actor.ID // .id // empty' 2>/dev/null)
+      emit_start "$CID" "$SERVICE"
       ;;
     die)
       CODE=$(echo "$line" | jq -r '.Actor.Attributes.exitCode // "?"' 2>/dev/null)
