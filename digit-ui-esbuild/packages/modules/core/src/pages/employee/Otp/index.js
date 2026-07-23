@@ -152,8 +152,8 @@ const Otp = ({ isLogin = false }) => {
         buttonStyle={{ 
           width: "100%", 
           maxWidth: "408px",
-          backgroundColor: "#F47738",
-          borderColor: "#F47738",
+          backgroundColor: "var(--color-button-primary-bg-default, var(--color-primary-main, #F47738))",
+          borderColor: "var(--color-button-primary-bg-default, var(--color-primary-main, #F47738))",
           color: "#fff",
           fontWeight: "500",
           padding: "12px 24px",
