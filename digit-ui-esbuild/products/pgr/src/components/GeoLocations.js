@@ -144,6 +144,12 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const mapRef = useRef(null);
   const searchInputRef = useRef(null);
   const hasInitialized = useRef(false);
+  // Coords of the last reverse-geocode ATTEMPT (not success). The formData
+  // sync effect below must never re-request coords that were already tried:
+  // a failed / rate-limited Nominatim call writes {lat, lng} without an
+  // address back into formData via onSelect, and re-fetching on that write
+  // turns one failure into an infinite request loop (CCRS#1380 symptom 4).
+  const lastReverseAttempt = useRef(null);
 
   // Leaflet writes the stroke as an SVG DOM attribute, which doesn't resolve
   // CSS `var()`. Read the runtime accent at mount so the user-drawn polygon
@@ -206,24 +212,46 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     }
   }, [isReady, DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
 
+  // Sync FROM formData (wizard restore / re-entering the map step).
+  //
+  // Depend on the field's VALUES, not the formData object. The wizard
+  // rebuilds formData on every patch — including the patch our own
+  // fetchAddress issues through onSelect — so keying this effect on object
+  // identity made it re-run after every fetch. When the reverse geocode came
+  // back without an address (Nominatim error, rate limit, or a response with
+  // no display_name), the re-run called fetchAddress again, whose onSelect
+  // patched formData again: an infinite request loop that hammered Nominatim
+  // (guaranteeing further rate-limit failures that sustained it) and kept the
+  // map churning. Reported as CCRS#1380 symptom 4.
+  const savedPoint = formData?.[config.key];
+  const savedLat = savedPoint?.lat;
+  const savedLng = savedPoint?.lng;
+  const savedAddress = savedPoint?.address;
   useEffect(() => {
-    if (formData?.[config.key]) {
-      const { lat, lng, address: savedAddress } = formData[config.key];
-      if (lat && lng) {
-        setCoords({ lat, lng });
-        setMarkerPos([lat, lng]);
-        // Restore saved address if available
-        if (savedAddress) {
-          setAddress(savedAddress);
-          setSearchQuery(savedAddress);
-        } else if (!address) {
-          fetchAddress(lat, lng);
-        }
-      }
+    if (!savedLat || !savedLng) return;
+    setCoords({ lat: savedLat, lng: savedLng });
+    setMarkerPos([savedLat, savedLng]);
+    // Restore saved address if available
+    if (savedAddress) {
+      setAddress(savedAddress);
+      setSearchQuery(savedAddress);
+    } else if (!address && lastReverseAttempt.current !== `${savedLat},${savedLng}`) {
+      // Only reverse-geocode coords that were never attempted (a genuine
+      // restore, e.g. Back into the map step with a pin but no address). A
+      // failed attempt must not re-trigger itself through the formData
+      // round-trip; user actions (pin drop, search, locate-me) always go
+      // through fetchAddress directly and are unaffected by this guard.
+      fetchAddress(savedLat, savedLng);
     }
-  }, [formData, config.key]);
+    // `address` is deliberately not a dep: it only gates the one-shot restore
+    // fetch, and re-running on address changes would undo manual edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedLat, savedLng, savedAddress]);
 
   const fetchAddress = async (lat, lng) => {
+    // Record the attempt BEFORE the request so even a throwing fetch marks
+    // these coords as tried — the sync effect keys off this to avoid looping.
+    lastReverseAttempt.current = `${lat},${lng}`;
     const ward = resolveWard(lat, lng, tenantBoundaries);
     setSelectedWard(ward?.code || null);
     try {
