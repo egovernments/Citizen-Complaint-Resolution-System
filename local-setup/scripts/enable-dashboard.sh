@@ -385,8 +385,12 @@ PY
   # Type-check both markers, matching isSchemaDocument() in
   # digit-mcp/src/tools/mdms-tenant.ts — key presence alone would flag a record
   # that legitimately carries a field named `properties`.
+  # Only ACTIVE rows: repair deactivates rather than deletes (mdms-v2 has no
+  # delete), and the catalog reader already skips inactive rows. Without this
+  # filter a repaired tenant flags its own deactivated row forever and every
+  # re-run demands --repair again.
   CORRUPT_UIDS="$(psql_q "select schemacode||'/'||uniqueidentifier from eg_mdms_data
-      where tenantid='$DASHBOARD_TENANT' and schemacode like 'dss.%'
+      where tenantid='$DASHBOARD_TENANT' and schemacode like 'dss.%' and isactive
         and jsonb_typeof(data->'\$schema') = 'string'
         and jsonb_typeof(data->'properties') = 'object'")"
   if [[ -n "$CORRUPT_UIDS" ]]; then
