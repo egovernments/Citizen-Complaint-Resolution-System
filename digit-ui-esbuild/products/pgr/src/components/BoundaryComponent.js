@@ -21,46 +21,17 @@ const BoundaryComponent = ({ t, config, onSelect, userType, formData, readOnly }
   // everyone else falls back to the logged-in tenant (unchanged behaviour).
   const tenantId = config?.tenantId || Digit.ULBService.getCurrentTenantId();
 
-  // Employee jurisdiction gate (egovernments/CCRS#496).
-  //
-  // A CSR scoped to e.g. NAIROBI_CITY_HARAMBEE could file complaints at
-  // any of the 9 Nairobi wards today — the cascade always rendered the
-  // full boundary tree without consulting the operator's HRMS
-  // jurisdictions. Backend doesn't independently enforce CSR creation
-  // jurisdiction, so the UI is the primary defense.
-  //
-  // For employees we look up the HRMS record and collect each
-  // `jurisdictions[].boundary` as an "allowed root". The boundary tree
-  // is then pruned to subtrees that either match an allowed root or
-  // contain one. City-level jurisdictions (NAIROBI_CITY) match the
-  // tree root, so the full city stays visible — no functional change
-  // for the 89% of employees with city-wide scope. Ward / sub-county
-  // scoped employees get a meaningfully narrower picker.
-  //
-  // Citizens have no HRMS record / jurisdictions, so the filter is
-  // dormant on the citizen path.
-  const user = Digit.UserService.getUser();
-  const isEmployee = user?.info?.type === "EMPLOYEE";
-  const employeeCode = user?.info?.userName;
-
-  const { data: hrmsData } = Digit.Hooks.useEmployeeSearch(
-    tenantId,
-    { codes: employeeCode },
-    { enabled: isEmployee && !!employeeCode, staleTime: 10 * 60 * 1000 }
-  );
-
-  const allowedRoots = useMemo(() => {
-    if (!isEmployee) return null;
-    const juris = hrmsData?.Employees?.[0]?.jurisdictions || [];
-    // Defensive: one observed seed record has `boundary: "ke.nairobi"`
-    // (the tenant code, not a real boundary code). Drop entries that
-    // can't appear in the boundary tree so they don't accidentally
-    // null-filter the cascade.
-    const roots = juris
-      .map((j) => j?.boundary)
-      .filter((b) => typeof b === "string" && b.length > 0 && b !== tenantId && !b.includes("."));
-    return roots.length > 0 ? new Set(roots) : null;
-  }, [isEmployee, hrmsData, tenantId]);
+  // Employee jurisdiction gate (egovernments/CCRS#496) — DISABLED on this
+  // deployment (Moz product call, 2026-07-23): the employee boundary picker
+  // renders the SAME full tree the citizen picker does. A reception officer
+  // takes complaints for any location in the country, so pruning the cascade
+  // to the operator's HRMS jurisdiction (which the onboarding seeded as
+  // maputo_provincia for 418/419 IGE staff, and a single childless Distrito
+  // for EMP001) collapsed the picker to one province and read as a bug.
+  // The prune machinery below (filterTree) is kept dormant behind
+  // `allowedRoots = null` so a future deployment can re-enable scoping by
+  // restoring the HRMS lookup here.
+  const allowedRoots = null;
 
   const { data: rawChildrenData, isLoading: isBoundaryLoading } = Digit.Hooks.pgr.useFetchBoundaries(tenantId);
 
