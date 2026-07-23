@@ -87,9 +87,8 @@ db_fast_path: true
 run_ci_tests: false
 install_claude_code: false
 
-# `docker_registry` is the tag prefix used for two specific fallbacks only:
+# `docker_registry` is the tag prefix used for one specific fallback only:
 #   - MCP image pull       — when `build_mcp: false`
-#   - DDH pinned image     — when `build_default_data_handler: false`
 # Every other DIGIT image is referenced by FULL hardcoded path in the
 # compose file (`docker-compose.egov-digit.yaml`) — `docker_registry`
 # does NOT redirect those.
@@ -99,12 +98,6 @@ install_claude_code: false
 #   registry.preview.egov.theflywheel.in/egovio         — Flywheel-hosted egovio mirror
 # Both serve TLS, so keep `insecure_registries: []` above.
 docker_registry: "registry.preview.egov.theflywheel.in/egovio"
-
-# Build DDH from in-tree source (`utilities/default-data-handler/`) instead
-# of pulling the pinned image from docker_registry. Slower first deploy,
-# but deterministic and gets the latest PR #598 idempotency guard. Bomet
-# runs with this on; recommended for fresh Linux deploys.
-build_default_data_handler: true
 
 nginx_features:
   brand_assets: false

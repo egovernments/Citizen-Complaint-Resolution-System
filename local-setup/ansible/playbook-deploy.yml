@@ -600,20 +600,6 @@
              | default('digit-mcp:local' if (build_mcp | default(false))
                        else 'ghcr.io/subhashini-egov/digit-mcp:2.12-draft-20260525-034354') }}
 
-    # Same shape as MCP. When `build_default_data_handler: true`, the build
-    # task below produces `default-data-handler:local` from utilities/default-data-handler
-    # using build/maven/Dockerfile. Otherwise we pull the published image
-    # carrying the relaxed RAINMAKER-PGR schema (source-file fix dated
-    # 2026-05-24) and the pincode-free tenant.tenants template (the 0525
-    # build seeded pg's Indian pincodes onto every new tenant's citya,
-    # vetoing citizen submits with CS_COMMON_PINCODE_NOT_SERVICABLE).
-    - name: "Resolve default-data-handler image tag"
-      ansible.builtin.set_fact:
-        ddh_image: >-
-          {{ ddh_image
-             | default('default-data-handler:local' if (build_default_data_handler | default(false))
-                       else 'ghcr.io/subhashini-egov/default-data-handler:2.12-draft-20260611-111521') }}
-
     # Novu dashboard: when `build_novu_dashboard: true` we build a subpath-rebased
     # image locally (backend/novu-dashboard/Dockerfile, tag novu-dashboard:local)
     # so the SPA serves under /novu with a single strip-prefix nginx location;
@@ -731,12 +717,6 @@
         path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
         regexp: '^(\s+)DIGIT_TENANT: pg$'
         replace: '\1DIGIT_TENANT: {{ state_root }}'
-
-    - name: Set DEFAULT_TENANT_ID (default-data-handler) in compose
-      replace:
-        path: "{{ digit_dir }}/docker-compose.egov-digit.yaml"
-        regexp: '^(\s+)DEFAULT_TENANT_ID: pg$'
-        replace: '\1DEFAULT_TENANT_ID: {{ state_root }}'
 
     # egov-user's OWN mobile-number-validation fallback (Spring env vars,
     # baked into the image's application.properties as India's +91 /
@@ -886,31 +866,6 @@
       when:
         - enable_mcp | default(false)
         - build_mcp | default(false)
-
-    # ==================== Build default-data-handler image locally =========
-    # When `build_default_data_handler: true`, build the image from the
-    # vendored source in this repo (utilities/default-data-handler) using
-    # the shared maven Dockerfile (build/maven/Dockerfile). The image is
-    # tagged `default-data-handler:local`; compose picks it up via DDH_IMAGE.
-    #
-    # Build context is the CCRS repo root so the Dockerfile can reach both
-    # utilities/default-data-handler/{pom.xml,src} and build/maven/start.sh.
-    # Works for `ansible_connection: local` (controller path == target path).
-    # For real remote targets, add a synchronize step that rsyncs both
-    # subdirs to a build-context dir on the target.
-    - name: "Build default-data-handler image locally (when build_default_data_handler)"
-      ansible.builtin.command: >-
-        docker build
-        -t default-data-handler:local
-        --build-arg WORK_DIR=utilities/default-data-handler
-        -f build/maven/Dockerfile
-        .
-      args:
-        chdir: "{{ playbook_dir }}/../.."
-      register: ddh_build_run
-      changed_when: true
-      when:
-        - build_default_data_handler | default(false)
 
     # ==================== Build novu-dashboard image locally ==============
     # When `build_novu_dashboard: true`, derive a subpath-rebased dashboard
