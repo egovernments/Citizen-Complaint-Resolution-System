@@ -72,8 +72,9 @@ deployment offers in `common-masters.StateInfo.languages`.
 
 ## Related
 
-- **`enable-dashboard.sh --help`** — the full runbook: prerequisites, the seven steps, the
-  role-remap decision, and a symptom→cause table for every known blocker
+- **`enable-dashboard.sh --help`** — usage and flags. The full runbook (prerequisites, the seven
+  steps, the role-remap decision, and a symptom→cause table for every known blocker) is the
+  enablement-PR comment that graduates into `docs/dashboard-configuration/` on merge
 - Runbook (issue #631): the original, with the manual form of each step
 - `docs/dashboard-configuration/` — the reference docs this seeds against
 - `local-setup/db/notif-mdms-seed/` — the same pattern for notification masters

@@ -909,7 +909,7 @@ step5() {
   local declared
   declared="$(psql_q "select string_agg(l->>'value', ',') from eg_mdms_data d,
       lateral jsonb_array_elements(d.data->'languages') l
-      where d.schemacode='common-masters.StateInfo' and d.tenantid='$DASHBOARD_TENANT'")"
+      where d.schemacode='common-masters.StateInfo' and d.tenantid='$DASHBOARD_TENANT' and d.isactive")"
   for loc in $locales; do
     [[ ",${declared}," == *",${loc},"* ]] || \
       warn "$loc is not in common-masters.StateInfo.languages — seeded but unselectable in the UI"
@@ -1065,7 +1065,7 @@ PY
   if [[ -z "$locales" ]]; then
     locales="$(psql_q "select string_agg(distinct l->>'value', ' ') from eg_mdms_data d,
         lateral jsonb_array_elements(d.data->'languages') l
-        where d.schemacode='common-masters.StateInfo' and d.tenantid='$DASHBOARD_TENANT'")"
+        where d.schemacode='common-masters.StateInfo' and d.tenantid='$DASHBOARD_TENANT' and d.isactive")"
     [[ -n "$locales" ]] || locales="$(cd "$DSS_L10N_DIR" && ls ./*.json | sed 's|.*/||; s/\.json$//' | tr '\n' ' ')"
   fi
   log "verifying locales: $locales"
@@ -1079,17 +1079,28 @@ PY
       note "Author a $loc pack in digit-mcp/src/tools/dashboard-l10n-seed.ts, then re-run --only step5."
       continue
     fi
+    # Extract EVERY localisation key the catalog references, not just titleKey:
+    # subtitleKey and the labelKeys/labelKey arrays render raw DASHBOARD_* codes
+    # just the same when a locale is missing them. `.**.` walks to each key at
+    # any depth; labelKeys is an array, so unnest it. A key is "resolved" when a
+    # message row exists for it in this locale.
     missing="$(psql_q "
       with keys as (
-        select distinct k from eg_mdms_data d,
-          lateral jsonb_path_query(d.data, '\$.**.titleKey') k
+        select distinct trim(both '\"' from k::text) as code
+        from eg_mdms_data d,
+          lateral (
+            select jsonb_path_query(d.data, '\$.**.titleKey')    as k
+            union all select jsonb_path_query(d.data, '\$.**.subtitleKey')
+            union all select jsonb_path_query(d.data, '\$.**.labelKey')
+            union all select jsonb_path_query(d.data, '\$.**.labelKeys[*]')
+          ) x
         where d.schemacode='dss.KpiDefinition' and d.tenantid='$DASHBOARD_TENANT' and d.isactive
       )
       select count(*) from keys
-      where trim(both '\"' from k::text) not in
+      where code not in
         (select code from message where locale='$loc' and tenantid like '${DASHBOARD_TENANT}%')")"
-    [[ "${missing:-0}" -eq 0 ]] && ok "$loc — every catalog titleKey resolves" \
-      || { err "$loc — ${missing} catalog titleKey(s) have no message (tiles show raw keys)"; rc=1; }
+    [[ "${missing:-0}" -eq 0 ]] && ok "$loc — every catalog title/subtitle/label key resolves" \
+      || { err "$loc — ${missing} catalog key(s) have no message (tiles show raw codes)"; rc=1; }
   done
 
   if [[ $rc -eq 0 ]]; then
