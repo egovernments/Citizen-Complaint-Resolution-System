@@ -331,6 +331,7 @@ export function humanizeTypeCode(code) {
   if (!raw) return "";
   const segment = raw.split(".").filter(Boolean).pop() || raw;
   const spaced = segment
+    .replace(/\//g, " / ")
     .replace(/[_\-]+/g, " ")
     .replace(/([a-z\d])([A-Z])/g, "$1 $2")
     .replace(/\s+/g, " ")
@@ -339,4 +340,47 @@ export function humanizeTypeCode(code) {
     .split(" ")
     .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
     .join(" ");
+}
+
+/**
+ * Readable label for boundary / department / similar SCREAMING_SNAKE codes
+ * that have no localization entry (ETOEROLES_WARD_1, MEDICAL_SVC, PMC_Z1_B1_L1).
+ * Strips common county prefixes, title-cases tokens.
+ */
+export function humanizeDimensionCode(code) {
+  const raw = String(code ?? "").trim();
+  if (!raw) return "";
+  let s = raw.replace(/^(KE_ADMIN_)+/i, "");
+  // Drop a leading county token when the rest still has substance
+  // (BOMET_CHEPALUNGU_CHEBUNYO → Chepalungu Chebunyo).
+  s = s.replace(/^BOMET_/i, "");
+  s = s
+    .replace(/[_\-.]+/g, " ")
+    .replace(/([a-z\d])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+  return s
+    .split(" ")
+    .map((w) => {
+      if (!w) return w;
+      if (/^\d+[A-Z]?\d*$/i.test(w) || /^[A-Z]\d+/i.test(w)) return w.toUpperCase();
+      const lower = w.toLowerCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
+}
+
+/**
+ * True when a localization *message* is still an internal taxonomy path
+ * (or a machine-translated variant like "reclamações.categories.…") rather
+ * than a human title. Callers should fall through to humanizeTypeCode.
+ */
+export function looksLikeTaxonomyCodePath(label) {
+  const s = String(label ?? "").trim();
+  if (!s) return false;
+  if (/\.(categories|category)\./i.test(s)) return true;
+  if (/^(complaints|reclama[cç][oõ]es)\./i.test(s)) return true;
+  // Three+ dotted segments is almost always a code path, never a title.
+  if ((s.match(/\./g) || []).length >= 2) return true;
+  return false;
 }
