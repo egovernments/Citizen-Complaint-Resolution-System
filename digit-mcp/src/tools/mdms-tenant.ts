@@ -1277,6 +1277,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const sourceSchemas = await digitApi.mdmsSchemaSearch(source);
       for (const schema of sourceSchemas) {
         const code = schema.code as string;
+        // The dss.* catalog schemas are registered from the repo in Step 1b.
+        // If we copied the source's copy here first, Step 1b would only ever
+        // see a duplicate and the source's (possibly stale) definition would
+        // win — schema code is immutable, so whichever registers first stays.
+        // Skip them here so the canonical definition is the one that lands.
+        if (code in DASHBOARD_CATALOG_SCHEMAS) {
+          continue;
+        }
         const definition = schema.definition as Record<string, unknown>;
         const description = (schema.description as string) || code;
         const xUnique = (definition as { 'x-unique'?: unknown })['x-unique'];
