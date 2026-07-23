@@ -164,6 +164,75 @@ export function normalizePincodeAllowlist(input: unknown): Array<string | number
 }
 
 /**
+ * Schemas where copying ZERO records from the source is a defect, not a no-op.
+ *
+ * The bootstrap copy is silent about an empty source: no records to iterate
+ * means nothing lands in `copied`, `skipped` OR `failed`, so the run reports
+ * success and the operator finds out weeks later that a feature renders blank.
+ * These schemas carry platform-level definitions that every root needs and
+ * that no other step seeds, so an empty source gets an explicit warning.
+ *
+ * Deliberately NOT in this list: tenant-specific masters (ComplaintHierarchy,
+ * ServiceDefs) whose emptiness at the source is the correct, expected state —
+ * they are operator-owned and loaded via the configurator.
+ */
+const SCHEMAS_EMPTY_IS_A_PROBLEM = new Map<string, { impact: string; remedy: string }>([
+  [
+    'dss.KpiDefinition',
+    {
+      impact: 'the dashboard will render an empty catalog',
+      remedy: 'local-setup/scripts/enable-dashboard.sh',
+    },
+  ],
+  [
+    'dss.DashboardPack',
+    {
+      impact: 'the dashboard will render no tiles for any role',
+      remedy: 'local-setup/scripts/enable-dashboard.sh',
+    },
+  ],
+  [
+    'INBOX.InboxQueryConfiguration',
+    {
+      impact: 'employee inbox searches will fail to resolve their query config',
+      remedy: 'copy the master from a populated root (no installer script covers this one)',
+    },
+  ],
+  [
+    'ACCESSCONTROL-ROLEACTIONS.roleactions',
+    {
+      impact: 'no role will have any action grants, so every sidebar renders empty',
+      remedy: 'seed ACCESSCONTROL-ROLEACTIONS from the ansible seed files',
+    },
+  ],
+]);
+
+/**
+ * True when an MDMS data payload is actually a JSON Schema document.
+ *
+ * Posting a schema body to `/v2/_create/<schema>` instead of
+ * `/schema/v1/_create` produces a data row whose payload is the schema itself.
+ * mdms-v2 accepts it, it occupies the uniqueIdentifier that the real record
+ * needs, and every later seed of that record is rejected as a duplicate — so
+ * the master stays permanently broken while looking populated. Observed live
+ * on `mz` for dss.KpiDefinition and dss.DashboardPack.
+ *
+ * Both markers are required, and both must be at the TOP level. Masters that
+ * legitimately carry a JSON Schema as part of their data (e.g.
+ * RAINMAKER-PGR.ComplaintExtendedAttributeSchema) nest it under a field —
+ * verified live on `mz`, where those rows have neither `$schema` nor
+ * `properties` as a top-level key.
+ */
+function isSchemaDocument(data: Record<string, unknown> | undefined): boolean {
+  if (!data || typeof data !== 'object') return false;
+  return (
+    typeof data['$schema'] === 'string' &&
+    typeof data['properties'] === 'object' &&
+    data['properties'] !== null
+  );
+}
+
+/**
  * Search for MDMS records across all state tenants.
  * First queries the default state tenant to discover all root-level tenants,
  * then queries each discovered root to get the complete set.
@@ -1189,9 +1258,11 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const results: {
         schemas: { copied: string[]; skipped: string[]; failed: string[] };
         data: { copied: string[]; skipped: string[]; failed: string[] };
+        warnings: string[];
       } = {
         schemas: { copied: [], skipped: [], failed: [] },
         data: { copied: [], skipped: [], failed: [] },
+        warnings: [],
       };
 
       emitProgress({ phase: 'bootstrap:start', message: `Bootstrapping ${target} from ${source}`, data: { source, target }, pct: 0 });
@@ -1542,11 +1613,62 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
               .map((r) => [r.uniqueIdentifier, r]),
           );
 
+          // An empty source is not the same as "nothing to do". For schemas
+          // whose whole purpose is to carry platform-level definitions, a
+          // source root with no rows means the target gets a working shell
+          // with an empty catalog — which is indistinguishable from success in
+          // the copied/skipped/failed counters. This is exactly how `mz` was
+          // bootstrapped to a dashboard with zero KPIs. Say so out loud.
+          const emptyImpact = SCHEMAS_EMPTY_IS_A_PROBLEM.get(schemaCode);
+          if (sourceRecords.length === 0 && emptyImpact) {
+            const warning =
+              `Source tenant "${source}" has no ${schemaCode} records — nothing was copied to ` +
+              `"${target}", so ${emptyImpact.impact}. Seed it from the repo files: ` +
+              `${emptyImpact.remedy} (tenant "${target}").`;
+            results.warnings.push(warning);
+            console.warn(`[tenant_bootstrap] ${warning}`);
+            emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode } });
+          }
+
           for (const record of sourceRecords) {
             const existing = targetByUid.get(record.uniqueIdentifier);
             try {
+              // A record whose payload is a JSON Schema document is the result
+              // of POSTing a schema body to /v2/_create/<schema> instead of
+              // /schema/v1/_create. It is not data, it occupies the uid a real
+              // record needs, and copying it propagates the corruption to every
+              // tenant bootstrapped from this source. Found live on `mz`.
+              if (isSchemaDocument(record.data as Record<string, unknown>)) {
+                const warning =
+                  `Skipped ${schemaCode}/${record.uniqueIdentifier} at source "${source}": the ` +
+                  `record payload is a JSON Schema document, not data. Deactivate it at the ` +
+                  `source (mdms-v2 _update with isActive:false) — it also shadows the real record there.`;
+                results.warnings.push(warning);
+                console.warn(`[tenant_bootstrap] ${warning}`);
+                emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode, uniqueIdentifier: record.uniqueIdentifier } });
+                results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier} (schema-as-data, not copied)`);
+                continue;
+              }
+              // A valid source record colliding with an active schema-as-data
+              // row on the TARGET must be surfaced, not swallowed by the
+              // generic active-record skip below — otherwise the target's
+              // corruption is invisible and the good record never lands, while
+              // bootstrap reports success. The copy can't repair it (an active
+              // row is not overwritten), so point the operator at the fix.
+              if (existing?.isActive && isSchemaDocument(existing.data as Record<string, unknown>)) {
+                const warning =
+                  `Skipped ${schemaCode}/${record.uniqueIdentifier} at target "${target}": the ` +
+                  `existing record is a JSON Schema document, not data, and shadows the real record. ` +
+                  `Deactivate it (mdms-v2 _update with isActive:false), then re-run — or repair it ` +
+                  `with local-setup/scripts/enable-dashboard.sh --repair.`;
+                results.warnings.push(warning);
+                console.warn(`[tenant_bootstrap] ${warning}`);
+                emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode, uniqueIdentifier: record.uniqueIdentifier } });
+                results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier} (target schema-as-data, not copied)`);
+                continue;
+              }
               if (existing && existing.isActive) {
-                // Already active — skip
+                // Already active — skip.
                 results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier}`);
               } else if (existing && !existing.isActive) {
                 // Inactive (from cleanup) — re-activate via update.
@@ -2515,7 +2637,12 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
           // gates auth.
           admin_user_provisioned: !!userProvisioned,
           admin_employee_provisioned: adminEmployee.provisioned,
+          warnings: results.warnings.length,
         },
+        // Surfaced at the top level on purpose. These are cases the copy
+        // cannot fix and that no counter reflects — an empty source master, a
+        // corrupt source record. Buried in `results` they read as success.
+        ...(results.warnings.length > 0 && { warnings: results.warnings }),
         localizations: localizationResults,
         adminEmployee,
         ...(userProvisioned && {
