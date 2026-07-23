@@ -58,8 +58,9 @@ and find the master.
 - RBAC design series: `docs/dashboard-rbac-design/`
 - Live MDMS examples: `ansible/nairobi-mdms/mdms/dss/KpiDefinition.json`, `DashboardPack.json`
 - Enabling it on a running deployment: `local-setup/scripts/enable-dashboard.sh` (run `--help`
-  for the full runbook — prerequisites, the role-remap decision, and a symptom→cause table for
-  every known blocker), with supporting schemas + message packs in `local-setup/db/dss-mdms-seed/`
+  for usage and flags; the full runbook — prerequisites, the role-remap decision, and a
+  symptom→cause table for every known blocker — is the enablement-PR comment that graduates
+  here on merge), with supporting schemas + message packs in `local-setup/db/dss-mdms-seed/`
 - Backend: `backend/pgr-services/src/main/java/org/egov/pgr/analytics/`
 - Frontend (deployed, post-#1062): `digit-ui-esbuild/products/dashboard/` — module root (`Module.js`,
   `roles.js`, `DashboardCard.js`) with the engine under `src/` (`AdminDashboard.jsx`, `components/`,
