@@ -578,6 +578,35 @@ The last 3 lines are the values to pass to Newman.
 | Application (PGR, UI, Kong) | ~0.7 GB |
 | **Total** | **~3.8 GB** |
 
+### Disk usage: container logs
+
+Container logs are **not** rotated by Compose. With Docker's default `json-file`
+driver they grow without bound: measured on an idle stack 21 hours after start,
+7.9 GB total — 4.3 GB from the MDMS backend and 2.6 GB from the OTel collector
+alone, roughly 9 GB/day before any load.
+
+This is not cosmetic. When the disk fills, Postgres hits
+`PANIC: could not write to file ... No space left on device` and crash-loops,
+because recovery must itself write a checkpoint. It does not return without
+intervention, and every service then fails on connection acquisition.
+
+The Ansible playbook (Option C) configures rotation for you, in
+`/etc/docker/daemon.json`. **If you started the stack by hand with
+`docker compose up`, you must configure it yourself** — it is a daemon-level
+setting, not a Compose one:
+
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "100m", "max-file": "10" }
+}
+```
+
+Then `sudo systemctl restart docker`. The limits apply to containers **created
+after** the restart — existing containers keep the settings they were created
+with until recreated, so run `docker compose up -d --force-recreate` if the
+stack is already running.
+
 ---
 
 ## API Access

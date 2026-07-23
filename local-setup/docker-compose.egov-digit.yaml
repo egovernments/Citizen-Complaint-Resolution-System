@@ -95,6 +95,15 @@ services:
   postgres-db:
     image: registry.preview.egov.theflywheel.in/postgres:16
     container_name: docker-postgres
+    # /dev/shm sizing (issue #1365). Postgres puts the dynamic shared memory
+    # that a parallel query's workers use to exchange tuples here — about 8 MB
+    # per query. Docker's default pad is 64 MB, so the 9th concurrent parallel
+    # query fails with "could not resize shared memory segment ... No space
+    # left on device". pgbouncer runs transaction pooling, so its
+    # DEFAULT_POOL_SIZE (60 below) is what bounds concurrency at the database:
+    # 60 x 8 MB = 480 MB worst case. A tmpfs is a ceiling, not a reservation —
+    # unused pages cost no memory.
+    shm_size: 1gb
     environment:
       POSTGRES_USER: egov
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
@@ -397,6 +406,11 @@ services:
     depends_on:
       egov-mdms-service:
         condition: service_healthy
+      # Flyway is disabled for this service, so the external db-migrations
+      # container must finish before enc starts — otherwise it races an
+      # unmigrated schema on a cold start (matches egov-user et al.).
+      db-migrations:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     volumes:
@@ -414,7 +428,14 @@ services:
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
       SPRING_FLYWAY_BASELINE_ON_MIGRATE: 'true'
       SPRING_FLYWAY_VALIDATE_ON_MIGRATE: 'false'
-      SPRING_FLYWAY_ENABLED: 'true'
+      # Schema is owned by the external egov-enc-service-migration container
+      # (like every other service — egov-user/filestore/localization all set
+      # this false). enc was the lone service still running embedded Flyway;
+      # on an existing DB the app's Flyway then fights the migrator's history
+      # table (enc_schema_version vs the standard egov_enc_service_schema) and
+      # the service crash-loops on "relation enc_schema_version_pk already
+      # exists". Disable it so the external migrator is the single source.
+      SPRING_FLYWAY_ENABLED: 'false'
       SPRING_FLYWAY_TABLE: enc_schema_version
       SERVER_PORT: 1234
       OTEL_TRACES_EXPORTER: otlp

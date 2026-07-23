@@ -320,10 +320,35 @@
                      * _u[(docker_log_max_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
             _tt: "{{ (docker_log_total_size | regex_search('^([0-9.]+)', '\\1') | first | float)
                      * _u[(docker_log_total_size | regex_search('([kmgKMG])[bB]?$', '\\1') | first | lower)] }}"
+          # The divisor below is floored at 1 byte — `[1, (_sz | float)] | max`
+          # — so the division can never raise. Two reasons that is not paranoia:
+          #
+          # 1. ansible-lint renders a task's Jinja using that task's `vars`
+          #    only. It never loads inventory group_vars, and this playbook has
+          #    no committed inventory (deploy.sh generates hosts.yml, and
+          #    group_vars live under inventory/). So at lint time
+          #    docker_log_max_size is undefined, `| float` yields 0.0, and an
+          #    unfloored division aborts the whole run with "jinja[invalid]:
+          #    Error rendering template: float division by zero" — a CI failure
+          #    with no runtime counterpart.
+          #
+          # 2. `default()` evaluates its argument eagerly, so this division runs
+          #    even when docker_log_max_file IS set. The guard task above is
+          #    skipped in exactly that case, so a host combining the escape
+          #    hatch with docker_log_max_size: "0m" would hit a real
+          #    ZeroDivisionError at runtime.
+          #
+          # Keep the floor INLINE. Hoisting it into a helper var does not work:
+          # ansible-lint resolves a task var only when it is self-contained, so
+          # a var defined in terms of _sz reads back as undefined, collapses to
+          # 0.0, and reintroduces the very error this avoids.
+          #
+          # A zero max-size reaching this point is still caught downstream —
+          # dockerd rejects a "max-size": "0m" log-opt itself.
           ansible.builtin.set_fact:
             docker_log_max_file_effective: >-
               {{ docker_log_max_file
-                 | default([1, ((_tt | float) / (_sz | float)) | int] | max, true) }}
+                 | default([1, ((_tt | float) / ([1, (_sz | float)] | max)) | int] | max, true) }}
 
         # daemon.json is written unconditionally now. It used to be gated on
         # insecure_registries being non-empty, which meant hosts on a TLS
@@ -463,6 +488,16 @@
       copy:
         src: ../docker-compose.migrations.ansible.yml
         dest: "{{ digit_dir }}/docker-compose.migrations.ansible.yml"
+
+    # ── Monitoring overlay (issue #1335) ────────────────────────────────────────
+    # node-exporter for host-level metrics (CPU/mem/disk/net). Always layered
+    # (see "Compute compose -f flags"): node metrics are wanted on every box,
+    # matching the k8s tier's always-on node_exporter DaemonSet. The scrape job
+    # ships in otel/prometheus.yml (synced via digit_config_dirs below).
+    - name: Copy monitoring overlay
+      copy:
+        src: ../docker-compose.monitoring.yml
+        dest: "{{ digit_dir }}/docker-compose.monitoring.yml"
 
     # Per-tenant compose overlay convention. If a file named
     # local-setup/docker-compose.<inventory_hostname>.yml exists on the
@@ -786,7 +821,7 @@
     # The migration overlay is layered ALWAYS (see "Copy DB-migration overlay"):
     # it is the migration model, not an opt-in extra. It must come BEFORE the
     # per-tenant overlay so a tenant can still override a migrator if it has to.
-    - name: "Compute compose -f flags (fast-path + migrations + per-tenant overlay)"
+    - name: "Compute compose -f flags (fast-path + migrations + monitoring + per-tenant overlay)"
       ansible.builtin.set_fact:
         compose_files: >-
           {{
@@ -794,6 +829,7 @@
             (' -f docker-compose.fast-path.yml' if (db_fast_path | default(false)) else '') +
             ' -f docker-compose.migrations.yml' +
             ' -f docker-compose.migrations.ansible.yml' +
+            ' -f docker-compose.monitoring.yml' +
             (' -f docker-compose.' ~ inventory_hostname ~ '.yml' if per_tenant_overlay.stat.exists else '')
           }}
 
@@ -1141,6 +1177,25 @@
       delay: 10
       until: hrms_health.stdout == 'healthy'
       changed_when: false
+
+    # ==================== Reload Prometheus config (issue #1335) ====================
+    # `up -d` recreates a container only when its service SPEC changes — a
+    # content-only change to the bind-mounted otel/prometheus.yml does not
+    # trigger a recreate. So on a REDEPLOY of an already-running tenant, the
+    # live Prometheus keeps its old in-memory config and never picks up a newly
+    # added scrape job (e.g. the `node` job for node-exporter) until it happens
+    # to restart. A fresh deploy is unaffected — Prometheus boots with the new
+    # config. Prometheus runs with --web.enable-lifecycle, so POST /-/reload
+    # rereads the file in place. Best-effort: on a first deploy Prometheus may
+    # not be up yet (and already loaded fresh config), so a failure here is fine.
+    - name: Reload Prometheus config (pick up new scrape jobs without a recreate)
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19090/-/reload
+        method: POST
+        status_code: [200]
+      register: prometheus_reload
+      changed_when: prometheus_reload.status == 200
+      failed_when: false
 
     # ==================== digit-ui mode convergence ====================
     # Three runtime models, picked by host_vars `digit_ui_mode`:

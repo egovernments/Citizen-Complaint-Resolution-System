@@ -9,6 +9,11 @@ services:
   postgres-db:
     image: postgres:16
     container_name: docker-postgres
+    # /dev/shm sizing (issue #1365). Postgres puts the dynamic shared memory
+    # that a parallel query's workers use to exchange tuples here — about 8 MB
+    # per query — and Docker's default pad is only 64 MB. pgbouncer's
+    # DEFAULT_POOL_SIZE is 20 on this stack, so 20 x 8 MB = 160 MB covers it.
+    shm_size: 256m
     environment:
       POSTGRES_USER: egov
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-egov123}
