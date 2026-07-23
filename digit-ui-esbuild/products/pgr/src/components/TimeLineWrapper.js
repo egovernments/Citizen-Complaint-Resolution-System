@@ -183,11 +183,15 @@ const TimelineWrapper = ({ businessId, isWorkFlowLoading, workflowData, labelPre
             const steps = workflowData.ProcessInstances.map((instance, index) => {
                 const assignee = instance?.assignes?.[0];
                 const personRecord = isAssigningAction(instance?.action) ? assignee : instance?.assigner;
-                // Confidential complaints: mask the CITIZEN actor's identity
-                // (employees stay visible — accountability is intact).
+                // Product call (2026-07-23, follow-up on QA #19): the timeline
+                // ALWAYS masks the CITIZEN actor's name and number — even on
+                // non-confidential complaints. The complainant card is the one
+                // place that shows clear identity, per the viewer's privilege.
+                // (maskConfidential is kept as a prop for compatibility but the
+                // citizen actor no longer depends on it.)
                 const isEmployeeActor = personRecord && !isCitizenActor(personRecord);
                 const maskThis =
-                  (maskConfidential && isCitizenActor(personRecord)) ||
+                  isCitizenActor(personRecord) ||
                   (maskEmployeeContacts && isEmployeeActor);
                 // QA #19 part 1: citizen view drops employee identity lines
                 // entirely (hide, not mask).
