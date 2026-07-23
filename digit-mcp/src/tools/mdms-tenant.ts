@@ -1645,14 +1645,30 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
                   `source (mdms-v2 _update with isActive:false) — it also shadows the real record there.`;
                 results.warnings.push(warning);
                 console.warn(`[tenant_bootstrap] ${warning}`);
+                emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode, uniqueIdentifier: record.uniqueIdentifier } });
                 results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier} (schema-as-data, not copied)`);
                 continue;
               }
+              // A valid source record colliding with an active schema-as-data
+              // row on the TARGET must be surfaced, not swallowed by the
+              // generic active-record skip below — otherwise the target's
+              // corruption is invisible and the good record never lands, while
+              // bootstrap reports success. The copy can't repair it (an active
+              // row is not overwritten), so point the operator at the fix.
+              if (existing?.isActive && isSchemaDocument(existing.data as Record<string, unknown>)) {
+                const warning =
+                  `Skipped ${schemaCode}/${record.uniqueIdentifier} at target "${target}": the ` +
+                  `existing record is a JSON Schema document, not data, and shadows the real record. ` +
+                  `Deactivate it (mdms-v2 _update with isActive:false), then re-run — or repair it ` +
+                  `with local-setup/scripts/enable-dashboard.sh --repair.`;
+                results.warnings.push(warning);
+                console.warn(`[tenant_bootstrap] ${warning}`);
+                emitProgress({ phase: 'data:warning', message: warning, data: { schema: schemaCode, uniqueIdentifier: record.uniqueIdentifier } });
+                results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier} (target schema-as-data, not copied)`);
+                continue;
+              }
               if (existing && existing.isActive) {
-                // Already active — skip. Note this is also true when the
-                // TARGET holds a schema-as-data row under the same uid: the
-                // copy cannot repair it, which is why the warning above points
-                // at the enablement script rather than suggesting a re-run.
+                // Already active — skip.
                 results.data.skipped.push(`${schemaCode}/${record.uniqueIdentifier}`);
               } else if (existing && !existing.isActive) {
                 // Inactive (from cleanup) — re-activate via update.

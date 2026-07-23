@@ -177,6 +177,18 @@ err()   { printf '   %s[FAIL]%s %s\n' "${C_RED}" "${C_RESET}" "$*" >&2; }
 note()  { printf '   %sℹ  %s%s\n' "${C_DIM}" "$*" "${C_RESET}"; }
 
 psql_q() { $SUDO docker exec "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -tAc "$1" 2>/dev/null; }
+
+# schemacode/uid of ACTIVE dss rows whose payload is a JSON Schema document, not
+# data — the shape --repair deactivates. Type-checks both markers (matching
+# isSchemaDocument in mdms-tenant.ts); active-only, because a deactivated row is
+# already neutralised and must not re-trip detection. Shared by step0 (report)
+# and step2 (repair), so --repair works even when step0 is not in this run.
+detect_corrupt_uids() {
+  psql_q "select schemacode||'/'||uniqueidentifier from eg_mdms_data
+      where tenantid='$DASHBOARD_TENANT' and schemacode like 'dss.%' and isactive
+        and jsonb_typeof(data->'\$schema') = 'string'
+        and jsonb_typeof(data->'properties') = 'object'"
+}
 http_code() { curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$@" 2>/dev/null || echo 000; }
 
 # =============================================================================
@@ -385,14 +397,7 @@ PY
   # Type-check both markers, matching isSchemaDocument() in
   # digit-mcp/src/tools/mdms-tenant.ts — key presence alone would flag a record
   # that legitimately carries a field named `properties`.
-  # Only ACTIVE rows: repair deactivates rather than deletes (mdms-v2 has no
-  # delete), and the catalog reader already skips inactive rows. Without this
-  # filter a repaired tenant flags its own deactivated row forever and every
-  # re-run demands --repair again.
-  CORRUPT_UIDS="$(psql_q "select schemacode||'/'||uniqueidentifier from eg_mdms_data
-      where tenantid='$DASHBOARD_TENANT' and schemacode like 'dss.%' and isactive
-        and jsonb_typeof(data->'\$schema') = 'string'
-        and jsonb_typeof(data->'properties') = 'object'")"
+  CORRUPT_UIDS="$(detect_corrupt_uids)"
   if [[ -n "$CORRUPT_UIDS" ]]; then
     warn "schema-as-data rows detected (a JSON Schema stored as a record):"
     printf '        %s\n' $CORRUPT_UIDS
@@ -605,6 +610,13 @@ step2() {
   # Repair first: a schema-as-data row occupies the uid a real record needs.
   # We deactivate rather than delete — mdms-v2 has no delete, and an inactive
   # row is skipped by the catalog reader while staying auditable.
+  #
+  # step0 sets CORRUPT_UIDS, but step2 can run without it (--only step2,
+  # --from step2). Compute it here when unset so --repair never silently
+  # no-ops. `${CORRUPT_UIDS+x}` distinguishes "unset" from "set but empty".
+  if [[ "$DO_REPAIR" == true && "$DRY_RUN" != true && -z "${CORRUPT_UIDS+x}" ]]; then
+    CORRUPT_UIDS="$(detect_corrupt_uids)"
+  fi
   if [[ "$DO_REPAIR" == true && -n "${CORRUPT_UIDS:-}" ]]; then
     for entry in $CORRUPT_UIDS; do
       local sc="${entry%%/*}" uid="${entry##*/}"
@@ -765,11 +777,15 @@ PY
 # =============================================================================
 step4() {
   step step4 "${STEP_TITLES[4]}"
-  local gate_roles; gate_roles="$(python3 -c "
+  # Pass values as argv, not interpolated into the source — matches
+  # target_roles()/role_report and can't break out of the string.
+  local gate_roles; gate_roles="$(python3 - "$ROLE_MAP_JSON" "$DASHBOARD_ALLOWED_ROLES" <<'PY'
 import json,sys
-rmap=json.loads('''$ROLE_MAP_JSON''')
-roles=[rmap.get(r.strip(),r.strip()) for r in '''$DASHBOARD_ALLOWED_ROLES'''.split(',') if r.strip()]
-print(' '.join(dict.fromkeys(roles)))")"
+rmap=json.loads(sys.argv[1])
+roles=[rmap.get(r.strip(),r.strip()) for r in sys.argv[2].split(',') if r.strip()]
+print(' '.join(dict.fromkeys(roles)))
+PY
+)"
 
   # The action itself must exist before it can be granted. mdms-v2 enforces the
   # reference and rejects the grant with REFERENCE_VALIDATION_ERR — which the
@@ -1005,11 +1021,13 @@ step7() {
   granted="$(psql_q "select count(*) from eg_mdms_data
       where schemacode='ACCESSCONTROL-ROLEACTIONS.roleactions' and tenantid='$DASHBOARD_TENANT'
         and data->>'actionid' = '${DASHBOARD_ACTION_ID}' and isactive")"
-  expected="$(python3 -c "
-import json
-rmap=json.loads('''$ROLE_MAP_JSON''')
-roles=[rmap.get(r.strip(),r.strip()) for r in '''$DASHBOARD_ALLOWED_ROLES'''.split(',') if r.strip()]
-print(len(dict.fromkeys(roles)))")"
+  expected="$(python3 - "$ROLE_MAP_JSON" "$DASHBOARD_ALLOWED_ROLES" <<'PY'
+import json,sys
+rmap=json.loads(sys.argv[1])
+roles=[rmap.get(r.strip(),r.strip()) for r in sys.argv[2].split(',') if r.strip()]
+print(len(dict.fromkeys(roles)))
+PY
+)"
   if [[ "${granted:-0}" -ge "${expected:-1}" ]]; then
     ok "sidebar action granted to ${granted} role(s)"
   else
