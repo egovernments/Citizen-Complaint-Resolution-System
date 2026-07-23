@@ -107,7 +107,7 @@ Per-tier notes:
   `dss.DashboardConfig`, the sidebar action, the localization packs, the cache-bust and token
   flush, then verifies end-to-end. Step 0 is read-only and reports the problems seeding cannot
   fix — unheld roles, missing department enrichment (#1280), and schema-as-data corruption.
-  Full detail: `05-enablement-runbook.md` (prerequisites, blockers, verification) and
+  Full detail: `enable-dashboard.sh --help` (prerequisites, blockers, verification) and
   `local-setup/db/dss-mdms-seed/README.md` (the seed files themselves).
 
   Without any of this the dashboard renders empty (`/packs` returns no tiles; the service logs

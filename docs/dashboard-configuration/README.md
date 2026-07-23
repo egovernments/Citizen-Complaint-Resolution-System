@@ -42,7 +42,6 @@ and find the master.
 
 | doc | contents |
 |---|---|
-| [05-enablement-runbook.md](05-enablement-runbook.md) | **Start here to turn the dashboard on.** Standalone runbook for `enable-dashboard.sh`: the 11 prerequisites, the seven steps, the role-remap decision (and why the canonical taxonomy is partly aspirational), the data caveats that make a correct seed look broken, a symptom→cause table for every known blocker, what the script cannot do, and the by-hand verification calls |
 | [10-kpi-catalog.md](10-kpi-catalog.md) | `dss.KpiDefinition` anatomy: query grammar essentials, every `viz.kind`, params & server-side defaults, status lifecycle, versioning, and the add-a-KPI-end-to-end cookbook |
 | [20-packs-and-rbac.md](20-packs-and-rbac.md) | `dss.DashboardPack` (roles/tiles/12-col layout), the four RBAC layers (row-scope ABAC, `visibleTo`, inline PII gate, public floor), error-code table, which knob grants what |
 | [30-view-access.md](30-view-access.md) | Reaching the dashboard in digit-ui: citymodule, actions/roleactions + `/access/v1/actions/mdms/_get`, localization keys, the three-layer cache-bust story, and the mdms-v2 operational gotchas |
@@ -58,9 +57,9 @@ and find the master.
 - Query grammar reference: `backend/pgr-services/ANALYTICS-QUERY-API.md`
 - RBAC design series: `docs/dashboard-rbac-design/`
 - Live MDMS examples: `ansible/nairobi-mdms/mdms/dss/KpiDefinition.json`, `DashboardPack.json`
-- Enabling it on a running deployment: [05-enablement-runbook.md](05-enablement-runbook.md) →
-  `local-setup/scripts/enable-dashboard.sh`, with supporting schemas + message packs in
-  `local-setup/db/dss-mdms-seed/`
+- Enabling it on a running deployment: `local-setup/scripts/enable-dashboard.sh` (run `--help`
+  for the full runbook — prerequisites, the role-remap decision, and a symptom→cause table for
+  every known blocker), with supporting schemas + message packs in `local-setup/db/dss-mdms-seed/`
 - Backend: `backend/pgr-services/src/main/java/org/egov/pgr/analytics/`
 - Frontend (deployed, post-#1062): `digit-ui-esbuild/products/dashboard/` — module root (`Module.js`,
   `roles.js`, `DashboardCard.js`) with the engine under `src/` (`AdminDashboard.jsx`, `components/`,
