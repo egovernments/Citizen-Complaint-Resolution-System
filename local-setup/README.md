@@ -10,10 +10,10 @@ There are **two independent ways** to run this stack. Pick one:
 |------|----------|---------------|
 | **[Option A: Docker Compose](#option-a-docker-compose)** | Quick setup, no extra tools | Docker only |
 | **[Option B: Tilt](#option-b-tilt)** | Dashboard, grouped services, dev buttons | Docker + Tilt |
+| **[Option C: Ansible (Remote Server)](#option-c-ansible-remote-server)** | Deploy to a remote Ubuntu machine | Ansible + SSH |
 
-| **[Option C: Ansible (Remote Server)](#option-c-ansible-remote-server)** | Deploy to a remote Ubuntu machine | Docker + Ansible |
-
-Options A and B run locally. Option C deploys to a remote server, pulling pre-built images from a public registry. **Pick one.**
+Options A and B run locally. Option C deploys a full per-tenant stack to a
+remote Ubuntu machine with `./deploy.sh <tenant>`. **Pick one.**
 
 ---
 
@@ -209,7 +209,16 @@ tilt up    # uses the default Tiltfile with hot reload
 
 ## Option C: Ansible (Remote Server)
 
-Deploy the full DIGIT stack to any fresh Ubuntu 24.04 machine using Ansible. Images are pulled from the public registry at `registry.preview.egov.theflywheel.in` — no VPC access or local builds needed.
+Deploy the full DIGIT stack to a remote Ubuntu machine with a single,
+config-driven Ansible playbook. Each tenant is an independent stack (~35
+containers) driven by its own `host_vars/<tenant>.yml`; one command —
+`./deploy.sh <tenant>` — installs Docker, syncs configs, seeds secrets,
+pulls/builds images, starts the stack, and runs smoke + lifecycle tests.
+
+> **This is the quick-start.** The authoritative Ansible reference is
+> [`ansible/README.md`](ansible/README.md) — it covers `host_vars`, OpenBao
+> secrets, TLS/domain setup, per-tenant compose overlays, subset deploys, and
+> the configurator/MCP build options.
 
 ### Prerequisites
 
@@ -217,83 +226,75 @@ On your **control machine** (laptop/CI server):
 
 | Tool | Install |
 |------|---------|
-| [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/) | `pip install ansible` |
-| SSH access to the target machine | Key-based auth recommended |
+| [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/) | `pip3 install --user ansible`, then `ansible-galaxy install -r ansible/requirements.yml` |
+| Node.js 20 | Required on the controller — the digit-ui and configurator builds run here |
+| SSH access to the target | Key-based `root` login (no password) |
 
 The **target machine** needs:
-- Ubuntu 24.04 (fresh install)
-- At least 8 vCPU, 16 GB RAM, 50 GB disk
-- Root or sudo access
-- Internet access (to pull images from the public registry)
+- Ubuntu (fresh install), 8 vCPU / 16 GB RAM / 50 GB disk
+- Reachable over SSH as `root`
 
-### Step 1: Configure inventory
+### Step 1: Create the tenant's host_vars
+
+The only tracked host_vars file is `_example.yml`. Copy it into a file named
+after your tenant (real tenant files are gitignored — they hold secrets):
 
 ```bash
 cd local-setup/ansible
-cp inventory.ini.example inventory.ini
+cp inventory/host_vars/_example.yml inventory/host_vars/<tenant>.yml
 ```
 
-Edit `inventory.ini` and replace the placeholder IP with your target machine:
+Edit `<tenant>.yml` — every field is commented. The non-negotiable ones:
+- `ansible_host` — IP/hostname Ansible SSHes into
+- `domain` — public hostname (nginx `server_name` + Grafana root URL)
+- `state_tenant_id` / `boot_tenant` / `tenant_id` — DIGIT tenancy slugs
+- `secrets_path` + `bootstrap_secrets.*` — OpenBao path + initial secrets
+- keep `db_fast_path: true` (a fresh install needs it — no SQL slow path exists)
 
-```ini
-[targets]
-203.0.113.10 ansible_user=root
+No inventory edit is needed: `deploy.sh` regenerates `inventory/hosts.yml` from
+`host_vars/*.yml` on every run. To enable the browser onboarding wizard, also set:
+
+```yaml
+nginx_features: { configurator: true }
+build_configurator: true
 ```
 
-### Step 2: Run the playbook
+### Step 2: Deploy
 
 ```bash
-ansible-playbook -i inventory.ini playbook-deploy.yml
+./deploy.sh <tenant>                 # full deploy
+./deploy.sh <tenant> --check --diff  # dry-run: no changes, show every diff
 ```
 
-The playbook will:
-1. Install Docker Engine and Docker Compose on the target
-2. Copy all config files (Kong, nginx, OTEL, DB seeds, etc.)
-3. Download the OpenTelemetry Java Agent (~21 MB)
-4. Pull ~30 container images from the public registry
-5. Start the DIGIT stack
-6. Wait for health checks (Kong, persister, HRMS, UI — up to 10 min)
-7. Run CI tests: XLSX-driven DataLoader (Bomet County) + Playwright E2E
+`deploy.sh` is tenant-agnostic — it forwards any extra flags to
+`ansible-playbook` (`--tags`, `--limit`, `--start-at-task`, `-vvv`, …).
+
+The first deploy installs Docker + Compose, creates `/opt/digit/`, syncs
+configs, initialises + unseals OpenBao and seeds secrets, pulls/builds images,
+starts the stack, waits on health gates, and (unless `run_ci_tests: false`)
+runs the Postman + Playwright suites. Subsequent deploys are idempotent — only
+changed configs trigger restarts.
 
 ### Step 3: Access the application
 
-After the playbook completes, the stack is available on the target machine:
+The host nginx serves everything on ports 80/443:
 
 | What | URL |
 |------|-----|
-| DIGIT UI (Employee login) | `http://<target-ip>:18000/digit-ui/employee` |
-| Kong Gateway (API base) | `http://<target-ip>:18000` |
-| Gatus Health Dashboard | `http://<target-ip>:18889` |
-| Grafana (Tracing) | `http://<target-ip>:13000` |
+| DIGIT UI (employee) | `https://<domain>/digit-ui/employee` |
+| DIGIT UI (citizen) | `https://<domain>/digit-ui/citizen` |
+| Configurator wizard | `https://<domain>/configurator/` (if enabled) |
+| Grafana (tracing) | `https://<domain>/grafana/` |
+| Gatus health dashboard | `https://<domain>/status/` |
 
-### Customizing the deployment
+For a local/sandbox deploy (`domain: localhost`, `tls_enabled: false`), use
+`http://localhost/...`.
 
-Override playbook variables to deploy with different tenant data:
+### Next: onboard a tenant
 
-```bash
-ansible-playbook -i inventory.ini playbook-deploy.yml \
-  -e boot_tenant=mz.lilongwe \
-  -e county_xlsx=/path/to/your-county-data.xlsx
-```
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `boot_tenant` | `ke.bomet` | City tenant ID for E2E tests |
-| `county_xlsx` | Bomet county XLSX (bundled) | Path to county data Excel file |
-
-### Public Docker Registry
-
-All images are hosted at `registry.preview.egov.theflywheel.in` — a read-only HTTPS proxy to the internal build registry. No authentication required for pulls.
-
-```bash
-# Browse available images
-curl -s https://registry.preview.egov.theflywheel.in/v2/_catalog | jq .
-
-# Pull an image directly
-docker pull registry.preview.egov.theflywheel.in/egovio/pgr-services:latest
-```
-
-The registry is read-only — push operations return `405 Method Not Allowed`.
+Once the stack is up, create your city and load its master data — via the
+browser **configurator wizard** or the Jupyter DataLoader. See the
+[Tenant Onboarding guide](docs/TENANT-ONBOARDING.md).
 
 ### What the Ansible playbook deploys
 
@@ -321,116 +322,84 @@ Between them these include:
 | **Tools** | Jupyter Lab (DataLoader), Gatus (health monitoring) |
 | **Seeds** | Tenant data, security config, workflow config, localization, user accounts |
 
-### Files involved
+### Files & configuration
+
+The Ansible tree, `host_vars` layout, templates, and runbooks are documented in
+[`ansible/README.md`](ansible/README.md). At a glance:
 
 ```
-local-setup/
-├── ansible/
-│   ├── playbook-deploy.yml         # Main deployment playbook
-│   └── inventory.ini.example       # Template inventory
-├── docker-compose.egov-digit.yaml  # What the playbook actually deploys
-├── docker-compose.fast-path.yml    # Overlay: db_fast_path
-├── docker-compose.migrations.yml   # Overlay: schema migrations
-├── docker-compose.migrations.ansible.yml # Overlay: ansible-specific migrators
-├── kong/
-│   └── kong.yml                    # API gateway routes + auth enrichment + RBAC (pre-function)
-├── nginx/
-│   ├── digit-ui.conf               # UI + API proxy config
-│   ├── globalConfigs.js            # Runtime UI configuration
-│   ├── mdms-proxy.conf             # MDMS backward-compat proxy
-│   ├── user-proxy.conf             # User service load balancer
-│   ├── workflow-proxy.conf         # Workflow service load balancer
-├── otel/
-│   ├── download-agent.sh           # Downloads OTEL Java Agent (~21MB)
-│   ├── otel-collector-config.yaml  # Collector → Tempo pipeline
-│   ├── tempo-config.yaml           # Trace storage config
-│   └── grafana/provisioning/       # Grafana datasource for Tempo
-├── seeds/
-│   └── user-seed.sh                # Creates ADMIN + GRO users via API
-├── data/
-│   └── Bomet county...xlsx         # Sample county data for E2E tests
-├── configs/egov-persister/         # Kafka consumer configs (9 YAML files)
-├── db/                             # Full DB dump + flyway history map
-├── gatus/                          # Health monitoring config
-├── jupyter/                        # DataLoader library + notebook
-├── scripts/                        # CI dataloader scripts
-└── tests/                          # Playwright E2E + smoke tests
+local-setup/ansible/
+├── deploy.sh                  # Single entrypoint — ./deploy.sh <tenant> [flags]
+├── playbook-deploy.yml        # The playbook
+├── requirements.yml           # Ansible collections to install
+├── inventory/
+│   ├── group_vars/            # Defaults inherited by every tenant
+│   └── host_vars/             # Per-tenant config (_example.yml is the template)
+├── templates/                 # Jinja2 — globalConfigs.js, nginx-site.conf, digit.env, …
+├── files/                     # Build scripts — configurator, digit-ui, mcp, …
+└── runbooks/                  # OpenBao, tenant-onboarding status, Bomet walkthrough
 ```
-
-### Relationship to PR #318
-
-This deployment setup builds on the work from [PR #318](https://github.com/egovernments/Citizen-Complaint-Resolution-System/pull/318) (Local setup enhancements and fixes), which added:
-
-- **DataLoader v2** (`jupyter/dataloader/crs_loader.py`) — rewritten loader with XLSX-driven tenant setup, boundary management, and rollback support
-- **Native auth config** (`nginx/globalConfigs.js`) — switched from Keycloak to DIGIT native auth provider
-- **PGR inbox components** — DesktopInbox, MobileInbox, Filter, ComplaintCard, search components
-- **Inbox data hooks** (`useInboxData`, `useComplaintStatus`, `useComplaintStatusCount`) — new React hooks for inbox queries
-- **Employee PGR inbox rewrite** — simplified PGRInbox page using the new components
-- **Playwright E2E tests** — tenant setup smoke tests (`pgr-tenant.test.ts`)
-
-This PR (#319) takes those local-setup enhancements and makes them deployable to any remote machine via Ansible, with:
-- A public Docker registry (no VPC access needed)
-- Full OTEL distributed tracing (Collector + Tempo + Grafana)
-- Kong auth enrichment (authToken → userInfo resolution)
-- Nginx reverse proxies for scaled services (user, workflow)
-- Automated CI test pipeline (XLSX DataLoader + Playwright)
 
 ---
 
-## Setting Up a New Tenant (Jupyter DataLoader)
+## Setting Up a New Tenant & Loading Master Data
 
-After the stack is running, you can create a new city/tenant with all the master data needed for PGR complaints. The DataLoader notebook guides you through this step by step.
+Once the stack is running, create a new city/tenant and load everything a PGR
+complaint needs — the tenant record + branding, the boundary hierarchy, common
+masters (departments, designations, complaint types), and employees.
 
-> **Full documentation**: See the [DIGIT CRS Deployment Guide](https://docs.digit.org/complaints-resolution/deploy/setup/production-setup/deploy-crs/unified-approach/1.-login-and-add-tenant) for detailed instructions on the tenant setup flow.
+**Full step-by-step instructions live in the
+[Tenant Onboarding guide](docs/TENANT-ONBOARDING.md).** There are three paths,
+all creating the same data:
 
-### Step 1: Open Jupyter Lab
+| Path | Interface | Available on |
+|------|-----------|--------------|
+| **Configurator wizard** | Browser — upload one XLSX per phase | Ansible deploys with `nginx_features.configurator: true` |
+| **Jupyter DataLoader** | `DataLoader_v2.ipynb` (Python) | Any stack (Docker Compose, Tilt, Ansible) |
+| **MCP `city_setup_from_xlsx`** | REST / automation | Deploys with `enable_mcp: true` |
 
-Open http://localhost:18000/jupyter/lab?token=digit-crs-local
+> **Order always matters:** Tenant → Boundaries → Masters → Employees. Each
+> phase validates codes created by the previous one.
 
-The default token is `digit-crs-local` (configurable via the `JUPYTER_TOKEN` env var in `docker-compose.yml`).
+### Quick path — Jupyter DataLoader
 
-### Step 2: Open the DataLoader notebook
-
-In the Jupyter file browser on the left, click **DataLoader_v2.ipynb** to open it.
-
-### Step 3: Configure variables
-
-The first code cell contains configuration. Edit these values:
+For a local Docker Compose / Tilt stack, open Jupyter Lab at
+http://localhost:18000/jupyter/lab?token=digit-crs-local (token configurable via
+`JUPYTER_TOKEN`) and open **DataLoader_v2.ipynb**. The first configuration cell
+both logs in **and** creates the tenant — edit and run it:
 
 ```python
-URL = "http://kong:8000"          # Kong gateway (inside Docker network) - don't change
-USERNAME = "ADMIN"                 # Superuser username - don't change
-PASSWORD = "eGov@123"             # Superuser password - don't change
-TENANT_ID = "pg"                   # Root tenant for login - don't change
-TARGET_TENANT = "pg.myorg"         # <-- Change this to your new tenant name
+URL          = "http://kong:8000"   # Kong gateway inside the Docker network — leave as-is
+USERNAME     = "ADMIN"
+PASSWORD     = "eGov@123"
+TENANT_ID    = "pg"                  # root tenant you log in against
+TARGET_TENANT = "pg.myorg"           # <-- your new tenant (pattern: <state>.<city>)
+
+loader = CRSLoader(URL)
+loader.login(username=USERNAME, password=PASSWORD, tenant_id=TENANT_ID)
+loader.create_tenant(TARGET_TENANT, "My Org", users=[
+    {"username": "ADMIN", "password": "eGov@123", "name": "Admin",
+     "roles": ["SUPERUSER", "EMPLOYEE", "CSR", "GRO", "DGRO", "PGR_LME", "PGR_VIEWER", "CITIZEN"]}
+])
+loader.login(username="ADMIN", password="eGov@123", tenant_id=TARGET_TENANT)
 ```
 
-> **Naming convention**: Tenant IDs follow the pattern `<state>.<city>`. For example: `pg.mumbai`, `pg.bangalore`, `pg.citya`.
-
-### Step 4: Run each phase
-
-Run the notebook cells in order. Each phase has a header cell explaining what it does, followed by one or more code cells to execute.
-
-| Phase | What to do | What happens | Expected output |
-|-------|-----------|-------------|-----------------|
-| **Phase 1: Tenant & Branding** | Run the cell | Creates your new tenant in MDMS with UI branding config | `Tenant 'pg.myorg' created successfully!` |
-| **Phase 2a: Boundary Template** | Run the cell | Downloads an Excel template for defining your admin hierarchy | An `.xlsx` file appears in the file browser |
-| **Phase 2b: Load Boundaries** | Fill in the Excel template, then run the cell | Uploads your boundary hierarchy (State > District > Block > Ward) | `Boundaries loaded: X records` |
-| **Phase 3: Common Masters** | Run the cell | Loads departments, designations, complaint types from the Excel template | Summary showing created/existing/failed counts |
-| **Phase 4: Employees** | Run the cell | Creates employee accounts via HRMS with roles and department assignments | `Created: N employees` |
-| **Phase 5: Localizations** | Run the cell (optional) | Loads translations for Hindi, Tamil, etc. | `Uploaded N messages` |
-| **Phase 6: Workflow** | Run the cell | Configures the 11-state PGR complaint workflow | `Workflow already configured` or `Workflow updated` |
-
-**After all phases complete**, your new tenant is ready. You can log into the UI, select your city, and create complaints.
+Then run the remaining cells top to bottom: **2a** boundary template → **2b**
+load boundaries → **3** common masters → **4** employees → **5** localizations
+(optional) → **6** workflow. See the
+[Tenant Onboarding guide](docs/TENANT-ONBOARDING.md#b-jupyter-dataloader-scripted)
+for the per-phase details and template shapes.
 
 ### Rollback
 
-If something goes wrong, each phase has a rollback function:
+Each phase has an inverse. Note `full_reset` takes the boundary **hierarchy
+type first**, then the tenant:
 
 ```python
-loader.full_reset(TARGET_TENANT)              # Reset everything for this tenant
-loader.rollback_common_masters(TARGET_TENANT)  # Just reset masters
-loader.delete_boundaries(TARGET_TENANT)        # Just reset boundaries
+loader.delete_boundaries(TARGET_TENANT)          # Phase 2
+loader.rollback_common_masters(TARGET_TENANT)    # Phase 3
+loader.rollback_tenant(TARGET_TENANT)            # Phase 1 (tenant + branding)
+loader.full_reset("REVENUE", TARGET_TENANT)      # everything (pass the hierarchy you used)
 ```
 
 ---
@@ -711,9 +680,13 @@ local-setup/
 ├── docker-compose.tilt.yml         # Overlay: points pgr-services/digit-ui at Tilt's locally built images
 ├── Tiltfile                        # Tilt with hot reload (requires Maven/Yarn)
 ├── Tiltfile.db-dump                # Tilt with pre-built images (recommended)
-├── ansible/
-│   ├── playbook-deploy.yml         # Ansible: install Docker, deploy stack, run CI tests
-│   └── inventory.ini.example       # Template inventory with placeholder IP
+├── ansible/                        # Config-driven remote deploy — see ansible/README.md
+│   ├── deploy.sh                   # Entrypoint: ./deploy.sh <tenant> [flags]
+│   ├── playbook-deploy.yml         # The playbook
+│   ├── inventory/host_vars/        # Per-tenant config (_example.yml is the template)
+│   ├── templates/                  # globalConfigs.js, nginx-site.conf, digit.env, …
+│   ├── files/                      # Build scripts (configurator, digit-ui, mcp, …)
+│   └── runbooks/                   # OpenBao, tenant-onboarding, Bomet walkthrough
 ├── kong/
 │   └── kong.yml                    # API gateway routes + OTEL + auth enrichment + RBAC (pre-function)
 ├── nginx/
@@ -758,7 +731,9 @@ local-setup/
 │   └── smoke/                      # Smoke tests (pgr-workflow, pgr-tenant)
 ├── postman/                        # Newman/Postman collections
 ├── gatus/                          # Health monitoring dashboard config
-└── docs/                           # Additional documentation
+└── docs/
+    ├── TENANT-ONBOARDING.md        # Enable a tenant + load master data (configurator / DataLoader)
+    └── …                           # Local/hybrid/remote setup guides
 
 ../backend/pgr-services/            # PGR Java source (hot reload target)
 ../frontend/micro-ui/               # DIGIT UI React source (hot reload target)
