@@ -68,11 +68,13 @@ const GEOMETRY_CHUNK_SIZE = 40;
 //
 // Returns null while the fetch is in flight; consumers gate the <GeoJSON>
 // layer on features.length and skip pin resolution until it arrives.
-const useTenantBoundaries = () => {
+const useTenantBoundaries = (tenantIdOverride) => {
   const [tenantBoundaries, setTenantBoundaries] = useState(null);
   // Which tenant's tree to draw is resolved from MDMS MapConfig, falling back to
-  // the deploy-time globalConfigs MAP_TENANT key.
-  const { isReady, boundaryTenantId: MAP_TENANT } = useMapConfig();
+  // the deploy-time globalConfigs MAP_TENANT key. Callers with an explicit
+  // acting tenant (citizen wizard's authority-resolved sub-tenant) pass it so
+  // the MapConfig lookup happens there instead of the logged-in tenant.
+  const { isReady, boundaryTenantId: MAP_TENANT } = useMapConfig(tenantIdOverride);
   // The hierarchy is a boundary construct rather than a map one, so it is not
   // part of MapConfig; it stays on globalConfigs until a default-boundary-
   // hierarchy master exists to own it.

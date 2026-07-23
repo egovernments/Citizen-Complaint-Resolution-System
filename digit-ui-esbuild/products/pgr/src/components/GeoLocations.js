@@ -81,7 +81,14 @@ const wardStyleFor = (WARD_COLOR, selectedCode, hoveredCode) => (feature) => {
   return                          { color: WARD_COLOR, weight: 1,   opacity: 0.6, fillColor: WARD_COLOR, fillOpacity: 0    };
 };
 
-const GeoLocations = ({ t, config, onSelect, formData }) => {
+const GeoLocations = ({ t, config, onSelect, formData, tenantId }) => {
+  // Acting tenant for the MAP (MapConfig record + ward-boundary tree). The
+  // citizen wizard passes the authority-resolved sub-tenant (mz.ige/mz.igsae)
+  // once the first dropdown is picked — before this, the MapConfig fetch ran
+  // at the logged-in tenant (state root "mz" for citizens), whose boundary
+  // tree is empty on multi-authority envs, so the ward overlay never drew.
+  // Employee create passes nothing and keeps resolving at the acting city.
+  const mapTenantId = tenantId || config?.tenantId || formData?.resolvedTenantId;
   const { t: trans, i18n } = useTranslation();
   // Nominatim Accept-Language is ISO 639-1 — derive from the active i18n
   // locale (e.g. `sw_KE` → `sw`) so place names come back in the user's
@@ -104,7 +111,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     maxZoom,
     geocodeCountryCodes,
     searchViewbox,
-  } = useMapConfig();
+  } = useMapConfig(mapTenantId);
 
   const nominatimCountry = useMemo(
     () => (geocodeCountryCodes ? `&countrycodes=${encodeURIComponent(geocodeCountryCodes)}` : ""),
@@ -141,7 +148,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const [selectedWard, setSelectedWard] = useState(null);
   // Tenant ward polygons (boundary-service when MAP_TENANT is set, else
   // the bundled static Nairobi wards). Null while the fetch is in flight.
-  const tenantBoundaries = useTenantBoundaries();
+  const tenantBoundaries = useTenantBoundaries(mapTenantId);
   const mapRef = useRef(null);
   const searchInputRef = useRef(null);
   const hasInitialized = useRef(false);
