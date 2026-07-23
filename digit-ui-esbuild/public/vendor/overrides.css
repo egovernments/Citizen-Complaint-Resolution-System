@@ -6264,22 +6264,15 @@ header.digit-header .digit-dropdown-master {
 }
 
 /* ============================================================================
-   CCSD-1985 — unify all primary buttons to the Moz brand ORANGE (#c84c0e).
-   The v2 buttons paint inline from var(--color-button-primary-bg-default, …),
-   which the tenant theme had set to yellow (#FEC931), while orange leaked
-   through the legacy paths — two shades on one screen. Force the brand button
-   vars to orange with !important so every path (v2 inline-var buttons, legacy
-   --color-primary-main buttons, submit bars) resolves to one shade. !important
-   on these custom properties beats applyTheme's runtime (non-important) :root
-   values. Text stays dark via --color-text-primary.
+   CCSD-2060 — the CCSD-1985 orange !important pins that used to live here
+   are REMOVED. They force-locked --color-button-primary-bg-default/hover/
+   pressed, --color-primary-2 and --color-primary-main to DIGIT orange, which
+   beat the MDMS ThemeConfig's runtime :root values — so buttons, module
+   icons and logout stayed orange on a green/yellow-themed tenant (QA #29).
+   The two-shades-on-one-screen problem CCSD-1985 pinned against is now
+   solved where it belongs: applyTheme's v3 expansion fans primary-2 onto
+   --color-primary-main, so the tenant record keeps every path on ONE shade.
    ========================================================================= */
-:root {
-  --color-button-primary-bg-default: #c84c0e !important;
-  --color-button-primary-bg-hover: #a83d0b !important;
-  --color-button-primary-bg-pressed: #8f340a !important;
-  --color-primary-2: #c84c0e !important;
-  --color-primary-main: #c84c0e !important;
-}
 
 /* CCSD-1995 — pre-login background: lighten the .banner overlay (0.8 -> 0.55,
    same teal family) so the StateInfo bannerUrl image (Maputo hero) reads

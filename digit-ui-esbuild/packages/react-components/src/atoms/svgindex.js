@@ -1,5 +1,8 @@
 import React from "react";
-const COLOR_FILL = "#c84c0e";
+// Theme-var indirection (CCSD-2060): icon default fills follow the tenant's
+// MDMS theme; the hex is only the themeless fallback. var() resolves in SVG
+// presentation attributes (verified on Chromium).
+const COLOR_FILL = "var(--color-primary-main, #c84c0e)";
 
 const CreateEstimateIcon = ({ className, style = {}, fill = COLOR_FILL }) => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className={className} style={style} xmlns="http://www.w3.org/2000/svg">
@@ -680,7 +683,7 @@ const ReceiptIcon = () => (
 const ReceiptInboxIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 22" width="24">
     <path d="M0 0h24v24H0z" fill="none"></path>
-    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 9h-2V5h2v6zm0 4h-2v-2h2v2z" fill="#c84c0e"></path>
+    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 9h-2V5h2v6zm0 4h-2v-2h2v2z" fill={COLOR_FILL}></path>
   </svg>
 );
 

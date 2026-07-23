@@ -203,7 +203,9 @@ const UnifiedLogin = ({ stateCode }) => {
             style={{
               width: "100%",
               padding: "0.625rem 1rem",
-              backgroundColor: isSubmitDisabled ? "#B1B4B6" : "#F47738",
+              backgroundColor: isSubmitDisabled
+                ? "#B1B4B6"
+                : "var(--color-button-primary-bg-default, var(--color-primary-main, #F47738))",
               color: "#fff",
               border: "none",
               borderRadius: "4px",
