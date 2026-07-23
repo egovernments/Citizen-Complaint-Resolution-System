@@ -130,7 +130,7 @@ behaves exactly as before. Deployments with a custom role taxonomy (e.g. `CMS_*`
 seed the record instead of rebuilding the bundle. It is a **nav/route gate
 only, not a security boundary** — the data plane stays enforced server-side by
 the catalog + scope RBAC. Seed shape: `ansible/nairobi-mdms/mdms/dss/DashboardConfig.json`;
-schema: `local-setup/db/notif-mdms-seed/schemas/dss.DashboardConfig.json`.
+schema: `local-setup/db/dss-mdms-seed/schemas/dss.DashboardConfig.json`.
 
 The check is **tenant-agnostic by design** (role *code* only). The rationale is load-bearing:
 employee roles live at the **state-root** tenant (`ke`) while the working tenant is usually a city

@@ -9,3 +9,10 @@ scrape_configs:
   - job_name: otel-collector
     static_configs:
       - targets: ['otel-collector:8889']
+
+  # Host-level metrics (CPU/mem/disk/net) from node-exporter, added by the
+  # docker-compose.monitoring.yml overlay (issue #1335). Reached by DNS name
+  # over egov-network. Feeds the "Node Exporter Full" Grafana dashboard.
+  - job_name: node
+    static_configs:
+      - targets: ['node-exporter:9100']
