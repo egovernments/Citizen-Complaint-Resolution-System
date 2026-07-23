@@ -13,6 +13,11 @@ import { probeServices } from '../utils/probe.js';
 import type { ProbeReport } from '../utils/probe.js';
 import { loadFromXlsx } from '../utils/xlsx-loader.js';
 import { DASHBOARD_L10N_PACKS } from './dashboard-l10n-seed.js';
+import {
+  DASHBOARD_CATALOG_SCHEMAS,
+  DASHBOARD_KPI_DEFINITIONS,
+  DASHBOARD_PACKS,
+} from './dashboard-catalog-seed.js';
 
 /**
  * True for error messages that indicate a record already exists (duplicate / unique
@@ -177,20 +182,9 @@ export function normalizePincodeAllowlist(input: unknown): Array<string | number
  * they are operator-owned and loaded via the configurator.
  */
 const SCHEMAS_EMPTY_IS_A_PROBLEM = new Map<string, { impact: string; remedy: string }>([
-  [
-    'dss.KpiDefinition',
-    {
-      impact: 'the dashboard will render an empty catalog',
-      remedy: 'local-setup/scripts/enable-dashboard.sh',
-    },
-  ],
-  [
-    'dss.DashboardPack',
-    {
-      impact: 'the dashboard will render no tiles for any role',
-      remedy: 'local-setup/scripts/enable-dashboard.sh',
-    },
-  ],
+  // dss.KpiDefinition / dss.DashboardPack are intentionally NOT here: they are
+  // backfilled from the repo by the catalog floor (Step 2b), so an empty source
+  // is no longer a problem for them. The remaining entries have no floor yet.
   [
     'INBOX.InboxQueryConfiguration',
     {
@@ -1283,6 +1277,14 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
       const sourceSchemas = await digitApi.mdmsSchemaSearch(source);
       for (const schema of sourceSchemas) {
         const code = schema.code as string;
+        // The dss.* catalog schemas are registered from the repo in Step 1b.
+        // If we copied the source's copy here first, Step 1b would only ever
+        // see a duplicate and the source's (possibly stale) definition would
+        // win — schema code is immutable, so whichever registers first stays.
+        // Skip them here so the canonical definition is the one that lands.
+        if (code in DASHBOARD_CATALOG_SCHEMAS) {
+          continue;
+        }
         const definition = schema.definition as Record<string, unknown>;
         const description = (schema.description as string) || code;
         const xUnique = (definition as { 'x-unique'?: unknown })['x-unique'];
@@ -1293,6 +1295,31 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         try {
           await digitApi.mdmsSchemaCreate(target, code, description, definition);
           results.schemas.copied.push(code);
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (isDuplicateError(msg)) {
+            results.schemas.skipped.push(code);
+          } else {
+            results.schemas.failed.push(`${code}: ${msg}`);
+          }
+        }
+      }
+
+      // Step 1b: ensure the canonical dss schemas are registered.
+      //
+      // The dashboard catalog masters (dss.KpiDefinition / dss.DashboardPack /
+      // dss.DashboardConfig) are tenant-invariant platform definitions. Copying
+      // them from the source (Step 1 above) only works if the source carries
+      // them, and copies whatever the source has — including a stale schema.
+      // Register the canonical definitions from the repo instead, create-if-
+      // absent (schema code is immutable; mdms-v2 _update is 501, so an already-
+      // registered schema is left as-is — reconciling a stale one is a separate
+      // DB-level op, out of scope here). This guarantees the schema exists
+      // before Step 2b seeds the catalog data.
+      for (const [code, definition] of Object.entries(DASHBOARD_CATALOG_SCHEMAS)) {
+        try {
+          await digitApi.mdmsSchemaCreate(target, code, code, definition);
+          results.schemas.copied.push(`${code} (canonical)`);
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           if (isDuplicateError(msg)) {
@@ -1707,6 +1734,57 @@ export function registerMdmsTenantTools(registry: ToolRegistry): void {
         } catch (schemaErr) {
           // Schema might not have data in source — that's OK
           console.error(`[tenant_bootstrap] Schema "${schemaCode}" data copy skipped: ${schemaErr instanceof Error ? schemaErr.message : String(schemaErr)}`);
+        }
+      }
+
+      // Step 2b: seed the canonical dashboard catalog as a floor.
+      //
+      // Mirrors the l10n floor below (DASHBOARD_L10N_PACKS): the copy-from-
+      // source above fills dss.KpiDefinition / dss.DashboardPack only when the
+      // source carries them, and a source without a catalog yields an empty one
+      // (#1394). These are tenant-invariant platform definitions with no tenant
+      // identity, so seed them from the repo, create-if-absent — a live record
+      // from the source copy (or a prior run) wins; a fresh/empty root gets the
+      // full canonical catalog. dss.DashboardConfig is intentionally NOT floored
+      // (its allowedRoles/scoping are tenant-specific, operator-owned).
+      {
+        const catalogFloor: Array<[string, Record<string, unknown>[]]> = [
+          ['dss.KpiDefinition', DASHBOARD_KPI_DEFINITIONS],
+          ['dss.DashboardPack', DASHBOARD_PACKS],
+        ];
+        for (const [schemaCode, records] of catalogFloor) {
+          let existingUids = new Set<string>();
+          try {
+            const rows = await digitApi.mdmsV2SearchRaw(target, schemaCode, { limit: 500 });
+            existingUids = new Set(
+              (rows || [])
+                .filter((r) => (r as { tenantId?: string }).tenantId === target)
+                .map((r) => r.uniqueIdentifier as string),
+            );
+          } catch {
+            // No rows yet (fresh tenant) — the floor fills everything.
+          }
+          for (const data of records) {
+            // The uid is derived server-side from x-unique (["id"]); a record
+            // already present under that id — copied from source or seeded on a
+            // prior run — is left untouched (first-writer-wins).
+            const id = (data as { id?: string }).id;
+            if (id && existingUids.has(id)) {
+              results.data.skipped.push(`${schemaCode}/${id} (catalog floor)`);
+              continue;
+            }
+            try {
+              await mdmsCreateWithSchemaWait(target, schemaCode, id ?? '', { ...data });
+              results.data.copied.push(`${schemaCode}/${id ?? '?'} (catalog floor)`);
+            } catch (error) {
+              const msg = error instanceof Error ? error.message : String(error);
+              if (isDuplicateError(msg)) {
+                results.data.skipped.push(`${schemaCode}/${id ?? '?'} (catalog floor)`);
+              } else {
+                results.data.failed.push(`${schemaCode}/${id ?? '?'} (catalog floor): ${msg}`);
+              }
+            }
+          }
         }
       }
 
