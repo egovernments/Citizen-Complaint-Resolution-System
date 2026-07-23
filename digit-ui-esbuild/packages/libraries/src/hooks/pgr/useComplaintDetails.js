@@ -65,22 +65,25 @@ const getDetailsRow = ({ id, service, complaintType, boundaryAncestors }) => ({
   CS_ADDCOMPLAINT_COMPLAINT_SUB_TYPE: `COMPLAINT_HIERARCHY.${service.serviceCode.toUpperCase()}`,
   CS_COMPLAINT_ADDTIONAL_DETAILS: service.description,
   CS_COMPLAINT_FILED_DATE: Digit.DateUtils.ConvertTimestampToDate(service.auditDetails.createdTime),
+  // Landmark is its OWN row (employee-page parity, P-2026-000019 feedback):
+  // it used to be folded into the Address line, which read as one run-on
+  // "TEST ADDRESS, TEST LANDMARK" value.
+  CS_COMPLAINT_LANDMARK__DETAILS: service.address?.landmark || "NA",
   // QA #31/#25 (product call): Endereço shows the TYPED address when one
   // exists. The typed complainant address is persisted by the BACKEND into
   // the User Service and returned as service.citizen.correspondenceAddress
   // (the extendedAttributes copy is stripped on write) — masking there is
-  // backend policy. Typed location parts follow; only when nothing was
-  // typed does the row fall back to the READABLE administrative chain,
-  // leaf upward ("Municipio Namaacha, Namaacha, Maputo Provincia"). The
-  // raw boundary key and tenant/authority name of the original composition
-  // stay gone.
+  // backend policy. Typed location parts follow (landmark deliberately NOT
+  // here — it has its own row above); only when nothing was typed does the
+  // row fall back to the READABLE administrative chain, leaf upward
+  // ("Municipio Namaacha, Namaacha, Maputo Provincia"). The raw boundary
+  // key and tenant/authority name of the original composition stay gone.
   ES_CREATECOMPLAINT_ADDRESS: (() => {
     const typed = [
       service.citizen?.correspondenceAddress,
       (service.extendedAttributes || {}).complainantAddress,
       service.address.buildingName,
       service.address.street,
-      service.address.landmark,
       service.address.pincode,
     ].filter((v) => v && String(v).trim());
     if (typed.length) return typed;
