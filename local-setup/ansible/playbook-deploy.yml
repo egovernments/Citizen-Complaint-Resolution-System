@@ -210,7 +210,7 @@
           See inventory/host_vars/_example.yml for a worked example.
       when:
         - core_mobile_configs is defined
-        - core_mobile_configs
+        - core_mobile_configs | length > 0
         - _mobile_missing_keys | length > 0
 
     # ==================== Docker host install + config ====================
@@ -475,6 +475,16 @@
     # contexts under docker/ (the existing build-context convention) and repoint
     # them with an Ansible-only overlay. docker-compose.migrations.yml itself
     # stays valid for anyone running compose straight from the repo.
+    # rsync only creates the final path component of `dest`, not
+    # intermediate ones — on a first-time deploy {{ digit_dir }}/docker/
+    # doesn't exist yet (it's only synced wholesale further down, by
+    # "Synchronize docker build context dirs"), so create it explicitly here
+    # rather than relying on task order or a prior run having left it behind.
+    - name: "Ensure docker/ build-context directory exists"
+      ansible.builtin.file:
+        path: "{{ digit_dir }}/docker"
+        state: directory
+
     - name: Synchronize in-repo migrator build contexts
       synchronize:
         src: "../../backend/{{ item }}/src/main/resources/db/"
@@ -962,6 +972,21 @@
     # 404'ing globalConfigs.js. tar over the baked SPA, leaving those two file
     # mounts intact, sidesteps that. No registry/pinned-image dependency.
     # Default off → no Linux behaviour change.
+    #
+    # digit-ui-build.sh runs `npm run build` on the target host directly (no
+    # Docker), same as the configurator build below — unlike the MCP build,
+    # which builds inside a container and needs no host Node. Unlike the
+    # digit-ui mode=static / digit-ui-v2 / integration-tests build paths,
+    # this one had no ensure-node20 include, so a target with no Node
+    # pre-installed failed with "ERROR: node not on PATH".
+    - name: "Build digit-ui from source — ensure Node 20 + npm (NodeSource)"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "digit-ui build_digit_ui"
+      when:
+        - build_digit_ui | default(false)
+        - ansible_system != "Darwin"
+
     - name: "Build digit-ui from source (when build_digit_ui)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/digit-ui-build.sh
@@ -1797,6 +1822,18 @@
     # script prints the dist path on its last line; captured into the
     # `configurator_build` var the sync task below consumes. (A real
     # configurator_repo_url still clones, for transitional/standalone use.)
+    #
+    # configurator-build.sh runs `npm`/vite on the target host directly, same
+    # requirement as the digit-ui build above — ensure Node 20 first instead
+    # of assuming it's already on PATH.
+    - name: "Configurator SPA — ensure Node 20 + npm (NodeSource)"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "configurator build_configurator"
+      when:
+        - build_configurator | default(false)
+        - ansible_system != "Darwin"
+
     - name: "Configurator SPA — build dist (when build_configurator)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/configurator-build.sh
