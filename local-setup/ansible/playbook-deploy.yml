@@ -3496,6 +3496,68 @@
       ansible.builtin.debug:
         msg: "{{ notif_seed.stdout_lines | default(['(no output)']) }}"
 
+    # ─────────── OOTB theme MDMS seed ───────────
+    # Seeds one committed theme preset (schema + one ThemeConfig row), scoped to
+    # JUST the theme — the standalone equivalent of DDH's file loader for this one
+    # master. Opt-in via `seed_theme_preset: <preset-code>` (e.g. bomet-blue,
+    # maputo-green — see digit-ui-esbuild/src/theme/presets/). Seeds at BOTH the
+    # state root and the city tenant, mirroring how the reference kenya-green
+    # theme is seeded at both ke and ke.nairobi. Idempotent — safe to re-run, and
+    # re-running with a different preset deactivates the prior one (see
+    # seed-theme.py) so a tenant never ends up with two "active" themes.
+    #   • Fresh install: runs automatically when `seed_theme_preset` is set.
+    #   • Add-on to an existing deploy: ./deploy.sh <tenant> --tags theme-seed
+    - name: "theme-seed — stage schema + preset + seeder on target"
+      when: seed_theme_preset is defined
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ digit_dir }}/theme-seed/"
+      loop:
+        - "{{ playbook_dir }}/../../utilities/default-data-handler/src/main/resources/schema/common-masters.json"
+        - "{{ playbook_dir }}/../../digit-ui-esbuild/src/theme/presets/{{ seed_theme_preset }}.json"
+        - "{{ playbook_dir }}/../scripts/seed-theme.py"
+
+    - name: "theme-seed — seed the ThemeConfig master at the state root (idempotent)"
+      when: seed_theme_preset is defined
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}/theme-seed
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        THEME_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
+        DIGIT_USERNAME={{ theme_seed_user | default('ADMIN') }} \
+        DIGIT_PASSWORD={{ theme_seed_pass | default('eGov@123') }} \
+        DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
+        SCHEMA_FILE={{ digit_dir }}/theme-seed/common-masters.json \
+        DATA_FILE={{ digit_dir }}/theme-seed/{{ seed_theme_preset }}.json \
+        python3 seed-theme.py
+      register: theme_seed_state
+      changed_when: "'created' in (theme_seed_state.stdout | default(''))"
+      failed_when: "theme_seed_state.rc != 0 or 'DONE' not in (theme_seed_state.stdout | default(''))"
+
+    - name: "theme-seed — seed the ThemeConfig master at the city tenant (idempotent)"
+      when: seed_theme_preset is defined and ui_state_tenant_id is defined
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.shell: |
+        cd {{ digit_dir }}/theme-seed
+        DIGIT_URL=http://127.0.0.1:{{ upstream_kong_port }} \
+        THEME_TENANT={{ ui_state_tenant_id }} \
+        DIGIT_USERNAME={{ theme_seed_user | default('ADMIN') }} \
+        DIGIT_PASSWORD={{ theme_seed_pass | default('eGov@123') }} \
+        DIGIT_LOGIN_TENANT={{ (state_root | default('')) or (state_tenant_id | regex_replace('\..*$','')) }} \
+        SCHEMA_FILE={{ digit_dir }}/theme-seed/common-masters.json \
+        DATA_FILE={{ digit_dir }}/theme-seed/{{ seed_theme_preset }}.json \
+        python3 seed-theme.py
+      register: theme_seed_city
+      changed_when: "'created' in (theme_seed_city.stdout | default(''))"
+      failed_when: "theme_seed_city.rc != 0 or 'DONE' not in (theme_seed_city.stdout | default(''))"
+
+    - name: "theme-seed — result"
+      when: seed_theme_preset is defined
+      tags: ['themes', 'theme-seed']
+      ansible.builtin.debug:
+        msg: "{{ (theme_seed_state.stdout_lines | default([])) + (theme_seed_city.stdout_lines | default([])) }}"
+
     - name: "CI — Postman digit-core-validation (every core service)"
       when: run_ci_tests | default(false)   # opt-in CI/extras; was ungated
       ansible.builtin.shell: |

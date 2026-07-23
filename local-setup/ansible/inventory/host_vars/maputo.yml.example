@@ -62,6 +62,12 @@ asset_s3_bucket: "maputo-egov-assets"
 footer_logo_url: ""
 footer_bw_logo_url: ""
 
+# ── OOTB theme (issue #1035) ──
+# Maputo Green (digit-ui-esbuild/src/theme/presets/maputo-green.json), seeded
+# at both state_tenant_id (mz) and ui_state_tenant_id (mz.maputo). Uncomment
+# to enable — no existing brand guide to match, so this isn't on by default.
+# seed_theme_preset: maputo-green
+
 digit_ui_mode: container
 # Build digit-ui from source at deploy (files/digit-ui-build.sh: clone +
 # npm run build) and mount the bundle over the container web root, instead of
