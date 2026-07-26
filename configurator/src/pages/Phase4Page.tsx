@@ -86,6 +86,12 @@ export default function Phase4Page() {
   const [createdCount, setCreatedCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
   const [createdEmployees, setCreatedEmployees] = useState<Employee[]>([]);
+  // Per-row failure reasons. The loop below creates employees one at a time and
+  // keeps going past a failure, so the enclosing try/catch never sees those
+  // errors — without this the complete screen could only say "0 created, 1
+  // failed" and the actual API message (e.g. "Unknown error occurred in
+  // encryption process") was console-only.
+  const [failures, setFailures] = useState<{ name: string; reason: string }[]>([]);
 
   useEffect(() => {
     async function fetchReferenceData() {
@@ -275,6 +281,7 @@ export default function Phase4Page() {
     setProgress(0);
     setCreatedCount(0);
     setFailedCount(0);
+    setFailures([]);
     setCreatedEmployees([]);
 
     const validEmployees = employees.filter((e) => e.status === 'valid');
@@ -353,6 +360,15 @@ export default function Phase4Page() {
           setCreatedCount((prev) => prev + 1);
         } catch (err) {
           console.error(`Failed to create employee ${emp.name}:`, err);
+          // Surface the reason, don't just count it. ApiClientError.firstError
+          // carries the DIGIT error message ("Unknown error occurred in
+          // encryption process", "INVALID_ROLE", …) — that string is the whole
+          // difference between an operator who can fix the row and one staring
+          // at "1 failed".
+          const reason = err instanceof ApiClientError
+            ? err.firstError
+            : (err instanceof Error ? err.message : String(err));
+          setFailures((prev) => [...prev, { name: emp.name, reason }]);
           setFailedCount((prev) => prev + 1);
         }
 
@@ -881,6 +897,26 @@ export default function Phase4Page() {
               </TableBody>
             </Table>
           </div>
+
+          {/* Why each row failed. The Banner above already promises a
+              "failure list below" — this is it. */}
+          {failures.length > 0 && (
+            <Alert variant="destructive" className="text-left mt-4 sm:mt-6">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-xs sm:text-sm">
+                <p className="mb-2">
+                  <strong>Failed rows:</strong>
+                </p>
+                <ul className="space-y-1">
+                  {failures.map((f, idx) => (
+                    <li key={`${f.name}-${idx}`}>
+                      <span className="font-medium">{f.name}</span>: {f.reason}
+                    </li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
 
           <Alert variant="info" className="text-left mt-4 sm:mt-6 max-w-md mx-auto">
             <AlertDescription className="text-xs sm:text-sm">
