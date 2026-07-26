@@ -36,6 +36,7 @@ const createdComplaints = new Set<string>();
 
 let liveServiceCode: string | null = null;
 let lmeAssigneeUuid: string | null = null;
+let lmeAssigneeName: string | null = null;
 let liveBoundaryCode: string | null = null;
 
 // Default mode (not serial): with workers=1 the tests still run in file order,
@@ -75,10 +76,27 @@ test.beforeAll(async () => {
     roles: ['PGR_LME'],
     limit: 100,
   }).catch(() => [] as Record<string, unknown>[]);
-  for (const e of employees) {
+  // Prefer an employee whose HRMS department matches the complaint type we file
+  // with. pgr-services validates the assignee's department against the
+  // complaint's, and the configurator's assignee dropdown is NOT yet filtered by
+  // department (product gap — pending the ABAC work), so it happily offers staff
+  // the backend will reject. Picking a department-valid assignee keeps this test
+  // measuring the edit/merge behaviour rather than that known gap.
+  const wantedDept = liveServiceCode
+    ? ((ctRecords.find((r) => (r.data as Record<string, unknown>)?.code === liveServiceCode)
+        ?.data as Record<string, unknown> | undefined)?.department as string | undefined)
+    : undefined;
+  const deptOf = (e: Record<string, unknown>): string[] =>
+    ((e.assignments as Record<string, unknown>[] | undefined) ?? [])
+      .map((a) => String(a.department ?? ''));
+  const preferred = wantedDept
+    ? employees.find((e) => deptOf(e).includes(wantedDept))
+    : undefined;
+  for (const e of [preferred, ...employees].filter(Boolean) as Record<string, unknown>[]) {
     const user = e.user as Record<string, unknown> | undefined;
     const uuid = (user?.uuid as string) || (e.uuid as string);
-    if (uuid) { lmeAssigneeUuid = uuid; break; }
+    const name = (user?.name as string) || (e.code as string);
+    if (uuid) { lmeAssigneeUuid = uuid; lmeAssigneeName = name ?? null; break; }
   }
 
   // --- Pick a live boundary code we know exists on this tenant ---
@@ -242,17 +260,33 @@ Catches a regression where description doesn't ride along with the workflow tran
     // assignee/rating and re-renders the Workflow section; the assignee/cascade
     // widgets can reset sibling inputs on mount, so fill the description LAST
     // (right before Save) to guarantee its value is what gets submitted.
-    const actionSelect = page.getByLabel(/^Action$/i).or(page.getByLabel(/^Workflow/i)).first();
-    await actionSelect.click();
-    await page.getByRole('option', { name: /ASSIGN/i }).first().click();
+    // These custom selects have NO <label> association, so getByLabel never
+    // matches them — locate by the combobox's own visible text instead.
+    const actionSelect = page.getByRole('combobox').filter({ hasText: /select action/i }).first();
+    await actionSelect.waitFor({ state: 'visible', timeout: 20_000 });
+    await actionSelect.scrollIntoViewIfNeeded().catch(() => {});
+    // force: the trigger is visible but Playwright's actionability check can hang
+    // on this custom select (overlay/pointer-events during the record load).
+    await actionSelect.click({ timeout: 20_000, force: true });
+    await page.getByRole('option', { name: /assign/i }).first().click({ timeout: 20_000 });
 
     // The assignee picker may render only after ASSIGN is chosen.
-    const assigneeSelect = page.getByLabel(/Assign(ee)?/i).first();
+    // These custom selects render WITHOUT a <label> association, so getByLabel
+    // never matches them — locate by role + accessible name (same pattern the
+    // Status/Department filters needed).
+    const assigneeSelect = page.getByRole('combobox').filter({ hasText: /select employee/i }).first();
     if (await assigneeSelect.isVisible().catch(() => false)) {
       await assigneeSelect.click();
       // Click the first available employee option — we already validated
       // a PGR_LME exists in beforeAll, so there will be options.
-      await page.getByRole('option').first().click();
+      // Pick the department-valid assignee resolved in beforeAll. The dropdown is
+      // not department-filtered yet (product gap), so 'first option' can be a
+      // employee whose department pgr-services will reject with a 400.
+      const wanted = lmeAssigneeName
+        ? page.getByRole('option', { name: new RegExp(lmeAssigneeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).first()
+        : null;
+      if (wanted && await wanted.count() > 0) await wanted.click();
+      else await page.getByRole('option').first().click();
     }
 
     const desc = page.getByLabel(/^Description/i);
@@ -634,7 +668,7 @@ Test data: ke.nairobi has 55 complaints (probed 2026-04-23). The 26 minimum keep
     expect(offset, 'offset on second page should be > 0').toBeGreaterThan(0);
   });
 
-  test('11. department column renders via EntityLink — not a raw code', {
+  test('11. department column renders the readable department name, not a raw code', {
     annotation: {
       type: 'description',
       description: `Confirms the Department column in the complaints list renders an EntityLink (anchor pointing at the dept show page), not a raw text code. Catches a regression where the cross-reference is dropped and admins lose the click-through to dept details.
@@ -643,10 +677,10 @@ Steps:
 1. Navigate to /complaints; wait networkidle.
 2. pgrSearch; iterate looking for a complaint with additionalDetail.department populated.
 3. test.skip if none.
-4. Build a lenient locator: look for an <a> linking to /manage/departments/.
-5. Assert at least one such link is visible within 15s.
+4. Resolve that department's display name from common-masters.Department.
+5. Assert the grid's row text contains the readable display name.
 
-Loose check — only requires that SOME row's department renders as a link, not that every row's link points at the seeded dept code (that would require deeper matching).`,
+Product decision (2026-07-26): there is no departments page, so the column is NOT expected to be a link. The requirement is that it reads as a human-readable name rather than a raw identifier — the stored value should be the code, the rendered value the name.`,
     },
     tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
@@ -667,13 +701,29 @@ Loose check — only requires that SOME row's department renders as a link, not 
     }
     if (!deptCode) test.skip(true, 'No complaint with additionalDetail.department on tenant');
 
-    // EntityLink renders an <a> whose href points at the dept show page.
-    const link = page.getByRole('link').filter({
-      has: page.locator(`text=${deptCode!}`).or(page.locator(`[href*="/departments/"]`)),
-    }).first();
-    // Lenient: at least one departments link should exist in the list body.
-    const anyDeptLink = page.locator('a[href*="/manage/departments/"]').first();
-    await expect(anyDeptLink.or(link)).toBeVisible({ timeout: 15_000 });
+    // Product decision (2026-07-26): there is NO departments page to link to, so
+    // the column is not expected to be an anchor. What it MUST do is render the
+    // department in a human-readable form — the display name, not a raw code —
+    // even though the underlying record should store the code as the identifier.
+    const rowsText = (await page.getByRole('row').allTextContents()).join(' | ');
+    expect(rowsText, 'complaints list rendered rows').toBeTruthy();
+
+    // Resolve the department's display name from the departments master, then
+    // assert the grid shows THAT (not the raw code). Deployment-agnostic: the
+    // name comes from the tenant's own master, never a hardcoded literal.
+    const deptRecords = await mdmsSearch(auth, TENANT_CODE, 'common-masters.Department', { limit: 200 })
+      .catch(() => [] as Awaited<ReturnType<typeof mdmsSearch>>);
+    const match = deptRecords.find((r) => {
+      const d = r.data as Record<string, unknown>;
+      return d?.code === deptCode || r.uniqueIdentifier === deptCode || d?.name === deptCode;
+    });
+    const displayName = (match?.data as Record<string, unknown> | undefined)?.name as string | undefined;
+    if (!displayName) test.skip(true, `department '${deptCode}' not found in common-masters.Department — cannot resolve its display name`);
+
+    expect(
+      rowsText.includes(displayName!),
+      `Department column should show the readable name "${displayName}" (rows: ${rowsText.slice(0, 300)})`,
+    ).toBe(true);
   });
 
   test('12. edit saves description + workflow in a single _update round-trip', {
@@ -713,13 +763,26 @@ Both client-side (single XHR count) and server-side (persistence) checks — tog
     // ASSIGN, which is only valid from PENDINGFORASSIGNMENT and needs an assignee.
     // Drive a real ASSIGN and confirm the description rides along in the SAME
     // _update round-trip (the point of this test).
-    const actionSelect = page.getByLabel(/^Action$/i).or(page.getByLabel(/^Workflow/i)).first();
-    await actionSelect.click();
-    await page.getByRole('option', { name: /ASSIGN/i }).first().click();
-    const assigneeSelect = page.getByLabel(/Assign(ee)?/i).first();
+    // These custom selects have NO <label> association, so getByLabel never
+    // matches them — locate by the combobox's own visible text instead.
+    const actionSelect = page.getByRole('combobox').filter({ hasText: /select action/i }).first();
+    await actionSelect.waitFor({ state: 'visible', timeout: 20_000 });
+    await actionSelect.scrollIntoViewIfNeeded().catch(() => {});
+    // force: the trigger is visible but Playwright's actionability check can hang
+    // on this custom select (overlay/pointer-events during the record load).
+    await actionSelect.click({ timeout: 20_000, force: true });
+    await page.getByRole('option', { name: /assign/i }).first().click({ timeout: 20_000 });
+    const assigneeSelect = page.getByRole('combobox').filter({ hasText: /select employee/i }).first();
     if (await assigneeSelect.isVisible().catch(() => false)) {
       await assigneeSelect.click();
-      await page.getByRole('option').first().click();
+      // Pick the department-valid assignee resolved in beforeAll. The dropdown is
+      // not department-filtered yet (product gap), so 'first option' can be a
+      // employee whose department pgr-services will reject with a 400.
+      const wanted = lmeAssigneeName
+        ? page.getByRole('option', { name: new RegExp(lmeAssigneeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).first()
+        : null;
+      if (wanted && await wanted.count() > 0) await wanted.click();
+      else await page.getByRole('option').first().click();
     }
     const desc = page.getByLabel(/^Description/i);
     await desc.fill('');

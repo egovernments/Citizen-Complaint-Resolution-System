@@ -85,7 +85,18 @@ Catches a regression where city-level localization stops inheriting from root, o
       // 6,224), so the city bundle must be at least as complete as the
       // root's. A city count BELOW root means city-level lookups lost
       // inherited rows — the actual regression this test guards.
-      expect(cityRows.length).toBeGreaterThanOrEqual(keRows.length);
+      // Exclude rows this SUITE generated. Tenant-onboarding specs upsert
+      // TENANT_TENANTS_<ROOT>_PWT… labels at the ROOT only, so a full run leaves
+      // root ahead of city by exactly those transient artifacts and the parity
+      // check fails for a reason that has nothing to do with inheritance.
+      // Compare the real deployment bundle instead.
+      const isSuiteArtifact = (code: string) => /(^|_)PW[T_]/i.test(code);
+      const rootReal = keRows.filter((r) => !isSuiteArtifact(String(r.code ?? '')));
+      const cityReal = cityRows.filter((r) => !isSuiteArtifact(String(r.code ?? '')));
+      expect(
+        cityReal.length,
+        `city bundle lost inherited rows (root ${rootReal.length} vs city ${cityReal.length})`,
+      ).toBeGreaterThanOrEqual(rootReal.length);
     }
   });
 

@@ -579,7 +579,6 @@ The skip cases are first-class outcomes — the suite is designed to pass on a 2
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     test.skip(!prerequisitesMet, 'Prerequisites not met');
-    test.skip(escalateNextStateFromLme !== 'PENDINGATLME', 'ESCALATE is a forward transition (PENDINGATLME→PENDINGATSUPERVISOR) on this deployment, not a self-loop; multi-level / PENDINGFORASSIGNMENT self-loop escalation is a different (Kenya) workflow shape. Single-level escalation is covered by tests 6-7.');
 
     // Look up the supervisor's reportingTo
     const supervisorEmp = allEmployees.find((e: any) => e.uuid === supervisorUuid);
@@ -648,7 +647,6 @@ Catches a regression where a transition implementation overwrites or strips addi
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     test.skip(!prerequisitesMet, 'Prerequisites not met');
-    test.skip(escalateNextStateFromLme !== 'PENDINGATLME', 'ESCALATE is a forward transition (PENDINGATLME→PENDINGATSUPERVISOR) on this deployment, not a self-loop; multi-level / PENDINGFORASSIGNMENT self-loop escalation is a different (Kenya) workflow shape. Single-level escalation is covered by tests 6-7.');
     const fullService = await fetchComplaint(adminToken, adminUserInfo, serviceRequestId);
 
     const resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
@@ -702,7 +700,6 @@ Stashes pfaComplaintId for the PFA-escalate + cleanup steps (11 and 12).`,
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     test.skip(!prerequisitesMet, 'Prerequisites not met');
-    test.skip(escalateNextStateFromLme !== 'PENDINGATLME', 'ESCALATE is a forward transition (PENDINGATLME→PENDINGATSUPERVISOR) on this deployment, not a self-loop; multi-level / PENDINGFORASSIGNMENT self-loop escalation is a different (Kenya) workflow shape. Single-level escalation is covered by tests 6-7.');
     const created = await seedComplaintAsCitizen({ description: `E2E PFA-escalate — ${new Date().toISOString()}` });
     pfaComplaintId = created.srid;
     expect(created.status).toBe('PENDINGFORASSIGNMENT');
@@ -725,7 +722,6 @@ Documents the v2 design: there is no FORWARD → PENDINGATSUPERVISOR detour anym
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     test.skip(!prerequisitesMet, 'Prerequisites not met');
-    test.skip(escalateNextStateFromLme !== 'PENDINGATLME', 'ESCALATE is a forward transition (PENDINGATLME→PENDINGATSUPERVISOR) on this deployment, not a self-loop; multi-level / PENDINGFORASSIGNMENT self-loop escalation is a different (Kenya) workflow shape. Single-level escalation is covered by tests 6-7.');
     const fullService = await fetchComplaint(adminToken, adminUserInfo, pfaComplaintId);
     const existingDetail = fullService.additionalDetail || {};
     fullService.additionalDetail = {
@@ -771,7 +767,6 @@ Teardown is API-only because PGR has no UI delete affordance — the cleanup is 
     },
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:api', '@persona:cross'] }, async () => {
     test.skip(!prerequisitesMet, 'Prerequisites not met');
-    test.skip(escalateNextStateFromLme !== 'PENDINGATLME', 'ESCALATE is a forward transition (PENDINGATLME→PENDINGATSUPERVISOR) on this deployment, not a self-loop; multi-level / PENDINGFORASSIGNMENT self-loop escalation is a different (Kenya) workflow shape. Single-level escalation is covered by tests 6-7.');
     // Assign
     let fullService = await fetchComplaint(adminToken, adminUserInfo, pfaComplaintId);
     let resp = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
