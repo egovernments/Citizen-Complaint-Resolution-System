@@ -157,7 +157,10 @@ describe('PGR End-to-End Workflow', () => {
             address: {
               city: tenant.city,
               locality: {
-                code: 'LOCALITY1',
+                // Real Locality seeded in full-dump.sql under pg.citya
+                // (…|PG_CITYA_B1|SUN01_LOCALITY). PGR validates the locality
+                // against the boundary service, so it must actually exist. #1308
+                code: 'SUN01_LOCALITY',
                 name: 'Test Locality',
               },
               geoLocation: {

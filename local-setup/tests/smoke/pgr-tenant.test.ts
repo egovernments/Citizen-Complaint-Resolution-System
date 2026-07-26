@@ -25,7 +25,11 @@ const TENANT_LABEL = TENANT.split('.').pop()!.toUpperCase();
 const timestamp = Date.now();
 
 const cityPart = TENANT.includes('.') ? TENANT.split('.').pop()! : TENANT;
-const LOCALITY_CODE = `LOC_${cityPart.toUpperCase()}_1`;
+// A real Locality seeded in full-dump.sql under pg.citya's boundary tree
+// (PG_STATE|PG_CITYA|PG_CITYA_Z1|PG_CITYA_B1|SUN01_LOCALITY). PGR validates the
+// complaint locality against the boundary service, so this must be a code that
+// actually exists — not a synthesised one. See #1308.
+const LOCALITY_CODE = process.env.LOCALITY_CODE || 'SUN01_LOCALITY';
 
 const PGR_ROLES = [
   { code: 'EMPLOYEE', name: 'Employee' },
