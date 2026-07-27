@@ -7897,13 +7897,13 @@
     },
     {
         "code": "PGR_LANDING_FINAL_TITLE",
-        "message": "Have a Complaint, Grievance, Petition or Report?",
+        "message": "Have a Complaint or Grievance?",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
     {
         "code": "PGR_LANDING_FINAL_TEXT",
-        "message": "Help improve public services and economic activity. Submit your case and follow its handling through the portal.",
+        "message": "Help improve public services. Submit your case and follow its handling through the portal.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

@@ -209,10 +209,10 @@ export const LANDING_COPY = {
 
   // Final CTA ----------------------------------------------------------—---
   // Title-cased type names echo the four card titles (prototype convention).
-  FINAL_TITLE: { pt: "Tem uma Reclamação, Queixa, Petição ou Denúncia?", en: "Have a Complaint, Grievance, Petition or Report?" },
+  FINAL_TITLE: { pt: "Tem uma Reclamação ou Queixa?", en: "Have a Complaint or Grievance?" },
   FINAL_TEXT: {
-    pt: "Participe na melhoria dos serviços públicos e da actividade económica. Submeta a sua manifestação e acompanhe o tratamento através do portal.",
-    en: "Help improve public services and economic activity. Submit your case and follow its handling through the portal.",
+    pt: "Participe na melhoria dos serviços públicos. Submeta a sua manifestação e acompanhe o tratamento através do portal.",
+    en: "Help improve public services. Submit your case and follow its handling through the portal.",
   },
   FINAL_CTA: { pt: "Submeter Manifestação", en: "Submit a Case" },
 

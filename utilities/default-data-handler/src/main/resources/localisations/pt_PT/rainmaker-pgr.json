@@ -1111,13 +1111,13 @@
     },
     {
         "code": "PGR_LANDING_FINAL_TITLE",
-        "message": "Tem uma Reclamação, Queixa, Petição ou Denúncia?",
+        "message": "Tem uma Reclamação ou Queixa?",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
     {
         "code": "PGR_LANDING_FINAL_TEXT",
-        "message": "Participe na melhoria dos serviços públicos e da actividade económica. Submeta a sua manifestação e acompanhe o tratamento através do portal.",
+        "message": "Participe na melhoria dos serviços públicos. Submeta a sua manifestação e acompanhe o tratamento através do portal.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
