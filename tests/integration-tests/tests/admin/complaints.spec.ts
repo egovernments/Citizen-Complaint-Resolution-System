@@ -875,16 +875,44 @@ Product decision (2026-07-26): there is no departments page, so the column is NO
     await page.waitForLoadState('networkidle').catch(() => {});
 
     const auth = loadAuth();
+
+    // Resolve the departments master FIRST so we can prefer a complaint whose
+    // department actually resolves to a display name.
+    //
+    // isActive:true is load-bearing here: this deployment carries 225+
+    // department records of which only 3 are real — the rest are soft-deleted
+    // PW_ scratch rows left by previous suite runs. An unfiltered page of 200
+    // is entirely junk, the real rows sort past the page boundary, and the
+    // lookup below found nothing even though the department exists. Pushing
+    // isActive to the server paginates over the ACTIVE set instead.
+    const deptRecords = await mdmsSearch(auth, TENANT_CODE, 'common-masters.Department', {
+      limit: 500,
+      isActive: true,
+    }).catch(() => [] as Awaited<ReturnType<typeof mdmsSearch>>);
+    const resolveDeptName = (code: string): string | undefined => {
+      const match = deptRecords.find((r) => {
+        const d = r.data as Record<string, unknown>;
+        return d?.code === code || r.uniqueIdentifier === code || d?.name === code;
+      });
+      return (match?.data as Record<string, unknown> | undefined)?.name as string | undefined;
+    };
+
     // Find a complaint whose additionalDetail.department is populated so
-    // we know the column has something to render.
+    // we know the column has something to render. Prefer one whose department
+    // still resolves in the master — scratch complaints from earlier runs can
+    // point at departments that have since been soft-deleted.
     const wrappers = await pgrSearch(auth, CITY_TENANT, { limit: 50 });
     let deptCode: string | null = null;
+    let fallbackDeptCode: string | null = null;
     for (const w of wrappers) {
       const svc = w.service as Record<string, unknown> | undefined;
       const add = svc?.additionalDetail as Record<string, unknown> | undefined;
       const d = add?.department as string | undefined;
-      if (d) { deptCode = d; break; }
+      if (!d) continue;
+      if (fallbackDeptCode === null) fallbackDeptCode = d;
+      if (resolveDeptName(d)) { deptCode = d; break; }
     }
+    if (!deptCode) deptCode = fallbackDeptCode;
     if (!deptCode) test.skip(true, 'No complaint with additionalDetail.department on tenant');
 
     // Product decision (2026-07-26): there is NO departments page to link to, so
@@ -894,16 +922,11 @@ Product decision (2026-07-26): there is no departments page, so the column is NO
     const rowsText = (await page.getByRole('row').allTextContents()).join(' | ');
     expect(rowsText, 'complaints list rendered rows').toBeTruthy();
 
-    // Resolve the department's display name from the departments master, then
-    // assert the grid shows THAT (not the raw code). Deployment-agnostic: the
-    // name comes from the tenant's own master, never a hardcoded literal.
-    const deptRecords = await mdmsSearch(auth, TENANT_CODE, 'common-masters.Department', { limit: 200 })
-      .catch(() => [] as Awaited<ReturnType<typeof mdmsSearch>>);
-    const match = deptRecords.find((r) => {
-      const d = r.data as Record<string, unknown>;
-      return d?.code === deptCode || r.uniqueIdentifier === deptCode || d?.name === deptCode;
-    });
-    const displayName = (match?.data as Record<string, unknown> | undefined)?.name as string | undefined;
+    // Resolve the department's display name from the departments master (read
+    // above), then assert the grid shows THAT (not the raw code).
+    // Deployment-agnostic: the name comes from the tenant's own master, never
+    // a hardcoded literal.
+    const displayName = resolveDeptName(deptCode!);
     if (!displayName) test.skip(true, `department '${deptCode}' not found in common-masters.Department — cannot resolve its display name`);
 
     expect(
