@@ -11,7 +11,7 @@
  * 3. No API calls are blocked or dropped by the proxy
  */
 import { test, expect } from '@playwright/test';
-import { BASE_URL, TENANT, ROOT_TENANT, KC_BASE, KC_REALM, KC_CLIENT_ID, ADMIN_USER, ADMIN_PASS } from '../utils/env';
+import { BASE_URL, TENANT, ROOT_TENANT, KC_BASE, KC_REALM, KC_CLIENT_ID, ADMIN_USER, ADMIN_PASS, LOCALES } from '../utils/env';
 import { tryGetProfile } from '../utils/profile';
 import { getDigitToken, loginViaApi } from '../utils/auth';
 
@@ -141,6 +141,7 @@ test.describe('API Proxy Coverage', () => {
     tag: ['@area:proxy', '@kind:regression', '@layer:api', '@persona:cross'],
   }, async ({ page }) => {
     const unauthorizedCalls: string[] = [];
+    const authedApiCalls: string[] = [];
 
     page.on('response', (resp) => {
       const url = resp.url();
@@ -151,8 +152,9 @@ test.describe('API Proxy Coverage', () => {
       if (url.includes('/realms/') && url.includes('iframe')) return;
       if (url.includes('/3p-cookies/')) return;
 
+      const path = url.replace(BASE_URL, '').split('?')[0];
+      authedApiCalls.push(`${resp.request().method()} ${path}`);
       if (resp.status() === 401) {
-        const path = url.replace(BASE_URL, '').split('?')[0];
         unauthorizedCalls.push(`${resp.request().method()} ${path}`);
       }
     });
@@ -167,6 +169,16 @@ test.describe('API Proxy Coverage', () => {
       timeout: 30_000,
     });
     await page.waitForTimeout(3000);
+
+    // Presence guard FIRST — without it this test is an absence assertion over a
+    // possibly-empty set. If loginViaApi injected a token the SPA never used, or the
+    // page failed to boot, zero calls would be recorded and `[] === []` would pass
+    // while nothing was exercised. Its sibling above already asserts
+    // `mdmsCalls.length >= 1`; this one did not.
+    expect(
+      authedApiCalls.length,
+      'no authenticated API calls were observed — the 401 check would be vacuous',
+    ).toBeGreaterThan(0);
 
     // No API call after login should return 401
     expect(unauthorizedCalls).toEqual([]);
@@ -188,13 +200,35 @@ test.describe('API Proxy Coverage', () => {
     expect(loginResp.access_token).toBeTruthy();
     const token = loginResp.access_token;
 
+    // A real RequestInfo, not a bare `{apiId}`. Several DIGIT services dereference
+    // these without a null check and answer an unhandled NullPointerException as a
+    // 400 — pgr-services needs `userInfo` (`RequestInfo.getUserInfo().getType()`)
+    // and egov-accesscontrol needs `ts` (`RequestInfo.getTs().longValue()`). With a
+    // stub RequestInfo four of the seven endpoints below 400, which the old
+    // `toBeLessThan(500)` assertion happily called "work with JWT auth".
+    expect(
+      loginResp.UserRequest,
+      'token response should carry UserRequest to build a real RequestInfo',
+    ).toBeTruthy();
+    const requestInfo = {
+      apiId: 'Rainmaker',
+      ver: '.01',
+      ts: 0,
+      action: '_search',
+      did: '1',
+      key: '',
+      msgId: 'proxy-coverage|en_IN',
+      authToken: token,
+      userInfo: loginResp.UserRequest,
+    };
+
     // Test each critical API endpoint
     const endpoints = [
       {
         name: 'MDMS search',
         url: `${BASE_URL}/mdms-v2/v1/_search`,
         body: {
-          RequestInfo: { apiId: 'Rainmaker' },
+          RequestInfo: requestInfo,
           MdmsCriteria: {
             tenantId: ROOT_TENANT,
             moduleDetails: [{ moduleName: 'tenant', masterDetails: [{ name: 'tenants' }] }],
@@ -202,52 +236,46 @@ test.describe('API Proxy Coverage', () => {
         },
       },
       {
+        // locale/tenantId/module are QUERY params on this service — sent in the
+        // body they are simply absent and it 400s "Required request parameter
+        // 'locale' ... is not present". Locale comes from the profile, not a literal.
         name: 'Localization search',
-        url: `${BASE_URL}/localization/messages/v1/_search`,
-        body: {
-          RequestInfo: { apiId: 'Rainmaker' },
-          tenantId: ROOT_TENANT,
-          locale: 'en_IN',
-          module: 'rainmaker-common',
-        },
+        url: `${BASE_URL}/localization/messages/v1/_search?tenantId=${ROOT_TENANT}&locale=${LOCALES[0]}&module=rainmaker-common`,
+        body: { RequestInfo: requestInfo },
       },
       {
+        // Needs tenantId + roleCodes (not `rolesCodes`, and not objects) — the old
+        // shape 400d with "Tenant Id is required" + "Atleast One Role is Required".
         name: 'Access control',
         url: `${BASE_URL}/access/v1/actions/mdms/_get`,
         body: {
-          RequestInfo: { apiId: 'Rainmaker' },
-          rolesCodes: [{ code: 'EMPLOYEE' }],
+          RequestInfo: requestInfo,
+          tenantId: ROOT_TENANT,
+          roleCodes: ['EMPLOYEE'],
+          actionMaster: 'actions-test',
+          enabled: true,
         },
       },
       {
         name: 'PGR search',
         url: `${BASE_URL}/pgr-services/v2/request/_search?tenantId=${TENANT}`,
-        body: {
-          RequestInfo: { apiId: 'Rainmaker' },
-          tenantId: TENANT,
-        },
+        body: { RequestInfo: requestInfo },
       },
       {
         name: 'Boundary search',
         url: `${BASE_URL}/boundary-service/boundary-relationships/_search?tenantId=${TENANT}&hierarchyType=${tryGetProfile()?.boundary.hierarchyType || 'ADMIN'}`,
-        body: {
-          RequestInfo: { apiId: 'Rainmaker' },
-        },
+        body: { RequestInfo: requestInfo },
       },
       {
+        // tenantId is a QUERY param here too — in `criteria` it never arrives.
         name: 'HRMS employee count',
-        url: `${BASE_URL}/egov-hrms/employees/_count`,
-        body: {
-          RequestInfo: { apiId: 'Rainmaker' },
-          criteria: { tenantId: TENANT },
-        },
+        url: `${BASE_URL}/egov-hrms/employees/_count?tenantId=${TENANT}`,
+        body: { RequestInfo: requestInfo },
       },
       {
         name: 'Workflow business service',
         url: `${BASE_URL}/egov-workflow-v2/egov-wf/businessservice/_search?tenantId=${TENANT}&businessServices=PGR`,
-        body: {
-          RequestInfo: { apiId: 'Rainmaker' },
-        },
+        body: { RequestInfo: requestInfo },
       },
     ];
 
@@ -262,16 +290,23 @@ test.describe('API Proxy Coverage', () => {
             },
             body: JSON.stringify(body),
           });
-          return { status: resp.status, ok: resp.ok };
+          return { status: resp.status, ok: resp.ok, body: (await resp.text()).slice(0, 300) };
         },
         { url: endpoint.url, body: endpoint.body, token },
       );
 
-      // API should not return 500/502 (proxy error)
+      // The endpoint must actually WORK, which is what this test's name claims.
+      //
+      // The previous assertion was `toBeLessThan(500)`, which cannot fail for any
+      // reachable endpoint: a 400, a 401, even a 404 from a service that does not
+      // exist all satisfy it. Four of the seven endpoints here were 400ing — one
+      // with a server-side NullPointerException — under a green test. Verified:
+      // pointing a URL at `/pgr-servicesXXX/...` returns 404, and 404 < 500, so the
+      // old form stayed green even against a service that isn't there.
       expect(
-        result.status,
-        `${endpoint.name} returned ${result.status}`,
-      ).toBeLessThan(500);
+        result.ok,
+        `${endpoint.name} returned ${result.status}: ${result.body}`,
+      ).toBe(true);
     }
   });
 
