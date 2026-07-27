@@ -6,6 +6,78 @@
         "locale": "pt_PT"
     },
     {
+        "code": "CS_LOGIN_PROVIDE_MOBILE_NUMBER",
+        "message": "Introduza o seu número de telemóvel",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_MOBILE_NUMBER",
+        "message": "Número de Telemóvel",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ERR_INVALID_MOBILE_NUMBER",
+        "message": "Por favor, introduza um número de telemóvel válido",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "MOBILE_VALIDATION_DIGITS",
+        "message": "dígitos",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "MOBILE_VALIDATION_STARTING_WITH",
+        "message": "começando por",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "MOBILE_VALIDATION_AT_LEAST",
+        "message": "pelo menos",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "MOBILE_VALIDATION_OR",
+        "message": "ou",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMONS_NEXT",
+        "message": "Seguinte",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOGIN_OTP",
+        "message": "Verificação do OTP",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_LOGIN_OTP_TEXT",
+        "message": "Introduza o OTP enviado para",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RESEND_OTP",
+        "message": "Reenviar OTP",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_RESEND_ANOTHER_OTP",
+        "message": "Reenviar OTP em",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "EVENTS_DATERANGE_LABEL",
         "message": "Intervalo de Datas",
         "module": "rainmaker-common",
