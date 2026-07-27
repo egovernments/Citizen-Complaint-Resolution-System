@@ -607,7 +607,7 @@
     },
     {
         "code": "PGR_LANDING_ORG_NAMES",
-        "message": "IGE e IGSAE",
+        "message": "Inspecção-Geral do Estado (IGE)",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -637,7 +637,7 @@
     },
     {
         "code": "PGR_LANDING_UTILITY_GREEN_LINE",
-        "message": "Linha Verde 1490",
+        "message": "Linha Verde 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },

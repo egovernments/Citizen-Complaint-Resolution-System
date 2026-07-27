@@ -4,7 +4,7 @@
 // header instead of three stacked bars.
 
 import * as React from "react";
-import { Phone, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
 import { cn } from "@egovernments/digit-ui-components-v2";
 import { LandingLink } from "./LandingLink";
 import { useLandingCopy } from "../useLandingCopy";
@@ -62,11 +62,6 @@ export function UtilityBar({ routes, languages, onLanguageChange }: UtilityBarPr
         </p>
 
         <div className="flex items-center gap-3 sm:gap-4">
-          <a href={routes.PHONE} className={cn(UTIL_LINK, "hidden md:inline-flex")}>
-            <Phone aria-hidden className="h-3.5 w-3.5" />
-            {c("UTILITY_PHONE_LABEL")}
-          </a>
-
           {languages.length > 1 && <div role="group" aria-label={c("ARIA_LANGUAGE")} className="flex items-center gap-1">
             {languages.map((lng, i) => (
               <React.Fragment key={lng.code}>

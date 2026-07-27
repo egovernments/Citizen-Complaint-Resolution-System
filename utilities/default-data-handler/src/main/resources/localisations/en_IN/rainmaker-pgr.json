@@ -7393,7 +7393,7 @@
     },
     {
         "code": "PGR_LANDING_ORG_NAMES",
-        "message": "IGE and IGSAE",
+        "message": "Inspectorate-General of the State (IGE)",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7423,7 +7423,7 @@
     },
     {
         "code": "PGR_LANDING_UTILITY_GREEN_LINE",
-        "message": "Green Line 1490",
+        "message": "Green Line 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
