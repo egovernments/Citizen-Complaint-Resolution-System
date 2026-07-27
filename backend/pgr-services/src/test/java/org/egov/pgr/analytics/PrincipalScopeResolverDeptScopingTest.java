@@ -63,11 +63,17 @@ public class PrincipalScopeResolverDeptScopingTest {
                 .collect(java.util.stream.Collectors.toList());
     }
 
-    /** HRMS /_search response with one employee holding one active WATER assignment. */
+    /**
+     * HRMS /_search response with one employee holding one active WATER assignment AND a
+     * jurisdiction — resolveEmployeeScope (see PrincipalScopeResolver) fails closed unless BOTH
+     * axes resolve, so a department-only stub would trip that unrelated fail-closed check rather
+     * than exercising the department-scoping toggle this test class pins.
+     */
     private void stubHrmsWithDepartment(String dept) {
         Map<String, Object> resp = Map.of("Employees", List.of(
                 Map.of("assignments", List.of(
-                        Map.of("isCurrentAssignment", true, "department", dept)))));
+                                Map.of("isCurrentAssignment", true, "department", dept)),
+                        "jurisdictions", List.of(Map.of("boundary", "WARD_1")))));
         when(restTemplate.postForObject(anyString(), any(), eq(Map.class))).thenReturn(resp);
     }
 
@@ -79,6 +85,7 @@ public class PrincipalScopeResolverDeptScopingTest {
         AnalyticsScope s = resolver.resolve(employeeRequest("EMP-1", "PGR_LME"), "ke.bomet", STATE_LEN);
 
         assertEquals(List.of("WATER"), s.departmentCodes);
+        assertEquals(List.of("WARD_1"), s.jurisdictionCodes);
         assertNull(s.citizenUuid);
         assertEquals("ke.bomet", s.tenantId);
         verify(restTemplate).postForObject(anyString(), any(), eq(Map.class));
