@@ -62,15 +62,15 @@ export const LANDING_COPY = {
   NAV_CONTACTS: { pt: "Contactos", en: "Contacts" },
 
   // Hero -----------------------------------------------------------------—--
-  HERO_EYEBROW: { pt: "República de Moçambique · IGE · IGSAE", en: "Republic of Mozambique · IGE · IGSAE" },
+  HERO_EYEBROW: { pt: "República de Moçambique · IGE", en: "Republic of Mozambique · IGE" },
   HERO_TITLE: { pt: "Fala Cidadão", en: "Complaints and Reports Portal" },
   HERO_PILOT_NOTICE: {
     pt: "Esta plataforma está em fase piloto e, de momento, está disponível apenas para a Cidade de Maputo.",
     en: "This platform is in a pilot phase and, for now, is available only for the City of Maputo.",
   },
   HERO_LEDE: {
-    pt: "Canal nacional para reclamações, queixas, petições e denúncias sobre serviços públicos, administração pública e actividades económicas — com acompanhamento simples, seguro e transparente.",
-    en: "The national channel for complaints, grievances, petitions and reports about public services, public administration and economic activities — with simple, secure and transparent tracking.",
+    pt: "Canal nacional para reclamações e queixas sobre serviços públicos e administração pública — com acompanhamento simples, seguro e transparente.",
+    en: "The national channel for complaints and grievances about public services and public administration — with simple, secure and transparent tracking.",
   },
   HERO_CTA_SUBMIT: { pt: "Submeter Manifestação", en: "Submit a Case" },
   HERO_CTA_TRACK: { pt: "Acompanhar Processo", en: "Track a Case" },
@@ -80,7 +80,7 @@ export const LANDING_COPY = {
   HERO_CHANNELS_LABEL: { pt: "Também disponível em:", en: "Also available on:" },
   HERO_CHANNEL_APP: { pt: "Aplicação Android", en: "Android App" },
   HERO_CHANNEL_WA: { pt: "WhatsApp Oficial", en: "Official WhatsApp" },
-  HERO_CHANNEL_LINE: { pt: "Linha Verde 1490", en: "Green Line 1490" },
+  HERO_CHANNEL_LINE: { pt: "Linha Verde 800 77 77", en: "Green Line 800 77 77" },
 
   // Manifestation types -------------------------------------------------—--
   TYPES_TITLE: { pt: "Tipos de Manifestação", en: "Types of Submission" },
@@ -144,9 +144,9 @@ export const LANDING_COPY = {
   CHANNEL_WA_TITLE: { pt: "WhatsApp Oficial", en: "Official WhatsApp" },
   CHANNEL_WA_DESC: { pt: "Submeta manifestações e receba apoio pela conversa oficial.", en: "Submit cases and get support through the official chat." },
   CHANNEL_WA_CTA: { pt: "Conversar no WhatsApp", en: "Chat on WhatsApp" },
-  CHANNEL_LINE_TITLE: { pt: "Linha Verde 1490", en: "Green Line 1490" },
+  CHANNEL_LINE_TITLE: { pt: "Linha Verde 800 77 77", en: "Green Line 800 77 77" },
   CHANNEL_LINE_DESC: { pt: "Chamada gratuita para apoio, orientação e submissão assistida.", en: "Toll-free call for support, guidance and assisted submission." },
-  CHANNEL_LINE_CTA: { pt: "Ligar 1490", en: "Call 1490" },
+  CHANNEL_LINE_CTA: { pt: "Ligar 800 77 77", en: "Call 800 77 77" },
 
   // Privacy ------------------------------------------------------------—---
   PRIVACY_TITLE: { pt: "Confidencialidade e Protecção de Dados", en: "Confidentiality and Data Protection" },
@@ -218,7 +218,7 @@ export const LANDING_COPY = {
   FOOTER_PORTAL_WEB: { pt: "Portal Web", en: "Web Portal" },
   FOOTER_ANDROID: { pt: "Aplicação Android", en: "Android App" },
   FOOTER_WHATSAPP: { pt: "WhatsApp Oficial", en: "Official WhatsApp" },
-  FOOTER_GREEN_LINE: { pt: "Linha Verde 1490", en: "Green Line 1490" },
+  FOOTER_GREEN_LINE: { pt: "Linha Verde 800 77 77", en: "Green Line 800 77 77" },
   FOOTER_FAQ: { pt: "Perguntas Frequentes", en: "FAQ" },
   FOOTER_CITIZEN_LOGIN: { pt: "Entrar como Cidadão", en: "Citizen Sign in" },
   FOOTER_EMPLOYEE_LOGIN: { pt: "Acesso de Funcionário", en: "Employee Access" },

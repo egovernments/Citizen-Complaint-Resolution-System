@@ -7507,7 +7507,7 @@
     },
     {
         "code": "PGR_LANDING_HERO_EYEBROW",
-        "message": "Republic of Mozambique · IGE · IGSAE",
+        "message": "Republic of Mozambique · IGE",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7525,7 +7525,7 @@
     },
     {
         "code": "PGR_LANDING_HERO_LEDE",
-        "message": "The national channel for complaints, grievances, petitions and reports about public services, public administration and economic activities — with simple, secure and transparent tracking.",
+        "message": "The national channel for complaints and grievances about public services and public administration — with simple, secure and transparent tracking.",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7579,7 +7579,7 @@
     },
     {
         "code": "PGR_LANDING_HERO_CHANNEL_LINE",
-        "message": "Green Line 1490",
+        "message": "Green Line 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7795,7 +7795,7 @@
     },
     {
         "code": "PGR_LANDING_CHANNEL_LINE_TITLE",
-        "message": "Green Line 1490",
+        "message": "Green Line 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7807,7 +7807,7 @@
     },
     {
         "code": "PGR_LANDING_CHANNEL_LINE_CTA",
-        "message": "Call 1490",
+        "message": "Call 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -7945,7 +7945,7 @@
     },
     {
         "code": "PGR_LANDING_FOOTER_GREEN_LINE",
-        "message": "Green Line 1490",
+        "message": "Green Line 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

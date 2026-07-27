@@ -721,7 +721,7 @@
     },
     {
         "code": "PGR_LANDING_HERO_EYEBROW",
-        "message": "República de Moçambique · IGE · IGSAE",
+        "message": "República de Moçambique · IGE",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -739,7 +739,7 @@
     },
     {
         "code": "PGR_LANDING_HERO_LEDE",
-        "message": "Canal nacional para reclamações, queixas, petições e denúncias sobre serviços públicos, administração pública e actividades económicas — com acompanhamento simples, seguro e transparente.",
+        "message": "Canal nacional para reclamações e queixas sobre serviços públicos e administração pública — com acompanhamento simples, seguro e transparente.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -793,7 +793,7 @@
     },
     {
         "code": "PGR_LANDING_HERO_CHANNEL_LINE",
-        "message": "Linha Verde 1490",
+        "message": "Linha Verde 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1009,7 +1009,7 @@
     },
     {
         "code": "PGR_LANDING_CHANNEL_LINE_TITLE",
-        "message": "Linha Verde 1490",
+        "message": "Linha Verde 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1021,7 +1021,7 @@
     },
     {
         "code": "PGR_LANDING_CHANNEL_LINE_CTA",
-        "message": "Ligar 1490",
+        "message": "Ligar 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1159,7 +1159,7 @@
     },
     {
         "code": "PGR_LANDING_FOOTER_GREEN_LINE",
-        "message": "Linha Verde 1490",
+        "message": "Linha Verde 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
