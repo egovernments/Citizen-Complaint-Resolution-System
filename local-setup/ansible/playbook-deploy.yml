@@ -648,7 +648,7 @@
         dest: "{{ digit_dir }}/nginx/globalConfigs.js"
         mode: '0644'
 
-    # ============== TESTING ENTRANCE (default path: /staging) ==============
+    # ============== TESTING ENTRANCE (default path: /digit-ui-test) ==============
     # Everything below renders ONLY when host_vars sets testing_ui_enabled —
     # default-off boxes produce byte-identical output to before this feature.
     - name: Render digit-ui globalConfigs.testing.js (testing entrance)
@@ -658,7 +658,7 @@
         dest: "{{ digit_dir }}/nginx/globalConfigs.testing.js"
         mode: '0644'
       vars:
-        context_path: "{{ testing_ui_path | default('staging') }}"
+        context_path: "{{ testing_ui_path | default('digit-ui-test') }}"
         gc_testing_mode: true
         login_tenant_allowlist: ["{{ testing_tenant }}"]
         city_tenant: "{{ testing_tenant }}"
@@ -682,7 +682,7 @@
         SOURCE_TENANT: "{{ testing_seed_source_tenant | default(city_tenant) }}"
         STATE_TENANT: "{{ state_tenant_id }}"
         HIERARCHY_TYPE: "{{ hierarchy_type | default('divisao_administrativa') }}"
-        TESTING_UI_PATH: "{{ testing_ui_path | default('staging') }}"
+        TESTING_UI_PATH: "{{ testing_ui_path | default('digit-ui-test') }}"
         ADMIN_USER: "{{ testing_seed_admin_user | default('ADMIN') }}"
         ADMIN_PASS: "{{ testing_seed_admin_pass | default('eGov@123') }}"
         TEST_EMP_PASS: "{{ testing_emp_password | default('eGov@123') }}"
@@ -749,18 +749,18 @@
             {% if testing_ui_enabled | default(false) %}
             # ── TESTING ENTRANCE — same bundle, testing config, password at
             #    the door. Rendered only when testing_ui_enabled. ──
-            location /{{ testing_ui_path | default('staging') }} {
+            location /{{ testing_ui_path | default('digit-ui-test') }} {
               auth_basic           "Testing";
               auth_basic_user_file /host-nginx/.htpasswd-testing;
               alias /var/web/digit-ui;
               index index.html;
-              try_files $uri $uri/ /{{ testing_ui_path | default('staging') }}/index.html;
-              sub_filter '</head>' '<script src="/{{ testing_ui_path | default('staging') }}/globalConfigs.js"></script></head>';
+              try_files $uri $uri/ /{{ testing_ui_path | default('digit-ui-test') }}/index.html;
+              sub_filter '</head>' '<script src="/{{ testing_ui_path | default('digit-ui-test') }}/globalConfigs.js"></script></head>';
               sub_filter '<div id="root">' '<div style="position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#B32D2D;color:#fff;text-align:center;font:600 12px/1.6 Roboto,sans-serif;padding:3px 8px">{{ testing_ui_banner | default('TESTING ENVIRONMENT &#8212; data created here is not real') }}</div><div id="root">';
               add_header Cache-Control "no-cache" always;
             }
 
-            location = /{{ testing_ui_path | default('staging') }}/globalConfigs.js {
+            location = /{{ testing_ui_path | default('digit-ui-test') }}/globalConfigs.js {
               auth_basic           "Testing";
               auth_basic_user_file /host-nginx/.htpasswd-testing;
               alias /host-nginx/globalConfigs.testing.js;

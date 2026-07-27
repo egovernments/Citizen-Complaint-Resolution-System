@@ -194,6 +194,6 @@ digit_ui_esbuild_branch: main
 #   testing_ui_enabled: true
 #   testing_tenant: mz.igetesting          # hidden QA tenant
 #   testing_ui_htpasswd: "tester:$apr1$…"  # pre-hashed; keep in vault
-# Optional: testing_ui_path (URL prefix, default "staging"), testing_seed_source_tenant,
+# Optional: testing_ui_path (URL prefix, default "digit-ui-test"), testing_seed_source_tenant,
 #   testing_ui_banner, testing_emp_password.
 testing_ui_enabled: false

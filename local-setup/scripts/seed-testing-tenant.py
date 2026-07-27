@@ -44,7 +44,7 @@ HIER = os.environ.get("HIERARCHY_TYPE", "divisao_administrativa")
 ADMIN_USER = os.environ.get("ADMIN_USER", "ADMIN")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "eGov@123")
 EMP_PASS = os.environ.get("TEST_EMP_PASS", "eGov@123")
-UI_PATH = os.environ.get("TESTING_UI_PATH", "staging")
+UI_PATH = os.environ.get("TESTING_UI_PATH", "digit-ui-test")
 
 CHANGED = False
 
