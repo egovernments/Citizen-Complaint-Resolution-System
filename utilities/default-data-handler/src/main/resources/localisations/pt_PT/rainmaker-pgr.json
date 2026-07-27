@@ -1,5 +1,17 @@
 [
     {
+        "code": "CS_REPORTER_DETAILS_TITLE",
+        "message": "Os Seus Dados",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_REPORTER_DETAILS_SUB",
+        "message": "Apresentados aos funcionários responsáveis. Pode editá-los para esta reclamação.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_COMMON_COMPLAINT_NO",
         "message": "N.º da Reclamação",
         "module": "rainmaker-pgr",

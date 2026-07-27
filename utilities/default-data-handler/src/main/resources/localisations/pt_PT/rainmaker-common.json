@@ -1,5 +1,23 @@
 [
     {
+        "code": "CS_HOME_HEADER",
+        "message": "Todos os Serviços",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_PGR",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_HOME_COMPLAINTS",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "EVENTS_DATERANGE_LABEL",
         "message": "Intervalo de Datas",
         "module": "rainmaker-common",
