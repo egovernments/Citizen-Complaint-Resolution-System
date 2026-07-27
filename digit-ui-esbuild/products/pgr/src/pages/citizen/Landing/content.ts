@@ -266,7 +266,6 @@ export interface ManifestationType {
 export const MANIFESTATION_TYPES: ManifestationType[] = [
   { id: "reclamacao", icon: FileText, titleKey: "TYPE_COMPLAINT_TITLE", descKey: "TYPE_COMPLAINT_DESC", accentVar: "--pgrl-type-complaint", route: "REGISTER_COMPLAINT" },
   { id: "queixa", icon: Megaphone, titleKey: "TYPE_GRIEVANCE_TITLE", descKey: "TYPE_GRIEVANCE_DESC", accentVar: "--pgrl-type-grievance", route: "REGISTER_COMPLAINT" },
-  { id: "denuncia", icon: ShieldAlert, titleKey: "TYPE_REPORT_TITLE", descKey: "TYPE_REPORT_DESC", accentVar: "--pgrl-type-report", route: "REGISTER_COMPLAINT" },
 ];
 
 export interface HowStep {
