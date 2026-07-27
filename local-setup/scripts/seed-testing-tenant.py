@@ -261,25 +261,34 @@ for loc, pairs in labels.items():
 print("seeded  entrance labels")
 
 # ── 8. HRMS test employees (full CMS chain) ──────────────────────────────────
-ROLES = {"TSTREC": ("CMS_RECEPTION_OFFICER", "reception_officer", "Tester Recepcao"),
-         "TSTSCR": ("CMS_SCREENING_OFFICER", "screening_officer", "Tester Triagem"),
-         "TSTSUP": ("CMS_SUPERVISOR", "supervisor", "Tester Supervisor"),
-         "TSTCM": ("CMS_CASE_MANAGER", "case_manager", "Tester Gestor de Caso")}
+# username -> (roles, designation, display name). Role-descriptive logins, plus
+# one all-roles account (all four workflow roles + CMS_VIEWER, which the PGR
+# workflow accepts on nearly every transition) so a single login can walk a
+# complaint end-to-end without switching users.
+ROLES = {
+    "TST_RECEPTION":    (["CMS_RECEPTION_OFFICER"], "reception_officer", "Oficial de Recepcao Teste"),
+    "TST_SCREENING":    (["CMS_SCREENING_OFFICER"], "screening_officer", "Oficial de Triagem Teste"),
+    "TST_SUPERVISOR":   (["CMS_SUPERVISOR"], "supervisor", "Supervisor Teste"),
+    "TST_CASE_MANAGER": (["CMS_CASE_MANAGER"], "case_manager", "Gestor de Caso Teste"),
+    "TST_ALL_ROLES":    (["CMS_RECEPTION_OFFICER", "CMS_SCREENING_OFFICER", "CMS_SUPERVISOR",
+                          "CMS_CASE_MANAGER", "CMS_VIEWER"], "supervisor", "Testador Geral Teste"),
+}
 prov = next((n["code"] for n in nodes if n["parent"] is None), None)
 now = int(time.time() * 1000)
 i = 0
-for code, (role, desig, name) in ROLES.items():
+for code, (roles, desig, name) in ROLES.items():
     i += 1
     r = call(f"/egov-hrms/employees/_search?tenantId={T}&codes={code}&limit=2&offset=0", {"RequestInfo": RI})
     if r.get("Employees"):
         print(f"exists  employee {code}")
         continue
+    role_objs = [{"code": "EMPLOYEE", "name": "EMPLOYEE", "tenantId": T}] + [
+        {"code": rl, "name": rl, "tenantId": T} for rl in roles]
     emp = {"tenantId": T, "code": code, "employeeStatus": "EMPLOYED", "employeeType": "PERMANENT",
            "dateOfAppointment": now - 86400000,
-           "user": {"name": name, "userName": code, "password": EMP_PASS, "mobileNumber": f"8477000{i:02d}",
+           "user": {"name": name, "userName": code, "password": EMP_PASS, "mobileNumber": f"8477001{i:02d}",
                     "gender": "MALE", "dob": 631152000000, "type": "EMPLOYEE", "tenantId": T,
-                    "roles": [{"code": "EMPLOYEE", "name": "EMPLOYEE", "tenantId": T},
-                              {"code": role, "name": role, "tenantId": T}]},
+                    "roles": role_objs},
            "assignments": [{"fromDate": now - 86400000, "toDate": None, "isCurrentAssignment": True,
                             "department": "central", "designation": desig}],
            "jurisdictions": [{"hierarchy": HIER, "boundaryType": "Provincia", "boundary": prov, "tenantId": T}],
