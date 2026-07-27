@@ -275,6 +275,19 @@ starts the stack, waits on health gates, and (unless `run_ci_tests: false`)
 runs the Postman + Playwright suites. Subsequent deploys are idempotent — only
 changed configs trigger restarts.
 
+**Two first-deploy stops and their fixes:**
+
+- **Preflight fails** with `db_fast_path: true requires db_fast_path_ack_data_wipe: true`
+  → set `db_fast_path_ack_data_wipe: true` in `host_vars` (it acknowledges that
+  the fast-path overlay recreates the Postgres container and wipes anonymous-volume
+  data) and re-run.
+- **`rsync … mkdir "/opt/digit/docker/…" failed: No such file or directory`** —
+  only on a freshly-wiped `/opt/digit` (the playbook creates `/opt/digit` but not
+  the `docker/` subdir before the migrator rsync). Create it once and re-run:
+  ```bash
+  sudo install -d -o "$USER" -g "$USER" /opt/digit/docker && ./deploy.sh <tenant>
+  ```
+
 ### Step 3: Access the application
 
 The host nginx serves everything on ports 80/443:

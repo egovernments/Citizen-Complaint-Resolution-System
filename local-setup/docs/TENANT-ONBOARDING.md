@@ -221,7 +221,103 @@ Requires a deploy with `enable_mcp: true`. See the step-by-step
 [City Setup Guide](../../digit-mcp/docs/guides/city-setup.md) in the digit-mcp
 package.
 
+### Worked headless run (`city_setup_from_xlsx` over the REST shim)
+
+The orchestrator is exposed on the shim at `POST /v1/tools/city_setup_from_xlsx`.
+Files are read **inside** the MCP container, so stage them there first. Run the
+steps in this order — each avoids a failure seen in practice.
+
+**1. Pre-create the boundary hierarchy at the tenant.** The loader auto-names a
+fresh hierarchy per city (`<CITY>_ADMIN`), but the UI reads a **single global
+`HIERARCHY_TYPE`** for every tenant. Create the hierarchy under that shared name
+(`ADMIN`) with your exact levels first, so the loader reuses it:
+
+```bash
+curl -s "$BASE/boundary-service/boundary-hierarchy-definition/_create" \
+  -H 'Content-Type: application/json' -d '{
+    "RequestInfo":{"authToken":"<TOKEN>","userInfo":{"userName":"ADMIN","tenantId":"<root>","type":"EMPLOYEE"}},
+    "BoundaryHierarchy":{"tenantId":"<tenant>","hierarchyType":"ADMIN","boundaryHierarchy":[
+      {"boundaryType":"<L1>","parentBoundaryType":null,"active":true},
+      {"boundaryType":"<L2>","parentBoundaryType":"<L1>","active":true}]}}'
+```
+
+**2. Wait until the backend is healthy for ≥ 5 min.** After a fresh deploy the
+JVM tier keeps warming/restarting; onboarding into that window causes transient
+5xx that corrupt the load (and can make the loader auto-create the wrong-named
+hierarchy from a swallowed error). Confirm `boundary-service` shows `healthy`.
+
+**3. Run it:**
+
+```bash
+docker cp <files-dir> digit-mcp:/tmp/onboard
+curl -s -m 900 "$BASE/v1/tools/city_setup_from_xlsx" -H 'Content-Type: application/json' -d '{
+  "tenant_id":"<tenant>",
+  "tenant_file":"/tmp/onboard/01-Tenant-And-Branding-Master.xlsx",
+  "boundary_file":"/tmp/onboard/02-Boundaries.xlsx",
+  "boundary_geojson_file":"/tmp/onboard/02-Boundaries-Polygons.geojson",
+  "masters_file":"/tmp/onboard/03-Common-and-Complaint-Master.xlsx",
+  "employee_file":"/tmp/onboard/04-Employees.xlsx",
+  "auth":{"username":"ADMIN","password":"eGov@123","tenant_id":"<root>"}
+}'
+```
+
+The optional GeoJSON sidecar attaches Polygon/MultiPolygon geometry to boundary
+rows by `properties.code`; include only real geometry (a boundary with no polygon
+still works in the dropdown, it just won't resolve map pins).
+
+**Known phase failures on the headless path & recovery:**
+
+- **Tenant phase** fails with a schema error on null `city.latitude/longitude` →
+  register the tenant directly: clone a known-good `tenant.tenants` row (patching
+  `code`/`name`/`tenantId`/`city.code`) and append the new code to the
+  `tenant.citymodule` rows (PGR / HRMS / Workbench). Re-run the remaining phases.
+- **Employee phase** fails with "encryption process" / "Tenant Id not found" →
+  `egov-enc-service` has no key for a tenant that wasn't registered yet. After the
+  tenant exists: `docker restart egov-enc-service`, then re-run with only
+  `employee_file`.
+- **Employee jurisdiction** lands on the wrong root (the loader scopes to the
+  first boundary root) → fix directly:
+  ```sql
+  UPDATE eg_hrms_jurisdiction j SET boundary='<intended-root-code>'
+  FROM eg_hrms_employee e WHERE e.uuid = j.employeeid AND e.tenantid = '<tenant>';
+  ```
+- **MapConfig not written.** Unlike the configurator wizard's Phase 2, the
+  headless path does **not** write `RAINMAKER-PGR.MapConfig`, so the citizen map
+  has no boundary source. Seed it (see the [map post-config](#after-onboarding-enable-the-map--boundaries) below).
+
 ---
+
+## After onboarding — enable the map & boundaries
+
+Two settings decide whether the map pin and boundary cascade actually work for
+citizens (easy to miss, and not created by the headless path):
+
+- **`RAINMAKER-PGR.MapConfig` per tenant.** The configurator wizard's Phase 2
+  writes this; the headless path does not. Without it the citizen map has no
+  boundary source. Seed one record per tenant (its `boundaryTenantId` = the
+  tenant itself):
+
+  ```bash
+  curl -s "$BASE/mdms-v2/v2/_create/RAINMAKER-PGR.MapConfig" -H 'Content-Type: application/json' -d '{
+    "RequestInfo":{"authToken":"<TOKEN>","userInfo":{"userName":"ADMIN","tenantId":"<root>","type":"EMPLOYEE"}},
+    "Mdms":{"tenantId":"<tenant>","schemaCode":"RAINMAKER-PGR.MapConfig","uniqueIdentifier":"DEFAULT",
+      "data":{"code":"DEFAULT","boundaryTenantId":"<tenant>","center":{"lat":<lat>,"lng":<lng>},
+              "defaultZoom":11,"baseMapTheme":"voyager","geocodeCountryCodes":"<cc>"},"isActive":true}}'
+  ```
+
+- **`pgr_boundary_lowest_level`** (host_vars → globalConfigs `PGR_BOUNDARY_LOWEST_LEVEL`)
+  — set to the level that tiles your territory **with real geometry** (e.g.
+  `Ward`), not a deeper level only some regions have. It caps *both* the map's
+  pin-resolution level and the dropdown cascade so they agree; if the name isn't
+  a level of the tree the map silently falls back to the deepest level (a
+  `console.warn` names the levels it does have).
+
+- **Citizen home city.** The citizen map and cascade resolve against
+  `CITIZEN.COMMON.HOME.CITY`; ensure it's set on citizen login (SSO mapper /
+  location picker), else citizens fall back to the state root (no city tree →
+  blank map/cascade). As a deployment-wide fallback for citizens without a home
+  city, globalConfigs `MAP_TENANT` (from `city_tenant`) can point at a tenant
+  that has geometry.
 
 ## After onboarding — verify
 
