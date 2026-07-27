@@ -388,8 +388,8 @@ export async function bootstrapStateRoot(
     // bootstrap exists to prevent. Fail fast with a message the operator can act on.
     throw new Error(
       `Bootstrap source tenant '${source}' has no schemas registered. ` +
-      `Pick a tenant that has been onboarded (e.g. 'pg' on personal-install, ` +
-      `'ke' on naipepea) via the source option.`
+      `Pick a tenant that has already been onboarded (one that has MDMS schemas ` +
+      `registered) via the source option.`
     );
   }
   onProgress({ step: 'schemas', current: 0, total: sourceSchemas.length });

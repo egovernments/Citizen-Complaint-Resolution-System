@@ -30,7 +30,19 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
   // Map theming resolved per tenant from MDMS RAINMAKER-PGR.MapConfig:
   // base tile theme (defaults to the light voyager basemap) + ward-highlight
   // colour (defaults to the legacy orange #FFA74F).
-  const { tileUrl, tileAttribution, wardHighlightColor: WARD_COLOR } = useMapConfig();
+  const {
+    tileUrl,
+    tileAttribution,
+    wardHighlightColor: WARD_COLOR,
+    minZoom,
+    maxZoom,
+    geocodeCountryCodes,
+  } = useMapConfig();
+
+  // This map always opens on a known complaint, so the starting position is the
+  // complaint itself rather than the tenant's configured centre. Only the zoom
+  // is a presentation choice: 15 is street level, clamped to the tenant bounds.
+  const DETAIL_ZOOM = Math.min(Math.max(15, minZoom), maxZoom);
 
   // Nominatim Accept-Language is ISO 639-1; derive from i18n locale (e.g.
   // `sw_KE` → `sw`). Falls back to English (closes egovernments/CCRS#520
@@ -68,7 +80,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
       setIsLoadingAddress(true);
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&countrycodes=ke`,
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1${geocodeCountryCodes ? `&countrycodes=${encodeURIComponent(geocodeCountryCodes)}` : ""}`,
           {
             headers: {
               'Accept-Language': nominatimLang
@@ -163,7 +175,9 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
         }}>
           <MapContainer
             center={[latitude, longitude]}
-            zoom={15}
+            zoom={DETAIL_ZOOM}
+            minZoom={minZoom}
+            maxZoom={maxZoom}
             style={{ height: "100%", width: "100%" }}
             zoomControl={true}
             dragging={true}

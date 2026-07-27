@@ -1,4 +1,5 @@
 import { getTenantId, hasAuth } from "./analyticsService";
+import { withTraceHeaders } from "./dashboardMetrics";
 
 function parseJson(raw) {
   try {
@@ -55,7 +56,7 @@ export async function fetchBoundariesByCodes(codes = []) {
 
     const response = await fetch(`/boundary-service/boundary/_search?${params}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: withTraceHeaders({ "Content-Type": "application/json" }),
       credentials: "omit",
       body: JSON.stringify({ RequestInfo: buildRequestInfo() }),
     });
@@ -157,7 +158,7 @@ export async function fetchBoundaryRelationshipsByCodes(
       `/boundary-service/boundary-relationships/_search?${params}`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withTraceHeaders({ "Content-Type": "application/json" }),
         credentials: "omit",
         body: JSON.stringify({ RequestInfo: buildRequestInfo() }),
       }

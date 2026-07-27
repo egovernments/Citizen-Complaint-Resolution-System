@@ -8,7 +8,7 @@ import { useHistory, useLocation } from "react-router-dom";
 import { useLoginConfig } from "../../../hooks/useLoginConfig";
 import { Loader } from "@egovernments/digit-ui-components";
 
-const EmployeeLogin = ({ stateCode }) => {
+const EmployeeLogin = ({ stateCode, appTenants }) => {
   const { t } = useTranslation();
   const { path } = useRouteMatch();
   const [loginConfig, setloginConfig] = useState(defaultLoginConfig);
@@ -83,7 +83,11 @@ const EmployeeLogin = ({ stateCode }) => {
   return (
     <Switch>
       <Route path={`${path}`} exact>
-        {loginType ? <LoginComponent config={loginOtpParams[0]} t={t} loginOTPBased={loginType}/> : <LoginComponent config={loginParams[0]} t={t} />}
+        {loginType ? (
+          <LoginComponent config={loginOtpParams[0]} t={t} loginOTPBased={loginType} appTenants={appTenants} />
+        ) : (
+          <LoginComponent config={loginParams[0]} t={t} appTenants={appTenants} />
+        )}
       </Route>
     </Switch>
   );

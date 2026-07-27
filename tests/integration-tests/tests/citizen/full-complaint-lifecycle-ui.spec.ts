@@ -14,10 +14,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import { getDigitToken, loginViaApi } from '../utils/auth';
 import { citizenOtpLogin } from '../utils/citizen-login';
+import { getPersona } from '../utils/personas';
 import {
   BASE_URL, TENANT, ROOT_TENANT,
   ADMIN_USER, ADMIN_PASS, FIXED_OTP,
-  SERVICE_CODE, LOCALITY_CODE,
   DEFAULT_PASSWORD,
   generateCitizenPhone,
 } from '../utils/env';
@@ -37,9 +37,68 @@ async function snap(page: Page, name: string) {
 const CITIZEN_PHONE = generateCitizenPhone();
 const CITIZEN_NAME = 'E2E UI Citizen';
 
-// City-level admin for UI tests (getCurrentTenantId returns the TENANT env)
-const CITY_ADMIN_USER = process.env.CITY_ADMIN_USER || ADMIN_USER;
-const CITY_ADMIN_PASS = process.env.CITY_ADMIN_PASS || DEFAULT_PASSWORD;
+/**
+ * The employee who drives Take Action in steps 3-5. Resolved by CAPABILITY, not
+ * by name: the requirement is "can act on this complaint's workflow", which
+ * means the GRO role plus an HRMS department at the complaint's own tenant.
+ *
+ * A pinned name cannot express that and gets it wrong in both directions:
+ * bomet's deploy/bomet.env pins CITY_ADMIN_USER=BOMET_LME, which has NO HRMS
+ * employee record on `ke` at all — so it logs in fine, never gets a Take Action
+ * button, and step 4 fails 10s later on a missing locator that says nothing
+ * about the cause. The bare ADMIN default fares no better there (also no HRMS
+ * record). getPersona('gro-with-department') finds HS_GRO on bomet and EMP001 on
+ * mz.maputo without either deployment declaring anything.
+ *
+ * CITY_ADMIN_USER still wins when set, so an operator can pin a specific actor.
+ *
+ * `authTenant` is part of the answer, not an afterthought. personas.ts probes
+ * each credential at the city tenant and at the root, and reports the one it
+ * PROVED the login works at. Dropping that and hard-coding TENANT at the call
+ * site only happens to work while the resolved GRO is a city employee (EMP001
+ * on mz.maputo, HS_GRO on bomet, where city and root are the same tenant
+ * anyway); a GRO that authenticates only at the root would fail both the inbox
+ * and the Assign login for a reason no locator error would explain. Step 5
+ * already threads `resolver.tenant` through — this is the same fact.
+ *
+ * Undefined for the CITY_ADMIN_USER branch: nobody proved anything about a
+ * pinned credential, so the caller keeps its existing default.
+ */
+async function cityAdmin(): Promise<{ username: string; password: string; authTenant?: string }> {
+  if (process.env.CITY_ADMIN_USER) {
+    return {
+      username: process.env.CITY_ADMIN_USER,
+      password: process.env.CITY_ADMIN_PASS || DEFAULT_PASSWORD,
+    };
+  }
+  const p = await getPersona('gro-with-department');
+  return { username: p.username, password: p.password, authTenant: p.tenant };
+}
+
+/**
+ * The employee who drives Take Action → Resolve in step 5.
+ *
+ * Deliberately NOT cityAdmin(): the two steps are gated on different roles.
+ * Every deployment we test declares
+ *
+ *   ASSIGN  : [GRO, PGR_VIEWER]
+ *   RESOLVE : [PGR_LME, PGR_VIEWER]
+ *
+ * and egov-workflow-v2 computes the Take Action menu from the CALLER's roles,
+ * so the Resolve option simply never renders for a GRO who holds no PGR_LME.
+ * Only mz.maputo happens to have one employee (EMP001: GRO + PGR_LME) covering
+ * both, which is why driving all of steps 3-5 as one person passed here and
+ * failed on bomet, where the GRO is HS_GRO (roles: [GRO] — nothing else) and
+ * step 5 timed out on a Resolve option that was never coming. That is the same
+ * "the actor and the assignee are necessarily different people" fact the seed
+ * plan already encodes; see personas.ts's persona-triple comment.
+ *
+ * getPersona('lme') is the same resolution escalate-action-521.spec.ts uses to
+ * drive its own Take Action, for the same reason.
+ */
+async function resolverPersona() {
+  return getPersona('lme');
+}
 
 /** Fetch complaint status via API (verification helper — not a "UI under test" action). */
 async function fetchComplaintStatus(serviceRequestId: string): Promise<string> {
@@ -153,30 +212,72 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
       await page.waitForTimeout(5000);
     };
 
+    // Cross-build dropdown locator. The modern digit-ui (CreatePGRFlowV2)
+    // renders each hierarchy level as a shadcn <button role="combobox">;
+    // older builds used input.digit-dropdown-employee-select-wrap--elipses.
+    // Matching only the legacy input made this spec time out on the v2 build
+    // (the wizard was never touched, so NEXT stayed disabled). Match both.
+    const wizardDropdowns = page.locator(
+      'button[role="combobox"], input.digit-dropdown-employee-select-wrap--elipses',
+    );
+    const optionLocator = () =>
+      page.locator(
+        '[role="listbox"][data-state="open"] [role="option"], [role="option"]:visible, .digit-dropdown-item:visible',
+      );
+
     // Helper: select dropdown option
     const selectDropdownOption = async (index: number) => {
-      const dropdowns = page.locator('input.digit-dropdown-employee-select-wrap--elipses');
-      const dropdown = dropdowns.nth(index);
+      const dropdown = wizardDropdowns.nth(index);
       await dropdown.waitFor({ state: 'visible', timeout: 10_000 });
       await dropdown.click();
       await page.waitForTimeout(1000);
-      const items = page.locator('.digit-dropdown-item');
+      const items = optionLocator();
       const count = await items.count();
       console.log(`Dropdown ${index}: ${count} items`);
       await items.first().click();
       await page.waitForTimeout(500);
     };
 
-    // Step 0: Select complaint type
+    // Walk a depth-agnostic dropdown cascade. Used for both the complaint-type
+    // levels and the boundary levels: depth is tenant-defined (complaint types
+    // are 2 levels on mz.maputo vs 4 on ke; boundaries are 4 on MAPUTO_ADMIN —
+    // Município > Distrito Municipal > Bairro > Quarteirão), each child renders
+    // disabled until the parent's lookup lands, and every level carrying options
+    // is mandatory — so NEXT only enables once the deepest is picked.
+    const walkCascade = async (firstLevelTimeout = 10_000) => {
+      for (let level = 0; level < 8; level++) {
+        const combobox = wizardDropdowns.nth(level);
+        const visible = await combobox
+          .isVisible({ timeout: level === 0 ? firstLevelTimeout : 3000 })
+          .catch(() => false);
+        if (!visible) break;
+        await expect(combobox).toBeEnabled({ timeout: 8000 }).catch(() => {});
+        if (!(await combobox.isEnabled().catch(() => false))) break;
+        // "Is this level still unselected?" — asked differently per build,
+        // because the two builds keep the answer in different places. The v2
+        // combobox is a <button> whose innerText is the chosen label (or
+        // "Select ..."), but the legacy control is an <input>, and innerText is
+        // ALWAYS "" on an <input> — so a single innerText test silently reports
+        // every legacy dropdown as already-selected, skips the click, and
+        // leaves NEXT disabled until the step times out. Read `value` there.
+        const hasPlaceholder = await combobox
+          .evaluate((el) => {
+            if (el instanceof HTMLInputElement) {
+              const chosen = el.value.trim();
+              return !chosen || /^Select/i.test(chosen);
+            }
+            return /^Select/i.test((el as HTMLElement).innerText.trim());
+          })
+          .catch(() => true);
+        if (!hasPlaceholder) continue;
+        await selectDropdownOption(level);
+        await page.waitForTimeout(1500);
+      }
+    };
+
+    // Step 0: Select complaint type.
     console.log('Step 0: Selecting complaint type...');
-    await selectDropdownOption(0);
-    await page.waitForTimeout(2000);
-    const subtypeCount = await page.locator('input.digit-dropdown-employee-select-wrap--elipses').count();
-    if (subtypeCount > 1) {
-      console.log('Selecting subtype...');
-      await selectDropdownOption(1);
-      await page.waitForTimeout(1000);
-    }
+    await walkCascade();
     await snap(page, '02a-complaint-type');
     await clickNextOrSubmit('NEXT');
 
@@ -184,8 +285,13 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     console.log('Step 1: Geolocation — skipping...');
     await clickNextOrSubmit('NEXT');
 
-    // Step 2: Location details — skip
-    console.log('Step 2: Location details — skipping...');
+    // Step 2: Location details — the boundary cascade lives here and its top
+    // level is required (rendered with a `*`), so this step cannot be skipped:
+    // clicking NEXT blind leaves the button disabled until the test times out.
+    console.log('Step 2: Location details — walking boundary cascade...');
+    await page.waitForTimeout(3000);
+    await walkCascade(5000);
+    await snap(page, '02a1-location-details');
     await clickNextOrSubmit('NEXT');
 
     // Step 3: Address — handle radio buttons (city) + locality
@@ -193,7 +299,10 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
     await page.waitForTimeout(2000);
 
     const radioButtons = page.locator('input[type="radio"]');
-    const boundaryDropdowns = page.locator('input[class*="select-wrap--elipses"]');
+    // Cross-build: v2 renders boundary levels as shadcn button comboboxes.
+    const boundaryDropdowns = page.locator(
+      'button[role="combobox"], input[class*="select-wrap--elipses"]',
+    );
 
     if (await radioButtons.first().isVisible({ timeout: 5000 }).catch(() => false)) {
       const radioCount = await radioButtons.count();
@@ -222,13 +331,13 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
       // Try waiting for a dropdown (>= 5 localities)
       if (!localitySelected) {
         try {
-          const localityDropdown = page.locator('input[class*="select-wrap--elipses"]');
+          const localityDropdown = boundaryDropdowns;
           await localityDropdown.first().waitFor({ state: 'visible', timeout: 10_000 });
           const ddCount = await localityDropdown.count();
           console.log(`Locality dropdown appeared (${ddCount} matching)`);
           await localityDropdown.first().click();
           await page.waitForTimeout(1000);
-          const items = page.locator('.digit-dropdown-item, .option-item, [class*="dropdown-item"], [class*="option"]');
+          const items = optionLocator();
           const itemCount = await items.count();
           console.log(`Locality dropdown items: ${itemCount}`);
           if (itemCount > 0) {
@@ -257,8 +366,22 @@ Long timeout (180s) because of multiple boundary lookups and DOM settles. Catche
       await snap(page, '02b-address');
       await clickNextOrSubmit('NEXT');
     } else {
-      console.log('No address controls found — skipping');
-      await clickNextOrSubmit('NEXT');
+      // No address controls. On builds where the boundary cascade already lives
+      // on Location Details (mz.maputo), there is no separate address step and
+      // we are already on Description — clicking NEXT here would wait on a
+      // button that stays disabled until Description is filled, hanging until
+      // the test times out. Only advance if this really is an empty step.
+      const onDescription = await page
+        .locator('textarea')
+        .first()
+        .isVisible({ timeout: 3000 })
+        .catch(() => false);
+      if (onDescription) {
+        console.log('No separate address step on this build — already at Description');
+      } else {
+        console.log('No address controls found — skipping');
+        await clickNextOrSubmit('NEXT');
+      }
     }
 
     // Step 4: Description
@@ -313,11 +436,14 @@ Doesn't assert the complaint appears in the inbox because legitimate boundary sc
     tag: ['@area:pgr', '@kind:lifecycle', '@layer:ui', '@persona:cross'] }, async ({ page }) => {
     test.skip(!complaintCreated, 'complaint not created');
 
+    // Resolved ONCE. Calling cityAdmin() per field re-entered persona
+    // resolution for each of username and password.
+    const admin = await cityAdmin();
     await loginViaApi(page, {
       tenant: TENANT,
-      authTenant: TENANT,
-      username: CITY_ADMIN_USER,
-      password: CITY_ADMIN_PASS,
+      authTenant: admin.authTenant ?? TENANT,
+      username: admin.username,
+      password: admin.password,
     });
 
     await page.goto(`${BASE_URL}/digit-ui/employee/pgr/inbox`, {
@@ -362,12 +488,14 @@ Status verification is API-only because there's no good DOM signal that the assi
     test.skip(!complaintCreated, 'complaint not created');
     test.setTimeout(120_000);
 
-    // Login as city-level admin (tenantId = TENANT env)
+    // Login as city-level admin (tenantId = TENANT env), authenticating at the
+    // tenant personas.ts proved this credential works at — see cityAdmin().
+    const admin = await cityAdmin();
     await loginViaApi(page, {
       tenant: TENANT,
-      authTenant: TENANT,
-      username: CITY_ADMIN_USER,
-      password: CITY_ADMIN_PASS,
+      authTenant: admin.authTenant ?? TENANT,
+      username: admin.username,
+      password: admin.password,
     });
 
     // Navigate to complaint details
@@ -446,16 +574,18 @@ API-only verification of status follows the same pattern as step 4 — UI flow i
     test.skip(!complaintCreated, 'complaint not created');
     test.setTimeout(120_000);
 
-    // Login as city-level admin
+    // Log in as someone the workflow will actually offer Resolve to (PGR_LME),
+    // not the GRO who did the ASSIGN — see resolverPersona().
+    const resolver = await resolverPersona();
     await loginViaApi(page, {
       tenant: TENANT,
-      authTenant: TENANT,
-      username: CITY_ADMIN_USER,
-      password: CITY_ADMIN_PASS,
+      authTenant: resolver.tenant,
+      username: resolver.username,
+      password: resolver.password,
     });
 
     // Navigate to complaint details
-    console.log(`Navigating to complaint ${serviceRequestId}...`);
+    console.log(`Navigating to complaint ${serviceRequestId} as ${resolver.username} (roles: ${resolver.roles.join('|')})...`);
     await page.goto(`${BASE_URL}/digit-ui/employee/pgr/complaint-details/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
@@ -473,7 +603,10 @@ API-only verification of status follows the same pattern as step 4 — UI flow i
     // Click "Resolve" in the dropdown menu
     console.log('Clicking Resolve...');
     const resolveOption = page.locator('.header-dropdown-option').filter({ hasText: /^Resolve$/i });
-    await expect(resolveOption).toBeVisible({ timeout: 5_000 });
+    await expect(
+      resolveOption,
+      `Resolve must be offered to ${resolver.username} (roles: ${resolver.roles.join('|')}). The workflow builds this menu from the caller's roles, so an empty menu here means this persona holds none of RESOLVE's roles — not that the UI is broken.`,
+    ).toBeVisible({ timeout: 5_000 });
     await resolveOption.click();
     await page.waitForTimeout(3_000);
     await snap(page, '05b-resolve-modal');

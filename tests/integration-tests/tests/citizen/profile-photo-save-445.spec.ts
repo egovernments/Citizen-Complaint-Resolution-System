@@ -14,7 +14,7 @@ const CITIZEN_PROFILE_URL = '/digit-ui/citizen/user/profile';
 test.describe('citizen profile — photo save round-trip #445 (JPEG)', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('upload JPEG photo, _update returns 2xx, no hard reload', async ({ page }) => {
+  test('upload JPEG photo, _update returns 2xx, no hard reload', { tag: ['@persona:citizen'] }, async ({ page }) => {
     const mobile = generateCitizenPhone();
 
     page.on('console', (msg) => console.log(`[CONSOLE] ${msg.type()}: ${msg.text()}`));

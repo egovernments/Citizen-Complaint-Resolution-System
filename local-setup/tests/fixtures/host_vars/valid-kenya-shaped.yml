@@ -1,0 +1,15 @@
+# Preflight fixture: a realistic Kenya-shaped tenant that must pass all rules.
+ansible_host: 10.0.0.99
+domain: fixture.example.org
+state_tenant_id: ke
+boot_tenant: ke.fixture
+db_fast_path: true
+db_fast_path_ack_data_wipe: true
+digit_ui_mode: static
+run_ci_tests: true
+auth_provider: digit
+core_mobile_configs:
+  countryCode: '+254'
+  mobileNumberRegex: ^0?[17][0-9]{8}$
+bootstrap_secrets:
+  elasticsearch_master_password: asd@#$@$!132123

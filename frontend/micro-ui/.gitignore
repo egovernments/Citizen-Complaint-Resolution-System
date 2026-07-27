@@ -4,8 +4,13 @@
 .eslintcache
 
 # yarn $
+# NOTE: yarn.lock is deliberately NOT ignored. It is the only thing pinning the transitive
+# dependency tree — package.json pins 21 of 23 direct deps exactly, but without a committed
+# lockfile every build re-resolved everything below that from the live registry, so two
+# developers on the same commit got different trees on different days. It also made
+# `yarn install --frozen-lockfile` in web/docker/Dockerfile a silent no-op: yarn v1 does not
+# fail when the lockfile is merely absent.
 .yarn
-yarn.lock
 .yarnrc.yml
 
 # dependencies

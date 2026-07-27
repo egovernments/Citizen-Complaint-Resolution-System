@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRefresh, useTranslate } from 'ra-core';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, ShieldCheck, Send, ListChecks, Copy, Check, Loader2, ExternalLink,
+  Plus, ShieldCheck, Send, ListChecks, Copy, Check, Loader2, ExternalLink, RefreshCw,
 } from 'lucide-react';
 import { DigitList, DigitDatagrid } from '@/admin';
 import type { DigitColumn } from '@/admin';
@@ -23,6 +23,7 @@ import {
   CHANNELS, DEFAULT_PROVIDER, credFields, rowChannel,
   type Channel, type CredField, type TemplatesResponse,
 } from './providerApi';
+import { SyncTwilioTemplatesDialog } from './SyncTwilioTemplatesDialog';
 
 /** Render a boolean flag as a compact yes/no chip. */
 function flag(value: unknown) {
@@ -42,7 +43,7 @@ const columns: DigitColumn[] = [
     // Novu stores WhatsApp as a Twilio `sms` integration; rowChannel derives
     // the WHATSAPP designation back from the identifier/name marker so the
     // row doesn't silently morph into a second SMS entry after a refetch.
-    render: (record) => <span>{rowChannel(record)}</span>,
+    render: (record) => <span>{rowChannel(record as Record<string, unknown>)}</span>,
   },
   {
     source: 'providerId',
@@ -260,6 +261,26 @@ function AddProviderAction() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// "Sync WhatsApp templates" — opens the map-and-confirm dialog that pulls the
+// operator's approved Twilio Content templates from the bridge and persists the
+// selected routing rows into MDMS NotificationProviderTemplate. Sits beside Add
+// Provider so it's discoverable right where operators manage their Twilio setup.
+// ---------------------------------------------------------------------------
+function SyncTemplatesAction() {
+  const t = useTranslate();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setOpen(true)}>
+        <RefreshCw className="w-4 h-4" />
+        {t('app.providers.sync_action', { _: 'Sync WhatsApp templates' })}
+      </Button>
+      <SyncTwilioTemplatesDialog open={open} onOpenChange={setOpen} />
+    </>
   );
 }
 
@@ -659,7 +680,12 @@ export function NotificationProviderList() {
       title="app.nav.notification_providers"
       subtitle="Novu integrations — credentials redacted server-side"
       sort={{ field: 'channel', order: 'ASC' }}
-      actions={<AddProviderAction />}
+      actions={
+        <div className="flex items-center gap-2">
+          <SyncTemplatesAction />
+          <AddProviderAction />
+        </div>
+      }
     >
       <DigitDatagrid
         columns={columns}

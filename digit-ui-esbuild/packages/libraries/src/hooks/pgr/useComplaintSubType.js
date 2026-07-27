@@ -13,6 +13,9 @@ const useComplaintSubType = (complaintType, t) => {
         // state-level id in single-root mode, so Bomet is unaffected.
         const tenantId = Digit.ULBService.getCurrentTenantId();
         const menu = await Digit.GetServiceDefinitions.getSubMenu(tenantId, complaintType, t);
+        // Sort sub-types A–Z by their displayed label for an easy-to-scan,
+        // searchable dropdown (CCRS#941).
+        menu.sort((a, b) => (a?.name || "").localeCompare(b?.name || ""));
         setSubTypeMenu(menu);
       }
     })();

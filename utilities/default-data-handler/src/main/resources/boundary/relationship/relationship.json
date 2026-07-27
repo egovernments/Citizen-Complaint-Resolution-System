@@ -15,30 +15,30 @@
   },
   {
     "tenantId": "{tenantid}.citya",
-    "code": "B1_ADMIN_BLOCK",
+    "code": "Z2_ADMIN_ZONE",
     "hierarchyType": "ADMIN",
-    "boundaryType": "Block",
+    "boundaryType": "Zone",
+    "parent": "PG_CITYA_ADMIN_CITY"
+  },
+  {
+    "tenantId": "{tenantid}.citya",
+    "code": "W1_ADMIN_WARD",
+    "hierarchyType": "ADMIN",
+    "boundaryType": "Ward",
     "parent": "Z1_ADMIN_ZONE"
   },
   {
     "tenantId": "{tenantid}.citya",
-    "code": "SUN01_ADMIN_LOCALITY",
+    "code": "W2_ADMIN_WARD",
     "hierarchyType": "ADMIN",
-    "boundaryType": "Locality",
-    "parent": "B1_ADMIN_BLOCK"
+    "boundaryType": "Ward",
+    "parent": "Z1_ADMIN_ZONE"
   },
   {
     "tenantId": "{tenantid}.citya",
-    "code": "SUN02_ADMIN_LOCALITY",
+    "code": "W3_ADMIN_WARD",
     "hierarchyType": "ADMIN",
-    "boundaryType": "Locality",
-    "parent": "B1_ADMIN_BLOCK"
-  },
-  {
-    "tenantId": "{tenantid}.citya",
-    "code": "SUN03_ADMIN_LOCALITY",
-    "hierarchyType": "ADMIN",
-    "boundaryType": "Locality",
-    "parent": "B1_ADMIN_BLOCK"
+    "boundaryType": "Ward",
+    "parent": "Z2_ADMIN_ZONE"
   }
 ]

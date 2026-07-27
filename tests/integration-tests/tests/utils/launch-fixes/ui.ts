@@ -1,11 +1,15 @@
 import { Page, expect } from '@playwright/test';
+import { BASE_URL, ROOT_TENANT } from '../env';
 
-const BASE = process.env.NAIPEPEA_BASE ?? 'https://naipepea.digit.org';
+// NAIPEPEA_BASE is an explicit override for the legacy demo host; default to the
+// suite's resolved target rather than that host, which is dead and made every
+// caller silently test nothing.
+const BASE = process.env.NAIPEPEA_BASE ?? BASE_URL;
 
 // Minimal employee login — UI form, not API. Use this for tests that
 // need a real session in browser localStorage (DIGIT-UI reads tenant +
 // authToken from there).
-export async function loginEmployeeUI(page: Page, username = 'ADMIN', password = 'eGov@123', tenantId = 'ke') {
+export async function loginEmployeeUI(page: Page, username = 'ADMIN', password = 'eGov@123', tenantId = ROOT_TENANT) {
   await page.goto(`${BASE}/digit-ui/employee/user/login`);
   // The login form has username + password + tenant inputs. The exact
   // selectors live in packages/modules/core/src/pages/employee/Login.
@@ -29,7 +33,7 @@ export async function citizenSendOtp(mobile: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      otp: { mobileNumber: mobile, tenantId: 'ke', userType: 'REGISTER', type: 'register' },
+      otp: { mobileNumber: mobile, tenantId: ROOT_TENANT, userType: 'REGISTER', type: 'register' },
       RequestInfo: { apiId: 'Rainmaker', authToken: '' },
     }),
   });

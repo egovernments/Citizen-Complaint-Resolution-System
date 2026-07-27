@@ -43,7 +43,7 @@ table to stay exhaustive.
 | family | pattern | examples | source of the key |
 |---|---|---|---|
 | chrome | `DASHBOARD_<AREA>_<NAME>` (AREAS: HEADER, FILTERS, SIDEBAR, LOGIN, MAP, TILE, TABLE, COMMON, COL, UNIT, DOW, BADGE, PERIOD, KPI_DISPLAY) | `DASHBOARD_HEADER_EXPORT`, `DASHBOARD_MAP_LEGEND_TITLE`, `DASHBOARD_COMMON_NO_DATA` | `t("KEY", "…")` literals in `products/dashboard/` |
-| KPI titles | `RAINMAKER-PGR.DASHBOARD_KPI_<ID_UPPER>` | `RAINMAKER-PGR.DASHBOARD_KPI_CL_NEW_CREATED_COUNT` | `viz.titleKey` on every `dss.KpiDefinition` |
+| KPI titles | `CMS-DASHBOARD.DASHBOARD_KPI_<ID_UPPER>` | `CMS-DASHBOARD.DASHBOARD_KPI_CL_NEW_CREATED_COUNT` | `viz.titleKey` on every `dss.KpiDefinition` |
 | KPI subtitles | `…DASHBOARD_KPI_<ID_UPPER>_SUBTITLE` | `…CL_REOPEN_RATE_COUNT_SUBTITLE` = "Reopened ÷ resolved" | `viz.subtitleKey` |
 | chart series | `DASHBOARD_WF_STAGE_<STATUS>`, `DASHBOARD_CHANNEL_<ID>`, `DASHBOARD_SLA_<STATE>` | `DASHBOARD_WF_STAGE_PENDINGATLME` = "Assigned", `DASHBOARD_CHANNEL_WALK_IN`, `DASHBOARD_SLA_APPROACHING` | `labelKey` on `stackSeries`/`channelMap` entries in the defs; also used directly by the `workflowStatus`/`channel`/`slaState` dimension kinds |
 | table columns | `DASHBOARD_COL_<LABEL_UPPER_SNAKE>` | `DASHBOARD_COL_AVG_RESOLUTION_TIME` | `labelKey` on column descriptors in the defs + FE-built columns (at-risk table) |
@@ -77,7 +77,7 @@ screen therefore means *neither* a localization message *nor* an operator-author
 | what renders | missing message | fix |
 |---|---|---|
 | `DASHBOARD_…` key | that key, module `rainmaker-dashboard`, active locale, state root | upsert it (locale gap ⇒ the whole pack for that locale is probably missing) |
-| `RAINMAKER-PGR.DASHBOARD_KPI_…` | title/subtitle for a def | upsert; if it's a new KPI, the def's author skipped the localization step (§2) |
+| `CMS-DASHBOARD.DASHBOARD_KPI_…` | title/subtitle for a def | upsert; if it's a new KPI, the def's author skipped the localization step (§2) |
 | a complaint-type code (`ServiceSchedulingComplaints`) | `COMPLAINT_HIERARCHY.<code>` in `rainmaker-pgr` | upsert — known gap for **legacy** type-level codes created before the `COMPLAINT_HIERARCHY` namespace (bomet `ke` has these) |
 | a department code (`WATER_ENV`) | `COMMON_MASTERS_DEPARTMENT_<CODE>` in `rainmaker-common` | upsert — known gap on bomet `ke` |
 | a boundary code | bare code in `rainmaker-boundary-<hier>` | re-run the configurator boundary localization / upsert (per locale) |
@@ -123,5 +123,37 @@ the tenant's `StateInfo.languages` value is the only code that matters at runtim
 
 ## 7. Numbers and dates
 
-`toLocaleString`/`toLocaleDateString` call sites pass the active locale (`en_IN` → `en-IN`), so
-number/date shapes follow the language switch automatically — no messages to seed.
+**Numbers** are configurable **per locale** via `dss.DashboardConfig.numberFormat` (state root
+tenant, record id `default`): a separators-only display mask applied to every number the dashboard
+renders — KPI values and deltas, table cells, bar/line/stacked labels, axis ticks, tooltips, map
+hovers, and duration strings ("2,5 hrs"). The canonical form is an object keyed by locale code
+(the `value`s in `common-masters.StateInfo.languages`, §6) with an optional `default` for locales
+without an entry:
+
+```json
+"numberFormat": {
+  "en_IN": "#,##0.00",
+  "pt_PT": "#.##0,00",
+  "fr_FR": "# ##0,00",
+  "default": "#,##0.00"
+}
+```
+
+Each user sees the convention of the language they selected in the TopBar — on a multi-locale
+tenant like bomet (`en_IN` + `fr_FR` + `pt_PT`), `12348248` renders as `12,348,248.00` (en_IN),
+`12.348.248,00` (pt_PT), and `12 348 248,00` (fr_FR); switching language reformats every number
+in place. Resolution is `numberFormat[language] ?? numberFormat.default ?? unconfigured`. A plain
+STRING is also accepted (legacy form, kept for back-compat): one mask applied for every locale,
+i.e. the original tenant-wide behavior.
+
+Mask syntax: placeholder chars are `[#0]`; the first non-placeholder char is the grouping
+separator, the last is the decimal separator; the decimal COUNT stays per-KPI (`viz.format`).
+Examples: `#,##0.00` (en → `1,234.56`), `#.##0,00` (pt → `1.234,56`), `# ##0,00` (fr →
+`1 234,56`). When the field is absent or malformed — or the active locale has no entry and no
+`default` — the dashboard renders exactly as before, and the CSV export always stays raw
+(machine-readable) regardless of the mask. To change it on a live tenant, `_update` the existing
+record (uniqueIdentifier `default`) via mdms-v2 — never re-create the schema.
+
+**Dates** are untouched by the mask: `toLocaleString`/`toLocaleDateString` call sites pass the
+active locale (`en_IN` → `en-IN`), so date shapes follow the language switch automatically — no
+messages to seed.

@@ -16,7 +16,7 @@ initContainers:
     schemaTable: "egov_indexer_schema"
     image:
       repository: "egov-indexer-db"
-      tag: v2.9.2-4a60f20
+      tag: "maven-jdk21-9f83afb"
   gitSync:
     enabled: true
     repo: "git@github.com:egovernments/configs"
@@ -25,7 +25,7 @@ initContainers:
 # Container Configs
 image:
   repository: "egov-indexer"
-  tag: v2.9.2-4a60f20
+  tag: "maven-jdk21-9f83afb"
 replicas: "1"
 healthChecks:
   enabled: true

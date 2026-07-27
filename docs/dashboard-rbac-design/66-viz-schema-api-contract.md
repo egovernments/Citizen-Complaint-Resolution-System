@@ -51,7 +51,7 @@ Each `dss.KpiDefinition` carries a `viz` object. This is what the catalog endpoi
 
   "titleKey": "<localization_module>.<UPPER_SNAKE_KEY>",
   // ^ localization key, NOT a raw English string; resolved at the edge
-  //   example: "RAINMAKER-PGR.DASHBOARD_KPI_TITLE_OPEN_COMPLAINTS"
+  //   example: "CMS-DASHBOARD.DASHBOARD_KPI_TITLE_OPEN_COMPLAINTS"
 
   // ─── Grouping / picker ───────────────────────────────────────────────────
   "group": "<string>",
@@ -168,7 +168,7 @@ POST /v2/analytics/packs
     {
       "kpiId": "cl_open_weekly",
       "version": "1.0.0",
-      "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_TITLE_OPEN_WEEKLY",
+      "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_TITLE_OPEN_WEEKLY",
       "viz": {
         "kind": "scalar",
         "format": "integer",

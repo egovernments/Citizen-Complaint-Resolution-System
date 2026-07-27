@@ -1,10 +1,14 @@
 /**
  * Citizen track-complaint flow — Stories 4.1, 5.1, 5.2.
  *
- * Files a complaint via API as the test citizen, then walks the citizen
- * UI for the My Complaints list + Complaint Detail + Timeline sections.
- * API-creates so we don't depend on naipepea inventory state for the
- * test citizen — the same phone hits the UI later for browse-only.
+ * Files a complaint via seedComplaintAsCitizen() (tests/utils/seed.ts) as
+ * the suite-wide provisioned citizen, then walks the citizen UI for the My
+ * Complaints list + Complaint Detail + Timeline sections. API-creates so we
+ * don't depend on deployment inventory state — the same provisioned citizen
+ * hits the UI later for browse-only, matching the pattern every other
+ * citizen spec now uses (complaint-detail-page, rate-resolved-complaint,
+ * reopen-closed-complaint) rather than each spec re-implementing
+ * register+resolveServiceCode/resolveLocalityCode+pgrCreate.
  *
  * Asserts the route divergence flagged in the catalogue Routes table:
  * the detail URL is `/citizen/pgr/complaints/:id` (PLURAL), NOT
@@ -12,110 +16,21 @@
  */
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { pgrCreate, resolveServiceCode, resolveLocalityCode } from '../utils/launch-fixes/api';
-import {
-  BASE_URL,
-  TENANT,
-  ROOT_TENANT,
-  FIXED_OTP,
-  DEFAULT_PASSWORD,
-  SERVICE_CODE,
-  LOCALITY_CODE,
-  PGR_ID_PREFIX,
-  generateCitizenPhone,
-} from '../utils/env';
+import { seedComplaintAsCitizen } from '../utils/seed';
+import { BASE_URL, PGR_ID_PREFIX } from '../utils/env';
 import { readProvisionedCitizen } from '../utils/citizen-provision';
 
 // Disable trace/video so the spec runs cleanly with --no-deps (the
 // .playwright-artifacts-0 dir is only created by the full setup DAG).
 test.use({ trace: 'off', video: 'off' });
 
-const CITIZEN_PHONE = generateCitizenPhone();
-const CITIZEN_NAME = `PW Track ${Date.now()}`;
-
-interface CitizenAuth {
-  token: string;
-  userInfo: Record<string, unknown>;
-}
-
-async function registerCitizenAPI(phone: string): Promise<CitizenAuth> {
-  await fetch(`${BASE_URL}/user-otp/v1/_send`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      otp: { mobileNumber: phone, tenantId: ROOT_TENANT, type: 'login', userType: 'CITIZEN' },
-    }),
-  });
-
-  const oauth = async () =>
-    fetch(`${BASE_URL}/user/oauth/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-      },
-      body: new URLSearchParams({
-        grant_type: 'password',
-        username: phone,
-        password: FIXED_OTP,
-        tenantId: ROOT_TENANT,
-        scope: 'read',
-        userType: 'CITIZEN',
-      }).toString(),
-    });
-
-  let resp = await oauth();
-  if (!resp.ok) {
-    await fetch(`${BASE_URL}/user/citizen/_create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker' },
-        user: {
-          name: CITIZEN_NAME,
-          userName: phone,
-          mobileNumber: phone,
-          password: DEFAULT_PASSWORD,
-          tenantId: ROOT_TENANT,
-          type: 'CITIZEN',
-          roles: [{ code: 'CITIZEN', name: 'Citizen', tenantId: ROOT_TENANT }],
-          otpReference: FIXED_OTP,
-        },
-      }),
-    });
-    resp = await oauth();
-  }
-
-  const data = (await resp.json()) as { access_token: string; UserRequest: Record<string, unknown> };
-  return { token: data.access_token, userInfo: data.UserRequest };
-}
-
-async function createComplaintAPI(auth: CitizenAuth): Promise<string> {
-  // Resolve a valid service code and locality code for this deployment
-  // (ke/Bomet uses different codes than the defaults which may only exist
-  // on Ethiopia or Nairobi).
-  const resolvedServiceCode = await resolveServiceCode(BASE_URL, auth.token, TENANT, SERVICE_CODE);
-  const resolvedLocalityCode = await resolveLocalityCode(BASE_URL, auth.token, TENANT, LOCALITY_CODE);
-  const created = await pgrCreate({
-    baseUrl: BASE_URL,
-    auth,
-    tenantId: TENANT,
-    serviceCode: resolvedServiceCode,
-    localityCode: resolvedLocalityCode,
-    description: 'PW track-complaint test — auto-filed',
-    citizenName: CITIZEN_NAME,
-    citizenPhone: CITIZEN_PHONE,
-  });
-  return created.serviceRequestId;
-}
-
 test.describe.serial('Citizen track-complaint', () => {
   let serviceRequestId: string;
 
   test.beforeAll(async () => {
-    const auth = await registerCitizenAPI(CITIZEN_PHONE);
-    serviceRequestId = await createComplaintAPI(auth);
-    console.log(`Seeded complaint ${serviceRequestId} for ${CITIZEN_PHONE}`);
+    const created = await seedComplaintAsCitizen({ description: 'PW track-complaint test — auto-filed' });
+    serviceRequestId = created.srid;
+    console.log(`Seeded complaint ${serviceRequestId}`);
   });
 
   test('My Complaints list shows the seeded complaint with OPEN badge', {
@@ -129,11 +44,11 @@ Steps:
 3. Assert body contains "My Complaints", the seeded serviceRequestId, /OPEN/, and /Pending for assignment/i.
 4. Assert body does NOT contain "Something went wrong".
 
-beforeAll is API-only — registers a fresh citizen and files a complaint via PGR _create — so the test isn't tied to whatever's currently seeded on naipepea.`,
+beforeAll is API-only — files a complaint as the suite-wide provisioned citizen via seedComplaintAsCitizen() — so the test isn't tied to whatever's currently seeded on the deployment.`,
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
-    await citizenOtpLogin(page, CITIZEN_PHONE);
+    await citizenOtpLogin(page);
     await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,
@@ -163,7 +78,7 @@ The Map widget + "Open in Maps" only render when geoLocation has non-zero coords
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
-    await citizenOtpLogin(page, CITIZEN_PHONE);
+    await citizenOtpLogin(page);
     await page.goto(
       `${BASE_URL}/digit-ui/citizen/pgr/complaints/${serviceRequestId}`,
       { waitUntil: 'domcontentloaded', timeout: 30_000 },
@@ -204,7 +119,7 @@ If the SPA ever redirects plural → singular (or 404s), this test catches the c
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
-    await citizenOtpLogin(page, CITIZEN_PHONE);
+    await citizenOtpLogin(page);
     await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/complaints`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,

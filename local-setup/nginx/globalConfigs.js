@@ -19,6 +19,10 @@ var globalConfigs = (function () {
   var pgrBoundaryLowestLevel = "Ward";
   var mapCenter = { lat: -1.0, lng: 37.0 };
   var useInboxV1 = true;
+  // Client-side dashboard render-lag instrumentation (#1110). ON unless
+  // explicitly false — the emitter self-mutes when the /otel ingest route is
+  // absent. Kill switch: flip to false here (no rebuild needed).
+  var dashboardMetricsEnabled = true;
   // Source of truth for mobile validation is common-masters.MobileNumberValidation in MDMS
   // (seeded during tenant onboarding). These values are a build-time fallback used only
   // when MDMS has not been seeded yet or cannot be reached. Changing these values alone
@@ -109,6 +113,8 @@ var globalConfigs = (function () {
       return useInboxV1;
     } else if (key === "CORE_MOBILE_CONFIGS") {
       return coreMobileConfigs;
+    } else if (key === "DASHBOARD_METRICS_ENABLED") {
+      return dashboardMetricsEnabled;
     }
   };
 

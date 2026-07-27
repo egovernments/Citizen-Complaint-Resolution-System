@@ -24,10 +24,12 @@ if CI_MODE:
     # CI Mode: Use pre-built images from Docker Hub (much faster)
     # Images should be pulled and tagged before running Tilt
     # If not available, fall back to building
+    # The pulled tag MUST match the pgr-services pin in docker-compose.yml. docker-compose.tilt.yml
+    # repoints the service to pgr-services-dev, so whatever is tagged here is what CI actually runs.
     pgr_image_exists = str(local('docker images -q pgr-services-dev:latest 2>/dev/null || echo "missing"', quiet=True)).strip()
     if pgr_image_exists == '' or 'missing' in pgr_image_exists:
         print('pgr-services-dev not found, pulling from Docker Hub...')
-        local('docker pull egovio/pgr-services:crs_dataseeder-084b7cc && docker tag egovio/pgr-services:crs_dataseeder-084b7cc pgr-services-dev:latest')
+        local('docker pull egovio/pgr-services:multiarch-d448cb7 && docker tag egovio/pgr-services:multiarch-d448cb7 pgr-services-dev:latest')
 else:
     # Local Dev Mode: Compile Java locally, then sync to container for fast hot reload
     # Requires: mvn installed locally
@@ -113,7 +115,11 @@ else:
 # Load docker-compose configuration
 # Note: wait=True blocks until ALL containers are healthy, which is too slow
 # Instead, rely on docker-compose depends_on with service_healthy conditions
-docker_compose('./docker-compose.yml')
+#
+# docker-compose.tilt.yml repoints pgr-services and digit-ui at the *-dev image names built above.
+# Without it those docker_build calls bind to nothing and Tilt runs the registry images instead —
+# silently, with no warning. See the comments in that file.
+docker_compose(['./docker-compose.yml', './docker-compose.tilt.yml'])
 
 # ==================== Infrastructure ====================
 dc_resource('postgres-db', labels=['infrastructure'])

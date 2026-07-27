@@ -15,11 +15,14 @@ import { resolveBarChartColumnWidth } from "../config/barChartPresentation";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
 import useDashboardT from "../i18n/useDashboardT";
 import ChartScrollViewport from "./ChartScrollViewport";
+import { formatNumber, getNumberFormatStamp } from "../utils/numberFormat";
 
+// Numeric part goes through the tenant mask (formatNumber, null when
+// unconfigured -> pre-#1213 expression).
 function formatRatio(value) {
   const n = Number(value);
-  if (!Number.isFinite(n)) return "0.00";
-  return n.toFixed(2);
+  if (!Number.isFinite(n)) return formatNumber(0, { decimals: 2 }) ?? "0.00";
+  return formatNumber(n, { decimals: 2 }) ?? n.toFixed(2);
 }
 
 function breakEvenSeriesValues(value, breakEven) {
@@ -33,6 +36,11 @@ function breakEvenSeriesValues(value, breakEven) {
 
 const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
   const { t, language } = useDashboardT();
+  // Per-locale numberFormat mask stamp (#1272): baked into the options memo
+  // because react-apexcharts compares JSON.stringify(options), which drops
+  // the total-label/tooltip formatter closures — `language` alone can miss a
+  // mask change whose translated strings happen to coincide.
+  const numberFormatStamp = getNumberFormatStamp();
   const rows = useMemo(
     () =>
       (data || []).map((entry) => ({
@@ -177,7 +185,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
             Number.isFinite(row.resolved) &&
             Number.isFinite(row.created) &&
             row.created > 0
-              ? `${row.resolved} ${t("DASHBOARD_COMMON_RESOLVED", "resolved")} ÷ ${row.created} ${t("DASHBOARD_COMMON_CREATED", "created")}`
+              ? `${formatNumber(row.resolved, { decimals: 0 }) ?? row.resolved} ${t("DASHBOARD_COMMON_RESOLVED", "resolved")} ÷ ${formatNumber(row.created, { decimals: 0 }) ?? row.created} ${t("DASHBOARD_COMMON_CREATED", "created")}`
               : "";
           const value = `${formatRatio(row.value)}${detail ? ` — ${detail}` : ""}`;
           return buildChartTooltipMarkup({
@@ -186,6 +194,9 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
           });
         },
       }),
+      // Not an Apex option — stringifiable stamp of the per-locale mask so
+      // the JSON.stringify options comparison sees mask-only changes.
+      _numberFormatStamp: numberFormatStamp,
     }),
     [
       axisMax,
@@ -201,6 +212,7 @@ const HorizontalBarChart = ({ data = [], breakEven = 1, scrollKey }) => {
       rows,
       t,
       language,
+      numberFormatStamp,
     ]
   );
 

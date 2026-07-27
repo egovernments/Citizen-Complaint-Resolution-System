@@ -10,4 +10,13 @@ const alphabeticalSortFunctionForTenantsBasedOnName = (firstEl, secondEl) =>{
         return 0
 }
 
-export const useTenants = () => useQuery(["ALL_TENANTS"], () => Digit.SessionStorage.get("initData").tenants.sort(alphabeticalSortFunctionForTenantsBasedOnName))
+export const useTenants = () =>
+  useQuery(
+    ["ALL_TENANTS"],
+    () => {
+      const tenants = Digit.SessionStorage.get("initData")?.tenants;
+      if (!Array.isArray(tenants)) return [];
+      return [...tenants].sort(alphabeticalSortFunctionForTenantsBasedOnName);
+    },
+    { staleTime: 0 }
+  );

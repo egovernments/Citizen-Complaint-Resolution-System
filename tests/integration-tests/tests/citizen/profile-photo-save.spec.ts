@@ -22,7 +22,7 @@ test.describe('citizen profile — photo save round-trip #556', () => {
   // Citizen flow does its own OTP login — don't reuse admin auth.json.
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('upload photo, _update returns 2xx, no hard reload', async ({ page }) => {
+  test('upload photo, _update returns 2xx, no hard reload', { tag: ['@persona:citizen'] }, async ({ page }) => {
     const mobile = generateCitizenPhone();
 
     // ============ OTP login ============

@@ -21,7 +21,7 @@
         "valueKey": "total",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_NEW_CREATED_COUNT",
         "compose": null,
         "pii": false,
         "title": "New complaints created",
@@ -75,7 +75,7 @@
         "valueKey": "total",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CREATED_TODAY_COUNT",
         "compose": null,
         "pii": false,
         "title": "Complaints created today",
@@ -136,7 +136,7 @@
         "valueKey": "pct",
         "accent": "green",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLUTION_RATE_COUNT",
         "compose": null,
         "pii": false,
         "threshold": {
@@ -208,7 +208,7 @@
         "valueKey": "pct",
         "accent": "amber",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT",
         "compose": null,
         "pii": false,
         "threshold": {
@@ -224,7 +224,7 @@
         "deltaLabel": "vs prior period",
         "title": "Reopen rate",
         "subtitle": "Reopened ÷ resolved",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT_SUBTITLE"
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_REOPEN_RATE_COUNT_SUBTITLE"
       },
       "params": [
         {
@@ -273,12 +273,12 @@
         "valueKey": "avg",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CSAT_AVG",
         "compose": null,
         "pii": false,
         "title": "Citizen satisfaction",
         "subtitle": "Avg. rating on resolved complaints",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CSAT_AVG_SUBTITLE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CSAT_AVG_SUBTITLE",
         "threshold": {
           "kind": "rating",
           "higherIsBetter": true,
@@ -347,12 +347,12 @@
         "valueKey": "pct",
         "accent": "green",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT",
         "compose": null,
         "pii": false,
         "title": "First-assignment rate",
         "subtitle": "Never reassigned ÷ assigned",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT_SUBTITLE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FIRST_ASSIGNMENT_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": true,
@@ -415,12 +415,12 @@
         "valueKey": "pct",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT",
         "compose": null,
         "pii": false,
         "title": "SLA compliance rate",
         "subtitle": "Resolved within SLA ÷ all filed",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT_SUBTITLE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_COMPLIANCE_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": true,
@@ -485,7 +485,7 @@
         "valueKey": "pct",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLVED_ON_TIME_RATE_COUNT",
         "compose": null,
         "pii": false,
         "title": "Resolved on time rate",
@@ -546,7 +546,7 @@
         "valueKey": "total",
         "accent": "amber",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OPEN_COMPLAINTS_LIVE",
         "compose": null,
         "pii": false,
         "title": "Open complaints",
@@ -603,7 +603,7 @@
         "valueKey": "total",
         "accent": "green",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_RESOLVED_DATE_RANGE_COUNT",
         "compose": null,
         "pii": false,
         "threshold": {
@@ -668,12 +668,12 @@
         "valueKey": "max_age_ms",
         "accent": "amber",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE",
         "compose": null,
         "pii": false,
         "title": "Oldest complaint",
         "subtitle": "Earliest open complaint",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE_SUBTITLE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_OLDEST_OPEN_AGE_SUBTITLE",
         "threshold": {
           "kind": "count",
           "higherIsBetter": false,
@@ -730,12 +730,12 @@
         "valueKey": "avg_ms",
         "accent": "green",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME",
         "compose": null,
         "pii": false,
         "title": "Average resolution time",
         "subtitle": "Avg. time to resolve",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME_SUBTITLE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_AVG_RESOLUTION_TIME_SUBTITLE",
         "delta": {
           "mode": "duration",
           "compare": "prior"
@@ -764,7 +764,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_chart_complaints_by_type",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -796,7 +796,7 @@
         "valueKey": "total",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE",
         "dimensionKey": "service_code",
         "measureKeys": [
           "total"
@@ -810,7 +810,7 @@
         "seriesLabelKey": "DASHBOARD_SERIES_FILED",
         "limit": 8,
         "subtitle": "Complaints filed, by type",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_BY_TYPE_SUBTITLE",
         "labelFormat": "dimension"
       },
       "params": [
@@ -824,6 +824,22 @@
             "wtd",
             "mtd"
           ]
+        },
+        {
+          "name": "hierLevel",
+          "default": "1",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "rbac": {
@@ -863,7 +879,7 @@
         "valueKey": "total",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENTS_BY_TYPE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENTS_BY_TYPE",
         "dimensionKey": "department_code",
         "measureKeys": [
           "total"
@@ -931,7 +947,7 @@
         "valueKey": "rate",
         "accent": "green",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE",
         "dimensionKey": "department_code",
         "measureKeys": [
           "rate"
@@ -942,7 +958,7 @@
         "pii": false,
         "title": "Department-wise resolution rate",
         "subtitle": "Resolved ÷ filed per department",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE_SUBTITLE"
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_RESOLUTION_RATE_SUBTITLE"
       },
       "params": [
         {
@@ -995,7 +1011,7 @@
         "valueKey": "total",
         "accent": "amber",
         "group": "employee-performance",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OFFICER_SLA",
         "dimensionKey": "current_assignee_uuid",
         "measureKey": "total",
         "measureKeys": [
@@ -1031,7 +1047,7 @@
         },
         "title": "Employees with most open complaints",
         "subtitle": "Open complaints by SLA state per officer",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OFFICER_SLA_SUBTITLE"
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OFFICER_SLA_SUBTITLE"
       },
       "params": [
         {
@@ -1060,7 +1076,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_chart_open_by_type_stage",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -1086,7 +1102,7 @@
         "valueKey": "total",
         "accent": "amber",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE",
         "dimensionKey": "service_code",
         "measureKeys": [
           "total"
@@ -1125,7 +1141,7 @@
         ],
         "limit": 8,
         "subtitle": "Subtypes with the most open complaints, each broken down by which workflow stage they're stuck in.",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_TYPE_STAGE_SUBTITLE",
         "labelFormat": "dimension"
       },
       "params": [
@@ -1139,6 +1155,22 @@
             "wtd",
             "mtd"
           ]
+        },
+        {
+          "name": "hierLevel",
+          "default": "1",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "rbac": {
@@ -1181,7 +1213,7 @@
         "valueKey": "total",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL",
         "dimensionKey": "source",
         "measureKeys": [
           "total"
@@ -1191,7 +1223,7 @@
         "title": "Complaints by channel",
         "measureKey": "total",
         "subtitle": "Open complaints by intake channel",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL_SUBTITLE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_CHANNEL_SUBTITLE",
         "channelMap": [
           {
             "id": "web",
@@ -1322,7 +1354,7 @@
         "valueKey": "total",
         "accent": "amber",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE",
         "dimensionKey": "aging_bucket",
         "measureKeys": [
           "total"
@@ -1337,7 +1369,7 @@
           ">7d"
         ],
         "subtitle": "Open complaints by age bucket",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE_SUBTITLE"
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OPEN_BY_AGE_SUBTITLE"
       },
       "params": [
         {
@@ -1398,7 +1430,7 @@
         "valueKey": "filed",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_MAP_WARD_WOW_CURRENT",
         "dimensionKey": "ward_code",
         "measureKeys": [
           "filed",
@@ -1433,7 +1465,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_table_complaint_type_details",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -1521,7 +1553,7 @@
         "valueKey": "avg_resolution_ms",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS",
         "dimensionKey": "service_code",
         "measureKeys": [
           "avg_resolution_ms",
@@ -1613,7 +1645,7 @@
           }
         ],
         "subtitle": "Resolution, SLA and reopen metrics per complaint type - all complaints, narrowed by the date filter",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS_SUBTITLE"
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINT_TYPE_DETAILS_SUBTITLE"
       },
       "params": [
         {
@@ -1623,8 +1655,26 @@
             "last_7d",
             "last_30d",
             "wtd",
-            "mtd"
+            "mtd",
+            "all"
+          ],
+          "default": "all"
+        },
+        {
+          "name": "hierLevel",
+          "default": "leaf",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
           ]
+        },
+        {
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "rbac": {
@@ -1679,7 +1729,7 @@
         "valueKey": "open_age_ms",
         "accent": "red",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK",
         "dimensionKey": "service_request_id",
         "measureKeys": [
           "open_age_ms",
@@ -1689,7 +1739,7 @@
         "pii": false,
         "title": "Complaints at risk",
         "subtitle": "Open complaints nearing or past SLA",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK_SUBTITLE"
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_COMPLAINTS_AT_RISK_SUBTITLE"
       },
       "params": [
         {
@@ -1718,7 +1768,7 @@
     "tenantId": "ke",
     "data": {
       "id": "cl_chart_over_time_created_daily",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "status": "published",
       "query": {
         "grain": "facts",
@@ -1762,9 +1812,10 @@
       "viz": {
         "kind": "line",
         "format": "integer",
+        "valueKey": "created",
         "accent": "teal",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_CREATED_DAILY",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_CREATED_DAILY",
         "dimensionKey": "created_date",
         "labelFormat": "date-dow",
         "measureKeys": [
@@ -1922,7 +1973,7 @@
         "valueKey": "open",
         "accent": "amber",
         "group": "employee-performance",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE",
         "dimensionKey": "current_assignee_uuid",
         "measureKeys": [
           "assigned",
@@ -2024,7 +2075,7 @@
         ],
         "labelFormat": "officer",
         "subtitle": "Workload and quality metrics per officer",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE_SUBTITLE"
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_EP_TABLE_EMPLOYEE_PERFORMANCE_SUBTITLE"
       },
       "params": [
         {
@@ -2075,7 +2126,7 @@
         "valueKey": "total",
         "accent": "red",
         "group": "resolution-sla",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_RS_BREACH_TOTAL",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_RS_BREACH_TOTAL",
         "compose": null,
         "pii": false,
         "threshold": {
@@ -2150,7 +2201,7 @@
         "valueKey": "total",
         "accent": "slate",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_MAP_COMPLAINT_PINS",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_MAP_COMPLAINT_PINS",
         "dimensionKey": "service_request_id",
         "measureKeys": [
           "total"
@@ -2215,7 +2266,7 @@
         "valueKey": "resolved",
         "accent": "green",
         "group": "complaint-landscape",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO",
         "dimensionKey": "department_code",
         "measureKeys": [
           "filed",
@@ -2227,7 +2278,7 @@
         "pii": false,
         "title": "Flow ratio by department",
         "subtitle": "Resolved ÷ created",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO_SUBTITLE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_FLOW_RATIO_SUBTITLE",
         "numeratorKey": "resolved",
         "denominatorKey": "filed",
         "breakEven": 1
@@ -2287,7 +2338,7 @@
         "pii": false,
         "title": "SLA non-compliance rate",
         "subtitle": "Breached SLA ÷ all complaints",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT_SUBTITLE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT_SUBTITLE",
         "threshold": {
           "kind": "percent",
           "higherIsBetter": false,
@@ -2299,7 +2350,7 @@
           "compare": "prior"
         },
         "deltaLabel": "vs prior period",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT"
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_SLA_NONCOMPLIANCE_RATE_COUNT"
       },
       "params": [
         {
@@ -2337,8 +2388,8 @@
         "compose": null,
         "dateKey": "created_date",
         "subtitle": "Complaints filed in period",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT_SUBTITLE",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TOTAL_COMPLAINTS_COUNT",
         "valueKey": "total",
         "deltaLabel": "vs prior period",
         "sparklineMeasureKey": "total"
@@ -2400,8 +2451,8 @@
         "format": "decimalTwo",
         "compose": null,
         "subtitle": "Resolved in period ÷ created in period",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT_SUBTITLE",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_FLOW_RATIO_COUNT",
         "valueKey": "ratio",
         "deltaLabel": "vs prior period"
       },
@@ -2463,8 +2514,8 @@
         "format": "integer",
         "compose": null,
         "subtitle": "Created, resolved and open per day",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME_SUBTITLE",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_COMPLAINTS_OVER_TIME",
         "valueKey": "created",
         "seriesDefs": [
           {
@@ -2564,7 +2615,7 @@
         "accent": "teal",
         "format": "integer",
         "compose": null,
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_OVER_TIME_OPEN_DAILY",
         "valueKey": "open",
         "dimensionKey": "snapshot_date"
       },
@@ -2628,8 +2679,8 @@
         "compose": null,
         "stackKey": "sla_status_bucket",
         "subtitle": "All complaints by SLA state — per ward",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA_SUBTITLE",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_WARDS_BY_SLA",
         "valueKey": "total",
         "measureKey": "total",
         "labelFormat": "dimension",
@@ -2717,8 +2768,8 @@
         "format": "percentOneDecimal",
         "compose": null,
         "subtitle": "Open caseload vs breach rate at period end",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER_SUBTITLE",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_CHART_DEPARTMENT_BREACH_SCATTER",
         "valueKey": "open",
         "xAxisLabel": "Caseload (open)",
         "yAxisLabel": "Breach rate (%)",
@@ -2857,8 +2908,8 @@
         ],
         "compose": null,
         "subtitle": "Created, open, reopen, on-time and CSAT by ward",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE_SUBTITLE",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_PERFORMANCE",
         "valueKey": "created",
         "measureKeys": [
           "created",
@@ -2983,7 +3034,7 @@
         "accent": "teal",
         "format": "integer",
         "compose": null,
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_WARD_OPEN_DAILY",
         "valueKey": "open",
         "dimensionKey": "ward_code"
       },
@@ -3075,8 +3126,8 @@
         ],
         "compose": null,
         "subtitle": "Volume, resolution rate and CSAT by intake channel",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL_SUBTITLE",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SERVICE_QUALITY_BY_CHANNEL",
         "valueKey": "volume",
         "measureKeys": [
           "volume",
@@ -3194,8 +3245,8 @@
         ],
         "compose": null,
         "subtitle": "Share, resolution time and SLA by subtype",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE_SUBTITLE",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_SUBTYPE_PERFORMANCE",
         "valueKey": "avg_resolution_ms",
         "measureKeys": [
           "total",
@@ -3254,10 +3305,26 @@
             "mtd"
           ],
           "default": "last_7d"
+        },
+        {
+          "name": "hierLevel",
+          "default": "leaf",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "status": "published",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "supportsSeries": false
     }
   },
@@ -3305,8 +3372,8 @@
         "compose": null,
         "minCount": 3,
         "subtitle": "Ward × subtype pairs with ≥ 3 complaints in period",
-        "subtitleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
-        "titleKey": "RAINMAKER-PGR.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
+        "subtitleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE_SUBTITLE",
+        "titleKey": "CMS-DASHBOARD.DASHBOARD_KPI_CL_TABLE_RECURRING_WARD_SUBTYPE",
         "valueKey": "total",
         "needsPrior": true,
         "measureKeys": [
@@ -3352,10 +3419,26 @@
             "mtd"
           ],
           "default": "last_7d"
+        },
+        {
+          "name": "hierLevel",
+          "default": "leaf",
+          "allowed": [
+            "leaf",
+            "1",
+            "2",
+            "3",
+            "4"
+          ]
+        },
+        {
+          "name": "complaintPath",
+          "default": "",
+          "allowed": []
         }
       ],
       "status": "published",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "supportsSeries": false
     }
   }

@@ -88,14 +88,45 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   // address-text path; map TILE labels are baked into the CARTO raster
   // tiles and require a vector-tile provider swap to translate.)
   const nominatimLang = ((i18n?.language || Digit?.StoreData?.getCurrentLanguage?.() || "en") + "").split("_")[0] || "en";
-  // Zero Mile Stone, Nagpur (Geographical Center of India) — used only as the last-resort fallback when the tenant has not configured MAP_CENTER in globalConfigs.
-  const INDIA_CENTER = { lat: 21.1498, lng: 79.0806 };
-  const DEFAULT_CENTER = window?.globalConfigs?.getConfig?.("MAP_CENTER") || INDIA_CENTER;
-  // Pin-step default zoom — 13 is neighborhood / district level, so the
-  // user lands on a frame that shows the surrounding area instead of a
-  // single block at street level (z 15). Stays close enough that a tap
-  // is meaningful for routing, but they can recognise the locality.
-  const DEFAULT_ZOOM = 13;
+
+  // Base tile theme, ward highlight, starting position and geocoding scope are
+  // all resolved per tenant from MDMS RAINMAKER-PGR.MapConfig, each falling
+  // back to the deploy-time globalConfigs key and then to a built-in default.
+  const {
+    isReady,
+    tileUrl,
+    tileAttribution,
+    wardHighlightColor: wardColor,
+    center,
+    defaultZoom,
+    minZoom,
+    maxZoom,
+    geocodeCountryCodes,
+    searchViewbox,
+  } = useMapConfig();
+
+  const nominatimCountry = useMemo(
+    () => (geocodeCountryCodes ? `&countrycodes=${encodeURIComponent(geocodeCountryCodes)}` : ""),
+    [geocodeCountryCodes]
+  );
+
+  // Forward search only. Nominatim honours `viewbox` alongside `bounded=1`,
+  // which discards every result outside the box — so send neither unless the
+  // tenant configured one. Unset, the search is merely broad; a box belonging to
+  // another city hides every address the citizen could legitimately pick.
+  const nominatimSearchScope = useMemo(() => {
+    if (!searchViewbox) return nominatimCountry;
+    const { minLon, minLat, maxLon, maxLat } = searchViewbox;
+    return `${nominatimCountry}&viewbox=${minLon},${minLat},${maxLon},${maxLat}&bounded=1`;
+  }, [nominatimCountry, searchViewbox]);
+
+  // 13 is neighbourhood / district level, so the user lands on a frame showing
+  // the surrounding area instead of a single block at street level.
+  const DEFAULT_CENTER = center;
+  const DEFAULT_ZOOM = defaultZoom;
+  // Shown before any pin exists (and after Clear): a deliberately wide frame the
+  // citizen zooms in from. Clamped so it can't sit outside the tenant's bounds.
+  const OVERVIEW_ZOOM = Math.max(minZoom, Math.min(5, maxZoom));
   const [coords, setCoords] = useState(DEFAULT_CENTER);
   const [markerPos, setMarkerPos] = useState([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -113,6 +144,12 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
   const mapRef = useRef(null);
   const searchInputRef = useRef(null);
   const hasInitialized = useRef(false);
+  // Coords of the last reverse-geocode ATTEMPT (not success). The formData
+  // sync effect below must never re-request coords that were already tried:
+  // a failed / rate-limited Nominatim call writes {lat, lng} without an
+  // address back into formData via onSelect, and re-fetching on that write
+  // turns one failure into an infinite request loop (CCRS#1380 symptom 4).
+  const lastReverseAttempt = useRef(null);
 
   // Leaflet writes the stroke as an SVG DOM attribute, which doesn't resolve
   // CSS `var()`. Read the runtime accent at mount so the user-drawn polygon
@@ -123,9 +160,6 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     return v || "#F47738";
   }, []);
 
-  // Map theming (base tile theme + ward highlight) resolved per tenant from
-  // MDMS RAINMAKER-PGR.MapConfig; defaults to the light voyager basemap.
-  const { tileUrl, tileAttribution, wardHighlightColor: wardColor } = useMapConfig();
   const wardStyle = useMemo(() => wardStyleFor(wardColor, selectedWard, hoveredWard), [wardColor, selectedWard, hoveredWard]);
   const onEachWard = useCallback((feature, layer) => {
     const code = feature?.properties?.code;
@@ -136,60 +170,93 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     // the raw code rather than blank, and the label re-localizes on language
     // switch (i18n.language is in the dep list).
     const label = (code && trans(code)) || feature?.properties?.name || code;
-    if (label) layer.bindTooltip(label, { sticky: true, direction: "top", className: "ward-tooltip" });
+    // CCSD-1993: Leaflet bindTooltip renders HTML; label is tenant-controlled
+    // (boundary code / localization / GeoJSON name) — escape before binding.
+    if (label) {
+      const safeLabel = String(label).replace(/[&<>"']/g, (ch) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+      layer.bindTooltip(safeLabel, { sticky: true, direction: "top", className: "ward-tooltip" });
+    }
     layer.on({
       mouseover: () => { if (selectedWard !== code) setHoveredWard(code); },
       mouseout:  () => setHoveredWard((c) => (c === code ? null : c)),
     });
   }, [selectedWard, trans, i18n.language]);
 
+  // Waits for MapConfig: the seeded lat/lng below is latched once, so running
+  // this before MDMS resolves would pin the citizen to the fallback centre and
+  // silently discard the tenant's configured starting position.
   useEffect(() => {
-    if (!hasInitialized.current) {
-      if (formData?.[config.key]) {
-        hasInitialized.current = true;
-      } else {
-        const savedLocation = Digit.SessionStorage.get("PGR_MAP_LOCATION");
-        if (savedLocation) {
-          hasInitialized.current = true;
-          const { lat, lng, address: savedAddress } = savedLocation;
-          setCoords({ lat, lng });
-          setMarkerPos([lat, lng]);
-          setAddress(savedAddress);
-          setSearchQuery(savedAddress);
-          onSelect(config.key, savedLocation);
-        } else {
-          hasInitialized.current = true;
-          // Seed lat/lng immediately so a quick Next click still captures something.
-          onSelect(config.key, { lat: DEFAULT_CENTER.lat, lng: DEFAULT_CENTER.lng });
-          fetchAddress(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
-        }
-      }
-    }
-  }, []);
-
-  useEffect(() => {
+    if (!isReady || hasInitialized.current) return;
     if (formData?.[config.key]) {
-      const { lat, lng, address: savedAddress } = formData[config.key];
-      if (lat && lng) {
+      hasInitialized.current = true;
+    } else {
+      const savedLocation = Digit.SessionStorage.get("PGR_MAP_LOCATION");
+      if (savedLocation) {
+        hasInitialized.current = true;
+        const { lat, lng, address: savedAddress } = savedLocation;
         setCoords({ lat, lng });
         setMarkerPos([lat, lng]);
-        // Restore saved address if available
-        if (savedAddress) {
-          setAddress(savedAddress);
-          setSearchQuery(savedAddress);
-        } else if (!address) {
-          fetchAddress(lat, lng);
-        }
+        setAddress(savedAddress);
+        setSearchQuery(savedAddress);
+        onSelect(config.key, savedLocation);
+      } else {
+        hasInitialized.current = true;
+        setCoords(DEFAULT_CENTER);
+        setMarkerPos([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
+        mapRef.current?.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], DEFAULT_ZOOM);
+        // Seed lat/lng immediately so a quick Next click still captures something.
+        onSelect(config.key, { lat: DEFAULT_CENTER.lat, lng: DEFAULT_CENTER.lng });
+        fetchAddress(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng);
       }
     }
-  }, [formData, config.key]);
+  }, [isReady, DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
+
+  // Sync FROM formData (wizard restore / re-entering the map step).
+  //
+  // Depend on the field's VALUES, not the formData object. The wizard
+  // rebuilds formData on every patch — including the patch our own
+  // fetchAddress issues through onSelect — so keying this effect on object
+  // identity made it re-run after every fetch. When the reverse geocode came
+  // back without an address (Nominatim error, rate limit, or a response with
+  // no display_name), the re-run called fetchAddress again, whose onSelect
+  // patched formData again: an infinite request loop that hammered Nominatim
+  // (guaranteeing further rate-limit failures that sustained it) and kept the
+  // map churning. Reported as CCRS#1380 symptom 4.
+  const savedPoint = formData?.[config.key];
+  const savedLat = savedPoint?.lat;
+  const savedLng = savedPoint?.lng;
+  const savedAddress = savedPoint?.address;
+  useEffect(() => {
+    if (!savedLat || !savedLng) return;
+    setCoords({ lat: savedLat, lng: savedLng });
+    setMarkerPos([savedLat, savedLng]);
+    // Restore saved address if available
+    if (savedAddress) {
+      setAddress(savedAddress);
+      setSearchQuery(savedAddress);
+    } else if (!address && lastReverseAttempt.current !== `${savedLat},${savedLng}`) {
+      // Only reverse-geocode coords that were never attempted (a genuine
+      // restore, e.g. Back into the map step with a pin but no address). A
+      // failed attempt must not re-trigger itself through the formData
+      // round-trip; user actions (pin drop, search, locate-me) always go
+      // through fetchAddress directly and are unaffected by this guard.
+      fetchAddress(savedLat, savedLng);
+    }
+    // `address` is deliberately not a dep: it only gates the one-shot restore
+    // fetch, and re-running on address changes would undo manual edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedLat, savedLng, savedAddress]);
 
   const fetchAddress = async (lat, lng) => {
+    // Record the attempt BEFORE the request so even a throwing fetch marks
+    // these coords as tried — the sync effect keys off this to avoid looping.
+    lastReverseAttempt.current = `${lat},${lng}`;
     const ward = resolveWard(lat, lng, tenantBoundaries);
     setSelectedWard(ward?.code || null);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&countrycodes=ke`,
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1${nominatimCountry}`,
         { headers: { "Accept-Language": nominatimLang } }
       );
       const data = await response.json();
@@ -245,7 +312,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     }
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&countrycodes=ke&viewbox=36.60,-1.55,37.10,-1.15&bounded=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1${nominatimSearchScope}`,
         { headers: { "Accept-Language": nominatimLang } }
       );
       const data = await response.json();
@@ -289,7 +356,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setIsSearching(true);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&countrycodes=ke&viewbox=36.60,-1.55,37.10,-1.15&bounded=1`,
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1${nominatimSearchScope}`,
         { headers: { "Accept-Language": nominatimLang } }
       );
       const data = await response.json();
@@ -356,14 +423,6 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setShowToast(null);
   };
 
-  // Auto-dismiss the toast after a few seconds so location/geolocation messages
-  // (e.g. denied permission) don't linger indefinitely. See issue #883.
-  useEffect(() => {
-    if (!showToast) return;
-    const timer = setTimeout(() => setShowToast(null), 5000);
-    return () => clearTimeout(timer);
-  }, [showToast]);
-
   const clearSearch = () => {
     setSearchQuery("");
     setAddress("");
@@ -372,7 +431,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
     setPolygonPoints([]);
     setCoords(DEFAULT_CENTER);
     if (mapRef.current) {
-      mapRef.current.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], 5);
+      mapRef.current.setView([DEFAULT_CENTER.lat, DEFAULT_CENTER.lng], OVERVIEW_ZOOM);
     }
     // Clear location from formData
     onSelect(config.key, null);
@@ -404,7 +463,9 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
         }}>
           <MapContainer
             center={[coords.lat, coords.lng]}
-            zoom={markerPos ? DEFAULT_ZOOM : 5}
+            zoom={markerPos ? DEFAULT_ZOOM : OVERVIEW_ZOOM}
+            minZoom={minZoom}
+            maxZoom={maxZoom}
             style={{ height: "100%", width: "100%" }}
             zoomControl={false}
           >
@@ -708,6 +769,7 @@ const GeoLocations = ({ t, config, onSelect, formData }) => {
           label={showToast.label}
           onClose={closeToast}
           isDleteBtn={true}
+          autoDismiss={true}
         />
       )}
     </div>

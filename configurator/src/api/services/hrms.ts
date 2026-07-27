@@ -19,17 +19,20 @@ export const hrmsService = {
       offset?: number;
     }
   ): Promise<Employee[]> {
-    const response = await apiClient.post(ENDPOINTS.HRMS_EMPLOYEES_SEARCH, {
+    // egov-hrms binds EmployeeSearchCriteria via Spring @ModelAttribute — i.e. from
+    // the QUERY STRING. Criteria sent in the JSON body is ignored, leaving tenantId
+    // null server-side and causing a NullPointerException ("tenantId" is null). So
+    // the criteria must go in the URL; only RequestInfo belongs in the body.
+    const params = new URLSearchParams({ tenantId });
+    if (options?.codes?.length) params.append('codes', options.codes.join(','));
+    if (options?.departments?.length) params.append('departments', options.departments.join(','));
+    if (options?.designations?.length) params.append('designations', options.designations.join(','));
+    if (options?.roles?.length) params.append('roles', options.roles.join(','));
+    params.append('limit', String(options?.limit || 100));
+    params.append('offset', String(options?.offset || 0));
+
+    const response = await apiClient.post(`${ENDPOINTS.HRMS_EMPLOYEES_SEARCH}?${params.toString()}`, {
       RequestInfo: apiClient.buildRequestInfo({ action: '_search' }),
-      criteria: {
-        tenantId,
-        codes: options?.codes,
-        departments: options?.departments,
-        designations: options?.designations,
-        roles: options?.roles,
-        limit: options?.limit || 100,
-        offset: options?.offset || 0,
-      },
     });
 
     return (response.Employees || []) as Employee[];

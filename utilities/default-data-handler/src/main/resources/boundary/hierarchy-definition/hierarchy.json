@@ -14,13 +14,8 @@
         "active": true
       },
       {
-        "boundaryType": "Block",
+        "boundaryType": "Ward",
         "parentBoundaryType": "Zone",
-        "active": true
-      },
-      {
-        "boundaryType": "Locality",
-        "parentBoundaryType": "Block",
         "active": true
       }
     ]

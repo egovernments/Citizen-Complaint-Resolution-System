@@ -148,12 +148,23 @@ Skips gracefully on deployments missing a fleshed-out tenant — better than fai
     const auth = loadAuth();
     const allTenants = await mdmsSearch(auth, TENANT_CODE, SCHEMA, { limit: 200 });
     const fleshedOut = allTenants.find((r) => {
+      // mdmsSearch returns raw MDMS rows and does NOT filter isActive, but the
+      // configurator's dataProvider filters isActive on getOne. Picking a
+      // deactivated row therefore drives the Show page at a record the UI
+      // refuses to load: it renders nothing and the assertions below fail with
+      // a bare "element not found" that looks like a UI regression.
+      // This bit: test 6 API-creates `<tenant>.pwt<hash>` tenants and the
+      // afterAll soft-deletes them (isActive=false) — those leftovers persist in
+      // MDMS across runs, sort ahead of the real seed, and carry a fleshed-out
+      // city block, so this picker kept selecting a dead PW tenant.
+      if (r.isActive === false) return false;
+      if (/\.pwt/i.test(r.uniqueIdentifier)) return false;
       const city = (r.data as Record<string, unknown>).city as
         | Record<string, unknown>
         | undefined;
       return typeof city?.districtName === 'string' && city.districtName !== '';
     });
-    test.skip(!fleshedOut, 'No tenant with city.districtName present');
+    test.skip(!fleshedOut, 'No active (non-PW) tenant with city.districtName present');
 
     const code = fleshedOut!.uniqueIdentifier;
     await page.goto(`${LIST_PATH}/${encodeURIComponent(code)}/show`);

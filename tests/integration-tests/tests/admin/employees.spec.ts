@@ -53,6 +53,17 @@ const LIST_PATH = '/configurator/manage/employees';
 let SEED_BOUNDARY = process.env.SEED_BOUNDARY || 'NAIROBI_CITY';
 let SEED_DEPT = process.env.SEED_DEPT || 'DEPT_7';
 let SEED_DESIG = process.env.SEED_DESIG || 'DESIG_58';
+// SEED_BOUNDARY's own hierarchy + boundaryType. These used to be hardcoded
+// 'ADMIN' / 'County' alongside a live-derived SEED_BOUNDARY code — silently
+// wrong the moment the boundary itself was discovered on a non-Kenya
+// hierarchy (mz.maputo's ADMIN-hierarchy jurisdictions carry boundaryType
+// 'City', and its PGR-facing hierarchy is 'MAPUTO_ADMIN' with boundaryType
+// 'Município'/'Distrito Municipal'/'Bairro'/'Quarteirão' — never 'County').
+// A mismatched hierarchy/boundaryType paired with a real SEED_BOUNDARY code
+// is a jurisdiction HRMS would be right to reject, or worse, silently store
+// as an unscoped/unusable row.
+let SEED_HIERARCHY = process.env.SEED_HIERARCHY || 'ADMIN';
+let SEED_BOUNDARY_TYPE = process.env.SEED_BOUNDARY_TYPE || 'County';
 
 /**
  * Derive boundary / department / designation FKs from a real employee on the
@@ -67,10 +78,14 @@ async function resolveSeedFks(): Promise<void> {
       const jur = (e.jurisdictions as Array<Record<string, unknown>> | undefined)?.[0];
       const asg = (e.assignments as Array<Record<string, unknown>> | undefined)?.[0];
       const boundary = jur?.boundary as string | undefined;
+      const hierarchy = jur?.hierarchy as string | undefined;
+      const boundaryType = jur?.boundaryType as string | undefined;
       const dept = asg?.department as string | undefined;
       const desig = asg?.designation as string | undefined;
-      if (boundary && dept && desig) {
+      if (boundary && hierarchy && boundaryType && dept && desig) {
         if (!process.env.SEED_BOUNDARY) SEED_BOUNDARY = boundary;
+        if (!process.env.SEED_HIERARCHY) SEED_HIERARCHY = hierarchy;
+        if (!process.env.SEED_BOUNDARY_TYPE) SEED_BOUNDARY_TYPE = boundaryType;
         if (!process.env.SEED_DEPT) SEED_DEPT = dept;
         if (!process.env.SEED_DESIG) SEED_DESIG = desig;
         return;
@@ -485,7 +500,7 @@ Hermetic: doesn't rely on tenant content — seeds and verifies its own employee
           password: 'eGov@123', tenantId: TENANT_CODE,
           roles: [{ code: 'EMPLOYEE', name: 'Employee', tenantId: TENANT_CODE }],
         },
-        jurisdictions: [{ boundary: SEED_BOUNDARY, boundaryType: 'County', hierarchy: 'ADMIN', hierarchyType: 'ADMIN', tenantId: TENANT_CODE, isActive: true }],
+        jurisdictions: [{ boundary: SEED_BOUNDARY, boundaryType: SEED_BOUNDARY_TYPE, hierarchy: SEED_HIERARCHY, hierarchyType: SEED_HIERARCHY, tenantId: TENANT_CODE, isActive: true }],
         assignments: [{ department: SEED_DEPT, designation: SEED_DESIG, fromDate: Date.now() - 24 * 3600_000, isCurrentAssignment: true }],
       }],
     });
@@ -594,8 +609,8 @@ The MDMS reason source is asserted indirectly — if the dropdown has no options
           roles: [{ code: 'EMPLOYEE', name: 'Employee', tenantId: TENANT_CODE }],
         },
         jurisdictions: [{
-          boundary: SEED_BOUNDARY, boundaryType: 'County',
-          hierarchy: 'ADMIN', hierarchyType: 'ADMIN',
+          boundary: SEED_BOUNDARY, boundaryType: SEED_BOUNDARY_TYPE,
+          hierarchy: SEED_HIERARCHY, hierarchyType: SEED_HIERARCHY,
           tenantId: TENANT_CODE, isActive: true,
         }],
         assignments: [{
@@ -678,7 +693,7 @@ Affirms the safety contract — admins must explicitly opt-in to password rotati
           password: 'eGov@123', tenantId: TENANT_CODE,
           roles: [{ code: 'EMPLOYEE', name: 'Employee', tenantId: TENANT_CODE }],
         },
-        jurisdictions: [{ boundary:SEED_BOUNDARY, boundaryType:'County', hierarchy:'ADMIN', hierarchyType:'ADMIN', tenantId: TENANT_CODE, isActive:true }],
+        jurisdictions: [{ boundary:SEED_BOUNDARY, boundaryType:SEED_BOUNDARY_TYPE, hierarchy:SEED_HIERARCHY, hierarchyType:SEED_HIERARCHY, tenantId: TENANT_CODE, isActive:true }],
         assignments: [{ department:SEED_DEPT, designation:SEED_DESIG, fromDate: Date.now()-24*3600_000, isCurrentAssignment:true }],
       }],
     });

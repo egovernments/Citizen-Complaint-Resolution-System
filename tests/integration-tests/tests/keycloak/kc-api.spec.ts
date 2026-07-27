@@ -60,7 +60,7 @@ test.describe('Keycloak SSO — API contract', () => {
     }
   });
 
-  test('OIDC discovery: issuer includes the /auth prefix (frontendUrl regression)', async ({ request }) => {
+  test('OIDC discovery: issuer includes the /auth prefix (frontendUrl regression)', { tag: ['@persona:system'] }, async ({ request }) => {
     const resp = await request.get(WELL_KNOWN);
     expect(resp.ok(), `well-known unreachable at ${WELL_KNOWN}`).toBeTruthy();
     const cfg = await resp.json();
@@ -72,7 +72,7 @@ test.describe('Keycloak SSO — API contract', () => {
     expect(cfg.issuer).toBe(`${BASE_URL}/auth/realms/${KC_REALM}`);
   });
 
-  test('OIDC discovery: every endpoint URL lives under the issuer origin + /auth prefix', async ({ request }) => {
+  test('OIDC discovery: every endpoint URL lives under the issuer origin + /auth prefix', { tag: ['@persona:system'] }, async ({ request }) => {
     const cfg = await (await request.get(WELL_KNOWN)).json();
     const prefix = `${BASE_URL}/auth/realms/${KC_REALM}`;
     // The SPA computes its KC URLs from KC_BASE + REALM (not from the
@@ -84,7 +84,7 @@ test.describe('Keycloak SSO — API contract', () => {
     expect(cfg.end_session_endpoint).toBe(`${prefix}/protocol/openid-connect/logout`);
   });
 
-  test('Overlay password grant mints a KC JWT for ADMIN (KC→DIGIT fallback on first login, KC direct after)', async ({ request }) => {
+  test('Overlay password grant mints a KC JWT for ADMIN (KC→DIGIT fallback on first login, KC direct after)', { tag: ['@persona:system'] }, async ({ request }) => {
     const body = new URLSearchParams({
       grant_type: 'password',
       client_id: KC_CLIENT_ID,
@@ -118,7 +118,7 @@ test.describe('Keycloak SSO — API contract', () => {
     expect(claims.realm_access?.roles, 'realm_access.roles').toEqual(expect.arrayContaining(['EMPLOYEE']));
   });
 
-  test('Overlay-issued JWT round-trips through the proxy: /mdms-v2 _search returns a DIGIT response (not 401)', async ({ request }) => {
+  test('Overlay-issued JWT round-trips through the proxy: /mdms-v2 _search returns a DIGIT response (not 401)', { tag: ['@persona:system'] }, async ({ request }) => {
     // Mint a token via the overlay.
     const tokenResp = await request.post(OVERLAY_TOKEN, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -168,7 +168,7 @@ test.describe('Keycloak SSO — API contract', () => {
     ).not.toBe(401);
   });
 
-  test('Authorize URL with PKCE + kc_idp_hint=google does not 400 at KC (realm allows the SPA client to redirect to Google)', async ({ request }) => {
+  test('Authorize URL with PKCE + kc_idp_hint=google does not 400 at KC (realm allows the SPA client to redirect to Google)', { tag: ['@persona:system'] }, async ({ request }) => {
     // Mimic exactly what the SPA's buildAuthorizeUrl() emits: response_type=code,
     // scope=openid, PKCE S256, kc_idp_hint=google, redirect_uri in the
     // /citizen/* allowlist. KC would 400 if any of these were missing
@@ -204,7 +204,7 @@ test.describe('Keycloak SSO — API contract', () => {
     ).toBeTruthy();
   });
 
-  test('Overlay healthz: status=ok and redis connected', async ({ request }) => {
+  test('Overlay healthz: status=ok and redis connected', { tag: ['@persona:system'] }, async ({ request }) => {
     const resp = await request.get(`${TOKEN_EXCHANGE_BASE}/healthz`);
     expect(resp.ok()).toBeTruthy();
     const body = await resp.json();

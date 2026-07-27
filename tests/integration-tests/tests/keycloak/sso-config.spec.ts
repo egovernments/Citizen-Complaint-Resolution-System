@@ -38,7 +38,7 @@ test.describe('Google SSO Configuration', () => {
   });
 
   test('KC issuer uses the deployment domain (not an old hostname)', {
-    tag: ['@local-only', '@area:keycloak', '@layer:api'],
+    tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
   }, async () => {
     const deploymentDomain = new URL(BASE_URL).origin;
 
@@ -60,7 +60,7 @@ test.describe('Google SSO Configuration', () => {
   });
 
   test('KC client has deployment domain in redirect URIs', {
-    tag: ['@local-only', '@area:keycloak', '@layer:api'],
+    tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
   }, async () => {
     const deploymentDomain = new URL(BASE_URL).origin;
     const adminToken = await getAdminToken();
@@ -88,7 +88,7 @@ test.describe('Google SSO Configuration', () => {
   });
 
   test('KC client has deployment domain in web origins (CORS)', {
-    tag: ['@local-only', '@area:keycloak', '@layer:api'],
+    tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
   }, async () => {
     const deploymentDomain = new URL(BASE_URL).origin;
     const adminToken = await getAdminToken();
@@ -117,7 +117,7 @@ test.describe('Google SSO Configuration', () => {
   });
 
   test('Google IdP is enabled and configured', {
-    tag: ['@local-only', '@area:keycloak', '@layer:api'],
+    tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
   }, async () => {
     const adminToken = await getAdminToken();
 
@@ -141,7 +141,7 @@ test.describe('Google SSO Configuration', () => {
   });
 
   test('Google OAuth authorize endpoint accepts the redirect', {
-    tag: ['@local-only', '@area:keycloak', '@layer:api'],
+    tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
   }, async ({ request }) => {
     const deploymentDomain = new URL(BASE_URL).origin;
 
@@ -188,7 +188,7 @@ test.describe('Google SSO Configuration', () => {
   });
 
   test('Google broker login redirects to accounts.google.com', {
-    tag: ['@local-only', '@area:keycloak', '@layer:api'],
+    tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
   }, async ({ request }) => {
     const deploymentDomain = new URL(BASE_URL).origin;
 
@@ -234,7 +234,7 @@ test.describe('Google SSO Configuration', () => {
   });
 
   test('Google client secret is valid (KC can exchange auth code)', {
-    tag: ['@local-only', '@area:keycloak', '@layer:api'],
+    tag: ['@local-only', '@area:keycloak', '@layer:api', '@persona:system'],
   }, async () => {
     const adminToken = await getAdminToken();
 

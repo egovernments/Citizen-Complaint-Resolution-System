@@ -5,7 +5,11 @@ const http = require("http");
 const { spawn, spawnSync } = require("child_process");
 
 const PORT = parseInt(process.env.PORT || "18080", 10);
+// Local Compose Kong defaults to 18000. For an SSH tunnel to a remote host
+// (e.g. Bomet), override: PROXY_PORT=18280 PROXY_HOST=bometfeedbackhub.digit.org
+//   ssh -N -L 18280:127.0.0.1:18000 <host>
 const PROXY_PORT = parseInt(process.env.PROXY_PORT || "18000", 10);
+const PROXY_HOST = process.env.PROXY_HOST || undefined;
 const PROXY_KC_PORT = parseInt(process.env.PROXY_KC_PORT || "18200", 10);
 const GLOBAL_CONFIGS = process.env.GLOBAL_CONFIGS || ""; // path to server-specific globalConfigs.js
 const PUBLIC_PATH = "/digit-ui/";
@@ -249,6 +253,11 @@ async function start() {
       "process.env.REACT_APP_STATE_LEVEL_TENANT_ID": '""',
       "process.env.REACT_APP_MAP_TENANT": JSON.stringify(process.env.REACT_APP_MAP_TENANT || ""),
       "process.env.REACT_APP_ANALYTICS_BASE": JSON.stringify(process.env.REACT_APP_ANALYTICS_BASE || "/pgr-services/v2/analytics"),
+      // Dashboard render-lag instrumentation (#1110): "" defers to the runtime
+      // DASHBOARD_METRICS_ENABLED globalConfigs gate; "true"/"false" force it.
+      "process.env.REACT_APP_DASHBOARD_METRICS": JSON.stringify(process.env.REACT_APP_DASHBOARD_METRICS || ""),
+      // Same-origin base of the Kong OTLP ingest routes (/otel/v1/metrics|logs).
+      "process.env.REACT_APP_OTEL_BASE": JSON.stringify(process.env.REACT_APP_OTEL_BASE || "/otel"),
       global: "window",
     },
     plugins: [cdnGlobalsPlugin, svgPlugin, liveReloadPlugin],
@@ -360,7 +369,10 @@ async function start() {
           port: target,
           path: req.url,
           method: req.method,
-          headers: { ...req.headers, host: req.headers.host },
+          headers: {
+            ...req.headers,
+            host: PROXY_HOST || req.headers.host,
+          },
         },
         (proxyRes) => {
           const ms = Date.now() - apiStart;
@@ -434,7 +446,7 @@ async function start() {
 
   server.listen(PORT, HOST, () => {
     log(`▲ Ready — http://${HOST}:${PORT}/digit-ui/`);
-    log(`  API proxy → 127.0.0.1:${PROXY_PORT} (Kong) / 127.0.0.1:${PROXY_KC_PORT} (Keycloak)`);
+    log(`  API proxy → 127.0.0.1:${PROXY_PORT}${PROXY_HOST ? ` (Host: ${PROXY_HOST})` : " (Kong)"} / 127.0.0.1:${PROXY_KC_PORT} (Keycloak)`);
     log(`  Live reload enabled — editing any source file triggers rebuild + refresh`);
   });
 }

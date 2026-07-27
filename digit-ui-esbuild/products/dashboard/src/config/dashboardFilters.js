@@ -60,6 +60,10 @@ export function reconcileFiltersWithOptions(filters, filterOptions) {
   const changed =
     next.geography !== safe.geography ||
     next.complaintType !== safe.complaintType ||
+    // The tree filter's companions can be repaired (path backfilled, leaf
+    // re-derived) even when the code survives — must propagate too.
+    next.complaintTypePath !== safe.complaintTypePath ||
+    next.complaintTypeLeaf !== safe.complaintTypeLeaf ||
     next.dateFrom !== safe.dateFrom ||
     next.dateTo !== safe.dateTo;
 

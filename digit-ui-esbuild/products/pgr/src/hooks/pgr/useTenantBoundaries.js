@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
+import useMapConfig from "./useMapConfig";
+import { sameLevelName } from "../../utils/boundaryLevels";
 
-// No hardcoded boundary data. When a tenant has no usable geometry (or
-// MAP_TENANT is unset), the map shows NO ward overlay rather than inventing
-// another tenant's wards — drawing a stale set would mis-resolve pins to
-// boundaries nowhere near the complaint. Boundaries come only from the live
-// boundary-service for the configured MAP_TENANT.
+// No hardcoded boundary data. When a tenant has no usable geometry (or no
+// boundary tenant is configured), the map shows NO ward overlay rather than
+// inventing another tenant's wards — drawing a stale set would mis-resolve pins
+// to boundaries nowhere near the complaint. Boundaries come only from the live
+// boundary-service for the configured boundary tenant.
 const EMPTY_BOUNDARIES = { type: "FeatureCollection", features: [] };
 
 // boundary-service historically returns a unit-square placeholder polygon
@@ -60,25 +62,33 @@ const GEOMETRY_CHUNK_SIZE = 40;
 //      code/boundaryType/children — no name, no geometry.
 //   2. boundary/_search (query params: tenantId, codes csv, limit) per
 //      chunk of LEAF codes → geometry, joined back by code.
-// Falls back to the bundled static Nairobi wards when MAP_TENANT is
-// absent, any fetch fails, or every leaf is geometry-less / placeholder.
+// Yields an empty FeatureCollection — never another tenant's wards — when no
+// boundary tenant is configured, any fetch fails, or every leaf is
+// geometry-less / placeholder.
 //
-// Returns null while the fetch is in flight — consumers already treat
-// null as "use the static fallback for point-in-polygon" and gate the
-// <GeoJSON> layer on features.length, so the swap-in re-render keying
-// stays exactly as before.
+// Returns null while the fetch is in flight; consumers gate the <GeoJSON>
+// layer on features.length and skip pin resolution until it arrives.
 const useTenantBoundaries = () => {
   const [tenantBoundaries, setTenantBoundaries] = useState(null);
+  // Which tenant's tree to draw is resolved from MDMS MapConfig, falling back to
+  // the deploy-time globalConfigs MAP_TENANT key.
+  const { isReady, boundaryTenantId: MAP_TENANT } = useMapConfig();
+  // The hierarchy is a boundary construct rather than a map one, so it is not
+  // part of MapConfig; it stays on globalConfigs until a default-boundary-
+  // hierarchy master exists to own it.
+  const HIERARCHY_TYPE = window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
 
   useEffect(() => {
     let cancelled = false;
-    const MAP_TENANT = window?.globalConfigs?.getConfig?.("MAP_TENANT") || process.env.REACT_APP_MAP_TENANT;
+    // Hold off while MapConfig is still resolving: acting on the not-yet-loaded
+    // value would fetch the fallback tenant's wards (or none), then need a second
+    // pass to correct itself.
+    if (!isReady) return undefined;
     if (!MAP_TENANT) {
-      console.log("No MAP_TENANT configured — no ward overlay.");
+      console.log("No map boundary tenant configured — no ward overlay.");
       setTenantBoundaries(EMPTY_BOUNDARIES);
       return undefined;
     }
-    const HIERARCHY_TYPE = window?.globalConfigs?.getConfig?.("HIERARCHY_TYPE") || "ADMIN";
 
     const fetchBoundaries = async () => {
       try {
@@ -108,11 +118,40 @@ const useTenantBoundaries = () => {
           roots.forEach((root) => walk(root, undefined, 0));
         });
 
-        // Leaf level = the deepest depth present in the tree (Ward in a
-        // County > Sub-County > Ward hierarchy). Only leaves carry the
-        // polygons the map needs.
-        const maxDepth = nodes.reduce((max, n) => (n.depth > max ? n.depth : max), -1);
-        const leaves = nodes.filter((n) => n.depth === maxDepth);
+        // Which level the pin resolves against. PGR_BOUNDARY_LOWEST_LEVEL is the
+        // level the boundary cascade files at, so the map has to resolve at that
+        // same level or the two disagree: the map hands back a node the cascade
+        // is not looking for and auto-fill silently no-ops.
+        //
+        // It also decides coverage. Deeper is not better — a level only the
+        // populated parts of a tenant carry (Mozambique seeds Município for 66
+        // of 158 Distritos) leaves every pin outside them unresolvable, while
+        // the level above tiles the whole territory.
+        //
+        // Falls back to the deepest depth in the tree when nothing is configured
+        // or the configured name is not a level of THIS tree, which is the
+        // pre-existing behaviour.
+        const configuredLevel = window?.globalConfigs?.getConfig?.("PGR_BOUNDARY_LOWEST_LEVEL");
+        const atConfiguredLevel = configuredLevel
+          ? nodes.filter((n) => sameLevelName(n.boundaryType, configuredLevel))
+          : [];
+
+        let leaves;
+        if (atConfiguredLevel.length > 0) {
+          leaves = atConfiguredLevel;
+        } else {
+          if (configuredLevel) {
+            // Silent fallbacks here cost hours to diagnose — the map looks fine
+            // and merely resolves nothing. Say which levels the tree does have.
+            console.warn(
+              `PGR_BOUNDARY_LOWEST_LEVEL "${configuredLevel}" is not a level of the ${MAP_TENANT} boundary tree ` +
+                `(levels present: ${[...new Set(nodes.map((n) => n.boundaryType))].join(", ") || "none"}). ` +
+                "Falling back to the deepest level."
+            );
+          }
+          const maxDepth = nodes.reduce((max, n) => (n.depth > max ? n.depth : max), -1);
+          leaves = nodes.filter((n) => n.depth === maxDepth);
+        }
 
         // Step 2: geometry per leaf code, chunked.
         const geometryByCode = {};
@@ -157,7 +196,7 @@ const useTenantBoundaries = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isReady, MAP_TENANT, HIERARCHY_TYPE]);
 
   return tenantBoundaries;
 };

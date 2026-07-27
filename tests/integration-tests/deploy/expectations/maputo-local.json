@@ -1,0 +1,27 @@
+{
+  "name": "maputo-local",
+  "_comment": [
+    "What this deployment SHOULD have. The profile discovers what it DOES have; this file",
+    "decides whether a gap is a bug (required -> FAIL) or legitimately N/A (absent -> SKIP).",
+    "Without it, discovery would let an unseeded deployment go green by skipping everything.",
+    "Measured against the local mz + mz.maputo stack on 2026-07-16."
+  ],
+  "expectations": {
+    "workflow.pgr.actions.ESCALATE": "required",
+    "mdms.rejectionReasons": "required",
+    "pgr.citizenCreate": "required",
+    "ui.citizen.attachmentDetailRender": "required",
+    "personas.gro-with-department": "required",
+    "personas.ward-scoped-csr": "absent",
+    "locales.multi": "absent",
+    "tenant.citySubTenant": "required"
+  },
+  "_rationale": {
+    "workflow.pgr.actions.ESCALATE": "REQUIRED, not absent — corrected 2026-07-16. ESCALATE is intended product config (added by PR #635 / commit ce302053: PENDINGATLME -> ESCALATE -> PENDINGATSUPERVISOR with role PGR_LME), and bomet's `ke` has it. mz.maputo lacked it only because tenant_bootstrap copies the PGR businessService from the `pg` demo tenant, which predates that PR — a real seed gap, not an N/A. api/pgr-escalation test 2 self-heals it (it patches the wirings into the live workflow, which is its stated purpose); do NOT gate that test on this capability, since it is the thing that creates it. Declaring this 'absent' would bless the gap and permanently skip #521 here.",
+    "mdms.rejectionReasons": "Deliberate red. Neither the schema nor any data exists on any tenant of either deployment, while the GRO reject modal reads this master. Seeded locally on 2026-07-16 (4 rows at mz), so this should now pass — if it goes red again the tenant was wiped (see the fast-path dump trap).",
+    "ui.citizen.attachmentDetailRender": "Required so a real regression stays visibly red rather than being hidden behind the old ATTACHMENT_DETAIL_UNSUPPORTED env hatch.",
+    "personas.ward-scoped-csr": "No ward-scoped CSR persona is onboarded here; the bomet-shaped BOMET_CSR_* defaults do not exist.",
+    "locales.multi": "Only en_IN is meaningfully seeded (16899 rows). pt_BR/fr_FR/hi_IN exist but are 205-row stubs, not real translations.",
+    "tenant.citySubTenant": "Two-level: root mz + city mz.maputo. The configurator tenant-search test is meaningful here."
+  }
+}

@@ -2,11 +2,19 @@
  * Citizen rate-complaint UI — Story 6.1.
  *
  * State-gated flow. Rating an `_update` requires the complaint to be in
- * `RESOLVED`. To avoid depending on naipepea inventory, the spec:
- *   1. API-registers a fresh test citizen.
- *   2. API-creates a complaint as that citizen → PENDINGFORASSIGNMENT.
- *   3. API-assigns + API-resolves it as ADMIN → RESOLVED.
+ * `RESOLVED`. Uses the seed-plan helpers (tests/utils/seed.ts) rather than
+ * driving ASSIGN/RESOLVE with an ADMIN token:
+ *   1. seedComplaintAsCitizen() — always a CITIZEN token (APPLY is
+ *      [CITIZEN, CSR] on every deployment) → PENDINGFORASSIGNMENT.
+ *   2. driveToPendingAtLme() — the seed plan's actor (GRO + department) ASSIGNs
+ *      to the plan's assignee → PENDINGATLME.
+ *   3. driveToResolved() — a persona holding PGR_LME RESOLVEs → RESOLVED.
  *   4. Citizen-OTP logs in and walks the rate UI to assert the field set.
+ *
+ * ADMIN can't be assumed to hold GRO/PGR_LME or an HRMS department on every
+ * deployment — on bomet ADMIN has no HRMS record at all (DEPARTMENT_NOT_FOUND)
+ * and no CITIZEN role (INVALID ROLE on create). The seed plan resolves a real
+ * (serviceCode, actor, assignee) triple instead (see personas.ts).
  *
  * Asserts the page renders for any state (UI doesn't gate by state — the
  * server rejects invalid actions on submit), the heading + 5-star row +
@@ -24,112 +32,8 @@ import { test, expect } from '@playwright/test';
 test.use({ trace: 'off', video: 'off' });
 
 import { citizenOtpLogin } from '../utils/citizen-login';
-import { getDigitToken } from '../utils/auth';
-import { pgrCreate, resolveServiceCode, resolveLocalityCode } from '../utils/launch-fixes/api';
-import {
-  ADMIN_PASS,
-  ADMIN_USER,
-  BASE_URL,
-  DEFAULT_PASSWORD,
-  FIXED_OTP,
-  LOCALITY_CODE,
-  ROOT_TENANT,
-  SERVICE_CODE,
-  TENANT,
-  generateCitizenPhone,
-} from '../utils/env';
-
-const CITIZEN_PHONE = generateCitizenPhone();
-const CITIZEN_NAME = `PW Rate ${Date.now()}`;
-
-interface CitizenAuth {
-  token: string;
-  userInfo: Record<string, unknown>;
-}
-
-async function registerCitizenAPI(phone: string): Promise<CitizenAuth> {
-  await fetch(`${BASE_URL}/user-otp/v1/_send`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      otp: { mobileNumber: phone, tenantId: ROOT_TENANT, type: 'login', userType: 'CITIZEN' },
-    }),
-  });
-
-  const oauth = async () =>
-    fetch(`${BASE_URL}/user/oauth/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: 'Basic ZWdvdi11c2VyLWNsaWVudDo=',
-      },
-      body: new URLSearchParams({
-        grant_type: 'password',
-        username: phone,
-        password: FIXED_OTP,
-        tenantId: ROOT_TENANT,
-        scope: 'read',
-        userType: 'CITIZEN',
-      }).toString(),
-    });
-
-  let resp = await oauth();
-  if (!resp.ok) {
-    await fetch(`${BASE_URL}/user/citizen/_create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        RequestInfo: { apiId: 'Rainmaker' },
-        user: {
-          name: CITIZEN_NAME,
-          userName: phone,
-          mobileNumber: phone,
-          password: DEFAULT_PASSWORD,
-          tenantId: ROOT_TENANT,
-          type: 'CITIZEN',
-          roles: [{ code: 'CITIZEN', name: 'Citizen', tenantId: ROOT_TENANT }],
-          otpReference: FIXED_OTP,
-        },
-      }),
-    });
-    resp = await oauth();
-  }
-
-  const data = (await resp.json()) as { access_token: string; UserRequest: Record<string, unknown> };
-  return { token: data.access_token, userInfo: data.UserRequest };
-}
-
-async function fetchService(token: string, userInfo: Record<string, unknown>, srId: string) {
-  const r = await fetch(
-    `${BASE_URL}/pgr-services/v2/request/_search?tenantId=${TENANT}&serviceRequestId=${srId}`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ RequestInfo: { apiId: 'Rainmaker', authToken: token, userInfo } }),
-    },
-  );
-  const data = (await r.json()) as { ServiceWrappers: Array<{ service: unknown }> };
-  return data.ServiceWrappers[0].service;
-}
-
-async function workflowAction(
-  token: string,
-  userInfo: Record<string, unknown>,
-  service: unknown,
-  action: string,
-  comments: string,
-): Promise<void> {
-  const r = await fetch(`${BASE_URL}/pgr-services/v2/request/_update?tenantId=${TENANT}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      RequestInfo: { apiId: 'Rainmaker', authToken: token, userInfo },
-      service,
-      workflow: { action, comments },
-    }),
-  });
-  expect(r.ok, `workflow action ${action} should succeed`).toBe(true);
-}
+import { seedComplaintAsCitizen, driveToPendingAtLme, driveToResolved } from '../utils/seed';
+import { BASE_URL } from '../utils/env';
 
 test.describe('Citizen rate-complaint UI', () => {
   let serviceRequestId: string;
@@ -137,39 +41,12 @@ test.describe('Citizen rate-complaint UI', () => {
   test.beforeAll(async () => {
     test.setTimeout(120_000);
 
-    // Citizen registers + files complaint
-    const citizen = await registerCitizenAPI(CITIZEN_PHONE);
-    // Resolve a valid service code and locality code for this deployment
-    // (ke/Bomet uses different codes than the defaults which may only exist
-    // on Ethiopia or Nairobi).
-    const resolvedServiceCode = await resolveServiceCode(BASE_URL, citizen.token, TENANT, SERVICE_CODE);
-    const resolvedLocalityCode = await resolveLocalityCode(BASE_URL, citizen.token, TENANT, LOCALITY_CODE);
-    const created = await pgrCreate({
-      baseUrl: BASE_URL,
-      auth: citizen,
-      tenantId: TENANT,
-      serviceCode: resolvedServiceCode,
-      localityCode: resolvedLocalityCode,
-      description: 'PW rate UI test — auto-resolved by spec',
-      citizenName: CITIZEN_NAME,
-      citizenPhone: CITIZEN_PHONE,
-    });
-    serviceRequestId = created.serviceRequestId;
+    const created = await seedComplaintAsCitizen({ description: 'PW rate UI test — auto-resolved by spec' });
+    serviceRequestId = created.srid;
+    await driveToPendingAtLme(serviceRequestId);
+    await driveToResolved(serviceRequestId);
 
-    // Admin assigns + resolves
-    const admin = await getDigitToken({
-      tenant: ROOT_TENANT,
-      username: ADMIN_USER,
-      password: ADMIN_PASS,
-    });
-    const adminUserInfo = admin.UserRequest as Record<string, unknown>;
-
-    let svc = await fetchService(admin.access_token, adminUserInfo, serviceRequestId);
-    await workflowAction(admin.access_token, adminUserInfo, svc, 'ASSIGN', 'PW assign');
-    svc = await fetchService(admin.access_token, adminUserInfo, serviceRequestId);
-    await workflowAction(admin.access_token, adminUserInfo, svc, 'RESOLVE', 'PW resolve');
-
-    console.log(`Seeded ${serviceRequestId} → RESOLVED for ${CITIZEN_PHONE}`);
+    console.log(`Seeded ${serviceRequestId} → RESOLVED`);
   });
 
   test('rate page renders 5 stars + 4 feedback checkboxes + Comments textarea', {
@@ -178,19 +55,19 @@ test.describe('Citizen rate-complaint UI', () => {
       description: `Story 6.1 contract for /citizen/pgr/rate/{srid}: page renders the rating heading, the 5-star row, the four "What was good?" checkboxes (Services / Resolution Time / Quality of Work / Others), and the Comments textarea. Doesn't actually submit — would mutate the resolved complaint to CLOSEDAFTERRESOLUTION.
 
 Steps:
-1. setTimeout 120s; citizenOtpLogin.
-2. Navigate to /digit-ui/citizen/pgr/rate/{seeded SR id} (seeded by beforeAll → API-create + ADMIN ASSIGN + RESOLVE).
+1. setTimeout 120s; citizenOtpLogin (the suite-wide provisioned citizen).
+2. Navigate to /digit-ui/citizen/pgr/rate/{seeded SR id} (seeded by beforeAll → seedComplaintAsCitizen + driveToPendingAtLme + driveToResolved, the seed plan's real actor/assignee triple — see tests/utils/seed.ts).
 3. Wait 5s; assert body does NOT contain "Something went wrong".
 4. Assert body contains "How would you rate your experience with us?".
 5. Assert body contains "What was good ?" (note spaces around ?).
 6. For each label ['Services','Resolution Time','Quality of Work','Others'], assert body contains it.
 7. Assert the first textarea on the page is visible.
 
-beforeAll is API-only (register citizen, file complaint, assign, resolve) because the UI flow to RESOLVE requires admin role and the test needs a deterministic state to assert against. Teardown is implicit — the leftover RESOLVED complaint is harmless on naipepea.`,
+beforeAll is API-only (file complaint as the provisioned citizen, assign, resolve) because the UI flow to RESOLVE requires a PGR_LME persona and the test needs a deterministic state to assert against. Teardown is implicit — the leftover RESOLVED complaint is harmless.`,
     },
     tag: ['@area:pgr', '@kind:regression', '@layer:api', '@persona:citizen'] }, async ({ page }) => {
     test.setTimeout(120_000);
-    await citizenOtpLogin(page, CITIZEN_PHONE);
+    await citizenOtpLogin(page);
     await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/rate/${serviceRequestId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 30_000,

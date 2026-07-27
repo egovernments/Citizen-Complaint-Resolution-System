@@ -1,0 +1,30 @@
+{
+  "name": "default",
+  "_comment": [
+    "Conservative baseline for a deployment with no expectations file of its own.",
+    "Used when EXPECTATIONS_FILE is unset. Deliberately strict about the capabilities a PGR",
+    "deployment cannot function without, and permissive about ones that legitimately vary —",
+    "so an unknown deployment surfaces real gaps instead of quietly skipping them.",
+    "",
+    "To add a deployment: copy this file to deploy/expectations/<name>.json, run the suite",
+    "once, and turn each surprise into a deliberate 'required' or 'absent' with a rationale."
+  ],
+  "expectations": {
+    "workflow.pgr.actions.ESCALATE": "optional",
+    "mdms.rejectionReasons": "required",
+    "pgr.citizenCreate": "required",
+    "ui.citizen.attachmentDetailRender": "required",
+    "personas.gro-with-department": "required",
+    "personas.ward-scoped-csr": "optional",
+    "locales.multi": "optional",
+    "tenant.citySubTenant": "optional"
+  },
+  "_rationale": {
+    "workflow.pgr.actions.ESCALATE": "Optional: genuinely varies by workflow config (present on bomet's ke, absent on any pg-derived workflow).",
+    "mdms.rejectionReasons": "Required everywhere: the GRO reject modal reads this master, so its absence is always a seed gap, never a valid configuration.",
+    "pgr.citizenCreate": "Required everywhere: a PGR deployment where a citizen cannot file a complaint has nothing to test.",
+    "personas.gro-with-department": "Required everywhere: without an actor that can drive ASSIGN, the entire complaint workflow is untestable. Absence must be loud, not a skip.",
+    "personas.ward-scoped-csr": "Optional: a ward-scoped CSR is a bomet-specific onboarding choice.",
+    "tenant.citySubTenant": "Optional: flat and two-level tenancy are both legitimate shapes."
+  }
+}

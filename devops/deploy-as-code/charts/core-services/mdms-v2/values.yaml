@@ -15,12 +15,23 @@ initContainers:
     schemaTable: "mdms_v2_schema"
     image:
       repository: "mdms-v2-db"
-      tag: "v2.9.2-4a60f20"
+      tag: "maven-jdk21-9f83afb"
 
 # Container Configs
+# PARITY / IMAGE NOTE — why this is NOT the chart-default v2.9.2 tag:
+#   v2.9.2 STRICTLY rejects string-valued RequestInfo.userInfo.roles (e.g. ["DGRO"])
+#   with a 500 (Cannot construct Role from String) — which the configurator SPA sends
+#   — so configurator writes fail on k8s. The maven-jdk21-9f83afb build tolerates it.
+#   Image drift, not app logic.
+#   PARITY: Compose pins the SAME image (egovio/mdms-v2:maven-jdk21-9f83afb,
+#   local-setup/docker-compose.egov-digit.yaml) — reverting to v2.9.2 would make k8s
+#   diverge from Compose. Keep both on this tag.
+#   Repo normalized to egovio/ so k8s pulls the same published image Compose does
+#   (was bare "mdms-v2", which relied on a local containerd import during the parity run).
 image:
-  repository: "mdms-v2"
-  tag: "v2.9.2-4a60f20"
+  repository: "egovio/mdms-v2"
+  tag: "maven-jdk21-9f83afb"
+  pullPolicy: "IfNotPresent"
 replicas: "1"
 healthChecks:
   enabled: true
@@ -28,7 +39,7 @@ healthChecks:
   readinessProbePath: "/mdms-v2/health"
 appType: "java-spring"
 tracing-enabled: true
-memory_limits: 512Mi
+memory_limits: 1024Mi
 heap: "-Xmx512m -Xms512m"
 java-args: "-Dspring.profiles.active=monitoring"
 egov-mdms-schema-definition-save-topic: "save-mdms-schema-definition"

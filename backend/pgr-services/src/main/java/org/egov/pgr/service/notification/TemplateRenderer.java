@@ -6,6 +6,7 @@ import org.egov.pgr.util.MDMSUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.util.HtmlUtils;
 
 import java.util.Map;
 
@@ -62,7 +63,29 @@ public class TemplateRenderer {
                         audience, action, toState, channel, locale, tenantId);
             return null;
         }
-        return substitute(raw, values);
+        // The EMAIL body is delivered through Novu with editorType=html and
+        // disableOutputSanitization=true, so the rendered string is treated as raw
+        // HTML by the recipient's mail client. Placeholder VALUES (citizen name,
+        // workflow comments, ...) are user-controlled, so HTML-escape them before
+        // substitution to prevent HTML/link injection into the email. The template
+        // body itself is admin-authored MDMS and may legitimately contain HTML, so
+        // only the substituted values are escaped, not the template. The subject is
+        // rendered as plain text by Novu, so it is left unescaped.
+        Map<String, String> effectiveValues = values;
+        if ("body".equals(field) && "EMAIL".equalsIgnoreCase(channel)) {
+            effectiveValues = escapeValuesForHtml(values);
+        }
+        return substitute(raw, effectiveValues);
+    }
+
+    /** Returns a copy of {@code values} with every value HTML-escaped. */
+    private Map<String, String> escapeValuesForHtml(Map<String, String> values) {
+        if (values == null) return null;
+        Map<String, String> escaped = new java.util.LinkedHashMap<>(values.size());
+        for (Map.Entry<String, String> e : values.entrySet()) {
+            escaped.put(e.getKey(), e.getValue() == null ? null : HtmlUtils.htmlEscape(e.getValue()));
+        }
+        return escaped;
     }
 
     @SuppressWarnings("unchecked")

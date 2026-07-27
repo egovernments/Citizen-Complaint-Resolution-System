@@ -43,7 +43,7 @@ test.describe('admin employee create — mobile validator (MDMS rule) #447 #674'
     await page.waitForSelector(MOBILE_INPUT, { timeout: 20_000 });
   });
 
-  test('valid mobile clears aria-invalid', async ({ page }) => {
+  test('valid mobile clears aria-invalid', { tag: ['@persona:admin'] }, async ({ page }) => {
     const validMobile = generateValidMobile(mobileRule);
     await page.waitForTimeout(2_000);
     const mobile = page.locator(MOBILE_INPUT);
@@ -59,7 +59,7 @@ test.describe('admin employee create — mobile validator (MDMS rule) #447 #674'
     ).toHaveCount(0);
   });
 
-  test('invalid mobile surfaces help text and aria-invalid', async ({ page }) => {
+  test('invalid mobile surfaces help text and aria-invalid', { tag: ['@persona:admin'] }, async ({ page }) => {
     const invalidMobile = generateInvalidMobile(mobileRule, 'short');
     await page.waitForTimeout(2_000);
     const mobile = page.locator(MOBILE_INPUT);
@@ -75,7 +75,7 @@ test.describe('admin employee create — mobile validator (MDMS rule) #447 #674'
     expect(await mobile.getAttribute('aria-invalid')).toBe('true');
   });
 
-  test('second valid mobile candidate clears aria-invalid — #674 fallback', async ({ page }) => {
+  test('second valid mobile candidate clears aria-invalid — #674 fallback', { tag: ['@persona:admin'] }, async ({ page }) => {
     // Catches a regression of PR #674 fallback handling. We generate a fresh
     // valid candidate from the rule — on tenants whose rule allows a leading
     // "0" trunk this naturally exercises the same path.

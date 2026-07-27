@@ -16,12 +16,12 @@ initContainers:
     schemaTable: "egov_idgen_schema"
     image:
       repository: "egov-idgen-db"
-      tag: v2.9.2-4a60f20
+      tag: "maven-jdk21-9f83afb"
 
 # Container Configs
 image:
   repository: "egov-idgen"
-  tag: v2.9.2-4a60f20
+  tag: "maven-jdk21-9f83afb"
 replicas: "1"
 healthChecks:
   enabled: true

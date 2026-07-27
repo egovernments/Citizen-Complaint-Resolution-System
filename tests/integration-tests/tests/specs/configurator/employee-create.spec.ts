@@ -109,9 +109,15 @@ Catches a regression where any of the four core form sections gets accidentally 
     // Wait for form to load
     await expect(page.locator('input[name="user.name"]')).toBeVisible({ timeout: 15_000 });
 
-    // Verify key section headings are present
+    // Verify key section headings are present. Each section is rendered by
+    // <FieldSection title=...> as an <h3>, so match on the heading role rather
+    // than raw text: getByText() does a case-insensitive *substring* match over
+    // every node, so 'Roles' also matched the hidden <option>ke.etoeroles</option>
+    // in the Tenant select (any tenant code containing "roles" collides), and the
+    // test failed with "resolved to <option> ... unexpected value hidden".
+    // An <option> can never satisfy role=heading, so this is collision-proof.
     for (const section of ['Employee Info', 'Roles', 'Assignments', 'Jurisdictions']) {
-      await expect(page.getByText(section).first()).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByRole('heading', { name: section })).toBeVisible({ timeout: 5_000 });
     }
 
     // Verify key input fields exist

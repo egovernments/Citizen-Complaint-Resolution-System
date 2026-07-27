@@ -35,6 +35,15 @@ public class KpiCatalogService {
     private static final String DSS_MODULE = "dss";
     private static final String MASTER_KPI  = "KpiDefinition";
     private static final String MASTER_PACK = "DashboardPack";
+    private static final String MASTER_CONFIG = "DashboardConfig";
+
+    /** The only departmentScoping value that turns employee department scoping OFF (#1280). */
+    private static final String DEPT_SCOPING_DISABLED = "disabled";
+    /** stateRoot -> [Boolean disabled, Long expiresAtMs]. Mirrors AnalyticsService.recordCountCache. */
+    private final java.util.concurrent.ConcurrentHashMap<String, Object[]> deptScopingCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** Injectable clock for cache-expiry tests (see KpiCatalogServiceDeptScopingTest). */
+    private java.util.function.LongSupplier configClock = System::currentTimeMillis;
 
     private final PGRConfiguration config;
     private final ServiceRequestRepository serviceRequestRepository;
@@ -101,6 +110,59 @@ public class KpiCatalogService {
         return fetchDefs(stateRoot).stream()
                 .filter(d -> kpiId.equals(d.getId()))
                 .findFirst();
+    }
+
+    /**
+     * Whether {@code dss.DashboardConfig.departmentScoping} is {@code "disabled"} for the tenant's
+     * state root (#1280) — i.e. employees should NOT be department-scoped on the analytics API.
+     *
+     * <p>Returns {@code true} only when a DashboardConfig record exists whose
+     * {@code departmentScoping} equals {@code "disabled"} (case-insensitive, trimmed). Everything
+     * else — module/record/field absent, malformed value, MDMS unreachable — resolves to
+     * {@code false} ("enforced", today's behavior). Fail-safe by construction; this method never
+     * throws.
+     *
+     * <p>Cached in-memory per state root (both outcomes) for
+     * {@code pgr.analytics.config-cache-ttl-ms} (the single TTL shared by every analytics
+     * config cache; default 5 minutes), mirroring the {@code recordCount} cache idiom in
+     * AnalyticsService — a config flip takes effect within one TTL without a redeploy.
+     */
+    public boolean isDepartmentScopingDisabled(String tenantId) {
+        try {
+            if (tenantId == null || tenantId.isEmpty()) return false;
+            String stateRoot = multiStateInstanceUtil.getStateLevelTenant(tenantId);
+            long now = configClock.getAsLong();
+            Object[] cached = deptScopingCache.get(stateRoot);
+            if (cached != null && (Long) cached[1] > now) return (Boolean) cached[0];
+
+            boolean disabled = false;
+            List<Map<String, Object>> records =
+                    fetchMaster(stateRoot, MASTER_CONFIG, new TypeReference<List<Map<String, Object>>>() {});
+            if (!records.isEmpty()) {
+                Object v = records.get(0).get("departmentScoping");
+                disabled = v instanceof String && DEPT_SCOPING_DISABLED.equalsIgnoreCase(((String) v).trim());
+            }
+            if (disabled)
+                log.info("dss.DashboardConfig.departmentScoping=disabled at {} — employee department scoping OFF",
+                        stateRoot);
+            deptScopingCache.put(stateRoot, new Object[]{disabled, now + configCacheTtlMs()});
+            return disabled;
+        } catch (Exception e) {
+            // Fail-safe: any unexpected error means "enforced" (current behavior), never a throw
+            // that could flip the caller's HRMS-error path to deny-all.
+            log.warn("departmentScoping lookup failed for tenant {}; treating as enforced", tenantId, e);
+            return false;
+        }
+    }
+
+    /**
+     * The shared analytics config-cache TTL ({@code pgr.analytics.config-cache-ttl-ms});
+     * falls back to the 5-minute default when the config mock/bean has no value.
+     * Same accessor idiom as AnalyticsService.configCacheTtlMs().
+     */
+    private long configCacheTtlMs() {
+        Long v = config == null ? null : config.getAnalyticsConfigCacheTtlMs();
+        return v != null ? v : PGRConfiguration.DEFAULT_ANALYTICS_CONFIG_CACHE_TTL_MS;
     }
 
     // ---- private MDMS helpers ----

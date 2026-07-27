@@ -19,7 +19,7 @@ import { Button, Footer } from "../atoms";
 import ResultsDataTableWrapper from "./ResultsDataTableWrapper";
 
 
-const InboxSearchComposer = ({configs,additionalConfig,onFormValueChange=()=>{},showTab,tabData,onTabChange,customizers={}}) => {
+const InboxSearchComposer = ({configs,additionalConfig,onFormValueChange=()=>{},showTab,tabData,onTabChange,customizers={},resultsHeader=null}) => {
 
     const renderCount = useRef(1); // Initialize render count
 
@@ -383,6 +383,11 @@ const InboxSearchComposer = ({configs,additionalConfig,onFormValueChange=()=>{},
                     : {}
                 }
               >
+                {/* Optional slot rendered directly above the results list
+                    (e.g. the PGR My/All visibility tabs). Passed as a React
+                    node prop — NOT through `configs` — so it survives the
+                    config cloneDeep in consumers. */}
+                {resultsHeader}
                 <MediaQuery minWidth={426}>
                   <ResultsDataTableWrapper
                     tabData={tabData}

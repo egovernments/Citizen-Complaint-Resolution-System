@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import Reopen from "./reopen";
 //const GetTranslatedAction = (action, t) => t(`CS_COMMON_${action}`);
 
-const Rejected = ({ action, nextActions, complaintDetails, ComplainMaxIdleTime=3600000, rating, serviceRequestId, reopenDate, isCompleted }) => {
+const Rejected = ({ action, nextActions, complaintDetails, ComplainMaxIdleTime, rating, serviceRequestId, reopenDate, isCompleted }) => {
   const { t } = useTranslation();
 
   if (action === "REJECTED") {
@@ -36,11 +36,19 @@ const Rejected = ({ action, nextActions, complaintDetails, ComplainMaxIdleTime=3
   } else if (action === "REOPEN") {
     return <CheckPoint isCompleted={isCompleted} label={t(`CS_COMMON_COMPLAINT_REOPENED`)} info={reopenDate} />;
   } else {
+    const lastModifiedTime = complaintDetails?.service?.auditDetails?.lastModifiedTime;
+    // ComplainMaxIdleTime is REOPENSLA from MDMS, undefined while it loads or on a tenant
+    // without the master. Unknown window => leave REOPEN visible and let pgr-services decide;
+    // hiding it here would re-create the unconfigured deadline that #925 was about.
+    const windowKnown = typeof ComplainMaxIdleTime === "number" && ComplainMaxIdleTime > 0;
+    const reopenWindowOpen = typeof lastModifiedTime === "number"
+      && Number.isFinite(lastModifiedTime)
+      && (!windowKnown || (Date.now() - lastModifiedTime) < ComplainMaxIdleTime);
     let actions =
       nextActions &&
       nextActions.map((action, index) => {
         if (action && (action !== "COMMENT") ) {
-          if((action!== "REOPEN" || (action === "REOPEN" && (Date?.now() - complaintDetails?.service?.auditDetails?.lastModifiedTime) < ComplainMaxIdleTime)))
+          if (action !== "REOPEN" || reopenWindowOpen)
           return (
             <Link key={index} to={`/${window?.contextPath}/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
               <ActionLinks>{t(`CS_COMMON_${action}`)}</ActionLinks>

@@ -123,7 +123,8 @@ The admin (executive) pack seeds **12 tiles** (15 available). Walk the tile grou
 - **The Leaflet choropleth map + pins.** *Ward WoW current* (`cl_map_ward_wow_current`)
   shades each ward by open-complaint volume; *complaint pins* (`cl_map_complaint_pins`)
   drops individual pins. Hover a ward for a tooltip (count + WoW delta). Ward highlight
-  colour is MDMS-driven (`MapConfig.wardHighlightColor`); basemap is CARTO dark.
+  colour and basemap are MDMS-driven (`RAINMAKER-PGR.MapConfig`), defaulting to
+  orange on the light CARTO voyager basemap.
 
 ---
 

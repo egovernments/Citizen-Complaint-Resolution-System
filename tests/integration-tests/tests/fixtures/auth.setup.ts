@@ -11,7 +11,22 @@ const TENANT_CODE = process.env.TENANT_CODE || 'ke';
 // rather than injecting localStorage so the spec exercises the same login
 // surface a real admin uses (and catches regressions in the login form).
 setup('authenticate', async ({ page }) => {
-  await page.goto('/configurator/login');
+  // Not every target under test deploys the configurator (e.g. a local-setup
+  // stack that only runs digit-ui-esbuild for PGR). `chromium`'s project
+  // dependency on this fixture is purely for sequencing — employee/citizen
+  // specs authenticate independently via API token injection and override
+  // storageState themselves, so they never read auth.json's contents. Only
+  // admin/configurator specs actually need it. Skip (not fail) when the
+  // route 404s so a missing configurator doesn't block every other persona's
+  // specs (previously required a manual `--no-deps` workaround).
+  const response = await page.goto('/configurator/login');
+  if (!response || !response.ok()) {
+    setup.skip(
+      true,
+      `configurator not reachable on this target (GET /configurator/login -> ${response ? response.status() : 'no response'}) — admin/configurator specs will skip for lack of auth.json, but employee/citizen specs authenticate independently and are unaffected`,
+    );
+    return;
+  }
 
   // The login page boots client-side — wait for the username field to mount.
   const usernameInput = page.locator('#username');

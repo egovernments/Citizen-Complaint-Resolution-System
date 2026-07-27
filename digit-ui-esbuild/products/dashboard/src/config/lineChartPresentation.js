@@ -9,6 +9,7 @@ import {
 } from "./chartAxisLabels";
 import { buildApexSeriesHoverTooltip } from "./chartTooltipPresentation";
 import { formatWrappedChartLabel } from "../utils/chartLabelWrap";
+import { formatNumber } from "../utils/numberFormat";
 import { VISUALIZATION_STYLES, VIZ_TYPE } from "./visualizationStyles";
 
 const LINE_CHART_STYLES = VISUALIZATION_STYLES[VIZ_TYPE.LINE_CHART];
@@ -169,14 +170,19 @@ export function applyLineChartMarkerHoverState(
 export function buildLineChartTooltip(categories = [], series = []) {
   return buildApexSeriesHoverTooltip({
     categories,
+    // Numeric parts go through the tenant mask (formatNumber, null when
+    // unconfigured -> the pre-#1213 expression, which keeps returning a
+    // NUMBER on the count branch — Apex accepts both).
     formatValue: (value, seriesIndex) => {
       const entry = series[seriesIndex];
       if (entry?.yAxisGroup === "percent") {
         const rounded = Math.round(Number(value) * 10) / 10;
-        const formatted = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+        const formatted =
+          formatNumber(rounded, { decimals: 1, trim: true }) ??
+          (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1));
         return `${formatted}%`;
       }
-      return Math.round(Number(value));
+      return formatNumber(value, { decimals: 0 }) ?? Math.round(Number(value));
     },
   });
 }
@@ -360,7 +366,8 @@ export function buildLineChartYAxis({ min, max, tickAmount }) {
     forceNiceScale: false,
     labels: {
       style: { fontSize: "10px" },
-      formatter: (value) => Math.round(Number(value)),
+      // Masked -> grouped string; unmasked keeps returning a number for Apex.
+      formatter: (value) => formatNumber(value, { decimals: 0 }) ?? Math.round(Number(value)),
     },
     axisBorder: { show: true, color: borderColor, width: 1, offsetX: 0, offsetY: 0 },
     axisTicks: { show: true, width: 4, color: borderColor },

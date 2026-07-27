@@ -1,0 +1,39 @@
+---
+extends: default
+
+rules:
+  # Ansible playbooks have legitimately long lines (env var blocks, URLs, Jinja2).
+  # 160 chars is a reasonable ceiling that still catches truly runaway lines.
+  line-length:
+    max: 160
+    level: warning
+
+  # yes/no are valid YAML booleans and widely used in Ansible; allow them.
+  truthy:
+    allowed-values: ["true", "false", "yes", "no"]
+    level: warning
+
+  # ansible-lint requires at least 1 space before inline comment content.
+  comments:
+    min-spaces-from-content: 1
+
+  # ansible-lint requires no extra spaces inside braces in inline maps.
+  braces:
+    max-spaces-inside: 1
+
+  # Allow aligned colons and commas in build-context maps and loop item tables.
+  colons:
+    max-spaces-after: -1
+  commas:
+    max-spaces-after: -1
+
+  # ansible-lint requires octal values to be explicit (0o755 not 0755).
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
+
+  # Allow one-liner inline comments (# comment after code).
+  comments-indentation: disable
+
+  # Ansible templates and multi-doc files start with --- but not all do.
+  document-start: disable

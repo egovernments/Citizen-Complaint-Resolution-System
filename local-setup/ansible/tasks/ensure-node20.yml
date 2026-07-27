@@ -1,0 +1,30 @@
+# Ensure Node 20 + a matching npm from NodeSource.
+#
+# Why not just `apt install nodejs`? On Ubuntu that ships Node 18 AND NO npm
+# (npm is a separate archive package), so apt alone leaves node present but
+# npm missing — downstream `npm install` silently no-op'd and builds failed
+# later with a confusing "Cannot find module 'esbuild'". NodeSource bundles a
+# matching npm. The install is gated on a version probe so re-deploys are a
+# no-op once Node >=20 is already present.
+#
+# Contract for callers:
+#   - Set `node_ensure_label` (a string) for readable task names.
+#   - Apply the enabling `when:` (e.g. feature flags) on the `include_tasks`
+#     statement — it propagates to every task in this file. Always exclude
+#     Darwin at the call site (NodeSource + apt-get is Debian/Ubuntu only).
+- name: "{{ node_ensure_label }} — probe installed node version"
+  ansible.builtin.command: node --version
+  register: _ensure_node_ver
+  changed_when: false
+  failed_when: false
+
+- name: "{{ node_ensure_label }} — install NodeSource Node 20 (node <20 or npm absent)"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
+  args:
+    executable: /bin/bash
+  when: >-
+    _ensure_node_ver.rc != 0
+    or (_ensure_node_ver.stdout | default('') is not match('^v(2[0-9]|[3-9][0-9])\.'))

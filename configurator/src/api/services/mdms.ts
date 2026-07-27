@@ -9,6 +9,13 @@ import type {
   Tenant,
 } from '../types';
 
+// MapConfig is a singleton per tenant, keyed on `code` (the schema's x-unique).
+// The key must NOT be derived from any configured value: the one hand-seeded
+// record in the wild keyed itself on its own ward colour, so changing the colour
+// either left the key contradicting the data or minted a second record — and the
+// UI reads MapConfig[0], which then picks between them arbitrarily.
+const MAP_CONFIG_KEY = 'DEFAULT';
+
 export const mdmsService = {
   // Generic MDMS search
   async search<T>(
@@ -50,6 +57,64 @@ export const mdmsService = {
     });
 
     return response.Mdms as MdmsRecord;
+  },
+
+  // Raw search: keeps `uniqueIdentifier` / `id` / `auditDetails`, which the
+  // generic search() drops when it maps records down to their `data`. An update
+  // has to round-trip all three.
+  async searchRecords(
+    tenantId: string,
+    schemaCode: string,
+    options?: { limit?: number }
+  ): Promise<MdmsRecord[]> {
+    const response = await apiClient.post(ENDPOINTS.MDMS_SEARCH, {
+      RequestInfo: apiClient.buildRequestInfo(),
+      MdmsCriteria: { tenantId, schemaCode, limit: options?.limit || 100, offset: 0 },
+    });
+    return (response.mdms || []) as MdmsRecord[];
+  },
+
+  // Generic MDMS update. `uniqueIdentifier` is immutable — mdms-v2 keys the row
+  // on it — so it is round-tripped, not recomputed from the new data.
+  async update(record: MdmsRecord, data: Record<string, unknown>): Promise<MdmsRecord> {
+    const response = await apiClient.post(`${ENDPOINTS.MDMS_UPDATE}/${record.schemaCode}`, {
+      RequestInfo: apiClient.buildRequestInfo(),
+      Mdms: {
+        tenantId: record.tenantId,
+        schemaCode: record.schemaCode,
+        uniqueIdentifier: record.uniqueIdentifier,
+        id: record.id,
+        data,
+        auditDetails: record.auditDetails,
+        isActive: true,
+      },
+    });
+    return response.Mdms as MdmsRecord;
+  },
+
+  /**
+   * Merges `patch` into this tenant's MapConfig, creating the record if it has
+   * none.
+   *
+   * mdms-v2 resolves up the tenant tree, so a search at `ke.bomet` happily
+   * returns a record owned by `ke`. Updating THAT would rewrite the state root
+   * and silently change every other city inheriting from it — so a record only
+   * counts as ours when its `tenantId` matches exactly. Anything else is the
+   * parent's, and we shadow it with a new record at this tenant instead.
+   */
+  async upsertMapConfig(tenantId: string, patch: Record<string, unknown>): Promise<MdmsRecord> {
+    const existing = await this.searchRecords(tenantId, MDMS_SCHEMAS.MAP_CONFIG).catch(() => []);
+    const own = existing.find((r) => r.tenantId === tenantId && r.isActive !== false);
+
+    if (own) {
+      return this.update(own, { ...(own.data as Record<string, unknown>), ...patch });
+    }
+
+    // Inherit the parent's values as the base so shadowing it doesn't silently
+    // drop a colour or basemap the operator set further up the tree.
+    const inherited = existing.find((r) => r.isActive !== false)?.data as Record<string, unknown> | undefined;
+    const data = { ...(inherited || {}), ...patch, code: MAP_CONFIG_KEY };
+    return this.create(tenantId, MDMS_SCHEMAS.MAP_CONFIG, MAP_CONFIG_KEY, data);
   },
 
   // ============================================
@@ -256,7 +321,13 @@ export const mdmsService = {
       name: tenant.name,
       type: tenant.city?.ulbGrade || 'CITY',
       description: tenant.description || tenant.name,
-      logoId: tenant.logoId || null,
+      // Schema note (tenant.tenants): `logoId` is an OPTIONAL non-nullable
+      // String — sending `logoId: null` fails validation with
+      // "expected type: String, found: Null", which blocked every Phase 1
+      // "Upload to DIGIT". Omit it entirely when the wizard has no logo yet
+      // (the branding step patches it in later). `imageId` is REQUIRED but
+      // nullable (["string","null"]), so `null` is the correct placeholder.
+      ...(tenant.logoId ? { logoId: tenant.logoId } : {}),
       imageId: tenant.logoId || null,
       emailId: tenant.emailId || `info@${tenant.code.toLowerCase().replace(/\./g, '-')}.gov.in`,
       address: tenant.address || `${tenant.city?.name || tenant.name}, ${tenant.city?.districtName || 'District'}`,

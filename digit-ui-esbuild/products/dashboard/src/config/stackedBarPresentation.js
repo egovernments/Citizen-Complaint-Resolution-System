@@ -13,6 +13,7 @@ import {
   resolveBarCategorySlotWidth,
   resolveBarChartColumnWidth,
 } from "./barChartPresentation";
+import { formatNumber } from "../utils/numberFormat";
 import { CHART_AXIS_WRAPPED_LABEL_MAX_LINES } from "../utils/chartLabelWrap";
 
 export const STACKED_BAR_LEGEND = {
@@ -152,11 +153,17 @@ export const RESOLUTION_DWELL_STACKED_SERIES = [
   { key: "RESOLVED", label: "Resolved", color: "var(--status-resolved)" },
 ];
 
+// Numeric part goes through the tenant mask (formatNumber, null when
+// unconfigured -> the pre-#1213 expression); the "h" unit stays here. R7:
+// duration values take the mask decimal separator — they are numbers.
 export function formatStackedBarHours(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return "";
-  if (Math.abs(n - Math.round(n)) < 0.05) return `${Math.round(n)}h`;
-  return `${n.toFixed(1)}h`;
+  const nearWhole = Math.abs(n - Math.round(n)) < 0.05;
+  const formatted =
+    formatNumber(nearWhole ? Math.round(n) : n, { decimals: nearWhole ? 0 : 1 }) ??
+    (nearWhole ? String(Math.round(n)) : n.toFixed(1));
+  return `${formatted}h`;
 }
 
 const STACKED_BAR_LABEL_CHAR_WIDTH_PX = 7;
@@ -169,7 +176,9 @@ const STACKED_BAR_SEGMENT_LABEL_OFFSET_Y = 7;
 function formatStackedBarSegmentValue(value, valueFormat) {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return "";
-  return valueFormat === "hours" ? formatStackedBarHours(n) : String(Math.round(n));
+  return valueFormat === "hours"
+    ? formatStackedBarHours(n)
+    : formatNumber(n, { decimals: 0 }) ?? String(Math.round(n));
 }
 
 function readStackTotal(opts) {
@@ -379,8 +388,11 @@ export function buildStackedBarYAxis({
   return {
     labels: {
       style: { fontSize: "10px" },
+      // Masked -> grouped string; unmasked keeps returning a number for Apex.
       formatter: (val) =>
-        valueFormat === "hours" ? formatStackedBarHours(val) : Math.round(val),
+        valueFormat === "hours"
+          ? formatStackedBarHours(val)
+          : formatNumber(val, { decimals: 0 }) ?? Math.round(val),
     },
     axisBorder: { show: false },
     axisTicks: { show: false },

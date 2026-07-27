@@ -82,7 +82,7 @@ function buildTemplate(
     ['Employee bulk import template'],
     [`Tenant: ${tenant}`],
     [''],
-    ['Required columns: employeeCode, name, mobileNumber (10-digit Kenya), dob (YYYY-MM-DD),'],
+    ['Required columns: employeeCode, name, mobileNumber (per the tenant mobile rule), dob (YYYY-MM-DD),'],
     ['department (from Codes), designation (from Codes).'],
     ['Optional: userName (auto-derives), emailId, gender, roles (comma-separated),'],
     ['jurisdictions (comma-separated boundary codes), dateOfAppointment (YYYY-MM-DD).'],

@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { runBatchQueries } from "../services/analyticsService";
-import { fetchComplaintTypeIndex } from "../services/complaintHierarchyService";
+import {
+  buildComplaintTypeIndex,
+  fetchComplaintHierarchyRecords,
+} from "../services/complaintHierarchyService";
+import {
+  buildComplaintTree,
+  pruneComplaintTree,
+} from "../utils/complaintTypeTree";
 import { dimensionLabel } from "../i18n/dimensionLabel";
 import useDashboardT from "../i18n/useDashboardT";
 import {
@@ -92,7 +99,7 @@ function toComplaintTypeDecorator(hierarchyIndex) {
 export function useFilterOptions() {
   // Raw fetch payload and derived labels are split so a language switch
   // re-labels from the cached rows without re-querying the backend.
-  const [raw, setRaw] = useState({ results: null, hierarchyIndex: null, loading: true });
+  const [raw, setRaw] = useState({ results: null, hierarchyRecords: null, loading: true });
   const { language } = useDashboardT();
 
   useEffect(() => {
@@ -101,15 +108,15 @@ export function useFilterOptions() {
       runBatchQueries(OPTION_QUERIES),
       // Resolves null on any failure (never rejects) — labels then fall back
       // to the humanizer and the list stays flat, exactly the old behavior.
-      fetchComplaintTypeIndex(),
+      fetchComplaintHierarchyRecords(),
     ])
-      .then(([res, hierarchyIndex]) => {
+      .then(([res, hierarchyRecords]) => {
         if (cancelled) return;
-        setRaw({ results: res?.results || {}, hierarchyIndex, loading: false });
+        setRaw({ results: res?.results || {}, hierarchyRecords, loading: false });
       })
       .catch(() => {
         // Never block the dashboard — the selects keep their placeholder lists.
-        if (!cancelled) setRaw({ results: null, hierarchyIndex: null, loading: false });
+        if (!cancelled) setRaw({ results: null, hierarchyRecords: null, loading: false });
       });
     return () => {
       cancelled = true;
@@ -118,13 +125,16 @@ export function useFilterOptions() {
 
   return useMemo(() => {
     if (!raw.results) return { options: null, loading: raw.loading };
+    const hierarchyIndex = raw.hierarchyRecords
+      ? buildComplaintTypeIndex(raw.hierarchyRecords)
+      : null;
     // Per-entry failures come back as { error } (no rows) — treated as empty.
     const complaintType = toOptionList(
       raw.results.complaintTypes?.rows,
       "service_code",
       COMPLAINT_TYPE_OPTIONS,
       "complaintType",
-      toComplaintTypeDecorator(raw.hierarchyIndex)
+      toComplaintTypeDecorator(hierarchyIndex?.size ? hierarchyIndex : null)
     );
     const geography = toOptionList(
       raw.results.wards?.rows,
@@ -132,9 +142,21 @@ export function useFilterOptions() {
       GEOGRAPHY_OPTIONS,
       "boundary"
     );
+    // Tree-traversal complaint-type filter: the MDMS tree intersected with the
+    // ABAC-scoped DISTINCT service_code list above (pruneComplaintTree). Both
+    // inputs must exist — no scoped distincts (query failed / zero rows) or no
+    // master → null, and the widget degrades to the flat leaf select.
+    const scopedLeafCodes = (raw.results.complaintTypes?.rows || [])
+      .map((row) => String(row?.service_code ?? "").trim())
+      .filter(Boolean);
+    const complaintTypeTree = pruneComplaintTree(
+      buildComplaintTree(raw.hierarchyRecords),
+      scopedLeafCodes
+    );
     const options = {
       ...(geography && { geography }),
       ...(complaintType && { complaintType }),
+      ...(complaintTypeTree && { complaintTypeTree }),
     };
     return {
       options: Object.keys(options).length ? options : null,

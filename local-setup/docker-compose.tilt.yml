@@ -1,0 +1,28 @@
+# Image overrides for the hot-reload Tiltfile (Option B, `tilt up`).
+#
+# Why this file exists:
+#   docker-compose.yml pins pgr-services and digit-ui to published registry images so that
+#   Option A (`docker compose up`) works with no local toolchain. The default Tiltfile, however,
+#   builds those two services from source via docker_build('pgr-services-dev') and
+#   docker_build('digit-ui-dev').
+#
+#   Tilt binds a docker_build to a Compose service by matching the built image name against the
+#   service's `image:` field. Registry pins never match the *-dev names, so Tilt built both images
+#   and then silently ran the registry images instead — hot reload appeared to work and did not.
+#   Tilt reports no warning for this (the resource simply ends up with zero image targets).
+#
+#   Loading this override alongside docker-compose.yml makes the names match, so the images Tilt
+#   builds are the images that actually run.
+#
+# Only the default `Tiltfile` loads this. Option A and Tiltfile.db-dump are unaffected and keep
+# using the registry pins in docker-compose.yml.
+#
+# In CI mode (TILT_CI=1) the Tiltfile pulls the registry images and re-tags them to these same
+# *-dev names, so these overrides resolve correctly there too.
+
+services:
+  pgr-services:
+    image: pgr-services-dev
+
+  digit-ui:
+    image: digit-ui-dev

@@ -33,6 +33,50 @@ if ! command -v ansible-playbook >/dev/null 2>&1; then
   exit 127
 fi
 
+# ── Static validation ────────────────────────────────────────────────────────
+# Run ansible-lint + yamllint before touching any server. Catches YAML syntax
+# errors, broken Jinja2, risky shell patterns, and structural mistakes in
+# seconds — far cheaper than waiting for a mid-deploy failure.
+#
+# Both tools are optional: if they're not installed we warn and continue
+# (operators on minimal boxes shouldn't be blocked). Install them with:
+#   pip3 install ansible-lint yamllint
+run_static_validation() {
+  local failed=0
+
+  if command -v ansible-lint >/dev/null 2>&1; then
+    echo "──── ansible-lint ────────────────────────────────────────────────"
+    ansible-galaxy collection install -r requirements.yml -p ~/.ansible/collections --quiet 2>/dev/null || true
+    if ! ansible-lint playbook-deploy.yml; then
+      echo "ERROR: ansible-lint found violations. Fix them before deploying." >&2
+      failed=1
+    fi
+  else
+    echo "WARN: ansible-lint not found — skipping. Install: pip3 install ansible-lint" >&2
+  fi
+
+  if command -v yamllint >/dev/null 2>&1; then
+    echo "──── yamllint ────────────────────────────────────────────────────"
+    if ! yamllint -c .yamllint playbook-deploy.yml inventory/group_vars/ inventory/host_vars/; then
+      echo "ERROR: yamllint found violations. Fix them before deploying." >&2
+      failed=1
+    fi
+  else
+    echo "WARN: yamllint not found — skipping. Install: pip3 install yamllint" >&2
+  fi
+
+  if [[ $failed -ne 0 ]]; then
+    echo ""
+    echo "Static validation failed. Run with SKIP_LINT=1 to bypass (not recommended)." >&2
+    exit 1
+  fi
+  echo "──── Static validation passed ────────────────────────────────────"
+}
+
+if [[ "${SKIP_LINT:-0}" != "1" ]]; then
+  run_static_validation
+fi
+
 # ansible buffers a task's stdout until the task ENDS, so the macOS Rosetta
 # converge (10-40min) looks like a dead hang with zero feedback. Tell the
 # operator the live escape hatches UP FRONT, before ansible swallows output.
@@ -87,6 +131,19 @@ if [[ ! -f "inventory/host_vars/${host}.yml" ]]; then
   echo "Start from the template:"
   echo "  cp inventory/host_vars/_example.yml inventory/host_vars/${host}.yml"
   exit 1
+fi
+
+# Incident-derived config gate — refuses combinations that have actually
+# burned us (data-wipe fastpath, KC half-wired, inconsistent mobile rules,
+# ...). Runs HERE because real host_vars are gitignored: CI can only ever
+# validate fixtures; this is the only spot that sees the operator's config.
+# Each failure prints the incident it encodes. SKIP_PREFLIGHT=1 to bypass.
+if [[ "${SKIP_PREFLIGHT:-0}" != "1" ]]; then
+  if ! python3 ../scripts/preflight.py "inventory/host_vars/${host}.yml"; then
+    echo "" >&2
+    echo "preflight failed — fix the config or re-run with SKIP_PREFLIGHT=1 if you are CERTAIN." >&2
+    exit 1
+  fi
 fi
 
 shift

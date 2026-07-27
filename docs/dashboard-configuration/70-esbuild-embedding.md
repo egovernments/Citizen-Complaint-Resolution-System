@@ -110,13 +110,27 @@ card and route are self-contained in the dashboard product; the sidebar is a sep
 `digit-ui-esbuild/products/dashboard/roles.js`:
 
 ```js
-export const DASHBOARD_ROLES =
+export const DASHBOARD_ROLES = // the FALLBACK
   ["SUPERVISOR", "PGR_SUPERVISOR", "GRO", "DGRO", "PGR_LME", "PGR_ADMIN", "SUPERUSER"];
+export const useDashboardAccess = () => { /* MDMS-resolved gate */ };
 ```
 
-Both `DashboardModule` (route) and `DashboardCard` (home card) gate on
-`Digit.UserService.hasAccess(DASHBOARD_ROLES)` — the card returns `null`, the route `Redirect`s to
-`/employee`, when the check fails. They therefore **always agree**.
+Both `DashboardModule` (route) and `DashboardCard` (home card) gate on the shared
+`useDashboardAccess()` hook — the card returns `null`, the route `Redirect`s to
+`/employee`, when the check fails; both render nothing while it resolves. They
+therefore **always agree**.
+
+The role list itself is **MDMS data, not code**: the hook fetches
+`dss.DashboardConfig` (single record `{ "id": "default", "allowedRoles": [...] }`,
+state-root tenant, same v1-compat `/egov-mdms-service/v1/_search` path as every
+other UI master, cached per session via react-query). Record present with a
+non-empty `allowedRoles` → those role codes; absent / error / malformed →
+`DASHBOARD_ROLES` fallback, silently — a deployment that never seeds the master
+behaves exactly as before. Deployments with a custom role taxonomy (e.g. `CMS_*`)
+seed the record instead of rebuilding the bundle. It is a **nav/route gate
+only, not a security boundary** — the data plane stays enforced server-side by
+the catalog + scope RBAC. Seed shape: `ansible/nairobi-mdms/mdms/dss/DashboardConfig.json`;
+schema: `local-setup/db/dss-mdms-seed/schemas/dss.DashboardConfig.json`.
 
 The check is **tenant-agnostic by design** (role *code* only). The rationale is load-bearing:
 employee roles live at the **state-root** tenant (`ke`) while the working tenant is usually a city
@@ -237,12 +251,13 @@ Key files and behaviours:
 | add/retire a KPI tile, its query, thresholds, params | `dss.KpiDefinition` (MDMS) | no |
 | default tiles + layout for a role | `dss.DashboardPack` (MDMS) | no |
 | a brand-new `viz.kind` render behaviour | `products/dashboard/src/components/KpiTile.jsx` (+ a component) | **yes** (FE bundle) |
-| which roles can *open* the view | `products/dashboard/roles.js` `DASHBOARD_ROLES` | **yes** (FE bundle) |
+| which roles can *open* the view | `dss.DashboardConfig` `allowedRoles` (MDMS; code fallback `products/dashboard/roles.js`) | no |
 | analytics base / tenant / MDMS path | host `globalConfigs` (`STATE_LEVEL_TENANT_ID`, `MDMS_V1_CONTEXT_PATH`, `REACT_APP_ANALYTICS_BASE`) | no (config) |
 | home card visibility | `tenant.citymodule` `Dashboard` row (`30-view-access.md`) | no |
 | card/menu labels | localization `DASHBOARD_CARD_HEADER`, `ACTION_TEST_DASHBOARD` (`30-view-access.md`) | no |
 
-Note that `DASHBOARD_ROLES` and any new `viz.kind` are the **only** two everyday dashboard knobs
-that require an FE rebuild — everything else is MDMS/config. A redeploy overwrites the served
+Note that a new `viz.kind` is the **only** everyday dashboard knob that requires an FE rebuild —
+everything else is MDMS/config (the open-the-view role gate moved to `dss.DashboardConfig`;
+`DASHBOARD_ROLES` in code is now only the fallback when that record is absent). A redeploy overwrites the served
 bundle (`60-operations.md` §4), so FE edits must land in `products/dashboard/` → PR → image, never
 as a hand-patch to `/opt/*/build/`.

@@ -16,6 +16,7 @@ import {
   resolveBarGroupLayout,
 } from "../config/barChartPresentation";
 import { SHARED_CHROME, VISUALIZATION_STYLES, VIZ_TYPE } from "../config/visualizationStyles";
+import { formatNumber, getNumberFormatStamp } from "../utils/numberFormat";
 import {
   buildWrappedVerticalXAxisLabels,
 } from "../config/chartAxisLabels";
@@ -53,6 +54,11 @@ const DepartmentBarChart = ({
 }) => {
   // Subscribes to language changes so labels below re-render translated.
   const { language } = useDashboardT();
+  // Per-locale numberFormat mask stamp (#1272): baked into the options memo
+  // because react-apexcharts compares JSON.stringify(options), which drops
+  // the data-label formatter closures — without a stringifiable delta a
+  // mask-only language switch would never redraw the bar value labels.
+  const numberFormatStamp = getNumberFormatStamp();
   const isPercent = valueFormat === "percent";
   const {
     containerRef: histogramContainerRef,
@@ -201,6 +207,9 @@ const DepartmentBarChart = ({
       states: {
         hover: { filter: { type: "darken", value: 0.85 } },
       },
+      // Not an Apex option — stringifiable stamp of the per-locale mask so
+      // the JSON.stringify options comparison sees mask-only changes.
+      _numberFormatStamp: numberFormatStamp,
     }),
     [
       categories,
@@ -216,6 +225,7 @@ const DepartmentBarChart = ({
       seriesMax,
       histogram,
       isPercent,
+      numberFormatStamp,
     ]
   );
 
@@ -272,7 +282,7 @@ const DepartmentBarChart = ({
           :{" "}
           {isPercent
             ? formatBarChartPercentOneDecimal(tooltip?.value)
-            : tooltip?.value}
+            : formatNumber(tooltip?.value, { decimals: 0 }) ?? tooltip?.value}
         </div>
       </ChartTooltipPortal>
     </>

@@ -58,6 +58,15 @@ if [ -d "/flyway/sql/egov-data-uploader" ]; then
     run_migration "egov-data-uploader" "egov_data_uploader_schema_version" "filesystem:/flyway/sql/egov-data-uploader"
 fi
 
+# egov-mdms: DATA-ONLY cleanup of mdms-v2 rows (eg_mdms_data /
+# eg_mdms_schema_definition). The mdms-v2 service manages those tables' DDL via
+# its OWN flyway history (mdms_schema_version); this uses a separate history
+# table so the two never touch each other. Runs before the services start, so
+# the default-data-handler re-registers any schema this removes.
+if [ -d "/flyway/sql/egov-mdms" ]; then
+    run_migration "egov-mdms" "egov_mdms_schema_version" "filesystem:/flyway/sql/egov-mdms"
+fi
+
 echo ""
 echo "========================================="
 echo "All migrations completed successfully!"

@@ -13,6 +13,11 @@ processors:
   memory_limiter:
     check_interval: 5s
     limit_mib: 200
+  # Browser dashboard metrics (#1110) arrive as DELTA-temporality histograms
+  # (ephemeral emitters can't hold cumulative state); the prometheus exporter
+  # needs CUMULATIVE, so accumulate deltas here. Inert for the (cumulative)
+  # javaagent metrics already flowing through this pipeline.
+  deltatocumulative:
 
 exporters:
   otlp/tempo:
@@ -46,5 +51,5 @@ service:
       exporters: [loki]
     metrics:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter, deltatocumulative, batch]
       exporters: [prometheus]
