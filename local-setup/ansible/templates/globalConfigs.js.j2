@@ -85,7 +85,18 @@ var globalConfigs = (function () {
   var tokenExchangeUrl = {{ (token_exchange_url | default('')) | to_json }};
   if (!tokenExchangeUrl) { tokenExchangeUrl = "/kc"; }
 
+{% if testing_ui_enabled | default(false) %}
+  // Testing entrance (see nginx /testing-ui). TESTING_TENANT_ID renders on
+  // BOTH entrances (the prod entrance uses it to EXCLUDE testing rows);
+  // TESTING_MODE is true only in the testing render.
+  var testingTenantId = {{ testing_tenant | to_json }};
+  var testingMode = {{ (gc_testing_mode | default(false)) | to_json }};
+{% endif %}
   var getConfig = function (key) {
+{% if testing_ui_enabled | default(false) %}
+    if (key === "TESTING_MODE") return testingMode;
+    if (key === "TESTING_TENANT_ID") return testingTenantId;
+{% endif %}
     if (key === "EMPLOYEE_MODULE_DENYLIST") return employeeModuleDenylist;
     if (key === "LOGIN_TENANT_ALLOWLIST") return loginTenantAllowlist;
     if (key === "STATE_LEVEL_TENANT_ID") {

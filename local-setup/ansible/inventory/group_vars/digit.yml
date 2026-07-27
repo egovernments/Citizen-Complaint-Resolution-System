@@ -188,3 +188,11 @@ digit_ui_esbuild_branch: main
 # single tenant, set digit_ui_bundle_image in that host_vars file (as pg.test
 # does). Set to "" in host_vars to force an on-host build even if this is on.
 # digit_ui_bundle_image: "ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop"
+
+# ── TESTING ENTRANCE (/testing-ui) — default OFF everywhere. ──
+# Opt in per box via host_vars:
+#   testing_ui_enabled: true
+#   testing_tenant: mz.igetesting          # hidden QA tenant
+#   testing_ui_htpasswd: "tester:$apr1$…"  # pre-hashed; keep in vault
+# Optional: testing_seed_source_tenant, testing_ui_banner, testing_emp_password.
+testing_ui_enabled: false
