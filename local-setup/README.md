@@ -249,7 +249,9 @@ Edit `<tenant>.yml` — every field is commented. The non-negotiable ones:
 - `domain` — public hostname (nginx `server_name` + Grafana root URL)
 - `state_tenant_id` / `boot_tenant` / `tenant_id` — DIGIT tenancy slugs
 - `secrets_path` + `bootstrap_secrets.*` — OpenBao path + initial secrets
-- keep `db_fast_path: true` (a fresh install needs it — no SQL slow path exists)
+- keep `db_fast_path: true` (a fresh install needs it — no SQL slow path exists),
+  and set `db_fast_path_ack_data_wipe: true` alongside it — preflight refuses to
+  run without that explicit acknowledgement
 
 No inventory edit is needed: `deploy.sh` regenerates `inventory/hosts.yml` from
 `host_vars/*.yml` on every run. To enable the browser onboarding wizard, also set:
@@ -283,9 +285,11 @@ changed configs trigger restarts.
   data) and re-run.
 - **`rsync … mkdir "/opt/digit/docker/…" failed: No such file or directory`** —
   only on a freshly-wiped `/opt/digit` (the playbook creates `/opt/digit` but not
-  the `docker/` subdir before the migrator rsync). Create it once and re-run:
+  the `docker/` subdir before the migrator rsync). Create it once **on the target
+  machine**, then re-run the deploy from the controller:
   ```bash
-  sudo install -d -o "$USER" -g "$USER" /opt/digit/docker && ./deploy.sh <tenant>
+  ssh <target> 'sudo install -d -o $(id -un) -g $(id -gn) /opt/digit/docker'
+  ./deploy.sh <tenant>
   ```
 
 ### Step 3: Access the application

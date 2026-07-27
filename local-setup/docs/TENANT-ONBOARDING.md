@@ -12,7 +12,7 @@ that matches how your stack is deployed:
 |------|-----------|----------|----------------------|
 | **[Configurator wizard](#a-configurator-wizard-browser)** | Browser (upload XLSX) | Non-technical operators onboarding a real city | Ansible deploys with `nginx_features.configurator: true` |
 | **[Jupyter DataLoader](#b-jupyter-dataloader-scripted)** | Jupyter notebook (Python) | Developers, scripted/local setups | Any stack (Docker Compose, Tilt, Ansible) |
-| **[MCP `city_setup_from_xlsx`](#c-mcp-automation)** | REST / MCP tool | CI, fully-automated onboarding | Deploys with `enable_mcp: true` |
+| **[MCP `city_setup_from_xlsx`](#c-mcp-automation)** | REST / MCP tool | CI, fully-automated onboarding | Deploys with `enable_mcp: true` + `nginx_features.mcp: true` |
 
 > **Order always matters:** Tenant → Boundaries → Masters → Employees. Each
 > phase validates codes created by the previous one (an employee's jurisdiction
@@ -111,7 +111,11 @@ department | designation | roles | jurisdictions | dateOfAppointment
   `^[17][0-9]{8}$`, i.e. exactly 9 digits).
 - `roles` — validated against `ACCESSCONTROL-ROLES`. Use `EMPLOYEE` plus a
   workflow role: **GRO** (receives/assigns), **DGRO** (department/subcounty
-  assigner), **PGR_LME** (resolver).
+  assigner), **PGR_LME** (resolver). Add **CSR** for anyone who must *file* a
+  complaint from the employee portal — the employee create-complaint screen is
+  gated on that role, so a GRO/DGRO/PGR_LME-only employee can process complaints
+  but cannot raise one. Give at least one employee `EMPLOYEE,CSR` if you want to
+  test the create flow end to end.
 - `jurisdictions` — boundary codes created in Phase 2 (`WARD_001`,
   `SUBCOUNTY_001`, …).
 - `department` accepts a **comma-separated list** (`HealthServices,WaterandSewage`).
@@ -134,6 +138,14 @@ hierarchy_type: BOMET-Hierarchy  # MUST match the Phase 2 hierarchy name
 
 Leave `state_root` / `state_tenant_id` / `tenant_id` at the **root** (`ke`) —
 those drive the JVM `STATE_LEVEL_TENANT_ID` pins. Re-run `./deploy.sh <tenant>`.
+
+> **`hierarchy_type` is a single global value, not per-tenant.** The UI sends it
+> on every boundary lookup regardless of which tenant is active, so **all tenants
+> on one deployment must use the same hierarchy name**. Onboarding a second city
+> under a differently-named hierarchy will silently blank the boundary dropdowns
+> for one of them. If you plan to host more than one city, standardise on one
+> name (`ADMIN` is the UI default) and create each tenant's hierarchy under it —
+> see [§C step 1](#worked-headless-run-city_setup_from_xlsx-over-the-rest-shim).
 
 ---
 
@@ -227,6 +239,34 @@ The orchestrator is exposed on the shim at `POST /v1/tools/city_setup_from_xlsx`
 Files are read **inside** the MCP container, so stage them there first. Run the
 steps in this order — each avoids a failure seen in practice.
 
+**Prerequisites.** The REST shim needs **both** flags in `host_vars` — the
+service *and* its nginx location:
+
+```yaml
+enable_mcp: true
+nginx_features: { mcp: true }     # exposes /mcp + /v1/*
+```
+
+Confirm it's reachable: `curl -s $BASE/v1/healthz` → `{"status":"ok",…}`.
+
+**Where to run these commands.** `curl` can run anywhere that can reach the
+host; `docker …` and `psql` commands run **on the deployment target** (SSH in
+first for a remote Option C deploy).
+
+**Shell setup** — every snippet below assumes these two variables:
+
+```bash
+# Ansible deploy: the host nginx (add https:// + your domain if TLS is on).
+# Docker Compose / Tilt stacks: http://localhost:18000 (Kong).
+BASE=http://localhost
+
+TOKEN=$(curl -s "$BASE/user/oauth/token" \
+  -H 'Authorization: Basic ZWdvdi11c2VyLWNsaWVudDo=' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'grant_type=password&scope=read&username=ADMIN&password=eGov@123&tenantId=<root>&userType=EMPLOYEE' \
+  | jq -r .access_token)
+```
+
 **1. Pre-create the boundary hierarchy at the tenant.** The loader auto-names a
 fresh hierarchy per city (`<CITY>_ADMIN`), but the UI reads a **single global
 `HIERARCHY_TYPE`** for every tenant. Create the hierarchy under that shared name
@@ -235,7 +275,7 @@ fresh hierarchy per city (`<CITY>_ADMIN`), but the UI reads a **single global
 ```bash
 curl -s "$BASE/boundary-service/boundary-hierarchy-definition/_create" \
   -H 'Content-Type: application/json' -d '{
-    "RequestInfo":{"authToken":"<TOKEN>","userInfo":{"userName":"ADMIN","tenantId":"<root>","type":"EMPLOYEE"}},
+    "RequestInfo":{"authToken":"'"$TOKEN"'","userInfo":{"userName":"ADMIN","tenantId":"<root>","type":"EMPLOYEE"}},
     "BoundaryHierarchy":{"tenantId":"<tenant>","hierarchyType":"ADMIN","boundaryHierarchy":[
       {"boundaryType":"<L1>","parentBoundaryType":null,"active":true},
       {"boundaryType":"<L2>","parentBoundaryType":"<L1>","active":true}]}}'
@@ -267,23 +307,47 @@ still works in the dropdown, it just won't resolve map pins).
 
 **Known phase failures on the headless path & recovery:**
 
-- **Tenant phase** fails with a schema error on null `city.latitude/longitude` →
-  register the tenant directly: clone a known-good `tenant.tenants` row (patching
-  `code`/`name`/`tenantId`/`city.code`) and append the new code to the
-  `tenant.citymodule` rows (PGR / HRMS / Workbench). Re-run the remaining phases.
+- **Tenant phase** fails with a schema error on null `city.latitude/longitude`
+  (surfaces as `ValidationException.getKeyword() is null` — mdms-v2's error
+  formatter NPEs on the underlying schema violation) → register the tenant
+  directly by cloning a known-good row, then re-run the remaining phases:
+  ```bash
+  docker exec -i docker-postgres psql -U egov -d egov <<'SQL'
+  -- clone an existing city's tenant.tenants row, patching identity fields
+  INSERT INTO eg_mdms_data (id, tenantid, uniqueidentifier, schemacode, data, isactive,
+                            createdby, lastmodifiedby, createdtime, lastmodifiedtime)
+  SELECT md5(random()::text || clock_timestamp()::text), '<root>', '<tenant>', 'tenant.tenants',
+         jsonb_set(jsonb_set(jsonb_set(jsonb_set(src.data::jsonb,
+           '{code}', '"<tenant>"'), '{name}', '"<City Name>"'),
+           '{tenantId}', '"<tenant>"'), '{city,code}', '"<TENANT-UPPER>"'),
+         true, src.createdby, src.lastmodifiedby,
+         (extract(epoch from now())*1000)::bigint, (extract(epoch from now())*1000)::bigint
+  FROM (SELECT data, createdby, lastmodifiedby FROM eg_mdms_data
+        WHERE schemacode='tenant.tenants' AND uniqueidentifier='<existing-city>') src;
+
+  -- make the tenant visible to the modules (PGR / HRMS / Workbench)
+  UPDATE eg_mdms_data SET data = jsonb_set(data::jsonb, '{tenants}',
+           (data::jsonb->'tenants') || '[{"code":"<tenant>"}]'::jsonb)
+  WHERE schemacode='tenant.citymodule' AND tenantid='<root>'
+    AND NOT (data::jsonb->'tenants') @> '[{"code":"<tenant>"}]'::jsonb;
+  SQL
+  ```
 - **Employee phase** fails with "encryption process" / "Tenant Id not found" →
   `egov-enc-service` has no key for a tenant that wasn't registered yet. After the
   tenant exists: `docker restart egov-enc-service`, then re-run with only
   `employee_file`.
 - **Employee jurisdiction** lands on the wrong root (the loader scopes to the
-  first boundary root) → fix directly:
-  ```sql
+  first boundary root) → fix directly (SQL runs on the target host; the DB
+  container is `docker-postgres`, user/db `egov`):
+  ```bash
+  docker exec -i docker-postgres psql -U egov -d egov <<'SQL'
   UPDATE eg_hrms_jurisdiction j SET boundary='<intended-root-code>'
   FROM eg_hrms_employee e WHERE e.uuid = j.employeeid AND e.tenantid = '<tenant>';
+  SQL
   ```
 - **MapConfig not written.** Unlike the configurator wizard's Phase 2, the
   headless path does **not** write `RAINMAKER-PGR.MapConfig`, so the citizen map
-  has no boundary source. Seed it (see the [map post-config](#after-onboarding-enable-the-map--boundaries) below).
+  has no boundary source. Seed it (see the [map post-config](#after-onboarding--enable-the-map--boundaries) below).
 
 ---
 
@@ -299,7 +363,7 @@ citizens (easy to miss, and not created by the headless path):
 
   ```bash
   curl -s "$BASE/mdms-v2/v2/_create/RAINMAKER-PGR.MapConfig" -H 'Content-Type: application/json' -d '{
-    "RequestInfo":{"authToken":"<TOKEN>","userInfo":{"userName":"ADMIN","tenantId":"<root>","type":"EMPLOYEE"}},
+    "RequestInfo":{"authToken":"'"$TOKEN"'","userInfo":{"userName":"ADMIN","tenantId":"<root>","type":"EMPLOYEE"}},
     "Mdms":{"tenantId":"<tenant>","schemaCode":"RAINMAKER-PGR.MapConfig","uniqueIdentifier":"DEFAULT",
       "data":{"code":"DEFAULT","boundaryTenantId":"<tenant>","center":{"lat":<lat>,"lng":<lng>},
               "defaultZoom":11,"baseMapTheme":"voyager","geocodeCountryCodes":"<cc>"},"isActive":true}}'
@@ -332,10 +396,20 @@ A successful onboarding should leave you able to:
 Quick API check that the tenant record landed:
 
 ```bash
-curl -s -X POST "http://localhost:18000/mdms-v2/v1/_search" \
+# $BASE = http://<domain> on an Ansible deploy; http://localhost:18000 (Kong)
+# on a Docker Compose / Tilt stack.
+curl -s -X POST "$BASE/mdms-v2/v1/_search" \
   -H "Content-Type: application/json" \
   -d '{"RequestInfo":{"apiId":"Rainmaker"},"MdmsCriteria":{"tenantId":"<root>","moduleDetails":[{"moduleName":"tenant","masterDetails":[{"name":"tenants"}]}]}}' \
   | grep -o '"code":"[^"]*"'
+```
+
+Boundary sanity-check (counts per level, and that geometry actually landed):
+
+```bash
+curl -s -X POST "$BASE/boundary-service/boundary-relationships/_search?tenantId=<tenant>&hierarchyType=<hierarchy>&includeChildren=true" \
+  -H 'Content-Type: application/json' -d '{"RequestInfo":{"authToken":"'"$TOKEN"'"}}' \
+  | jq '[.TenantBoundary[0].boundary | .. | objects | select(has("boundaryType")).boundaryType] | group_by(.) | map({(.[0]): length}) | add'
 ```
 
 Then run the PGR lifecycle Postman collection against the tenant to confirm the
