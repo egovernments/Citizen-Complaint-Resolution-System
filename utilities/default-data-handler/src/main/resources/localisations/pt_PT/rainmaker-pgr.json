@@ -1081,7 +1081,7 @@
     },
     {
         "code": "PGR_LANDING_INST_TITLE",
-        "message": "IGE e IGSAE ao serviço do cidadão",
+        "message": "Inspecção-Geral do Estado (IGE) ao serviço do cidadão",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },

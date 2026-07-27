@@ -7867,7 +7867,7 @@
     },
     {
         "code": "PGR_LANDING_INST_TITLE",
-        "message": "IGE and IGSAE at the citizen's service",
+        "message": "Inspectorate-General of the State (IGE) at the citizen's service",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },

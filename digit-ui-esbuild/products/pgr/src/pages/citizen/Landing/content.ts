@@ -195,7 +195,7 @@ export const LANDING_COPY = {
   NEWS_VIEW_ALL: { pt: "Ver todas as actualizações", en: "See all updates" },
 
   // Institutions -------------------------------------------------------—---
-  INST_TITLE: { pt: "IGE e IGSAE ao serviço do cidadão", en: "IGE and IGSAE at the citizen's service" },
+  INST_TITLE: { pt: "Inspecção-Geral do Estado (IGE) ao serviço do cidadão", en: "Inspectorate-General of the State (IGE) at the citizen's service" },
   INST_IGE_TITLE: { pt: "Inspecção-Geral do Estado (IGE)", en: "General State Inspectorate (IGE)" },
   INST_IGE_DESC: {
     pt: "Órgão central de controlo interno da Administração Pública, responsável pela auditoria, fiscalização e inspecção da legalidade, regularidade, eficiência e eficácia da utilização dos recursos públicos.",
@@ -316,7 +316,6 @@ export interface InstitutionItem {
 
 export const INSTITUTIONS: InstitutionItem[] = [
   { icon: Landmark, titleKey: "INST_IGE_TITLE", descKey: "INST_IGE_DESC" },
-  { icon: Store, titleKey: "INST_IGSAE_TITLE", descKey: "INST_IGSAE_DESC" },
 ];
 
 export interface NewsItem {
