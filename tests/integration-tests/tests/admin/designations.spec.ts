@@ -299,13 +299,14 @@ Steps:
 1. Generate two unique codes (codeA matching DEPT_A, codeOther matching DEPT_C); track for cleanup.
 2. mdmsCreate both designations with the appropriate department arrays.
 3. Navigate to LIST_PATH.
-4. Locate Department filter; test.skip if absent.
-5. Click filter, click DEPT_A option (fall back to typeahead if click fails).
-6. Wait networkidle; type 'PW_' in the search to scope to seeded rows.
-7. Assert codeA row is visible.
-8. Assert codeOther row count === 0.
+4. The Department filter is NOT alwaysOn in DesignationList — open the "Add filter" popover and pick "Department" so the control mounts.
+5. Locate the trigger via getByRole('combobox').filter({ hasText: /department/i }) and open it.
+6. Click the option whose label carries DEPT_A (ReferenceFilterInput labels options by department NAME, which embeds the code).
+7. Type 'PW_' in the search to scope to seeded rows.
+8. Assert codeA row becomes visible (auto-retrying — the grid debounces).
+9. Assert codeOther row count === 0.
 
-Filter-by-array logic — confirms the dataProvider sends the right query for chip values.`,
+Filter-by-array logic — confirms the dataProvider sends the right query for chip values. Previously this used getByLabel(/^Department/i), which matched NOTHING (ReferenceFilterInput renders a Radix SelectTrigger with an id but no <label for>) and additionally never opened "Add filter", so the test self-skipped on every deployment.`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({
     page,
@@ -329,26 +330,35 @@ Filter-by-array logic — confirms the dataProvider sends the right query for ch
 
     await page.goto(LIST_PATH);
 
-    // Filter by DEPT_A. The departments filter is a select; if it's
-    // missing on this build, the test logs and short-circuits — the
-    // filter UI is part of the regression net but a missing widget is a
-    // separate failure surface.
-    const filter = page.getByLabel(/^Department/i).first();
+    // Filter by DEPT_A. The Department filter is NOT `alwaysOn` in
+    // DesignationList's `filters` array, so it doesn't exist in the DOM until
+    // it's picked out of the "Add filter" popover (FilterBar/AddFilterButton).
+    // ReferenceFilterInput then renders a Radix <SelectTrigger id={id}> with no
+    // <label for> anywhere — getByLabel(/^Department/i) matched NOTHING, which
+    // is why the old guard skipped this test on every deployment. Target the
+    // combobox by the placeholder text the trigger renders instead.
+    const filter = page.getByRole('combobox').filter({ hasText: /department/i }).first();
     if (!(await filter.isVisible().catch(() => false))) {
-      test.skip(true, 'Department filter not present on this build');
+      await page.getByRole('button', { name: /^Add filter$/i }).click();
+      await page.getByRole('button', { name: 'Department', exact: true }).click();
     }
+    await expect(filter).toBeVisible();
     await filter.click();
-    await page.getByRole('option', { name: DEPT_A }).click().catch(async () => {
-      // Some builds use a typeahead — fall back to keyboard input.
-      await page.keyboard.type(DEPT_A);
-      await page.getByRole('option', { name: DEPT_A }).click();
-    });
-    await page.waitForLoadState('networkidle').catch(() => {});
 
-    // codeA should appear; codeOther should not.
+    // Options are labelled with the department NAME (ReferenceFilterInput's
+    // displayField), and the seeded names embed the code.
+    const option = page.getByRole('option', { name: new RegExp(DEPT_A) }).first();
+    await option.waitFor({ state: 'visible', timeout: 15_000 });
+    await option.click();
+
+    // codeA should appear; codeOther should not. Scope to the seeded rows.
     await page.getByPlaceholder(/search/i).first().fill('PW_');
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await expect(page.getByRole('row').filter({ hasText: codeA })).toBeVisible();
+    // The grid debounces (setFilters(..., undefined, true)) and neither the
+    // option click nor the keystrokes navigate, so waitForLoadState('networkidle')
+    // resolves in ~0.2 ms. Auto-retrying expect is the honest wait.
+    await expect(
+      page.getByRole('row').filter({ hasText: codeA }),
+    ).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole('row').filter({ hasText: codeOther })).toHaveCount(0);
   });
 

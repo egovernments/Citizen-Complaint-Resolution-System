@@ -18,7 +18,7 @@
  *  - /access-control/v1/actions/mdms/_get returns 404 at `ke` (pre-existing;
  *    see DEV-LOG §13). Not on the critical create/edit path.
  */
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import ExcelJS from 'exceljs';
 import { loadAuth, employeeSearch, type AuthInfo } from '../utils/manage/api';
 import { testCode, testCodeIndexed } from '../utils/manage/codes';
@@ -209,24 +209,55 @@ test.afterAll(async () => {
 });
 
 test.describe('manage/employees', () => {
-  test('1. list renders, search narrows, status filter applies', {
+  test('1. list renders; search narrows to the matching row; Status filter partitions the list', {
     annotation: {
       type: 'description',
-      description: `Smoke check for /manage/employees: the list renders with the four expected columns (Employee Code, Name, Mobile, Status), search narrows the row count, and the Status filter switches between Active and Inactive without crashing.
+      description: `Smoke check for /manage/employees that actually proves the two filters NARROW.
+
+The previous version could not fail. It asserted \`filtered <= initial\` — a
+narrowing filter can never *increase* a row count, and the grid's debounce
+(DigitList.tsx handleSearchChange -> setFilters(..., undefined, true), ~750ms
+measured) made the two reads identical anyway — and \`inactiveCount >= 0\`,
+a pure tautology. Worse, the Status branch was guarded by
+\`getByLabel(/^Status$/i)\`, which matches NOTHING: the filter is a Radix
+SelectTrigger with no <label>, so the tautology never even ran. This rewrite
+asserts the expected *rows*, and every read goes through an auto-retrying
+poll so the debounce cannot fake a pass.
 
 Steps:
-1. Navigate to /configurator/manage/employees.
-2. Assert role=table is visible.
-3. For each header in ['Employee Code','Name','Mobile','Status'], assert the matching role=columnheader is visible.
-4. Read initial row count; assert > 1.
-5. Type 'zzz_no_such_employee' in the search input; wait networkidle.
-6. Read filtered count; assert filtered <= initial.
-7. Clear search; wait networkidle.
-8. If Status filter visible, click it, pick Inactive, wait networkidle, assert count >= 0.
+1. Pick a needle from live HRMS: the alphabetically-first employee code that
+   occurs in exactly ONE record. Derived, not hardcoded — and uniqueness is
+   checked because the grid's quick-search matches the whole record, so a code
+   like ADMIN also matches every employee whose jurisdiction hierarchy is
+   MAPUTO_ADMIN (measured: 65 of 65 rows on the local stack).
+2. Navigate to the list; assert role=table + the four expected columnheaders.
+3. Read the grid's own "Showing a-b of N" footer for the unfiltered total N;
+   assert N > 1 (otherwise nothing can be narrowed and the test skips).
+4. Type the needle; poll the footer until the total is exactly 1, and assert
+   the single rendered row's Employee Code cell IS the needle.
+5. Type a nonsense term; poll the total to 0 and assert the "No records found"
+   empty state renders (the footer is not rendered at total=0).
+6. Clear the search; poll the total back to N — the filter is reversible.
+7. Status filter (located as the filter bar's only combobox, since Radix gives
+   it no accessible name): select Inactive, then Employed. For each, assert
+   EVERY rendered Status cell carries that status, and record the total.
+8. Assert totalInactive + totalEmployed === N. A filter that is silently
+   ignored returns the full list under both, so the sum would be 2N; a filter
+   that over-narrows makes the sum fall short. Employed/Inactive are the only
+   choices the UI offers, so they must partition the list.
 
-Multi-purpose smoke that exercises the major surface in one pass.`,
+Mutation-tested: deleting the \`search.fill(needle)\` line turns step 4 red
+("expected 1, received 65").`,
     },
     tag: ['@area:configurator-manage', '@area:hrms', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
+    // Derived from the deployment, never hardcoded: the first code (in a
+    // deterministic order) that identifies exactly one employee.
+    const needle = await pickUniqueEmployeeCode();
+    test.skip(
+      !needle,
+      'no employee code on this deployment identifies exactly one record — nothing unambiguous to search for',
+    );
+
     await page.goto(LIST_PATH);
 
     const table = page.getByRole('table');
@@ -239,28 +270,76 @@ Multi-purpose smoke that exercises the major surface in one pass.`,
       ).toBeVisible();
     }
 
-    const dataRows = page.getByRole('row');
-    const initialCount = await dataRows.count();
-    expect(initialCount).toBeGreaterThan(1);
+    // Data rows only — getByRole('row') also counts the header row, which is
+    // how "11 rows" used to stand in for "10 employees".
+    const dataRows = table.locator('tbody tr');
+    const baselineTotal = await settledTotal(page);
+    test.skip(
+      baselineTotal < 2,
+      `only ${baselineTotal} employee(s) on this deployment — a narrowing filter cannot be observed`,
+    );
 
-    // Narrow via search — expect row count to drop or empty state to appear.
+    // ── search narrows to exactly the matching row ──────────────────────────
     const search = page.getByPlaceholder(/search/i).first();
     await expect(search).toBeVisible();
-    await search.fill('zzz_no_such_employee');
-    await page.waitForLoadState('networkidle').catch(() => {});
-    const filteredCount = await dataRows.count();
-    expect(filteredCount).toBeLessThanOrEqual(initialCount);
+    await search.fill(needle!);
+    // expect.poll, not a bare read: the grid debounces the filter, so an
+    // immediate count still shows the UNFILTERED page.
+    await expect
+      .poll(() => readTotal(page), {
+        timeout: 20_000,
+        message: `search for '${needle}' must narrow the grid to that one employee`,
+      })
+      .toBe(1);
+    await expect(dataRows).toHaveCount(1);
+    await expect(dataRows.first().locator('td').first()).toHaveText(needle!);
 
-    // Reset and flip Status → Inactive.
+    // ── a term that matches nothing empties the grid ────────────────────────
+    await search.fill('zzz_no_such_employee');
+    await expect
+      .poll(() => readTotal(page), { timeout: 20_000, message: 'a non-matching search must empty the grid' })
+      .toBe(0);
+    await expect(dataRows).toHaveCount(0);
+    await expect(page.getByText(/No records found/i)).toBeVisible();
+
+    // ── clearing restores the full list ─────────────────────────────────────
     await search.fill('');
-    await page.waitForLoadState('networkidle').catch(() => {});
-    const statusFilter = page.getByLabel(/^Status$/i);
-    if (await statusFilter.isVisible().catch(() => false)) {
+    await expect
+      .poll(() => readTotal(page), { timeout: 20_000, message: 'clearing the search must restore every row' })
+      .toBe(baselineTotal);
+
+    // ── Status filter ───────────────────────────────────────────────────────
+    // The filter bar's Status control is a Radix SelectTrigger with no <label>
+    // and no aria-label, so getByLabel(/^Status$/) matches nothing — that is
+    // exactly how the old assertion went unexecuted. It is the only combobox
+    // inside FilterBar's <form>, and it keeps that identity after selection
+    // (its rendered text becomes the chosen value).
+    const statusFilter = page.locator('form').getByRole('combobox').first();
+    await expect(statusFilter, 'the filter bar combobox must be the Status filter').toHaveText(/^Status$/i);
+
+    const statusCells = dataRows.locator('td:nth-child(4)');
+    const totals: Record<string, number> = {};
+    for (const [option, cellText] of [['Inactive', 'INACTIVE'], ['Employed', 'EMPLOYED']] as const) {
       await statusFilter.click();
-      await page.getByRole('option', { name: /Inactive/i }).click();
-      await page.waitForLoadState('networkidle').catch(() => {});
-      expect(await dataRows.count()).toBeGreaterThanOrEqual(0);
+      await page.getByRole('option', { name: new RegExp(`^${option}$`, 'i') }).click();
+      await expect(statusFilter).toHaveText(new RegExp(`^${option}$`, 'i'));
+      // Auto-retrying, so it also absorbs the debounce: no rendered row may
+      // carry a status other than the one selected.
+      await expect(
+        statusCells.filter({ hasNotText: cellText }),
+        `every row under Status='${option}' must show ${cellText}`,
+      ).toHaveCount(0);
+      totals[option] = await settledTotal(page);
     }
+
+    // The two choices the UI offers are the whole vocabulary, so they must
+    // partition the list. A filter that is silently ignored yields the full
+    // list under both (sum = 2N); one that over-narrows falls short.
+    expect(
+      totals.Inactive + totals.Employed,
+      `Status filter must partition the ${baselineTotal} employees — got ` +
+        `${totals.Inactive} Inactive + ${totals.Employed} Employed`,
+    ).toBe(baselineTotal);
   });
 
   test('2. single create — happy path derives code + username, employee lands', {
@@ -965,6 +1044,80 @@ the test is actually asserting.`,
 });
 
 // --- Helpers local to this spec ---
+
+/**
+ * The grid's own record count, read from its "Showing 1-10 of 65" footer.
+ *
+ * The footer is the only honest total on the page: the visible row count is
+ * capped by the page size (10), so a filter that narrows 65 -> 40 changes no
+ * row count at all. DigitDatagrid renders the footer only when total > 0, so an
+ * absent footer plus the empty state means a real zero; an absent footer with
+ * no empty state means the grid is mid-refetch (react-query unmounts the table
+ * while a new filter's query is pending) and the caller must retry.
+ */
+async function readTotal(page: Page): Promise<number | null> {
+  const footer = page.getByText(/Showing\s+\d+\s*[-–]\s*\d+\s+of\s+\d+/i).first();
+  if ((await footer.count()) > 0) {
+    const text = await footer.textContent({ timeout: 2_000 }).catch(() => null);
+    const m = text?.match(/of\s+(\d+)/i);
+    if (m) return Number(m[1]);
+  }
+  if ((await page.getByText(/No records found/i).count()) > 0) return 0;
+  return null;
+}
+
+/**
+ * readTotal() once the grid has stopped moving.
+ *
+ * For a total we can predict, prefer `expect.poll(() => readTotal(page))` —
+ * it retries a stale read away. This exists for the reads whose expected value
+ * is exactly what we are measuring (the per-status totals), where a stale read
+ * would otherwise be indistinguishable from a settled one. The grid debounces
+ * filter changes (~750ms measured), so we wait past that before sampling and
+ * then require two consecutive identical readings.
+ */
+async function settledTotal(page: Page, opts?: { settleMs?: number; timeoutMs?: number }): Promise<number> {
+  const settleMs = opts?.settleMs ?? 2_000;
+  const deadline = Date.now() + (opts?.timeoutMs ?? 20_000);
+  await page.waitForTimeout(settleMs);
+  let previous: number | null = null;
+  while (Date.now() < deadline) {
+    const current = await readTotal(page);
+    if (current !== null && current === previous) return current;
+    previous = current;
+    await page.waitForTimeout(400);
+  }
+  throw new Error(
+    `the employee grid never settled on a record count (last read: ${previous ?? 'none — no footer and no empty state'})`,
+  );
+}
+
+/**
+ * An employee code that identifies exactly ONE record on this deployment.
+ *
+ * The quick-search filter matches the whole serialized record
+ * (dataProvider clientFilter: `JSON.stringify(record).includes(q)`), not just
+ * the code column, so plenty of real codes are useless as a narrowing probe:
+ * searching `ADMIN` on the local stack returns all 65 rows, because every
+ * employee's jurisdiction hierarchy is `MAPUTO_ADMIN`. Uniqueness is checked
+ * against the same record set the grid itself lists (HRMS at TENANT_CODE,
+ * limit 500 — the page size hrmsGetList uses), and candidates are walked in
+ * sorted order so the choice is deterministic across runs.
+ */
+async function pickUniqueEmployeeCode(): Promise<string | null> {
+  const auth = loadAuth();
+  const employees = await employeeSearch(auth, TENANT_CODE, { limit: 500 });
+  const serialized = employees.map((e) => JSON.stringify(e).toLowerCase());
+  const codes = employees
+    .map((e) => String(e.code ?? ''))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+  for (const code of codes) {
+    const needle = code.toLowerCase();
+    if (serialized.filter((s) => s.includes(needle)).length === 1) return code;
+  }
+  return null;
+}
 
 interface BulkRow {
   employeeCode: string;

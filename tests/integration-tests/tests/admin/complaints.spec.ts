@@ -21,6 +21,7 @@ import {
   type AuthInfo,
 } from '../utils/manage/api';
 import { cleanupPgrComplaints } from '../utils/manage/teardown';
+import { seedComplaintAsCitizen } from '../utils/seed';
 import { generateCitizenPhone, ROOT_TENANT, TENANT, LOCALITY_CODE, SERVICE_CODE } from '../utils/env';
 
 // Tenant identifiers come from env so the suite runs on any deployment.
@@ -33,6 +34,34 @@ const LIST_PATH = '/configurator/manage/complaints';
 const CREATE_PATH = `${LIST_PATH}/create`;
 
 const createdComplaints = new Set<string>();
+// Complaints already handed out by pickWorkableComplaint(). pgr-services' read
+// model does not reflect a write immediately (and, until the locality-wipe bug
+// is fixed, may never reflect it at all), so a second caller asking the same
+// `status: PENDINGFORASSIGNMENT` query gets the same complaint back, loads a
+// stale status, offers ASSIGN, and egov-workflow-v2 — which IS up to date —
+// rejects it with `INVALID ACTION`. Never hand the same complaint out twice.
+const consumedComplaints = new Set<string>();
+
+/**
+ * Choose the human ASSIGN action in the Take-Action select.
+ *
+ * Anchored deliberately: from PENDINGFORASSIGNMENT the PGR workflow also offers
+ * `ASSIGNEDBYAUTOESCALATION` (roles: [AUTO_ESCALATE]) and the UI lists it BEFORE
+ * `ASSIGN`, so a loose /assign/i picks the system-only transition. No human role
+ * holds AUTO_ESCALATE, so the _update then 400s with `INVALID ROLE`. Anchoring on
+ * ^ also keeps `Reassign to Employee` out.
+ *
+ * Asserts on the option's text so a future label change fails loudly here rather
+ * than silently selecting a neighbouring action.
+ */
+async function chooseAssignAction(page: import('@playwright/test').Page) {
+  const option = page.getByRole('option', { name: /^Assign to Employee/i }).first();
+  await expect(
+    option,
+    'the Take-Action select should offer an "Assign to Employee" option',
+  ).toBeVisible({ timeout: 20_000 });
+  await option.click({ timeout: 20_000 });
+}
 
 let liveServiceCode: string | null = null;
 let lmeAssigneeUuid: string | null = null;
@@ -268,7 +297,7 @@ Catches a regression where description doesn't ride along with the workflow tran
     // force: the trigger is visible but Playwright's actionability check can hang
     // on this custom select (overlay/pointer-events during the record load).
     await actionSelect.click({ timeout: 20_000, force: true });
-    await page.getByRole('option', { name: /assign/i }).first().click({ timeout: 20_000 });
+    await chooseAssignAction(page);
 
     // The assignee picker may render only after ASSIGN is chosen.
     // These custom selects render WITHOUT a <label> association, so getByLabel
@@ -422,26 +451,29 @@ Catches the bug class where pagination renders fine but the count number is wron
     expect(uiCount).toBe(apiCount);
   });
 
-  test('6. status + date filters fire as XHR query params', {
+  test('6. status filter fires as an XHR query param', {
     annotation: {
       type: 'description',
-      description: `Validates server-side filtering on the complaints list: changing the Status filter to PENDINGFORASSIGNMENT and setting From-date to 7 days ago must produce a /pgr-services/v2/request/_search XHR with both applicationStatus= and fromDate= query params.
+      description: `Validates server-side status filtering on the complaints list: changing the Status filter to "Pending Assignment" must produce a /pgr-services/v2/request/_search XHR carrying applicationStatus=PENDINGFORASSIGNMENT.
 
 Steps:
-1. Navigate to /complaints; wait networkidle.
-2. Attach a request listener to capture _search URLs into 'seen'.
-3. Locate Status filter; test.skip if not visible; click; pick PENDINGFORASSIGNMENT.
-4. If From-date input exists, fill ISO date 7 days ago.
-5. Wait networkidle.
-6. Assert seen.length > 0 (at least one search XHR fired).
-7. Assert the latest URL matches /applicationStatus=/.
-8. If From-date was filled, assert the URL also matches /fromDate=/.
+1. Navigate to /complaints; wait for the first data row.
+2. Attach a request listener capturing _search URLs into 'seen'.
+3. Locate the Status filter (radix combobox — matched by its trigger TEXT, see below); assert it is visible.
+4. Click it and pick the option whose id is PENDINGFORASSIGNMENT (label "Pending Assignment").
+5. expect.poll until a _search URL carrying applicationStatus= is observed, then assert the value is PENDINGFORASSIGNMENT.
 
-Catches a regression where filters render but only update local state instead of triggering a server search.`,
+Two selector notes, both learned the hard way:
+- The radix SelectTrigger has NO accessible name, so getByRole('combobox', { name: /^Status$/ }) matches NOTHING. That silently drove this test into test.skip() for its whole life. Match on trigger text instead.
+- waitForLoadState('networkidle') resolves in ~0.2ms after an SPA click (no navigation occurs), so it cannot be used to wait for the refire. Poll the captured URLs instead.
+
+The From/To date half of this test now lives in test 6b — it is a genuinely separate contract and it is currently broken app-side, so bundling the two hid a working assertion behind a failing one.
+
+Catches a regression where the status filter renders but only updates local state instead of triggering a server search.`,
     },
     tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await expect(page.getByRole('row').nth(1)).toBeVisible({ timeout: 30_000 });
 
     const seen: string[] = [];
     page.on('request', (req: Request) => {
@@ -449,76 +481,215 @@ Catches a regression where filters render but only update local state instead of
       if (/\/pgr-services\/v2\/request\/_search/.test(url)) seen.push(url);
     });
 
-    // The filter renders as a combobox with an accessible name (not a <label>
-    // association), so match by role+name, not getByLabel.
-    const statusFilter = page.getByRole('combobox', { name: /^Status$/i }).first();
-    if (!(await statusFilter.isVisible().catch(() => false))) {
-      test.skip(true, 'Status filter not present on this build');
-    }
+    const statusFilter = page.getByRole('combobox').filter({ hasText: /^Status$/ }).first();
+    await expect(
+      statusFilter,
+      'the complaints list must render a Status filter',
+    ).toBeVisible({ timeout: 15_000 });
     await statusFilter.click();
-    await page.getByRole('option', { name: /PENDINGFORASSIGNMENT/i }).click();
 
-    // From-date = 7 days ago. The widget is a date input; we drive it via
-    // its labeled control if present.
-    const fromDate = page.getByLabel(/^From|^From\s*date/i).first();
-    if (await fromDate.isVisible().catch(() => false)) {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      const iso = sevenDaysAgo.toISOString().slice(0, 10);
-      await fromDate.fill(iso);
-    }
-    await page.waitForLoadState('networkidle').catch(() => {});
+    // The option LABEL is the human name ("Pending Assignment"); the id it sets
+    // is PENDINGFORASSIGNMENT. Anchor on the label, assert on the emitted param.
+    const pendingOption = page
+      .getByRole('option')
+      .filter({ hasText: /^Pending Assignment$/i })
+      .first();
+    await expect(
+      pendingOption,
+      'the Status filter must offer the PENDINGFORASSIGNMENT state',
+    ).toBeVisible({ timeout: 15_000 });
+    await pendingOption.click();
 
-    expect(seen.length, 'status/date change should trigger _search XHR').toBeGreaterThan(0);
-    const last = seen[seen.length - 1];
-    expect(last).toMatch(/applicationStatus=/);
-    if (await fromDate.isVisible().catch(() => false)) {
-      expect(last).toMatch(/fromDate=/);
-    }
+    await expect
+      .poll(() => seen.filter((u) => /[?&]applicationStatus=/.test(u)).length, {
+        timeout: 25_000,
+        message:
+          'changing Status must refire /pgr-services/v2/request/_search with an applicationStatus= query param',
+      })
+      .toBeGreaterThan(0);
+
+    const filtered = seen.filter((u) => /[?&]applicationStatus=/.test(u));
+    expect(
+      filtered[filtered.length - 1],
+      'the emitted applicationStatus must be the state the operator picked',
+    ).toMatch(/[?&]applicationStatus=PENDINGFORASSIGNMENT(&|$)/);
+  });
+
+  test('6b. From-date filter fires as a fromDate XHR query param', {
+    annotation: {
+      type: 'description',
+      description: `Validates server-side DATE filtering on the complaints list: adding the "From" filter and setting it to 7 days ago must produce a /pgr-services/v2/request/_search XHR carrying a fromDate= query param.
+
+Steps:
+1. Navigate to /complaints; wait for the first data row.
+2. Click "Add filter" and choose "From" (fromDate is NOT alwaysOn in ComplaintList.tsx, so it only exists once added — this is why the old bundled test never exercised it).
+3. Attach a request listener capturing _search URLs.
+4. Fill the date input with ISO(now - 7d). DateFilterInput DOES associate its <label htmlFor>, so getByLabel(/^From$/) reaches it once shown.
+5. expect.poll until _search refires at all (proves the filter form reacted).
+6. Assert one of the refired URLs carries fromDate=.
+
+Split out of test 6 deliberately: the status half passes and the date half does not, and a single bundled test would have masked the working half behind the broken one. Do NOT relax step 6 to make this green — see the failure message for the mechanism.`,
+    },
+    tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
+    await page.goto(LIST_PATH);
+    await expect(page.getByRole('row').nth(1)).toBeVisible({ timeout: 30_000 });
+
+    // fromDate is not alwaysOn — surface it through the Add-filter popover.
+    const addFilter = page.getByRole('button', { name: /^Add filter$/i }).first();
+    await expect(
+      addFilter,
+      'the complaints list must offer an "Add filter" control for the non-alwaysOn filters',
+    ).toBeVisible({ timeout: 15_000 });
+    await addFilter.click();
+    const fromEntry = page
+      .locator('[data-radix-popper-content-wrapper]')
+      .getByRole('button', { name: /^From$/ })
+      .first();
+    await expect(
+      fromEntry,
+      'the Add-filter menu must offer the "From" date filter',
+    ).toBeVisible({ timeout: 15_000 });
+    await fromEntry.click();
+
+    const fromInput = page.getByLabel(/^From$/i).first();
+    await expect(fromInput, 'the From date input must mount once added').toBeVisible({
+      timeout: 15_000,
+    });
+
+    const seen: string[] = [];
+    page.on('request', (req: Request) => {
+      const url = req.url();
+      if (/\/pgr-services\/v2\/request\/_search/.test(url)) seen.push(url);
+    });
+
+    const iso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    await fromInput.fill(iso);
+
+    // The grid debounces (DigitList setFilters(..., undefined, true)), so never
+    // read immediately — poll until the refire lands.
+    await expect
+      .poll(() => seen.length, {
+        timeout: 25_000,
+        message: 'setting the From date must refire /pgr-services/v2/request/_search',
+      })
+      .toBeGreaterThan(0);
+
+    expect(
+      seen.some((u) => /[?&]fromDate=/.test(u)),
+      `the From date must reach pgr-services as a fromDate= query param, but no refired _search carried one. ` +
+        `Observed: ${JSON.stringify(seen)}. ` +
+        `APP BUG — DateFilterInput drives an <input type="date">, so react-hook-form stores fromDate as the STRING "${iso}", ` +
+        `while dataProvider.ts getList() gates on \`typeof filter.fromDate === 'number'\` and therefore drops it. ` +
+        `Do not weaken this assertion; parse the date input to epoch-ms (or widen the type guard) in the provider.`,
+    ).toBe(true);
   });
 
   test('7. department filter narrows visible rows', {
     annotation: {
       type: 'description',
-      description: `Validates the Department filter on the complaints list: each visible row after filtering must reference the picked department (text match in row content). Picks the first available option to avoid hardcoding tenant-specific dept codes.
+      description: `Validates the Department filter on the complaints list actually NARROWS the grid: after picking a department, the rows still on screen must be exactly the rows that already carried that department.
 
 Steps:
-1. Navigate to /complaints.
-2. Locate Department filter; test.skip if absent.
-3. Click filter; capture first option's text; click it; wait networkidle.
-4. Read row count; if <=1 return early (filter validly returned 0 rows).
-5. Sample up to 5 rows; lower-case row text and assert it contains the option's lowercased text.
+1. Navigate to /complaints; wait for rows and let them settle (the grid debounces).
+2. Read the Department column of every visible row -> deptsBefore.
+3. Open the Department filter and read its options, dropping "All" (that option CLEARS the filter — selecting it can never narrow anything, so iterating it would guarantee a vacuous pass).
+4. Pick the department with the FEWEST rows on the current page — that maximises the observable narrowing. Skip if it would not narrow at all (a real data gap, not a pass).
+5. expect.poll the Department column until it equals exactly the subset of deptsBefore that carried the picked department.
 
-Loose match via text inclusion tolerates whatever the row actually renders (label, code, or both).`,
+Selector note: the radix SelectTrigger has NO accessible name, so getByRole('combobox', { name: /^Department/ }) matched nothing and this test skipped itself for its whole life.
+
+The assertion is an exact array equality against a pre-filter measurement — it cannot pass unless the filter genuinely removed the non-matching rows.`,
     },
     tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async ({ page }) => {
     await page.goto(LIST_PATH);
-    const filter = page.getByRole('combobox', { name: /^Department/i }).first();
-    if (!(await filter.isVisible().catch(() => false))) {
-      test.skip(true, 'Department filter not present on this build');
-    }
-
-    // Pick the FIRST option that has at least one matching row server-side
-    // — querying live data avoids tenant-specific assumptions.
-    await filter.click();
-    const firstOpt = page.getByRole('option').first();
-    const optText = ((await firstOpt.textContent()) || '').trim();
-    await firstOpt.click();
-    await page.waitForLoadState('networkidle').catch(() => {});
-
     const rows = page.getByRole('row');
-    const rowCount = await rows.count();
-    if (rowCount <= 1) return; // header only — filter validly returned 0 rows.
+    await expect(rows.nth(1)).toBeVisible({ timeout: 30_000 });
 
-    // Sample up to 5 rows and check the Department column contains the
-    // selected option's text.
-    const sample = Math.min(5, rowCount - 1);
-    for (let i = 1; i <= sample; i++) {
-      const rowText = (await rows.nth(i).textContent())?.toLowerCase() || '';
-      expect(
-        rowText.includes(optText.toLowerCase()),
-        `row ${i} should match dept filter "${optText}"`,
-      ).toBe(true);
-    }
+    const headers = (await rows.nth(0).getByRole('columnheader').allTextContents()).map((h) =>
+      h.trim(),
+    );
+    const deptCol = headers.findIndex((h) => /^department$/i.test(h));
+    expect(deptCol, `complaints grid must render a Department column, got ${JSON.stringify(headers)}`)
+      .toBeGreaterThanOrEqual(0);
+
+    /** The Department cell of every DATA row, top to bottom. */
+    const readDepartments = async (): Promise<string[]> => {
+      const n = await rows.count();
+      const out: string[] = [];
+      for (let i = 1; i < n; i++) {
+        out.push(((await rows.nth(i).getByRole('cell').nth(deptCol).textContent()) || '').trim());
+      }
+      return out;
+    };
+
+    /** Read until two consecutive reads agree — the grid debounces its refetch,
+     *  so a single immediate read regularly catches a half-rendered page. */
+    const settledDepartments = async (): Promise<string[]> => {
+      let prev = '';
+      await expect
+        .poll(
+          async () => {
+            const cur = JSON.stringify(await readDepartments());
+            const stable = cur === prev && cur !== '[]';
+            prev = cur;
+            return stable;
+          },
+          { timeout: 30_000, intervals: [800], message: 'complaints grid rows must settle' },
+        )
+        .toBe(true);
+      return JSON.parse(prev) as string[];
+    };
+
+    const before = await settledDepartments();
+    expect(before.length, 'need at least one complaint on page 1 to test narrowing').toBeGreaterThan(0);
+
+    const filter = page.getByRole('combobox').filter({ hasText: /^Department$/ }).first();
+    await expect(
+      filter,
+      'the complaints list must render a Department filter',
+    ).toBeVisible({ timeout: 15_000 });
+    await filter.click();
+
+    // "All" is the clear-the-filter sentinel (ReferenceFilterInput maps it to
+    // ''), so it is never a narrowing case — iterating it is a guaranteed
+    // vacuous pass. Drop it.
+    const choices = (await page.getByRole('option').allTextContents())
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .filter((t) => !/^all$/i.test(t));
+    expect(choices.length, 'the departments reference list must offer at least one department')
+      .toBeGreaterThan(0);
+
+    const occurrences = (d: string) => before.filter((v) => v === d).length;
+    const target = choices
+      .slice()
+      .sort((a, b) => occurrences(a) - occurrences(b) || a.localeCompare(b))[0];
+    const expectedAfter = before.filter((v) => v === target);
+    expect(
+      expectedAfter.length,
+      `every department option matches every row on page 1 (${JSON.stringify(before)}) — ` +
+        'no option could narrow anything, so this deployment cannot prove the filter works',
+    ).toBeLessThan(before.length);
+
+    await page
+      .getByRole('option', { name: new RegExp(`^${escapeRegex(target)}$`) })
+      .first()
+      .click();
+
+    await expect
+      .poll(readDepartments, {
+        timeout: 30_000,
+        intervals: [800],
+        message:
+          `selecting Department="${target}" must leave ONLY that department's rows. ` +
+          `Page 1 held ${JSON.stringify(before)}, so the grid must narrow to ${JSON.stringify(expectedAfter)}. ` +
+          'If the grid is byte-identical to the unfiltered one, the filter is not filtering — ' +
+          'ComplaintList.tsx declares source="additionalDetail.department", react-hook-form (inside FilterLiveForm) ' +
+          "NESTS that dotted path into params.filter as { additionalDetail: { department } }, while dataProvider.ts " +
+          "getList() reads the FLAT key filter['additionalDetail.department'] and gets undefined, so the client-side " +
+          'filter never runs. Do not weaken this assertion.',
+      })
+      .toEqual(expectedAfter);
   });
 
   test('8. show page renders address extras and a working geo link', {
@@ -658,10 +829,25 @@ Test data: ke.nairobi has 55 complaints (probed 2026-04-23). The 26 minimum keep
     if (!(await nextBtn.isVisible().catch(() => false))) {
       test.skip(true, 'No Next pagination control rendered');
     }
-    await nextBtn.click();
-    await page.waitForLoadState('networkidle').catch(() => {});
-
-    expect(searches.length, 'paging should trigger a fresh _search XHR').toBeGreaterThan(0);
+    // Wait for the REQUEST, not for a load state. Clicking Next in an SPA performs
+    // no navigation, and the page's `networkidle` already fired during goto(), so
+    // waitForLoadState('networkidle') returns in ~0.2 ms — before React has even
+    // dispatched the refetch. The old assertion was therefore reading `searches`
+    // while it was still empty, and reported "pagination is not server-side" on a
+    // grid that pages perfectly well.
+    await Promise.all([
+      page.waitForRequest(
+        (r) => r.url().includes('/pgr-services/v2/request/_search'),
+        { timeout: 15_000 },
+      ),
+      nextBtn.click(),
+    ]);
+    await expect
+      .poll(() => searches.length, {
+        message: 'paging should trigger a fresh _search XHR',
+        timeout: 15_000,
+      })
+      .toBeGreaterThan(0);
     // The last search's offset should be > 0 — i.e. real server-side paging.
     const last = searches[searches.length - 1];
     const offset = Number(last.searchParams.get('offset') || '0');
@@ -771,7 +957,7 @@ Both client-side (single XHR count) and server-side (persistence) checks — tog
     // force: the trigger is visible but Playwright's actionability check can hang
     // on this custom select (overlay/pointer-events during the record load).
     await actionSelect.click({ timeout: 20_000, force: true });
-    await page.getByRole('option', { name: /assign/i }).first().click({ timeout: 20_000 });
+    await chooseAssignAction(page);
     const assigneeSelect = page.getByRole('combobox').filter({ hasText: /select employee/i }).first();
     if (await assigneeSelect.isVisible().catch(() => false)) {
       await assigneeSelect.click();
@@ -822,32 +1008,93 @@ Both client-side (single XHR count) and server-side (persistence) checks — tog
   test('13. PENDINGFORASSIGNMENT filter returns the expected queue size', {
     annotation: {
       type: 'description',
-      description: `API-level coherence check: pgrCount and pgrSearch must agree on the PENDINGFORASSIGNMENT queue size. Doesn't pin a hard count (seed data drifts) — only that count >= 0, search returns <= count, and search respects the page size limit.
+      description: `API-level check that the PENDINGFORASSIGNMENT status filter returns a REAL, verifiable queue size — not merely a self-consistent one.
+
+The previous version asserted count >= 0, wrappers.length <= count and wrappers.length <= 50. All three are tautologies (counts are always >= 0; 0 <= N always holds; 50 was the limit it had just passed), so despite the title nothing asserted a size and the test could not fail. Note pgrCount() returns 0 for any non-numeric body, so even a broken endpoint kept it green.
 
 Steps:
-1. pgrCount(auth, CITY_TENANT, { status: 'PENDINGFORASSIGNMENT' }).
-2. pgrSearch(auth, CITY_TENANT, { status: 'PENDINGFORASSIGNMENT', limit: 50 }).
-3. Assert count >= 0.
-4. Assert wrappers.length <= count.
-5. Assert wrappers.length <= 50 (page size respected).
+1. total  = pgrCount(CITY_TENANT)                            — every complaint on the tenant.
+2. queue  = pgrCount(CITY_TENANT, { status: PENDINGFORASSIGNMENT }).
+3. Assert 0 < queue <= total. A non-empty queue is a real precondition of this suite: lifecycle.setup.ts seeds a PENDINGFORASSIGNMENT complaint every run and pickWorkableComplaint() consumes them, so an empty queue means the filter (or the seed) is broken.
+4. rows = pgrSearch(status, limit > queue); assert rows.length === queue EXACTLY, and that every row's applicationStatus is PENDINGFORASSIGNMENT — the server must return the whole queue and nothing else.
+5. Assert the page size is honoured EXACTLY: pgrSearch(status, limit 25).length === min(25, queue).
+6. Independent recount: sweep the UNFILTERED complaint list page by page and count PENDINGFORASSIGNMENT locally; assert it equals 'queue'. This is the only assertion here that cannot be satisfied by an internally-consistent-but-wrong server (skipped, with an annotation, on tenants too large to sweep).
 
-Probed 2026-04-23: 11 PENDINGFORASSIGNMENT on ke.nairobi. Hardcoding 11 would drift; this test validates the contract instead.`,
+Mutation-proven: flipping the status to a nonsense state drops 'queue' to 0 and step 3 fails; stubbing pgrSearch to [] fails step 4.`,
     },
     tag: ['@area:configurator-manage', '@area:pgr', '@kind:regression', '@layer:ui', '@persona:admin'] }, async () => {
-    // Probed 2026-04-23: 11 PENDINGFORASSIGNMENT on ke.nairobi. Rather
-    // than hard-code 11 (seed data drifts), we assert the server responds
-    // coherently — both _count and _search agree on a non-negative
-    // number, and _search never returns more than the page size.
     const auth = loadAuth();
-    const count = await pgrCount(auth, CITY_TENANT, {
-      status: 'PENDINGFORASSIGNMENT',
+    const QUEUE_STATUS = 'PENDINGFORASSIGNMENT';
+    const SWEEP_PAGE = 100;
+    // Above this, the unfiltered sweep costs more than it is worth; steps 3-5
+    // still carry the test.
+    const SWEEP_LIMIT = 2_000;
+
+    const total = await pgrCount(auth, CITY_TENANT);
+    const queue = await pgrCount(auth, CITY_TENANT, { status: QUEUE_STATUS });
+
+    expect(total, `tenant ${CITY_TENANT} must hold complaints to measure a queue against`)
+      .toBeGreaterThan(0);
+    expect(
+      queue,
+      `the ${QUEUE_STATUS} queue must be non-empty — lifecycle.setup.ts seeds one every run, ` +
+        'so 0 means either the status filter or the seed is broken',
+    ).toBeGreaterThan(0);
+    expect(queue, 'a filtered queue can never exceed the tenant total').toBeLessThanOrEqual(total);
+
+    // The filtered search must return the WHOLE queue and nothing but the queue.
+    const rows = await pgrSearch(auth, CITY_TENANT, {
+      status: QUEUE_STATUS,
+      limit: queue + 5,
     });
-    const wrappers = await pgrSearch(auth, CITY_TENANT, {
-      status: 'PENDINGFORASSIGNMENT', limit: 50,
-    });
-    expect(count).toBeGreaterThanOrEqual(0);
-    expect(wrappers.length).toBeLessThanOrEqual(count);
-    expect(wrappers.length).toBeLessThanOrEqual(50);
+    expect(
+      rows.length,
+      `_search must return every ${QUEUE_STATUS} complaint _count promised (${queue})`,
+    ).toBe(queue);
+    const returnedStatuses = [
+      ...new Set(
+        rows.map((w) =>
+          String((w.service as Record<string, unknown> | undefined)?.applicationStatus ?? ''),
+        ),
+      ),
+    ];
+    expect(returnedStatuses, `_search must return ONLY ${QUEUE_STATUS} complaints`).toEqual([
+      QUEUE_STATUS,
+    ]);
+
+    // Page size honoured exactly — not "at most".
+    const pageSize = 25;
+    const firstPage = await pgrSearch(auth, CITY_TENANT, { status: QUEUE_STATUS, limit: pageSize });
+    expect(firstPage.length, `limit=${pageSize} must yield exactly min(limit, queue) rows`).toBe(
+      Math.min(pageSize, queue),
+    );
+
+    // Independent recount from the UNFILTERED list — the server's own filter is
+    // not allowed to be the only witness to its own size.
+    if (total > SWEEP_LIMIT) {
+      test.info().annotations.push({
+        type: 'note',
+        description: `unfiltered recount skipped: ${total} complaints on ${CITY_TENANT} exceeds the ${SWEEP_LIMIT} sweep cap`,
+      });
+      return;
+    }
+    let recount = 0;
+    let swept = 0;
+    for (let offset = 0; offset < total; offset += SWEEP_PAGE) {
+      const page = await pgrSearch(auth, CITY_TENANT, { limit: SWEEP_PAGE, offset });
+      if (page.length === 0) break;
+      swept += page.length;
+      for (const w of page) {
+        const status = (w.service as Record<string, unknown> | undefined)?.applicationStatus;
+        if (status === QUEUE_STATUS) recount += 1;
+      }
+    }
+    expect(swept, 'the unfiltered sweep must reach every complaint _count reported').toBe(total);
+    expect(
+      recount,
+      `counting ${QUEUE_STATUS} by hand across all ${total} complaints must reproduce the ` +
+        'size the server reports for the filtered query',
+    ).toBe(queue);
   });
 });
 
@@ -1012,12 +1259,48 @@ async function pickWorkableComplaint(auth: AuthInfo): Promise<string | null> {
   // department is one a PGR_LME employee actually holds, so an ASSIGN succeeds.
   // A random PFA complaint is often an old test-junk type whose department no
   // employee holds — ASSIGN then 400s (pgr-services NPEs on the mismatch).
+  const idOf = (w: { service?: unknown }) =>
+    (w.service as Record<string, unknown> | undefined)?.serviceRequestId as string | undefined;
+  const claim = (id: string | undefined): string | null => {
+    if (!id || consumedComplaints.has(id)) return null;
+    consumedComplaints.add(id);
+    return id;
+  };
+
   const preferred = wrappers.find(
-    (w) => (w.service as Record<string, unknown>)?.serviceCode === SERVICE_CODE,
+    (w) =>
+      (w.service as Record<string, unknown>)?.serviceCode === SERVICE_CODE &&
+      !consumedComplaints.has(String(idOf(w))),
   );
-  if (preferred) return (preferred.service as Record<string, unknown>).serviceRequestId as string;
+  if (preferred) {
+    const id = claim(idOf(preferred));
+    if (id) return id;
+  }
+
+  // No unconsumed complaint of the seed serviceCode left — file a fresh one
+  // rather than scavenging.
+  //
+  // Scavenging is actively harmful here: most PENDINGFORASSIGNMENT complaints on
+  // a long-lived box are filed against `PW*` junk complaint types other runs
+  // created, whose department no employee holds. ASSIGN on one of those 400s in
+  // pgr-services, which reads as a workflow bug and is really just bad test data.
+  // Seeding gives every caller a complaint of the SEED serviceCode, whose
+  // department the resolved PGR_LME assignee actually holds.
+  try {
+    const seeded = await seedComplaintAsCitizen({
+      serviceCode: SERVICE_CODE,
+      localityCode: LOCALITY_CODE,
+      description: `complaints.spec seed — ${new Date().toISOString()}`,
+    });
+    createdComplaints.add(seeded.srid);
+    const id = claim(seeded.srid);
+    if (id) return id;
+  } catch {
+    // Fall through to scavenging — better a flaky complaint than no coverage.
+  }
+
   for (const w of wrappers) {
-    const id = (w.service as Record<string, unknown>)?.serviceRequestId as string | undefined;
+    const id = claim(idOf(w));
     if (id) return id;
   }
   // Fall back to any non-terminal complaint.
@@ -1029,7 +1312,8 @@ async function pickWorkableComplaint(auth: AuthInfo): Promise<string | null> {
       status &&
       !['REJECTED', 'CLOSEDAFTERRESOLUTION', 'CLOSEDAFTERREJECTION'].includes(status)
     ) {
-      return svc?.serviceRequestId as string;
+      const id = claim(svc?.serviceRequestId as string | undefined);
+      if (id) return id;
     }
   }
   return null;
