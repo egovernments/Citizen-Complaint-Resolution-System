@@ -1026,6 +1026,18 @@
         "locale": "pt_PT"
     },
     {
+        "code": "PGR_LANDING_CHANNEL_INPERSON_TITLE",
+        "message": "Atendimento Presencial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_INPERSON_DESC",
+        "message": "Visite os escritórios físicos ou balcões de atendimento da Inspecção-Geral do Estado (IGE) ou de outra instituição pública para obter atendimento presencial e apresentar reclamações manualmente.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_LANDING_PRIVACY_TITLE",
         "message": "Confidencialidade e Protecção de Dados",
         "module": "rainmaker-pgr",

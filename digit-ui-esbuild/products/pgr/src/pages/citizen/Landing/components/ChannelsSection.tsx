@@ -34,7 +34,7 @@ export function ChannelsSection({ routes, section }: ChannelsSectionProps) {
       <ul className="m-0 grid list-none grid-cols-1 gap-5 p-0 sm:grid-cols-2 xl:grid-cols-4">
         {items.map((channel) => {
           const Icon = channel.icon;
-          const to = channel.href ?? routes[channel.route];
+          const to = channel.href ?? (channel.route ? routes[channel.route] : undefined);
           const external = Boolean(channel.external) && to !== "#";
           return (
             <li key={channel.id} className="m-0 p-0">
@@ -58,21 +58,23 @@ export function ChannelsSection({ routes, section }: ChannelsSectionProps) {
                   {c(channel.descKey)}
                 </p>
 
-                <CtaLink
-                  to={to}
-                  target={external ? "_blank" : undefined}
-                  variant="outline"
-                  className="mt-5 w-full text-sm"
-                  trailing={
-                    external ? (
-                      <ExternalLink aria-hidden className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight aria-hidden className="h-4 w-4" />
-                    )
-                  }
-                >
-                  {c(channel.ctaKey)}
-                </CtaLink>
+                {channel.ctaKey && to && (
+                  <CtaLink
+                    to={to}
+                    target={external ? "_blank" : undefined}
+                    variant="outline"
+                    className="mt-5 w-full text-sm"
+                    trailing={
+                      external ? (
+                        <ExternalLink aria-hidden className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight aria-hidden className="h-4 w-4" />
+                      )
+                    }
+                  >
+                    {c(channel.ctaKey)}
+                  </CtaLink>
+                )}
               </article>
             </li>
           );

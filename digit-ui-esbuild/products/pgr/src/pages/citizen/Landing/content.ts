@@ -29,6 +29,7 @@ import {
   Phone,
   Landmark,
   Store,
+  MapPin,
 } from "lucide-react";
 import type { LandingRoutes } from "./routes";
 
@@ -147,6 +148,11 @@ export const LANDING_COPY = {
   CHANNEL_LINE_TITLE: { pt: "Linha Verde 800 77 77", en: "Green Line 800 77 77" },
   CHANNEL_LINE_DESC: { pt: "Chamada gratuita para apoio, orientação e submissão assistida.", en: "Toll-free call for support, guidance and assisted submission." },
   CHANNEL_LINE_CTA: { pt: "Ligar 800 77 77", en: "Call 800 77 77" },
+  CHANNEL_INPERSON_TITLE: { pt: "Atendimento Presencial", en: "In-Person Service" },
+  CHANNEL_INPERSON_DESC: {
+    pt: "Visite os escritórios físicos ou balcões de atendimento da Inspecção-Geral do Estado (IGE) ou de outra instituição pública para obter atendimento presencial e apresentar reclamações manualmente.",
+    en: "Visit the physical offices or service desks of the Inspectorate-General of the State (IGE) or another public institution for in-person assistance and to submit complaints manually.",
+  },
 
   // Privacy ------------------------------------------------------------—---
   PRIVACY_TITLE: { pt: "Confidencialidade e Protecção de Dados", en: "Confidentiality and Data Protection" },
@@ -287,8 +293,8 @@ export interface ChannelItem {
   icon: IconComponent;
   titleKey: LandingCopyKey;
   descKey: LandingCopyKey;
-  ctaKey: LandingCopyKey;
-  route: keyof LandingRoutes;
+  ctaKey?: LandingCopyKey;
+  route?: keyof LandingRoutes;
   /** Chip shown on the current channel ("Está aqui"). */
   badgeKey?: LandingCopyKey;
   external?: boolean;
@@ -299,6 +305,7 @@ export const CHANNELS: ChannelItem[] = [
   { id: "app", icon: Smartphone, titleKey: "CHANNEL_APP_TITLE", descKey: "CHANNEL_APP_DESC", ctaKey: "CHANNEL_APP_CTA", route: "ANDROID_APP", external: true },
   { id: "whatsapp", icon: MessageCircle, titleKey: "CHANNEL_WA_TITLE", descKey: "CHANNEL_WA_DESC", ctaKey: "CHANNEL_WA_CTA", route: "WHATSAPP", external: true },
   { id: "greenline", icon: Phone, titleKey: "CHANNEL_LINE_TITLE", descKey: "CHANNEL_LINE_DESC", ctaKey: "CHANNEL_LINE_CTA", route: "GREEN_LINE" },
+  { id: "presencial", icon: MapPin, titleKey: "CHANNEL_INPERSON_TITLE", descKey: "CHANNEL_INPERSON_DESC" },
 ];
 
 export interface InstitutionItem {

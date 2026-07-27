@@ -7812,6 +7812,18 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_CHANNEL_INPERSON_TITLE",
+        "message": "In-Person Service",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_INPERSON_DESC",
+        "message": "Visit the physical offices or service desks of the Inspectorate-General of the State (IGE) or another public institution for in-person assistance and to submit complaints manually.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_PRIVACY_TITLE",
         "message": "Confidentiality and Data Protection",
         "module": "rainmaker-pgr",
