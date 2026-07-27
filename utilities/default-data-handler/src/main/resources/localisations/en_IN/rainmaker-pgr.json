@@ -7398,6 +7398,12 @@
         "locale": "en_IN"
     },
     {
+        "code": "PGR_LANDING_FOOTER_ORG",
+        "message": "IGE",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
         "code": "PGR_LANDING_TAGLINE",
         "message": "The citizen speaks. The State responds.",
         "module": "rainmaker-pgr",

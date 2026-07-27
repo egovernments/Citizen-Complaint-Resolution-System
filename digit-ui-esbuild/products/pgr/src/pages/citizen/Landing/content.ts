@@ -41,6 +41,7 @@ export const LANDING_COPY = {
   GOV_NAME: { pt: "República de Moçambique", en: "Republic of Mozambique" },
   PORTAL_NAME: { pt: "Fala Cidadão", en: "Complaints and Reports Portal" },
   ORG_NAMES: { pt: "Inspecção-Geral do Estado (IGE)", en: "Inspectorate-General of the State (IGE)" },
+  FOOTER_ORG: { pt: "IGE", en: "IGE" },
   TAGLINE: { pt: "O cidadão fala. O Estado responde.", en: "The citizen speaks. The State responds." },
   MOTTO_VALUES: { pt: "Transparência · Integridade", en: "Transparency · Integrity" },
   SKIP_LINK: { pt: "Saltar para o conteúdo principal", en: "Skip to main content" },

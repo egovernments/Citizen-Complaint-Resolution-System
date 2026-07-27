@@ -612,6 +612,12 @@
         "locale": "pt_PT"
     },
     {
+        "code": "PGR_LANDING_FOOTER_ORG",
+        "message": "IGE",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
         "code": "PGR_LANDING_TAGLINE",
         "message": "O cidadão fala. O Estado responde.",
         "module": "rainmaker-pgr",
@@ -1213,7 +1219,7 @@
     },
     {
         "code": "PGR_LANDING_FOOTER_COPYRIGHT",
-        "message": "Portal de Reclamações e Denúncias · República de Moçambique. Todos os direitos reservados.",
+        "message": "Fala Cidadão · República de Moçambique. Todos os direitos reservados.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
