@@ -1339,7 +1339,7 @@
     },
     {
         "code": "PGR_EXT_IS_CONFIDENTIAL_HINT",
-        "message": "A visibilidade é garantida assim que o processamento seguro é ativado; por enquanto, isso sinaliza a reclamação para que a equipe esteja ciente.",
+        "message": "A sua identidade será protegida através do mascaramento dos dados pessoais, sendo acessível apenas a oficiais seniores autorizados.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
