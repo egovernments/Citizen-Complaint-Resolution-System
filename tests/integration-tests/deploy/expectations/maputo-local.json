@@ -12,7 +12,7 @@
     "pgr.citizenCreate": "required",
     "ui.citizen.attachmentDetailRender": "required",
     "personas.gro-with-department": "required",
-    "personas.ward-scoped-csr": "absent",
+    "personas.ward-scoped-csr": "optional",
     "locales.multi": "absent",
     "tenant.citySubTenant": "required"
   },
@@ -20,7 +20,7 @@
     "workflow.pgr.actions.ESCALATE": "REQUIRED, not absent — corrected 2026-07-16. ESCALATE is intended product config (added by PR #635 / commit ce302053: PENDINGATLME -> ESCALATE -> PENDINGATSUPERVISOR with role PGR_LME), and bomet's `ke` has it. mz.maputo lacked it only because tenant_bootstrap copies the PGR businessService from the `pg` demo tenant, which predates that PR — a real seed gap, not an N/A. api/pgr-escalation test 2 self-heals it (it patches the wirings into the live workflow, which is its stated purpose); do NOT gate that test on this capability, since it is the thing that creates it. Declaring this 'absent' would bless the gap and permanently skip #521 here.",
     "mdms.rejectionReasons": "Deliberate red. Neither the schema nor any data exists on any tenant of either deployment, while the GRO reject modal reads this master. Seeded locally on 2026-07-16 (4 rows at mz), so this should now pass — if it goes red again the tenant was wiped (see the fast-path dump trap).",
     "ui.citizen.attachmentDetailRender": "Required so a real regression stays visibly red rather than being hidden behind the old ATTACHMENT_DETAIL_UNSUPPORTED env hatch.",
-    "personas.ward-scoped-csr": "No ward-scoped CSR persona is onboarded here; the bomet-shaped BOMET_CSR_* defaults do not exist.",
+    "personas.ward-scoped-csr": "Was 'absent' — nothing here held the CSR role together with a jurisdiction below the MAPUTO_ADMIN root (EMP001/2/3 are scoped to the root itself and hold no CSR; ADMIN holds CSR but its only jurisdiction is the TENANT id mz.maputo, in hierarchy ADMIN). scripts/seed-deployment.ts now onboards SEED_WARD_CSR (Bairro-scoped, obras_publicas/agente) so boundary-jurisdiction-496 can actually run. 'optional' rather than 'required': the seeder is idempotent but not guaranteed to have been run, and a deployment that legitimately has no ward CSR should still self-skip honestly rather than hard-fail on a persona nobody onboarded.",
     "locales.multi": "Only en_IN is meaningfully seeded (16899 rows). pt_BR/fr_FR/hi_IN exist but are 205-row stubs, not real translations.",
     "tenant.citySubTenant": "Two-level: root mz + city mz.maputo. The configurator tenant-search test is meaningful here."
   }

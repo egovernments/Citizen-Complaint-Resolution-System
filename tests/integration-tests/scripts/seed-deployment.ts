@@ -29,7 +29,9 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { BASE_URL, ROOT_TENANT, TENANT, ADMIN_USER, ADMIN_PASS } from '../tests/utils/env';
+import { BASE_URL, ROOT_TENANT, TENANT, ADMIN_USER, ADMIN_PASS, DEFAULT_PASSWORD } from '../tests/utils/env';
+import { fetchGlobalConfigs, fetchBoundaryTree, type BoundaryNode } from '../tests/utils/probes';
+import { getMobileValidationRule, generateValidMobile } from '../tests/utils/mdms-mobile';
 
 const CHECK_ONLY = process.argv.includes('--check');
 /** Where the version-controlled seed lives (a git submodule in this repo). */
@@ -40,6 +42,8 @@ const MDMS_DIR = join(SEED_ROOT, 'mdms');
 const TENANTS = Array.from(new Set([ROOT_TENANT, TENANT]));
 
 let token = '';
+/** The admin's own UserRequest, kept for the writes whose audit trail needs it. */
+let adminUserInfo: Record<string, any> | null = null;
 const log = (s: string) => console.log(s);
 
 async function post<T = any>(path: string, body: unknown): Promise<{ ok: boolean; data?: T; err?: string }> {
@@ -70,7 +74,9 @@ async function auth(): Promise<void> {
     body: body.toString(),
   });
   if (!r.ok) throw new Error(`admin login failed (${r.status}) — is the stack up?`);
-  token = ((await r.json()) as { access_token: string }).access_token;
+  const body2 = (await r.json()) as { access_token: string; UserRequest?: Record<string, any> };
+  token = body2.access_token;
+  adminUserInfo = body2.UserRequest ?? null;
 }
 
 // ── localization ────────────────────────────────────────────────────────────
@@ -224,6 +230,166 @@ async function seedMobileValidation(): Promise<void> {
   log(`  → mobile rule: ${data.countryCode} ${pattern} (derived from this deployment)`);
 }
 
+// ── personas ────────────────────────────────────────────────────────────────
+
+/**
+ * A CSR narrowed to ONE ward — the persona `personas.ward-scoped-csr` gates
+ * tests/api/boundary-jurisdiction-496.spec.ts on.
+ *
+ * Without it that spec self-skips, because personas.ts's isWardScopedCsr wants
+ * BOTH halves and no shipped employee has them together:
+ *   - the CSR role, and
+ *   - an HRMS jurisdiction in the PGR boundary hierarchy whose boundaryType is
+ *     BELOW the hierarchy root (an employee scoped to the whole root sees the
+ *     entire tree, which would make the jurisdiction-filter assertion vacuous).
+ * On the local stack EMP001/2/3 are scoped to the MAPUTO_ADMIN root itself and
+ * hold no CSR, while ADMIN holds CSR but its lone jurisdiction is `mz.maputo` —
+ * a TENANT id in hierarchy `ADMIN`, not a PGR boundary at all.
+ *
+ * Everything here is derived from the deployment, never from Maputo literals:
+ * the hierarchy comes from the SPA's own globalConfigs, the ward from that
+ * hierarchy's live tree, and the department/designation from an employee who
+ * already exists (the same trick tests/admin/employees.spec.ts uses, so HRMS's
+ * FK validation passes on any tenant). Idempotent: if any active employee
+ * already satisfies the predicate, nothing is written.
+ */
+const WARD_CSR_CODE = process.env.SEED_WARD_CSR_CODE || 'SEED_WARD_CSR';
+
+interface HrmsEmployeeRow {
+  code?: string;
+  user?: { roles?: Array<{ code?: string }> };
+  jurisdictions?: Array<{ hierarchy?: string; boundary?: string; boundaryType?: string; isActive?: boolean }>;
+  assignments?: Array<{ department?: string; designation?: string; isCurrentAssignment?: boolean }>;
+}
+
+/** Active employees at the EXACT complaint tenant — HRMS has no parent fallback. */
+async function employeesAt(tenant: string): Promise<HrmsEmployeeRow[]> {
+  const r = await post<{ Employees?: HrmsEmployeeRow[] }>(
+    `/egov-hrms/employees/_search?tenantId=${encodeURIComponent(tenant)}&isActive=true&limit=500&offset=0`,
+    { RequestInfo: requestInfo() },
+  );
+  return r.data?.Employees ?? [];
+}
+
+/** The boundaryTypes of one root-to-leaf path, root first. */
+function levelsOf(root: BoundaryNode): string[] {
+  const out: string[] = [];
+  for (let n: BoundaryNode | undefined = root; n; n = n.children?.[0]) out.push(n.boundaryType);
+  return [...new Set(out)];
+}
+
+async function seedWardScopedCsr(): Promise<void> {
+  const gc = await fetchGlobalConfigs().catch(() => ({} as Awaited<ReturnType<typeof fetchGlobalConfigs>>));
+  let hierarchyType = gc.hierarchyType ?? '';
+  if (!hierarchyType && existsSync(resolve('deployment-profile.json'))) {
+    hierarchyType = JSON.parse(readFileSync(resolve('deployment-profile.json'), 'utf8'))?.boundary?.hierarchyType ?? '';
+  }
+  if (!hierarchyType) { log('  ! no boundary hierarchy on this deployment — cannot scope a CSR to a ward'); return; }
+
+  const tree = await fetchBoundaryTree(TENANT, hierarchyType, { authToken: token }).catch(() => null);
+  if (!tree) { log(`  ! hierarchy ${hierarchyType} has no boundary tree at ${TENANT} — seed boundaries first`); return; }
+  const levels = levelsOf(tree);
+  if (levels.length < 2) { log(`  ! hierarchy ${hierarchyType} is one level deep — nothing sits BELOW its root`); return; }
+
+  // Already satisfied? Same predicate personas.ts applies, so a deployment that
+  // onboarded its own ward CSR (bomet) is left completely alone.
+  const employees = await employeesAt(TENANT);
+  const existing = employees.find((e) =>
+    (e.user?.roles ?? []).some((r) => r.code === 'CSR') &&
+    (e.jurisdictions ?? []).some(
+      (j) => j.isActive !== false && j.hierarchy === hierarchyType && j.boundaryType !== levels[0],
+    ),
+  );
+  if (existing) { log(`  = ward-scoped CSR @ ${TENANT}: ${existing.code} (already onboarded)`); return; }
+
+  // A "ward" is the level just above the leaf — the smallest area that still
+  // contains several localities — but never the root, which would defeat the
+  // scoping this persona exists to exercise.
+  const wardLevel = levels[Math.max(1, levels.length - 2)];
+  const wards: string[] = [];
+  const collect = (n: BoundaryNode): void => {
+    if (n.boundaryType === wardLevel) wards.push(n.code);
+    for (const c of n.children ?? []) collect(c);
+  };
+  collect(tree);
+  wards.sort();
+  if (wards.length < 2) {
+    log(`  ! only ${wards.length} '${wardLevel}' boundary(ies) exist — #496 needs a sibling ward to be non-vacuous`);
+    return;
+  }
+  const ward = wards[0];
+
+  // HRMS validates department/designation against the tenant's own masters, so
+  // borrow a live pair rather than guessing. `PW_`-prefixed rows are suite
+  // litter and are skipped; a donor scoped to the PGR hierarchy is preferred
+  // because its department is the one the complaint catalogue actually uses.
+  const isLitter = (code = ''): boolean => /(^|_)PW[A-Z_]/i.test(code);
+  const donors = employees
+    .filter((e) => !isLitter(e.code) && (e.assignments ?? []).some((a) => a.department && a.designation))
+    .sort((a, b) => String(a.code).localeCompare(String(b.code)));
+  const donor =
+    donors.find((e) => (e.jurisdictions ?? []).some((j) => j.hierarchy === hierarchyType)) ?? donors[0];
+  const assignment = (donor?.assignments ?? []).find((a) => a.department && a.designation);
+  if (!assignment) {
+    log(`  ! no employee at ${TENANT} carries a department+designation to copy — onboard one employee first`);
+    return;
+  }
+
+  if (CHECK_ONLY) {
+    log(`  ~ ward-scoped CSR ${WARD_CSR_CODE} @ ${TENANT}: would create — ${wardLevel} '${ward}' ` +
+      `in ${hierarchyType}, ${assignment.department}/${assignment.designation} (from ${donor?.code})`);
+    return;
+  }
+
+  // Mobile must satisfy THIS tenant's MDMS rule (Kenya starts 7/1, Maputo 8) —
+  // HRMS rejects the create otherwise.
+  const mobile = generateValidMobile(await getMobileValidationRule(TENANT));
+  const now = Date.now();
+  const r = await post(`/egov-hrms/employees/_create?tenantId=${encodeURIComponent(TENANT)}`, {
+    RequestInfo: { ...requestInfo(), ver: '1.0', ts: now, action: '_create', userInfo: adminUserInfo ?? undefined },
+    Employees: [{
+      tenantId: TENANT,
+      code: WARD_CSR_CODE,
+      employeeStatus: 'EMPLOYED',
+      employeeType: 'PERMANENT',
+      dateOfAppointment: now - 24 * 3600_000,
+      user: {
+        // HRMS overwrites userName with the employee code regardless of what we
+        // send (see EmployeeShow.tsx:39-41), and persona discovery logs in with
+        // the CODE it read back from HRMS — so they must be the same string.
+        userName: WARD_CSR_CODE,
+        name: 'Seeded Ward CSR',
+        mobileNumber: mobile,
+        type: 'EMPLOYEE',
+        active: true,
+        gender: 'MALE',
+        dob: 631152000000,
+        // The password persona discovery guesses (personas.ts passwordGuesses
+        // defaults to this); without it the persona is created but unusable.
+        password: process.env.PERSONA_PASSWORD_GUESSES?.split(',')[0]?.trim() || DEFAULT_PASSWORD,
+        tenantId: TENANT,
+        roles: [
+          { code: 'CSR', name: 'CSR', tenantId: TENANT },
+          { code: 'EMPLOYEE', name: 'Employee', tenantId: TENANT },
+        ],
+      },
+      jurisdictions: [{
+        boundary: ward, boundaryType: wardLevel,
+        hierarchy: hierarchyType, hierarchyType,
+        tenantId: TENANT, isActive: true,
+      }],
+      assignments: [{
+        department: assignment.department, designation: assignment.designation,
+        fromDate: now - 24 * 3600_000, isCurrentAssignment: true,
+      }],
+    }],
+  });
+  log(r.ok
+    ? `  + ward-scoped CSR ${WARD_CSR_CODE} @ ${TENANT}: ${wardLevel} '${ward}' in ${hierarchyType}, ` +
+      `${assignment.department}/${assignment.designation}`
+    : `  ! ward-scoped CSR ${WARD_CSR_CODE} @ ${TENANT} failed: ${r.err}`);
+}
+
 // ── cache ───────────────────────────────────────────────────────────────────
 
 /**
@@ -255,6 +421,8 @@ async function main(): Promise<void> {
   log('\n── localization ──');
   await seedLocalization();
   await mirrorRootToCity();
+  log('\n── personas ──');
+  await seedWardScopedCsr();
   log('\n── caches ──');
   await bustCaches();
   log('\nDone. Re-run any time — every step is idempotent.');
