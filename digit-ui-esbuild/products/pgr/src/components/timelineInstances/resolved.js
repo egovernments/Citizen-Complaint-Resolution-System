@@ -26,7 +26,7 @@ const Resolved = ({ action, nextActions,complaintDetails, ComplainMaxIdleTime, r
       nextActions.map((action, index) => {
         if (action && action !== "COMMENT") {
           return (
-            <Link key={index} to={`/digit-ui/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
+            <Link key={index} to={`/${window?.contextPath || "digit-ui"}/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
               <ActionLinks>{t(`CS_COMMON_${action}`)}</ActionLinks>
             </Link>
           );
@@ -63,7 +63,7 @@ const Resolved = ({ action, nextActions,complaintDetails, ComplainMaxIdleTime, r
           // so REOPEN was hidden whenever auditDetails was still loading.
           if (action !== "REOPEN" || reopenWindowOpen)
           return (
-            <Link key={index} to={`/digit-ui/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
+            <Link key={index} to={`/${window?.contextPath || "digit-ui"}/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
               <ActionLinks>{t(`CS_COMMON_${action}`)}</ActionLinks>
             </Link>
           );

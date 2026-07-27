@@ -189,7 +189,7 @@ function WorkflowComponent({ complaintDetails, id }) {
             const key = `CS_COMMON_${action}`;
             const label = t(key) === key ? action : t(key);
             return (
-              <Link key={action} to={`/digit-ui/citizen/pgr/${action.toLowerCase()}/${id}`}>
+              <Link key={action} to={`/${window?.contextPath || "digit-ui"}/citizen/pgr/${action.toLowerCase()}/${id}`}>
                 <button
                   type="button"
                   style={{

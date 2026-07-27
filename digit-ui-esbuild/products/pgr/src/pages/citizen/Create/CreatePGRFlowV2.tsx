@@ -1873,7 +1873,7 @@ const CreatePGRFlowV2: React.FC = () => {
         onError: () => {
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/${window?.contextPath || "digit-ui"}/citizen/pgr/response`);
         },
         onSuccess: async (responseData: any) => {
           // Create is done — drop the session draft so the next visit starts fresh.
@@ -1881,7 +1881,7 @@ const CreatePGRFlowV2: React.FC = () => {
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/${window?.contextPath || "digit-ui"}/citizen/pgr/response`);
         },
       });
       return;
