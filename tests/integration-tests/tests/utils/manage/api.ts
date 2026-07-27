@@ -125,7 +125,7 @@ export async function apiAuth(): Promise<AuthInfo> {
   return { token: j.access_token, user: j.UserRequest || null, tenant: rootTenant, baseUrl };
 }
 
-function buildRequestInfo(auth: AuthInfo, action?: string): Record<string, unknown> {
+export function buildRequestInfo(auth: AuthInfo, action?: string): Record<string, unknown> {
   return {
     apiId: 'Rainmaker',
     ver: '1.0',

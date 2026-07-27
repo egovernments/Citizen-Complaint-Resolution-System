@@ -18,11 +18,12 @@ import {
   pgrSearch,
   pgrCount,
   employeeSearch,
+  buildRequestInfo,
   type AuthInfo,
 } from '../utils/manage/api';
 import { cleanupPgrComplaints } from '../utils/manage/teardown';
 import { seedComplaintAsCitizen } from '../utils/seed';
-import { generateCitizenPhone, ROOT_TENANT, TENANT, LOCALITY_CODE, SERVICE_CODE } from '../utils/env';
+import { BASE_URL, generateCitizenPhone, ROOT_TENANT, TENANT, LOCALITY_CODE, SERVICE_CODE } from '../utils/env';
 
 // Tenant identifiers come from env so the suite runs on any deployment.
 // TENANT_CODE is the STATE/root tenant (citizen tenantId); CITY_TENANT is the
@@ -734,22 +735,47 @@ If the geo link doesn't pop a new tab or doesn't carry the coords, an admin can'
     await page.goto(`${LIST_PATH}/${target!.id}/show`);
 
     // Address-extras rows we expect to render.
-    for (const label of ['Landmark', 'Street', 'Pincode']) {
+    for (const label of ['Landmark', 'Street', 'Pincode', 'Geo']) {
       const row = page.getByText(new RegExp(`^${label}$`, 'i')).first();
       // Some may be blank — just assert the LABEL renders.
       await expect(row).toBeVisible();
     }
 
-    // Geo link — opens new tab to maps.google.com/maps?q=lat,lng.
+    // Geo link — a target="_blank" anchor to google.com/maps?q=lat,lng.
+    //
+    // Located by href, NOT by accessible name. The anchor's accessible name is the
+    // coordinate pair itself ("-25.969200, 32.573200"); the word "Geo" is only the
+    // <dt> label of the FieldRow (admin/fields/FieldSection.tsx), a plain sibling
+    // with no aria association to the <a> in the adjacent <dd>. The previous
+    // `getByRole('link', { name: /map|geo|location/i })` matched ZERO links, so the
+    // click hung on an unresolvable locator and the popup wait timed out first —
+    // reporting a failure identical whether the feature worked or not. It works.
+    const geoLink = page.locator('a[href*="google.com/maps"]').first();
+    await expect(
+      geoLink,
+      'the Geo row must render a maps link for a complaint with coordinates',
+    ).toBeVisible({ timeout: 15_000 });
+
+    // Assert the URL BEFORE clicking, so a placeholder href (e.g. ?q=0,0) fails even
+    // though a tab would still open. Single combined match: two separate substring
+    // checks can both pass on a URL that merely contains each number somewhere.
+    expect(
+      await geoLink.getAttribute('href'),
+      "geo link must point at the complaint's real coordinates",
+    ).toContain(`?q=${target!.lat},${target!.lng}`);
+    expect(
+      await geoLink.getAttribute('target'),
+      'geo link must open in a new tab',
+    ).toBe('_blank');
+
     const [popup] = await Promise.all([
       page.waitForEvent('popup', { timeout: 10_000 }),
-      page.getByRole('link', { name: /map|geo|location/i }).first().click(),
+      geoLink.click(),
     ]);
 
     const popupUrl = popup.url();
     expect(popupUrl).toMatch(/google\.com\/maps/);
-    expect(popupUrl).toContain(String(target!.lat));
-    expect(popupUrl).toContain(String(target!.lng));
+    expect(popupUrl).toContain(`${target!.lat},${target!.lng}`);
   });
 
   test('9. mobile-only citizen heuristic shows suffix on Show page', {
@@ -1290,18 +1316,55 @@ async function pickWorkableComplaint(auth: AuthInfo): Promise<string | null> {
     return id;
   };
 
-  const preferred = wrappers.find(
-    (w) =>
-      (w.service as Record<string, unknown>)?.serviceCode === SERVICE_CODE &&
-      !consumedComplaints.has(String(idOf(w))),
-  );
-  if (preferred) {
-    const id = claim(idOf(preferred));
-    if (id) return id;
+  // Scavenge ONLY a complaint whose live WORKFLOW state agrees with pgr's.
+  //
+  // pgr-services' `applicationStatus` cannot be trusted on this deployment. The
+  // configurator's complaint edit submits `address.locality.code: null`; pgr
+  // answers 200 and publishes, then egov-persister rejects the row on a NOT NULL
+  // constraint and the shared transaction rolls the service row back too. The
+  // result is a "zombie": egov-workflow-v2 has advanced to PENDINGATLME while the
+  // pgr read model still reports PENDINGFORASSIGNMENT, permanently.
+  //
+  // Measured on mz.maputo: 23 of 211 PENDINGFORASSIGNMENT complaints were zombies,
+  // with 15 distinct ids producing `INVALID ACTION` in a five-hour window. Handing
+  // one to a test yields exactly that 400 — the UI loads the stale status, offers
+  // ASSIGN, and workflow (which IS up to date) refuses it.
+  //
+  // Crucially, a PASSING edit test mints a new zombie, so this poisons itself: the
+  // same spec alternates green and red depending on whether the newest candidate
+  // happens to be a fresh seed or a corpse from the previous run.
+  const wfAgrees = async (srid: string): Promise<boolean> => {
+    try {
+      const r = await fetch(
+        `${BASE_URL}/egov-workflow-v2/egov-wf/process/_search?tenantId=${CITY_TENANT}` +
+          `&businessIds=${encodeURIComponent(srid)}&history=false`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ RequestInfo: buildRequestInfo(auth) }),
+        },
+      );
+      if (!r.ok) return false;
+      const j = (await r.json()) as { ProcessInstances?: Array<{ state?: { applicationStatus?: string } }> };
+      const state = j.ProcessInstances?.[0]?.state?.applicationStatus;
+      // No workflow record yet == freshly filed and not desynced.
+      return state === undefined || state === 'PENDINGFORASSIGNMENT';
+    } catch {
+      return false;
+    }
+  };
+
+  for (const w of wrappers) {
+    if ((w.service as Record<string, unknown>)?.serviceCode !== SERVICE_CODE) continue;
+    const id = idOf(w);
+    if (!id || consumedComplaints.has(id)) continue;
+    if (!(await wfAgrees(id))) continue; // zombie — skip it
+    const claimed = claim(id);
+    if (claimed) return claimed;
   }
 
-  // No unconsumed complaint of the seed serviceCode left — file a fresh one
-  // rather than scavenging.
+  // No unconsumed, workflow-consistent complaint of the seed serviceCode — file a
+  // fresh one rather than scavenging.
   //
   // Scavenging is actively harmful here: most PENDINGFORASSIGNMENT complaints on
   // a long-lived box are filed against `PW*` junk complaint types other runs
