@@ -44,6 +44,7 @@ HIER = os.environ.get("HIERARCHY_TYPE", "divisao_administrativa")
 ADMIN_USER = os.environ.get("ADMIN_USER", "ADMIN")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "eGov@123")
 EMP_PASS = os.environ.get("TEST_EMP_PASS", "eGov@123")
+UI_PATH = os.environ.get("TESTING_UI_PATH", "staging")
 
 CHANGED = False
 
@@ -235,6 +236,27 @@ if missing:
     print(f"CREATED boundary tree: {made}/{len(missing)} nodes copied")
 else:
     print(f"exists  boundary tree ({len(have_nodes)} nodes)")
+
+# ── 6b. entrance-scoped sidebar/card rows ───────────────────────────────────
+# The citizen home + sidebar read ACCESSCONTROL-ACTIONS-TEST rows whose
+# url/sidebar match `${window.contextPath}-card` / `-links`. The testing
+# entrance runs under its own context path, so it needs clones of the
+# digit-ui rows with the path swapped (URLs rewritten to the entrance).
+rows = mdms_rows("ACCESSCONTROL-ACTIONS-TEST.actions-test", STATE, 500)
+have_sidebar = {r["data"].get("id") for r in rows}
+src_rows = [r for r in rows if r["data"].get("sidebar") == "digit-ui-links"]
+for r in src_rows:
+    d = dict(r["data"])
+    d["id"] = int(d["id"]) + 90000
+    if d["id"] in have_sidebar:
+        print(f"exists  actions-test/{d['id']}")
+        continue
+    d["url"] = f"{UI_PATH}-card"
+    d["sidebar"] = f"{UI_PATH}-links"
+    for k in ("sidebarURL", "navigationURL"):
+        if d.get(k):
+            d[k] = d[k].replace("/digit-ui/", f"/{UI_PATH}/")
+    mdms_create("ACCESSCONTROL-ACTIONS-TEST.actions-test", STATE, str(d["id"]), d)
 
 # ── 7. localization: boundary labels + entrance labels ───────────────────────
 MOD = f"rainmaker-boundary-{HIER}"
