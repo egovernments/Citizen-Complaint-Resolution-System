@@ -733,7 +733,7 @@
     },
     {
         "code": "PGR_LANDING_HERO_TITLE",
-        "message": "Portal de Reclamações e Denúncias",
+        "message": "Fala Cidadão",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
