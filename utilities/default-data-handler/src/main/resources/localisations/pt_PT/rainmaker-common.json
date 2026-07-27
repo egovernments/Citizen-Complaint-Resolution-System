@@ -1,5 +1,11 @@
 [
     {
+        "code": "CS_LOGIN_TEXT",
+        "message": "Todas as comunicações referentes à reclamação/queixa serão enviadas para este número de telemóvel.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "EVENTS_DATERANGE_LABEL",
         "message": "Intervalo de Datas",
         "module": "rainmaker-common",
