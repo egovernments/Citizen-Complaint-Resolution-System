@@ -45,9 +45,13 @@ Re-run `./deploy.sh <tenant>` after flipping these. See
 
 ### Open it
 
+```text
+https://<domain>/configurator/
 ```
-http://<domain>/configurator/
-```
+
+`tls_enabled` defaults to `true`, so HTTPS is the normal case; use
+`http://<domain>/configurator/` only on a sandbox deploy with
+`tls_enabled: false` (e.g. `domain: localhost`).
 
 Log in as `ADMIN` / `eGov@123` against the **root** tenant (e.g. `ke`). The
 wizard walks the four phases in order.
@@ -102,7 +106,7 @@ Three sheets in one workbook.
 
 Template columns:
 
-```
+```text
 employeeCode | name | userName | mobileNumber | emailId | gender | dob |
 department | designation | roles | jurisdictions | dateOfAppointment
 ```
@@ -131,13 +135,14 @@ Because the wizard puts all data on the city tenant, the SPA must land there.
 In `host_vars/<tenant>.yml`:
 
 ```yaml
-ui_state_tenant_id: ke.bomet     # SPA boots on the wizard-created city
-boot_tenant: ke.bomet
-hierarchy_type: BOMET-Hierarchy  # MUST match the Phase 2 hierarchy name
+ui_state_tenant_id: <root>.<city>   # SPA boots on the wizard-created city
+boot_tenant: <root>.<city>          #   e.g. ke.bomet
+hierarchy_type: <hierarchy-name>    # MUST match the Phase 2 hierarchy name
 ```
 
-Leave `state_root` / `state_tenant_id` / `tenant_id` at the **root** (`ke`) —
-those drive the JVM `STATE_LEVEL_TENANT_ID` pins. Re-run `./deploy.sh <tenant>`.
+Leave `state_root` / `state_tenant_id` / `tenant_id` at the **root** (`<root>`,
+e.g. `ke`) — those drive the JVM `STATE_LEVEL_TENANT_ID` pins. Re-run
+`./deploy.sh <tenant>`.
 
 > **`hierarchy_type` is a single global value, not per-tenant.** The UI sends it
 > on every boundary lookup regardless of which tenant is active, so **all tenants
@@ -157,12 +162,26 @@ under `jupyter/dataloader/templates/`.
 
 ### 1. Open Jupyter Lab
 
-```
+**Docker Compose / Tilt (local):** reachable through Kong —
+
+```text
 http://localhost:18000/jupyter/lab?token=digit-crs-local
 ```
 
 The default token is `digit-crs-local` (override via `JUPYTER_TOKEN` in
-`docker-compose.yml`). In the file browser, open **DataLoader_v2.ipynb**.
+`docker-compose.yml`).
+
+**Ansible (remote target):** the host nginx does **not** publish a `/jupyter`
+location, so there is no public URL — tunnel to the container's host-bound port
+instead. This stack also starts Jupyter with an empty token, so no `?token=` is
+needed:
+
+```bash
+ssh -L 18888:127.0.0.1:18888 <target>
+# then open http://localhost:18888/jupyter/lab
+```
+
+In the file browser, open **DataLoader_v2.ipynb**.
 
 ### 2. Configure + create the tenant (Phase 1)
 
@@ -246,6 +265,18 @@ service *and* its nginx location:
 enable_mcp: true
 nginx_features: { mcp: true }     # exposes /mcp + /v1/*
 ```
+
+The target must also be able to **pull or build the MCP image**. Compose
+validates every image before starting any service, so an unreachable registry
+fails the whole `docker compose up`, not just MCP. Either:
+
+- `build_mcp: true` — build from the vendored in-tree source (no registry
+  needed); or
+- leave it off and use the playbook's pinned public image default.
+
+If your `host_vars` overrides `mcp_image` / `docker_registry` to the Hetzner VPC
+registry (`10.0.0.4:5000`), the target must be VPC-internal — see the
+`enable_mcp` notes in `_example.yml`.
 
 Confirm it's reachable: `curl -s $BASE/v1/healthz` → `{"status":"ok",…}`.
 

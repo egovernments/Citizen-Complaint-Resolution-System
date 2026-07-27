@@ -294,7 +294,8 @@ changed configs trigger restarts.
 
 ### Step 3: Access the application
 
-The host nginx serves everything on ports 80/443:
+The host nginx serves everything on ports 80/443. `tls_enabled` defaults to
+`true`, so the HTTPS forms below are the normal case:
 
 | What | URL |
 |------|-----|
@@ -319,7 +320,7 @@ The playbook deploys `docker-compose.egov-digit.yaml` plus overlays — **not**
 `docker-compose.registry.yml`, which it never references. The exact stack is built in
 `ansible/playbook-deploy.yml` ("Compute compose -f flags"):
 
-```
+```text
 -f docker-compose.egov-digit.yaml
 [-f docker-compose.fast-path.yml]          # when db_fast_path is set
 -f docker-compose.migrations.yml
@@ -344,7 +345,7 @@ Between them these include:
 The Ansible tree, `host_vars` layout, templates, and runbooks are documented in
 [`ansible/README.md`](ansible/README.md). At a glance:
 
-```
+```text
 local-setup/ansible/
 ├── deploy.sh                  # Single entrypoint — ./deploy.sh <tenant> [flags]
 ├── playbook-deploy.yml        # The playbook
@@ -489,7 +490,7 @@ python3 scripts/ci-dataloader.py
 ```
 
 **Expected output**:
-```
+```text
 [1/6] Login
   Authentication successful!
 [2/6] Create tenant
@@ -687,7 +688,7 @@ docker compose up -d                       # Fresh start
 
 ## Project Structure
 
-```
+```text
 local-setup/
 ├── docker-compose.yml              # Main service definitions (~3.8GB RAM, registry images)
 ├── docker-compose.registry.yml     # All images from public registry (NOT the Ansible
