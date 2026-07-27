@@ -125,7 +125,7 @@ export async function apiAuth(): Promise<AuthInfo> {
   return { token: j.access_token, user: j.UserRequest || null, tenant: rootTenant, baseUrl };
 }
 
-function buildRequestInfo(auth: AuthInfo, action?: string): Record<string, unknown> {
+export function buildRequestInfo(auth: AuthInfo, action?: string): Record<string, unknown> {
   return {
     apiId: 'Rainmaker',
     ver: '1.0',
@@ -197,7 +197,12 @@ export async function mdmsSearch(
   auth: AuthInfo,
   tenantId: string,
   schemaCode: string,
-  options?: { limit?: number; offset?: number; uniqueIdentifiers?: string[] },
+  options?: {
+    limit?: number;
+    offset?: number;
+    uniqueIdentifiers?: string[];
+    isActive?: boolean;
+  },
 ): Promise<MdmsRecord[]> {
   const criteria: Record<string, unknown> = {
     tenantId,
@@ -207,6 +212,16 @@ export async function mdmsSearch(
   };
   if (options?.uniqueIdentifiers?.length) {
     criteria.uniqueIdentifiers = options.uniqueIdentifiers;
+  }
+  // Push isActive to the SERVER so limit/offset paginate over the FILTERED set
+  // — same contract the configurator's DigitApiClient.mdmsSearch uses. Without
+  // it, a tenant polluted with soft-deleted rows (e.g. thousands of PW_ test
+  // leftovers) spends the whole page on inactive records and a caller doing
+  // `.find(r => r.isActive !== false)` over the page gets nothing, even though
+  // the active rows exist. Optional — omitting it preserves the legacy
+  // unfiltered behaviour for existing call sites.
+  if (options?.isActive !== undefined) {
+    criteria.isActive = options.isActive;
   }
   const data = await postJson<{ mdms?: MdmsRecord[] }>(
     auth,

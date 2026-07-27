@@ -128,7 +128,11 @@ export default defineConfig({
       name: 'api',
       testDir: 'tests/api',
       testMatch: /.*\.spec\.ts$/,
-      dependencies: ['api-setup', 'profile-setup'],
+      // lifecycle-setup writes lifecycle-fixtures.json, which api-helpers.spec.ts
+      // reads at module-load time. Without this dependency a `--project=api` run has
+      // no fixture file and that spec self-skips — which read as a data gap but was
+      // purely a missing dependency here.
+      dependencies: ['api-setup', 'profile-setup', 'lifecycle-setup'],
       grepInvert: EXCLUDE_LOCAL_ONLY,
       use: {
         storageState: 'auth-api.json',

@@ -184,7 +184,8 @@ async function selectReopen(page: Page) {
 }
 
 test.describe("Employee PGR reopen window is driven by MDMS REOPENSLA #925", () => {
-  test("blocks reopen and shows a toast once the configured window has elapsed", async ({ page }) => {
+  test("blocks reopen and shows a toast once the configured window has elapsed", {
+    tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:employee'] }, async ({ page }) => {
     test.setTimeout(60_000);
 
     // 6h window, complaint resolved 9h ago -> outside the window.
@@ -204,7 +205,8 @@ test.describe("Employee PGR reopen window is driven by MDMS REOPENSLA #925", () 
     await expect(toast).not.toBeVisible();
   });
 
-  test("allows reopen while still inside the configured window", async ({ page }) => {
+  test("allows reopen while still inside the configured window", {
+    tag: ['@area:pgr', '@kind:regression', '@layer:ui', '@persona:employee'] }, async ({ page }) => {
     test.setTimeout(60_000);
 
     // 6h window, complaint resolved 2h ago -> inside the window, so reopen must proceed.
