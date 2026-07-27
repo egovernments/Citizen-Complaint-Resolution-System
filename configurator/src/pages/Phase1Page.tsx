@@ -27,7 +27,7 @@ import { Banner } from '@/components/digit/Banner';
 import { parseExcelFile, parseTenantExcel } from '@/utils/excelParser';
 import * as XLSX from 'xlsx';
 import { mdmsService, localizationService, apiClient, ApiClientError } from '@/api';
-import { bootstrapStateRoot, bootstrapLocalization, stateNeedsBootstrap, type BootstrapProgress } from '@/api/services/tenantBootstrap';
+import { bootstrapStateRoot, bootstrapLocalization, stateNeedsBootstrap, ensureEncKey, type BootstrapProgress } from '@/api/services/tenantBootstrap';
 import type { TenantExcelRow, Tenant, ValidationResult } from '@/api/types';
 
 type Step = 'landing' | 'upload' | 'preview' | 'branding' | 'complete' | 'select-existing';
@@ -76,6 +76,11 @@ export default function Phase1Page() {
   const [step, setStep] = useState<Step>('landing');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Non-blocking problems: the step SUCCEEDED but something the operator needs
+  // to know about degraded (e.g. the enc-service key registration below, which
+  // only bites later in Phase 4). Kept separate from `error` so it doesn't read
+  // as "this failed, go back".
+  const [warning, setWarning] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   // Bootstrap progress (only set when we detect a brand-new state root).
   // The new tenant.tenants record will be written at parentState (derived from the
@@ -175,6 +180,7 @@ export default function Phase1Page() {
 
     setLoading(true);
     setError(null);
+    setWarning(null);
 
     try {
       // Build tenant object for MDMS
@@ -215,11 +221,51 @@ export default function Phase1Page() {
       // definitely has the tenant.tenants schema, either pre-existing or just
       // registered by bootstrap). This replaces the previous `state.tenant`
       // target — that was a localStorage value, not a deliberate write target.
+      let tenantAlreadyExisted = false;
       try {
         await mdmsService.createTenant(parentState, tenant);
       } catch (err) {
         const msg = err instanceof ApiClientError ? err.firstError : (err instanceof Error ? err.message : '');
         if (!/duplicate|already exists|unique|NON_UNIQUE/i.test(msg)) throw err;
+        tenantAlreadyExisted = true;
+      }
+
+      // Give the brand-new tenant its egov-enc-service symmetric key.
+      //
+      // Every write that carries PII — Phase 4's employees (mobile/email), and
+      // any citizen user later — is encrypted per tenant. A tenant with no key
+      // row rejects all of them with
+      //   400 UNKNOWN_ERROR "Unknown error occurred in encryption process"
+      // which is what made UI-created tenants unusable in Phase 4. The ansible
+      // deploy does this for the tenants it provisions (playbook-deploy.yml,
+      // "pre-bootstrap — generate enc-service key"); the wizard has to do it for
+      // the tenants IT creates.
+      //
+      // Deliberately narrow, so this can never rotate a live tenant's key:
+      //   - only here, on the tenant-CREATION path;
+      //   - skipped entirely when the tenant already existed (duplicate above),
+      //     and skipped for a fresh state root because bootstrapStateRoot()
+      //     already registered the key for it;
+      //   - the endpoint itself is create-if-missing (returns created:false and
+      //     the same keyId when a key exists) — see ensureEncKey();
+      //   - and there is no standalone "regenerate key" control anywhere in the UI.
+      //
+      // Non-fatal: the tenant itself is created and usable for Phases 2-3, so
+      // don't roll the operator back to the upload step. Warn instead — Phase 4
+      // surfaces the underlying encryption error if this really didn't take.
+      if (!tenantAlreadyExisted) {
+        try {
+          await ensureEncKey(tenant.code);
+        } catch (encErr) {
+          const msg = encErr instanceof ApiClientError
+            ? encErr.firstError
+            : (encErr instanceof Error ? encErr.message : String(encErr));
+          console.warn(`[phase1] enc-service key generation for ${tenant.code} failed: ${msg}`);
+          setWarning(
+            `Tenant created, but registering it with the encryption service failed (${msg}). ` +
+            `Employee creation in Phase 4 will fail until this is resolved.`
+          );
+        }
       }
 
       // Create localization for tenant name, also at the parent state.
@@ -437,6 +483,19 @@ export default function Phase1Page() {
           <AlertDescription className="flex items-center justify-between">
             <span>{error}</span>
             <Button variant="ghost" size="sm" onClick={() => setError(null)} className="h-6 w-6 p-0">
+              <X className="h-4 w-4" />
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Non-blocking warning display (step succeeded, something degraded) */}
+      {warning && (
+        <Alert variant="warning">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex items-start justify-between gap-2">
+            <span>{warning}</span>
+            <Button variant="ghost" size="sm" onClick={() => setWarning(null)} className="h-6 w-6 p-0 flex-shrink-0">
               <X className="h-4 w-4" />
             </Button>
           </AlertDescription>

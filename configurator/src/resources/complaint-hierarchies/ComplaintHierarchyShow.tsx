@@ -54,7 +54,11 @@ export function ComplaintHierarchyShow() {
             { limit: PAGE, offset },
           );
           acc.push(...page);
-          if (page.length < PAGE || offset > 100000) break; // last page (or safety cap)
+          // Stop on an EMPTY page, not a short one. mdmsService.search() drops
+          // soft-deleted records, so a short page no longer implies "last page" —
+          // it can just mean this window contained a removed row. Costs one extra
+          // (empty) request per tenant and can never truncate the tree.
+          if (page.length === 0 || offset > 100000) break; // exhausted (or safety cap)
         }
         return acc;
       };
