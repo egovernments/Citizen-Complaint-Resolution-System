@@ -1,0 +1,144 @@
+name: Nightly Develop Build
+run-name: Nightly develop build (${{ github.event_name }})
+
+on:
+  schedule:
+    - cron: '30 13 * * *'   # 7:00 PM IST (UTC+5:30). Cron is UTC-only.
+  workflow_dispatch: {}
+
+# NOTE: scheduled workflows fire only from the DEFAULT branch (master) and this
+# file must exist there. Every job checks out ref: develop — the nightly always
+# builds develop regardless of which branch the workflow file ran from.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-develop
+  cancel-in-progress: false
+
+env:
+  DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_ACCESS_TOKEN }}
+  PUSH_NAMESPACE: egovio
+
+jobs:
+  enumerate:
+    name: Enumerate build-config.yml
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.list.outputs.targets }}
+      images:  ${{ steps.list.outputs.images }}
+      date_tag: ${{ steps.list.outputs.date_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+      - name: Install yq
+        run: |
+          sudo curl -sSL "https://github.com/mikefarah/yq/releases/download/v4.30.8/yq_linux_amd64" -o /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+      - name: Flatten manifest to matrix JSON
+        id: list
+        run: |
+          set -euo pipefail
+          TARGETS=$(yq -o=json -I=0 '[.config[].build[] | {"image": .["image-name"], "workdir": .["work-dir"], "dockerfile": (.dockerfile // "")}]' build/build-config.yml)
+          IMAGES=$(yq -o=json -I=0 '[.config[].build[].["image-name"]]' build/build-config.yml)
+          COUNT=$(echo "$TARGETS" | jq 'length')
+          if [ "$COUNT" -eq 0 ]; then echo "FATAL: no targets parsed"; exit 1; fi
+          echo "targets=$TARGETS" >> "$GITHUB_OUTPUT"
+          echo "images=$IMAGES"   >> "$GITHUB_OUTPUT"
+          echo "date_tag=develop-$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          echo "### Nightly targets ($COUNT)" >> $GITHUB_STEP_SUMMARY
+          echo "$TARGETS" | jq -r '.[].image' | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
+
+  build:
+    name: ${{ matrix.target.image }} (${{ matrix.arch }})
+    needs: enumerate
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.enumerate.outputs.targets) }}
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v2
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+      - name: Build and push per-arch staging tag
+        run: |
+          set -euo pipefail
+          IMAGE='${{ matrix.target.image }}'
+          WORKDIR='${{ matrix.target.workdir }}'
+          DOCKERFILE='${{ matrix.target.dockerfile }}'
+          TAG="${PUSH_NAMESPACE}/${IMAGE}:nightly-develop-${{ matrix.arch }}"
+          if [ "$DOCKERFILE" = "build/maven/Dockerfile" ]; then
+            docker buildx build --platform linux/${{ matrix.arch }} \
+              --build-arg WORK_DIR="$WORKDIR" -f build/maven/Dockerfile \
+              -t "$TAG" --push .
+          elif [ -n "$DOCKERFILE" ]; then
+            docker buildx build --platform linux/${{ matrix.arch }} \
+              -f "$DOCKERFILE" -t "$TAG" --push "$WORKDIR"
+          else
+            docker buildx build --platform linux/${{ matrix.arch }} \
+              -t "$TAG" --push "$WORKDIR"
+          fi
+
+  manifest:
+    name: Stitch ${{ matrix.image }} multi-arch tags
+    needs: [enumerate, build]
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.enumerate.outputs.images) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v2
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+      - name: Create nightly-develop + dated manifest
+        run: |
+          set -euo pipefail
+          IMG="${PUSH_NAMESPACE}/${{ matrix.image }}"
+          DATE_TAG='${{ needs.enumerate.outputs.date_tag }}'
+          docker buildx imagetools inspect "$IMG:nightly-develop-amd64" >/dev/null
+          docker buildx imagetools inspect "$IMG:nightly-develop-arm64" >/dev/null
+          docker buildx imagetools create \
+            -t "$IMG:nightly-develop" \
+            -t "$IMG:$DATE_TAG" \
+            "$IMG:nightly-develop-amd64" "$IMG:nightly-develop-arm64"
+          echo "- $IMG:{nightly-develop, $DATE_TAG}" >> $GITHUB_STEP_SUMMARY
+
+  prune:
+    name: Retain newest 5 develop-YYYYMMDD tags per image
+    needs: [enumerate, manifest]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prune dated tags on Docker Hub (egovio namespace)
+        run: |
+          set -euo pipefail
+          TOKEN=$(curl -s -X POST "https://hub.docker.com/v2/users/login/" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\": \"$DOCKER_USERNAME\", \"password\": \"$DOCKER_PASSWORD\"}" | jq -r .token)
+          [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ] || { echo "Hub login failed"; exit 1; }
+          for IMG in $(echo '${{ needs.enumerate.outputs.images }}' | jq -r '.[]'); do
+            TAGS=$(curl -s -H "Authorization: JWT $TOKEN" \
+              "https://hub.docker.com/v2/repositories/${PUSH_NAMESPACE}/${IMG}/tags?page_size=100&name=develop-" \
+              | jq -r '.results[].name' | grep -E '^develop-[0-9]{8}$' | sort -r || true)
+            STALE=$(echo "$TAGS" | tail -n +6)
+            for T in $STALE; do
+              [ -n "$T" ] || continue
+              echo "delete ${PUSH_NAMESPACE}/${IMG}:${T}"
+              curl -fsS -X DELETE -H "Authorization: JWT $TOKEN" \
+                "https://hub.docker.com/v2/repositories/${PUSH_NAMESPACE}/${IMG}/tags/${T}/" \
+                || echo "WARN: delete failed for ${IMG}:${T} (token may lack delete scope)"
+            done
+          done

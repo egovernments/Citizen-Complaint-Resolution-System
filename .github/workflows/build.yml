@@ -165,13 +165,13 @@ jobs:
           # Check if repo exists
           HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
             -H "Authorization: JWT $TOKEN" \
-            "https://hub.docker.com/v2/repositories/$DOCKER_USERNAME/$SERVICE_NAME/")
+            "https://hub.docker.com/v2/repositories/egovio/$SERVICE_NAME/")
 
           if [ "$HTTP_CODE" -ne 200 ]; then
             NEXT_TAG="${BRANCH}-${COMMIT_HASH}"
           else
             EXISTING_TAGS=$(curl -s -H "Authorization: JWT $TOKEN" \
-              "https://hub.docker.com/v2/repositories/$DOCKER_USERNAME/$SERVICE_NAME/tags?page_size=100" \
+              "https://hub.docker.com/v2/repositories/egovio/$SERVICE_NAME/tags?page_size=100" \
               | jq -r '.results[].name')
             LATEST_TAG=$(echo "$EXISTING_TAGS" \
               | grep "^${BRANCH}-${COMMIT_HASH}" || true \
