@@ -102,26 +102,35 @@ def search_rows(tok, code):
         return []
 
 
-def deactivate(tok, code, row):
+def _set_active(tok, code, row, active):
     # MDMS v2's _update rejects the request outright (AUDIT_DETAILS_ABSENT_ERR)
     # unless the row's own auditDetails is echoed back verbatim.
     body = ri(tok)
     body["Mdms"] = {
         "tenantId": TENANT, "schemaCode": code,
         "uniqueIdentifier": row.get("uniqueIdentifier"), "id": row.get("id"),
-        "data": row.get("data"), "isActive": False,
+        "data": row.get("data"), "isActive": active,
         "auditDetails": row.get("auditDetails"),
     }
     try:
         _post("/mdms-v2/v2/_update/" + code, body, tok).read()
         return True
     except urllib.error.HTTPError as e:
-        # Non-fatal: creating the new theme is the goal of this run; leaving
-        # a stale theme active is a (loudly reported) degradation, not a
-        # reason to abort the whole seed.
-        print("    ! could not deactivate %s: HTTP %s %s" % (
-            (row.get("data") or {}).get("code"), e.code, e.read().decode()[:160]))
+        verb = "activate" if active else "deactivate"
+        print("    ! could not %s %s: HTTP %s %s" % (
+            verb, (row.get("data") or {}).get("code"), e.code, e.read().decode()[:160]))
         return False
+
+
+def deactivate(tok, code, row):
+    # Non-fatal: activating the requested theme is the goal of this run;
+    # leaving a stale theme active is a (loudly reported) degradation, not
+    # a reason to abort the whole seed.
+    return _set_active(tok, code, row, False)
+
+
+def activate(tok, code, row):
+    return _set_active(tok, code, row, True)
 
 
 def create_row(tok, code, row_code, data):
@@ -157,26 +166,58 @@ def main():
     if not preset_code:
         sys.exit("ERROR: preset file %s has no 'code' field" % DATA_FILE)
 
-    # Deactivate any OTHER active ThemeConfig row at this tenant so re-runs
-    # or preset swaps never leave two "active" themes fighting over
-    # ThemeConfig?.[0] on the frontend.
+    # Activate the REQUESTED preset FIRST — only once it's confirmed active
+    # do we touch any other row. Deactivating other active themes up front
+    # (as an earlier version of this script did) can strand a tenant with
+    # ZERO active themes: switching Blue -> Green -> Blue deactivates Green,
+    # then creating Blue comes back "dup" (the row already exists, just
+    # inactive, from the first switch) without ever reactivating it.
     existing = search_rows(tok, THEME_CODE)
-    deactivated = 0
-    for row in existing:
-        row_code = (row.get("data") or {}).get("code")
-        if row.get("isActive") and row_code != preset_code:
-            if deactivate(tok, THEME_CODE, row):
-                deactivated += 1
-                print("  deactivated stale active theme: %s" % row_code)
+    target_row = next((r for r in existing
+                        if (r.get("data") or {}).get("code") == preset_code), None)
 
-    result = create_row(tok, THEME_CODE, preset_code, preset)
+    if target_row is not None and target_row.get("isActive"):
+        result, target_active = "active", True
+    elif target_row is not None:
+        target_active = activate(tok, THEME_CODE, target_row)
+        result = "reactivated" if target_active else "reactivate-FAILED"
+    else:
+        created = create_row(tok, THEME_CODE, preset_code, preset)
+        if created == "created":
+            result, target_active = "created", True
+        else:
+            # "dup": a concurrent run created it since our search above —
+            # re-fetch and make sure it's active. "failed": nothing to do.
+            existing = search_rows(tok, THEME_CODE)
+            target_row = next((r for r in existing
+                                if (r.get("data") or {}).get("code") == preset_code), None)
+            if target_row is not None and not target_row.get("isActive"):
+                target_active = activate(tok, THEME_CODE, target_row)
+                result = "reactivated" if target_active else "reactivate-FAILED"
+            else:
+                target_active = target_row is not None
+                result = created
     print("  data %-30s -> %s" % (preset_code, result))
+
+    # Only once the requested preset is confirmed active do we deactivate
+    # any OTHER active ThemeConfig row at this tenant, so re-runs or preset
+    # swaps never leave two "active" themes fighting over ThemeConfig?.[0]
+    # on the frontend. If activating the target failed, leave existing rows
+    # alone rather than risk a zero-active outage.
+    if target_active:
+        for row in existing:
+            row_code = (row.get("data") or {}).get("code")
+            if row.get("isActive") and row_code != preset_code:
+                if deactivate(tok, THEME_CODE, row):
+                    print("  deactivated stale active theme: %s" % row_code)
+    else:
+        print("  ! target theme not active — leaving other active themes untouched")
 
     time.sleep(2)
     rows = search_rows(tok, THEME_CODE)
     active = [r for r in rows if r.get("isActive")]
     print("verify (tenant=%s): %d ThemeConfig row(s), %d active" % (TENANT, len(rows), len(active)))
-    ok = result in ("created", "dup") and any((r.get("data") or {}).get("code") == preset_code for r in active)
+    ok = any((r.get("data") or {}).get("code") == preset_code for r in active)
     print("DONE" if ok else "DONE (with warnings)")
     sys.exit(0 if ok else 1)
 

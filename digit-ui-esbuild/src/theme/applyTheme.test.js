@@ -500,15 +500,19 @@ test("preset: Bomet Blue applies its real production colors to key brand surface
     const applyTheme = freshApply();
     const bometBlue = require("./presets/bomet-blue.json");
     applyTheme(bometBlue);
-    // Regression guard: this MUST stay pinned to the tenant's real, live
-    // production color — the whole point of "Bomet Blue" is formalizing
-    // what's already deployed, not a fresh invented palette.
-    assert.equal(props["--color-button-primary-bg-default"], "#1B85D2");
+    // Regression guard: decorative/brand surfaces MUST stay pinned to the
+    // tenant's real, live production color — the whole point of "Bomet
+    // Blue" is formalizing what's already deployed, not a fresh invented
+    // palette. button-primary-bg-default and link-normal are the exception:
+    // white-on-#1B85D2 and #1B85D2-on-white both fail WCAG AA (~3.9:1), so
+    // those two roles use #1565A8 instead — still Bomet's own darker brand
+    // tone (already used for header/sidebar below), not an outside color.
+    assert.equal(props["--color-button-primary-bg-default"], "#1565A8");
     assert.equal(props["--color-primary-main"], "#1B85D2");
     assert.equal(props["--color-error"], "#E02D3A");
     assert.equal(props["--color-digitv2-chart-2"], "#E5202A");
     assert.equal(props["--color-header-bg"], "#1565A8");
-    assert.equal(props["--color-link-normal"], "#1B85D2");
+    assert.equal(props["--color-link-normal"], "#1565A8");
     assert.equal(props["--color-sidebar-bg"], "#1565A8");
     assert.equal(props["--color-button-primary-text"], "#FFFFFF");
   } finally { restore(); }
