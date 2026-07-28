@@ -240,6 +240,11 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_COMMON_UPDATED",
+    "message": "Updated",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_DOW_FRI",
     "message": "Fri",
     "module": "rainmaker-dashboard"

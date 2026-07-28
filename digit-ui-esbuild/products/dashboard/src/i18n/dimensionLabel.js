@@ -7,11 +7,7 @@ import {
   FALLBACK_LOCALE,
   getLanguage,
 } from "./localeRuntime";
-import {
-  humanizeTypeCode,
-  humanizeDimensionCode,
-  looksLikeTaxonomyCodePath,
-} from "../utils/complaintTypeTree";
+import { looksLikeTaxonomyCodePath } from "../utils/complaintTypeTree";
 
 /**
  * THE single seam between raw dimension codes and display text. Every place
@@ -29,8 +25,11 @@ import {
  *   3. boundary: underscore-insensitive pack lookup (KONGASIS → KONG_ASIS)
  *   4. fallbackText — DATA-OWNED only (MDMS display name, boundary localname),
  *      skipped when it is itself a taxonomy path / equals the code
- *   5. complaintType → humanizeTypeCode; boundary/department → humanizeDimensionCode
- *   6. raw code
+ *   5. raw code
+ *
+ * NO code-owned (regex) humaniser: a missing translation surfaces the raw
+ * code so the gap stays visible. Data-owned names are fine — operators
+ * authored them.
  *
  * Key conventions per kind mirror what the configurator seeds:
  *   complaintType  → COMPLAINT_HIERARCHY.<code> (SERVICEDEFS.<CODE> legacy)
@@ -151,7 +150,5 @@ export function dimensionLabel(code, kind, fallbackText) {
       return fallbackText;
     }
   }
-  if (kind === "complaintType") return humanizeTypeCode(code);
-  if (kind === "boundary" || kind === "department") return humanizeDimensionCode(code);
   return String(code);
 }

@@ -91,9 +91,10 @@ test("complaintType skips taxonomy-path i18n messages (incl. PT partial translat
     },
   });
   const { dimensionLabel } = bundle("dimensionLabel.js");
+  // Path-shaped seeds skipped; no usable pt message → raw code (no humaniser).
   assert.equal(
     dimensionLabel("complaints.categories.StreetLightNotWorking", "complaintType"),
-    "Street Light Not Working"
+    "complaints.categories.StreetLightNotWorking"
   );
 });
 
@@ -129,11 +130,11 @@ test("complaintType on pt_PT does not fall back to en_IN English titles", () => 
     },
   });
   const { dimensionLabel } = bundle("dimensionLabel.js");
-  // No usable pt message → humanise, never bleed the English pack.
+  // No usable pt message → raw code, never bleed the English pack.
   assert.equal(dimensionLabel("STREETLIGHT", "complaintType"), "STREETLIGHT");
 });
 
-test("complaintType with no locale and no MDMS humanises the code", () => {
+test("complaintType with no locale and no usable MDMS surfaces the raw code", () => {
   mockI18n({
     language: "pt_PT",
     bags: { pt_PT: {}, en_IN: {} },
@@ -141,12 +142,12 @@ test("complaintType with no locale and no MDMS humanises the code", () => {
   const { dimensionLabel } = bundle("dimensionLabel.js");
   assert.equal(
     dimensionLabel("complaints.categories.DamagedRoad", "complaintType"),
-    "Damaged Road"
+    "complaints.categories.DamagedRoad"
   );
-  // MDMS English fallback is ignored on pt_PT — humanise instead.
+  // MDMS English fallback is ignored on pt_PT — raw code, not a humaniser.
   assert.equal(
     dimensionLabel("PWAUTHORITY_TYPE_xyz", "complaintType", "Sample Authority"),
-    "PWAUTHORITY TYPE Xyz"
+    "PWAUTHORITY_TYPE_xyz"
   );
 });
 
@@ -162,14 +163,26 @@ test("boundary loose-matches underscore variants to place names", () => {
   assert.equal(dimensionLabel("BOMET_CHEPALUNGU_KONGASIS", "boundary"), "Kong'asis");
 });
 
-test("boundary humanises codes with no pack entry", () => {
+test("boundary/department with no pack entry surface the raw code", () => {
   mockI18n({
     language: "pt_PT",
     bags: { pt_PT: {}, en_IN: {} },
   });
   const { dimensionLabel } = bundle("dimensionLabel.js");
-  assert.equal(dimensionLabel("ETOEROLES_WARD_1", "boundary"), "Etoeroles Ward 1");
-  assert.equal(dimensionLabel("MEDICAL_SVC", "department"), "Medical Svc");
+  assert.equal(dimensionLabel("ETOEROLES_WARD_1", "boundary"), "ETOEROLES_WARD_1");
+  assert.equal(dimensionLabel("MEDICAL_SVC", "department"), "MEDICAL_SVC");
+});
+
+test("boundary uses data-owned localname when pack has no entry", () => {
+  mockI18n({
+    language: "pt_PT",
+    bags: { pt_PT: {}, en_IN: {} },
+  });
+  const { dimensionLabel } = bundle("dimensionLabel.js");
+  assert.equal(
+    dimensionLabel("ETOEROLES_WARD_1", "boundary", "Etoeroles Ward 1"),
+    "Etoeroles Ward 1"
+  );
 });
 
 test("Unknown department bucket uses DASHBOARD_COMMON_UNKNOWN", () => {

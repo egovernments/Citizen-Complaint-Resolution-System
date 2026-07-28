@@ -240,6 +240,11 @@
     "module": "rainmaker-dashboard"
   },
   {
+    "code": "DASHBOARD_COMMON_UPDATED",
+    "message": "Atualizado",
+    "module": "rainmaker-dashboard"
+  },
+  {
     "code": "DASHBOARD_DOW_FRI",
     "message": "Sex",
     "module": "rainmaker-dashboard"

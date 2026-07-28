@@ -41,12 +41,12 @@ import {
  * stays one click — the old flat-select ergonomics at that level).
  *
  * Labels resolve through dimensionLabel (skips taxonomy-path i18n messages
- * like reclamações.categories.* and humanises the last segment).
+ * like reclamações.categories.*, then data-owned MDMS name, then raw code).
  */
 
 export function nodeDisplayLabel(tree, code) {
   const node = nodeOf(tree, code);
-  // dimensionLabel already humanises taxonomy-path messages / name===code.
+  // dimensionLabel skips taxonomy-path messages / name===code; raw code if gap.
   return dimensionLabel(code, "complaintType", node?.label);
 }
 
