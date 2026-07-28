@@ -205,7 +205,7 @@
     },
     {
         "code": "ACTION_TEST_COMPLAINTS",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -385,7 +385,7 @@
     },
     {
         "code": "ACTION_TEST_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -6493,7 +6493,7 @@
     },
     {
         "code": "CS_COMMON_HOME_COMPLAINTS",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -6655,7 +6655,7 @@
     },
     {
         "code": "CS_COMMON_INBOX_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -8113,7 +8113,7 @@
     },
     {
         "code": "PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -9013,7 +9013,7 @@
     },
     {
         "code": "ES_PGR_HEADER_COMPLAINT",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
@@ -9133,13 +9133,13 @@
     },
     {
         "code": "ACTION_TEST_NATIONAL_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },
     {
         "code": "MODULE_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "en_IN"
     },

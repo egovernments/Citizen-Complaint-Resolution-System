@@ -205,7 +205,7 @@
     },
     {
         "code": "ACTION_TEST_COMPLAINTS",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -391,7 +391,7 @@
     },
     {
         "code": "ACTION_TEST_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -6499,7 +6499,7 @@
     },
     {
         "code": "CS_COMMON_HOME_COMPLAINTS",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -6661,7 +6661,7 @@
     },
     {
         "code": "CS_COMMON_INBOX_PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -8119,7 +8119,7 @@
     },
     {
         "code": "PGR",
-        "message": "Citizen Complaint Resolution System",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "default"
     },
@@ -8846,6 +8846,24 @@
     {
         "code": "WHATSAPP_SEARCH_LOCALITY",
         "message": "Search locality",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "ACTION_TEST_NATIONAL_PGR",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "ES_PGR_HEADER_COMPLAINT",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "default"
+    },
+    {
+        "code": "MODULE_PGR",
+        "message": "Fala Cidadão",
         "module": "rainmaker-common",
         "locale": "default"
     }
