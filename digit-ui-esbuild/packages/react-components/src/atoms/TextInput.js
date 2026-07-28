@@ -2,6 +2,14 @@ import React, { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { LocateIcon } from "./svgindex";
 
+// The native `pattern` attribute must be a bare regex SOURCE string. Callers
+// (e.g. the FormValidations-driven getters) may hand us a compiled RegExp —
+// stringifying that into the DOM produces "/src/u" (slashes + flags), which
+// old Chrome silently ignored but Chrome 150+ compiles (v-flag) and THROWS on
+// form-submit click, crashing the page (observed as a bounce to the employee
+// language-selection screen on create-complaint ENVIAR).
+const asPatternAttr = (p) => (p instanceof RegExp ? p.source : p);
+
 const TextInput = (props) => {
   const user_type = Digit.SessionStorage.get("userType");
   const [date, setDate] = useState(props?.type==="date"&&props?.value);
@@ -47,7 +55,7 @@ const TextInput = (props) => {
             minLength={props.minlength}
             maxLength={props.maxlength}
             max={props.max}
-            pattern={props?.validation && props.ValidationRequired ? props?.validation?.pattern : props.pattern}
+            pattern={asPatternAttr(props?.validation && props.ValidationRequired ? props?.validation?.pattern : props.pattern)}
             min={props.min}
             readOnly={props.disable}
             title={props?.validation && props.ValidationRequired ? props?.validation?.title :props.title}
@@ -85,7 +93,7 @@ const TextInput = (props) => {
             maxLength={props.maxlength}
             max={props.max}
             required={props?.validation && props.ValidationRequired ? props?.validation?.isRequired :props.isRequired || (props.type === "date" && (props.name === "fromDate" ? data.toDate : data.fromDate))}
-            pattern={props?.validation && props.ValidationRequired ? props?.validation?.pattern : props.pattern}
+            pattern={asPatternAttr(props?.validation && props.ValidationRequired ? props?.validation?.pattern : props.pattern)}
             min={props.min}
             readOnly={props.disable}
             title={props?.validation && props.ValidationRequired ? props?.validation?.title :props.title}

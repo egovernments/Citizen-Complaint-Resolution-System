@@ -21,6 +21,7 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../../../utils/complaintLabel";
+import { isVisibleOnEntrance } from "../../../utils/testingTenant";
 import PGRDatePicker from "../../../components/PGRDatePicker";
 import PgrFileUpload from "../../../components/PgrFileUpload";
 import { useDispatch } from "react-redux";
@@ -1455,7 +1456,8 @@ function StepComplaint(props: StepBodyProps) {
           ? tr(t, "CS_HINT_TYPE_SUB", "This helps us route your complaint to the right team.")
           : tr(t, "CS_HINT_RELATED_SUB", "Based on your selection, relevant options will appear automatically.")}
       />
-      {hasDispatcher ? <RelatedToStepBody {...props} /> : null}
+      {/* Single-authority: the one option is auto-selected upstream — no picker. */}
+      {hasDispatcher && (relatedToOptions?.length ?? 0) > 1 ? <RelatedToStepBody {...props} /> : null}
       <ReporterDetailsCard {...props} />
       {showType ? (
         catalogueLoading ? <InlineSpinner /> : <Step0Type {...props} />
@@ -1648,11 +1650,34 @@ const CreatePGRFlowV2: React.FC = () => {
       select: (raw: any) =>
         ((raw?.["RAINMAKER-PGR"]?.ComplaintRelatedToMap || []) as RelatedToOption[])
           .filter((o) => o?.active !== false && !!o?.code && !!o?.name && !!o?.tenantCode)
+          // Entrance scoping: the gated /digit-ui-test entrance sees ONLY
+          // testing-tenant authorities; production entrances never see them.
+          // Which tenants are "testing" comes from the isTestingTenant flag
+          // (set via the configurator checkbox) with the legacy
+          // TESTING_TENANT_ID config as fallback — see utils/testingTenant.
+          .filter((o: RelatedToOption) => isVisibleOnEntrance(o.tenantCode))
           .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
     },
     { schemaCode: "PGR_COMPLAINT_RELATED_TO_MAP", tenantId: stateTenant }
   );
   const hasDispatcher = Array.isArray(relatedToOptions) && relatedToOptions.length > 0;
+
+  // Single-authority deployments (one active row — e.g. IGE-only after the
+  // split, or the testing entrance): the authority is a foregone conclusion,
+  // so pick it automatically and never render the dropdown. Multi-authority
+  // keeps the picker exactly as before. The auto-pick mirrors the manual
+  // handler's patch (resolvedTenantId drives catalogue/boundary/map fetches).
+  React.useEffect(() => {
+    if (!Array.isArray(relatedToOptions) || relatedToOptions.length !== 1) return;
+    const o = relatedToOptions[0];
+    if (formData.caseRelatedTo === o.code && formData.resolvedTenantId === o.tenantCode) return;
+    patch({
+      caseRelatedTo: o.code,
+      caseRelatedToName: o.name,
+      resolvedTenantId: o.tenantCode,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relatedToOptions, formData.caseRelatedTo, formData.resolvedTenantId]);
 
   // Catalogue tenant: the authority-resolved sub-tenant once picked, else the
   // base tenant (legacy). Changing it re-fetches the hierarchy at that tenant.
@@ -1873,7 +1898,7 @@ const CreatePGRFlowV2: React.FC = () => {
         onError: () => {
           dispatch({ type: "CREATE_COMPLAINT", payload: { responseInfo: { status: "failed" } } });
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/${window?.contextPath || "digit-ui"}/citizen/pgr/response`);
         },
         onSuccess: async (responseData: any) => {
           // Create is done — drop the session draft so the next visit starts fresh.
@@ -1881,7 +1906,7 @@ const CreatePGRFlowV2: React.FC = () => {
           dispatch({ type: "CREATE_COMPLAINT", payload: responseData });
           await client.refetchQueries(["complaintsList"]);
           setSubmitting(false);
-          history.push(`/digit-ui/citizen/pgr/response`);
+          history.push(`/${window?.contextPath || "digit-ui"}/citizen/pgr/response`);
         },
       });
       return;

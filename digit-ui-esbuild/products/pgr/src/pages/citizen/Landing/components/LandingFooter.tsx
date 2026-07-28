@@ -79,7 +79,7 @@ export function LandingFooter({ routes }: LandingFooterProps) {
             {c("PORTAL_NAME")}
           </p>
           <p className="mb-0 mt-2 text-sm text-[hsl(var(--pgrl-on-primary)/0.8)]">
-            {c("ORG_NAMES")} · {c("TAGLINE")}
+            {c("FOOTER_ORG")} · {c("TAGLINE")}
           </p>
           <p className="mb-0 mt-3 inline-block rounded-full bg-[hsl(var(--pgrl-accent)/0.15)] px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[hsl(var(--pgrl-accent))]">
             {c("MOTTO_VALUES")}

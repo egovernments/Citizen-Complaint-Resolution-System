@@ -19,6 +19,7 @@
 
 import React, { useEffect } from "react";
 import { complaintLabel } from "../../utils/complaintLabel";
+import { isVisibleOnEntrance } from "../../utils/testingTenant";
 import { useTranslation } from "react-i18next";
 import { useHistory, useRouteMatch } from "react-router-dom";
 
@@ -291,6 +292,18 @@ export const ComplaintsList = () => {
     return v === key ? fallback : v;
   };
 
+  // Entrance scoping for the testing tenant: the citizen "my complaints"
+  // search runs at the STATE tenant, which spans every child tenant — so a
+  // tester who used a personal mobile on the testing entrance would otherwise
+  // see TST- rows mixed into their real list here. The prod entrance drops
+  // testing-tenant rows; the testing entrance lists ONLY them. Which tenants
+  // are "testing" comes from the isTestingTenant flag (config fallback) —
+  // see utils/testingTenant. Deployments without a testing setup are untouched.
+  const visibleWrappers = React.useMemo(() => {
+    const all = data?.ServiceWrappers || [];
+    return all.filter(({ service }) => isVisibleOnEntrance(service?.tenantId));
+  }, [data]);
+
   return (
     <div
       className="v2-scope"
@@ -351,7 +364,7 @@ export const ComplaintsList = () => {
               </Button>
             }
           />
-        ) : !data?.ServiceWrappers?.length ? (
+        ) : !visibleWrappers.length ? (
           <EmptyState
             icon={<Inbox style={{ height: "1.5rem", width: "1.5rem" }} />}
             title={tr("CS_NO_COMPLAINTS_TITLE", "No complaints yet")}
@@ -370,7 +383,7 @@ export const ComplaintsList = () => {
               gap: "12px",
             }}
           >
-            {data.ServiceWrappers.map(({ service }) => (
+            {visibleWrappers.map(({ service }) => (
               <ComplaintRow
                 key={service.serviceRequestId}
                 data={service}

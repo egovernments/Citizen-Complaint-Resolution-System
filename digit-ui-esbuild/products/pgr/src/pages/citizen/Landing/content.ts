@@ -29,6 +29,7 @@ import {
   Phone,
   Landmark,
   Store,
+  MapPin,
 } from "lucide-react";
 import type { LandingRoutes } from "./routes";
 
@@ -39,12 +40,13 @@ export const LANDING_COPY = {
   // Chrome ------------------------------------------------------------------
   GOV_NAME: { pt: "República de Moçambique", en: "Republic of Mozambique" },
   PORTAL_NAME: { pt: "Fala Cidadão", en: "Complaints and Reports Portal" },
-  ORG_NAMES: { pt: "IGE e IGSAE", en: "IGE and IGSAE" },
+  ORG_NAMES: { pt: "Inspecção-Geral do Estado (IGE)", en: "Inspectorate-General of the State (IGE)" },
+  FOOTER_ORG: { pt: "IGE", en: "IGE" },
   TAGLINE: { pt: "O cidadão fala. O Estado responde.", en: "The citizen speaks. The State responds." },
   MOTTO_VALUES: { pt: "Transparência · Integridade", en: "Transparency · Integrity" },
   SKIP_LINK: { pt: "Saltar para o conteúdo principal", en: "Skip to main content" },
   UTILITY_PHONE_LABEL: { pt: "+258 21 490 000", en: "+258 21 490 000" },
-  UTILITY_GREEN_LINE: { pt: "Linha Verde 1490", en: "Green Line 1490" },
+  UTILITY_GREEN_LINE: { pt: "Linha Verde 800 77 77", en: "Green Line 800 77 77" },
   UTILITY_GREEN_LINE_FREE: { pt: "gratuita", en: "toll-free" },
   LOGIN: { pt: "Entrar", en: "Sign in" },
   ARIA_LANGUAGE: { pt: "Idioma", en: "Language" },
@@ -62,15 +64,15 @@ export const LANDING_COPY = {
   NAV_CONTACTS: { pt: "Contactos", en: "Contacts" },
 
   // Hero -----------------------------------------------------------------—--
-  HERO_EYEBROW: { pt: "República de Moçambique · IGE · IGSAE", en: "Republic of Mozambique · IGE · IGSAE" },
+  HERO_EYEBROW: { pt: "República de Moçambique · IGE", en: "Republic of Mozambique · IGE" },
   HERO_TITLE: { pt: "Fala Cidadão", en: "Complaints and Reports Portal" },
   HERO_PILOT_NOTICE: {
     pt: "Esta plataforma está em fase piloto e, de momento, está disponível apenas para a Cidade de Maputo.",
     en: "This platform is in a pilot phase and, for now, is available only for the City of Maputo.",
   },
   HERO_LEDE: {
-    pt: "Canal nacional para reclamações, queixas, petições e denúncias sobre serviços públicos, administração pública e actividades económicas — com acompanhamento simples, seguro e transparente.",
-    en: "The national channel for complaints, grievances, petitions and reports about public services, public administration and economic activities — with simple, secure and transparent tracking.",
+    pt: "Canal nacional para reclamações e queixas sobre serviços públicos e administração pública — com acompanhamento simples, seguro e transparente.",
+    en: "The national channel for complaints and grievances about public services and public administration — with simple, secure and transparent tracking.",
   },
   HERO_CTA_SUBMIT: { pt: "Submeter Manifestação", en: "Submit a Case" },
   HERO_CTA_TRACK: { pt: "Acompanhar Processo", en: "Track a Case" },
@@ -80,7 +82,7 @@ export const LANDING_COPY = {
   HERO_CHANNELS_LABEL: { pt: "Também disponível em:", en: "Also available on:" },
   HERO_CHANNEL_APP: { pt: "Aplicação Android", en: "Android App" },
   HERO_CHANNEL_WA: { pt: "WhatsApp Oficial", en: "Official WhatsApp" },
-  HERO_CHANNEL_LINE: { pt: "Linha Verde 1490", en: "Green Line 1490" },
+  HERO_CHANNEL_LINE: { pt: "Linha Verde 800 77 77", en: "Green Line 800 77 77" },
 
   // Manifestation types -------------------------------------------------—--
   TYPES_TITLE: { pt: "Tipos de Manifestação", en: "Types of Submission" },
@@ -144,9 +146,14 @@ export const LANDING_COPY = {
   CHANNEL_WA_TITLE: { pt: "WhatsApp Oficial", en: "Official WhatsApp" },
   CHANNEL_WA_DESC: { pt: "Submeta manifestações e receba apoio pela conversa oficial.", en: "Submit cases and get support through the official chat." },
   CHANNEL_WA_CTA: { pt: "Conversar no WhatsApp", en: "Chat on WhatsApp" },
-  CHANNEL_LINE_TITLE: { pt: "Linha Verde 1490", en: "Green Line 1490" },
+  CHANNEL_LINE_TITLE: { pt: "Linha Verde 800 77 77", en: "Green Line 800 77 77" },
   CHANNEL_LINE_DESC: { pt: "Chamada gratuita para apoio, orientação e submissão assistida.", en: "Toll-free call for support, guidance and assisted submission." },
-  CHANNEL_LINE_CTA: { pt: "Ligar 1490", en: "Call 1490" },
+  CHANNEL_LINE_CTA: { pt: "Ligar 800 77 77", en: "Call 800 77 77" },
+  CHANNEL_INPERSON_TITLE: { pt: "Atendimento Presencial", en: "In-Person Service" },
+  CHANNEL_INPERSON_DESC: {
+    pt: "Visite os escritórios físicos ou balcões de atendimento da Inspecção-Geral do Estado (IGE) ou de outra instituição pública para obter atendimento presencial e apresentar reclamações manualmente.",
+    en: "Visit the physical offices or service desks of the Inspectorate-General of the State (IGE) or another public institution for in-person assistance and to submit complaints manually.",
+  },
 
   // Privacy ------------------------------------------------------------—---
   PRIVACY_TITLE: { pt: "Confidencialidade e Protecção de Dados", en: "Confidentiality and Data Protection" },
@@ -189,7 +196,7 @@ export const LANDING_COPY = {
   NEWS_VIEW_ALL: { pt: "Ver todas as actualizações", en: "See all updates" },
 
   // Institutions -------------------------------------------------------—---
-  INST_TITLE: { pt: "IGE e IGSAE ao serviço do cidadão", en: "IGE and IGSAE at the citizen's service" },
+  INST_TITLE: { pt: "Inspecção-Geral do Estado (IGE) ao serviço do cidadão", en: "Inspectorate-General of the State (IGE) at the citizen's service" },
   INST_IGE_TITLE: { pt: "Inspecção-Geral do Estado (IGE)", en: "General State Inspectorate (IGE)" },
   INST_IGE_DESC: {
     pt: "Órgão central de controlo interno da Administração Pública, responsável pela auditoria, fiscalização e inspecção da legalidade, regularidade, eficiência e eficácia da utilização dos recursos públicos.",
@@ -203,10 +210,10 @@ export const LANDING_COPY = {
 
   // Final CTA ----------------------------------------------------------—---
   // Title-cased type names echo the four card titles (prototype convention).
-  FINAL_TITLE: { pt: "Tem uma Reclamação, Queixa, Petição ou Denúncia?", en: "Have a Complaint, Grievance, Petition or Report?" },
+  FINAL_TITLE: { pt: "Tem uma Reclamação ou Queixa?", en: "Have a Complaint or Grievance?" },
   FINAL_TEXT: {
-    pt: "Participe na melhoria dos serviços públicos e da actividade económica. Submeta a sua manifestação e acompanhe o tratamento através do portal.",
-    en: "Help improve public services and economic activity. Submit your case and follow its handling through the portal.",
+    pt: "Participe na melhoria dos serviços públicos. Submeta a sua manifestação e acompanhe o tratamento através do portal.",
+    en: "Help improve public services. Submit your case and follow its handling through the portal.",
   },
   FINAL_CTA: { pt: "Submeter Manifestação", en: "Submit a Case" },
 
@@ -218,7 +225,7 @@ export const LANDING_COPY = {
   FOOTER_PORTAL_WEB: { pt: "Portal Web", en: "Web Portal" },
   FOOTER_ANDROID: { pt: "Aplicação Android", en: "Android App" },
   FOOTER_WHATSAPP: { pt: "WhatsApp Oficial", en: "Official WhatsApp" },
-  FOOTER_GREEN_LINE: { pt: "Linha Verde 1490", en: "Green Line 1490" },
+  FOOTER_GREEN_LINE: { pt: "Linha Verde 800 77 77", en: "Green Line 800 77 77" },
   FOOTER_FAQ: { pt: "Perguntas Frequentes", en: "FAQ" },
   FOOTER_CITIZEN_LOGIN: { pt: "Entrar como Cidadão", en: "Citizen Sign in" },
   FOOTER_EMPLOYEE_LOGIN: { pt: "Acesso de Funcionário", en: "Employee Access" },
@@ -266,7 +273,6 @@ export interface ManifestationType {
 export const MANIFESTATION_TYPES: ManifestationType[] = [
   { id: "reclamacao", icon: FileText, titleKey: "TYPE_COMPLAINT_TITLE", descKey: "TYPE_COMPLAINT_DESC", accentVar: "--pgrl-type-complaint", route: "REGISTER_COMPLAINT" },
   { id: "queixa", icon: Megaphone, titleKey: "TYPE_GRIEVANCE_TITLE", descKey: "TYPE_GRIEVANCE_DESC", accentVar: "--pgrl-type-grievance", route: "REGISTER_COMPLAINT" },
-  { id: "denuncia", icon: ShieldAlert, titleKey: "TYPE_REPORT_TITLE", descKey: "TYPE_REPORT_DESC", accentVar: "--pgrl-type-report", route: "REGISTER_COMPLAINT" },
 ];
 
 export interface HowStep {
@@ -288,8 +294,8 @@ export interface ChannelItem {
   icon: IconComponent;
   titleKey: LandingCopyKey;
   descKey: LandingCopyKey;
-  ctaKey: LandingCopyKey;
-  route: keyof LandingRoutes;
+  ctaKey?: LandingCopyKey;
+  route?: keyof LandingRoutes;
   /** Chip shown on the current channel ("Está aqui"). */
   badgeKey?: LandingCopyKey;
   external?: boolean;
@@ -300,6 +306,7 @@ export const CHANNELS: ChannelItem[] = [
   { id: "app", icon: Smartphone, titleKey: "CHANNEL_APP_TITLE", descKey: "CHANNEL_APP_DESC", ctaKey: "CHANNEL_APP_CTA", route: "ANDROID_APP", external: true },
   { id: "whatsapp", icon: MessageCircle, titleKey: "CHANNEL_WA_TITLE", descKey: "CHANNEL_WA_DESC", ctaKey: "CHANNEL_WA_CTA", route: "WHATSAPP", external: true },
   { id: "greenline", icon: Phone, titleKey: "CHANNEL_LINE_TITLE", descKey: "CHANNEL_LINE_DESC", ctaKey: "CHANNEL_LINE_CTA", route: "GREEN_LINE" },
+  { id: "presencial", icon: MapPin, titleKey: "CHANNEL_INPERSON_TITLE", descKey: "CHANNEL_INPERSON_DESC" },
 ];
 
 export interface InstitutionItem {
@@ -310,7 +317,6 @@ export interface InstitutionItem {
 
 export const INSTITUTIONS: InstitutionItem[] = [
   { icon: Landmark, titleKey: "INST_IGE_TITLE", descKey: "INST_IGE_DESC" },
-  { icon: Store, titleKey: "INST_IGSAE_TITLE", descKey: "INST_IGSAE_DESC" },
 ];
 
 export interface NewsItem {

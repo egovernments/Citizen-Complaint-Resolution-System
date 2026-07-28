@@ -400,6 +400,31 @@ server {
 
 {% endif %}
 {% if digit_ui_mode == "static" %}
+{% if testing_ui_enabled | default(false) %}
+  # ── TESTING ENTRANCE (static mode) — same build, testing config, password
+  #    at the door. Rendered ONLY when host_vars sets testing_ui_enabled. ──
+  location = /{{ testing_ui_path | default('digit-ui-test') }} {
+    return 302 /{{ testing_ui_path | default('digit-ui-test') }}/;
+  }
+  location /{{ testing_ui_path | default('digit-ui-test') }}/ {
+    auth_basic           "Testing";
+    auth_basic_user_file {{ digit_dir }}/nginx/.htpasswd-testing;
+    alias /opt/digit-ui-esbuild/build/;
+    try_files $uri $uri/ /{{ testing_ui_path | default('digit-ui-test') }}/index.html;
+    add_header Cache-Control "no-cache" always;
+    sub_filter_once on;
+    sub_filter_types text/html;
+    sub_filter '</head>' '<script src="/{{ testing_ui_path | default('digit-ui-test') }}/globalConfigs.js"></script></head>';
+    sub_filter '<div id="root">' '<div style="position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#B32D2D;color:#fff;text-align:center;font:600 12px/1.6 Roboto,sans-serif;padding:3px 8px">{{ testing_ui_banner | default('TESTING ENVIRONMENT &#8212; data created here is not real') }}</div><div id="root">';
+  }
+  location = /{{ testing_ui_path | default('digit-ui-test') }}/globalConfigs.js {
+    auth_basic           "Testing";
+    auth_basic_user_file {{ digit_dir }}/nginx/.htpasswd-testing;
+    alias {{ digit_dir }}/nginx/globalConfigs.testing.js;
+    default_type application/javascript;
+    add_header Cache-Control "no-cache, must-revalidate" always;
+  }
+{% endif %}
   # digit-ui in static mode: host nginx serves the build artifact from
   # /opt/digit-ui-esbuild/build/ directly. Built by the playbook
   # (`node esbuild.build.js`) — no inner Docker container, no esbuild
@@ -508,6 +533,23 @@ server {
   # Kong. The pre-fix template had NO `container` branch, so this fell
   # into the HMR `else` and sent /user/oauth/token to
   # :{{ upstream_esbuild_port }} (no API there) → 504 on every login.
+{% if testing_ui_enabled | default(false) %}
+  # ── TESTING ENTRANCE (container mode) — host routes; auth + config live in
+  #    the container's digit-ui.conf (rendered by the playbook). ──
+  location = /{{ testing_ui_path | default('digit-ui-test') }} {
+    return 302 /{{ testing_ui_path | default('digit-ui-test') }}/;
+  }
+  location /{{ testing_ui_path | default('digit-ui-test') }}/ {
+    proxy_set_header Accept-Encoding "";
+    proxy_pass http://{{ nginx_upstream_host | default('127.0.0.1') }}:{{ upstream_esbuild_port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 120s;
+    proxy_buffering off;
+  }
+{% endif %}
   location = /digit-ui {
     return 302 /digit-ui/;
   }

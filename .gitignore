@@ -139,3 +139,4 @@ charts/*.tgz
 # ─── Operator Local Testing ──────────────────────────────────────────────────
 local-testing/
 .agent/
+.playwright-mcp/
