@@ -1,17 +1,23 @@
 [
     {
+        "code": "CS_HOME_HEADER",
+        "message": "Todos os Serviços",
         "code": "CS_LOGIN_TEXT",
         "message": "Todas as comunicações referentes à reclamação/queixa serão enviadas para este número de telemóvel.",
         "module": "rainmaker-common",
         "locale": "pt_PT"
     },
     {
+        "code": "ACTION_TEST_PGR",
+        "message": "Fala Cidadão",
         "code": "CS_LOGIN_PROVIDE_MOBILE_NUMBER",
         "message": "Introduza o seu número de telemóvel",
         "module": "rainmaker-common",
         "locale": "pt_PT"
     },
     {
+        "code": "CS_COMMON_HOME_COMPLAINTS",
+        "message": "Fala Cidadão",
         "code": "CORE_COMMON_MOBILE_NUMBER",
         "message": "Número de Telemóvel",
         "module": "rainmaker-common",
