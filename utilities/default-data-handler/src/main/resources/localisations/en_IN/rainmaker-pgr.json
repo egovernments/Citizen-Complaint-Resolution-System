@@ -8182,5 +8182,35 @@
         "message": "OPTIONAL",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
+    },
+    {
+        "code": "ES_CREATECOMPLAINT_RECEIVED_CHANNEL",
+        "message": "Received Channel",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_CHANNEL_IN_PERSON",
+        "message": "In Person",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_CHANNEL_EMAIL",
+        "message": "Email",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_CHANNEL_LETTER",
+        "message": "Letter",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_CHANNEL_LINHA_VERDE",
+        "message": "Green Line",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
     }
 ]
