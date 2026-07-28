@@ -9832,5 +9832,23 @@
         "message": "By selecting “I agree to the Privacy Policy”, you confirm that the information provided is accurate and that you understand and accept the collection, use, storage and processing of your personal data for the purposes described above.",
         "module": "rainmaker-common",
         "locale": "en_IN"
+    },
+    {
+        "code": "USERNAME",
+        "message": "Username",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_FORGOT_USERNAME_PLACEHOLDER",
+        "message": "Your work username",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "CORE_COMMON_BACK_TO_LOGIN",
+        "message": "Back to login",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
     }
 ]

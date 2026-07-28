@@ -475,7 +475,7 @@
     },
     {
         "code": "WF_INBOX_HEADER_LOCALITY",
-        "message": "Localidade",
+        "message": "Distrito",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1559,6 +1559,7 @@
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
+    {
         "code": "CS_FEEDBACK_RATE_TEXT",
         "message": "Como avalia a sua experiência connosco?",
         "module": "rainmaker-pgr",
@@ -1570,6 +1571,7 @@
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
+    {
         "code": "CS_COMMON_COMMENTS",
         "message": "Comentários",
         "module": "rainmaker-pgr",

@@ -2,6 +2,10 @@
     {
         "code": "CS_HOME_HEADER",
         "message": "Todos os Serviços",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_LOGIN_TEXT",
         "message": "Todas as comunicações referentes à reclamação/queixa serão enviadas para este número de telemóvel.",
         "module": "rainmaker-common",
@@ -10,6 +14,10 @@
     {
         "code": "ACTION_TEST_PGR",
         "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CS_LOGIN_PROVIDE_MOBILE_NUMBER",
         "message": "Introduza o seu número de telemóvel",
         "module": "rainmaker-common",
@@ -18,6 +26,10 @@
     {
         "code": "CS_COMMON_HOME_COMPLAINTS",
         "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
         "code": "CORE_COMMON_MOBILE_NUMBER",
         "message": "Número de Telemóvel",
         "module": "rainmaker-common",
@@ -248,6 +260,60 @@
     {
         "code": "MODULE_PGR",
         "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_LOGIN",
+        "message": "Entrar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_FORGOT_PASSWORD",
+        "message": "Esqueceu a senha?",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_FORGOT_PASSWORD_LABEL",
+        "message": "Esqueceu a senha?",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_FORGOT_PASSWORD_DESC",
+        "message": "Introduza o seu nome de usuário e instituição. Enviaremos um código único para repor a sua senha.",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "USERNAME",
+        "message": "Nome de usuário",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_FORGOT_USERNAME_PLACEHOLDER",
+        "message": "O seu nome de usuário de trabalho",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_CONTINUE",
+        "message": "Continuar",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CORE_COMMON_BACK_TO_LOGIN",
+        "message": "Voltar ao início de sessão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_SEARCH_COMPLAINT",
+        "message": "Pesquisar Reclamação",
         "module": "rainmaker-common",
         "locale": "pt_PT"
     }
