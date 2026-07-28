@@ -118,5 +118,53 @@
         "message": "Ao selecionar «Concordo com a Política de Privacidade», o utilizador confirma que as informações fornecidas são exatas e que compreende e aceita a recolha, utilização, armazenamento e tratamento dos seus dados pessoais para os fins acima descritos.",
         "module": "rainmaker-common",
         "locale": "pt_PT"
+    },
+    {
+        "code": "PGR",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_COMPLAINTS",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_NATIONAL_PGR",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ACTION_TEST_PGR",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_HOME_COMPLAINTS",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_COMMON_INBOX_PGR",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_HEADER_COMPLAINT",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "MODULE_PGR",
+        "message": "Fala Cidadão",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
     }
 ]
