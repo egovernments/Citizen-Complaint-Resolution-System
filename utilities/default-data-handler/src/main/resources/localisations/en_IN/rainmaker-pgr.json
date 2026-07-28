@@ -751,7 +751,7 @@
     },
     {
         "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
-        "message": "Upload complaint photos",
+        "message": "Upload complaint photos or documents",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     },
@@ -8168,6 +8168,18 @@
     {
         "code": "PGR_LANDING_PRIVACY_PAGE_P5",
         "message": "Your information will be retained only for the period necessary to process your complaint, comply with legal obligations and maintain official government records. You may request access to or correction of your personal information, subject to applicable law and any restrictions necessary to protect ongoing investigations.",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_CONSENT_SECTION_MANDATORY",
+        "message": "MANDATORY",
+        "module": "rainmaker-pgr",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PGR_CONSENT_SECTION_OPTIONAL",
+        "message": "OPTIONAL",
         "module": "rainmaker-pgr",
         "locale": "en_IN"
     }

@@ -1170,7 +1170,15 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
         {extended ? (
           <div className="space-y-2">
             {/* Consents are EXPLICIT at create (CCSD-1979 revisited: show at
-                create; hidden only on the details/view screens — CCSD-1988). */}
+                create; hidden only on the details/view screens — CCSD-1988).
+                CCSD-2072: group the mandatory consents under an OBRIGATÓRIO
+                header and the confidential opt-in under OPCIONAL. */}
+            <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: PRIMARY }}>
+              {tr(t, "PGR_CONSENT_SECTION_MANDATORY", "Mandatory")}
+              <span className="ml-0.5" style={{ color: "var(--color-error, #d4351c)" }} aria-hidden>
+                *
+              </span>
+            </div>
             {REQUIRED_CONSENTS.map((c) => (
               <label key={c.code} className="flex items-start gap-2 text-sm">
                 <input
@@ -1188,7 +1196,10 @@ function Step3Description({ data, patch, templateFields, t }: StepBodyProps) {
                 </span>
               </label>
             ))}
-            <label className="flex items-start gap-2 text-sm pt-2 border-t border-border">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-3 mt-1 border-t border-border">
+              {tr(t, "PGR_CONSENT_SECTION_OPTIONAL", "Optional")}
+            </div>
+            <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
                 style={CHECKBOX_STYLE}
