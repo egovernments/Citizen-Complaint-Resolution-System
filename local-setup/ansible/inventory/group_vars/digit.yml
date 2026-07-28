@@ -189,11 +189,14 @@ digit_ui_esbuild_branch: main
 # does). Set to "" in host_vars to force an on-host build even if this is on.
 # digit_ui_bundle_image: "ghcr.io/subhashini-egov/digit-ui-esbuild:nightly-develop"
 
-# ── TESTING ENTRANCE (/testing-ui) — default OFF everywhere. ──
+# ── TESTING ENTRANCE (/digit-ui-test) — default OFF everywhere. ──
+# This renders the gated entrance ONLY (nginx + testing globalConfigs +
+# htpasswd). It does NOT create or seed the testing tenant — onboard that
+# through the configurator and flag it there ("Make this a testing tenant"),
+# which writes isTestingTenant on the tenant record; the UIs read the flag.
 # Opt in per box via host_vars:
 #   testing_ui_enabled: true
-#   testing_tenant: mz.igetesting          # hidden QA tenant
-#   testing_ui_htpasswd: "tester:$apr1$…"  # pre-hashed; keep in vault
-# Optional: testing_ui_path (URL prefix, default "digit-ui-test"), testing_seed_source_tenant,
-#   testing_ui_banner, testing_emp_password.
+#   testing_tenant: mz.igetesting          # login/allowlist tenant for the entrance
+#   testing_ui_htpasswd: "tester:$apr1$…"  # pre-hashed gate credential; keep in vault
+# Optional: testing_ui_path (URL prefix, default "digit-ui-test"), testing_ui_banner.
 testing_ui_enabled: false
