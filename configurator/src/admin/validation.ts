@@ -75,7 +75,11 @@ const DEFAULT_POSTAL_PATTERN = /^[0-9]{5}$/;
 const GENERIC_POSTAL_MESSAGE = 'Enter a valid postal code';
 
 function deriveMessage(patternStr: string): string {
-  const m = patternStr.match(/\{\s*(\d+)\s*\}/); // ^[0-9]{5}$ -> "5"
+  // Anchored to the whole `^[0-9]{N}$` shape — a bare `\{(\d+)\}` search would
+  // also match an unrelated quantifier elsewhere in an alnum pattern (e.g. the
+  // UK shape's trailing `{2}` character-class repeat), misreporting a digit
+  // count for a field that isn't digit-only.
+  const m = patternStr.match(/^\^?\[0-9\]\{\s*(\d+)\s*\}\$?$/); // ^[0-9]{5}$ -> "5"
   return m ? `Enter a valid ${m[1]}-digit postal code` : GENERIC_POSTAL_MESSAGE;
 }
 

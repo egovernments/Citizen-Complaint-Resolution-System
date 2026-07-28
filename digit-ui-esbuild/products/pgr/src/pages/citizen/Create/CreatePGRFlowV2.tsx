@@ -672,12 +672,10 @@ function Step2Location({ data, patch, t }: StepBodyProps) {
           <Input
             id="postal-code"
             type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={7}
+            maxLength={16}
             invalid={showPostalError}
             value={effectivePincode}
-            onChange={(e) => patch({ postalCode: e.target.value.replace(/\D/g, "") })}
+            onChange={(e) => patch({ postalCode: e.target.value })}
           />
         </Field>
 

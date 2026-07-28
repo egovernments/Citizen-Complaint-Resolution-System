@@ -1,3 +1,5 @@
+import { getPostalCodePattern } from "../utils/postalCode";
+
 export const CreateComplaintConfig = {
   get tenantId() { return Digit.ULBService.getCurrentTenantId(); },
   moduleName: "RAINMAKER-PGR",
@@ -216,14 +218,20 @@ export const CreateComplaintConfig = {
                 required: false,
                 validation: {
                   required: false,
-                  // Postal-code shape is per-country. Read the pattern from
-                  // globalConfigs CORE_POSTAL_CONFIGS (e.g. MZ = 4 digits)
-                  // instead of hardcoding 5, so this field rule matches the
-                  // config-driven check in createComplaintForm.js. Falls back
-                  // to the legacy 5-digit default when the host hasn't set it.
-                  pattern: new RegExp(
-                    window?.globalConfigs?.getConfig?.("CORE_POSTAL_CONFIGS")?.postalCodePattern || "^[0-9]{5}$"
-                  ),
+                  // Postal-code shape is per-country. Routed through the same
+                  // shared getPostalCodePattern() used by createComplaintForm.js
+                  // (utils/postalCode.js) so this field rule can't drift from
+                  // the real submit-time check, honours the legacy
+                  // CORE_POSTAL_CODE_CONFIGS key too, and — via the lazy
+                  // getter below — never throws at module-import time if a
+                  // configured pattern is malformed.
+                  get pattern() {
+                    try {
+                      return new RegExp(getPostalCodePattern());
+                    } catch {
+                      return /^[0-9]{5}$/;
+                    }
+                  },
                 },
                 // This static config can't interpolate the configured digit
                 // count into the message (FormComposerV2 calls `t(error)`

@@ -18,15 +18,20 @@
 // generic, still-localized message instead of asserting a wrong digit
 // count.
 
-function getPostalCodePattern() {
+export function getPostalCodePattern() {
   const getConfig = typeof window !== "undefined" ? window.globalConfigs?.getConfig : undefined;
   const cfg = getConfig?.("CORE_POSTAL_CONFIGS") || getConfig?.("CORE_POSTAL_CODE_CONFIGS") || {};
   return cfg.postalCodePattern || "^[0-9]{5}$";
 }
 
-/** Digit count for a `^[0-9]{N}$`-shaped pattern, or null for anything else. */
+/**
+ * Digit count for a whole `^[0-9]{N}$`-shaped pattern, or null for anything
+ * else (e.g. alnum shapes like the UK example, which must fall back to the
+ * generic message rather than misreporting an unrelated `{N}` quantifier
+ * found elsewhere in the pattern).
+ */
 function getPostalCodeDigitLength() {
-  const m = String(getPostalCodePattern()).match(/\{\s*(\d+)\s*\}/);
+  const m = String(getPostalCodePattern()).match(/^\^?\[0-9\]\{\s*(\d+)\s*\}\$?$/);
   return m ? m[1] : null;
 }
 
