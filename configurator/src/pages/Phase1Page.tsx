@@ -221,16 +221,14 @@ export default function Phase1Page() {
       // definitely has the tenant.tenants schema, either pre-existing or just
       // registered by bootstrap). This replaces the previous `state.tenant`
       // target — that was a localStorage value, not a deliberate write target.
-      let tenantAlreadyExisted = false;
       try {
         await mdmsService.createTenant(parentState, tenant);
       } catch (err) {
         const msg = err instanceof ApiClientError ? err.firstError : (err instanceof Error ? err.message : '');
         if (!/duplicate|already exists|unique|NON_UNIQUE/i.test(msg)) throw err;
-        tenantAlreadyExisted = true;
       }
 
-      // Give the brand-new tenant its egov-enc-service symmetric key.
+      // Make sure the tenant has its egov-enc-service symmetric key.
       //
       // Every write that carries PII — Phase 4's employees (mobile/email), and
       // any citizen user later — is encrypted per tenant. A tenant with no key
@@ -241,31 +239,34 @@ export default function Phase1Page() {
       // "pre-bootstrap — generate enc-service key"); the wizard has to do it for
       // the tenants IT creates.
       //
-      // Deliberately narrow, so this can never rotate a live tenant's key:
-      //   - only here, on the tenant-CREATION path;
-      //   - skipped entirely when the tenant already existed (duplicate above),
-      //     and skipped for a fresh state root because bootstrapStateRoot()
-      //     already registered the key for it;
-      //   - the endpoint itself is create-if-missing (returns created:false and
-      //     the same keyId when a key exists) — see ensureEncKey();
-      //   - and there is no standalone "regenerate key" control anywhere in the UI.
+      // Called unconditionally, including when createTenant above reported a
+      // duplicate. An existing tenant.tenants record is not evidence of an
+      // existing key — the two live in different services, and every tenant the
+      // wizard created before ensureEncKey existed has the record but no key.
+      // Re-running Phase 1 is the one repair an operator would reach for, so
+      // that path is exactly the one that must mint the key.
+      //
+      // Safe to call on a tenant that already has a key: /crypto/v1/_generatekey
+      // is create-if-missing, never a rotation. Verified against a live tenant
+      // (ke.bomet's sibling pu.chandigarh): first call {created:true,keyId:184},
+      // second {created:false,keyId:184}, one row throughout with an unchanged
+      // key_id. Rotation would strand already-encrypted data (#622) and remains
+      // a deliberate ops action — the UI exposes no "regenerate key" control.
       //
       // Non-fatal: the tenant itself is created and usable for Phases 2-3, so
       // don't roll the operator back to the upload step. Warn instead — Phase 4
       // surfaces the underlying encryption error if this really didn't take.
-      if (!tenantAlreadyExisted) {
-        try {
-          await ensureEncKey(tenant.code);
-        } catch (encErr) {
-          const msg = encErr instanceof ApiClientError
-            ? encErr.firstError
-            : (encErr instanceof Error ? encErr.message : String(encErr));
-          console.warn(`[phase1] enc-service key generation for ${tenant.code} failed: ${msg}`);
-          setWarning(
-            `Tenant created, but registering it with the encryption service failed (${msg}). ` +
-            `Employee creation in Phase 4 will fail until this is resolved.`
-          );
-        }
+      try {
+        await ensureEncKey(tenant.code);
+      } catch (encErr) {
+        const msg = encErr instanceof ApiClientError
+          ? encErr.firstError
+          : (encErr instanceof Error ? encErr.message : String(encErr));
+        console.warn(`[phase1] enc-service key generation for ${tenant.code} failed: ${msg}`);
+        setWarning(
+          `Tenant created, but registering it with the encryption service failed (${msg}). ` +
+          `Employee creation in Phase 4 will fail until this is resolved.`
+        );
       }
 
       // Create localization for tenant name, also at the parent state.
