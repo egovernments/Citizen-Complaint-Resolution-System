@@ -747,24 +747,24 @@ const CMS_PH = () => (CFG.tenants.length > 1 ? `cms@${CFG.tenant}` : 'cms');
 
 async function phaseCms() {
   if (!CFG.cms) return record(CMS_PH(), OUTCOME.SKIPPED, 'opt-in phase — pass --cms to run');
-  const city = CFG.tenant.includes('.') ? CFG.tenant : null;
-  if (!city) {
-    // A state-root entry in a tenant list legitimately has no cms run of its
-    // own — the city entries that follow carry it. Only a SINGLE state-root
-    // tenant is an operator error.
-    if (CFG.tenants.length > 1) return record(CMS_PH(), OUTCOME.SKIPPED, 'state root — cms runs at the city tenants in the list');
-    return record('cms', OUTCOME.FAILED, 'CMS workflow needs a city tenant (e.g. mz.igsae), got a state root', 'CMS_TENANT_REQUIRED',
-      'Re-run with --tenant <state.city> --phases cms --cms');
+  // A state-root entry in a MULTI-tenant list legitimately has no cms run of
+  // its own — the city entries that follow carry it. For a SINGLE state-root
+  // tenant (no city provisioned at all), run cms directly against the state
+  // tenant itself instead of requiring a city.
+  if (!CFG.tenant.includes('.') && CFG.tenants.length > 1) {
+    return record(CMS_PH(), OUTCOME.SKIPPED, 'state root — cms runs at the city tenants in the list');
   }
+  const city = CFG.tenant;
+  const targets = [...new Set([CFG.state, city])];
   const failures = [];
   try {
-    // 1: roles — at the STATE root and the CITY tenant. MDMS v1 role lookups
-    // do not overlay state rows onto a city tenant here (each tenant carries
-    // its own copy — MCP tenant bootstrap clones the stock ones), so the
-    // configurator's employee-upload validator at the city tenant only sees
-    // city-tenant rows.
+    // 1: roles — at the STATE root and the CITY tenant (same tenant, once,
+    // when there is no city). MDMS v1 role lookups do not overlay state rows
+    // onto a city tenant here (each tenant carries its own copy — MCP tenant
+    // bootstrap clones the stock ones), so the configurator's employee-upload
+    // validator at the city tenant only sees city-tenant rows.
     const roleRows = readJson(SEED.roles).filter((r) => CMS_ROLES.includes(r.code));
-    for (const T of [CFG.state, city]) {
+    for (const T of targets) {
       const haveRoles = new Set((await cmsSearchAll('ACCESSCONTROL-ROLES.roles', T)).map((m) => m.data && m.data.code));
       for (const r of roleRows.filter((r) => !haveRoles.has(r.code))) {
         if (CFG.dryRun) { info(`dry-run: would create role ${r.code} @ ${T}`); continue; }
@@ -772,7 +772,7 @@ async function phaseCms() {
         if (!res.ok && !res.exists) failures.push(`role ${r.code} @ ${T}: HTTP ${res.code}`);
       }
     }
-    ok(`roles: ${CMS_ROLES.length} ensured @ ${CFG.state} + ${city}`);
+    ok(`roles: ${CMS_ROLES.length} ensured @ ${targets.join(' + ')}`);
     // 2+3: actions + grants
     const grants = readJson(SEED.roleactions).filter((g) => CMS_ROLES.includes(g.rolecode));
     const catalog = new Map(readJson(SEED.actionsTest).map((a) => [Number(a.id), a]));

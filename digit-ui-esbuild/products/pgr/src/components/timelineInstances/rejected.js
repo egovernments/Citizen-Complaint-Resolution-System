@@ -24,7 +24,7 @@ const Rejected = ({ action, nextActions, complaintDetails, ComplainMaxIdleTime, 
       nextActions.map((action, index) => {
         if (action && action !== "COMMENT") {
           return (
-            <Link key={index} to={`/digit-ui/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
+            <Link key={index} to={`/${window?.contextPath || "digit-ui"}/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
               <ActionLinks>{t(`CS_COMMON_${action}`)}</ActionLinks>
             </Link>
           );
@@ -65,7 +65,7 @@ const Rejected = ({ action, nextActions, complaintDetails, ComplainMaxIdleTime, 
           // hadn't loaded yet. Use a strict-numeric guard.
           if (action !== "REOPEN" || reopenWindowOpen)
           return (
-            <Link key={index} to={`/digit-ui/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
+            <Link key={index} to={`/${window?.contextPath || "digit-ui"}/citizen/pgr/${action.toLowerCase()}/${serviceRequestId}`}>
               <ActionLinks>{t(`CS_COMMON_${action}`)}</ActionLinks>
             </Link>
           );

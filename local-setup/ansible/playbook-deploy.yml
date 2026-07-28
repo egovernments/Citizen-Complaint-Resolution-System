@@ -648,6 +648,37 @@
         dest: "{{ digit_dir }}/nginx/globalConfigs.js"
         mode: '0644'
 
+    # ============== TESTING ENTRANCE (default path: /digit-ui-test) ==============
+    # Everything below renders ONLY when host_vars sets testing_ui_enabled —
+    # default-off boxes produce byte-identical output to before this feature.
+    - name: Render digit-ui globalConfigs.testing.js (testing entrance)
+      when: testing_ui_enabled | default(false)
+      template:
+        src: templates/globalConfigs.js.j2
+        dest: "{{ digit_dir }}/nginx/globalConfigs.testing.js"
+        mode: '0644'
+      vars:
+        context_path: "{{ testing_ui_path | default('digit-ui-test') }}"
+        gc_testing_mode: true
+        login_tenant_allowlist: ["{{ testing_tenant }}"]
+        city_tenant: "{{ testing_tenant }}"
+
+    - name: Write testing-entrance htpasswd
+      when: testing_ui_enabled | default(false)
+      copy:
+        # Pre-hashed htpasswd line(s), e.g. output of:
+        #   printf "tester:%s" "$(openssl passwd -apr1 '<password>')"
+        # Keep the value in vault — it gates the entire testing entrance.
+        content: "{{ testing_ui_htpasswd }}\n"
+        dest: "{{ digit_dir }}/nginx/.htpasswd-testing"
+        mode: '0640'
+
+    # NOTE: the testing tenant is no longer seeded by a clone script here.
+    # Onboard it through the normal configurator flow, then flag it in the
+    # configurator ("Make this a testing tenant" → writes isTestingTenant on
+    # the tenant record). The gate + testing globalConfigs above are the only
+    # deploy-time pieces; the citizen/employee UIs read the flag at runtime.
+
     - name: Add API proxy to digit-ui nginx config
       copy:
         content: |
@@ -705,6 +736,29 @@
               default_type text/html;
             }
 
+            {% if testing_ui_enabled | default(false) %}
+            # ── TESTING ENTRANCE — same bundle, testing config, password at
+            #    the door. Rendered only when testing_ui_enabled. ──
+            location /{{ testing_ui_path | default('digit-ui-test') }} {
+              auth_basic           "Testing";
+              auth_basic_user_file /host-nginx/.htpasswd-testing;
+              alias /var/web/digit-ui;
+              index index.html;
+              try_files $uri $uri/ /{{ testing_ui_path | default('digit-ui-test') }}/index.html;
+              sub_filter '</head>' '<script src="/{{ testing_ui_path | default('digit-ui-test') }}/globalConfigs.js"></script></head>';
+              sub_filter '<div id="root">' '<div style="position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#B32D2D;color:#fff;text-align:center;font:600 12px/1.6 Roboto,sans-serif;padding:3px 8px">{{ testing_ui_banner | default('TESTING ENVIRONMENT &#8212; data created here is not real') }}</div><div id="root">';
+              add_header Cache-Control "no-cache" always;
+            }
+
+            location = /{{ testing_ui_path | default('digit-ui-test') }}/globalConfigs.js {
+              auth_basic           "Testing";
+              auth_basic_user_file /host-nginx/.htpasswd-testing;
+              alias /host-nginx/globalConfigs.testing.js;
+              default_type application/javascript;
+              add_header Cache-Control "no-cache, must-revalidate" always;
+            }
+
+            {% endif %}
             # Proxy API calls to Kong gateway
             location / {
               set $kong http://kong-gateway:8000;

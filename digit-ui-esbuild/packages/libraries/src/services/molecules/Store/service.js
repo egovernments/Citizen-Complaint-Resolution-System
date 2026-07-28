@@ -188,6 +188,17 @@ export const StoreService = {
     // .filter((item) => !!moduleTenants.find((mt) => mt.code === item.code))
     // .map((tenant) => ({ i18nKey: `TENANT_TENANTS_${tenant.code.replace(".", "_").toUpperCase()}`, ...tenant }));
 
+    // Testing-tenant codes — derived from the AUTHORITATIVE tenant.tenants
+    // master (GetCitiesWithi18nKeys drops arbitrary fields on the multi-root
+    // path, so initData.tenants can't be trusted to carry the flag). The
+    // configurator's "Make this a testing tenant" checkbox writes
+    // `isTestingTenant: true` onto the tenant record; the citizen/employee UIs
+    // read these codes to route the tenant to the /digit-ui-test entrance and
+    // hide it from production. Cached as a plain array for a synchronous read.
+    initData.testingTenantCodes = (MdmsRes?.tenant?.tenants || [])
+      .filter((t) => t?.isTestingTenant === true)
+      .map((t) => t.code);
+
     await LocalizationService.getLocale({
       modules: [`${modulePrefix}-common`, `digit-ui`, `digit-tenants`, `${modulePrefix}-${stateCode.toLowerCase()}`],
       locale: initData.selectedLanguage,
