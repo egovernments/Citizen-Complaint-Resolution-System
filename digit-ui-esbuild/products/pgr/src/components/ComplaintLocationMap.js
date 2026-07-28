@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Tooltip, GeoJSON } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { injectGlassTooltipStyle } from "../utils/mapTooltipStyle";
 import { CardLabel } from "@egovernments/digit-ui-react-components";
 import { useTranslation } from "react-i18next";
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
@@ -16,6 +17,9 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://unpkg.com/leaflet@1.6.0/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.6.0/dist/images/marker-shadow.png",
 });
+
+// Frosted-glass styling for the address tooltip so it no longer covers the map.
+injectGlassTooltipStyle();
 
 const NavigationIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -195,7 +199,7 @@ const ComplaintLocationMap = ({ latitude, longitude, address }) => {
             )}
             <Marker position={[latitude, longitude]}>
               {displayAddress && (
-                <Tooltip permanent direction="top" offset={[0, -30]} opacity={1}>
+                <Tooltip permanent direction="top" offset={[0, -30]} opacity={1} className="pgr-loc-tooltip">
                   <div style={{
                     fontSize: "14px",
                     fontWeight: "600",

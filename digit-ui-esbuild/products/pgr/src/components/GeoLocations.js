@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Tooltip, Polygon, GeoJSON, useMapEvents, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import { injectGlassTooltipStyle } from "../utils/mapTooltipStyle";
 import L from "leaflet";
 import { CardLabel, Loader } from "@egovernments/digit-ui-react-components";
 import { Toast } from "@egovernments/digit-ui-components";
@@ -18,6 +19,9 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://unpkg.com/leaflet@1.6.0/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.6.0/dist/images/marker-shadow.png",
 });
+
+// Frosted-glass styling for the address tooltip so it no longer covers the map.
+injectGlassTooltipStyle();
 
 // Inline-SVG accent fills follow the runtime theme via `--color-primary-accent`.
 // `currentColor` reads the host element's `color`, which we drive from the CSS var.
