@@ -3,6 +3,7 @@ import { DigitCard } from '@/components/digit/DigitCard';
 import { useNavigate } from 'react-router-dom';
 import { getDedicatedResources } from '@/providers/bridge';
 import { useResourceLabel } from '@/providers/useResourceLabel';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 import {
   Building2,
   MapPin,
@@ -65,9 +66,10 @@ function ResourceCard({ resource }: { resource: string }) {
 
 export function DigitDashboard() {
   const translate = useTranslate();
+  const { canViewResource } = useMastersCapability();
   const dedicatedMap = getDedicatedResources();
   const resources = Object.keys(dedicatedMap).filter(
-    (r) => ICONS[r] // only show resources that have icons
+    (r) => ICONS[r] && canViewResource(r) // only show resources that have icons and the role can see
   );
 
   return (

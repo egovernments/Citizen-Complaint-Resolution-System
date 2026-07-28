@@ -6,6 +6,7 @@ import { DigitCard } from '@/components/digit/DigitCard';
 import { ActionBar } from '@/components/digit/ActionBar';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 import {
   useMutationError,
   MutationErrorBanner,
@@ -57,6 +58,13 @@ function DigitEditContent({
   const { record, isPending, saving, error, defaultTitle, refetch } =
     useEditContext();
   const navigate = useNavigate();
+  const resource = useResourceContext();
+  const { canEditResource } = useMastersCapability();
+  // UI-level only (not a security boundary) — see
+  // docs/design/masters-configurator-access-policy-design.md §3.3. A role
+  // that can view but not edit this master's schema loses the Save button;
+  // the resource keeps working read-only via the same Edit screen.
+  const canEdit = !resource || canEditResource(resource);
 
   const displayTitle = title || defaultTitle || 'Edit';
 
@@ -130,6 +138,11 @@ function DigitEditContent({
       {/* Form card */}
       <DigitCard className="max-w-none">
         <MutationErrorBanner info={errorInfo} onDismiss={onDismissError} />
+        {!canEdit && (
+          <div className="mb-4 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+            Your role has view-only access to this master.
+          </div>
+        )}
         {/* mode="onChange": see matching note in DigitCreate.tsx — without
             it, fieldState.invalid stays unset (no red/error styling) until
             the first submit attempt. */}
@@ -147,14 +160,16 @@ function DigitEditContent({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={saving} className="gap-1.5">
-              {saving ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              Save
-            </Button>
+            {canEdit && (
+              <Button type="submit" disabled={saving} className="gap-1.5">
+                {saving ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save
+              </Button>
+            )}
           </ActionBar>
         </Form>
       </DigitCard>

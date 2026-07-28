@@ -4,12 +4,14 @@ import { StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { Badge } from '@/components/ui/badge';
 import { useShowController } from 'ra-core';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 export function ComplaintTypeShow() {
   const { record } = useShowController();
+  const { canEditResource } = useMastersCapability();
 
   return (
-    <DigitShow title={record ? `Complaint Type: ${record.name ?? record.id}` : 'Complaint Type'} hasEdit>
+    <DigitShow title={record ? `Complaint Type: ${record.name ?? record.id}` : 'Complaint Type'} hasEdit={canEditResource('complaint-hierarchy')}>
       {(rec: Record<string, unknown>) => {
         const keywords = rec.keywords as string[] | string | undefined;
         const keywordList = Array.isArray(keywords) ? keywords : (typeof keywords === 'string' ? keywords.split(',').map(k => k.trim()) : []);

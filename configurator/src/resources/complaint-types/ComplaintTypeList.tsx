@@ -2,6 +2,7 @@ import { DigitList, DigitDatagrid } from '@/admin';
 import type { DigitColumn } from '@/admin';
 import { StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 const columns: DigitColumn[] = [
   // Grouping key — the leaf's parent node code in the hierarchy (was menuPath).
@@ -42,8 +43,9 @@ const columns: DigitColumn[] = [
 ];
 
 export function ComplaintTypeList() {
+  const { canEditResource } = useMastersCapability();
   return (
-    <DigitList title="app.resources.complaint_types" hasCreate sort={{ field: 'serviceCode', order: 'ASC' }}>
+    <DigitList title="app.resources.complaint_types" hasCreate={canEditResource('complaint-hierarchy')} sort={{ field: 'serviceCode', order: 'ASC' }}>
       <DigitDatagrid columns={columns} rowClick="show" />
     </DigitList>
   );

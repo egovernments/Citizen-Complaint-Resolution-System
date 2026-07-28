@@ -2,12 +2,14 @@ import { DigitShow } from '@/admin';
 import { FieldSection, FieldRow, ReverseReferenceList, StatusChip } from '@/admin/fields';
 import { EntityLink } from '@/components/ui/EntityLink';
 import { useShowController } from 'ra-core';
+import { useMastersCapability } from '@/hooks/useMastersCapability';
 
 export function DesignationShow() {
   const { record } = useShowController();
+  const { canEditResource } = useMastersCapability();
 
   return (
-    <DigitShow title={record ? `Designation: ${record.name ?? record.id}` : 'Designation'} hasEdit>
+    <DigitShow title={record ? `Designation: ${record.name ?? record.id}` : 'Designation'} hasEdit={canEditResource('designations')}>
       {(rec: Record<string, unknown>) => {
         const raw = rec.department;
         const deptCodes: string[] = Array.isArray(raw)

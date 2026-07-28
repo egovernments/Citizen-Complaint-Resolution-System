@@ -127,6 +127,13 @@ public class PGRConfiguration {
     @Value("${egov.mdms.search.endpoint}")
     private String mdmsEndPoint;
 
+    //Accesscontrol — Tier-2 PDP condition lookup, see org.egov.pgr.policy
+    @Value("${egov.accesscontrol.host}")
+    private String accessControlHost;
+
+    @Value("${egov.accesscontrol.actions.mdms.get.path}")
+    private String accessControlActionsMdmsGetPath;
+
     //HRMS
     @Value("${egov.hrms.host}")
     private String hrmsHost;
