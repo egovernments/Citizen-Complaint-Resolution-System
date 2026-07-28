@@ -6,24 +6,16 @@ import { convertEpochFormateToDate } from '../utils';
 // NOTE: no useMyContext() here — the citizen route tree has no MyContext
 // provider, and this wrapper renders on BOTH citizen and employee details.
 // CCSD-1971 (B4): when a complaint is marked confidential, the CITIZEN's
-// identity must not surface in the employee timeline. Names show first char +
-// asterisks; contact numbers keep the last 4 digits (the backend already
-// masks the mobile, this covers the name and any unmasked residue).
-// Fixed-shape mask, mirroring the number convention (*****0104): first letter
-// of each word + exactly three stars — "CMS Case Manager" → "C*** C*** M***".
-// Fixed star count so the mask doesn't leak the real name's length.
-const maskName = (name) => {
-  if (!name || name.length < 2) return name;
-  return String(name)
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0) + "***")
-    .join(" ");
-};
-const maskPhone = (phone) => {
-  if (!phone || phone.length < 4) return phone;
-  return "******" + phone.slice(-4);
-};
+// identity must not surface in the employee timeline. The complainant's name
+// and number are FULLY masked — no first letter, no last 4 digits — so nothing
+// (value or length) leaks; the backend's own mobile masking is a second layer.
+// Fully masked — the timeline reveals NO complainant PII: not the name's first
+// letter and not the number's last 4 digits. A single fixed token so neither the
+// value nor its length (nor word count) can leak. Clear identity lives only on
+// the complainant card, shown per the viewer's privilege.
+const MASKED = "******";
+const maskName = (name) => (name ? MASKED : name);
+const maskPhone = (phone) => (phone ? MASKED : phone);
 const isCitizenActor = (person) =>
   Array.isArray(person?.roles) && person.roles.some((r) => (r?.code || r) === "CITIZEN");
 
