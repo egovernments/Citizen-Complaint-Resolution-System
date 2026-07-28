@@ -1606,5 +1606,35 @@
         "message": "OPCIONAL",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
+    },
+    {
+        "code": "ES_CREATECOMPLAINT_RECEIVED_CHANNEL",
+        "message": "Canal de Recepção",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CHANNEL_IN_PERSON",
+        "message": "Presencial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CHANNEL_EMAIL",
+        "message": "E-mail",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CHANNEL_LETTER",
+        "message": "Carta",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CHANNEL_LINHA_VERDE",
+        "message": "Linha Verde",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
     }
 ]
