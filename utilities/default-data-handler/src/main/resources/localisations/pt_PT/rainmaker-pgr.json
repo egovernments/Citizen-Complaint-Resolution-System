@@ -607,7 +607,13 @@
     },
     {
         "code": "PGR_LANDING_ORG_NAMES",
-        "message": "IGE e IGSAE",
+        "message": "Inspecção-Geral do Estado (IGE)",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_FOOTER_ORG",
+        "message": "IGE",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -637,7 +643,7 @@
     },
     {
         "code": "PGR_LANDING_UTILITY_GREEN_LINE",
-        "message": "Linha Verde 1490",
+        "message": "Linha Verde 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -721,13 +727,13 @@
     },
     {
         "code": "PGR_LANDING_HERO_EYEBROW",
-        "message": "República de Moçambique · IGE · IGSAE",
+        "message": "República de Moçambique · IGE",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
     {
         "code": "PGR_LANDING_HERO_TITLE",
-        "message": "Portal de Reclamações e Denúncias",
+        "message": "Fala Cidadão",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -739,7 +745,7 @@
     },
     {
         "code": "PGR_LANDING_HERO_LEDE",
-        "message": "Canal nacional para reclamações, queixas, petições e denúncias sobre serviços públicos, administração pública e actividades económicas — com acompanhamento simples, seguro e transparente.",
+        "message": "Canal nacional para reclamações e queixas sobre serviços públicos e administração pública — com acompanhamento simples, seguro e transparente.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -793,7 +799,7 @@
     },
     {
         "code": "PGR_LANDING_HERO_CHANNEL_LINE",
-        "message": "Linha Verde 1490",
+        "message": "Linha Verde 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1009,7 +1015,7 @@
     },
     {
         "code": "PGR_LANDING_CHANNEL_LINE_TITLE",
-        "message": "Linha Verde 1490",
+        "message": "Linha Verde 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1021,7 +1027,19 @@
     },
     {
         "code": "PGR_LANDING_CHANNEL_LINE_CTA",
-        "message": "Ligar 1490",
+        "message": "Ligar 800 77 77",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_INPERSON_TITLE",
+        "message": "Atendimento Presencial",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_LANDING_CHANNEL_INPERSON_DESC",
+        "message": "Visite os escritórios físicos ou balcões de atendimento da Inspecção-Geral do Estado (IGE) ou de outra instituição pública para obter atendimento presencial e apresentar reclamações manualmente.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1069,7 +1087,7 @@
     },
     {
         "code": "PGR_LANDING_INST_TITLE",
-        "message": "IGE e IGSAE ao serviço do cidadão",
+        "message": "Inspecção-Geral do Estado (IGE) ao serviço do cidadão",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1099,13 +1117,13 @@
     },
     {
         "code": "PGR_LANDING_FINAL_TITLE",
-        "message": "Tem uma Reclamação, Queixa, Petição ou Denúncia?",
+        "message": "Tem uma Reclamação ou Queixa?",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
     {
         "code": "PGR_LANDING_FINAL_TEXT",
-        "message": "Participe na melhoria dos serviços públicos e da actividade económica. Submeta a sua manifestação e acompanhe o tratamento através do portal.",
+        "message": "Participe na melhoria dos serviços públicos. Submeta a sua manifestação e acompanhe o tratamento através do portal.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1159,7 +1177,7 @@
     },
     {
         "code": "PGR_LANDING_FOOTER_GREEN_LINE",
-        "message": "Linha Verde 1490",
+        "message": "Linha Verde 800 77 77",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1201,7 +1219,7 @@
     },
     {
         "code": "PGR_LANDING_FOOTER_COPYRIGHT",
-        "message": "Portal de Reclamações e Denúncias · República de Moçambique. Todos os direitos reservados.",
+        "message": "Fala Cidadão · República de Moçambique. Todos os direitos reservados.",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
