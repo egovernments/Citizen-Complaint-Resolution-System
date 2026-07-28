@@ -26,11 +26,32 @@ import { AlertTriangle, FlaskConical } from 'lucide-react';
 //   2. Root/state tenants (code without a ".") cannot be flagged — only
 //      sub-tenants. This blocks marking e.g. `mz` itself.
 //   3. Enabling shows a confirmation dialog spelling out the consequences.
-const NAME_MUST_CONTAIN = /testing/i;
+// Whole-word match — "IGE Testing" / "Testing Tenant" pass, but "Contesting"
+// and "Testington" (which merely contain the substring) do not.
+const NAME_MUST_CONTAIN = /\btesting\b/i;
 const isSubTenant = (code?: string) => !!code && code.includes('.');
 
+// Enforced at SAVE time too, not just at toggle time: if an operator flags a
+// tenant and later renames it to a production name (dropping "Testing"), the
+// form must refuse to save while the flag is still true — otherwise a
+// production tenant silently persists isTestingTenant:true and is hidden from
+// production. Returns an error string (react-admin surfaces it) or undefined.
+const validateTestingFlag = (value: unknown, allValues: Record<string, unknown>) => {
+  if (value !== true) return undefined;
+  const nm = (allValues?.name as string | undefined) ?? '';
+  const cd = (allValues?.code as string | undefined) ?? '';
+  if (!NAME_MUST_CONTAIN.test(nm) || !isSubTenant(cd)) {
+    return 'A testing tenant’s Name must contain the word "Testing" and it must be a sub-tenant. Rename it, or uncheck "Make this a testing tenant".';
+  }
+  return undefined;
+};
+
 export function TestingTenantToggle() {
-  const { id, field } = useInput({ source: 'isTestingTenant', parse: (v: boolean) => v });
+  const { id, field, fieldState } = useInput({
+    source: 'isTestingTenant',
+    parse: (v: boolean) => v,
+    validate: validateTestingFlag,
+  });
   const name = (useWatch({ name: 'name' }) as string | undefined) ?? '';
   const code = (useWatch({ name: 'code' }) as string | undefined) ?? '';
 
@@ -84,6 +105,11 @@ export function TestingTenantToggle() {
         Routes this tenant to the gated <code>/digit-ui-test</code> entrance and hides it from
         production. Name must contain "Testing".
       </p>
+      {fieldState.error ? (
+        <p className="mt-1 pl-6 text-xs font-medium text-red-600">
+          {(fieldState.error as { message?: string })?.message ?? String(fieldState.error)}
+        </p>
+      ) : null}
 
       {/* Confirmation before enabling */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

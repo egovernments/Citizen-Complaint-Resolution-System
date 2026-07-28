@@ -7,9 +7,10 @@
 // initData.testingTenantCodes, so this resolves synchronously (usable inside a
 // react-query `select`, no hook needed).
 //
-// FLAG-FIRST, CONFIG-FALLBACK: if no tenant is flagged (a box that hasn't
-// migrated to the flag yet), fall back to the legacy deploy-time
-// globalConfigs TESTING_TENANT_ID so nothing breaks mid-migration.
+// FLAG ∪ LEGACY CONFIG: flagged codes are UNIONED with the legacy deploy-time
+// globalConfigs TESTING_TENANT_ID (not flag-else-config) — on a box mid-
+// migration where one tenant is flagged but another is still known only via
+// the config, both must stay hidden from production.
 //
 // TESTING_MODE (per-entrance boolean, still from globalConfigs) identifies
 // whether THIS entrance is the testing one; the flag identifies WHICH tenants
@@ -21,12 +22,10 @@ export const getTestingTenantCodes = () => {
     const cached = window?.Digit?.SessionStorage?.get?.("initData")?.testingTenantCodes;
     if (Array.isArray(cached)) codes = cached.filter(Boolean);
   } catch (e) {
-    /* initData not ready — fall through to config */
+    /* initData not ready — the legacy config below still applies */
   }
-  if (codes.length === 0) {
-    const cfg = window?.globalConfigs?.getConfig?.("TESTING_TENANT_ID");
-    if (cfg) codes = [cfg];
-  }
+  const cfg = window?.globalConfigs?.getConfig?.("TESTING_TENANT_ID");
+  if (cfg && !codes.includes(cfg)) codes.push(cfg);
   return new Set(codes);
 };
 

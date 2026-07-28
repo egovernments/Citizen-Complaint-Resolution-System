@@ -35,6 +35,33 @@ import Header from "../../../components/Header";
 import Carousel from "./Carousel/Carousel";
 import ImageComponent from "../../../components/ImageComponent";
 
+// Testing-tenant visibility for the employee login city/institution dropdown.
+// Mirrors products/pgr/src/utils/testingTenant.js (can't import it — core must
+// not depend on a product). A tenant is "testing" when the configurator's
+// "Make this a testing tenant" checkbox set isTestingTenant on its record
+// (StoreService caches the codes as initData.testingTenantCodes), UNIONED with
+// the legacy deploy-time TESTING_TENANT_ID for boxes not yet migrated. On a
+// production entrance the dropdown must hide testing tenants; on the gated
+// /digit-ui-test entrance (TESTING_MODE) it shows only them.
+const getTestingTenantCodes = () => {
+  let codes = [];
+  try {
+    const cached = window?.Digit?.SessionStorage?.get?.("initData")?.testingTenantCodes;
+    if (Array.isArray(cached)) codes = cached.filter(Boolean);
+  } catch (e) {
+    /* initData not ready — legacy config below still applies */
+  }
+  const cfg = window?.globalConfigs?.getConfig?.("TESTING_TENANT_ID");
+  if (cfg && !codes.includes(cfg)) codes.push(cfg);
+  return new Set(codes);
+};
+const isTenantVisibleOnEntrance = (tenantCode) => {
+  const testing = getTestingTenantCodes();
+  const onTestingEntrance = !!window?.globalConfigs?.getConfig?.("TESTING_MODE");
+  if (testing.size === 0) return !onTestingEntrance;
+  return onTestingEntrance ? testing.has(tenantCode) : !testing.has(tenantCode);
+};
+
 const setEmployeeDetail = (userObject, token) => {
   if (Digit.Utils.getMultiRootTenant() && process.env.NODE_ENV !== "development") return;
   let locale = JSON.parse(sessionStorage.getItem("Digit.locale"))?.value || Digit.Utils.getDefaultLanguage();
@@ -207,9 +234,12 @@ const Login = ({ config: propsConfig, t, isDisabled, loginOTPBased, appTenants }
   const cityOptions = useMemo(() => {
     const all = Array.isArray(cities) ? cities : [];
     const allow = window?.globalConfigs?.getConfig?.("LOGIN_TENANT_ALLOWLIST");
-    const filtered = Array.isArray(allow) && allow.length > 0
+    const allowed = Array.isArray(allow) && allow.length > 0
       ? all.filter((tnt) => allow.includes(tnt.code))
       : all;
+    // Keep testing tenants off the production entrance (and non-testing
+    // tenants off /digit-ui-test) — matches the citizen dispatcher/list.
+    const filtered = allowed.filter((tnt) => isTenantVisibleOnEntrance(tnt.code));
     return filtered.map((tnt) => ({
       value: tnt.code,
       label: tr(`TENANT_TENANTS_${Digit?.Utils?.locale?.getTransformedLocale?.(tnt.code) ?? tnt.code}`, tnt.name || tnt.code),
