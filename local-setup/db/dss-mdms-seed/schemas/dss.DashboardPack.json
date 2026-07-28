@@ -1,0 +1,70 @@
+{
+  "type": "object",
+  "title": "DashboardPack",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "required": [
+    "id",
+    "roles",
+    "tiles",
+    "layout"
+  ],
+  "x-unique": [
+    "id"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Role codes this pack applies to; server picks best match for caller's token"
+    },
+    "tiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "kpiIds in this pack (must all be published KpiDefinitions)"
+    },
+    "layout": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "kpiId",
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "properties": {
+          "h": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "w": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "kpiId": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "description": {
+      "type": "string"
+    }
+  }
+}
