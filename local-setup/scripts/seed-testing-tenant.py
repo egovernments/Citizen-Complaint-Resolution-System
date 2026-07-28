@@ -85,7 +85,17 @@ def auth():
     return {"authToken": d["access_token"], "userInfo": d["UserRequest"]}
 
 
-RI = auth()
+# Fail-safe: on a from-zero deploy the state tenant isn't bootstrapped yet
+# (ADMIN@<state> doesn't exist), so auth() would throw and fail the whole
+# deploy. Skip cleanly instead — enable the testing entrance after the tenant
+# is onboarded.
+try:
+    RI = auth()
+except Exception as e:
+    print(f"SKIP: cannot authenticate ADMIN@{STATE} yet — state tenant not "
+          f"bootstrapped. Enable the testing entrance after onboarding. "
+          f"[{type(e).__name__}]")
+    sys.exit(0)
 
 
 def mdms_rows(schema, tenant, limit=200):
@@ -103,6 +113,34 @@ def mdms_update(row):
     r = call(f"/mdms-v2/v2/_update/{row['schemaCode']}", {"RequestInfo": RI, "Mdms": row})
     return r.get("ResponseInfo", {}).get("status") == "successful"
 
+
+# ── 0. source-readiness guard ────────────────────────────────────────────────
+# The seeder CLONES tenant-scoped data (boundary tree, departments,
+# ComplaintTemplateType, MapConfig) FROM the source/state tenant, so that
+# tenant must be onboarded FIRST. On a fresh box those are added by
+# ccrs-migrate / the configurator AFTER the base deploy — until then, skip
+# rather than clone an empty/partial tenant (which would produce a broken
+# testing tenant). State-level masters (ComplaintHierarchy, FormValidations,
+# ThemeConfig, workflow, most localization) are INHERITED by mz.igetesting via
+# mdms-v2 tenant-tree resolution, so those are not checked here.
+def source_ready():
+    tree = call(
+        f"/boundary-service/boundary-relationships/_search"
+        f"?tenantId={SRC}&hierarchyType={HIER}&includeChildren=true",
+        {"RequestInfo": RI})
+    has_tree = bool(tree.get("TenantBoundary") or [])
+    has_tpl = len(mdms_rows("RAINMAKER-PGR.ComplaintTemplateType", STATE)) > 0
+    return has_tree, has_tpl
+
+
+_tree_ok, _tpl_ok = source_ready()
+if not (_tree_ok and _tpl_ok):
+    _missing = ([] if _tree_ok else [f"boundary tree @ {SRC}"]) + \
+               ([] if _tpl_ok else [f"ComplaintTemplateType @ {STATE}"])
+    print(f"SKIP: source tenant not onboarded yet — missing: {', '.join(_missing)}. "
+          f"Run ccrs-migrate / configurator onboarding, then re-enable the "
+          f"testing entrance.")
+    sys.exit(0)
 
 # ── 1. tenants row ───────────────────────────────────────────────────────────
 existing = {r["data"].get("code") for r in mdms_rows("tenant.tenants", STATE)}
