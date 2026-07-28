@@ -673,21 +673,11 @@
         dest: "{{ digit_dir }}/nginx/.htpasswd-testing"
         mode: '0640'
 
-    - name: Seed the testing tenant (idempotent; additive only)
-      when: testing_ui_enabled | default(false)
-      command: python3 {{ playbook_dir }}/../scripts/seed-testing-tenant.py
-      environment:
-        DIGIT_BASE: "http://localhost"
-        TESTING_TENANT: "{{ testing_tenant }}"
-        SOURCE_TENANT: "{{ testing_seed_source_tenant | default(city_tenant) }}"
-        STATE_TENANT: "{{ state_tenant_id }}"
-        HIERARCHY_TYPE: "{{ hierarchy_type | default('divisao_administrativa') }}"
-        TESTING_UI_PATH: "{{ testing_ui_path | default('digit-ui-test') }}"
-        ADMIN_USER: "{{ testing_seed_admin_user | default('ADMIN') }}"
-        ADMIN_PASS: "{{ testing_seed_admin_pass | default('eGov@123') }}"
-        TEST_EMP_PASS: "{{ testing_emp_password | default('eGov@123') }}"
-      register: testing_seed
-      changed_when: "'CREATED' in testing_seed.stdout or 'UPDATED' in testing_seed.stdout"
+    # NOTE: the testing tenant is no longer seeded by a clone script here.
+    # Onboard it through the normal configurator flow, then flag it in the
+    # configurator ("Make this a testing tenant" → writes isTestingTenant on
+    # the tenant record). The gate + testing globalConfigs above are the only
+    # deploy-time pieces; the citizen/employee UIs read the flag at runtime.
 
     - name: Add API proxy to digit-ui nginx config
       copy:
