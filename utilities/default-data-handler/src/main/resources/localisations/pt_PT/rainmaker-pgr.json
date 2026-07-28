@@ -475,7 +475,7 @@
     },
     {
         "code": "WF_INBOX_HEADER_LOCALITY",
-        "message": "Localidade",
+        "message": "Distrito",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
@@ -1559,6 +1559,7 @@
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
+    {
         "code": "CS_FEEDBACK_RATE_TEXT",
         "message": "Como avalia a sua experiência connosco?",
         "module": "rainmaker-pgr",
@@ -1570,6 +1571,7 @@
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     },
+    {
         "code": "CS_COMMON_COMMENTS",
         "message": "Comentários",
         "module": "rainmaker-pgr",
@@ -1578,6 +1580,30 @@
     {
         "code": "CS_COMMON_SUBMIT",
         "message": "Submeter",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_ADDCOMPLAINT_UPLOAD_PHOTO",
+        "message": "Enviar fotos ou documentos da reclamação",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "CS_UPLOAD_HINT",
+        "message": "Formatos permitidos: JPG, PNG, PDF, DOC, DOCX, XLS, XLSX. Até 5 MB por ficheiro.",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CONSENT_SECTION_MANDATORY",
+        "message": "OBRIGATÓRIO",
+        "module": "rainmaker-pgr",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PGR_CONSENT_SECTION_OPTIONAL",
+        "message": "OPCIONAL",
         "module": "rainmaker-pgr",
         "locale": "pt_PT"
     }
