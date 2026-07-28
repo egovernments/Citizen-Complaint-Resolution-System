@@ -1050,7 +1050,6 @@
       text-overflow: unset;
       white-space: normal;
       overflow-wrap: anywhere;
-      word-break: break-word;
     }
 
     .dashboard-kpi-card--metric .dashboard-kpi-title,
