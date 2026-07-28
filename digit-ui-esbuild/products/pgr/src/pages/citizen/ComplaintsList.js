@@ -19,6 +19,7 @@
 
 import React, { useEffect } from "react";
 import { complaintLabel } from "../../utils/complaintLabel";
+import { isVisibleOnEntrance } from "../../utils/testingTenant";
 import { useTranslation } from "react-i18next";
 import { useHistory, useRouteMatch } from "react-router-dom";
 
@@ -295,16 +296,12 @@ export const ComplaintsList = () => {
   // search runs at the STATE tenant, which spans every child tenant — so a
   // tester who used a personal mobile on the testing entrance would otherwise
   // see TST- rows mixed into their real list here. The prod entrance drops
-  // testing-tenant rows; the testing entrance (TESTING_MODE) lists ONLY them.
-  // Deployments without a testing setup (no TESTING_TENANT_ID) are untouched.
+  // testing-tenant rows; the testing entrance lists ONLY them. Which tenants
+  // are "testing" comes from the isTestingTenant flag (config fallback) —
+  // see utils/testingTenant. Deployments without a testing setup are untouched.
   const visibleWrappers = React.useMemo(() => {
     const all = data?.ServiceWrappers || [];
-    const testingTenant = window?.globalConfigs?.getConfig?.("TESTING_TENANT_ID");
-    if (!testingTenant) return all;
-    const isTestingEntrance = !!window?.globalConfigs?.getConfig?.("TESTING_MODE");
-    return all.filter(({ service }) =>
-      isTestingEntrance ? service?.tenantId === testingTenant : service?.tenantId !== testingTenant
-    );
+    return all.filter(({ service }) => isVisibleOnEntrance(service?.tenantId));
   }, [data]);
 
   return (

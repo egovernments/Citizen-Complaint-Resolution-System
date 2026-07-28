@@ -21,6 +21,7 @@
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 import { complaintLabel } from "../../../utils/complaintLabel";
+import { isVisibleOnEntrance } from "../../../utils/testingTenant";
 import PGRDatePicker from "../../../components/PGRDatePicker";
 import PgrFileUpload from "../../../components/PgrFileUpload";
 import { useDispatch } from "react-redux";
@@ -1649,16 +1650,12 @@ const CreatePGRFlowV2: React.FC = () => {
       select: (raw: any) =>
         ((raw?.["RAINMAKER-PGR"]?.ComplaintRelatedToMap || []) as RelatedToOption[])
           .filter((o) => o?.active !== false && !!o?.code && !!o?.name && !!o?.tenantCode)
-          // Entrance scoping: the TESTING entrance (globalConfigs TESTING_MODE
-          // + TESTING_TENANT_ID, served only at the gated /testing-ui path)
-          // sees ONLY the testing authority; every other entrance never sees
-          // it. Same MDMS rows, no schema change — the tenantCode is the flag.
-          .filter((o) => {
-            const testingTenant = window?.globalConfigs?.getConfig?.("TESTING_TENANT_ID");
-            if (!testingTenant) return true; // deployment without a testing setup
-            const isTestingEntrance = !!window?.globalConfigs?.getConfig?.("TESTING_MODE");
-            return isTestingEntrance ? o.tenantCode === testingTenant : o.tenantCode !== testingTenant;
-          })
+          // Entrance scoping: the gated /digit-ui-test entrance sees ONLY
+          // testing-tenant authorities; production entrances never see them.
+          // Which tenants are "testing" comes from the isTestingTenant flag
+          // (set via the configurator checkbox) with the legacy
+          // TESTING_TENANT_ID config as fallback — see utils/testingTenant.
+          .filter((o: RelatedToOption) => isVisibleOnEntrance(o.tenantCode))
           .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
     },
     { schemaCode: "PGR_COMPLAINT_RELATED_TO_MAP", tenantId: stateTenant }

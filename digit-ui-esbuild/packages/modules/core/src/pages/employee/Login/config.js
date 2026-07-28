@@ -58,8 +58,11 @@ export const loginConfig = [
             // the dropdown is filtered to those codes; when absent,
             // the historical "all tenants" behaviour is preserved
             // (CCRS#443 sub-1).
+            // Also drops testing tenants on the production entrance (and keeps
+            // only them on /digit-ui-test) — mirrors login.js isTenantVisibleOnEntrance
+            // and products/pgr testingTenant.js, so a flagged tenant never leaks here.
             select:
-              "(data)=>{ const all=Array.isArray(data['tenant'].tenants)?Digit.Utils.getUnique(data['tenant'].tenants):[]; const allow=window?.globalConfigs?.getConfig?.('LOGIN_TENANT_ALLOWLIST'); const filtered=Array.isArray(allow)&&allow.length>0?all.filter(t=>allow.includes(t.code)):all; return filtered.map(ele=>({code:ele.code,name:Digit.Utils.locale.getTransformedLocale('TENANT_TENANTS_'+ele.code)}))}",
+              "(data)=>{ const all=Array.isArray(data['tenant'].tenants)?Digit.Utils.getUnique(data['tenant'].tenants):[]; const allow=window?.globalConfigs?.getConfig?.('LOGIN_TENANT_ALLOWLIST'); const allowed=Array.isArray(allow)&&allow.length>0?all.filter(t=>allow.includes(t.code)):all; let codes=[]; try{const c=window?.Digit?.SessionStorage?.get?.('initData')?.testingTenantCodes; if(Array.isArray(c))codes=c.filter(Boolean);}catch(e){} const cfg=window?.globalConfigs?.getConfig?.('TESTING_TENANT_ID'); if(cfg&&codes.indexOf(cfg)<0)codes.push(cfg); const testing=new Set(codes); const onTest=!!window?.globalConfigs?.getConfig?.('TESTING_MODE'); const filtered=allowed.filter(t=>testing.size===0?!onTest:(onTest?testing.has(t.code):!testing.has(t.code))); return filtered.map(ele=>({code:ele.code,name:Digit.Utils.locale.getTransformedLocale('TENANT_TENANTS_'+ele.code)}))}",
           },
         },
       },
