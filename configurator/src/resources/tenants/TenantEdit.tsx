@@ -1,4 +1,5 @@
 import { DigitEdit, DigitFormInput, v } from '@/admin';
+import { TestingTenantToggle } from './TestingTenantToggle';
 
 export function TenantEdit() {
   return (
@@ -27,6 +28,7 @@ export function TenantEdit() {
         label="Address"
         help="Office address shown in the citizen footer / contact pages."
       />
+      <TestingTenantToggle />
     </DigitEdit>
   );
 }

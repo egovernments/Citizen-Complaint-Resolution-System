@@ -134,6 +134,52 @@ describe('createDigitDataProvider', () => {
     assert.equal((captured as { active: boolean }).active, false);
   });
 
+  it('preserves the additive isTestingTenant flag through a tenant update and getOne round-trip', async () => {
+    // The "Make this a testing tenant" checkbox writes an additive
+    // `isTestingTenant` field onto the tenant.tenants record. MDMS accepts it
+    // dynamically (no schema migration), but update()'s sanitize strips `id`
+    // and `_`-prefixed metadata — this locks in that a plain additive field is
+    // NOT stripped on the way out and is returned on the way back in.
+    const tenantRecord = {
+      id: 'ten-id',
+      tenantId: 'mz',
+      schemaCode: 'tenant.tenants',
+      uniqueIdentifier: 'mz.igetesting',
+      data: { code: 'mz.igetesting', name: 'IGE Testing', isTestingTenant: false },
+      isActive: true,
+      auditDetails: { createdBy: 'x', lastModifiedBy: 'x', createdTime: 1, lastModifiedTime: 1 },
+    };
+    mock.method(client, 'mdmsSearch', async () => [tenantRecord]);
+    let captured: Record<string, unknown> | null = null;
+    mock.method(client, 'mdmsUpdate', async (rec: { data: Record<string, unknown> }) => {
+      captured = rec.data;
+      return { ...tenantRecord, data: rec.data };
+    });
+
+    const dp = createDigitDataProvider(client, 'mz');
+    const result = await dp.update('tenants', {
+      id: 'mz.igetesting',
+      data: {
+        id: 'mz.igetesting',
+        code: 'mz.igetesting',
+        name: 'IGE Testing',
+        isTestingTenant: true, // the flag the checkbox sets
+        _isActive: true,
+        _uniqueIdentifier: 'mz.igetesting',
+        _schemaCode: 'tenant.tenants',
+        _mdmsId: 'ten-id',
+      },
+      previousData: {} as never,
+    });
+
+    // Write side: the flag survives the id/_-prefixed strip.
+    assert.ok(captured, 'mdmsUpdate should have been called');
+    assert.equal((captured as { isTestingTenant: unknown }).isTestingTenant, true);
+    assert.equal((captured as { code: string }).code, 'mz.igetesting');
+    // Read side: the returned record carries the flag back for the UI.
+    assert.equal((result.data as { isTestingTenant: unknown }).isTestingTenant, true);
+  });
+
   it('does not let a stale reActivateEmployee in the form payload override the fresh fetch (closes #813)', async () => {
     // EmployeeEdit.tsx has no input bound to reActivateEmployee, so any value
     // present in the submitted form data is a stale leftover from whatever
