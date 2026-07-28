@@ -165,7 +165,12 @@ function fetchStandaloneLocale(locale) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ RequestInfo: { apiId: "Rainmaker", ver: ".01", authToken } }),
   })
-    .then((res) => (res.ok ? res.json() : { messages: [] }))
+    .then((res) => {
+      // Non-OK must not poison the cache with {} — that would block retries
+      // for the rest of the session (ensureMessages now runs in embedded mode).
+      if (!res.ok) throw new Error(`localization _search ${res.status}`);
+      return res.json();
+    })
     .then((data) => {
       const map = {};
       (data?.messages || []).forEach((m) => {
@@ -176,9 +181,8 @@ function fetchStandaloneLocale(locale) {
       notifyStandalone();
     })
     .catch(() => {
-      standalone.messages[locale] = {};
+      // Leave messages[locale] unset so a later ensureMessages() can retry.
       delete standalone.pending[locale];
-      notifyStandalone();
     });
 }
 

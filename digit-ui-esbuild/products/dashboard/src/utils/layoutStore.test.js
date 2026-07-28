@@ -128,6 +128,16 @@ test("readSavedLayout falls back to the legacy global key exactly once (read-onl
   assert.equal(storage.getItem(LEGACY_STORAGE_KEY), JSON.stringify(legacyLayout));
 });
 
+test("readSavedLayout still falls back when the scoped key holds malformed JSON", () => {
+  const legacyLayout = [item("chart_a", 0, 0, 6, 6)];
+  const key = storageKeyFor("ke", "u1");
+  const storage = fakeStorage({
+    [key]: "{not-json",
+    [LEGACY_STORAGE_KEY]: JSON.stringify(legacyLayout),
+  });
+  assert.deepEqual(readSavedLayout(storage, key, LEGACY_STORAGE_KEY), legacyLayout);
+});
+
 test("two users on one browser no longer clobber each other (the #1276 shared-slot failure)", () => {
   const storage = fakeStorage();
   const keyGro = storageKeyFor("ke", "gro-uuid");

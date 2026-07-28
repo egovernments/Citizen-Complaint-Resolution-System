@@ -15,7 +15,8 @@
  * Without --translate: boundary messages are copied en→pt (place names); pgr
  * complaint keys are skipped (would still be English).
  * With --translate: unique English pgr strings are machine-translated to
- * Portuguese (Google via deep-translator) then upserted.
+ * Portuguese via MyMemory (api.mymemory.translated.net; ~120ms between calls
+ * to stay under the free-tier rate limit) then upserted.
  *
  * Token: DevTools → Application → Local Storage → Employee.token (JSON string
  * without quotes, or the raw JWT).

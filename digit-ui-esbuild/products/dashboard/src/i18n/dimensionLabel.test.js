@@ -198,6 +198,32 @@ test("Unknown department bucket uses DASHBOARD_COMMON_UNKNOWN", () => {
   assert.equal(dimensionLabel("UNKNOWN", "department"), "Desconhecido");
 });
 
+test("boundary/department skip code-echo pack messages and fall through", () => {
+  mockI18n({
+    language: "pt_PT",
+    bags: {
+      pt_PT: {
+        ETOEROLES_WARD_1: "ETOEROLES_WARD_1",
+        COMMON_MASTERS_DEPARTMENT_MEDICAL_SVC: "MEDICAL_SVC",
+      },
+      en_IN: {
+        ETOEROLES_WARD_1: "Etoeroles Ward 1",
+        COMMON_MASTERS_DEPARTMENT_MEDICAL_SVC: "Medical Services",
+      },
+    },
+  });
+  const { dimensionLabel } = bundle("dimensionLabel.js");
+  // pt code-echo skipped → boundary still may use en_IN place name
+  assert.equal(dimensionLabel("ETOEROLES_WARD_1", "boundary"), "Etoeroles Ward 1");
+  // department does not bleed en_IN; code-echo skipped → raw code
+  assert.equal(dimensionLabel("MEDICAL_SVC", "department"), "MEDICAL_SVC");
+  // data-owned fallback still wins for department when present
+  assert.equal(
+    dimensionLabel("MEDICAL_SVC", "department", "Serviços Médicos"),
+    "Serviços Médicos"
+  );
+});
+
 test("active-locale complaintType translation wins", () => {
   mockI18n({
     language: "pt_PT",

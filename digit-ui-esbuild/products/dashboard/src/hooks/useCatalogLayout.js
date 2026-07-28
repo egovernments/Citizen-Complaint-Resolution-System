@@ -13,6 +13,7 @@ import { getTenantId, getUserUuid } from "../services/analyticsService";
 import {
   LEGACY_STORAGE_KEY,
   storageKeyFor,
+  readSavedLayout,
 } from "../utils/layoutStore";
 
 /**
@@ -113,19 +114,15 @@ function buildSeedLayout(packLayout, kpis) {
 }
 
 function readSaved() {
-  try {
-    const scopedKey = storageKeyFor(getTenantId(), getUserUuid());
-    // Prefer the per-user key (#1276); fall back to the legacy global slot.
-    for (const key of scopedKey === STORAGE_KEY ? [STORAGE_KEY] : [scopedKey, STORAGE_KEY]) {
-      const raw = window.localStorage?.getItem(key);
-      if (raw == null) continue;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  const scopedKey = storageKeyFor(getTenantId(), getUserUuid());
+  // Prefer the per-user key (#1276); fall back to the legacy global slot.
+  // readSavedLayout parses each key in its own try/catch so a corrupt scoped
+  // value still falls through to the legacy slot.
+  return readSavedLayout(
+    window.localStorage,
+    scopedKey,
+    scopedKey === STORAGE_KEY ? undefined : STORAGE_KEY
+  );
 }
 
 function persistPositions(layout) {

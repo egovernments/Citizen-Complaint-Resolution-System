@@ -78,12 +78,16 @@ const CANDIDATES = {
   ageBucket: (c) => [`DASHBOARD_AGE_${transform(c)}`],
 };
 
-/** True when a resolved string is fit to show as a complaint-type title. */
-function usableComplaintLabel(text, code) {
+/**
+ * True when a resolved pack message is fit to show. Rejects empty values and
+ * code-echoes (bad seeds that store the code as the message). For complaintType
+ * also rejects taxonomy-path "translations" (#1108).
+ */
+function usableMessage(kind, text, code) {
   if (text == null || text === "") return false;
   const s = String(text);
   if (s === String(code)) return false;
-  if (looksLikeTaxonomyCodePath(s)) return false;
+  if (kind === "complaintType" && looksLikeTaxonomyCodePath(s)) return false;
   return true;
 }
 
@@ -96,7 +100,7 @@ function shouldTryEnIn(kind) {
 function usableFallbackText(kind, text, code) {
   if (text == null || text === "") return false;
   if (String(text) === String(code)) return false;
-  if (kind === "complaintType") return usableComplaintLabel(text, code);
+  if (kind === "complaintType") return usableMessage(kind, text, code);
   // boundary-service often echoes the code as localname — treat as missing
   return true;
 }
@@ -116,8 +120,7 @@ export function dimensionLabel(code, kind, fallbackText) {
     return translate("DASHBOARD_COMMON_UNKNOWN", "Unknown");
   }
   const candidates = (CANDIDATES[kind] || (() => []))(code);
-  const accept = (msg) =>
-    kind === "complaintType" ? usableComplaintLabel(msg, code) : msg != null && msg !== "";
+  const accept = (msg) => usableMessage(kind, msg, code);
 
   for (const key of candidates) {
     if (exists(key)) {
