@@ -167,17 +167,28 @@
   }
 
   .dashboard-drag-handle-title {
-    @apply tw-truncate tw-font-semibold tw-text-foreground;
-
+    @apply tw-min-w-0 tw-font-semibold tw-text-foreground;
     font-size: 18px;
     line-height: 1.3;
     letter-spacing: normal;
     text-transform: none;
     margin: 0;
+    /* 2-line clamp + word wrap so PT titles stay readable instead of
+       truncating mid-phrase ("…Fase do Fl…") (#1108). */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
   }
 
   .dashboard-drag-handle-subtitle {
-    @apply tw-m-0 tw-truncate tw-text-[11px] tw-leading-tight tw-text-muted-foreground;
+    @apply tw-m-0 tw-min-w-0 tw-text-[11px] tw-leading-tight tw-text-muted-foreground;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
   }
 
   .kpi-inventory-item:active {
@@ -379,7 +390,23 @@
   }
 
   .dashboard-header-controls {
-    @apply tw-flex tw-min-w-0 tw-flex-wrap tw-items-center tw-gap-2;
+    @apply tw-flex tw-min-w-0 tw-flex-wrap tw-items-center tw-justify-end tw-gap-2;
+  }
+
+  /* Long locales (pt_PT "Operações de Resolução de Reclamações") must wrap
+     rather than clip inside the old fixed h-12 header bar (#1108). */
+  .dashboard-header-title {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .dashboard-header-subtitle {
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .dashboard-header-search {
@@ -1069,12 +1096,22 @@
     }
   }
 
-  @media (max-width: 639px) {
+  /* Stack title above controls on tablet+phone so long PT titles don't
+     fight the search + button cluster (was mobile-only; mid-widths clipped
+     "Operações de Resolução de Reclamações") (#1108). */
+  @media (max-width: 1023px) {
     .dashboard-header-top {
       flex-wrap: wrap;
       align-items: flex-start;
+      height: auto;
+      min-height: 3rem;
       padding-top: 0.5rem;
       padding-bottom: 0.5rem;
+    }
+
+    .dashboard-header-title-block {
+      flex: 1 1 100%;
+      max-width: 100%;
     }
 
     .dashboard-header-controls {
@@ -1087,7 +1124,9 @@
       overflow-wrap: anywhere;
       word-break: break-word;
     }
+  }
 
+  @media (max-width: 639px) {
     .dashboard-header-controls .dashboard-header-export span {
       display: none;
     }
