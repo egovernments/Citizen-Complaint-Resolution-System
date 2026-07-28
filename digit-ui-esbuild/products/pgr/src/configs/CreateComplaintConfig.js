@@ -218,6 +218,12 @@ export const CreateComplaintConfig = {
                 required: false,
                 validation: {
                   required: false,
+                  // No configured postal pattern needs more than this many
+                  // digits — caps unbounded typing client-side (RenderFormFields
+                  // reads populators.validation.maxlength, lowercase) instead of
+                  // relying solely on the pattern check, which only surfaces
+                  // its error on submit.
+                  maxlength: 16,
                   // Postal-code shape is per-country. Routed through the same
                   // shared getPostalCodePattern() used by createComplaintForm.js
                   // (utils/postalCode.js) so this field rule can't drift from
