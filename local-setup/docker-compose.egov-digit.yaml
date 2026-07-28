@@ -933,7 +933,10 @@ services:
     - egov-network
 
   egov-accesscontrol:
-    image: egovio/egov-accesscontrol:maven-jdk21-9f83afb
+    # Parameterized so deploys can pin a local ABAC-testing build via
+    # ACCESSCONTROL_IMAGE in the env; default keeps the prior behaviour. Mirrors
+    # the pgr-services image param below.
+    image: ${ACCESSCONTROL_IMAGE:-egovio/egov-accesscontrol:maven-jdk21-9f83afb}
     container_name: egov-accesscontrol
     depends_on:
       pgbouncer:
@@ -974,6 +977,16 @@ services:
     ports:
     - 18090:8090
     healthcheck:
+      # Universal across both possible images: the pinned default
+      # (egovio/egov-accesscontrol:maven-jdk21-9f83afb) has always had
+      # /bin/sh + wget; the abac-local build now does too (its Dockerfile
+      # uses the distroless `debug-nonroot` tag specifically so this same
+      # check works there as well — see Digit-Core's build/maven/Dockerfile).
+      # Do NOT make this healthcheck image-specific again: ACCESSCONTROL_IMAGE
+      # can silently flip back to the pinned default whenever a DIFFERENT
+      # tenant is deployed on this same shared host (its host_vars won't
+      # define the abac-local override), so whatever runs here must work for
+      # either image without needing a compose change.
       test: ["CMD-SHELL", "wget -qO- http://localhost:8090/access/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
@@ -1457,6 +1470,7 @@ services:
       EGOV_HRMS_HOST: http://egov-hrms:8092/
       EGOV_URL_SHORTNER_HOST: http://egov-url-shortening:8080/
       EGOV_ENC_HOST: http://egov-enc-service:1234
+      EGOV_ACCESSCONTROL_HOST: http://egov-accesscontrol:8090
       EGOV_UI_APP_HOST: http://localhost:18080
       # pgr-services' EscalationScheduler resolves the tenant to query
       # MDMS at from the KEYS of this map (PGRConfiguration#getUiAppHostMap,
