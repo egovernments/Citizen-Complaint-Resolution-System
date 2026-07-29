@@ -615,13 +615,22 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: audit-service
       PROCESS_AUDIT_LOGS_KAFKA_TOPIC: process-audit-records
-      PERSIST_AUDIT_LOGS_KAFKA_TOPIC: persist-audit-records
+      # signed logs are published where audit-service-persister.yml consumes them
+      # (app property is persister.audit.kafka.topic; PERSIST_AUDIT_LOGS_KAFKA_TOPIC
+      # bound to nothing in this build)
+      PERSISTER_AUDIT_KAFKA_TOPIC: audit-create
+      # audit-service decides WHAT to audit by parsing the same persister configs
+      # (mappings with isAuditEnabled: true). Without this it falls back to the
+      # image's baked-in GitHub URLs and never audits local topics.
+      EGOV_PERSIST_YML_REPO_PATH: /persister-config/
       # integrity-hash signing goes through enc-service (same as K8s EGOV_ENC_SIGN_HOST)
       EGOV_ENC_SIGN_HOST: http://egov-enc-service:1234
       SERVER_PORT: 8080
       SECURITY_BASIC_ENABLED: 'false'
       MANAGEMENT_SECURITY_ENABLED: 'false'
       MANAGEMENT_HEALTH_DB_ENABLED: 'false'
+    volumes:
+      - ./configs/egov-persister:/persister-config:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/audit-service/actuator/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
