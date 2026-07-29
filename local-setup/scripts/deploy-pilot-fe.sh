@@ -11,10 +11,17 @@
 #      the host-nginx docroot
 #
 # Usage:
-#   deploy-pilot-fe.sh [target] [--no-pull] [--branch <name>]
+#   deploy-pilot-fe.sh [target] [branch] [--no-pull]
 #     target: all (default) | ui | configurator
+#     branch: any bare argument that isn't a target is taken as the branch to
+#             checkout+pull+deploy (default: release-v2.12-moz).
+#             `--branch <name>` works too.
 #     --no-pull   deploy whatever is currently checked out
-#     --branch    override the release branch (default: release-v2.12-moz)
+#
+#   examples:
+#     deploy-pilot-fe.sh                          # release-v2.12-moz, both FEs
+#     deploy-pilot-fe.sh ui fix/my-hotfix         # hotfix branch, digit-ui only
+#     deploy-pilot-fe.sh feat/testing-tenant-flag # feature branch, both FEs
 #
 # ⚠️ The digit-ui copy is ephemeral: if the digit-ui container is recreated
 #    (compose up / image redeploy) it reverts to the baked build — re-run
@@ -34,8 +41,9 @@ while [ $# -gt 0 ]; do
     all|ui|configurator) TARGET="$1" ;;
     --no-pull) DO_PULL=0 ;;
     --branch)  BRANCH="$2"; shift ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
-    *) echo "unknown arg: $1 (try --help)" >&2; exit 1 ;;
+    -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
+    -*) echo "unknown flag: $1 (try --help)" >&2; exit 1 ;;
+    *) BRANCH="$1" ;;  # bare non-target arg = branch name to deploy
   esac
   shift
 done
@@ -45,6 +53,7 @@ log() { echo -e "\n[deploy-pilot-fe] $*"; }
 # ---------- 0. pull ----------
 if [ "$DO_PULL" = 1 ]; then
   log "pulling $BRANCH in $REPO"
+  git -C "$REPO" fetch origin "$BRANCH"   # so brand-new remote branches are checkout-able
   git -C "$REPO" checkout "$BRANCH"
   git -C "$REPO" pull --ff-only
   log "HEAD is now:"
