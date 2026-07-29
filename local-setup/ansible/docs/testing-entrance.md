@@ -32,6 +32,27 @@ tenant is **hidden**. (See `products/pgr/src/utils/testingTenant.js`.)
 
 ---
 
+## First-time enable — preconditions
+
+Confirm these **before** editing `host_vars`, or the entrance will render but be
+empty (or not render at all):
+
+- **`digit_ui_mode: static`** (the default). The `/digit-ui-test` nginx location is
+  rendered **only** in static mode — the vhost gates it on `digit_ui_mode == "static"`.
+  On an `hmr` box the entrance simply won't exist. Static-mode deploys also build the
+  shared bundle the entrance aliases, so there's nothing extra to build.
+- **The testing tenant exists *with its own data*.** Onboard it through the normal
+  flow **with** boundaries, departments and complaint types — otherwise you can log in
+  but can't file or search anything on it.
+- **The tenant is flagged** (next section). Without `isTestingTenant`, the testing
+  entrance's citizen dispatcher and complaints list render **empty** — on the testing
+  entrance the UI shows *only* flagged-tenant rows — so the entrance will look broken
+  even though the gate and banner work.
+
+Everything else the playbook does in a single pass (render `globalConfigs.testing.js`,
+write the htpasswd, build the bundle, render the vhost and reload nginx) — no manual
+ordering needed.
+
 ## Prerequisite — a flagged testing tenant
 
 1. Onboard a **sub-tenant** for testing through the normal configurator flow
