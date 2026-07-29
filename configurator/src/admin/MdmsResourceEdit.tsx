@@ -6,6 +6,7 @@ import { useEditContext, useResourceContext } from 'ra-core';
 import { getResourceConfig, getResourceLabel } from '@/providers/bridge';
 import { getDescriptor } from './schemaDescriptors';
 import { customEditors } from './themeEditor';
+import { useCanWriteResource } from '@/hooks/useCanWriteResource';
 
 function MdmsEditFields() {
   const resource = useResourceContext() ?? '';
@@ -71,6 +72,19 @@ export function MdmsResourceEdit() {
   const config = getResourceConfig(resource);
   const descriptor = getDescriptor(config?.schema);
   const label = getResourceLabel(resource);
+  // Role gate (CCSD-1998): called before any early return to keep hook order
+  // stable. Also blocks deep links straight to /manage/<resource>/:id/edit.
+  const canWrite = useCanWriteResource(resource);
+
+  if (!canWrite) {
+    return (
+      <div className="p-6">
+        <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
+          Editing {label} is restricted to: {(config?.writeRoles ?? []).join(', ')}.
+        </div>
+      </div>
+    );
+  }
 
   // Escape hatch: if the descriptor names a custom editor, mount that instead.
   if (descriptor?.customEditor) {

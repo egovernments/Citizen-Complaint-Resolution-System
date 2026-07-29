@@ -6,6 +6,7 @@ import { useResourceContext, useInput, required } from 'ra-core';
 import { getResourceConfig } from '@/providers/bridge';
 import { useResourceLabel } from '@/providers/useResourceLabel';
 import { useSchemaDefinition } from '@/hooks/useSchemaDefinition';
+import { useCanWriteResource } from '@/hooks/useCanWriteResource';
 import { orderFields, formatFieldLabel } from './schemaUtils';
 import { Label } from '@/components/ui/label';
 import { getDescriptor } from './schemaDescriptors';
@@ -106,11 +107,24 @@ export function MdmsResourceCreate() {
   const label = useResourceLabel()(resource);
   const { definition } = useSchemaDefinition(config?.schema);
   const descriptor = getDescriptor(config?.schema);
+  // Role gate (CCSD-1998): called before any early return to keep hook order
+  // stable. Also blocks deep links straight to /manage/<resource>/create.
+  const canWrite = useCanWriteResource(resource);
 
   const defaults = useMemo(() => {
     if (!definition) return undefined;
     return buildDefaults(definition);
   }, [definition]);
+
+  if (!canWrite) {
+    return (
+      <div className="p-6">
+        <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
+          Creating {label} is restricted to: {(config?.writeRoles ?? []).join(', ')}.
+        </div>
+      </div>
+    );
+  }
 
   if (!definition) {
     return (

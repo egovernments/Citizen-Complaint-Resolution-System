@@ -12,6 +12,9 @@ import { mapConfigDescriptor } from './map-config';
 import { landingSectionDescriptor } from './landing-section';
 import { landingPageConfigDescriptor } from './landing-page-config';
 import { cityModuleDescriptor } from './city-module';
+import { uiHomePageDescriptor } from './ui-homepage';
+import { securityPolicyDescriptor } from './data-security';
+import { encryptionPolicyDescriptor } from './encryption-policy';
 
 /** Map of schema code -> descriptor. Add new entries as we cover more schemas. */
 const DESCRIPTORS: Record<string, SchemaDescriptor> = {
@@ -28,6 +31,9 @@ const DESCRIPTORS: Record<string, SchemaDescriptor> = {
   [landingSectionDescriptor.schema]: landingSectionDescriptor,
   [landingPageConfigDescriptor.schema]: landingPageConfigDescriptor,
   [cityModuleDescriptor.schema]: cityModuleDescriptor,
+  [uiHomePageDescriptor.schema]: uiHomePageDescriptor,
+  [securityPolicyDescriptor.schema]: securityPolicyDescriptor,
+  [encryptionPolicyDescriptor.schema]: encryptionPolicyDescriptor,
 };
 
 export function getDescriptor(schemaCode?: string): SchemaDescriptor | undefined {
