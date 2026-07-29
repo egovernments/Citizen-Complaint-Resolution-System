@@ -6,7 +6,7 @@ export function RoleActionShow() {
   const { record } = useShowController();
 
   return (
-    <DigitShow title={record ? `Role Action: ${record.rolecode ?? record.id}` : 'Role Action'}>
+    <DigitShow title={record ? `Role Action: ${record.rolecode ?? record.id}` : 'Role Action'} hasEdit>
       {(rec: Record<string, unknown>) => (
         <div className="space-y-6">
           <FieldSection title="Details">

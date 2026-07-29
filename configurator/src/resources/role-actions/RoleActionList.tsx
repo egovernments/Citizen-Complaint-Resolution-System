@@ -10,7 +10,7 @@ const columns: DigitColumn[] = [
 
 export function RoleActionList() {
   return (
-    <DigitList title="app.resources.role_actions" sort={{ field: 'rolecode', order: 'ASC' }}>
+    <DigitList title="app.resources.role_actions" sort={{ field: 'rolecode', order: 'ASC' }} hasCreate>
       <DigitDatagrid columns={columns} rowClick="show" />
     </DigitList>
   );
