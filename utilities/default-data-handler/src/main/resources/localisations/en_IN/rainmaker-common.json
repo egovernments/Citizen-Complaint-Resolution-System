@@ -9850,5 +9850,17 @@
         "message": "Back to login",
         "module": "rainmaker-common",
         "locale": "en_IN"
+    },
+    {
+        "code": "ENGLISH",
+        "message": "English",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
+    },
+    {
+        "code": "PORTUGUESE",
+        "message": "Português",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
     }
 ]
