@@ -146,4 +146,30 @@ describe('DDH seed contract — common-masters.FormValidations', () => {
     const types = rows.map((r) => r.fieldType);
     expect(new Set(types).size).toBe(types.length);
   });
+
+  it('full-dump.sql seeds the same FormValidations rows as the DDH seed (no drift)', () => {
+    // The dump baseline (local-setup/db/full-dump.sql) hand-carries the same
+    // rows so dump-booted stacks get them without DDH tenant-setup. Two copies
+    // of one dataset = a drift vector; pin them to each other. COPY text
+    // format doubles backslashes, so unescape before comparing.
+    const dump = readFileSync(resolve(process.cwd(), '../local-setup/db/full-dump.sql'), 'utf8');
+    const dumpRows = dump
+      .split('\n')
+      .map((l) => l.split('\t'))
+      // eg_mdms_data columns: id, tenantid, uniqueidentifier, schemacode, data, …
+      // (matching on the schemacode POSITION also excludes the schema-definition
+      // row in eg_mdms_schema_definition, whose code sits at index 2).
+      .filter((cols) => cols[3] === 'common-masters.FormValidations')
+      .map((cols) => ({
+        uniqueidentifier: cols[2],
+        data: JSON.parse(cols[4].replace(/\\\\/g, '\\')) as { fieldType: string; regex: string },
+      }));
+    expect(dumpRows.length).toBe(rows.length);
+    for (const seedRow of rows) {
+      const dumpRow = dumpRows.find((d) => d.data.fieldType === seedRow.fieldType);
+      expect(dumpRow, `full-dump.sql must carry a ${seedRow.fieldType} row`).toBeDefined();
+      expect(dumpRow!.data.regex).toBe(seedRow.regex);
+      expect(dumpRow!.uniqueidentifier).toBe(seedRow.fieldType);
+    }
+  });
 });

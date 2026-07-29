@@ -3108,6 +3108,9 @@ dashboard-config-data-002	pg	default	dss.DashboardConfig	{"id": "default", "allo
 2cade399-9d00-4423-8ddf-eda05af5c904	pg.citya	common-masters.Department.DEPT_2	common-masters.Department	{"code": "DEPT_2", "name": "Roads & Public Works", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
 07da774b-1bc0-4154-b542-0ad17b645374	pg.citya	common-masters.Department.DEPT_3	common-masters.Department	{"code": "DEPT_3", "name": "Health & Sanitation", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
 9c2e1397-8a1e-49ac-83c0-50c784db5133	pg.citya	common-masters.Department.DEPT_4	common-masters.Department	{"code": "DEPT_4", "name": "Water Supply & Sewerage", "active": true}	t	system-mdms-seed	system-mdms-seed	1783555200000	1783555200000
+form-validations-email-001	pg	email	common-masters.FormValidations	{"regex": "^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$", "fieldType": "email"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
+form-validations-name-001	pg	name	common-masters.FormValidations	{"regex": "^(?!.*[ _-]{2})(?!^[\\\\s_-])(?!.*[\\\\s_-]$)(?=^[\\\\p{L}][\\\\p{L}\\\\p{N} _\\\\-\\\\(\\\\)]{0,29}$)^.*$", "fieldType": "name"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
+form-validations-postalcode-001	pg	postalCode	common-masters.FormValidations	{"regex": "^[0-9]{5}$", "fieldType": "postalCode"}	t	system-mdms-seed	system-mdms-seed	1770614666000	1770614666000
 \.
 
 
