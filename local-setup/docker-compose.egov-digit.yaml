@@ -1267,6 +1267,12 @@ services:
         condition: service_healthy
       egov-enc-service:
         condition: service_healthy
+      # The script talks to egov-user-proxy (EGOV_USER_HOST below), and a
+      # container's DNS name only registers once the container exists — on
+      # a cold start the seed could burn its whole retry budget on curl
+      # exit 6 (couldn't resolve host) because the proxy hadn't started yet.
+      egov-user-proxy:
+        condition: service_started
     volumes:
       - ./seeds/user-seed.sh:/user-seed.sh:ro
     entrypoint: ["sh", "/user-seed.sh"]
