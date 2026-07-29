@@ -328,5 +328,11 @@
         "message": "Português",
         "module": "rainmaker-common",
         "locale": "pt_PT"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH",
+        "message": "Pesquisa Administrativa de Manifestações",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
     }
 ]

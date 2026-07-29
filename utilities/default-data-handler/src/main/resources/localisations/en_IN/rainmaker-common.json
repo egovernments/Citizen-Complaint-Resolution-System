@@ -9862,5 +9862,11 @@
         "message": "Português",
         "module": "rainmaker-common",
         "locale": "en_IN"
+    },
+    {
+        "code": "ES_PGR_ADMIN_SEARCH",
+        "message": "Admin Complaint Search",
+        "module": "rainmaker-common",
+        "locale": "en_IN"
     }
 ]
