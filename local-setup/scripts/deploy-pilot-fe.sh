@@ -58,15 +58,37 @@ if [ "$DO_PULL" = 1 ]; then
   git -C "$REPO" pull --ff-only
   log "HEAD is now:"
   git -C "$REPO" log --oneline -3
+
+  # the executed copy usually lives in ~ (outside the repo); warn when the
+  # freshly-pulled repo version differs so the operator refreshes it
+  if ! cmp -s "$0" "$REPO/local-setup/scripts/deploy-pilot-fe.sh"; then
+    log "NOTE: the repo has a newer deploy-pilot-fe.sh than the copy you are running."
+    log "      refresh it after this run: cp $REPO/local-setup/scripts/deploy-pilot-fe.sh ~/"
+  fi
 fi
 
 # ---------- A. digit-ui (esbuild) ----------
 deploy_ui() {
   log "=== digit-ui (esbuild) ==="
 
-  # node 20 gate — esbuild build breaks on older node
-  local NODEV; NODEV="$(node -v)"
-  case "$NODEV" in v20.*) ;; *) echo "ERROR: node is $NODEV, need v20.x" >&2; exit 1 ;; esac
+  # node 20 gate — the esbuild build needs v20.x. If the default node isn't
+  # v20, auto-pick one: $NODE20_BIN (a .../bin dir) first, then the newest
+  # nvm-installed v20.
+  case "$(node -v 2>/dev/null || true)" in
+    v20.*) ;;
+    *)
+      local N20="${NODE20_BIN:-}"
+      [ -n "$N20" ] || N20="$(ls -d "$HOME"/.nvm/versions/node/v20.*/bin 2>/dev/null | sort -V | tail -1 || true)"
+      if [ -n "$N20" ] && [ -x "$N20/node" ]; then
+        export PATH="$N20:$PATH"
+        log "default node is not v20 → using $N20 ($(node -v))"
+      fi
+      case "$(node -v 2>/dev/null || true)" in v20.*) ;; *)
+        echo "ERROR: node is $(node -v 2>/dev/null || echo missing), need v20.x." >&2
+        echo "       Install one ('nvm install 20') or point NODE20_BIN at a v20 bin dir." >&2
+        exit 1 ;;
+      esac ;;
+  esac
 
   [ -f "$GLOBAL_CONFIGS" ] || { echo "ERROR: $GLOBAL_CONFIGS not found" >&2; exit 1; }
   docker ps --format '{{.Names}}' | grep -qx digit-ui \
