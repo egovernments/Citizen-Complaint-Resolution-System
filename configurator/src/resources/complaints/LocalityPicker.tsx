@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useInput, useGetList, type RaRecord } from 'ra-core';
 import {
   Select,
@@ -51,14 +51,23 @@ export function LocalityPicker({
 }: LocalityPickerProps) {
   const { id, field, fieldState } = useInput({ source, validate: required ? requiredV : undefined });
 
+  // Same story as `boundaries` below: client-side slicing only, so don't truncate.
   const { data: hierarchies, isLoading: hierarchiesLoading } = useGetList<HierarchyRecord>(
     'boundary-hierarchies',
-    { pagination: { page: 1, perPage: 100 }, sort: { field: 'hierarchyType', order: 'ASC' } },
+    { pagination: { page: 1, perPage: 100_000 }, sort: { field: 'hierarchyType', order: 'ASC' } },
   );
 
+  // `boundaries` has no server-side pagination in the data provider — it fetches
+  // every tenant tree and then slices `perPage` off the front — so `perPage` is
+  // a pure TRUNCATION knob here, not a cost control. The old 1000 silently cut a
+  // 1256-node deployment (mz.maputo) off at the knees: any complaint whose
+  // locality fell past the cut had no matching record, so `currentBoundary` came
+  // back undefined, the ancestor selects fell back to some unrelated hierarchy,
+  // and the Boundary control rendered its bare "Boundary" placeholder instead of
+  // the complaint's real locality. Ask for the whole set.
   const { data: boundaries, isLoading: boundariesLoading } = useGetList<BoundaryRecord>(
     'boundaries',
-    { pagination: { page: 1, perPage: 1000 }, sort: { field: 'name', order: 'ASC' } },
+    { pagination: { page: 1, perPage: 100_000 }, sort: { field: 'name', order: 'ASC' } },
   );
 
   // Seed the navigation selects from the *current* boundary code (if the form
@@ -136,17 +145,18 @@ export function LocalityPicker({
     (boundaryTypesByHierarchy.get(hierarchyType) ?? [])[0] ??
     '';
 
-  // Navigation state that the operator *actually* manipulates: we keep the
-  // hierarchy + type in form-local sidecars so changing them doesn't fire an
-  // immediate `field.onChange` of a broken code.
-  const { hSource, tSource } = {
-    hSource: `${source}__h`,
-    tSource: `${source}__t`,
-  };
-  const hInput = useInput({ source: hSource, defaultValue: hierarchyType });
-  const tInput = useInput({ source: tSource, defaultValue: boundaryType });
-  const activeHierarchy = String(hInput.field.value || hierarchyType);
-  const activeType = String(tInput.field.value || boundaryType);
+  // Navigation state that the operator *actually* manipulates. This is COMPONENT
+  // state, never form state: the previous version registered `useInput` on
+  // `${source}__h` / `${source}__t`, and because `source` is `address.locality.code`
+  // those paths resolve INSIDE the locality object — so react-hook-form built
+  // `address.locality.code__h` / `code__t` and the form posted this picker's
+  // private navigation into PGR's address contract. pgr-services tolerates the
+  // extra keys (they're dropped when the payload is bound to the Boundary POJO),
+  // but they are not ours to send.
+  const [navHierarchy, setNavHierarchy] = useState<string | null>(null);
+  const [navType, setNavType] = useState<string | null>(null);
+  const activeHierarchy = navHierarchy ?? hierarchyType;
+  const activeType = navType ?? boundaryType;
 
   const typesForHierarchy =
     boundaryTypesByHierarchy.get(activeHierarchy) ?? [];
@@ -173,8 +183,9 @@ export function LocalityPicker({
         <Select
           value={activeHierarchy}
           onValueChange={(v) => {
-            hInput.field.onChange(v);
-            tInput.field.onChange('');
+            if (!v) return; // Radix echo — see the note on the Boundary select below.
+            setNavHierarchy(v);
+            setNavType(null);
             field.onChange('');
           }}
           disabled={hierarchiesLoading}
@@ -192,7 +203,8 @@ export function LocalityPicker({
         <Select
           value={activeType}
           onValueChange={(v) => {
-            tInput.field.onChange(v);
+            if (!v) return; // Radix echo — see the note on the Boundary select below.
+            setNavType(v);
             field.onChange('');
           }}
           disabled={!activeHierarchy || typesForHierarchy.length === 0}
@@ -207,9 +219,34 @@ export function LocalityPicker({
           </SelectContent>
         </Select>
 
+        {/* THE LOCALITY WIPE. Radix renders a hidden form-bubble <select> to make
+            the control submittable, and its <option>s are contributed by the
+            SelectItems — which live in the portalled content and are therefore
+            NOT mounted while the dropdown is closed. Its effect fires on every
+            change of the controlled `value`: it assigns the new value to the
+            native select and dispatches a synthetic `change`. With no options
+            mounted the assignment can't take, the native value stays "", and the
+            event reports "" back through `onValueChange`.
+
+            On an edit form that happens unprompted: the hierarchy/type selects
+            go from "" to their resolved defaults the moment the boundary queries
+            settle, each echoes "", and the handlers dutifully cleared the code.
+            `useInput`'s default parse turns "" into null, so the form posted
+            `address.locality.code: null`. pgr-services accepted it (200) and
+            published to `update-pgr-request`, then egov-persister died on
+            `null value in column "locality" of relation "eg_pgr_address_v2"` —
+            and because the address and service UPDATEs share one transaction,
+            the description/status edit rolled back with it. Nine retries, message
+            dropped, complaint silently unchanged with its workflow advanced.
+
+            Radix rejects an empty SelectItem value, so an empty payload is ALWAYS
+            the echo and never an operator choice. Drop it. */}
         <Select
           value={typeof field.value === 'string' ? field.value : ''}
-          onValueChange={(v) => field.onChange(v)}
+          onValueChange={(v) => {
+            if (!v) return;
+            field.onChange(v);
+          }}
           disabled={!activeType || boundariesLoading}
         >
           <SelectTrigger

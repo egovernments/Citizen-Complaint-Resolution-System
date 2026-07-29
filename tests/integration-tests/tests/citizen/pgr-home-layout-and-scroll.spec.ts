@@ -7,13 +7,14 @@
  *          scrolled to the middle of the page (the old `history.listen`
  *          handler leaked across renders and fired before mount).
  * - #441 — rating submit without any "What was good?" checkbox must not
- *          crash the UI. Requires a complaint in RESOLVED state to exercise
- *          the form, which isn't deterministic in a shared deployment —
- *          currently asserted via bundle-level grep until we wire a full
- *          lifecycle fixture.
+ *          crash the UI. Exercised end-to-end: the seed-plan helpers
+ *          (tests/utils/seed.ts) file a complaint as the provisioned citizen
+ *          and drive it to RESOLVED, so the throwaway complaint this test
+ *          submits a rating for is created per run and owned by us.
  */
 import { test, expect } from '@playwright/test';
 import { citizenOtpLogin } from '../utils/citizen-login';
+import { seedComplaintAsCitizen, driveToPendingAtLme, driveToResolved } from '../utils/seed';
 import { BASE_URL } from '../utils/env';
 
 test.describe('citizen PGR regression — shipped fixes', () => {
@@ -121,28 +122,101 @@ Verified 2026-06-29: on compact/v2 builds (Ethiopia), the layout uses an inner-s
     expect(after).toBe(0);
   });
 
-  test.fixme(
+  test(
     '#441 — submit rating without "What was good?" boxes does not crash', {
       annotation: {
         type: 'description',
-        description: `TODO: needs a complaint in RESOLVED state belonging to a citizen we control before this can be exercised end-to-end. Either chain off pgr-lifecycle-ui.spec.ts (which already resolves one) or bootstrap via the PGR API before the browser step. Until then, the code-level guard is verified offline with grep on build/index.js for an isArray check around CS_FEEDBACK_WHAT_WAS_GOOD.
+        description: `Catches CCRS#441: submitting the complaint rating with ZERO "What was good?" checkboxes ticked used to throw ("Cannot read properties of undefined (reading 'join')") inside SelectRating's submit handler, tripping the error boundary and leaving the citizen on a blank page. Fixed in both builds that ship this page — the Array.isArray guard at packages/modules/pgr/src/pages/citizen/Rating/SelectRating.js:26, and the v2 product overlay (products/pgr/.../SelectRating.js) which builds the selections array from local state so it can never be undefined. This test drives the real form with no checkbox touched and asserts nothing throws and the SPA advances; it is build-agnostic by design, since a rewrite of this page is exactly where the bug could come back.
 
-Steps (target):
-1. Seed a RESOLVED complaint owned by the test citizen.
-2. citizenOtpLogin and navigate to /pgr/rate/{srid}.
-3. Submit the rating without checking any "What was good?" feedback boxes.
-4. Assert the page does NOT crash and either advances to the next step or shows a recoverable error.
+Steps:
+1. setTimeout 180s; attach a pageerror listener BEFORE anything navigates.
+2. Seed a throwaway complaint via seedComplaintAsCitizen -> driveToPendingAtLme -> driveToResolved (tests/utils/seed.ts; RESOLVE is PGR_LME-role-gated, not assignee-gated).
+3. citizenOtpLogin as the provisioned citizen (the same identity seed.ts filed as — RATE is only open to the filer) and navigate to /digit-ui/citizen/pgr/rate/{srid}.
+4. Wait for the 5-star row (legacy svg.rating-star or the v2 overlay's role=radio StarRow); click the 4th star so rating > 0 — the submit handler no-ops below that.
+5. Submit WITHOUT ticking any of the four "What was good?" checkboxes; assert none is checked first, so a build that pre-ticks one cannot make this pass vacuously.
+6. Assert the SPA advanced to the PGR /response route (SelectRating pushes \`\${parentRoute}/response\` only after the previously-crashing line).
+7. Assert no uncaught pageerror matching /Cannot read properties of undefined|of undefined \\(reading|is not a function/ and that the error boundary ("Something went wrong") did not render.
 
-Marked test.fixme — runs only when manually un-fixed and the seed step is wired in.`,
+Unlike rate-resolved-complaint.spec.ts this test DOES submit — the complaint is seeded per run and going to CLOSEDAFTERRESOLUTION is harmless.`,
       },
       tag: ['@area:pgr', '@ccrs:441', '@kind:regression', '@layer:ui', '@persona:citizen'] }, async ({ page }) => {
-      // TODO: needs a complaint in RESOLVED state belonging to a citizen
-      // we control. Either chain off pgr-lifecycle-ui.spec.ts (which
-      // already resolves one) or bootstrap via the PGR API before the
-      // browser step. Until then, the code-level guard is verified
-      // offline with `grep isArray(.*CS_FEEDBACK_WHAT_WAS_GOOD)` on
-      // `build/index.js`.
-      void page; // placeholder so the fixme block type-checks
+      test.setTimeout(180_000);
+
+      // Attached before any navigation so a crash during mount is captured too.
+      const pageErrors: string[] = [];
+      page.on('pageerror', (err) => pageErrors.push(err.message));
+
+      const { srid } = await seedComplaintAsCitizen({
+        description: 'PW #441 — rating submitted with no feedback boxes',
+      });
+      await driveToPendingAtLme(srid);
+      await driveToResolved(srid);
+
+      await citizenOtpLogin(page);
+      await page.goto(`${BASE_URL}/digit-ui/citizen/pgr/rate/${srid}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30_000,
+      });
+
+      // Two builds ship the 5-star row: the legacy digit-ui-react-components <Rating>
+      // (svg.rating-star) and the v2 product overlay's <StarRow>
+      // (button.v2-rating-star, role=radio in an aria-label="rating"
+      // radiogroup). Match either — the union dedupes, so the count stays 5.
+      const stars = page.locator(
+        '.rating-star, .v2-rating-star, [role="radiogroup"][aria-label="rating"] [role="radio"]',
+      );
+      await expect(stars.first()).toBeVisible({ timeout: 60_000 });
+      await expect(stars).toHaveCount(5);
+
+      // Rating must be > 0 or submit takes the error branch and never reaches
+      // the line under test. Star N is index N-1.
+      await stars.nth(3).click();
+
+      // The whole point of #441: not one checkbox is touched. Assert that is
+      // actually the state we are submitting in — a build that pre-ticked one
+      // would otherwise make this test pass without exercising the bug.
+      const feedbackBoxes = page.locator('input[type="checkbox"]');
+      const checkedCount = await feedbackBoxes.evaluateAll(
+        (els) => els.filter((el) => (el as HTMLInputElement).checked).length,
+      );
+      expect(checkedCount, 'no "What was good?" checkbox may be ticked — that is the regression under test').toBe(0);
+
+      // Legacy build labels the button CS_COMMONS_NEXT ("Next") and gives it
+      // type=submit; the v2 overlay labels it CS_COMMON_SUBMIT ("Submit") with
+      // type=button and an onClick. Match by accessible name so both work —
+      // the sidebar's only other buttons are Logout and HELPLINE.
+      const submit = page
+        .getByRole('button', { name: /submit|next|CS_COMMON_SUBMIT|CS_COMMONS_NEXT/i })
+        .first();
+
+      // The form is interactive before its data is: useComplaintDetails()
+      // chains MDMS getServiceDefs -> PGR search -> boundary ancestors, and
+      // until it lands `complaintDetails?.service` is undefined and the submit
+      // handler no-ops into the "pick a rating" alert. Retry rather than sleep
+      // a magic number — a submit that took has already changed the URL, so
+      // the loop stops on the first one that works.
+      const RESPONSE_ROUTE = /\/citizen\/pgr\/response/;
+      let advanced = RESPONSE_ROUTE.test(page.url());
+      for (let attempt = 0; attempt < 10 && !advanced; attempt++) {
+        await submit.click({ timeout: 10_000 }).catch(() => {});
+        advanced = await page
+          .waitForURL(RESPONSE_ROUTE, { timeout: 8_000 })
+          .then(() => true)
+          .catch(() => false);
+      }
+
+      // Asserted BEFORE the navigation assertion: when #441 regresses, the
+      // throw is the diagnosis and "never navigated" is only its symptom.
+      const fatal = pageErrors.filter((m) =>
+        /Cannot read properties of undefined|of undefined \(reading|is not a function/i.test(m),
+      );
+      expect(fatal, `uncaught error(s) on rating submit:\n${fatal.join('\n')}`).toEqual([]);
+
+      await expect(page.locator('body')).not.toContainText('Something went wrong');
+
+      // SelectRating pushes `${parentRoute}/response` on the line AFTER the
+      // one that used to throw, so reaching it is the crash assertion.
+      expect(advanced, 'rating submit never advanced to the PGR response page').toBe(true);
     },
   );
 });

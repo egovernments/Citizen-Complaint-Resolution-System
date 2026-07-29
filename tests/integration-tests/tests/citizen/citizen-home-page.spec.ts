@@ -79,9 +79,15 @@ Catalog test — if a label gets renamed legitimately, update this spec and Stor
     await expect(body).toContainText('File a Complaint');
     await expect(body).toContainText('My Complaints');
 
-    // Sidebar inventory — Story 2.x note
-    for (const item of ['Home', 'Edit Profile', 'Logout', 'HELPLINE']) {
-      await expect(body, `sidebar item "${item}" missing`).toContainText(item);
+    // Sidebar inventory — Story 2.x note.
+    // Matched case-insensitively: these render from localization, so the label
+    // is the translated value ("Helpline"), not the raw key ("HELPLINE"). Pinning
+    // the upper-case form only passed while the bundle was unseeded and the UI
+    // was echoing raw keys back.
+    for (const item of ['Home', 'Edit Profile', 'Logout', 'Helpline']) {
+      await expect(body, `sidebar item "${item}" missing`).toContainText(
+        new RegExp(item.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+      );
     }
   });
 

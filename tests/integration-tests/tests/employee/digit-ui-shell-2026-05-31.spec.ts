@@ -4,8 +4,9 @@
  * Covers in one run:
  *   #592       /digit-ui/globalConfigs.js served + parseable
  *   #505 sub-1 login background brand-dark, not white
- *   #505 sub-2 header surfaces user initial (post-fix circle removal)
- *   #505 sub-3 banner/header logos sized correctly (96x96)
+ *   #505 sub-2 header surfaces the logged-in user's initial (post-fix
+ *              circle removal)
+ *   #505 sub-3 banner/header logo actually loads and lays out
  *   #505 sub-4 dropdown icons render with dark fill (not white-on-white)
  *   #344       PGR SecurityPolicy lets PGR roles read decrypted
  *              name/mobile (not hex blobs) on complaint detail page
@@ -22,6 +23,7 @@ import {
   TENANT_LABEL,
 } from '../utils/env';
 import { readLifecycleFixtures } from '../utils/lifecycle-fixtures';
+import { getPrincipal } from '../utils/employee-ui';
 
 const LOGIN_URL = '/digit-ui/employee/user/login';
 const INBOX_URL = '/digit-ui/employee/pgr/inbox-v2';
@@ -49,27 +51,24 @@ test.describe('employee digit-ui shell bundle', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('login + chrome + visible decrypt + inbox honest drives', { tag: ['@persona:employee'] }, async ({ page }) => {
-    // Onboarding-data gap (#505 brand chrome): the login banner brand color
-    // (#505 sub-1) and the 96x96 banner/header logo (#505 sub-3) only render
-    // once the tenant's branding (logo asset + theme color) is onboarded via
-    // the configurator. This test also drives the #344 decrypt assertion
-    // against ASSIGNED_COMPLAINT_ID, a complaint that must already exist and
-    // sit in the logged-in employee's inbox on the target deployment — not
-    // guaranteed on a fresh bootstrap. Both are seed/onboarding gaps, not code
-    // regressions, so we mark the test fixme with a clear reason rather than
-    // faking a pass. Re-enable once branding is onboarded and a known assigned
-    // complaint (ASSIGNED_COMPLAINT_ID) is seeded on the deployment.
-    test.fixme(
-      true,
-      'onboarding-data gap: #505 brand chrome (banner color + 96x96 logo) requires tenant branding onboarded, and #344 needs a seeded ASSIGNED_COMPLAINT_ID in the employee inbox. Both are configurator-seed gaps, not code regressions.',
-    );
-    // Dead code while the fixme above stands, kept correct for when it's lifted:
-    // an empty resolution (no env override, no lifecycle fixture) must skip
-    // with the real cause rather than driving the UI at a blank/undefined SRID.
-    test.skip(
-      !ASSIGNED_COMPLAINT_ID,
+    // This test used to carry an unconditional `test.fixme(true, …)` blaming
+    // two onboarding-data gaps. Both claims were false and are now retired:
+    //   * "#344 needs a seeded ASSIGNED_COMPLAINT_ID" — lifecycle.setup.ts DOES
+    //     seed one (lifecycle-fixtures.json -> complaints.assigned_to_employee),
+    //     which is exactly what the resolution chain above reads.
+    //   * "#505 brand chrome needs tenant branding onboarded" — the login
+    //     banner renders its brand colour from the shipped stylesheet with zero
+    //     branding seeded, and no stylesheet rule anywhere produces the 96x96
+    //     logo the old assertion demanded (see the sizing comment below).
+    // The three assertions that were genuinely stale are fixed in place instead.
+    //
+    // No skip guard here on purpose: an unresolved SRID is a broken
+    // lifecycle-setup, not a legitimate "nothing to test" — fail loudly with the
+    // cause rather than driving the UI at a blank SRID and timing out opaquely.
+    expect(
+      ASSIGNED_COMPLAINT_ID,
       'no assigned_to_employee complaint available — lifecycle.setup.ts did not seed one; set ASSIGNED_COMPLAINT_ID to override',
-    );
+    ).not.toBe('');
 
     // ============ #592 globalConfigs.js ============
     const gcResp = await page.request.get(`${BASE_URL}${GLOBAL_CONFIGS_URL}?cb=${Date.now()}`);
@@ -91,16 +90,53 @@ test.describe('employee digit-ui shell bundle', () => {
 
     const logoBox = await page.evaluate(() => {
       const img = document.querySelector('.bannerLogo') as HTMLImageElement | null;
-      return img ? { w: img.offsetWidth, h: img.offsetHeight } : null;
+      return img
+        ? { w: img.offsetWidth, h: img.offsetHeight, natW: img.naturalWidth, natH: img.naturalHeight }
+        : null;
     });
-    expect(logoBox!.w, '#505 sub-3 bannerLogo width').toBeGreaterThanOrEqual(96);
-    expect(logoBox!.h, '#505 sub-3 bannerLogo height').toBeGreaterThanOrEqual(96);
+    expect(logoBox, '#505 sub-3 — .bannerLogo must be present in the login banner').not.toBeNull();
+    /*
+     * The asset must genuinely decode. A broken/404 <img> still lays out a box,
+     * so a size-only check cannot tell "logo rendered" from "logo missing" —
+     * naturalWidth is 0 for anything the browser failed to load.
+     */
+    expect(logoBox!.natW, '#505 sub-3 — bannerLogo image must actually load').toBeGreaterThan(0);
+    expect(logoBox!.natH, '#505 sub-3 — bannerLogo image must actually load').toBeGreaterThan(0);
+    /*
+     * Size floor, deliberately NOT the old >= 96x96.
+     *
+     * The served digit-ui-css.css declares exactly two .bannerLogo rules:
+     * `width:80px;height:40px`, and the `.login-container .bannerHeader
+     * .bannerLogo{width:50%}` override that makes the rendered height
+     * aspect-driven from the banner width. Nothing anywhere declares 96px, so
+     * `h >= 96` demanded a size the shipped stylesheet cannot produce on ANY
+     * deployment (it measures 246x56 here — width passed, height failed).
+     *
+     * 40x20 is half the only box the stylesheet actually declares: far below
+     * what any real tenant logo renders at (so it does not re-pin a magic
+     * number), and far above the 0x0 / 1px collapse that a hidden, unstyled or
+     * detached logo produces — which is the regression #505 sub-3 is about.
+     */
+    expect(logoBox!.w, '#505 sub-3 bannerLogo laid-out width').toBeGreaterThanOrEqual(40);
+    expect(logoBox!.h, '#505 sub-3 bannerLogo laid-out height').toBeGreaterThanOrEqual(20);
 
     // ============ #622 — Login completes ============
     await page.locator('input[type="text"]').first().pressSequentially(EMPLOYEE_USER, { delay: 60 });
     await page.locator('input[type="password"]').first().pressSequentially(EMPLOYEE_PASS, { delay: 60 });
 
-    const cityCombo = page.getByRole('combobox', { name: /City/i });
+    /*
+     * The city picker's visible label is the LOCALIZED CORE_COMMON_CITY. On this
+     * deployment rainmaker-common sets it to 'County', so the old
+     * `getByRole('combobox', { name: /City/i })` matched nothing and burned the
+     * full 120s test timeout. Swapping in /County/i would just move the
+     * hardcoded English literal, so the label is kept out of the locator
+     * entirely: core's employee login page renders the picker as
+     * `<Select id="emp-city">` (pages/employee/Login/login.js), and that id is
+     * set by the app, not by any localization or tenant config. The
+     * [role="combobox"] arm is the structural fallback if the id is ever
+     * renamed — the login form has exactly one combobox.
+     */
+    const cityCombo = page.locator('#emp-city, [role="combobox"]').first();
     if (!(await cityCombo.textContent())?.includes(TENANT_LABEL)) {
       await cityCombo.click();
       await page.waitForTimeout(700);
@@ -114,7 +150,26 @@ test.describe('employee digit-ui shell bundle', () => {
     await page.waitForTimeout(3_000);
 
     // ============ #505 sub-2 — header initial visible ============
-    const expectedInitial = EMPLOYEE_USER.charAt(0);
+    /*
+     * The header renders the initial of the user's DISPLAY NAME, not of their
+     * username: TopBar.js passes `userDetails.info.name` to the Dropdown's
+     * `profilePic` prop, and Dropdown renders a string prop as
+     * `profilePic[0].toUpperCase()`. The old expectation read
+     * EMPLOYEE_USER.charAt(0) — the wrong source field, and wrong on every
+     * deployment whose employee login differs from their display name
+     * ('EMP001' -> 'E' vs "Jane Doe" -> 'J' here; 'ADMIN' -> 'A' vs
+     * "System Administrator" -> 'S' on a stock bootstrap).
+     *
+     * Resolve the display name live from the deployment's own user record
+     * rather than deriving it from any env literal.
+     */
+    const principal = await getPrincipal(EMPLOYEE_USER, EMPLOYEE_PASS);
+    const displayName = String(principal?.userInfo?.name ?? '').trim();
+    expect(
+      displayName,
+      `#505 sub-2 — could not resolve a display name for ${EMPLOYEE_USER}; the header initial has no expectation to compare against`,
+    ).not.toBe('');
+    const expectedInitial = displayName.charAt(0).toUpperCase();
     const headerInitial = await page.evaluate((expected) => {
       const headerNodes = [
         ...document.querySelectorAll(

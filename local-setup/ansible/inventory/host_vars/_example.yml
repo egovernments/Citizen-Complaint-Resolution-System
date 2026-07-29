@@ -238,12 +238,17 @@ enable_search_stack: false
 
 # Pull + start digit-mcp + mcp-postgres. The MCP server exposes a REST
 # shim on :3000 (POST /v1/tenant/bootstrap, POST /v1/tools/:name) that
-# the configurator/frontend uses for tenant onboarding. The image lives
-# in the Hetzner VPC registry (10.0.0.4:5000) — only Hetzner-internal
-# hosts can reach it. Compose validates every image before starting any
-# service, so a public-internet box with this on would fail at
-# `docker compose up`. Flip to false (or override `docker_registry` to
-# a public mirror) if you're not on the VPC.
+# the configurator/frontend uses for tenant onboarding. Serving that shim
+# through nginx at /v1/* additionally needs `nginx_features.mcp: true`.
+#
+# Image source: the playbook's "Resolve MCP image tag" task defaults to the
+# PUBLIC pin `ghcr.io/subhashini-egov/digit-mcp:<tag>`, and passes it to
+# compose verbatim (no `docker_registry` prefix) — so a public-internet box
+# works out of the box. Set `build_mcp: true` to build from the vendored
+# in-tree source instead, or pin `mcp_image:` yourself. If you pin it to the
+# Hetzner VPC registry (10.0.0.4:5000) the target must be VPC-internal:
+# compose validates every image before starting any service, so an
+# unreachable one fails the whole `docker compose up`.
 enable_mcp: true
 
 # ────────── Turbopass (OSM location autocomplete) ──────────
@@ -362,6 +367,26 @@ novu_bridge_channel: "sms"
 # novu_bridge_workflow_id_email:    "complaints-email"
 # Subscriber-identify TTL cache (ms) — skip redundant POST /v1/subscribers.
 # novu_bridge_identify_cache_ttl_ms: 300000
+
+# Browser-facing origin for the Novu dashboard SPA (scheme + host, no trailing
+# slash). The dashboard runs in the OPERATOR's browser, so these URLs must name
+# a host the browser can reach — not an in-cluster or loopback address.
+#
+# Defaults to this tenant's own `domain` + `tls_enabled` scheme, which is
+# correct whenever the ansible-managed vhost is the one the browser hits.
+# Set this only when TLS terminates on a vhost whose hostname differs from
+# `domain` — e.g. `domain: localhost` for the internal vhost, with a
+# separately-managed public vhost proxying /novu/, /novu-api/ and /novu-ws/.
+# novu_public_base_url: "https://pilot.example.org"
+
+# Escape hatch for the rare case where the API / WS / dashboard live on
+# DIFFERENT hosts. Prefer novu_public_base_url above — it sets all four at
+# once and keeps the paths aligned with the nginx location blocks.
+# novu_api_public_url:  "https://pilot.example.org/novu-api"
+# novu_ws_public_url:   "https://pilot.example.org/novu-ws"
+# novu_api_root_url:    "https://pilot.example.org/novu-api"
+# novu_front_base_url:  "https://pilot.example.org/novu"
+# novu_node_env: "production"
 
 # ────────── Keycloak SSO (opt-in) ──────────
 # Adds 2 containers (keycloak + token-exchange-svc) plus the host
