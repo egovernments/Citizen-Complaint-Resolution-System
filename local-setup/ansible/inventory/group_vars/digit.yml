@@ -164,6 +164,12 @@ docker_log_total_size: "1g"
 # is treated as unset, so the derivation still applies.
 # docker_log_max_file: 10
 
+# Live progress sink for the deploy's two long compose steps (image pull +
+# stack up). Their output streams here as they run, so the operator can
+# `tail -f` it from another terminal instead of waiting for the task to end.
+# Same idea as the Mac path's /tmp/mac-stack-up.progress.
+compose_progress_file: /tmp/digit-stack-up.progress
+
 # On-target directory for digit-mcp when build_mcp is true. Vendored deploys
 # rsync CCRS digit-mcp/ here; a git mcp_repo_url clones/updates here instead.
 mcp_repo: "{{ digit_dir }}/digit-mcp"

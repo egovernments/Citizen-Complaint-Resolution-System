@@ -1111,16 +1111,36 @@
         - enable_keycloak | default(false)
         - kcprep_secrets.json.data.data.keycloak_db_password | default('') | length > 0
 
+    # The next two steps are the deploy's long, silent stretch — the image
+    # pull (tens of GB on a first run) and the ~40-container up (~10 min on
+    # a cold box). Ansible buffers a task's output until it finishes, so
+    # without a side channel the operator stares at nothing. Stream the
+    # live compose output (docker compose emits per-container Created/
+    # Started/Healthy transitions on the fly) to compose_progress_file via
+    # tee; ansible still captures the full output for the task result, and
+    # pipefail keeps the compose exit code authoritative.
+    - name: "Progress sink — where to watch the long compose steps"
+      ansible.builtin.debug:
+        msg: >-
+          LONG STEPS AHEAD (image pull, then stack up). Follow live progress
+          from another terminal with:  tail -f {{ compose_progress_file }}
+
     - name: Pull all images from VPC registry
-      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures
+      shell: |
+        set -o pipefail
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} pull --ignore-pull-failures 2>&1 | tee {{ compose_progress_file }}
       args:
         chdir: "{{ digit_dir }}"
+        executable: /bin/bash
       changed_when: false
 
     - name: Start DIGIT stack (Linux/Debian)
-      shell: COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d
+      shell: |
+        set -o pipefail
+        COMPOSE_PROFILES={{ compose_profiles }} docker compose {{ compose_files }} up -d 2>&1 | tee -a {{ compose_progress_file }}
       args:
         chdir: "{{ digit_dir }}"
+        executable: /bin/bash
       changed_when: false
       when: ansible_system != "Darwin"
 
