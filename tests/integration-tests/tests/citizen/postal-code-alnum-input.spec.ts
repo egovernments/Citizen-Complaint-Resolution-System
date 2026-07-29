@@ -165,7 +165,7 @@ Catches: a broken i18next interpolation (post-processors mangling the {{length}}
     // then the 5-digit default.
     const pattern = await page.evaluate(() => {
       const w = window as any;
-      const mdms = w.__DIGIT_USER_VALIDATION?.postalCode?.pattern;
+      const mdms = w.__DIGIT_FORM_VALIDATIONS?.postalCode?.pattern;
       if (mdms) return String(mdms);
       const getConfig = w.globalConfigs?.getConfig;
       const cfg = [getConfig?.('CORE_POSTAL_CONFIGS'), getConfig?.('CORE_POSTAL_CODE_CONFIGS')]

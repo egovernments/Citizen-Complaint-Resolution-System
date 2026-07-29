@@ -618,11 +618,29 @@ export async function discoverProfile(opts?: { baseUrl?: string }): Promise<Depl
     source: mobilePattern ? 'globalConfigs' : 'none',
   };
 
+  // Resolution order MUST mirror the SPA's (utils/postalCode.js): an MDMS
+  // `common-masters.FormValidations` postalCode row is the PRIMARY per-tenant
+  // rule and outranks globalConfigs — a profile that reads only globalConfigs
+  // asserts the wrong pattern on any tenant whose MDMS row differs from its
+  // host_vars. City tenant first, then root, matching MDMS seeding scope.
+  const mdmsPostalPattern = await attempt(
+    'postal FormValidations row',
+    async () => {
+      for (const tenantId of tenants) {
+        const row = (await fetchMdms(tenantId, 'common-masters.FormValidations', authToken, { baseUrl })).find(
+          (r) => r?.data?.fieldType === 'postalCode' && r?.isActive !== false && typeof r?.data?.regex === 'string',
+        );
+        if (row) return row.data.regex as string;
+      }
+      return null;
+    },
+    null as string | null,
+  );
   // bomet ships corePostalConfigs as {} and the SPA falls back to 5 digits, so
   // the fallback is the deployment's real behaviour — but flag that nobody chose
   // it, since a postal assertion against a default is worth less than one
   // against a declared rule.
-  const postalPattern = gc.corePostalConfigs?.postalCodePattern ?? null;
+  const postalPattern = mdmsPostalPattern ?? gc.corePostalConfigs?.postalCodePattern ?? null;
   const configuredExplicitly = Boolean(postalPattern);
   const effectivePostal = postalPattern ?? '^[0-9]{5}$';
   const envSample = envOr('POSTAL_CODE_VALID');
