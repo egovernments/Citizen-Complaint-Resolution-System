@@ -316,5 +316,17 @@
         "message": "Pesquisar Reclamação",
         "module": "rainmaker-common",
         "locale": "pt_PT"
+    },
+    {
+        "code": "ENGLISH",
+        "message": "English",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
+    },
+    {
+        "code": "PORTUGUESE",
+        "message": "Português",
+        "module": "rainmaker-common",
+        "locale": "pt_PT"
     }
 ]
