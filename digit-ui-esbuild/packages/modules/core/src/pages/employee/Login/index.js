@@ -55,9 +55,15 @@ const EmployeeLogin = ({ stateCode, appTenants }) => {
   const loginParams = useMemo(() =>
     loginConfig.map(
       (step) => {
+        // Pass the raw loc KEYS through — the login component resolves them via
+        // its own tr(key, fallback) at render. Pre-resolving here with t() and
+        // then letting tr() run again double-resolves: tr sees an already-
+        // translated message, trans(message) === message, and returns the
+        // English fallback — so the header/submit/forgot texts ignored the
+        // locale entirely. Keeping raw keys makes tr() resolve them once.
         const texts = {};
         for (const key in step.texts) {
-          texts[key] = t(step.texts[key]);
+          texts[key] = step.texts[key];
         }
         return { ...step, texts };
       },
@@ -68,9 +74,15 @@ const EmployeeLogin = ({ stateCode, appTenants }) => {
   const loginOtpParams = useMemo(() =>
     loginOtpConfig.map(
       (step) => {
+        // Pass the raw loc KEYS through — the login component resolves them via
+        // its own tr(key, fallback) at render. Pre-resolving here with t() and
+        // then letting tr() run again double-resolves: tr sees an already-
+        // translated message, trans(message) === message, and returns the
+        // English fallback — so the header/submit/forgot texts ignored the
+        // locale entirely. Keeping raw keys makes tr() resolve them once.
         const texts = {};
         for (const key in step.texts) {
-          texts[key] = t(step.texts[key]);
+          texts[key] = step.texts[key];
         }
         return { ...step, texts };
       },
