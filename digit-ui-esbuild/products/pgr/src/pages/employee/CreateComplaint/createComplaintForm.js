@@ -482,6 +482,11 @@ const CreateComplaintForm = ({
     if (reset && formResetRef.current !== reset) {
       formResetRef.current = reset;
     }
+    // After a successful create, ignore all further change events for this mount
+    // so the post-submit reset() cannot re-persist the just-submitted draft
+    // (CCSD-2117). The component unmounts on navigation to the response page, so
+    // the next Create Complaint mount starts with submittedRef=false again.
+    if (submittedRef.current) return;
     recomputeSubmitDisabled(formData);
 
     // Real-time mobile validation: show/hide CardLabelError as the user types.
@@ -609,6 +614,13 @@ const CreateComplaintForm = ({
   // sessionStorage cache; resetForm() clears react-hook-form's in-memory
   // values (also closes egovernments/CCRS#478 — form-clear-on-success).
   const formResetRef = useRef(null);
+  // True once a complaint has been created successfully. Suppresses any further
+  // draft persistence for the remaining life of this mount (CCSD-2117): without
+  // it, the reset() we fire on success re-runs onFormValueChange with the still
+  // stale submitted values, which re-writes the draft with a fresh __draftMeta —
+  // so returning to Create Complaint restored the just-submitted data. The ref
+  // resets to false on remount, so the next complaint persists normally.
+  const submittedRef = useRef(false);
 
   const onFormSubmit = (_data) => {
     if (!isBoundaryLeaf(_data?.SelectedBoundary)) {
@@ -677,6 +689,9 @@ const CreateComplaintForm = ({
           // state before navigating, so that if the operator hits Back
           // (or the route is remounted) the form is empty rather than
           // restored to the just-submitted complaint's values.
+          // submittedRef guards onFormValueChange so the reset() below can't
+          // re-persist the stale draft (CCSD-2117); set it before resetting.
+          submittedRef.current = true;
           clearSessionFormData();
           draftJsonRef.current = JSON.stringify({});
           if (typeof formResetRef.current === "function") {
