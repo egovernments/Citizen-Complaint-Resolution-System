@@ -137,6 +137,15 @@ core_mobile_configs:
 # through the standard localization pipeline (module `rainmaker-pgr`, key
 # `CS_COMPLAINT_POSTALCODE_INVALID_ERROR_LEN`), so it's correct in every
 # locale the tenant ships without any per-tenant message override field.
+#
+# MDMS is the PRIMARY knob: the `fieldType: "postalCode"` row in the
+# `common-masters.FormValidations` master outranks this pattern (same
+# precedence as the mobile/name/email rules), in DIGIT Studio and the PGR
+# create-complaint flows alike. DDH seeds a default 5-digit row at tenant
+# creation — change a tenant's postal rule by editing that row (DIGIT
+# Studio > FormValidations), not just this file. This host_vars pattern is
+# the fallback for tenants without the row (dump-booted stacks, tenants
+# created before FormValidations existed).
 core_postal_configs:
   postalCodePattern: "^[0-9]{5}$"
 

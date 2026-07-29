@@ -54,26 +54,31 @@ function postalRejectedSamples(pattern: string, validBase: string): { tooLong: s
   return { tooLong, tooShort };
 }
 const { tooLong: INVALID_POSTAL_LONG, tooShort: INVALID_POSTAL_SHORT } =
-  postalRejectedSamples(POSTAL_CODE_PATTERN, POSTAL_CODE_VALID.split('-')[0]);
+  postalRejectedSamples(POSTAL_CODE_PATTERN, POSTAL_CODE_VALID);
 
 /**
- * The base (hyphen-free) segment of the deployment's valid sample. The
- * create-complaint postalCode input is `type=number` on the redesigned build and
- * cannot hold a hyphen, while the base 4/5-digit code is valid on its own (the
- * '-NN' sector suffix is optional in every pattern we ship). For Kenya '00100'
- * this is a no-op; for mz.maputo '0101-03' it yields '0101'.
+ * The deployment's valid sample, verbatim. The create-complaint postalCode
+ * input is `type=text` (PR #1315 flipped it from `number` so the field can
+ * hold every shape the configured pattern accepts), so a dash-suffixed
+ * sample like mz.maputo's '0101-03' is enterable as-is.
  */
-const VALID_POSTAL = POSTAL_CODE_VALID.split('-')[0];
+const VALID_POSTAL = POSTAL_CODE_VALID;
 
-/** The localization code the postal validator raises (CreateComplaintConfig populators.error). */
-const POSTAL_ERROR_KEY = 'CS_COMPLAINT_POSTALCODE_INVALID_ERROR';
+/**
+ * The localization code the postal validator raises (CreateComplaintConfig
+ * populators.error). PR #1315 re-pointed the field-level error from the old
+ * fixed-length CS_COMPLAINT_POSTALCODE_INVALID_ERROR (which hardcoded
+ * "5 digit" into its message) at this generic, still-localized key; the
+ * length-aware wording lives in the submit-time toast, not this inline error.
+ */
+const POSTAL_ERROR_KEY = 'CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC';
 
 /**
  * Resolve what the postal error actually RENDERS AS on this deployment.
  *
- * Both the inline CardLabelError and the submit toast render `t(POSTAL_ERROR_KEY)`,
- * so on any deployment that seeds rainmaker-pgr the raw key NEVER appears in the
- * DOM — it is replaced by e.g. "Please enter a valid 5-digit postal code". The
+ * The inline CardLabelError renders `t(POSTAL_ERROR_KEY)`, so on any deployment
+ * that seeds rainmaker-pgr the raw key NEVER appears in the
+ * DOM — it is replaced by e.g. "Please enter a valid postal code". The
  * previous `text=CS_COMPLAINT_POSTALCODE_INVALID_ERROR` locator therefore matched
  * nothing, which made the rejection cases unassertable and the acceptance case
  * (count 0) vacuous: it would have passed with the validator deleted outright.

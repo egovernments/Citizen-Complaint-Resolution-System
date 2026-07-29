@@ -9,9 +9,15 @@
 // configurator/src/admin/validation.ts — one precedence for one rule,
 // so a tenant can't see a different pattern in DIGIT Studio than in the
 // PGR create-complaint flows:
-//   1. `window.__DIGIT_USER_VALIDATION.postalCode.pattern` — the MDMS
-//      channel (common-masters.FormValidations) mirrored on `window` for
-//      synchronous consumers, same as the mobile/name/email rules.
+//   1. `window.__DIGIT_FORM_VALIDATIONS.postalCode.pattern` — the MDMS
+//      channel: a `fieldType: "postalCode"` row in
+//      `common-masters.FormValidations`, mirrored onto a window channel
+//      named after that master (keyed by fieldType, exactly like the
+//      rows themselves) by useMobileValidation here and usePostalRule in
+//      the configurator. This is the PRIMARY per-tenant knob: DDH seeds
+//      a default 5-digit row at tenant creation, and editing it (DIGIT
+//      Studio's FormValidations editor) changes the tenant's rule — it
+//      outranks `core_postal_configs`, here AND in Studio, by design.
 //   2. `CORE_POSTAL_CONFIGS.postalCodePattern` from globalConfigs (set
 //      per-tenant in the ansible inventory, see
 //      local-setup/ansible/inventory/host_vars/_example.yml), with the
@@ -30,7 +36,7 @@
 
 export function getPostalCodePattern() {
   if (typeof window === "undefined") return "^[0-9]{5}$";
-  const mdmsPattern = window.__DIGIT_USER_VALIDATION?.postalCode?.pattern;
+  const mdmsPattern = window.__DIGIT_FORM_VALIDATIONS?.postalCode?.pattern;
   if (mdmsPattern) return mdmsPattern;
   const getConfig = window.globalConfigs?.getConfig;
   // Select on the field, not the config object: the ansible template

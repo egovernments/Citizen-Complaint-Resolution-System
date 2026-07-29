@@ -39,14 +39,21 @@ export const phone = raRegex(
  *
  * Per @vinothrallapalli-eGov review on PR #690: don't hardcode the
  * length / starting-digit constraints, because each country has its
- * own postal-code rule. The canonical source is the
- * `common-masters.MobileNumberValidation` MDMS master — same master used for
- * mobile validation — for postal code, use a separate MDMS entry or
- * globalConfigs.CORE_POSTAL_CONFIGS.
+ * own postal-code rule. An MDMS-authored rule is a
+ * `fieldType: "postalCode"` row in `common-masters.FormValidations`
+ * (the same per-fieldType master that carries the name/email rules);
+ * otherwise the rule comes from globalConfigs.CORE_POSTAL_CONFIGS.
  *
- * Read order (matches `useMobileValidation`):
- *   1. `window.__DIGIT_USER_VALIDATION.postalCode` — populated by the
- *      `useMobileValidation` hook from the MDMS master.
+ * Read order (matches `useMobileValidation` and the PGR flows'
+ * utils/postalCode.js — one precedence for one rule):
+ *   1. `window.__DIGIT_FORM_VALIDATIONS.postalCode` — a window channel
+ *      named after the master it mirrors, keyed by fieldType exactly
+ *      like the FormValidations rows themselves. Written by
+ *      `usePostalRule` here (mounted by the Complaint create/edit
+ *      screens) and by `useMobileValidation` in digit-ui. This is the
+ *      PRIMARY per-tenant knob: DDH seeds a default 5-digit row at
+ *      tenant creation, and editing it changes the tenant's rule —
+ *      MDMS outranks the host_vars pattern.
  *   2. `globalConfigs.CORE_POSTAL_CONFIGS` — build-time fallback rendered
  *      by the ansible playbook from host_vars `core_postal_configs`
  *      (legacy `CORE_POSTAL_CODE_CONFIGS` key also honoured).
@@ -62,10 +69,9 @@ export const phone = raRegex(
  * the pattern (CCRS#722 — a hand-set message drifted from the pattern's
  * actual digit count on more than one tenant). The message is always
  * derived from the pattern itself: the digit count when it's a plain
- * `^[0-9]{N}$` shape, otherwise a generic message. The MDMS master may
- * still supply its own `errorMessage` alongside its `pattern` — that's a
- * genuinely different, per-tenant-authored rule, not a config knob that
- * can drift from this validator's own pattern.
+ * `^[0-9]{N}$` shape, otherwise a generic message. The FormValidations
+ * row is pattern-only too ({ fieldType, regex }, additionalProperties
+ * false) — no message knob exists anywhere in the chain.
  *
  * Form usage: `<DigitFormInput validate={v.postalCode} ... />` — the
  * old `postalCodeKE` alias still works as a backward-compat shim
@@ -84,11 +90,11 @@ function deriveMessage(patternStr: string): string {
 }
 
 function resolvePostalRule(): { pattern: RegExp; message: string } {
-  const userValidation =
+  const formValidations =
     typeof window !== 'undefined'
-      ? (window as unknown as Record<string, unknown>).__DIGIT_USER_VALIDATION
+      ? (window as unknown as Record<string, unknown>).__DIGIT_FORM_VALIDATIONS
       : undefined;
-  const mdmsRule = (userValidation as Record<string, Record<string, unknown>> | undefined)?.postalCode;
+  const mdmsRule = (formValidations as Record<string, Record<string, unknown>> | undefined)?.postalCode;
   const getConfig =
     typeof window !== 'undefined'
       ? (window as unknown as Record<string, { getConfig?: (key: string) => Record<string, unknown> }>)
@@ -107,17 +113,16 @@ function resolvePostalRule(): { pattern: RegExp; message: string } {
   const patternStr =
     (mdmsRule?.pattern as string | undefined) ||
     (globalRule?.postalCodePattern as string | undefined);
-  const mdmsMessage = mdmsRule?.errorMessage as string | undefined;
 
   if (patternStr) {
     try {
-      return { pattern: new RegExp(patternStr), message: mdmsMessage || deriveMessage(patternStr) };
+      return { pattern: new RegExp(patternStr), message: deriveMessage(patternStr) };
     } catch {
       // Bad pattern in MDMS — fall through to the default rather than
       // throwing during validation.
     }
   }
-  return { pattern: DEFAULT_POSTAL_PATTERN, message: mdmsMessage || deriveMessage(DEFAULT_POSTAL_PATTERN.source) };
+  return { pattern: DEFAULT_POSTAL_PATTERN, message: deriveMessage(DEFAULT_POSTAL_PATTERN.source) };
 }
 
 export const postalCode = (value: unknown) => {

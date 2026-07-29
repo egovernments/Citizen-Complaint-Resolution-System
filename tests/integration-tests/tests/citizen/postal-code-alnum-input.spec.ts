@@ -184,8 +184,11 @@ Catches: a broken i18next interpolation (post-processors mangling the {{length}}
 
     // The visible error must carry the tenant's real digit count — not a raw
     // localization key, not a mangled "{{length}}" placeholder, and not a
-    // hardcoded count from some other tenant's pattern.
-    const errorText = page.getByText(new RegExp(`valid\\s+${n}[\\s-]?digit postal code`, 'i'));
+    // hardcoded count from some other tenant's pattern. `.first()` because
+    // getByText is strict-mode: if the message ever also surfaces in a toast
+    // or summary step, one visible occurrence should still pass rather than
+    // failing as a strict-mode violation.
+    const errorText = page.getByText(new RegExp(`valid\\s+${n}[\\s-]?digit postal code`, 'i')).first();
     await expect(errorText).toBeVisible({ timeout: 10_000 });
   });
 });
