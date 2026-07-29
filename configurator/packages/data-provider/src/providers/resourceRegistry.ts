@@ -22,6 +22,10 @@ export interface ResourceConfig {
     update?: string;
   };
   dedicated?: boolean;
+  /** When set, the generic UI hides/blocks Edit + Create unless the logged-in
+   *  user has one of these role codes. UX gate only — server authority is the
+   *  role-action mapping (e.g. action 2627 → MDMS_ADMIN for the enc policy). */
+  writeRoles?: string[];
   /** For `type: 'custom'` resources only: the origin-relative path of the
    *  read-only GET endpoint on the out-of-band service (e.g.
    *  `/novu-bridge/novu-adapter/v1/logs`). The data provider prefixes it with
@@ -150,7 +154,7 @@ export const REGISTRY: Record<string, ResourceConfig> = {
   'role-actions': { type: 'mdms', label: 'Role Actions', schema: 'ACCESSCONTROL-ROLEACTIONS.roleactions', idField: 'id', nameField: 'rolecode', descriptionField: 'actionid' },
   roles: { type: 'mdms', label: 'Roles', schema: MDMS_SCHEMAS.ROLES, idField: 'code', nameField: 'name', descriptionField: 'description' },
   'action-mappings': { type: 'mdms', label: 'Action Mappings', schema: 'ACCESSCONTROL-ACTIONS-TEST.actions-test', idField: 'id', nameField: 'displayName', descriptionField: 'url' },
-  'encryption-policy': { type: 'mdms', label: 'Encryption Policy', schema: 'DataSecurity.EncryptionPolicy', idField: 'key', nameField: 'key' },
+  'encryption-policy': { type: 'mdms', label: 'Encryption Policy', schema: 'DataSecurity.EncryptionPolicy', idField: 'key', nameField: 'key', writeRoles: ['MDMS_ADMIN', 'SUPERUSER'] }, // CCSD-1998
   'decryption-abac': { type: 'mdms', label: 'Decryption ABAC', schema: 'DataSecurity.DecryptionABAC', idField: 'key', nameField: 'key' }, // CCSD-1999: schema id is 'key', not 'model'
   'masking-patterns': { type: 'mdms', label: 'Masking Patterns', schema: 'DataSecurity.MaskingPatterns', idField: 'patternId', nameField: 'patternId' },
   'security-policy': { type: 'mdms', label: 'Security Policy', schema: 'DataSecurity.SecurityPolicy', idField: 'model', nameField: 'model' },

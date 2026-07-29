@@ -18,7 +18,9 @@ export type WidgetKind =
   | 'regex'      // pattern field + live sample tester
   | 'chip-array' // string[] editor (add on Enter, remove on x)
   | 'duration-ms' // number input alongside d/h/m/s display
-  | 'locale-list'; // table editor for {label, value}[] arrays (e.g. StateInfo.languages)
+  | 'locale-list' // table editor for {label, value}[] arrays (e.g. StateInfo.languages)
+  | 'json'        // raw-JSON textarea for object/array fields (parse-validated; blocks save while invalid)
+  | 'object-table'; // table editor for arrays of flat objects with configurable columns
 
 /** A single field override. `path` is dot-notation into the record (e.g. "rules.pattern"). */
 export interface FieldSpec {
@@ -34,6 +36,8 @@ export interface FieldSpec {
   max?: number;
   /** For text/regex widgets — a static pattern to also enforce client-side. */
   pattern?: string;
+  /** For 'object-table': column definitions; each row is an object keyed by these. */
+  columns?: { key: string; label: string }[];
 }
 
 /** A grouping of fields shown as a titled section in the form. */
