@@ -71,24 +71,26 @@ fi
 deploy_ui() {
   log "=== digit-ui (esbuild) ==="
 
-  # node 20 gate — the esbuild build needs v20.x. If the default node isn't
-  # v20, auto-pick one: $NODE20_BIN (a .../bin dir) first, then the newest
-  # nvm-installed v20.
-  case "$(node -v 2>/dev/null || true)" in
-    v20.*) ;;
-    *)
-      local N20="${NODE20_BIN:-}"
-      [ -n "$N20" ] || N20="$(ls -d "$HOME"/.nvm/versions/node/v20.*/bin 2>/dev/null | sort -V | tail -1 || true)"
-      if [ -n "$N20" ] && [ -x "$N20/node" ]; then
-        export PATH="$N20:$PATH"
-        log "default node is not v20 → using $N20 ($(node -v))"
-      fi
-      case "$(node -v 2>/dev/null || true)" in v20.*) ;; *)
-        echo "ERROR: node is $(node -v 2>/dev/null || echo missing), need v20.x." >&2
-        echo "       Install one ('nvm install 20') or point NODE20_BIN at a v20 bin dir." >&2
-        exit 1 ;;
-      esac ;;
-  esac
+  # node gate — the esbuild build needs node >= 20 (a FLOOR, same as
+  # configurator-build.sh's NEED_NODE; the old "must be v20.x" was written
+  # when 20 was current and wrongly rejected v22). If the default node is
+  # older, try $NODE20_BIN (a .../bin dir) or the newest nvm-installed v20+.
+  local MAJ; MAJ="$(node -v 2>/dev/null | sed 's/^v\([0-9]*\).*/\1/' || true)"
+  if [ "${MAJ:-0}" -lt 20 ]; then
+    local N20="${NODE20_BIN:-}"
+    [ -n "$N20" ] || N20="$(ls -d "$HOME"/.nvm/versions/node/v2[0-9].*/bin 2>/dev/null | sort -V | tail -1 || true)"
+    if [ -n "$N20" ] && [ -x "$N20/node" ]; then
+      export PATH="$N20:$PATH"
+      log "default node too old → using $N20 ($(node -v))"
+    fi
+    MAJ="$(node -v 2>/dev/null | sed 's/^v\([0-9]*\).*/\1/' || true)"
+    if [ "${MAJ:-0}" -lt 20 ]; then
+      echo "ERROR: node is $(node -v 2>/dev/null || echo missing), need v20 or newer." >&2
+      echo "       Install one ('nvm install 20') or point NODE20_BIN at a node bin dir." >&2
+      exit 1
+    fi
+  fi
+  log "node $(node -v)"
 
   [ -f "$GLOBAL_CONFIGS" ] || { echo "ERROR: $GLOBAL_CONFIGS not found" >&2; exit 1; }
   docker ps --format '{{.Names}}' | grep -qx digit-ui \
