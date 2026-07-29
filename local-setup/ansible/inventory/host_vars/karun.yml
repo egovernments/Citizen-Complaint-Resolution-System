@@ -1,0 +1,123 @@
+# Self-targeting local deploy (localhost, no TLS) on the dump-seeded
+# pg / pg.citya tenants. Derived from the pg.citya config validated on
+# the eGov dev box 2026-07-27; domain generalized to localhost so it
+# works on any box (WSL2 Ubuntu included).
+#
+# Deploy: ./deploy.sh karun
+# Login:  http://localhost/digit-ui/  ADMIN / eGov@123
+
+ansible_host: localhost
+ansible_connection: local
+
+# Fresh box: nothing to preserve. If image pulls fail with
+# "x509: certificate has expired" (registry.preview.egov.theflywheel.in),
+# set this to ["registry.preview.egov.theflywheel.in"] and re-run.
+insecure_registries: []
+
+domain: localhost
+tls_enabled: false
+
+state_root: pg
+state_tenant_id: pg
+boot_tenant: pg.citya
+tenant_id: pg
+ui_state_tenant_id: pg.citya
+
+map_center:
+  lat: 30.7333
+  lng: 76.7794
+
+login_tenant_allowlist: []
+employee_module_denylist: []
+
+pgr_boundary_highest_level: "State"
+pgr_boundary_lowest_level: "Locality"
+boundary_type: "Locality"
+hierarchy_type: "ADMIN"
+
+core_mobile_configs:
+  countryCode: "+91"
+  mobileNumberRegex: "^[6-9][0-9]{9}$"
+
+core_postal_configs:
+  postalCodePattern: "^[0-9]{6}$"
+  postalCodeLength: 6
+  postalCodeErrorMessage: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR"
+
+asset_s3_bucket: "pg-egov-assets"
+footer_logo_url: ""
+footer_bw_logo_url: ""
+
+digit_ui_mode: container
+enable_digit_ui_v2: true
+digit_ui_v2_repo: "https://github.com/egovernments/Citizen-Complaint-Resolution-System.git"
+digit_ui_v2_branch: "fix/citizen-ui-v2-mobile-config"
+
+enable_integration_tests: false
+integration_tests_dashboard_base: "/tests-v2/"
+integration_tests_basic_auth_user: "digit-tests"
+enable_integration_tests_runner: false
+
+enable_otp_services: false
+enable_search_stack: false
+enable_mcp: true
+build_mcp: true
+build_digit_ui: true
+build_otp_publisher: true
+digit_ui_esbuild_branch: "feat/keycloak-auth-adapter"
+tolerate_bootstrap_failures: true
+enable_turbopass: false
+enable_overpass: false
+
+enable_novu: true
+build_novu_dashboard: false
+novu_api_key: ""
+twilio_account_sid: ""
+twilio_auth_token: ""
+twilio_whatsapp_from: "whatsapp:+14155238886"
+pgr_notification_config_driven: true
+build_novu_bridge: false
+build_pgr_services: false
+novu_bridge_channel: "sms"
+
+enable_keycloak: false
+auth_provider: ""
+keycloak_client_id: "digit-ui"
+keycloak_google_client_id: ""
+
+requires_nairobi_mdms: false
+db_fast_path: true
+db_fast_path_ack_data_wipe: true
+run_ci_tests: false
+force_clean: false
+install_claude_code: false
+build_configurator: true
+
+nginx_features:
+  brand_assets: false
+  configurator: true
+  configurator_caching: false
+  status: true
+  api_pgr: false
+  mcp: true
+  keycloak: true
+  digit_ui_v2: true
+  integration_tests: false
+  integration_tests_runner: false
+nginx_preserve_vhost: false
+
+secrets_path: kv/digit/pg.citya
+
+# Local-only bootstrap values, pinned by the db_fast_path dump — do not
+# "harden" them; the dump's data must match.
+bootstrap_secrets:
+  postgres_password: egov123
+  mcp_db_password: egov123
+  minio_root_user: minioadmin
+  minio_root_password: minioadmin
+  elasticsearch_master_password: "asd@#$@$!132123"
+  egov_hrms_default_password: "eGov@123"
+  keycloak_admin_password: "eGov@123"
+  keycloak_db_password: "eGov@123"
+  keycloak_google_client_secret: ""
+  token_exchange_system_password: "eGov@123"
