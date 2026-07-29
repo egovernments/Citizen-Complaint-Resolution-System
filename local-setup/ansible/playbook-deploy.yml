@@ -931,6 +931,19 @@
     # 404'ing globalConfigs.js. tar over the baked SPA, leaving those two file
     # mounts intact, sidesteps that. No registry/pinned-image dependency.
     # Default off → no Linux behaviour change.
+    #
+    # files/digit-ui-build.sh hard-fails without node on PATH — the same
+    # Ubuntu gap the static/v2 paths already guard (apt nodejs = Node 18,
+    # no npm; see tasks/ensure-node20.yml). Darwin excluded per the helper
+    # contract (node comes from brew there).
+    - name: "digit-ui build — ensure Node 20 + npm (NodeSource) for on-host build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "digit-ui build"
+      when:
+        - build_digit_ui | default(false)
+        - ansible_system != "Darwin"
+
     - name: "Build digit-ui from source (when build_digit_ui)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/digit-ui-build.sh
@@ -1766,6 +1779,19 @@
     # script prints the dist path on its last line; captured into the
     # `configurator_build` var the sync task below consumes. (A real
     # configurator_repo_url still clones, for transitional/standalone use.)
+    #
+    # files/configurator-build.sh hard-fails without node >= 20.19 on PATH —
+    # same Ubuntu gap as the digit-ui build (see tasks/ensure-node20.yml).
+    # Darwin excluded per the helper contract (node comes from brew there).
+    - name: "Configurator SPA — ensure Node 20 + npm (NodeSource) for dist build"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/ensure-node20.yml"
+      vars:
+        node_ensure_label: "configurator build"
+      when:
+        - nginx_features.configurator | default(false)
+        - build_configurator | default(false)
+        - ansible_system != "Darwin"
+
     - name: "Configurator SPA — build dist (when build_configurator)"
       ansible.builtin.command: >-
         bash {{ playbook_dir }}/files/configurator-build.sh
