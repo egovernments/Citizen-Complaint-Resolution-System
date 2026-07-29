@@ -278,6 +278,59 @@
             state: started
             enabled: yes
 
+        # ==================== Root mount propagation ====================
+        # The monitoring overlay's node-exporter binds /:/rootfs:ro,rslave
+        # (docker-compose.monitoring.yml). rslave requires the host's / to be
+        # a shared mount. systemd makes it so on standard Ubuntu, but WSL2's
+        # init leaves / private, and `docker compose up` then dies with
+        # "path / is mounted on / but it is not a shared or slave mount".
+        # On WSL (or any host whose / isn't shared) install a boot-time
+        # oneshot that re-shares / before docker.service, and apply it now.
+        # No-op on hosts where / is already shared: probe shows shared, both
+        # tasks skip.
+        - name: "Root mount — probe / propagation"
+          ansible.builtin.command: findmnt -no PROPAGATION /
+          register: root_propagation
+          changed_when: false
+
+        - name: "Root mount — persist make-rshared for private / (e.g. WSL2)"
+          when: >-
+            ('microsoft' in (ansible_kernel | lower))
+            or ('shared' not in root_propagation.stdout)
+          block:
+            # WSL is matched by kernel string, not just current propagation,
+            # so a box where the operator ran `mount --make-rshared /` by
+            # hand (probe would show shared) still gets the boot persistence.
+            - name: "Root mount — install make-rshared oneshot unit"
+              ansible.builtin.copy:
+                dest: /etc/systemd/system/make-rshared-root.service
+                mode: "0644"
+                content: |
+                  # Installed by the DIGIT ansible deploy: hosts whose init
+                  # leaves / private (WSL2) break container rslave bind
+                  # mounts (node-exporter's /:/rootfs:ro,rslave) unless /
+                  # is re-shared before docker starts.
+                  [Unit]
+                  Description=Make / a shared mount for container rslave binds
+                  DefaultDependencies=no
+                  After=local-fs.target
+                  Before=docker.service
+
+                  [Service]
+                  Type=oneshot
+                  ExecStart=/usr/bin/mount --make-rshared /
+                  RemainAfterExit=yes
+
+                  [Install]
+                  WantedBy=multi-user.target
+
+            - name: "Root mount — enable unit + make / rshared now"
+              ansible.builtin.systemd:
+                name: make-rshared-root.service
+                enabled: true
+                state: started
+                daemon_reload: true
+
         # ==================== Docker Configuration ====================
         # Log rotation. Docker's json-file driver keeps growing a container's
         # log forever unless max-size/max-file are set, and a chatty JVM
