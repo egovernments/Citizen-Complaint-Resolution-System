@@ -789,6 +789,14 @@ const CreatePGRFlowV2: React.FC = () => {
     Digit.ULBService.getCurrentTenantId();
   const tenants: any = Digit.Hooks.pgr.useTenants();
 
+  // Mount the MDMS validation mirror: fetches common-masters.FormValidations
+  // (and MobileNumberValidation) and publishes the tenant's postalCode rule to
+  // window.__DIGIT_FORM_VALIDATIONS — the channel isPostalCodeValid() /
+  // getPostalCodeErrorMessage() read FIRST. Without this, the v2 flow would
+  // silently keep validating against the globalConfigs fallback while the
+  // employee form honours the (higher-precedence) MDMS row.
+  Digit.Hooks.pgr.useMobileValidation(tenantId);
+
   // The single RAINMAKER-PGR.ComplaintHierarchy adjacency list (interior nodes
   // + leaf complaint types) is the only complaint-type master now. We derive:
   //   - serviceDefs: leaf rows mapped to the legacy shape (serviceCode=code,

@@ -241,6 +241,21 @@ const CreateComplaintForm = ({
               disable: disabledFields[field.populators.name],
             }];
           }
+          if (fname === "postalCode") {
+            // Show the SAME dynamic, length-aware message the citizen flows
+            // show ("Please enter a valid 4-digit postal code" on a 4-digit
+            // tenant) instead of the static generic key the raw config
+            // carries. getPostalCodeErrorMessage(t) returns final localized
+            // text; FieldV1 passes it through t() again, which echoes an
+            // unknown key back verbatim, so the text survives untouched.
+            return [{
+              ...field,
+              populators: {
+                ...field.populators,
+                error: getPostalCodeErrorMessage(t),
+              },
+            }];
+          }
           return [field];
         }),
       };
@@ -263,6 +278,8 @@ const CreateComplaintForm = ({
   // actually changes — preventing the infinite render loop that trigger() causes
   // (trigger → errors change → re-render → watch() new ref → useEffect fires → loop).
   const mobileErrorRef = useRef(null);
+  // Same guard for the postal-code field's real-time validation.
+  const postalErrorRef = useRef(null);
 
   // Track whether every isMandatory field in the live config has a
   // non-empty value, so we can gate the SUBMIT button. FormComposerV2
@@ -327,6 +344,23 @@ const CreateComplaintForm = ({
     } else if (!mobile && mobileErrorRef.current !== null) {
       clearErrors?.("ComplainantContactNumber");
       mobileErrorRef.current = null;
+    }
+
+    // Real-time postal validation, same guarded setError/clearErrors pattern
+    // as the mobile field above (react-hook-form 6 is mode:"onSubmit", so
+    // the field's own `validate` rule only fires on submit — this surfaces
+    // the SAME error while the user types). The message text comes from the
+    // field's populators.error, which updatedConfig set to the dynamic,
+    // length-aware getPostalCodeErrorMessage(t). Optional field: empty is
+    // never an error.
+    const pc = String(formData?.postalCode ?? "").trim();
+    const postalInvalid = pc.length > 0 && !isPostalCodeValid(pc);
+    if (postalInvalid && postalErrorRef.current !== "invalid") {
+      setError?.("postalCode", { type: "validate" });
+      postalErrorRef.current = "invalid";
+    } else if (!postalInvalid && postalErrorRef.current === "invalid") {
+      clearErrors?.("postalCode");
+      postalErrorRef.current = null;
     }
 
     // The flat Type→Sub-Type cascade only applies to the legacy dropdowns.

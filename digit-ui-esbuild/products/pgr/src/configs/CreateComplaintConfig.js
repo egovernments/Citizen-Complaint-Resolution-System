@@ -1,4 +1,4 @@
-import { getPostalCodePattern } from "../utils/postalCode";
+import { isPostalCodeValid } from "../utils/postalCode";
 
 export const CreateComplaintConfig = {
   get tenantId() { return Digit.ULBService.getCurrentTenantId(); },
@@ -240,29 +240,28 @@ export const CreateComplaintConfig = {
                   // relying solely on the pattern check, which only surfaces
                   // its error on submit.
                   maxlength: 16,
-                  // Postal-code shape is per-country. Routed through the same
-                  // shared getPostalCodePattern() used by createComplaintForm.js
-                  // (utils/postalCode.js) so this field rule can't drift from
-                  // the real submit-time check, honours the legacy
-                  // CORE_POSTAL_CODE_CONFIGS key too, and — via the lazy
-                  // getter below — never throws at module-import time if a
-                  // configured pattern is malformed.
-                  get pattern() {
-                    try {
-                      return new RegExp(getPostalCodePattern());
-                    } catch {
-                      return /^[0-9]{5}$/;
-                    }
-                  },
+                  // Postal-code shape is per-country — enforced through the
+                  // shared isPostalCodeValid() (utils/postalCode.js), the same
+                  // check createComplaintForm.js runs at submit, so this field
+                  // rule can't drift from it. A react-hook-form `validate`
+                  // rule, NOT `pattern`: FieldV1 copies validation.pattern
+                  // onto the native input's pattern attribute, and on a text
+                  // input the browser then blocks submit with its own
+                  // unlocalized "Please match the requested format" bubble
+                  // (made worse by React stringifying a RegExp value with its
+                  // slashes, so the native check failed for EVERY value). A
+                  // validate function is consumed by react-hook-form only and
+                  // never reaches the DOM.
+                  validate: (value) => isPostalCodeValid(value),
                 },
-                // This static config can't interpolate the configured digit
-                // count into the message (FormComposerV2 calls `t(error)`
-                // with no options — see utils/postalCode.js for the dynamic,
-                // length-aware version used by the real submit-time check in
-                // createComplaintForm.js). Point at the generic, still-
-                // localized key rather than the old fixed "…5 digit…" one,
-                // which lied about the length on any non-5-digit tenant
-                // (CCRS#722).
+                // Static fallback only: createComplaintForm.js overrides this
+                // per render with the dynamic, length-aware message from
+                // getPostalCodeErrorMessage(t) ("Please enter a valid 4-digit
+                // postal code" on a 4-digit tenant — the same text the
+                // citizen v2 flow shows). This generic, still-localized key
+                // remains for any consumer that renders the raw config,
+                // rather than the old fixed "…5 digit…" key, which lied
+                // about the length on any non-5-digit tenant (CCRS#722).
                 error: "CS_COMPLAINT_POSTALCODE_INVALID_ERROR_GENERIC",
               },
             },
