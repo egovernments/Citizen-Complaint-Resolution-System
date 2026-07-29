@@ -84,7 +84,6 @@ enable_novu: true                  # config-driven notifications target: Novu
 db_fast_path: true                 # REQUIRED — see kit NON-PERSISTED-STATE.md / DB section
 build_otp_publisher: true          # not in kit: real Bomet box already has otp-publisher:local;
                                    # the notifications profile needs it, so build it here
-build_default_data_handler: true
 build_digit_ui: true
 build_configurator: true
 tolerate_bootstrap_failures: true  # bootstrap is partial-success tolerant (see kit GAPS)
