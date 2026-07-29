@@ -248,7 +248,9 @@ For CI or hands-off onboarding, the DIGIT-MCP server drives the same steps
 through its tools — `tenant_bootstrap` (once per new root), then `city_setup`
 and the masters/employees/localization tools, or the `city_setup_from_xlsx`
 orchestrator that sequences the four phases from a folder of XLSX files.
-Requires a deploy with `enable_mcp: true`. See the step-by-step
+Requires a deploy with `enable_mcp: true` — and, if you drive it over the REST
+shim (`/v1/*`) as below rather than in-process, `nginx_features.mcp: true` as
+well. See the step-by-step
 [City Setup Guide](../../digit-mcp/docs/guides/city-setup.md) in the digit-mcp
 package.
 
@@ -272,11 +274,18 @@ fails the whole `docker compose up`, not just MCP. Either:
 
 - `build_mcp: true` — build from the vendored in-tree source (no registry
   needed); or
-- leave it off and use the playbook's pinned public image default.
+- leave it off and take the playbook's default, which resolves to the public
+  `ghcr.io/subhashini-egov/digit-mcp:<pinned-tag>` (see "Resolve MCP image tag"
+  in `playbook-deploy.yml`). `MCP_IMAGE` is passed through verbatim — no
+  `docker_registry` prefix is applied.
 
-If your `host_vars` overrides `mcp_image` / `docker_registry` to the Hetzner VPC
-registry (`10.0.0.4:5000`), the target must be VPC-internal — see the
-`enable_mcp` notes in `_example.yml`.
+If your `host_vars` pins `mcp_image` to the Hetzner VPC registry
+(`10.0.0.4:5000`), the target must be VPC-internal.
+
+> ⚠️ The `enable_mcp` comment in `_example.yml` still describes that VPC
+> registry as the source. That is **out of date** relative to the playbook's
+> current default (above). Check what your deploy will actually pull with:
+> `grep -A4 'Resolve MCP image tag' ansible/playbook-deploy.yml`
 
 Confirm it's reachable: `curl -s $BASE/v1/healthz` → `{"status":"ok",…}`.
 

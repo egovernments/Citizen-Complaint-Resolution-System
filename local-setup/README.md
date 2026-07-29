@@ -4,7 +4,7 @@ Run the DIGIT Citizen Complaint Resolution System locally with Docker Compose or
 
 ## Choose Your Setup Path
 
-There are **two independent ways** to run this stack. Pick one:
+There are **three independent ways** to run this stack. Pick one:
 
 | Path | Best for | What you need |
 |------|----------|---------------|
@@ -372,9 +372,9 @@ all creating the same data:
 
 | Path | Interface | Available on |
 |------|-----------|--------------|
-| **Configurator wizard** | Browser — upload one XLSX per phase | Ansible deploys with `nginx_features.configurator: true` |
+| **Configurator wizard** | Browser — upload one XLSX per phase | Ansible deploys with `nginx_features.configurator: true` + `build_configurator: true` |
 | **Jupyter DataLoader** | `DataLoader_v2.ipynb` (Python) | Any stack (Docker Compose, Tilt, Ansible) |
-| **MCP `city_setup_from_xlsx`** | REST / automation | Deploys with `enable_mcp: true` |
+| **MCP `city_setup_from_xlsx`** | REST / automation | `enable_mcp: true`; the REST shim (`/v1/*`) additionally needs `nginx_features.mcp: true` |
 
 > **Order always matters:** Tenant → Boundaries → Masters → Employees. Each
 > phase validates codes created by the previous one.
