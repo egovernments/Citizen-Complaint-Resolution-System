@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -81,6 +82,15 @@ import java.util.regex.Pattern;
  *       keys into one def + {@code {series:"daily"}}.</li>
  * </ul>
  *
+ * <p><b>Pinned windows (#1462).</b> A def may declare {@code window: {name, pinned: true}} to keep
+ * its own time axis — "complaints created today" means today whatever range the user picked. For
+ * such a def the {@code window} param and {@code dateFrom}/{@code dateTo} do NOT rewrite the time
+ * predicate. If the selected range does not overlap the pinned interval the entry is SUPPRESSED
+ * (no rows, {@code suppressed:"filter_excludes_window"}) so the tile can render an explicit
+ * "no data for the applied filters" instead of a number for the wrong period; {@code compare:"prior"}
+ * then means the preceding window of equal span (yesterday, for {@code dtd}). Non-time params
+ * (ward / serviceCode / complaintPath / hierLevel) still apply — pinning fixes time, not filters.
+ *
  * <p>{@code compare}/{@code series} compose with {@code window}/{@code dateFrom}/{@code dateTo}/
  * {@code ward}/{@code serviceCode}: the window/range params resolve the <em>current</em> range first,
  * then {@code compare:"prior"} shifts it back one equal period, and {@code series:"daily"} buckets it.
@@ -99,6 +109,12 @@ public class KpiQueryComposer {
     private static final long MS_PER_DAY = 86_400_000L;
     /** Sparkline daily-series safety cap, matching the FE {@code Math.min(366, ...)}. */
     private static final int MAX_SERIES_DAYS = 366;
+    /**
+     * Marker written onto the merged query when a pinned window cannot be answered under the
+     * selected range (#1462). Read and stripped by {@link AnalyticsService} before planning — it is
+     * never a grammar field and never reaches SQL.
+     */
+    static final String SUPPRESSED = "__suppressed";
     /** {@code complaintPath} length cap — live paths are short dot-joined UPPER_SNAKE codes. */
     static final int MAX_COMPLAINT_PATH_LENGTH = 256;
     /**
@@ -166,6 +182,28 @@ public class KpiQueryComposer {
         // delta uses a prior-week comparison and the sparkline a rolling window, per reference.)
         boolean liveOpenSnapshot = isLiveOpenSnapshot(next, g);
 
+        // A PINNED window owns its own time axis: the def declares what period it means ("today",
+        // "this week") and the dashboard's date range must not redefine it (#1462). Unlike a live-open
+        // snapshot — which is timeless and simply ignores the range — a pinned window occupies a real
+        // interval, so a range that excludes that interval makes the tile unanswerable rather than
+        // merely unfiltered. That case is SUPPRESSED: no value, so the tile can say "no data for the
+        // applied filters" instead of quietly reporting a number for a different period.
+        if (isPinnedWindow(next)) {
+            if (series && !prior) {
+                // The sparkline is trend CONTEXT for the pinned value, not the value itself: it keeps
+                // its existing range-bucketed behaviour and stays answerable even when the pinned
+                // interval sits outside the range (the tile then shows a trend but no headline number).
+                applyDailySeries(next, g, bounds);
+            } else {
+                // Overlap is decided FIRST: applyPinnedPrior consumes the window node.
+                boolean suppress = bounds != null && !pinnedWindowOverlaps(next, bounds);
+                if (prior) applyPinnedPrior(next, g);
+                if (suppress) next.put(SUPPRESSED, true);
+            }
+            applyNarrowingParams(next, g, params, paramsIgnoredOut);
+            return next;
+        }
+
         // ---- window override (skipped when an explicit range is supplied; range governs time) ----
         // Also skipped for compare:"prior" with no range, where the prior-WEEK fallback governs time,
         // and for live-open snapshots (point-in-time; no window axis).
@@ -189,6 +227,17 @@ public class KpiQueryComposer {
             applyDailySeries(next, g, bounds);
         }
 
+        applyNarrowingParams(next, g, params, paramsIgnoredOut);
+
+        return next;
+    }
+
+    /**
+     * The non-time narrowing params — ward, service type, complaint subtree, hierarchy rollup.
+     * Applied on every path, pinned windows included: pinning fixes a tile's <em>time</em> axis, it
+     * does not exempt it from the dashboard's ward / type filters.
+     */
+    private void applyNarrowingParams(ObjectNode next, Grain g, JsonNode params, List<String> paramsIgnoredOut) {
         // ---- narrowing dimension filters (only if the grain supports the column) ----
         if (params.hasNonNull("ward")) {
             String ward = params.get("ward").asText();
@@ -208,8 +257,6 @@ public class KpiQueryComposer {
             String hierLevel = params.get("hierLevel").asText();
             if (!hierLevel.isEmpty() && !"leaf".equals(hierLevel)) applyHierLevel(next, g, hierLevel);
         }
-
-        return next;
     }
 
     // ---- window ----
@@ -287,6 +334,68 @@ public class KpiQueryComposer {
             bound.put("gte", fromMs);
             bound.put("lt", toMs);
         }
+    }
+
+    // ---- pinned window (#1462) ----
+
+    /**
+     * A def PINS its window when it declares {@code window: {name, pinned: true}} — "this tile means
+     * today / this week, whatever the dashboard's date range says". Without the flag the range wins,
+     * which is the historical behaviour for every other tile and stays unchanged.
+     */
+    private boolean isPinnedWindow(JsonNode query) {
+        JsonNode window = query.get("window");
+        return window != null && window.isObject()
+                && window.hasNonNull("name") && window.path("pinned").asBoolean(false);
+    }
+
+    /**
+     * Does the pinned window's interval intersect the selected range? The window covers
+     * {@code [windowStart, now]}; the range covers {@code [dateFrom, dateTo]}. They miss each other
+     * when the range ends before the window opens, or begins after today.
+     *
+     * <p>For the {@code dtd} ("today") case this reduces to the intuitive rule: the range must
+     * contain today. Comparison is on EAT calendar days — the same zone the planner buckets in — so a
+     * range ending "today" counts as containing today regardless of clock time.
+     */
+    private boolean pinnedWindowOverlaps(JsonNode query, Bounds bounds) {
+        long now = System.currentTimeMillis();
+        Long startMs = AnalyticsPlanner.windowStartMs(query.path("window").path("name").asText(), now);
+        if (startMs == null) return true;                       // boundless window: nothing to miss.
+        LocalDate windowStart = Instant.ofEpochMilli(startMs).atZone(EAT).toLocalDate();
+        LocalDate today = Instant.ofEpochMilli(now).atZone(EAT).toLocalDate();
+        LocalDate rangeEnd = bounds.toExclusive.minusDays(1);   // back to the inclusive dateTo
+        return !rangeEnd.isBefore(windowStart) && !bounds.fromDate.isAfter(today);
+    }
+
+    /**
+     * {@code compare:"prior"} against a pinned window: the immediately-preceding window of the same
+     * span, NOT the FE's prior-equal-duration-of-the-selected-range (which would compare "today"
+     * against a month). For {@code dtd} this is yesterday — matching the tile's "vs yesterday" label.
+     */
+    private void applyPinnedPrior(ObjectNode query, Grain g) {
+        String col = dateFilterColumn(query, g);
+        if (col == null || !g.filterable.contains(col)) {
+            log.debug("grain '{}' has no filterable time column for a pinned compare:prior; skipping", g.name);
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Long startMs = AnalyticsPlanner.windowStartMs(query.path("window").path("name").asText(), now);
+        if (startMs == null) return;
+        LocalDate windowStart = Instant.ofEpochMilli(startMs).atZone(EAT).toLocalDate();
+        LocalDate today = Instant.ofEpochMilli(now).atZone(EAT).toLocalDate();
+        long spanDays = Math.max(1, java.time.temporal.ChronoUnit.DAYS.between(windowStart, today) + 1);
+        LocalDate priorStart = windowStart.minusDays(spanDays);
+
+        ObjectNode bound = mergeableFilterObject(query, col);
+        if ("snapshot_date".equals(col)) {
+            bound.put("gte", priorStart.toString());
+            bound.put("lt", windowStart.toString());
+        } else {
+            bound.put("gte", priorStart.atStartOfDay(EAT).toInstant().toEpochMilli());
+            bound.put("lt", windowStart.atStartOfDay(EAT).toInstant().toEpochMilli());
+        }
+        query.remove("window");   // the explicit prior bounds now govern the time axis.
     }
 
     // ---- prior period ----
